@@ -165,6 +165,8 @@ Future<ImagingRunResult?> createImagingRun(
   bool pauseForFilterSwap = true,
   // #1716 — Simple Mode: see [buildImagingRunBody].
   bool recalibrateGuider = false,
+  // #1757 — Simple Mode: flats right after the target (see [buildTargetBlock]).
+  bool flatsAfterTarget = false,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -197,6 +199,7 @@ Future<ImagingRunResult?> createImagingRun(
       parkAtEnd: parkAtEnd,
       pauseForFilterSwap: pauseForFilterSwap,
       recalibrateGuider: recalibrateGuider,
+      flatsAfterTarget: flatsAfterTarget,
     );
   } finally {
     keepApi.close();
@@ -225,6 +228,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   bool parkAtEnd = false,
   bool pauseForFilterSwap = true,
   required bool recalibrateGuider,
+  bool flatsAfterTarget = false,
 }) async {
   final api = container.read(sequenceApiProvider);
 
@@ -297,6 +301,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       unguidedOptions: unguidedOptionsOf(container),
       ditherEveryNExposures: _ditherCadence(container, choice),
       manualFilterSwap: choice.manualFilterSwap,
+      flatsAfter: flatsAfterTarget,
     );
     // Mosaic: one further target block per remaining panel, grafted before
     // the session-end steps (same shape a manual multi-target append builds).
@@ -325,6 +330,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: _ditherCadence(container, choice),
           manualFilterSwap: choice.manualFilterSwap,
+          flatsAfter: flatsAfterTarget,
         ),
       );
     }
@@ -359,6 +365,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             unguidedOptions: unguidedOptionsOf(container),
             ditherEveryNExposures: _ditherCadence(container, choice),
             manualFilterSwap: choice.manualFilterSwap,
+            flatsAfter: flatsAfterTarget,
           ),
       ]);
       if (appended) {
@@ -450,6 +457,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: ditherEvery,
           manualFilterSwap: choice.manualFilterSwap,
+          flatsAfter: flatsAfterTarget,
         ),
     ];
     // §38.9 — a RUNNING selected sequence now takes the append LIVE: the
@@ -508,6 +516,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     unguidedOptions: unguidedOptionsOf(container),
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
+    flatsAfter: flatsAfterTarget,
   );
   // Mosaic: a target block per remaining panel, before the session-end steps.
   for (final p in panels.skip(1)) {
@@ -535,6 +544,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         unguidedOptions: unguidedOptionsOf(container),
         ditherEveryNExposures: ditherEvery,
         manualFilterSwap: choice.manualFilterSwap,
+        flatsAfter: flatsAfterTarget,
       ),
     );
   }

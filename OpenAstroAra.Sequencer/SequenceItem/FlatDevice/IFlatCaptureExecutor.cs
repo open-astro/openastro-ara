@@ -126,5 +126,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         /// reads open; false with no panel connected or no motorised cover — the reason is logged.
         /// </summary>
         Task<bool> OpenCoverAsync(CancellationToken token);
+
+        /// <summary>
+        /// Turn the panel off and close its motorised cover, so bias and darks run unattended behind it.
+        /// True once the cover reads closed; false with no panel connected, no motorised cover, or a cover
+        /// that never read closed — the reason is logged.
+        /// </summary>
+        Task<bool> CloseCoverAsync(CancellationToken token);
     }
 }

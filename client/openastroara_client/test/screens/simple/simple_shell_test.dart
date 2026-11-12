@@ -21,6 +21,7 @@ import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
+import 'package:openastroara/services/sequence_api.dart' show SequenceClient;
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
@@ -41,6 +42,8 @@ import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
@@ -121,6 +124,8 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/guider/guider_build_activity_state.dart';
+import 'package:openastroara/state/simple_calibration_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
@@ -828,6 +833,55 @@ class _RunState extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => value;
 }
 
+/// A calibration run Simple Mode started.
+class _Calibrating extends SimpleCalibrationNotifier {
+  @override
+  SimpleCalibrationRun? build() => (sequenceId: 'cal-run', total: 205);
+}
+
+class _CalibrationWaiting extends SimpleCalibrationRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+      sequenceId: 'lib-run',
+      state: SequenceRunState.pausedAwaitingUser,
+      currentInstructionDescription: 'Put the lens cap on the scope, then press Resume to take the darks.');
+}
+
+class _CalibrationRunning extends SimpleCalibrationRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46);
+}
+
+/// The Guide Camera builds, as the rig's events fold them.
+class _Builds extends GuiderBuildActivityNotifier {
+  @override
+  Map<CalibrationArtifact, CalibrationBuildActivity> build() => const {};
+  void set(Map<CalibrationArtifact, CalibrationBuildActivity> v) => state = v;
+}
+
+/// The run state a test moves on.
+class _MovingRun extends SequenceRunStateNotifier {
+  _MovingRun(this.value);
+  SequenceRunStateInfo value;
+  @override
+  Future<SequenceRunStateInfo?> build() async => value;
+  void set(SequenceRunStateInfo v) => state = AsyncData(value = v);
+}
+
+/// The sequence routes: resume recorded.
+class _ResumeSeq implements SequenceClient {
+  final calls = <String>[];
+  @override
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async {
+    calls.add('resume $id recenter=$recenter');
+    return id;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 const _queuedM31 = SimpleRun(sequenceId: 'seq-1', targets: [
   SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
 ]);
@@ -908,6 +962,81 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 }
 
 void main() {
+  testWidgets("the queue's own Calibration block waiting for the lens cap asks with Resume, without a recentre (#1757)", (tester) async {
+    const queue = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+      SimpleTarget(name: kCalibrationBlockName, calibration: true,
+          steps: [FilterPlanStep(filterName: '', exposureSeconds: 60, frameCount: 50)]),
+    ]);
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: queue,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1',
+            state: SequenceRunState.pausedAwaitingUser,
+            framesCaptured: 30,
+            currentInstructionDescription: 'Put the lens cap on the scope, then press Resume to take the darks.'),
+        gear: [sequenceApiProvider.overrideWithValue(seq)]);
+    await tester.pump();
+    await tester.pump();
+    final asked = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.question);
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume seq-1 recenter=false'], reason: 'no target to recentre on a calibration block');
+  });
+
+  testWidgets('the calibration run is never the selected sequence: its own poll brings the lens-cap pill (rig 2026-11-12)', (tester) async {
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31,
+        runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.completed),
+        gear: [
+          simpleCalibrationRunStateProvider.overrideWith(_CalibrationWaiting.new),
+          sequenceApiProvider.overrideWithValue(seq),
+        ]);
+    await tester.pump();
+    await tester.pump();
+    final asked = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.question);
+    expect(asked.title, 'Put the lens cap on the scope, then press Resume to take the darks.');
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume lib-run recenter=false']);
+  });
+
+  testWidgets("a calibration run waiting for the lens cap asks in a pill with Resume; the Plan's own pause does not (#1563)", (tester) async {
+    const lensCap = SequenceRunStateInfo(
+        sequenceId: 'cal-run',
+        state: SequenceRunState.pausedAwaitingUser,
+        currentInstructionDescription: 'Put the lens cap on, then resume.');
+    final run = _MovingRun(lensCap);
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31, gear: [
+      sequenceRunStateProvider.overrideWith(() => run),
+      sequenceApiProvider.overrideWithValue(seq),
+    ]);
+    await tester.pump();
+    await tester.pump();
+
+    final asked = c.read(simpleMessagesProvider).single;
+    expect(asked.kind, SimpleMessageKind.question);
+    expect(asked.title, 'Put the lens cap on, then resume.');
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume cal-run recenter=false']);
+
+    run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+        reason: 'the run moved on');
+
+    run.set(const SequenceRunStateInfo(
+        sequenceId: 'seq-1', state: SequenceRunState.pausedAwaitingUser, currentInstructionDescription: 'Flip the mount'));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+        reason: "the Plan's pause keeps its amber pill and the shutter's Resume");
+  });
+
+
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
     testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library, Sky Album)',
         (tester) async {
@@ -6163,6 +6292,77 @@ void main() {
         ['M 31']);
   });
 
+  test('Simple search finds the Focus offsets routine by "focus offsets" and "filter offsets" (#1675)', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    for (final q in ['focus offsets', 'filter offsets']) {
+      expect(simpleSearch(en, q).whereType<SimpleModeHit>().map((h) => (h.mode, h.focusOffsets)),
+          [(SimpleModeScreen.focus, true)], reason: q);
+    }
+  });
+
+  testWidgets('a Focus offsets search hit opens Focus on its Offsets routine (#1675)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-search-field')), 'filter offsets');
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-search-mode-0')), matching: find.text('Focus offsets')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-mode-0')));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
+    expect(c.read(simpleFocusOffsetsProvider), isTrue);
+  });
+
+  testWidgets('the status pill reads Focus offsets · OIII · 4 of 7 while offsets calibrate (#1675)', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [filterOffsetCalibrationProvider.overrideWith(_OffsetsRunning.new)]);
+    await tester.pump();
+    final words = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words, allOf(contains('Focus offsets'), contains('OIII · 4 of 7')));
+  });
+
+  testWidgets('the calibration run has a status pill with its frames (#1757)', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [
+      simpleCalibrationProvider.overrideWith(_Calibrating.new),
+      // The calibration run's own poll: it is never the selected sequence.
+      simpleCalibrationRunStateProvider.overrideWith(_CalibrationRunning.new),
+    ]);
+    await tester.pump();
+    final words = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words, allOf(contains('Calibration'), contains('46 of 205')));
+  });
+
+  testWidgets('a Guide Camera build has a status pill with its frames; how it ended is a message (#1757)', (tester) async {
+    final builds = _Builds();
+    final c = await _pump(tester, const Size(1024, 768), gear: [guiderBuildActivityProvider.overrideWith(() => builds)]);
+    builds.set({
+      CalibrationArtifact.darkLibrary: const CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.building, exposureIndex: 2, exposureCount: 3, frame: 1, frameCount: 5),
+    });
+    await tester.pump();
+    String words() => tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words(), allOf(contains('Dark library'), contains('Building · 6 of 15')));
+
+    builds.set({
+      CalibrationArtifact.darkLibrary: const CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.failed, error: 'ZWO image acquisition failed'),
+    });
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.error);
+    expect(pill.title, "Dark library wasn't built");
+    expect(pill.detail, 'ZWO image acquisition failed', reason: "the guider's own words name the cause");
+  });
+
   test('the exposure list stays inside what the camera reports', () {
     expect(exposurePresets(minSec: 1, maxSec: 60), allOf(contains(const Duration(seconds: 1)),
         contains(const Duration(seconds: 60)), isNot(contains(const Duration(milliseconds: 500))),
@@ -6574,3 +6774,14 @@ class _FactsHolder extends Notifier<RigSetupFacts?> {
 final _factsHolder = NotifierProvider<_FactsHolder, RigSetupFacts?>(
   () => throw UnimplementedError('override it'),
 );
+
+/// An offset calibration on its 4th autofocus run of 7, measuring OIII.
+class _OffsetsRunning extends FilterOffsetCalibrationNotifier {
+  @override
+  FilterOffsetLive build() => const FilterOffsetLive(
+      calibration: FilterOffsetCalibration(
+          state: 'running', referencePosition: 0, referenceName: 'L', currentPosition: 3, runIndex: 4, runCount: 7,
+          filters: [FilterOffsetRow(position: 3, name: 'OIII', status: 'pending')]));
+  @override
+  Future<void> refresh() async {}
+}

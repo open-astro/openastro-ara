@@ -274,6 +274,7 @@ class ClassifyTest(unittest.TestCase):
             "scripts/check-settings-registry.mjs",
             "scripts/check-help-registry.mjs",
             "scripts/fit-star-count-model.py",
+            "scripts/merge-gate.sh",
             "scripts/tests/<anything>",
         }
         probe = sorted(

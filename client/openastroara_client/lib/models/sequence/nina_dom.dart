@@ -76,9 +76,9 @@ Map<String, dynamic> withChildren(
   final existing = node['Items'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
-      : <String, dynamic>{};
+      // Json.NET reads `$type` only as an object's first member.
+      : <String, dynamic>{r'$type': itemsWrapperType};
   wrapper[r'$values'] = children;
-  wrapper.putIfAbsent(r'$type', () => itemsWrapperType);
   return Map<String, dynamic>.of(node)..['Items'] = wrapper;
 }
 
@@ -110,9 +110,9 @@ Map<String, dynamic> withConditions(
   final existing = node['Conditions'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
-      : <String, dynamic>{};
+      // Json.NET reads `$type` only as an object's first member.
+      : <String, dynamic>{r'$type': conditionsWrapperType};
   wrapper[r'$values'] = conditions;
-  wrapper.putIfAbsent(r'$type', () => conditionsWrapperType);
   return Map<String, dynamic>.of(node)..['Conditions'] = wrapper;
 }
 
@@ -179,9 +179,9 @@ Map<String, dynamic> withTriggers(
   final existing = node['Triggers'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
-      : <String, dynamic>{};
+      // Json.NET reads `$type` only as an object's first member.
+      : <String, dynamic>{r'$type': triggersWrapperType};
   wrapper[r'$values'] = triggers;
-  wrapper.putIfAbsent(r'$type', () => triggersWrapperType);
   return Map<String, dynamic>.of(node)..['Triggers'] = wrapper;
 }
 
