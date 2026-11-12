@@ -1817,6 +1817,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'site.time_zone',
   ),
   Setting(
+    id: 'safety.site.permanent_pier',
+    label: 'Permanent pier',
+    description: 'The mount stays polar aligned between nights, so Simple Mode\'s Night Setup skips polar alignment. Saved in the rig\'s site profile, so every device agrees. Also in Simple Mode\'s Settings.',
+    keywords: ['permanent pier', 'pier', 'polar alignment', 'observatory', 'fixed mount'],
+    path: ['Settings', 'Location & sky', 'Where you observe'],
+    type: SettingType.bool(),
+    defaultValue: false,
+    profilePath: 'site.permanent_pier',
+  ),
+  Setting(
     id: 'safety.site.use_custom_horizon',
     label: 'Use custom horizon polygon',
     description: 'When on, target visibility and the planning chart use your entered azimuth/altitude skyline instead of the flat default-altitude floor. Enter the skyline below the toggle.',
