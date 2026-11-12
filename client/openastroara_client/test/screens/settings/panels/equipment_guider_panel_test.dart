@@ -364,6 +364,29 @@ void main() {
     expect(find.textContaining('Not saved'), findsWidgets);
   });
 
+  testWidgets('#1806 Apply to guider after a failed load does not write over the rig', (tester) async {
+    final h = await _pump(
+        tester,
+        const Phd2Settings(guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]', guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
+        failLoad: true);
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    expect(h.equipment.calls, isNot(contains('push')));
+  });
+
+  testWidgets('#1806 Connect after a failed load does not write over the rig', (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), failLoad: true);
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setHost('new-sbc');
+    await tester.pump(); // inside the save delay
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'the flushed save must not run on settings that did not load');
+    expect(h.profile.puts, 0);
+  });
+
   testWidgets('a mount on another server than the camera gets a cross-server warning',
       (tester) async {
     await _pump(
