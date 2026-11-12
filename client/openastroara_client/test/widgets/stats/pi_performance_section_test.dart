@@ -8,6 +8,7 @@ import 'package:openastroara/services/server_internal_state_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/widgets/stats/pi_performance_section.dart';
+import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
@@ -85,7 +86,7 @@ void main() {
     expect(ServerInternalState.fromJson(const {}).threadCount, 0, reason: 'a sparse body never throws');
   });
 
-  testWidgets('renders the tiles, and the refresh button re-reads the server', (tester) async {
+  testWidgets('renders the tiles, and a pull down re-reads the server', (tester) async {
     final api = _FakeClient(const ServerInternalState(
       uptimeSeconds: 4000,
       workingSetBytes: 268435456,
@@ -115,7 +116,7 @@ void main() {
     expect(find.textContaining('Debian 13'), findsOneWidget);
 
     api.value = const ServerInternalState(uptimeSeconds: 65, processorCount: 4);
-    await tester.tap(find.byTooltip('Refresh'));
+    pullRefresh(tester);
     await tester.pumpAndSettle();
     expect(api.fetches, 2);
     expect(find.text('1m 05s'), findsOneWidget);

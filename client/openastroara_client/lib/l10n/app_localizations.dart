@@ -8679,6 +8679,18 @@ abstract class AppLocalizations {
   /// **'Not now'**
   String get rigSetupNotNow;
 
+  /// Rig setup sheet footer and Settings › Rig header: how many of the items are done
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} done'**
+  String rigSetupProgress(int done, int total);
+
+  /// Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)
+  ///
+  /// In en, this message translates to:
+  /// **'Next: {item}'**
+  String rigSetupNext(String item);
+
   /// Simple Mode result pill when the last Rig setup item is done
   ///
   /// In en, this message translates to:

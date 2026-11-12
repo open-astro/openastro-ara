@@ -105,8 +105,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // Verdict
   const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6 &&
              Math.abs(res.latRad - -33.856784 * Math.PI / 180) < 1e-3 &&
-             // Simple Mode chart: art/atmosphere/landscape/Milky Way/DSS2 off; lines, grid, DSO hints on.
-             !res.chart.atmosphere && !res.chart.landscape && !res.chart.milkyway && !res.chart.dss &&
+             // Simple Mode chart: art/atmosphere/Milky Way/DSS2 off; ground (the horizon), lines, grid, DSO hints on.
+             !res.chart.atmosphere && res.chart.landscape && !res.chart.milkyway && !res.chart.dss &&
              !res.chart.art && res.chart.lines && res.chart.grid && res.chart.dsos && res.chart.hints &&
              // Full UI: today's defaults (landscape and DSS2 on, atmosphere off).
              res.full.landscape && res.full.dss && !res.full.atmosphere && res.full.lines;

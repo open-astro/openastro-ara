@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
 import '../../adaptive_controls.dart';
+import '../stats_pull_refresh.dart';
 
 /// §50.4 Focus & Temperature scatter — each captured frame that recorded a
 /// focuser position is a point at (sensor temp, focus position), read from the
@@ -24,7 +25,11 @@ class FocusTempScatterChart extends ConsumerStatefulWidget {
       _FocusTempScatterChartState();
 }
 
-class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart> {
+class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
+    with StatsPullRefresh<FocusTempScatterChart> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Plot at most the most-recent N samples so a very long capture history can't
   // hand fl_chart a huge spot list. r² in the subtitle stays full-history
   // (computed server-side over every sample).
@@ -89,22 +94,13 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart> {
                 tooltip: 'Couldn’t refresh — showing the last loaded scatter.',
               ),
             ),
-          Positioned(
-            top: 0,
-            right: 4,
-            child: IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
+          // The page's pull down refreshes; this shows it running.
+          if (spinning)
+            const Positioned(
+              top: 12,
+              right: 16,
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
-          ),
         ],
       ),
     );

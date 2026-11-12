@@ -2921,6 +2921,7 @@ class SimpleWindowButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.outlined = false,
+    this.accent,
   });
 
   final String label;
@@ -2928,6 +2929,10 @@ class SimpleWindowButton extends StatelessWidget {
 
   /// The second of a pair (Delete beside Rebuild): a Hairline outline, no fill.
   final bool outlined;
+
+  /// A fix for what needs attention (Rig setup): outline and label in this
+  /// colour, no fill.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2938,12 +2943,16 @@ class SimpleWindowButton extends StatelessWidget {
     child: Opacity(
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
-        color: outlined ? Colors.transparent : AraColors.tileFill,
+        color: outlined || accent != null
+            ? Colors.transparent
+            : AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          side: outlined
-              ? const BorderSide(color: AraColors.border)
-              : BorderSide.none,
+          side: switch (accent) {
+            final c? => BorderSide(color: c),
+            null when outlined => const BorderSide(color: AraColors.border),
+            null => BorderSide.none,
+          },
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -2957,7 +2966,7 @@ class SimpleWindowButton extends StatelessWidget {
               textAlign: TextAlign.center,
               style: kSimpleText.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AraColors.textPrimary,
+                color: accent ?? AraColors.textPrimary,
               ),
             ),
           ),

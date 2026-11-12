@@ -9,6 +9,7 @@ import '../../theme/ara_colors.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import '../adaptive_controls.dart';
+import 'stats_pull_refresh.dart';
 
 /// §66.7 — the Stats "Pi performance" section: what the server process is
 /// doing right now (memory, CPU, GC, threads, connected clients, host load).
@@ -20,7 +21,11 @@ class PiPerformanceSection extends ConsumerStatefulWidget {
   ConsumerState<PiPerformanceSection> createState() => _PiPerformanceSectionState();
 }
 
-class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection> {
+class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
+    with StatsPullRefresh<PiPerformanceSection> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   bool _refreshing = false;
   bool _staleError = false;
 
@@ -56,15 +61,12 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection> {
             Expanded(
               child: Text('Pi performance', style: Theme.of(context).textTheme.titleMedium),
             ),
-            IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
-            ),
+            // The page's pull down refreshes; this shows it running.
+            if (spinning)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+              ),
           ],
         ),
         const SizedBox(height: 8),

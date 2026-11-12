@@ -5133,6 +5133,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get rigSetupNotNow => 'Not now';
 
   @override
+  String rigSetupProgress(int done, int total) {
+    return '$done of $total done';
+  }
+
+  @override
+  String rigSetupNext(String item) {
+    return 'Next: $item';
+  }
+
+  @override
   String get rigSetupDonePill => 'Rig set up';
 
   @override
@@ -10322,6 +10332,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get rigSetupNotNow => 'Agora não';
+
+  @override
+  String rigSetupProgress(int done, int total) {
+    return '$done de $total prontos';
+  }
+
+  @override
+  String rigSetupNext(String item) {
+    return 'Próximo: $item';
+  }
 
   @override
   String get rigSetupDonePill => 'Setup configurado';

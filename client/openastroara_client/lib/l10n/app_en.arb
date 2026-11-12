@@ -6553,6 +6553,21 @@
   "@rigSetupNotNow": {
     "description": "Rig setup: closes the sheet and keeps it closed for this rig on this device"
   },
+  "rigSetupProgress": "{done} of {total} done",
+  "@rigSetupProgress": {
+    "description": "Rig setup sheet footer and Settings › Rig header: how many of the items are done",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "rigSetupNext": "Next: {item}",
+  "@rigSetupNext": {
+    "description": "Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)",
+    "placeholders": {
+      "item": {"type": "String"}
+    }
+  },
   "rigSetupDonePill": "Rig set up",
   "@rigSetupDonePill": {
     "description": "Simple Mode result pill when the last Rig setup item is done"
