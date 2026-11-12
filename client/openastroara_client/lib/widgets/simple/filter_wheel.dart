@@ -198,12 +198,20 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
                                 (p.dx - centre) * math.sin(rot) +
                                 (p.dy - centre) * math.cos(rot),
                           );
-                          final hit = math.max(cell, 44);
+                          // A round target, 44 pt where there is room but never
+                          // past half-way to the next cell, so a tap on a cell's
+                          // edge never picks its neighbour.
+                          final hit = math.min(
+                            math.max(cell, 44.0),
+                            n > 1
+                                ? 2 * ring * math.sin(math.pi / n)
+                                : double.infinity,
+                          );
                           return Positioned(
                             left: turned.dx - hit / 2,
                             top: turned.dy - hit / 2,
-                            width: hit.toDouble(),
-                            height: hit.toDouble(),
+                            width: hit,
+                            height: hit,
                             child: _Cell(
                               key: Key(
                                 'simple-filterwheel-slot-${widget.slots[i].position}',
@@ -364,7 +372,8 @@ class _CellState extends State<_Cell> {
       label: widget.semanticLabel,
       excludeSemantics: true,
       onTap: widget.onTap,
-      child: Center(
+      // The whole round box is the target, not only the glass.
+      child: ClipOval(
         child: Opacity(
           opacity: widget.dim ? 0.45 : 1,
           child: Material(
@@ -375,59 +384,66 @@ class _CellState extends State<_Cell> {
               customBorder: const CircleBorder(),
               containedInkWell: false,
               radius: d / 2,
-              child: Container(
-                width: d + 8,
-                height: d + 8,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    width: 2,
-                    color: _focused ? AraColors.accentInfo : Colors.transparent,
-                  ),
-                ),
+              child: Center(
                 child: Container(
-                  width: d,
-                  height: d,
+                  width: d + 8,
+                  height: d + 8,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: ring == null
-                        ? null
-                        : Border.all(color: ring, width: 2),
+                    border: Border.all(
+                      width: 2,
+                      color: _focused
+                          ? AraColors.accentInfo
+                          : Colors.transparent,
+                    ),
                   ),
-                  padding: EdgeInsets.all(ring == null ? 0 : 2),
-                  child: DecoratedBox(
+                  child: Container(
+                    width: d,
+                    height: d,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: tint.glass,
-                      border: Border.all(color: AraColors.bgPrimary, width: 2),
+                      border: ring == null
+                          ? null
+                          : Border.all(color: ring, width: 2),
                     ),
-                    position: DecorationPosition.background,
+                    padding: EdgeInsets.all(ring == null ? 0 : 2),
                     child: DecoratedBox(
-                      position: DecorationPosition.foreground,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          center: Alignment(-0.32, -0.44),
-                          radius: 0.9,
-                          colors: [AraColors.glassGloss, Colors.transparent],
-                          stops: [0, 0.5],
+                        color: tint.glass,
+                        border: Border.all(
+                          color: AraColors.bgPrimary,
+                          width: 2,
                         ),
                       ),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            // Upright whatever the wheel's turn.
-                            child: Text(
-                              widget.label,
-                              maxLines: 1,
-                              textScaler: widget.labelScaler,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: tint.label,
+                      position: DecorationPosition.background,
+                      child: DecoratedBox(
+                        position: DecorationPosition.foreground,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            center: Alignment(-0.32, -0.44),
+                            radius: 0.9,
+                            colors: [AraColors.glassGloss, Colors.transparent],
+                            stops: [0, 0.5],
+                          ),
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              // Upright whatever the wheel's turn.
+                              child: Text(
+                                widget.label,
+                                maxLines: 1,
+                                textScaler: widget.labelScaler,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: tint.label,
+                                ),
                               ),
                             ),
                           ),

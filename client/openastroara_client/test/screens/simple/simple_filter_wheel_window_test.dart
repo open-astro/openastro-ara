@@ -442,6 +442,23 @@ void main() {
     }
   });
 
+  testWidgets("a tap on a cell's edge picks that cell, never its neighbour", (tester) async {
+    // Slot 2 is drawn after slot 1, so where their targets overlapped it took the tap.
+    for (final (wire, width, why) in [
+      (_wire(extra: 5), 280.0, '8 slots on a wheel a narrow window shrinks'),
+      (_wire(extra: 9), 360.0, '12 slots, the cells diagonal to each other'),
+    ]) {
+      final (_, wheel) = await _pump(tester, wire, width: width);
+      final one = tester.getCenter(_slot(1)), two = tester.getCenter(_slot(2));
+      expect(tester.getSize(_slot(1)).width, lessThanOrEqualTo((two - one).distance + 0.01),
+          reason: '$why: never past half-way to the next cell');
+      await tester.tapAt(Offset.lerp(one, two, 0.42)!);
+      await tester.pump();
+      expect(wheel.calls, ['change 1'], reason: why);
+      await tester.pump(const Duration(seconds: 11));
+    }
+  });
+
   testWidgets('a large wheel engraves its slot numbers in Text Secondary, growing with the text', (tester) async {
     // Slot 5's cell reads "F5", so the wheel's only "5" is the engraved number.
     Finder five() => find.descendant(of: find.byType(SimpleFilterWheel), matching: find.text('5'));
