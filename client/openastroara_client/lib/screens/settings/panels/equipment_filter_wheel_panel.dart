@@ -18,6 +18,7 @@ import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../simple/simple_device_windows.dart' show simpleSigned;
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 
@@ -480,8 +481,8 @@ class _FocusOffsetsSection extends ConsumerWidget {
     final theme = Theme.of(context).textTheme;
     final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);
     String rowValue(FilterOffsetRow r) => r.isMeasured
-        ? '${r.offset! >= 0 ? '+' : ''}${r.offset} · R² ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
-            ' · ${l.focusOffsetsColPrevious} ${r.previousOffset}'
+        ? '${simpleSigned(r.offset!)} · ${l.focusFitR2} ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
+            ' · ${l.focusOffsetsColPrevious} ${simpleSigned(r.previousOffset)}'
         : r.isFailed
             ? '${l.focusOffsetsRowFailed}${r.failureReason == null ? '' : ': ${r.failureReason}'}'
             : running
