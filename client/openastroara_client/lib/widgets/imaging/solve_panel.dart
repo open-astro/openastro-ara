@@ -73,7 +73,7 @@ class SolvePanel extends ConsumerWidget {
     return result.when(
       loading: () => Text('Solving with ASTAP…', style: mono),
       error: (e, _) => Text(
-        e is PlateSolveException ? e.message : friendlyError(context.l10n, e, action: 'solve the frame'),
+        e is PlateSolveException ? e.message : friendlyError(context.l10n, e, action: context.l10n.actionSolveFrame),
         style: mono?.copyWith(color: AraColors.accentError),
       ),
       data: (r) {

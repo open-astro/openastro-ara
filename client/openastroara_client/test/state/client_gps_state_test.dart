@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -9,6 +11,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/serial_gps_source.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/state/client_gps_state.dart';
+import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 
@@ -69,6 +72,8 @@ class _FakeSource implements SerialGpsSource {
 
 class _FakeApi implements TimeSyncClient {
   final pushes = <Map<String, Object?>>[];
+  /// When set, a push throws it, like a rig that refuses the fix.
+  Object? pushError;
   TimeSyncState? state;
   @override
   Future<TimeSyncState> getState() async => state ?? (throw StateError('no state'));
@@ -77,6 +82,7 @@ class _FakeApi implements TimeSyncClient {
   @override
   Future<TimeSyncPushResult> pushGpsFix({required DateTime timeUtc, double? lat, double? lng, double? alt}) async {
     pushes.add({'t': timeUtc, 'lat': lat, 'lng': lng, 'alt': alt});
+    if (pushError != null) throw pushError!;
     return const TimeSyncPushResult(locationUpdated: true, clockSet: true);
   }
   @override
@@ -248,6 +254,24 @@ void main() {
       final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
       expect(saved.port, '/dev/cu.usbmodem101', reason: 'remembered for the next launch');
       expect(api.pushes, isNotEmpty);
+    });
+
+    test('a refused push reads wholly in the picked language (#1751)', () async {
+      final api = _FakeApi()
+        ..pushError = DioException.badResponse(
+          statusCode: 422,
+          requestOptions: RequestOptions(path: '/api/v1/time-sync/gps'),
+          response: Response(requestOptions: RequestOptions(path: '/api/v1/time-sync/gps'), statusCode: 422),
+        );
+      final c = await container(_FakeSource([_rmc, _gga]), api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      c.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await c.read(clientGpsProvider.notifier).syncNow();
+      final error = c.read(clientGpsProvider).value!.lastError!;
+      expect(error, startsWith('A posição foi lida, mas o setup a recusou: Não foi possível enviar a posição do GPS'));
+      expect(error, endsWith('esta versão é anterior ao GPS deste computador.'));
+      expect(error, isNot(contains('Fix read')));
     });
 
     test('with two candidate dongles the saved port is kept and the failure names them', () async {

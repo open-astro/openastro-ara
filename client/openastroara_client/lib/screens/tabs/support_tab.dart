@@ -98,7 +98,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = friendlyError(context.l10n, e, action: 'load the logs'));
+      setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionLoadLogs));
     } finally {
       if (mounted && gen == _refreshGen) setState(() => _loading = false);
     }
@@ -134,7 +134,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = friendlyError(context.l10n, e, action: 'load older logs'));
+      setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionLoadOlderLogs));
     } finally {
       // Only this call's own spinner: a refresh that superseded it already cleared the flag.
       if (mounted && gen == _refreshGen) setState(() => _loadingMore = false);
@@ -160,7 +160,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'download that'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionDownload))),
       );
     } finally {
       if (mounted) setState(() => _downloading = false);

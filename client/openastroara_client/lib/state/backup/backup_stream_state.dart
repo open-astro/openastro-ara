@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:ui' show Locale;
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../app_locale_state.dart';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -287,6 +287,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     await _pollOnce();
   }
 
+  /// [friendlyError] in the language picked in Settings.
+  String _friendly(Object e, String Function(AppLocalizations l) action) {
+    final l = l10nFor(ref.read(appLocaleProvider));
+    return friendlyError(l, e, action: action(l));
+  }
+
   /// One claim attempt. On failure the stream stays enabled with a visible
   /// problem — the next tick retries, so a slot freeing up or a server
   /// connecting later is picked up without a manual off/on.
@@ -338,7 +344,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       if (target != null && ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
         return;
       }
-      state = state.copyWith(active: false, problem: friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'start copying frames'));
+      state = state.copyWith(active: false, problem: _friendly(e, (l) => l.actionStartCopyingFrames));
     } finally {
       _claiming = false;
     }
@@ -417,8 +423,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // ("checksum mismatch") — show it verbatim; friendlyError would
           // flatten it to a generic sentence and lose the cause.
           state = state.copyWith(
-            problem: 'Backup of ${entry.id} failing: '
-                '${error is String ? error : friendlyError(lookupAppLocalizations(const Locale('en')), error, action: 'back up that entry')}');
+            problem: l10nFor(ref.read(appLocaleProvider)).backupEntryFailing(
+                entry.id,
+                error is String ? error : _friendly(error, (l) => l.actionBackUpEntry)));
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
@@ -472,8 +479,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // Transient transport trouble: surface it, keep the loop; the next
       // tick retries.
       state = state.copyWith(
-          problem: 'Backup stream hiccup: '
-              '${friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'keep the backup stream going')}');
+          problem: l10nFor(ref.read(appLocaleProvider))
+              .backupStreamHiccup(_friendly(e, (l) => l.actionKeepBackupGoing)));
     } finally {
       _polling = false;
     }

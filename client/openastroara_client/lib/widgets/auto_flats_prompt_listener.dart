@@ -69,7 +69,7 @@ class _AutoFlatsPromptListenerState
       if (!mounted) return;
       ref.read(simpleMessagesProvider.notifier).show(
         SimpleMessageKind.error,
-        friendlyError(context.l10n, e, action: 'send the calibration choice'),
+        friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice),
       );
     }
   }
@@ -100,7 +100,7 @@ class _AutoFlatsPromptListenerState
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content:
-                      Text(friendlyError(context.l10n, e, action: 'send the calibration choice'))));
+                      Text(friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice))));
             }
           },
         ),
