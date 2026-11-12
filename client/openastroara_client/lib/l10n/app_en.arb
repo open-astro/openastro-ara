@@ -4148,14 +4148,6 @@
   "@planFlatsNone": {
     "description": "Plan sheet flats choice: no flats this run"
   },
-  "planFlatsSky": "Sky",
-  "@planFlatsSky": {
-    "description": "Plan sheet flats choice"
-  },
-  "planFlatsPanel": "Panel",
-  "@planFlatsPanel": {
-    "description": "Plan sheet flats choice"
-  },
   "shellStorageReading": "Checking the disk…",
   "@shellStorageReading": {
     "description": "Simple Mode Storage block: heading while the first read is out"
@@ -5405,5 +5397,700 @@
   "monitorLinkLostShort": "Lost contact with the rig",
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  },
+  "calibrationDarks": "Darks",
+  "@calibrationDarks": {
+    "description": "Night done / Calibration: dark frames are missing"
+  },
+  "calibrationBias": "Bias",
+  "@calibrationBias": {
+    "description": "Night done / Calibration: bias frames are missing"
+  },
+  "calibrationTakeFlats": "Take flats",
+  "@calibrationTakeFlats": {
+    "description": "Night done button: shoot the missing flats"
+  },
+  "calibrationTakeDarks": "Take darks",
+  "@calibrationTakeDarks": {
+    "description": "Night done button: shoot the missing darks and bias (asks for the lens cap first)"
+  },
+  "calibrationTaking": "Calibration frames · {done} of {total}",
+  "@calibrationTaking": {
+    "description": "Night done: the calibration run in progress, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationStopped": "Stopped · {done} of {total}",
+  "@calibrationStopped": {
+    "description": "Night done: the calibration run was stopped part-way, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationDone": "Calibration frames done",
+  "@calibrationDone": {
+    "description": "Night done: the calibration run finished"
+  },
+  "calibrationActionShoot": "start the calibration frames",
+  "@calibrationActionShoot": {
+    "description": "Simple Mode, after Couldn't: generating or starting the calibration run failed"
+  },
+  "calibrationActionStop": "stop the calibration frames",
+  "@calibrationActionStop": {
+    "description": "Simple Mode, after Couldn't: stopping the calibration run failed"
+  },
+  "shellModeCalibration": "Calibration",
+  "@shellModeCalibration": {
+    "description": "Calibration mode (#1757): flats, darks and bias for the main camera and the Guide Camera's dark library; the mode grid's tile and the rail's name"
+  },
+  "calibrationTabsGroup": "Calibration tabs",
+  "@calibrationTabsGroup": {
+    "description": "Calibration panel: the screen reader's name for the row of tabs"
+  },
+  "calibrationTabFlats": "Flats",
+  "@calibrationTabFlats": {
+    "description": "Calibration panel tab: flats per filter"
+  },
+  "calibrationTabDarks": "Darks & bias",
+  "@calibrationTabDarks": {
+    "description": "Calibration panel tab: darks and bias (no filters)"
+  },
+  "calibrationTabGuide": "Guide Camera",
+  "@calibrationTabGuide": {
+    "description": "Calibration panel tab: the Guider's dark library and bad-pixel map"
+  },
+  "calibrationChipMissing": "{count} missing",
+  "@calibrationChipMissing": {
+    "description": "Calibration settings chip: how many calibration sets the latest plan's lights lack",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationChipReady": "Ready",
+  "@calibrationChipReady": {
+    "description": "Calibration settings chip: the latest plan's lights have every calibration set"
+  },
+  "calibrationChipNoLights": "No lights",
+  "@calibrationChipNoLights": {
+    "description": "Calibration settings chip: no plan has taken lights yet"
+  },
+  "calibrationNoLightsYet": "No plan lights yet. Build a dark library to reuse for weeks.",
+  "@calibrationNoLightsYet": {
+    "description": "Calibration panel: no plan has taken lights, so there is nothing to match; Darks & bias builds a dark library instead"
+  },
+  "calibrationCovered": "Covered",
+  "@calibrationCovered": {
+    "description": "Calibration panel: this set has matching calibration frames"
+  },
+  "calibrationMissing": "Missing",
+  "@calibrationMissing": {
+    "description": "Calibration panel: this set has no matching calibration frames"
+  },
+  "calibrationFlatsFrom": "Flats from {date}",
+  "@calibrationFlatsFrom": {
+    "description": "Calibration panel, Flats: when the flats that count for this filter were shot",
+    "placeholders": {
+      "date": {"type": "String", "example": "Nov 9"}
+    }
+  },
+  "calibrationAddToQueue": "Add to queue",
+  "@calibrationAddToQueue": {
+    "description": "Calibration: put the darks and bias in the Queue as one Calibration block after the last target"
+  },
+  "calibrationLensCapPrompt": "Put the lens cap on the scope, then press Resume to take the darks.",
+  "@calibrationLensCapPrompt": {
+    "description": "The dark library run's first step: the question its pill asks"
+  },
+  "calibrationPlanRunning": "A plan is running. Calibration would have to wait for it: add the darks and bias to the queue instead?",
+  "@calibrationPlanRunning": {
+    "description": "Calibration: shooting asked while the Plan's run is going; the rig runs one at a time"
+  },
+  "calibrationPlanRunningNote": "A plan is running: calibration frames go in the queue.",
+  "@calibrationPlanRunningNote": {
+    "description": "Calibration panel: shown while the Plan's run is going"
+  },
+  "calibrationNotNow": "Not now",
+  "@calibrationNotNow": {
+    "description": "Calibration question pill: leave it"
+  },
+  "calibrationConnectCamera": "Connect the camera first.",
+  "@calibrationConnectCamera": {
+    "description": "Calibration shutter: why it is off with no main camera"
+  },
+  "calibrationShutterStop": "Stop calibration",
+  "@calibrationShutterStop": {
+    "description": "Calibration shutter's spoken label while its run goes"
+  },
+  "calibrationNothingMissing": "Nothing missing.",
+  "@calibrationNothingMissing": {
+    "description": "Calibration shutter: why it is off when every set is covered"
+  },
+  "calibrationGuideNoGuider": "Connect the Guider to build its dark library and bad-pixel map.",
+  "@calibrationGuideNoGuider": {
+    "description": "Calibration panel, Guide Camera: the Guider isn't connected"
+  },
+  "calibrationGuideDarks": "Dark library",
+  "@calibrationGuideDarks": {
+    "description": "Calibration panel, Guide Camera: the Guider's dark library"
+  },
+  "calibrationGuideCovers": "Covers {min} to {max}",
+  "@calibrationGuideCovers": {
+    "description": "Calibration panel, Guide Camera: the guide exposures the loaded dark library covers",
+    "placeholders": {
+      "min": {"type": "String", "example": "1 s"},
+      "max": {"type": "String", "example": "3 s"}
+    }
+  },
+  "calibrationGuideNotBuilt": "Not built",
+  "@calibrationGuideNotBuilt": {
+    "description": "Calibration panel, Guide Camera: no dark library or bad-pixel map yet"
+  },
+  "calibrationGuideUse": "Use while guiding",
+  "@calibrationGuideUse": {
+    "description": "Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels"
+  },
+  "calibrationGuideRebuild": "Rebuild",
+  "@calibrationGuideRebuild": {
+    "description": "Calibration panel, Guide Camera: build it again (after a gain or temperature change)"
+  },
+  "calibrationGuideDelete": "Delete",
+  "@calibrationGuideDelete": {
+    "description": "Calibration panel, Guide Camera: delete the dark library"
+  },
+  "calibrationGuideDeleteDarksTitle": "Delete the dark library?",
+  "@calibrationGuideDeleteDarksTitle": {
+    "description": "Calibration, Guide Camera: the inline question before Delete removes the guider's dark library"
+  },
+  "calibrationGuideDeleteDefectsTitle": "Delete the bad-pixel map?",
+  "@calibrationGuideDeleteDefectsTitle": {
+    "description": "Calibration, Guide Camera: the inline question before Delete removes the guider's bad-pixel map"
+  },
+  "calibrationGuideDeleteBody": "Building it again takes several minutes of frames with the guide scope covered.",
+  "@calibrationGuideDeleteBody": {
+    "description": "Calibration, Guide Camera: why Delete asks first"
+  },
+  "calibrationGuideDefect": "Bad-pixel map",
+  "@calibrationGuideDefect": {
+    "description": "Calibration panel, Guide Camera: the Guider's defect map, so hot pixels aren't picked as guide stars"
+  },
+  "calibrationGuideCover": "Cover the guide scope, then build.",
+  "@calibrationGuideCover": {
+    "description": "Calibration, Guide Camera: the question before a build (the frames must be dark)"
+  },
+  "calibrationGuideCovered": "Covered, build",
+  "@calibrationGuideCovered": {
+    "description": "Calibration, Guide Camera question: the guide scope is covered; build"
+  },
+  "calibrationGuideStopFirst": "Stop guiding to build: a plan would lose its guide star.",
+  "@calibrationGuideStopFirst": {
+    "description": "Calibration panel, Guide Camera: builds are refused while guiding"
+  },
+  "calibrationNoQueue": "Queue a target first: the darks and bias run after it.",
+  "@calibrationNoQueue": {
+    "description": "Calibration, Add to queue with no queue"
+  },
+  "calibrationAlreadyQueued": "The queue already has its calibration frames.",
+  "@calibrationAlreadyQueued": {
+    "description": "Calibration, Add to queue: the queue holds one Calibration block"
+  },
+  "calibrationActionQueue": "add the calibration frames to the queue",
+  "@calibrationActionQueue": {
+    "description": "Simple Mode, after Couldn't: queuing the Calibration block failed"
+  },
+  "calibrationActionBuildLibrary": "build the dark library",
+  "@calibrationActionBuildLibrary": {
+    "description": "Simple Mode, after Couldn't: building the dark library failed"
+  },
+  "calibrationActionGuide": "change the guide camera's calibration",
+  "@calibrationActionGuide": {
+    "description": "Simple Mode, after Couldn't: a Guide Camera tab action failed"
+  },
+  "searchCalibrationWords": "flats darks bias calibration frames dark library",
+  "@searchCalibrationWords": {
+    "description": "Simple Mode search: words (never shown) that find the Calibration mode; space-separated, lower case"
+  },
+  "focusOffsets": "Offsets",
+  "@focusOffsets": {
+    "description": "Simple Focus panel: the third routine beside Auto and Manual, which measures each filter's focus offset (keep it short, it shares a row)"
+  },
+  "focusOffsetsTitle": "Focus offsets",
+  "@focusOffsetsTitle": {
+    "description": "Simple Mode: the offset calibration routine's name, on its status pill and its search result"
+  },
+  "focusOffsetsProgress": "{filter} · {index} of {count}",
+  "@focusOffsetsProgress": {
+    "description": "Simple Mode status pill, Focus offsets: the filter being measured and which autofocus run of how many (e.g. OIII · 4 of 7)",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsIntro": "Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.",
+  "@focusOffsetsIntro": {
+    "description": "Simple Focus panel, Offsets: what the routine does, before it starts"
+  },
+  "focusOffsetsReference": "Offsets are measured from {filter}, the reference.",
+  "@focusOffsetsReference": {
+    "description": "Simple Focus panel, Offsets: which filter the offsets are measured from, before the run",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsReferenceChip": "{filter} · reference",
+  "@focusOffsetsReferenceChip": {
+    "description": "Simple Focus panel, Offsets filter picker: the reference filter's chip, always measured",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsPicker": "Filters to measure",
+  "@focusOffsetsPicker": {
+    "description": "Simple Focus panel, Offsets: the filter picker's caption"
+  },
+  "focusOffsetsStart": "Calibrate focus offsets",
+  "@focusOffsetsStart": {
+    "description": "Simple Mode shutter in Focus, Offsets: starts the calibration (screen-reader label)"
+  },
+  "focusOffsetsCancel": "Stop calibrating focus offsets",
+  "@focusOffsetsCancel": {
+    "description": "Simple Mode shutter in Focus, Offsets while it runs: the red square stops it (screen-reader label)"
+  },
+  "focusOffsetsMeasuring": "Measuring {filter} · {index} of {count}",
+  "@focusOffsetsMeasuring": {
+    "description": "Simple Focus panel, Offsets: the run's headline while it measures a filter",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsStarting": "Starting…",
+  "@focusOffsetsStarting": {
+    "description": "Simple Focus panel, Offsets: the headline before the first measurement starts"
+  },
+  "focusOffsetsPlanRunning": "Wait for the plan to finish: calibrating changes filters and focus.",
+  "@focusOffsetsPlanRunning": {
+    "description": "Simple Focus panel, Offsets: why it can't start while a plan runs"
+  },
+  "focusOffsetsFocusBusy": "Wait for the other focus routine to finish.",
+  "@focusOffsetsFocusBusy": {
+    "description": "Simple Focus panel, Offsets: why it can't start while autofocus, the Bahtinov readout or guide-camera focus runs"
+  },
+  "focusOffsetsNeedsCamera": "Connect the camera to calibrate focus offsets.",
+  "@focusOffsetsNeedsCamera": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no camera connected"
+  },
+  "focusOffsetsNeedsFocuser": "Connect the focuser to calibrate focus offsets.",
+  "@focusOffsetsNeedsFocuser": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no focuser connected"
+  },
+  "focusOffsetsNeedsWheel": "Connect the filter wheel to calibrate focus offsets.",
+  "@focusOffsetsNeedsWheel": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no filter wheel connected"
+  },
+  "focusOffsetsNeedsMotorisedWheel": "Calibrating needs a motorised filter wheel: a manual one can't change filters by itself.",
+  "@focusOffsetsNeedsMotorisedWheel": {
+    "description": "Simple Focus panel, Offsets: why it can't start with the manual filter wheel"
+  },
+  "focusOffsetsNeedsAbsoluteFocuser": "Calibrating needs an absolute focuser: a relative one has no positions to compare.",
+  "@focusOffsetsNeedsAbsoluteFocuser": {
+    "description": "Simple Focus panel, Offsets: why it can't start with a relative focuser"
+  },
+  "focusOffsetsPickOne": "Pick at least one filter besides the reference.",
+  "@focusOffsetsPickOne": {
+    "description": "Simple Focus panel, Offsets: why it can't start with only the reference picked"
+  },
+  "focusOffsetsResults": "Offsets measured",
+  "@focusOffsetsResults": {
+    "description": "Simple Focus panel, Offsets: the finished run's headline"
+  },
+  "focusOffsetsStopped": "Stopped. Your saved offsets are unchanged.",
+  "@focusOffsetsStopped": {
+    "description": "Simple Focus panel, Offsets: the headline after the run was stopped"
+  },
+  "focusOffsetsFailed": "The calibration failed. Your saved offsets are unchanged.",
+  "@focusOffsetsFailed": {
+    "description": "Simple Focus panel, Offsets: the headline after the run failed (the reason follows)"
+  },
+  "focusOffsetsColFilter": "Filter",
+  "@focusOffsetsColFilter": {
+    "description": "Simple Focus panel, Offsets results table: the filter column"
+  },
+  "focusOffsetsColOffset": "Offset",
+  "@focusOffsetsColOffset": {
+    "description": "Simple Focus panel, Offsets results table: the offset column, in focuser steps"
+  },
+  "focusOffsetsColPrevious": "Before",
+  "@focusOffsetsColPrevious": {
+    "description": "Simple Focus panel, Offsets results table: the offset saved before this run"
+  },
+  "focusOffsetsRowFailed": "Failed",
+  "@focusOffsetsRowFailed": {
+    "description": "Simple Focus panel, Offsets results table: a filter whose autofocus failed (the reason follows)"
+  },
+  "focusOffsetsRowSkipped": "Not measured",
+  "@focusOffsetsRowSkipped": {
+    "description": "Simple Focus panel, Offsets results table: a filter the run ended before"
+  },
+  "focusOffsetsRowPending": "Waiting",
+  "@focusOffsetsRowPending": {
+    "description": "Simple Focus panel, Offsets results table: a filter not reached yet"
+  },
+  "focusOffsetsWeakFit": "Weak curve fit (R² {r2}): run again if the sky has settled.",
+  "@focusOffsetsWeakFit": {
+    "description": "Simple Focus panel, Offsets results table: a filter whose fit was weak, in the full UI's weak-fit words",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsDrift": "The reference moved {steps} steps between its two runs, more than its critical focus zone ({cfz} steps). Run it again for steadier numbers.",
+  "@focusOffsetsDrift": {
+    "description": "Simple Focus panel, Offsets results: the drift warning",
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "cfz": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsDriftNotChecked": "Drift not checked: the reference's second run didn't measure.",
+  "@focusOffsetsDriftNotChecked": {
+    "description": "Simple Focus panel, Offsets results: the reference's second run failed, so drift was not checked"
+  },
+  "focusOffsetsSave": "Save offsets",
+  "@focusOffsetsSave": {
+    "description": "Simple Focus panel, Offsets results: keeps the measured offsets"
+  },
+  "focusOffsetsDiscard": "Discard",
+  "@focusOffsetsDiscard": {
+    "description": "Simple Focus panel, Offsets results: throws the results away, the saved offsets stay"
+  },
+  "focusOffsetsSaved": "Offsets saved. Autofocus after a filter change can now be turned off.",
+  "@focusOffsetsSaved": {
+    "description": "Simple Focus panel, Offsets: the hint after Save"
+  },
+  "deviceFocusOffset": "Offset {offset} steps",
+  "@deviceFocusOffset": {
+    "description": "Simple Filter wheel window: the filter in place's saved focus offset, signed (e.g. Offset +42 steps)",
+    "placeholders": {
+      "offset": {
+        "type": "String"
+      }
+    }
+  },
+  "searchFocusOffsetsWords": "focus offsets filter offsets calibrate",
+  "@searchFocusOffsetsWords": {
+    "description": "Simple Mode search: words (never shown) that find the Focus offsets routine; space-separated, lower case"
+  },
+  "calibrationLightGroup": "Light",
+  "@calibrationLightGroup": {
+    "description": "Calibration panel, Flats: where the flats' light comes from (screen reader name of the two segments)"
+  },
+  "calibrationLightFront": "Panel or screen",
+  "@calibrationLightFront": {
+    "description": "Calibration panel, Flats: an even light in front of the scope: a flat panel, a tablet screen or a light box"
+  },
+  "calibrationLightSky": "Twilight sky",
+  "@calibrationLightSky": {
+    "description": "Calibration panel, Flats: the flats wait for twilight and use the sky"
+  },
+  "calibrationLightPanelNote": "The flat panel lights itself.",
+  "@calibrationLightPanelNote": {
+    "description": "Calibration panel, Flats: a flat panel is connected, so the run turns it on"
+  },
+  "calibrationLightScreenNote": "No flat panel connected: the run asks you to put a screen or light box over the scope first.",
+  "@calibrationLightScreenNote": {
+    "description": "Calibration panel, Flats: no panel device, so a hand-held light (a tablet, a light box) is asked for before the flats"
+  },
+  "calibrationLightSkyNote": "The flats wait for twilight and use the sky.",
+  "@calibrationLightSkyNote": {
+    "description": "Calibration panel, Flats: twilight sky flats"
+  },
+  "calibrationLightPrompt": "Put the screen or light box over the scope, then press Resume to take the flats.",
+  "@calibrationLightPrompt": {
+    "description": "The calibration run's first step with no flat panel: the question its pill asks before the flats"
+  },
+  "calibrationPillProgress": "{done} of {total}",
+  "@calibrationPillProgress": {
+    "description": "Calibration status pill: frames taken of planned in the calibration run",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationGuideBuilding": "Building…",
+  "@calibrationGuideBuilding": {
+    "description": "Status pill: the Guide Camera's dark library or bad-pixel map is being built, before the rig reports frames"
+  },
+  "calibrationGuideBuildProgress": "Building · {done} of {total}",
+  "@calibrationGuideBuildProgress": {
+    "description": "Status pill: the Guide Camera's dark library or bad-pixel map build, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationGuideBuildFailed": "{what} wasn't built",
+  "@calibrationGuideBuildFailed": {
+    "description": "Error pill: a Guide Camera build failed on the rig; the guider's reason follows. {what} is the Dark library or the Bad-pixel map",
+    "placeholders": {
+      "what": {"type": "String", "example": "Dark library"}
+    }
+  },
+  "calibrationGuideBuilt": "{what} built",
+  "@calibrationGuideBuilt": {
+    "description": "Result pill: a Guide Camera build finished on the rig",
+    "placeholders": {
+      "what": {"type": "String", "example": "Dark library"}
+    }
+  },
+  "calibrationFlatsForSession": "Tonight's filters · {target}",
+  "@calibrationFlatsForSession": {
+    "description": "Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target",
+    "placeholders": {
+      "target": {"type": "String", "example": "NGC 7000"}
+    }
+  },
+  "calibrationOnFileTag": "On file",
+  "@calibrationOnFileTag": {
+    "description": "Calibration panel, Guide Camera: the outlined pill of a dark library or bad-pixel map that exists"
+  },
+  "calibrationGuideBuildDarks": "Build dark library",
+  "@calibrationGuideBuildDarks": {
+    "description": "Calibration panel, Guide Camera: build the Guider's dark library"
+  },
+  "calibrationGuideBuildDefects": "Build bad-pixel map",
+  "@calibrationGuideBuildDefects": {
+    "description": "Calibration panel, Guide Camera: build the Guider's bad-pixel map"
+  },
+  "calibrationGuideCoverNote": "Building asks you to cover the guide scope first.",
+  "@calibrationGuideCoverNote": {
+    "description": "Calibration panel, Guide Camera: the line under the build buttons"
+  },
+  "calibrationGuideReady": "Built",
+  "@calibrationGuideReady": {
+    "description": "Calibration panel, Guide Camera: the dark library or bad-pixel map exists (its row, beside the On file pill)"
+  },
+  "calibrationFlatsMissing": "Flats missing",
+  "@calibrationFlatsMissing": {
+    "description": "Night done: tonight's lights lack flats; the filters follow under it"
+  },
+  "calibrationFlatsOnFile": "Flats on file",
+  "@calibrationFlatsOnFile": {
+    "description": "Night done: every filter of tonight's lights has flats"
+  },
+  "calibrationDarksMissingFromLibrary": "Darks missing from the library",
+  "@calibrationDarksMissingFromLibrary": {
+    "description": "Night done: the camera's library has no darks (or bias) matching tonight's lights, e.g. a new exposure, gain or temperature"
+  },
+  "calibrationChipNoPlan": "No plan",
+  "@calibrationChipNoPlan": {
+    "description": "Calibration chip on Darks & bias: no plan rows to say which darks are needed"
+  },
+  "calibrationChipOld": "{count} old",
+  "@calibrationChipOld": {
+    "description": "Calibration chip on Darks & bias: dark sets the plan needs that are older than six months",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationChipNoGuider": "No guider",
+  "@calibrationChipNoGuider": {
+    "description": "Calibration chip on Guide Camera: the Guider isn't connected"
+  },
+  "calibrationCapShootFlats": "Shoot flats",
+  "@calibrationCapShootFlats": {
+    "description": "Calibration shutter caption on Flats: what the shutter does"
+  },
+  "calibrationCapBuild": "Build {what}",
+  "@calibrationCapBuild": {
+    "description": "Calibration shutter caption and button on Darks & bias: builds the darks (by exposure) and/or bias the plan needs",
+    "placeholders": {
+      "what": {"type": "String", "example": "120 s + bias"}
+    }
+  },
+  "calibrationCapRefresh": "Refresh {what}",
+  "@calibrationCapRefresh": {
+    "description": "Calibration shutter caption and button on Darks & bias: shoots old dark sets again",
+    "placeholders": {
+      "what": {"type": "String", "example": "300 s"}
+    }
+  },
+  "calibrationLibraryNoPlan": "Queue a target to see which darks its plan needs.",
+  "@calibrationLibraryNoPlan": {
+    "description": "Calibration panel, Darks & bias: no plan rows, so coverage can't be judged"
+  },
+  "calibrationShootMissingFlats": "{count, plural, =1{Shoot 1 missing flat set} other{Shoot {count} missing flat sets}}",
+  "@calibrationShootMissingFlats": {
+    "description": "Calibration panel, Flats: shoot the filters that have no flats",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationReshootAll": "Reshoot all",
+  "@calibrationReshootAll": {
+    "description": "Calibration panel, Flats: every filter is covered; shoot all of them again"
+  },
+  "calibrationReshootAllNote": "Reshoot all keeps what you have and shoots every filter again.",
+  "@calibrationReshootAllNote": {
+    "description": "Calibration panel, Flats: the line under Reshoot all"
+  },
+  "calibrationAgeDays": "{count, plural, =0{today} =1{1 day} other{{count} days}}",
+  "@calibrationAgeDays": {
+    "description": "Calibration library: how old a set is, in days (followed by 'old')",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationAgeWeeks": "{count, plural, =1{1 week} other{{count} weeks}}",
+  "@calibrationAgeWeeks": {
+    "description": "Calibration library: how old a set is, in weeks",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationAgeMonths": "{count, plural, =1{1 month} other{{count} months}}",
+  "@calibrationAgeMonths": {
+    "description": "Calibration library: how old a set is, in months",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationGain": "gain {gain}",
+  "@calibrationGain": {
+    "description": "Calibration library: a set's camera gain",
+    "placeholders": {
+      "gain": {"type": "int"}
+    }
+  },
+  "calibrationOffset": "offset {offset}",
+  "@calibrationOffset": {
+    "description": "Calibration library: a bias set's camera offset",
+    "placeholders": {
+      "offset": {"type": "int"}
+    }
+  },
+  "calibrationLibraryCamera": "{camera} · reused for months",
+  "@calibrationLibraryCamera": {
+    "description": "Calibration panel, Darks & bias: the heading naming the camera the library belongs to",
+    "placeholders": {
+      "camera": {"type": "String", "example": "ZWO ASI533MC Pro"}
+    }
+  },
+  "calibrationLibraryCovers": "Covers your plan",
+  "@calibrationLibraryCovers": {
+    "description": "Calibration panel, Darks & bias: the library has darks and bias for every exposure the queued plan uses"
+  },
+  "calibrationLibraryNeeds": "Your plan needs {what}",
+  "@calibrationLibraryNeeds": {
+    "description": "Calibration panel, Darks & bias: the darks (by exposure) and/or bias the library lacks for the queued plan",
+    "placeholders": {
+      "what": {"type": "String", "example": "120 s + bias"}
+    }
+  },
+  "calibrationLibraryOld": "Covers your plan, but the {what} darks are old",
+  "@calibrationLibraryOld": {
+    "description": "Calibration panel, Darks & bias: the plan is covered by dark sets older than six months",
+    "placeholders": {
+      "what": {"type": "String", "example": "300 s"}
+    }
+  },
+  "calibrationLibraryOldNote": "Darks drift as a sensor ages. Refresh them when you can.",
+  "@calibrationLibraryOldNote": {
+    "description": "Calibration panel, Darks & bias: under the old-darks line"
+  },
+  "calibrationLibraryEmpty": "No darks or bias for this camera yet",
+  "@calibrationLibraryEmpty": {
+    "description": "Calibration panel, Darks & bias: the camera's library is empty"
+  },
+  "calibrationLibraryEmptyNote": "Build them once on a cloudy night; they last months.",
+  "@calibrationLibraryEmptyNote": {
+    "description": "Calibration panel, Darks & bias: under the empty-library line"
+  },
+  "calibrationLibraryNone": "None yet.",
+  "@calibrationLibraryNone": {
+    "description": "Calibration panel, Darks & bias: no darks (or no bias) in the library"
+  },
+  "calibrationLibraryAge": "{age} old · {frames} frames",
+  "@calibrationLibraryAge": {
+    "description": "Calibration library row: how old the set is and how many frames it holds",
+    "placeholders": {
+      "age": {"type": "String", "example": "3 weeks"},
+      "frames": {"type": "int"}
+    }
+  },
+  "calibrationOld": "Old",
+  "@calibrationOld": {
+    "description": "Calibration library: the outlined pill of a dark set older than six months"
+  },
+  "calibrationLibraryBuildSection": "Build or refresh",
+  "@calibrationLibraryBuildSection": {
+    "description": "Calibration panel, Darks & bias: the heading over the exposure chips"
+  },
+  "calibrationLibraryNote": "At {settings}, from the plan. Bias at the same gain. The run asks for the lens cap first.",
+  "@calibrationLibraryNote": {
+    "description": "Calibration panel, Darks & bias: the settings the library build uses",
+    "placeholders": {
+      "settings": {"type": "String", "example": "gain 100 · -10 °C"}
+    }
+  },
+  "calibrationBuildPicked": "Build picked",
+  "@calibrationBuildPicked": {
+    "description": "Calibration panel, Darks & bias: build darks for the exposures picked by hand"
+  },
+  "planFlatsFor": "For {filters}",
+  "@planFlatsFor": {
+    "description": "Plan sheet, Flats row: the target's filters the flats are for",
+    "placeholders": {
+      "filters": {"type": "String", "example": "L, R, G, Ha"}
+    }
+  },
+  "planFlatsAfterTarget": "After target",
+  "@planFlatsAfterTarget": {
+    "description": "Plan sheet, Flats row: flats for this target's filters right after its last frame (#1757)"
+  },
+  "planFlatsEndOfNight": "End of night",
+  "@planFlatsEndOfNight": {
+    "description": "Plan sheet, Flats row: flats for this target's filters after the queue's last target (#1757)"
+  },
+  "planFlatsHint": "After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.",
+  "@planFlatsHint": {
+    "description": "Plan sheet, Flats row: what the two choices do"
+  },
+  "calibrationLibraryNoCamera": "camera not recorded",
+  "@calibrationLibraryNoCamera": {
+    "description": "Calibration library row: a set from before the rig recorded which camera took it; it counts for any camera"
+  },
+  "calibrationStartQueue": "The calibration frames are in the queue after your targets. Start the queue now?",
+  "@calibrationStartQueue": {
+    "description": "Question pill: calibration was added to a queue whose targets haven't started"
+  },
+  "calibrationStartQueueNow": "Start queue",
+  "@calibrationStartQueueNow": {
+    "description": "Question pill action: start the queue (targets first, then the calibration frames)"
   }
 }

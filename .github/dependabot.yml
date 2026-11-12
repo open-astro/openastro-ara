@@ -43,6 +43,22 @@ updates:
       # see OpenAstroAra.Equipment.csproj.
       - dependency-name: SharpGIS.NmeaParser
         update-types: ["version-update:semver-major"]
+      # Held on the .NET 10 (LTS) line: these packages ship with each .NET
+      # release, and an 11.x one on the net10.0 server mixes runtime lines
+      # (Microsoft.Data.Sqlite 11 also swaps the bundled native SQLite).
+      # Move them in the same PR that retargets the server to .NET 11.
+      - dependency-name: Microsoft.AspNetCore.OpenApi
+        update-types: ["version-update:semver-major"]
+      - dependency-name: Microsoft.Data.Sqlite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: Microsoft.EntityFrameworkCore.Sqlite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: System.Configuration.ConfigurationManager
+        update-types: ["version-update:semver-major"]
+      - dependency-name: System.Drawing.Common
+        update-types: ["version-update:semver-major"]
+      - dependency-name: System.IO.Ports
+        update-types: ["version-update:semver-major"]
 
   # Flutter / Dart client packages.
   #

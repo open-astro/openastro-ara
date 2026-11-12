@@ -211,6 +211,8 @@ public sealed partial class FileProfileStore : IProfileStore {
     public void PutFilterWheelPolicy(FilterWheelPolicyDto value) => UpdateAndPersist(s => s with { FilterWheelPolicy = value });
     public CoolingFanDto GetCoolingFan() { lock (_lock) { return _snapshot.CoolingFan ?? CoolingFanDto.None; } }
     public void PutCoolingFan(CoolingFanDto value) => UpdateAndPersist(s => s with { CoolingFan = value });
+    public FilterFocusOffsetsDto GetFilterFocusOffsets() { lock (_lock) { return _snapshot.FilterFocusOffsets ?? FilterFocusOffsetsDto.Empty; } }
+    public void PutFilterFocusOffsets(FilterFocusOffsetsDto value) => UpdateAndPersist(s => s with { FilterFocusOffsets = value });
     public DomeSettingsDto GetDomeSettings() { lock (_lock) { return _snapshot.Dome ?? DomeSettingsDto.Default; } }
     public void PutDomeSettings(DomeSettingsDto value) => UpdateAndPersist(s => s with { Dome = value });
 

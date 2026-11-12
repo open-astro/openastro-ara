@@ -50,6 +50,9 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class CameraService : ICameraService, IRetainedDeviceSource, IDisposable {
 
+    /// <summary>The target a Take One (a frame outside any plan) is filed under, in the shared manual-capture session.</summary>
+    public const string ManualCaptureTarget = "Manual capture";
+
     // #1127 — the record the card names. The remembered-selection store and this can diverge
     // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
     public DiscoveredDeviceDto? RetainedDevice {
@@ -739,7 +742,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // #1177 — the request's ImageType (validated at the entry point) picks the IMAGETYP, the
             // catalog frame type and, through the lower-cased kind, the shutter.
             var imageType = NormalizeManualImageType(request.ImageType);
-            _ = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), "Manual capture", CancellationToken.None).ConfigureAwait(false);
+            _ = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), ManualCaptureTarget, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
@@ -1558,7 +1561,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             var prefs = ReadHeaderPrefsBestEffort();
 
             fits.SetHeader("SWCREATE", FrameAlbumFields.AraSoftware, "capture software");
-            if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
+            if (!string.IsNullOrWhiteSpace(targetName) && targetName != ManualCaptureTarget) {
                 fits.SetHeader("OBJECT", targetName!, "target name");
             }
             // Where the mount was pointed: the solve hint (§18.I reads OBJCTRA/OBJCTDEC back), the
@@ -1861,7 +1864,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 BinX: request.BinX,
                 BinY: request.BinY,
                 SensorTemp: sensorTemp,
-                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
+                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == ManualCaptureTarget
                     ? null : targetName,
                 FrameNumber: NextFrameNumber(rootDir),
                 Night: night));
@@ -1955,6 +1958,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // bin the header's XPIXSZ follows, so a coerced bin still gets the right scale.
         var j2000 = pointing is { IsJ2000: true } pt ? pt : (FramePointing?)null;
         var optics = _profileStore?.GetOpticsSettings();
+        // #1757 — the camera, from the same selected device the FITS INSTRUME header is written from.
+        var device = _device;
         var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
             optics.PixelSizeUm * Math.Max(bin, 1),
             optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1));
@@ -1985,7 +1990,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             RaDeg: j2000 is FramePointing p ? OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(p.RaHours) : null,
             DecDeg: j2000?.DecDegrees,
             PixelScaleArcsec: pixelScale,
-            CapturedByAra: true), CancellationToken.None).ConfigureAwait(false);
+            CapturedByAra: true,
+            CameraName: string.IsNullOrWhiteSpace(device?.Name) ? null : device.Name,
+            CameraId: string.IsNullOrWhiteSpace(device?.UniqueId) ? null : device.UniqueId), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────

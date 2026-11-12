@@ -98,5 +98,7 @@ public sealed record ProfileSnapshotDto(
     SavedTargetsDto? SavedTargets = null,
     // #1700 — the camera's cooling fan. Null (every pre-#1700 file) = no designation, no interlock.
     CoolingFanDto? CoolingFan = null,
+    // #1675 — the per-slot focus offsets the offset calibration saved. Null (every pre-#1675 file) = none saved.
+    FilterFocusOffsetsDto? FilterFocusOffsets = null,
     // #1689 — the dome's geometry and follow-the-mount setting. Null (every pre-#1689 file) = the defaults, not following.
     DomeSettingsDto? Dome = null);
