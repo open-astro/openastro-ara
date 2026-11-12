@@ -83,6 +83,7 @@ const kSimpleText = TextStyle(
 class AraFontSize {
   static const double simpleCaption = 12;
   static const double simpleUnit = 13;
+  static const double simpleHeading = 16;
 
   /// A direction pad cell's N / S / E / W (#1649).
   static const double simplePadLetter = 18;
@@ -109,6 +110,14 @@ const kSimpleCaption = TextStyle(
 const kSimpleUnit = TextStyle(
   fontSize: AraFontSize.simpleUnit,
   color: AraColors.textSecondary,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// A sheet's or panel's title (the Rig setup sheet; DESIGN.md's Heading).
+const kSimpleHeading = TextStyle(
+  fontSize: AraFontSize.simpleHeading,
+  fontWeight: FontWeight.w600,
+  color: AraColors.textPrimary,
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
