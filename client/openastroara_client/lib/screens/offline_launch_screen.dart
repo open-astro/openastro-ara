@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/launch_gate_state.dart';
 import '../state/profile_cache_state.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/adaptive_controls.dart';
 
 /// §2 offline planning — the profile choice for a server-less session. Shows
 /// the profiles cached from past connected sessions; picking one seeds the
@@ -50,7 +51,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
-                      Center(child: CircularProgressIndicator()),
+                      Center(child: AdaptiveProgressIndicator()),
                     ],
                     // A cache read never throws (the service degrades to
                     // empty), but the branch is required — treat it as empty.
@@ -130,7 +131,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: AdaptiveProgressIndicator(strokeWidth: 2))
             : const Text('Plan'),
       ),
     ];

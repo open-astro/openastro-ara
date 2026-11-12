@@ -19,6 +19,7 @@ import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.4 Filter Wheel panel. Shows the connected wheel's live slots (the device's
 /// own names + focus offsets) with a per-slot select, via the shared connection
@@ -284,7 +285,7 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
                 child: SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 ),
               ),
             Text(currentText),
@@ -415,7 +416,7 @@ class _SlotRow extends StatelessWidget {
                 const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 )
               else if (isCurrent)
                 const Icon(Icons.check_circle,

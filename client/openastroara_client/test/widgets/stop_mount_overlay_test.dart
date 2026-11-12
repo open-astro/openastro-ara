@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -262,6 +263,20 @@ void main() {
     expect(find.text('Mount stopped at user request'), findsOneWidget);
     expect(find.textContaining('RA 9.57h'), findsOneWidget);
   });
+
+  testWidgets('on iOS the post-stop window is an iOS alert with Close as its default action', (tester) async {
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted, {'reason': 'user_request'}));
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    final close = tester.widget<CupertinoDialogAction>(find.byKey(const ValueKey('stop_modal_close')));
+    expect(close.isDefaultAction, isTrue);
+    await tester.ensureVisible(find.byKey(const ValueKey('stop_modal_close')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stop_modal_close')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mount stopped at user request'), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('quiet (Simple Mode, no popups): no slewing banner and no stopped dialog', (tester) async {
     await pump(tester, quiet: true);

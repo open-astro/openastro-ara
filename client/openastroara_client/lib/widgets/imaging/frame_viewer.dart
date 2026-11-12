@@ -10,6 +10,7 @@ import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// Center pane of the Imaging tab. While §64 Live View is running it shows the
 /// live frame stream; otherwise it shows the most-recent captured frame's
@@ -33,7 +34,7 @@ class FrameViewer extends ConsumerWidget {
       color: AraColors.bgPanelAlt,
       child: preview.when(
         data: (bytes) => _ZoomableFrame(bytes: bytes),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
             friendlyError(context.l10n, e, action: context.l10n.actionLoadPreview),
@@ -184,7 +185,7 @@ class _LiveView extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CircularProgressIndicator(),
+                        const AdaptiveProgressIndicator(),
                         const SizedBox(height: 12),
                         Text('Starting Live View…',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(

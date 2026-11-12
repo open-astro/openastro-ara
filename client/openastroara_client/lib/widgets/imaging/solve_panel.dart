@@ -10,6 +10,7 @@ import '../../theme/ara_colors.dart';
 import '../../util/coord_format.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// §18.I — plate-solve the last captured frame and show its astrometric
 /// solution (RA / Dec / rotation / scale). Sits under the frame viewer on the
@@ -39,7 +40,7 @@ class SolvePanel extends ConsumerWidget {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.my_location, size: 16),
             label: Text(solving ? 'Solving…' : 'Solve frame'),

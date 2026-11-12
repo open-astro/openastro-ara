@@ -30,7 +30,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart' show simpleModeActiveProvider;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
-import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 
 /// The Queue's run state, as the rig last said it.
 class _Run extends SequenceRunStateNotifier {
@@ -120,6 +120,13 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
   return c;
 }
 
+GuiderLiveState _calibratedAt(double dec) => GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'data': {'calibrated': true, 'declination_deg': dec},
+      }),
+    );
+
 GuiderLiveState _liveState({String app = 'Stopped', bool lock = false, bool calibrated = true}) => GuiderLiveState(
       live: GuiderLive(appState: app, lockX: lock ? 1 : null, lockY: lock ? 1 : null),
       calibration: GuiderCalibrationView.fromJson({
@@ -208,7 +215,12 @@ void main() {
           guidingAssistantProvider.overrideWith(() => assistant ?? _Assistant(_idleAssistant)),
           if (run != null) sequenceRunStateProvider.overrideWith(() => _Run(run)),
         ];
-    FilledButton button(WidgetTester t, String key) => t.widget<FilledButton>(find.byKey(Key(key)));
+    OutlinedButton button(WidgetTester t, String key) => t.widget<OutlinedButton>(find.byKey(Key(key)));
+    // The status dot of a tool's line: its colour and whether it is a ring (blue, changing).
+    StatusDot dot(WidgetTester t, String key) =>
+        t.widget<StatusDot>(find.descendant(of: find.byKey(Key(key)), matching: find.byType(StatusDot)));
+    const calStatus = 'simple-guider-calibration-status';
+    const gaStatus = 'simple-guider-assistant-status';
 
     testWidgets('Tuning and Tools hold the new controls; the Guide tab opens first', (tester) async {
       await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
@@ -220,6 +232,51 @@ void main() {
       expect(find.byKey(const Key('simple-guider-recalibrate')), findsOneWidget);
       expect(find.byKey(const Key('simple-guider-assistant')), findsOneWidget);
       expect(find.text('Build dark library'), findsNothing);
+    });
+
+    testWidgets('calibrated: one row per tool, the Dec in green, quiet 44 pt buttons', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(12.4)));
+      await _tab(tester, 'tools');
+      expect(find.text('Calibration'), findsOneWidget);
+      expect(find.text('Guiding Assistant'), findsOneWidget);
+      expect(find.text('Calibrated at Dec +12°'), findsOneWidget);
+      expect(dot(tester, calStatus).color, AraColors.accentConnected);
+      expect(dot(tester, calStatus).ring, isFalse);
+      expect(find.text('Not run yet'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentInfo);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
+      for (final k in ['simple-guider-recalibrate', 'simple-guider-assistant']) {
+        expect(tester.getSize(find.byKey(Key(k))).height, greaterThanOrEqualTo(44));
+      }
+      expect(find.text('Recalibrate'), findsOneWidget);
+      expect(find.text('Run'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing, reason: 'no filled control: the tab keeps one blue');
+    });
+
+    testWidgets('a southern Dec reads with its sign', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(-33.8)));
+      await _tab(tester, 'tools');
+      expect(find.text('Calibrated at Dec -34°'), findsOneWidget);
+    });
+
+    testWidgets('each button is read as its whole action', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      expect(find.bySemanticsLabel('Recalibrate now'), findsOneWidget);
+      expect(find.bySemanticsLabel('Run Guiding Assistant'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('each row is read once: its name, what it does and where it stands', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(12)));
+      await _tab(tester, 'tools');
+      expect(find.bySemanticsLabel(RegExp(r'^Calibration\. Measures again .* Calibrated at Dec \+12°$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Guiding Assistant\. .* Not run yet$')), findsOneWidget);
+      // the drawn words are not a second reading of the same row
+      expect(find.bySemanticsLabel('Not run yet'), findsNothing);
+      semantics.dispose();
     });
 
     testWidgets('a minimum move goes to the Guider live', (tester) async {
@@ -260,6 +317,7 @@ void main() {
       await tester.pump(); // the run state's first read
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      expect(find.text('Stop the plan to use these.'), findsOneWidget);
     });
 
     testWidgets('guiding refuses Recalibrate now and says to stop first', (tester) async {
@@ -267,6 +325,9 @@ void main() {
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(find.text('Stop guiding to use these.'), findsOneWidget);
+      // One line for both tools, above the rows.
+      final refusal = tester.getTopLeft(find.byKey(const Key('simple-guider-tools-refusal'))).dy;
+      expect(refusal, lessThan(tester.getTopLeft(find.text('Calibration')).dy));
     });
 
     testWidgets('the Guiding Assistant is one action with no options', (tester) async {
@@ -297,6 +358,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(_g.calls, isEmpty);
       expect(c.read(simpleMessagesProvider), hasLength(1));
+      await _tab(tester, 'guide'); // Tools watches the Guider's live state: leaving it stops that poll
       await tester.pump(const Duration(seconds: 4));
     });
 
@@ -306,6 +368,8 @@ void main() {
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      expect(find.text('The main camera is busy: wait for its frame, or stop it.'), findsOneWidget);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsOneWidget);
       c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 11));
     });
@@ -323,15 +387,18 @@ void main() {
       expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
     });
 
-    testWidgets('with no calibration the Guiding Assistant says so and does not start', (tester) async {
+    testWidgets('with no calibration the Guiding Assistant is off and its row says to calibrate first', (tester) async {
       final a = _Assistant(_idleAssistant);
-      final c = await _pump(tester, _wire(runtime: 'stopped'),
+      await _pump(tester, _wire(runtime: 'stopped'),
           rig: rig(_GuiderEquipment(), assistant: a, live: _liveState(calibrated: false)));
       await _tab(tester, 'tools');
-      await tester.tap(find.byKey(const Key('simple-guider-assistant')));
-      await tester.pump();
-      expect(a.started, isEmpty);
-      expect(c.read(simpleMessagesProvider).single.title, contains('Calibrate'));
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      expect(find.textContaining('Calibrate first'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentWarning);
+      expect(find.text('Not calibrated. The next start calibrates first.'), findsOneWidget);
+      expect(dot(tester, calStatus).color, AraColors.accentInfo);
+      expect(dot(tester, calStatus).ring, isTrue, reason: 'blue is a ring, readable by shape in Night mode');
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNotNull, reason: 'Recalibrate is how to fix it');
     });
 
     testWidgets('a star already picked goes straight to measuring', (tester) async {
@@ -394,7 +461,44 @@ void main() {
       await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       expect(find.byKey(const Key('simple-guider-assistant-failed')), findsOneWidget);
-      expect(find.textContaining('star lost'), findsOneWidget);
+      expect(find.textContaining('Last run failed: star lost'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentWarning);
+      expect(find.text('Run again'), findsOneWidget);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing, reason: 'a one-tool state is not a shared refusal');
+    });
+
+    testWidgets('while the Assistant measures: Stop, a blinking green line, and Recalibrate off', (tester) async {
+      final a = _Assistant(_assistant('measuring'));
+      // A real run reports the guider runtime as `assistant`, which counts as busy.
+      await _pump(tester, _wire(runtime: 'assistant'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('Stop'), findsOneWidget);
+      expect(find.text('Measuring drift…'), findsOneWidget);
+      expect(find.text('Stop the guide loop to recalibrate.'), findsNothing, reason: 'stopping it would end the run');
+      expect(dot(tester, gaStatus).color, AraColors.accentConnected);
+      expect(
+          tester.widget<StatusBlink>(find.descendant(of: find.byKey(const Key(gaStatus)), matching: find.byType(StatusBlink))).on,
+          isTrue);
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNotNull, reason: 'Stop takes the tap');
+    });
+
+    testWidgets('a finished Assistant says how many suggestions wait, in green, with Run again', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('Done. 2 suggestions to apply.'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentConnected);
+      expect(find.text('Run again'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Apply 2 suggestions'), findsOneWidget, reason: 'the only filled control');
+    });
+
+    testWidgets('a loop stops Recalibrate only, and says so on its row', (tester) async {
+      await _pump(tester, _wire(runtime: 'looping'), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      expect(find.text('Stop the guide loop to recalibrate.'), findsOneWidget);
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
     });
 
     testWidgets('a long failure reason keeps to two lines, so Tools keeps the Guide height', (tester) async {

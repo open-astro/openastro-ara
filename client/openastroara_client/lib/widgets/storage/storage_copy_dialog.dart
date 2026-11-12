@@ -8,6 +8,7 @@ import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// Copy the store — all of it, or folders picked on it — onto a second drive
 /// plugged into the server. Copy only: nothing on either drive is deleted or
@@ -212,7 +213,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
     final devices = ref.watch(storageDevicesProvider);
     return devices.when(
       loading: () => const SizedBox(
-          height: 140, child: Center(child: CircularProgressIndicator())),
+          height: 140, child: Center(child: AdaptiveProgressIndicator())),
       error: (e, _) => SizedBox(
         height: 140,
         child: Center(
@@ -477,7 +478,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
           else if (level == null)
             const Padding(
               padding: EdgeInsets.all(12),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              child: Center(child: AdaptiveProgressIndicator(strokeWidth: 2)),
             )
           else if (level.dirs.isEmpty)
             Padding(

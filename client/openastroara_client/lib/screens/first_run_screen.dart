@@ -15,6 +15,7 @@ import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
 import '../widgets/adaptive_refresh.dart';
 import '../widgets/plan_offline_button.dart';
+import '../widgets/adaptive_controls.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
 /// Polish + UX lands in Phase 12a (app shell + §25 visual design); this is
@@ -311,7 +312,7 @@ class _HandshakePanel extends StatelessWidget {
               const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: AdaptiveProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 12),
               Text('Connecting to ${server.baseUrl}…'),

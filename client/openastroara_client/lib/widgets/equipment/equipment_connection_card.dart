@@ -11,6 +11,7 @@ import 'alpaca_chooser_dialog.dart';
 import 'equipment_state_chip.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// Shared connection card for the single-instance equipment panels (everything on
 /// the generic [EquipmentDeviceNotifier] core — i.e. all but the multi-instance
@@ -94,7 +95,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
             ),
           _ => const Padding(
               padding: EdgeInsets.all(12),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: AdaptiveProgressIndicator()),
             ),
         },
       ),

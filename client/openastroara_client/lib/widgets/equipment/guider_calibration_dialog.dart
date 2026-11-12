@@ -9,6 +9,7 @@ import '../../models/calibration_status.dart';
 import '../../state/guider/guider_build_activity_state.dart';
 import '../../state/guider/guider_calibration_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// Problem-detail `type` tokens the daemon puts on calibration-build 409s so
 /// the two user situations read differently (mirrors EquipmentEndpoints).
@@ -113,7 +114,7 @@ class _GuiderCalibrationSectionState extends ConsumerState<GuiderCalibrationSect
         if (busy && response == null)
           const Padding(
             padding: EdgeInsets.all(8),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: AdaptiveProgressIndicator()),
           )
         else if (async.hasError)
           // This replaces the last-known status (Riverpod 3's copyWithPrevious
@@ -142,7 +143,7 @@ class _GuiderCalibrationSectionState extends ConsumerState<GuiderCalibrationSect
           child: TextButton(
             onPressed: locked ? null : _refresh,
             child: _refreshingUi
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Text('Refresh'),
           ),
         ),
@@ -425,7 +426,7 @@ class _Artifact extends StatelessWidget {
               onPressed: onBuild,
               icon: building
                   ? const SizedBox(
-                      width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.build, size: 16),
               label: Text(building ? 'Building…' : (exists ? 'Rebuild' : 'Build')),
             ),

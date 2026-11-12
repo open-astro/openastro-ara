@@ -24,6 +24,7 @@ import 'optimal_sub_calculator_dialog.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
 import 'target_preview.dart';
+import '../adaptive_controls.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
 /// active profile's site and optical train, by the server's transparent 0–100
@@ -608,7 +609,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                           child: SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AdaptiveProgressIndicator(strokeWidth: 2),
                           ),
                         )
                       : IconButton(

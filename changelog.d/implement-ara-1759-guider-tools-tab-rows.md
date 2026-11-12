@@ -1,0 +1,2 @@
+### Changed (Simple Mode)
+- **Guider Tools tab is one row per tool** (#1759): Calibration and Guiding Assistant each show what they do, a status line (Calibrated at Dec +12°, Not run yet, Measuring drift…, Done. 2 suggestions to apply., Last run failed: …) and a quiet outlined button. A refusal that covers both tools shows once above the rows. With no calibration the Assistant's Run is off and its row says to calibrate first.

@@ -8,6 +8,7 @@ import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/gps_site_fill.dart';
 import '../wizard_form_kit.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.1 Screen 1 — Profile name + location.
 class ScreenProfileBasics extends ConsumerStatefulWidget {
@@ -192,7 +193,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
                 icon: _gpsBusy
                     ? const SizedBox(
                         width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.gps_fixed, size: 18),
                 label: const Text('Fill from GPS'),
               ),

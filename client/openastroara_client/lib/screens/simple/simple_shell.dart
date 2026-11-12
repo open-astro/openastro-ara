@@ -1055,10 +1055,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
-      onTrackerTap: () => _toggle(_Popover.queue),
     );
     final sheet = screen.overlay(screenHost);
-    final tracker = screen.tracker(screenHost);
     final runActive =
         sheet != null &&
         ref.watch(
@@ -1147,6 +1145,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               kSimplePlanSquareHeight * simpleRailScale(context) +
               kSimpleInset
         : kSimpleInset;
+    // Large text or a short window: the right rail reaches down into the
+    // plan squares' corner, so they sit beside it, never over its chip.
+    final squaresBesideRail =
+        rightRailTop + _rightRailHeight + AraSpace.s8 >
+        height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
+    // Beside it they still hold one square (a rail wide): a phone at 2x text.
+    final squaresLeft = squaresBesideRail
+        ? math.min(width / 2, width - kSimpleInset * 2 - railWidth * 2)
+        : width / 2;
     final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
         sheet != null &&
@@ -1536,26 +1543,38 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
-                              // half (the Info tiles have the left).
-                              if (tracker != null && !runSheet)
+                              // half (the Info tiles have the left); beside the
+                              // rail when it reaches down that far, one square wide
+                              // at least. Not before the rail is measured, so they
+                              // never slide there.
+                              if (!runSheet &&
+                                  !preflightPanel &&
+                                  _rightRailHeight > 0)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
-                                  left: width / 2,
-                                  right: kSimpleInset,
+                                  left: squaresLeft,
+                                  right: squaresBesideRail
+                                      ? kSimpleInset * 2 + railWidth
+                                      : kSimpleInset,
                                   bottom: aboveStop,
                                   duration: motion,
                                   curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
-                                    child: tracker,
+                                    child: SimpleRunTracker(
+                                      onTap: () => _toggle(_Popover.queue),
+                                    ),
                                   ),
                                 ),
-                              // The sky's pick, offered to Plan.
+                              // The sky's pick, offered to Plan; above the plan
+                              // squares while they show.
                               if (_sky && sel != null && !runSheet)
                                 Positioned(
                                   left: 0,
                                   right: 0,
-                                  bottom: kSimpleInset * 2 + 40,
+                                  bottom: planSquares && !preflightPanel
+                                      ? popoverBottom
+                                      : kSimpleInset * 2 + 40,
                                   child: Center(
                                     child: _SkyPick(
                                       selection: sel,

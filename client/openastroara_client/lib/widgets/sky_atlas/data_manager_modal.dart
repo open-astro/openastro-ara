@@ -8,6 +8,7 @@ import '../../state/sky_atlas/data_manager_state.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// §36 Data Manager — the real sky-data package manager. Lists the curated
 /// catalog from the active server (`/api/v1/data-manager/*`), shows on-disk
@@ -99,7 +100,7 @@ class _DataManagerViewState extends ConsumerState<DataManagerView> {
     List<DataPackage>? packages,
   ) {
     if (async.isLoading && packages == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AdaptiveProgressIndicator());
     }
     if (async.hasError) {
       return _Centered(

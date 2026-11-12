@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/library/library_selection.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_dialog.dart';
 
 /// §40.8 bulk action bar — slides up from the bottom when selection is
 /// non-empty. All five actions are live against `/api/v1/frames/bulk/*`:
@@ -82,7 +83,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final rating = await showDialog<int>(
+                              final rating = await showAdaptiveAlert<int>(
                                 context: context,
                                 builder: (_) => const _RatePickerDialog(),
                               );
@@ -102,7 +103,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final tags = await showDialog<_TagEdit>(
+                              final tags = await showAdaptiveAlert<_TagEdit>(
                                 context: context,
                                 builder: (_) => const _TagDialog(),
                               );
@@ -196,7 +197,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final confirmed = await showDialog<bool>(
+                              final confirmed = await showAdaptiveAlert<bool>(
                                 context: context,
                                 builder: (_) =>
                                     _DeleteConfirmDialog(count: ids.length),
@@ -296,26 +297,36 @@ class _RatePickerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: const Text('Rate selected frames'),
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Flexible: five 48 px buttons overflow the 270 pt iOS alert, so
+          // each shrinks to its share there (about 47 px); Material keeps 48.
           for (var stars = 1; stars <= 5; stars++)
-            IconButton(
-              tooltip: '$stars star${stars == 1 ? '' : 's'}',
-              onPressed: () => Navigator.of(context).pop(stars),
-              icon: Icon(Icons.star,
-                  color: AraColors.accentBusy, size: 20 + stars.toDouble()),
+            Flexible(
+              child: IconButton(
+                tooltip: '$stars star${stars == 1 ? '' : 's'}',
+                onPressed: () => Navigator.of(context).pop(stars),
+                icon: Icon(
+                  Icons.star,
+                  color: AraColors.accentBusy,
+                  size: 20 + stars.toDouble(),
+                ),
+              ),
             ),
         ],
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(0),
           child: const Text('Clear rating'),
         ),
-        TextButton(
+        adaptiveDialogAction(
+          context,
+          isDefault: true,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
@@ -357,30 +368,40 @@ class _TagDialogState extends State<_TagDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: const Text('Tag selected frames'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // "comma-separated" as helper text: in the label it was cut off in
+          // the narrow iOS alert.
           TextField(
             controller: _add,
-            decoration:
-                const InputDecoration(labelText: 'Add tags (comma-separated)'),
+            decoration: InputDecoration(
+              labelText: 'Add tags',
+              helperText: context.l10n.libraryTagsCommaSeparated,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _remove,
-            decoration: const InputDecoration(
-                labelText: 'Remove tags (comma-separated)'),
+            decoration: InputDecoration(
+              labelText: 'Remove tags',
+              helperText: context.l10n.libraryTagsCommaSeparated,
+            ),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
           onPressed: () {
             final add = _split(_add.text);
             final remove = _split(_remove.text);
@@ -406,20 +427,22 @@ class _DeleteConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: Text(count == 1
           ? 'Delete this frame?'
           : 'Delete these $count frames?'),
       content: const Text(
           'The FITS files are deleted from the disk for good. This can\'t be undone.'),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          style:
-              FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDestructive: true,
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(count == 1 ? 'Delete' : 'Delete $count'),
         ),

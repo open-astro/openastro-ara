@@ -8,6 +8,7 @@ import '../../theme/ara_colors.dart';
 import '../status_indicator.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// §42.6 fault feed per playbook §42 — renders inline below the diagnostic
 /// panel. Collapsed by default: the header rolls up the LIVE standing-fault
@@ -96,7 +97,7 @@ class _FaultHistoryList extends ConsumerWidget {
               child: SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2)))),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2)))),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
         child: Text(friendlyError(context.l10n, e, action: context.l10n.actionLoadFaults),
@@ -164,6 +165,8 @@ class FaultHistoryTile extends StatelessWidget {
         : row.actionTaken ?? 'unresolved';
     return ListTile(
       dense: true,
+      // The 8 px dot needs no 40 px leading slot; the title gets the room.
+      minLeadingWidth: 8,
       leading: Container(
         width: 8,
         height: 8,
@@ -172,7 +175,9 @@ class FaultHistoryTile extends StatelessWidget {
       title: Text(
         '$device — ${row.faultType.replaceAll('_', ' ')}'
         '${row.details == null ? '' : ' (${row.details})'}',
-        maxLines: 1,
+        // Three lines: in the narrow iOS alert a camera name plus the fault
+        // type needs three, and the fault type must not be cut off.
+        maxLines: 3,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
       ),

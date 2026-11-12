@@ -596,6 +596,171 @@ void main() {
       });
     });
 
+    group('Darks & bias: Bias in the build picker (#1790)', () {
+      Future<(ProviderContainer, _Calibration, _Seq, _Run)> library(
+        WidgetTester tester, {
+        List<BiasLibraryEntry>? bias,
+        List<DarkLibraryEntry>? darks,
+        bool queued = true,
+      }) async {
+        final r = await _pump(
+          tester,
+          [_session()],
+          panel: true,
+          plan: queued ? _queued(const []) : null,
+          child: panelView(),
+          overrides: [simpleCalibrationTabProvider.overrideWith(_DarksTab.new)],
+        );
+        // Not queued: the plan in Plan's sheet, so a build starts its own run.
+        if (!queued) {
+          r.$1.read(simpleRunPlanProvider.notifier).load(const [
+            FilterPlanStep(
+              filterName: 'L',
+              exposureSeconds: 300,
+              frameCount: 40,
+            ),
+          ]);
+          r.$1.read(simpleRunGainProvider.notifier).set(100);
+        }
+        r.$2.library = DarkLibraryState(
+          status: 'idle',
+          totalCombinations: 0,
+          completedCombinations: 0,
+          generatedSequenceId: null,
+          entries: darks ?? [_dark(300)],
+          biasEntries: bias ?? [_bias],
+        );
+        r.$1.invalidate(darkLibraryStatusProvider);
+        r.$3.bodies['lib-run'] = _container('Dark library', [
+          _container('Darks 120 s'),
+        ]);
+        r.$3.bodies['queue-1'] = _container('Queue', [_container('NGC 7000')]);
+        await tester.pumpAndSettle();
+        return r;
+      }
+
+      Future<void> tapKey(WidgetTester tester, String key) async {
+        await tester.ensureVisible(find.byKey(Key(key)));
+        await tester.tap(find.byKey(Key(key)));
+        await tester.pumpAndSettle();
+      }
+
+      bool selected(WidgetTester tester, String key) =>
+          tester.widget<FilterChip>(find.byKey(Key(key))).selected;
+      bool enabled(WidgetTester tester, String key) =>
+          tester.widget<SimpleWindowButton>(find.byKey(Key(key))).onTap != null;
+
+      testWidgets('the Bias chip is off when bias is on file', (tester) async {
+        await library(tester);
+        expect(selected(tester, 'simple-calibration-bias'), isFalse);
+      });
+
+      testWidgets('the Bias chip is on when the library lacks bias', (
+        tester,
+      ) async {
+        await library(tester, bias: const []);
+        expect(selected(tester, 'simple-calibration-bias'), isTrue);
+      });
+
+      bool queuedBias(_Seq seq) =>
+          childrenOf(childrenOf(seq.bodies['queue-1']!).last)
+              .any((k) => (k['Name'] as String?)?.startsWith('Bias') ?? false);
+
+      // Exposures untouched: the shutter's own darks, not the chips shown picked.
+      testWidgets(
+        'only Bias touched, every dark on file: Add to queue queues the bias set and asks the rig for no darks',
+        (tester) async {
+          final (_, cal, seq, _) = await library(tester);
+          await tapKey(tester, 'simple-calibration-bias');
+          await tapKey(tester, 'simple-calibration-queue-library');
+          expect(cal.builds, isEmpty, reason: 'the 300 s darks are on file');
+          expect(queuedBias(seq), isTrue, reason: 'the bias set is shot again');
+        },
+      );
+
+      testWidgets(
+        'only Bias touched, every dark on file: Build asks the rig for no darks and counts the bias frames only',
+        (tester) async {
+          final (c, cal, _, _) = await library(tester, queued: false);
+          await tapKey(tester, 'simple-calibration-bias');
+          await tapKey(tester, 'simple-calibration-build-library');
+          expect(cal.builds, isEmpty, reason: 'the 300 s darks are on file');
+          expect(c.read(simpleCalibrationProvider)?.total, kSimpleBiasFrames);
+        },
+      );
+
+      for (final (key, name) in const [
+        ('simple-calibration-build-library', 'Build'),
+        ('simple-calibration-queue-library', 'Add to queue'),
+      ]) {
+        testWidgets(
+          'only Bias touched, old darks: $name refreshes them along with the bias set',
+          (tester) async {
+            final (_, cal, seq, _) = await library(
+              tester,
+              darks: [_dark(300, ageDays: 220)],
+            );
+            await tapKey(tester, 'simple-calibration-bias');
+            await tapKey(tester, key);
+            expect(cal.builds.single.exposureSecondsList, [300.0]);
+            expect(
+              cal.builds.single.reuseExistingFrames,
+              isFalse,
+              reason: 'the shutter refreshes old darks',
+            );
+            expect(queuedBias(seq), isTrue);
+          },
+        );
+      }
+
+      testWidgets(
+        'Bias alone: a bias-only run through the queue, no dark library build asked of the rig',
+        (tester) async {
+          final (c, cal, seq, _) = await library(tester);
+          await tapKey(
+            tester,
+            'simple-calibration-exposure-300',
+          ); // unpick the plan's exposure
+          expect(
+            enabled(tester, 'simple-calibration-queue-library'),
+            isFalse,
+            reason: 'nothing picked',
+          );
+          await tapKey(tester, 'simple-calibration-bias');
+          expect(enabled(tester, 'simple-calibration-queue-library'), isTrue);
+          expect(enabled(tester, 'simple-calibration-build-library'), isTrue);
+          await tapKey(tester, 'simple-calibration-queue-library');
+          expect(
+            cal.builds,
+            isEmpty,
+            reason: 'the rig refuses an empty exposure list',
+          );
+          expect(seq.calls, ['update queue-1']);
+          final block = childrenOf(seq.bodies['queue-1']!).last;
+          expect(
+            childrenOf(
+              block,
+            ).any((k) => (k['Name'] as String?)?.startsWith('Bias') ?? false),
+            isTrue,
+          );
+          expect(
+            c.read(simpleRunProvider).targets.last.calibration,
+            isTrue,
+            reason: 'a plan square',
+          );
+        },
+      );
+
+      testWidgets(
+        'nothing picked and Bias off: Build and Add to queue stay off',
+        (tester) async {
+          await library(tester);
+          await tapKey(tester, 'simple-calibration-exposure-300');
+          expect(enabled(tester, 'simple-calibration-build-library'), isFalse);
+          expect(enabled(tester, 'simple-calibration-queue-library'), isFalse);
+        },
+      );
+    });
     group('Guide Camera', () {
       const built = CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true);
 

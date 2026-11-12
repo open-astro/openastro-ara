@@ -24,6 +24,7 @@ import 'focus_section.dart';
 import 'guide_focus_card.dart';
 import 'v_curve_chart.dart';
 import '../../util/friendly_error.dart';
+import '../adaptive_controls.dart';
 
 /// Setup → Smart Focus: two tabs, Main telescope then Guide camera — the order is
 /// the order of work (an OAG only focuses once the main scope has), and each
@@ -139,7 +140,7 @@ class _StepTab extends StatelessWidget {
             const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           else
             Icon(
@@ -304,7 +305,7 @@ class MainFocusCard extends ConsumerWidget {
             icon: live.busy
                 ? const SizedBox(
                     width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.center_focus_strong, size: 18),
             label: Text(run.isComplete ? 'Run again' : 'Run autofocus'),
           );
