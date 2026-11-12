@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart' show CupertinoAlertDialog;
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -691,6 +691,49 @@ void main() {
         expect(find.text('Add tags'), findsOneWidget);
         expect(find.text('Remove tags'), findsOneWidget);
         expect(find.text('Comma-separated'), findsNWidgets(2));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets(
+      'the Delete confirm is an iOS alert with Delete as its destructive action',
+      (tester) async {
+        final fake = await selectOne(tester);
+        await tester.ensureVisible(find.text('Delete'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        final delete = find.widgetWithText(CupertinoDialogAction, 'Delete');
+        expect(tester.widget<CupertinoDialogAction>(delete).isDestructiveAction, isTrue);
+        await tester.tap(delete);
+        await tester.pumpAndSettle();
+        expect(fake.deleted!.$1, ['f1']);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets(
+      "the frame viewer's Add tag is an iOS alert with Add as its default action",
+      (tester) async {
+        final fake = _FakeLibraryClient(
+          sessions: [_session()],
+          frames: {
+            'sess-1': [_frame('f1')],
+          },
+        );
+        await _pump(tester, fake);
+        await tester.tap(find.text('Ha'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('tag'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        await tester.enterText(find.byType(TextField).last, 'lucky');
+        final add = find.widgetWithText(CupertinoDialogAction, 'Add');
+        expect(tester.widget<CupertinoDialogAction>(add).isDefaultAction, isTrue);
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+        expect(fake.tagged!.$2, ['lucky']);
       },
       variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     );
