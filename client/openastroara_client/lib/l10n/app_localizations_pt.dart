@@ -5134,6 +5134,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get rigSetupDonePill => 'Rig set up';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count times';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'First $first · last $last';
+  }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count unresolved';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recovered';
+
+  @override
+  String get faultGroupReleased => 'released — disconnected by hand';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10304,4 +10325,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get rigSetupDonePill => 'Setup configurado';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count vezes';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'Primeira $first · última $last';
+  }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count sem solução';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recuperado';
+
+  @override
+  String get faultGroupReleased => 'liberado — desconectado à mão';
 }

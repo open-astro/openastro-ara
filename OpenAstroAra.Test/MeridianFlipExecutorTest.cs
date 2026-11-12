@@ -809,6 +809,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_first_flip_window_reports_its_countdown_as_run_progress() {
+            // #1783 — the run status must show the wait, not the last exposure.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            var recorded = new RecordingProgress();
+
+            await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, recorded, CancellationToken.None);
+
+            Assert.That(recorded.Reports.Select(r => r.Status),
+                Has.Some.StartsWith(MeridianFlipExecutor.FirstFlipWaitText));
+        }
+
+        [Test]
         public async Task A_confirmed_profile_flips_without_the_announce() {
             SetupProfile(recenter: false);
             SetupSafety(Safety());   // firstFlipConfirmed defaults true in the test helper

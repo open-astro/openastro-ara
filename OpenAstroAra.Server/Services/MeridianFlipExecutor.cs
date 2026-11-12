@@ -97,6 +97,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     }
     // §58.8 — the first-flip proceed-on-timeout window (spec: ~60 s).
     internal TimeSpan FirstFlipConfirmWait { get; set; } = TimeSpan.FromSeconds(60);
+    internal const string FirstFlipWaitText = "Meridian flip — first flip, starting in";
     // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
@@ -200,7 +201,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         // noise) and BEFORE any state is touched, so a user who stops the sequence during the
         // window leaves the mount exactly as it was. A cancel during the wait propagates as
         // CANCELLED (the flag stays false — the next attempt announces again).
-        await ConfirmFirstFlip(safety, token);
+        await ConfirmFirstFlip(safety, progress, token);
 
         // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
         // guider we never stopped, don't "restore" tracking we never disabled (either would log a misleading
@@ -811,7 +812,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// edit made during the wait isn't clobbered by a stale snapshot.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Persisting the confirmation flag is best-effort: a briefly-unwritable profile file must not fail an otherwise-good flip — the only cost of a swallowed persist fault is announcing again before the next flip. CA1031's log-and-recover boundary applies.")]
-    private async Task ConfirmFirstFlip(SafetyPoliciesDto? safety, CancellationToken token) {
+    private async Task ConfirmFirstFlip(SafetyPoliciesDto? safety, IProgress<ApplicationStatus> progress, CancellationToken token) {
         if (profileStore is null || safety is null || safety.FirstFlipConfirmed) {
             return;
         }
@@ -820,7 +821,14 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             $"About to run this profile's FIRST meridian flip in {FirstFlipConfirmWait.TotalSeconds:0} seconds. "
             + "Verify the flip pause settings are safe for this rig — stop the sequence now if you want to check. "
             + "Later flips will run without this wait.");
-        await Task.Delay(FirstFlipConfirmWait, token);
+        // #1783 — report the countdown so the run status shows the wait, not the last exposure.
+        var remaining = FirstFlipConfirmWait;
+        while (remaining > TimeSpan.Zero) {
+            progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = $"{FirstFlipWaitText} {TimeSpan.FromSeconds(Math.Ceiling(remaining.TotalSeconds)):m\\:ss}" });
+            var step = remaining < TimeSpan.FromSeconds(1) ? remaining : TimeSpan.FromSeconds(1);
+            await Task.Delay(step, token);
+            remaining -= step;
+        }
         try {
             // Atomic read-modify-write under the store lock (a Get→Put pair could lose a
             // concurrent policy edit made during the 60 s wait to a stale snapshot).

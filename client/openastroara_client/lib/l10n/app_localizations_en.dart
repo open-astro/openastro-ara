@@ -5134,4 +5134,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rigSetupDonePill => 'Rig set up';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count times';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'First $first · last $last';
+  }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count unresolved';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recovered';
+
+  @override
+  String get faultGroupReleased => 'released — disconnected by hand';
 }

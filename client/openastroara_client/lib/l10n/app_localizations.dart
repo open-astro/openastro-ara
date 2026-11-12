@@ -8684,6 +8684,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rig set up'**
   String get rigSetupDonePill;
+
+  /// Fault log: how many times one device dropped within one run of faults, shown on the collapsed row
+  ///
+  /// In en, this message translates to:
+  /// **'{count} times'**
+  String faultGroupCount(int count);
+
+  /// Fault log: first and last time (clock strings) of the collapsed row
+  ///
+  /// In en, this message translates to:
+  /// **'First {first} · last {last}'**
+  String faultGroupSpan(String first, String last);
+
+  /// Fault log: how many rows of the collapsed row are not resolved yet
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unresolved'**
+  String faultGroupUnresolved(int count);
+
+  /// Fault log: every row of the collapsed row is resolved and the newest one recovered
+  ///
+  /// In en, this message translates to:
+  /// **'recovered'**
+  String get faultGroupRecovered;
+
+  /// Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered
+  ///
+  /// In en, this message translates to:
+  /// **'released — disconnected by hand'**
+  String get faultGroupReleased;
 }
 
 class _AppLocalizationsDelegate
