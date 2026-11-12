@@ -225,7 +225,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
             '${PlanningPrefs.minNoiseTolerancePct.toStringAsFixed(0)}–${PlanningPrefs.maxNoiseTolerancePct.toStringAsFixed(0)} %. '
             'Applies to Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor.',
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.textDisabled),
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         // #1176 — optional Tonight's Sky magnitude floor (off by default).
@@ -262,7 +262,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
             '(${PlanningPrefs.minMagnitudeFloor.toStringAsFixed(0)}–${PlanningPrefs.maxMagnitudeFloor.toStringAsFixed(0)}). '
             'Targets with no catalogued magnitude stay listed. Off by default.',
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.textDisabled),
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         // #1622 — mosaic size the Tonight's Sky framing rank assumes.

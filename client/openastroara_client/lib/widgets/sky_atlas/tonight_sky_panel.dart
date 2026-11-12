@@ -736,7 +736,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                               Text(
                                 'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AraColors.textDisabled,
+                                  color: AraColors.textSecondary,
                                   fontSize: 10,
                                 ),
                               ),
@@ -825,7 +825,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         'T = SNR² · (S_target + S_sky) / S_target², per tier; the full and faint '
         'tiers use the surface brightness dimmed by the offsets above.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: AraColors.textDisabled,
+          color: AraColors.textSecondary,
         ),
       ));
     }

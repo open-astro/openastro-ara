@@ -30,6 +30,7 @@ import 'package:openastroara/widgets/settings/editable_field.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
 
@@ -951,6 +952,40 @@ void _budgetTests() {
     expect(find.textContaining('Surface brightness: 22.0 mag/arcsec²'), findsOneWidget);
     expect(find.textContaining('Sky flux:'), findsOneWidget);
     expect(find.textContaining('SNR goals: core 5'), findsOneWidget);
+  });
+
+  testWidgets('the hours formula and Glover attribution read in Dim Text', (
+    tester,
+  ) async {
+    final o = TonightSkyObject(
+      id: 'M31',
+      name: 'Andromeda Galaxy',
+      type: 'galaxy',
+      magnitude: 3.4,
+      raDeg: 10.6847,
+      decDeg: 41.269,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      integrationHours: 6.3,
+      score: 88,
+      scoreReasons: const ['fills the frame (+35)'],
+      optimalSubS: 300,
+      budget: budget,
+    );
+    await tester.pumpWidget(host(o));
+    await tester.pump();
+    // DESIGN.md: captions are Dim Text (5.8:1 on Panel Grey); Faint Text is
+    // for disabled text and reads 2.4:1.
+    Color? colorOf(String text) =>
+        tester.widget<Text>(find.textContaining(text)).style?.color;
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pumpAndSettle();
+    expect(colorOf('T = SNR²'), AraColors.textSecondary);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Why?'));
+    await tester.pump();
+    expect(colorOf('Dr. Robin Glover'), AraColors.textSecondary);
   });
 
   testWidgets('#1140 banked hours past the full tier flag diminishing returns', (tester) async {
