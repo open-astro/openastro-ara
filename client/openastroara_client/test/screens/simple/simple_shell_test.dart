@@ -2536,7 +2536,7 @@ void main() {
         ],
       ),
     );
-    await tester.tap(find.text('Sky'));
+    await tester.tap(find.byKey(const Key('simple-sky')));
     await tester.pump();
     container
         .read(planetariumSelectionProvider.notifier)
