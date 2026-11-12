@@ -60,8 +60,9 @@ NONE: frozenset = frozenset()
 # tests pin the recipes), which run on every PR regardless of this list;
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
-# required contexts (server-build, registry-gate) and the three client-test
-# legs' steps on a SKILL.md-only PR loses nothing that CI ever checked.
+# required contexts (server-build, registry-gate), the Linux client test
+# shards and the steps of the macOS and Windows client-test legs on a
+# SKILL.md-only PR loses nothing that CI ever checked.
 #
 # codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.
 INERT_DIRS = (
@@ -69,6 +70,8 @@ INERT_DIRS = (
     "docs/",
     ".claude/",
     ".github/ISSUE_TEMPLATE/",
+    # #1812: changelog fragments, read only by scripts/changelog-fragments.py in the Sanity job.
+    "changelog.d/",
 )
 
 # Root-level files that are prose and nothing else. Deliberately short:
@@ -132,6 +135,10 @@ SCRIPT_RULES = {
     "scripts/check-settings-registry.mjs": NONE,
     "scripts/check-help-registry.mjs": NONE,
     "scripts/fit-star-count-model.py": NONE,
+    # Changelog fragment check (#1812): run by the Sanity job, read by no .NET or client job.
+    "scripts/changelog-fragments.py": NONE,
+    # Run by merge-queue.yml on a merge group only.
+    "scripts/merge-gate.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -153,7 +160,7 @@ GITHUB_RULES = {
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,
-    # Run by the (ungated) Unicode scan job only.
+    # Run by the Unicode scan step of the (ungated) Sanity job only.
     ".github/scripts/check-unicode.py": NONE,
 }
 

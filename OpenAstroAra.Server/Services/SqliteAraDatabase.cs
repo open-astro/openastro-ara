@@ -167,6 +167,10 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await AddColumnIfMissingAsync(conn, "frames", "captured_by_ara", "INTEGER", ct);
         // #1723 — NULL for a frame analysed before this column. Same after-the-rebuilds placement.
         await AddColumnIfMissingAsync(conn, "frames", "clipped_stars", "INTEGER", ct);
+        // #1757 — the main camera that took the frame (its name, the FITS INSTRUME value, and the driver's unique
+        // id): darks, bias and flats calibrate only that camera's lights. NULL on older rows (legacy: any camera).
+        await AddColumnIfMissingAsync(conn, "frames", "camera_name", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "camera_id", "TEXT", ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);

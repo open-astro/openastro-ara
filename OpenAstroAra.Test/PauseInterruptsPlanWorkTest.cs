@@ -228,6 +228,7 @@ namespace OpenAstroAra.Test {
             public Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) =>
                 CaptureFlatSetAsync(null!, progress, token);
             public Task<bool> OpenCoverAsync(CancellationToken token) => Task.FromResult(true);
+            public Task<bool> CloseCoverAsync(CancellationToken token) => Task.FromResult(true);
         }
 
         [Test]
