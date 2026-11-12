@@ -90,14 +90,16 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   }
 });
 
-/// The Guider's stored calibration, read when the Guider connects. Null: not
-/// connected or no way to read it.
+/// The Guider's stored calibration, read when the Guider connects and again on
+/// each runtime change (a calibration ends in one). Null: not connected or no
+/// way to read it.
 final rigSetupCalibrationProvider =
     FutureProvider.autoDispose<GuiderCalibrationView?>((ref) async {
       final connected = ref.watch(
         guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
       );
       if (!connected) return null;
+      ref.watch(guiderStatusProvider.select((s) => s.value?.runtimeState));
       return ref.watch(guiderLiveApiProvider)?.getCalibration();
     });
 

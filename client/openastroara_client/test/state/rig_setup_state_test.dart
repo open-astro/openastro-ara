@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart'
+    show guiderLiveApiProvider;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
@@ -40,7 +44,8 @@ class _Profile extends ProfileApi {
   Future<OpticsSettings> getOptics() async =>
       optics ?? (throw Exception('connection refused'));
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<Phd2Settings> getPhd2Settings() async =>
+      const Phd2Settings(guideFocalLength: 240, guidePixelSize: 3.75);
 }
 
 /// A profile without a Guider.
@@ -49,13 +54,48 @@ class _NoGuider extends GuiderStatusNotifier {
   Future<GuiderStatus?> build() async => null;
 }
 
+/// A connected Guider; [at] moves its runtime state on, as the status poll does.
+class _ConnectedGuider extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => _at(GuiderRuntimeState.stopped);
+  static GuiderStatus _at(GuiderRuntimeState r) => GuiderStatus(
+    name: 'Guider',
+    connectionState: GuiderConnectionState.connected,
+    runtimeState: r,
+  );
+  void at(GuiderRuntimeState r) => state = AsyncData(_at(r));
+}
+
+/// The Guider's calibration reads; [calibration] is what the next read returns.
+class _Calibration implements GuiderLiveClient {
+  GuiderCalibrationView calibration = const GuiderCalibrationView(
+    connected: true,
+  );
+  @override
+  Future<GuiderCalibrationView> getCalibration() async => calibration;
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+Future<void> _settle() async {
+  for (var i = 0; i < 5; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
 /// The facts and gaps for [api], once its reads have settled.
-Future<ProviderContainer> _trust(_Profile api, {bool linkUp = true}) async {
+Future<ProviderContainer> _trust(
+  _Profile api, {
+  bool linkUp = true,
+  _ConnectedGuider Function()? guider,
+  _Calibration? live,
+}) async {
   final c = ProviderContainer(
     overrides: [
       serverLinkUpProvider.overrideWithValue(linkUp),
       profileApiProvider.overrideWithValue(api),
-      guiderStatusProvider.overrideWith(_NoGuider.new),
+      guiderStatusProvider.overrideWith(guider ?? _NoGuider.new),
+      if (live != null) guiderLiveApiProvider.overrideWithValue(live),
       // The planner's bootstrap has finished, but it swallows a failed read,
       // so it left the site and optics at their defaults.
       planningSettingsBootstrapProvider.overrideWith((ref) async {}),
@@ -63,9 +103,7 @@ Future<ProviderContainer> _trust(_Profile api, {bool linkUp = true}) async {
   );
   addTearDown(c.dispose);
   c.listen(rigSetupGapsProvider, (_, _) {});
-  for (var i = 0; i < 5; i++) {
-    await Future<void>.delayed(Duration.zero);
-  }
+  await _settle();
   return c;
 }
 
@@ -214,6 +252,34 @@ void main() {
         );
         final c = await _trust(notSetUp, linkUp: false);
         expect(c.read(rigSetupFactsProvider), isNull);
+        expect(c.read(rigSetupGapsProvider), isEmpty);
+      },
+    );
+
+    test(
+      'a calibration made while the Guider stays connected takes the line off the list',
+      () async {
+        final live = _Calibration();
+        late _ConnectedGuider guider;
+        final c = await _trust(
+          _Profile(),
+          guider: () => guider = _ConnectedGuider(),
+          live: live,
+        );
+        expect(c.read(rigSetupGapsProvider), [RigSetupGap.guiderCalibration]);
+
+        // The user calibrates in Guider mode; the Guider never disconnects.
+        guider.at(GuiderRuntimeState.calibrating);
+        await _settle();
+        live.calibration = const GuiderCalibrationView(
+          connected: true,
+          runState: 'complete',
+          data: GuiderCalibrationData(calibrated: true),
+          verdict: 'good',
+        );
+        guider.at(GuiderRuntimeState.guiding);
+        await _settle();
+
         expect(c.read(rigSetupGapsProvider), isEmpty);
       },
     );
