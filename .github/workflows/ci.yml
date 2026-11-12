@@ -1319,7 +1319,9 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          mapfile -t files < <(find test -name '*_test.dart' | sort | awk -v n=3 -v s="$SHARD" 'NR % n == s - 1')
+          # Not mapfile: macos-latest's bash is 3.2, which lacks it.
+          files=()
+          while IFS= read -r f; do files+=("$f"); done < <(find test -name '*_test.dart' | sort | awk -v n=3 -v s="$SHARD" 'NR % n == s - 1')
           echo "shard ${SHARD}: ${#files[@]} test files"
           flutter test "${files[@]}"
 

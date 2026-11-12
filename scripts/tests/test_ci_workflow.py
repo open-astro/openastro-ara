@@ -7,6 +7,7 @@ context that passes with a failed shard behind it, a cache that never hits.
 
 import re
 import subprocess
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -82,6 +83,34 @@ class CiRunTimeTest(unittest.TestCase):
             )
             taken += run.stdout.split()
         self.assertEqual(sorted(taken), files)
+
+    def test_the_desktop_test_step_runs_under_the_macos_bash(self):
+        # macos-latest runs `shell: bash` with /bin/bash 3.2, which has no mapfile or readarray.
+        script = steps(job(self.text, "client-test-desktop-shard"))["flutter test"].split("run: |\n", 1)[1]
+        script = textwrap.dedent(script)
+        self.assertNotRegex(script, r"(?m)^\s*(mapfile|readarray)\b")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "test").mkdir()
+            files = [f"test/f{i}_test.dart" for i in range(4)]
+            for f in files:
+                (root / f).touch()
+            (root / "bin").mkdir()
+            flutter = root / "bin" / "flutter"
+            flutter.write_text('#!/bin/sh\nshift\nprintf "%s\\n" "$@"\n')
+            flutter.chmod(0o755)
+            taken = []
+            for shard in (1, 2, 3):
+                run = subprocess.run(
+                    ["bash", "-c", script],
+                    cwd=root,
+                    env={"PATH": f"{root / 'bin'}:/usr/bin:/bin", "SHARD": str(shard)},
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(run.returncode, 0, run.stderr)
+                taken += run.stdout.splitlines()[1:]  # after "shard N: M test files"
+            self.assertEqual(sorted(taken), files)
 
     def test_the_ubuntu_shards_skip_only_a_docs_only_change(self):
         block = job(self.text, "client-test-shard")
