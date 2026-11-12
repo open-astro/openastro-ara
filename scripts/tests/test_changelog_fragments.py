@@ -140,7 +140,8 @@ class PreviewTest(FragmentTestCase):
 
     def test_preview_consumes_nothing(self):
         p = self.t.fragment("a.md", GOOD)
-        self.t.run("--preview", "--version", "0.0.1-ara.1")
+        r = self.t.run("--preview", "--version", "0.0.1-ara.1")
+        self.assertTrue(r.stdout.startswith("## [0.0.1-ara.1]\n"), r.stdout)
         self.assertTrue(p.exists())
         self.assertEqual(self.t.changelog.read_text(), "# Changelog\n")
 
@@ -174,6 +175,27 @@ class ReleaseTest(FragmentTestCase):
             + "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
             + HISTORY,
         )
+
+    def test_the_third_release_collapses_only_the_second(self):
+        ara1 = "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
+        ara2 = "<details>\n<summary><strong>[0.0.1-ara.2] - 2026-12-20</strong></summary>\n\n### Added\n- **y**\n\n</details>\n\n"
+        self.t.changelog.write_text(HEADER + "## [0.0.1-ara.2] - 2026-12-20\n\n### Added\n- **y**\n\n" + ara1 + HISTORY)
+        self.t.fragment("a.md", "### Fixed\n- **z**\n")
+        r = self.t.run("--release", "0.0.1-ara.3", "--date", "2027-01-10")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(
+            self.t.changelog.read_text(),
+            HEADER + "## [0.0.1-ara.3] - 2027-01-10\n\n### Fixed\n- **z**\n\n" + ara2 + ara1 + HISTORY,
+        )
+
+    def test_a_collapsed_release_counts_as_released(self):
+        before = HEADER + "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n" + HISTORY
+        self.t.changelog.write_text(before)
+        self.t.fragment("a.md", GOOD)
+        r = self.t.run("--release", "0.0.1-ara.1", "--date", "2026-12-20")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("already released", r.stderr)
+        self.assertEqual(self.t.changelog.read_text(), before)
 
     def assertReleaseRefused(self, version: str, date: str, words: str, body: str = GOOD):
         before = HEADER + "## [0.0.1-ara.1] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY

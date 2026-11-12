@@ -4009,9 +4009,7 @@ Example structure:
 ```markdown
 # Changelog
 
-## [Unreleased]
-
-## [0.0.1-ara.6] — 2026-06-01
+## [0.0.1-ara.6] - 2026-06-01
 
 ### Added
 - Smart Focus collimation detection (§59.4)
@@ -4024,12 +4022,17 @@ Example structure:
 ### Security
 - Bug-report bundles now strip §70 share-sensitive fields (§54.3)
 
-## [0.0.1-ara.5] — 2026-05-25
+<details>
+<summary><strong>[0.0.1-ara.5] - 2026-05-25</strong></summary>
 
 ### Added
 - Initial release of OpenAstroAra
+
+</details>
 ...
 ```
+
+Only the newest release is expanded; `--release` folds each older one into a `<details>` block, so the release-notes parser reads both forms.
 
 Entry-writing discipline: every PR that ships a user-visible change adds a `changelog.d/<branch-slug>.md` fragment with `### <Type>` subsections (`changelog.d/README.md`, #1812). The release tag-cut process (Phase 15 + future releases) runs `scripts/changelog-fragments.py --release <version> --date <date>`, which writes `## [<version>] - <date>` from the fragments and deletes them.
 
@@ -4142,7 +4145,7 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 
 **Release process integration:**
 
-- The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
+- The Phase 15 PR (final port → master) adds the `## [0.0.1-ara.1] - <date>` section to CHANGELOG.md with `--release`
 - Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
 - Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
