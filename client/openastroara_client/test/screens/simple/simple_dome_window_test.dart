@@ -823,6 +823,30 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
   });
 
+  testWidgets('Stop while following says once that following is off', (
+    tester,
+  ) async {
+    final (c, dome) = await _pump(
+      tester,
+      _wire(runtime: 'slewing', following: true),
+    );
+    await tester.tap(_key('hub'));
+    await tester.pump();
+    expect(dome.calls, ['abort']);
+    expect(c.read(simpleMessagesProvider).map((m) => m.title), [
+      'The dome no longer follows the mount',
+    ]);
+
+    // The daemon turned it off with the stop: a later Stop says nothing more.
+    dome.set(_wire(runtime: 'slewing'));
+    await tester.pump();
+    await tester.tap(_key('hub'));
+    await tester.pump();
+    expect(dome.calls, ['abort', 'abort']);
+    expect(c.read(simpleMessagesProvider), hasLength(1));
+    await tester.pump(const Duration(seconds: 11));
+  });
+
   testWidgets('the follower turning the dome reads Following the mount…, '
       'blinking green', (tester) async {
     await _pump(tester, _wire(runtime: 'slewing', following: true));

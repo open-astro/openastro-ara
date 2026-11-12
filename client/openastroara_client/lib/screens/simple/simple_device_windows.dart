@@ -5125,9 +5125,15 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
     final l10n = context.l10n;
     ref.read(simpleDomeAskProvider.notifier).clear();
+    final wasFollowing = ref.read(domeProvider).value?.following ?? false;
     try {
       final performed = await ref.read(domeProvider.notifier).abortSlew();
-      if (!performed) _sayBusy(ref, l10n);
+      if (!performed) {
+        _sayBusy(ref, l10n);
+      } else if (wasFollowing) {
+        // The daemon turned following off with the stop: say so once.
+        notify(l10n.deviceStoppedFollowingMount);
+      }
     } catch (e) {
       notify(
         l10n.deviceCouldntStopDome,
