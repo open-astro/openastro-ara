@@ -4947,6 +4947,36 @@ abstract class AppLocalizations {
   /// **'Calibrate first: it needs a calibration to measure against.'**
   String get guideToolCalibrateFirst;
 
+  /// No description provided for @guideSuggestExposure.
+  ///
+  /// In en, this message translates to:
+  /// **'Guide exposure'**
+  String get guideSuggestExposure;
+
+  /// No description provided for @guideSuggestMinMoveRa.
+  ///
+  /// In en, this message translates to:
+  /// **'RA minimum move'**
+  String get guideSuggestMinMoveRa;
+
+  /// No description provided for @guideSuggestMinMoveDec.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec minimum move'**
+  String get guideSuggestMinMoveDec;
+
+  /// No description provided for @guideSuggestDecBacklash.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec backlash compensation'**
+  String get guideSuggestDecBacklash;
+
+  /// No description provided for @guideSuggestDecAlgorithm.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec algorithm'**
+  String get guideSuggestDecAlgorithm;
+
   /// No description provided for @focusNudgeIn.
   ///
   /// In en, this message translates to:

@@ -3840,6 +3840,11 @@
     }
   },
   "guideToolCalibrateFirst": "Calibrate first: it needs a calibration to measure against.",
+  "guideSuggestExposure": "Guide exposure",
+  "guideSuggestMinMoveRa": "RA minimum move",
+  "guideSuggestMinMoveDec": "Dec minimum move",
+  "guideSuggestDecBacklash": "Dec backlash compensation",
+  "guideSuggestDecAlgorithm": "Dec algorithm",
   "focusNudgeIn": "Nudge in",
   "focusNudgeOut": "Nudge out",
   "focusNudgeStop": "Stop",
