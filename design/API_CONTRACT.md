@@ -26,6 +26,22 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-12 — #1757 the dark and bias library belongs to one camera
+
+**Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.
+
+**Decision:** every frame Ara captures records the main camera that took it: `camera_name`, the selected device's name (the value the FITS `INSTRUME` header is written from), and `camera_id`, the driver's unique id. Rows from before the columns, and foreign frames the drive scan catalogues, stay NULL. Dark and bias library groups add the camera to their key and carry it as `camera`; a group's `id` hashes the camera too, except for a NULL-camera group, which keeps its old id. `dark-library/status` lists one camera's library: the `camera` query, else the connected main camera; `camera` on the response says which. With no camera asked and none connected it lists every group (`camera: null`). A build's progress counts the same frames. A session's darks, bias and flats coverage, and what the generator shoots, count only calibration frames whose camera matches the lights'. `CalibrationSessionDto.camera` is the camera most of the session's lights were taken with, null when none recorded one. Matching uses the name.
+
+**Legacy rule:** a NULL camera on either side matches any camera. Library groups with `camera: null` appear in every camera's status, as the flag that they predate the camera record, and they keep covering lights, so an existing library is not lost. NULL-camera lights are covered by any camera's frames.
+
+**Reasoning:** darks and bias are a property of one sensor; a second camera's library silently "covering" lights would skip frames the user needs. Treating legacy frames as foreign would throw away every library built before this change, which costs a cloudy night to rebuild; the null `camera` lets the client label them. The name is the match key because it is what the user sees and what the FITS header carries; `camera_id` is stored for telling apart two cameras of the same model later.
+
+**Spec ref:** `Services/SqliteAraDatabase.cs` (camera columns), `Services/CameraService.cs` (`RegisterFrameAsync`), `Services/SqliteDarkLibraryService.cs` (`GetStatusAsync`), `Services/SqliteCalibrationService.cs` (`SameCamera`, `ModalCamerasAsync`, flat coverage).
+
+**Related:** #1757; tests `FramesSchemaWideningTest`, `AlbumFrameFieldsTest`, `SqliteDarkLibraryServiceTest`, `SqliteCalibrationServiceTest`.
+
+---
+
 ## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).
@@ -50,6 +66,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Reasoning:** the 2026-11-10 entry promised a count that may over-report and never under-reports, and a marker that outlived the drive it vouched for broke that promise. The log lives on the rig, not on a drive, so it also voids markers on stores that were unplugged during the erase. It is written before the wipe so a format that fails partway still counts. Not covered: a target drive lost, or erased or changed outside ARA; the marker cannot see that. Content tracking was decided against (#1764 item 6).
 
 **Spec ref:** `Services/StorageEraseLog.cs`; `Services/StorageCopyService.cs` (`CopiedUntil`, `MarkCopied`); `Endpoints/SystemEndpoints.cs` (`GetStorageContents`, `ConfigureStorageDevice`).
+
+---
+
+## 2026-11-11 — Calibration sessions say which one holds Take One frames: `manual_capture`
+
+**Endpoint(s) or area:** `GET /api/v1/calibration/sessions` and `GET /api/v1/calibration/sessions/{id}` (`CalibrationSessionDto.manual_capture`).
+
+**Decision:** `manual_capture` is true when every light in the session has the target `Manual capture` (`CameraService.ManualCaptureTarget`), the shared session Preview's Take One files its frames into; false for a plan's session and for a session that mixes both. Nothing else changes: the session is still listed and calibrated like any other.
+
+**Reasoning:** the bucket was indistinguishable from a plan session, so a client could not label or set it apart. The flag is derived from the lights, the same rows the session header already reads, so no schema change is needed.
+
+**Spec ref:** `Services/SqliteCalibrationService.cs` (`ManualCaptureColumn`), `Services/CameraService.cs` (`ManualCaptureTarget`).
+
+**Related:** tests `SqliteCalibrationServiceTest.A_session_is_marked_manual_capture_only_when_every_light_is_a_manual_capture`.
+
+---
+
+## 2026-11-11 — #1675 calibrate per-filter focus offsets: `/equipment/filterwheel/offsets/*`
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/filterwheel/offsets/calibrate`, `GET …/offsets/calibration`, `POST …/offsets/calibration/cancel`, `…/save`, `…/discard`; `POST /api/v1/equipment/focuser/autofocus`, `POST /api/v1/bahtinov-focus/start` and `POST /api/v1/equipment/guider/focus/start` gain a 409.
+
+**Decision:** `calibrate {positions?: int[]}` → 202 + `BatchJobDto` (job type `filter_offset_calibration`, one step per autofocus). Without `positions` the daemon picks every named slot whose name does not contain "dark". The reference is the slot named like the profile's `autofocus.af_filter`, else a slot named `L` or `Lum`, else the lowest pick; it is always measured. 400 for a slot the wheel does not have. 409 Problem `title: offset_calibration_refused` with the reason in `detail` when: another calibration, an autofocus run, the Bahtinov readout or guide-camera focus is running; a plan is running; the camera, focuser or filter wheel is not connected (named); the wheel is the manual one; the focuser is relative; no filter besides the reference is picked. The job autofocuses the reference, each other pick in slot order, then the reference again; each autofocus is a normal run record with `trigger: "offset calibration"` and its filter. `calibration` → `FilterOffsetCalibrationDto { state: running|complete|failed|cancelled, job_id, reference_position, reference_name, reference_first_position, reference_second_position, cfz_steps, drift_checked, drift_warning, current_position, run_index, run_count, reason, filters[] }`, a filter `{ position, name, status: pending|measured|failed|skipped, best_position, offset, r_squared, previous_offset, failure_reason }`; 404 when there is none. `offset` = best position − the mean of the reference positions that measured, rounded; the reference reads 0. When the reference fails both times the run ends `failed` with a reason and no offsets. `drift_warning` is true when the two reference positions differ by more than `cfz_steps`; `drift_checked` is false when the second reference failed or the CFZ is unknown. Once the reference has measured, every ending puts it back in the wheel and moves the focuser to its latest best position. `cancel` 204 while running; `save` writes each `measured` filter's offset into the profile's filter list and into the new profile section `filter_focus_offsets` (`{ offsets: [{ position, offset }] }`, in the profile snapshot, stripped from share files), and clears the results; `discard` clears them; each 409 Problem `title: no_offset_calibration` when there is nothing to act on. While a calibration runs, including between its autofocus runs, `POST /equipment/focuser/autofocus`, `POST /bahtinov-focus/start` and `POST /equipment/guider/focus/start` return 409 `offset_calibration_refused`.
+
+**Reasoning:** the daemon owns the run so a sleeping laptop loses nothing; the results stay until Save or Discard so the user can decide later. `cfz_steps` is twice the half-CFZ step the Classic sweep seeds from (2.2 µm × N² over the focuser's µm per step), so it is null when the focuser does not report µm per step or the optics lack focal length or aperture; the autofocus result carries no CFZ of its own. The profile's filter list is the one a filter change applies offsets from (#1667), but it is held in memory and rebuilt from the wheel on connect, so the saved offsets also live in `filter_focus_offsets`: on connect a saved offset wins over the driver's for its slot (a slot without one keeps the driver's), and `GET /equipment/filterwheel` `slots[].focus_offset` reports that effective offset on every read, for a motorised wheel too. The manual wheel already reads its offsets from the profile's filter list.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1filterwheel~1offsets~1calibrate`; `Services/FilterOffsetCalibrationService.cs`; `Endpoints/EquipmentEndpoints.cs` (`MapOffsetCalibration`, `RunAutofocus`).
+
+**Related:** #1675, #1667; tests `FilterOffsetCalibrationEndpointsTest`, `FilterFocusOffsetsStoreTest`, `CompositionRootSmokeTest.Offset_calibration_resolves_from_the_composition_root`.
 
 ---
 

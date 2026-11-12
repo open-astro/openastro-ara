@@ -375,7 +375,8 @@ public static partial class EquipmentEndpoints {
                 IBatchJobService jobs,
                 IProfileStore profiles,
                 AutofocusRunTracker tracker,
-                IBahtinovFocusService bahtinov) => RunAutofocus(autofocus, jobs, profiles, tracker, bahtinov))
+                IBahtinovFocusService bahtinov,
+                FilterOffsetCalibrationService offsets) => RunAutofocus(autofocus, jobs, profiles, tracker, bahtinov, offsets))
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("RunAutofocus");
@@ -405,6 +406,9 @@ public static partial class EquipmentEndpoints {
             CancelManualSwapAsync(router, ct))
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status409Conflict);
+        // #1675 — calibrate each filter's focus offset as a background job; the results wait on the daemon
+        // for Save or Discard.
+        MapOffsetCalibration(filterwheel);
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");
@@ -554,19 +558,8 @@ public static partial class EquipmentEndpoints {
         // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
         // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.
         // stop: 204 once the in-flight frame has drained. status + the latest rendered frame (204 until one).
-        guider.MapPost("/focus/start", async ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, CancellationToken ct) => {
-            try {
-                await focus.StartAsync(request, ct);
-                return Results.Accepted();
-            } catch (System.ArgumentException ex) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
-            } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
-                // The daemon refused the lease (it is guiding/calibrating, or its camera is not connected).
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-        })
+        guider.MapPost("/focus/start", ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, FilterOffsetCalibrationService offsets, CancellationToken ct) =>
+            StartGuideFocusAsync(request, focus, offsets, ct))
             .Produces(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -834,6 +827,84 @@ public static partial class EquipmentEndpoints {
         return app;
     }
 
+    internal const string OffsetCalibrationRefusedTitle = "offset_calibration_refused";
+
+    /// <summary>#1675 — the other focus routines' refusal while an offset calibration runs, including between its
+    /// autofocus runs (it moves the wheel and focuser there). Null when none runs. <paramref name="before"/>
+    /// finishes "Stop it before …".</summary>
+    internal static IResult? OffsetCalibrationConflict(FilterOffsetCalibrationService? offsets, string before) =>
+        offsets is { IsRunning: true }
+            ? Results.Problem(title: OffsetCalibrationRefusedTitle,
+                detail: $"A focus offset calibration is running. Stop it before {before}.",
+                statusCode: StatusCodes.Status409Conflict)
+            : null;
+
+    /// <summary>The body of <c>POST /equipment/guider/focus/start</c>.</summary>
+    internal static async Task<IResult> StartGuideFocusAsync(GuideFocusStartRequestDto request, IGuideFocusService focus,
+            FilterOffsetCalibrationService? offsets, CancellationToken ct) {
+        if (OffsetCalibrationConflict(offsets, "focusing the guide camera") is { } calibrating) {
+            return calibrating;
+        }
+        try {
+            await focus.StartAsync(request, ct);
+            return Results.Accepted();
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            // The daemon refused the lease (it is guiding/calibrating, or its camera is not connected).
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    /// <summary>#1675 — the focus offset calibration routes under <c>/equipment/filterwheel</c>.</summary>
+    internal static void MapOffsetCalibration(IEndpointRouteBuilder filterwheel) {
+        // 202 + the batch job; 400 for a slot the wheel does not have; 409 with the reason when a
+        // precondition fails (devices, manual wheel, relative focuser, a plan or another focus routine, nothing picked).
+        filterwheel.MapPost("/offsets/calibrate", ([FromBody] FilterOffsetCalibrationRequestDto request, FilterOffsetCalibrationService svc, CancellationToken ct) =>
+            StartOffsetCalibrationAsync(request, svc, ct))
+            .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CalibrateFilterOffsets");
+        // The running calibration or its results waiting for Save or Discard; 404 when there are none.
+        filterwheel.MapGet("/offsets/calibration", (FilterOffsetCalibrationService svc) =>
+            svc.Snapshot() is { } calibration ? Results.Ok(calibration) : Results.NotFound())
+            .Produces<FilterOffsetCalibrationDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/cancel", (FilterOffsetCalibrationService svc) =>
+            svc.TryCancel() ? Results.NoContent() : NothingToActOn("No offset calibration is running."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CancelFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/save", (FilterOffsetCalibrationService svc) =>
+            svc.TrySave() ? Results.NoContent() : NothingToActOn("No finished offset calibration to save."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("SaveFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/discard", (FilterOffsetCalibrationService svc) =>
+            svc.TryDiscard() ? Results.NoContent() : NothingToActOn("No finished offset calibration to discard."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("DiscardFilterOffsetCalibration");
+    }
+
+    private static IResult NothingToActOn(string detail) =>
+        Results.Problem(title: "no_offset_calibration", detail: detail, statusCode: StatusCodes.Status409Conflict);
+
+    internal static async Task<IResult> StartOffsetCalibrationAsync(FilterOffsetCalibrationRequestDto request, FilterOffsetCalibrationService svc, CancellationToken ct) {
+        try {
+            var job = await svc.StartAsync(request.Positions, ct);
+            return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
+        } catch (ArgumentOutOfRangeException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(title: OffsetCalibrationRefusedTitle, detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     /// <summary>The body of <c>POST /equipment/focuser/autofocus</c>: 409 while the Bahtinov readout runs, else
     /// the sweep enqueued as a background job (202).</summary>
     internal static IResult RunAutofocus(
@@ -841,7 +912,12 @@ public static partial class EquipmentEndpoints {
             IBatchJobService jobs,
             IProfileStore profiles,
             AutofocusRunTracker tracker,
-            IBahtinovFocusService bahtinov) {
+            IBahtinovFocusService bahtinov,
+            FilterOffsetCalibrationService? offsets = null) {
+        // #1675 — one focus routine at a time.
+        if (OffsetCalibrationConflict(offsets, "running autofocus") is { } calibrating) {
+            return calibrating;
+        }
         // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
         // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
         if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "running autofocus") is { } refused) {

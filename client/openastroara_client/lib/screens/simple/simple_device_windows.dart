@@ -119,6 +119,10 @@ String simpleCelsius(double c) {
   return '${rounded.replaceFirst('-', '−')} °C';
 }
 
+/// A focus offset in steps as Simple Mode shows it: signed, a real minus.
+String simpleSigned(int steps) =>
+    steps > 0 ? '+$steps' : '$steps'.replaceFirst('-', '−');
+
 /// The camera's window: the cooler (On / Off), its target and what the
 /// sensor reads now. The target is the profile's, so plans cool to it too.
 class SimpleCameraWindow extends ConsumerStatefulWidget {
@@ -2905,10 +2909,18 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 /// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
 /// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
 class SimpleWindowButton extends StatelessWidget {
-  const SimpleWindowButton({super.key, required this.label, required this.onTap});
+  const SimpleWindowButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.outlined = false,
+  });
 
   final String label;
   final VoidCallback? onTap;
+
+  /// The second of a pair (Delete beside Rebuild): a Hairline outline, no fill.
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2919,8 +2931,13 @@ class SimpleWindowButton extends StatelessWidget {
     child: Opacity(
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+        color: outlined ? Colors.transparent : AraColors.tileFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          side: outlined
+              ? const BorderSide(color: AraColors.border)
+              : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -2990,9 +3007,10 @@ class _RotatorHub extends StatelessWidget {
   );
 }
 
-/// The filter wheel's window: the filter in place, and a tap on a filter
-/// moves to it. A manual wheel asks the user to swap it by hand and confirm.
-/// Names, offsets and labels stay in the full UI.
+/// The filter wheel's window: the filter in place, with its saved focus
+/// offset once any slot has one (#1675), and a tap on a filter moves to it. A
+/// manual wheel asks the user to swap it by hand and confirm. Names and labels
+/// stay in the full UI.
 class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
   const SimpleFilterWheelWindow({super.key, this.inSettings = false});
 
@@ -3103,6 +3121,18 @@ class _SimpleFilterWheelWindowState
       } else {
         final large = w.slots.length > 8;
         final scale = simpleRailScale(context);
+        // The saved offset of the filter in place, once any slot has one
+        // (#1675): a caption under the slot line.
+        final offset =
+            !moving &&
+                shownSlot != null &&
+                w.slots.any((s) => s.focusOffset != 0)
+            ? Text(
+                l10n.deviceFocusOffset(simpleSigned(shownSlot.focusOffset)),
+                key: const Key('simple-filterwheel-offset'),
+                style: AraText.caption,
+              )
+            : null;
         FilterCellRing ringOf(int position) => sentSlot == position
             ? FilterCellRing.moving
             : asked && command.target == position
@@ -3187,6 +3217,7 @@ class _SimpleFilterWheelWindowState
                             l10n.deviceSlot(shownSlot.position),
                             style: AraText.caption,
                           ),
+                        ?offset,
                         statusLine,
                       ],
                     ),

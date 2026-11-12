@@ -4,12 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_filter_wheel_panel.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
@@ -83,8 +85,25 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+/// The offsets routine with no rig behind it: records what the panel asks.
+class _Offsets extends FilterOffsetCalibrationNotifier {
+  _Offsets([this.initial = FilterOffsetLive.idle]);
+  final FilterOffsetLive initial;
+  final calls = <String>[];
+  @override
+  FilterOffsetLive build() => initial;
+  @override
+  Future<void> refresh() async {}
+  @override
+  Future<void> start(List<int> positions) async => calls.add('start $positions');
+  @override
+  Future<void> save() async => calls.add('save');
+  @override
+  Future<void> discard() async => calls.add('discard');
+}
+
 Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status,
-    {bool settle = true}) async {
+    {bool settle = true, _Offsets? offsets}) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -93,6 +112,7 @@ Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status,
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       filterWheelApiFactoryProvider.overrideWithValue((_) => api),
+      if (offsets != null) filterOffsetCalibrationProvider.overrideWith(() => offsets),
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentFilterWheelPanel())),
   ));
@@ -133,7 +153,8 @@ void main() {
             FilterSlot(position: 1, name: 'R', focusOffset: 0),
           ],
         ));
-    expect(find.textContaining('focus offset'), findsNothing);
+    // The slot column's "focus offset N", not the Focus offsets section's button.
+    expect(find.textContaining(RegExp(r'^focus offset')), findsNothing);
   });
 
   testWidgets('the focus-offset row toggles the policy, off by default', (tester) async {
@@ -148,6 +169,37 @@ void main() {
     await tester.pump();
     expect(container.read(filterWheelPolicyProvider).useFilterWheelOffsets, isTrue);
     await tester.pump(const Duration(seconds: 20));
+  });
+
+  testWidgets('the full UI calibrates focus offsets: every named filter, from the reference (#1675, ADR 0009 rule 1)',
+      (tester) async {
+    final offsets = _Offsets();
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('Offsets are measured from L, the reference.'), findsOneWidget);
+    final start = find.byKey(const Key('settings-offsets-start'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pump();
+    expect(offsets.calls, ['start [0, 1]']);
+  });
+
+  testWidgets('a finished offset calibration lists each filter and offers Save and Discard', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 3, 'run_count': 3,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 1, 'name': 'Hα', 'status': 'measured', 'offset': 41, 'r_squared': 0.93, 'previous_offset': 12},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('+41 · R² 0.93 · Before 12'), findsOneWidget);
+    final save = find.byKey(const Key('settings-offsets-save'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pump();
+    expect(offsets.calls, ['save']);
+    expect(find.byKey(const Key('settings-offsets-discard')), findsOneWidget);
   });
 
   testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',

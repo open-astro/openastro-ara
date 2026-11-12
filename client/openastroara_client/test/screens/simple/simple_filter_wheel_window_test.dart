@@ -450,4 +450,26 @@ void main() {
     expect(tester.getCenter(_slot(1)).dx, moreOrLessEquals(under(wheel).dx, epsilon: 1), reason: 'landed without turning');
     await tester.pump(const Duration(seconds: 11));
   });
+
+  testWidgets("the filter in place's saved offset shows under its slot line, only once any offset is non-zero (#1675)",
+      (tester) async {
+    Map<String, dynamic> wire(int ha) => {
+          ..._wire(current: 1),
+          'slots': [
+            {'position': 0, 'name': 'L', 'focus_offset': 0},
+            {'position': 1, 'name': 'Ha', 'focus_offset': ha},
+          ],
+        };
+    final (_, wheel) = await _pump(tester, wire(0));
+    expect(find.byKey(const Key('simple-filterwheel-offset')), findsNothing, reason: 'every offset 0');
+    wheel.set(wire(42));
+    await tester.pump();
+    expect(find.text('Offset +42 steps'), findsOneWidget);
+    final line = tester.getRect(
+        find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text('Slot 1')));
+    expect(tester.getRect(find.text('Offset +42 steps')).top, greaterThanOrEqualTo(line.bottom),
+        reason: 'under the slot line');
+    expect(find.descendant(of: _slot(1), matching: find.textContaining('42')), findsNothing,
+        reason: 'the cells don\'t change');
+  });
 }

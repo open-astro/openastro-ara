@@ -138,6 +138,10 @@ public interface IProfileStore {
     CoolingFanDto GetCoolingFan();
     void PutCoolingFan(CoolingFanDto value);
 
+    // #1675 — the per-slot focus offsets the offset calibration saved.
+    FilterFocusOffsetsDto GetFilterFocusOffsets();
+    void PutFilterFocusOffsets(FilterFocusOffsetsDto value);
+
     /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
     CustomHorizonDto GetCustomHorizon();
     void PutCustomHorizon(CustomHorizonDto value);
