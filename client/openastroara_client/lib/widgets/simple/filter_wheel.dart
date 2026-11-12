@@ -100,7 +100,13 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
   @override
   void initState() {
     super.initState();
-    _at = _indexOf(widget.pointAt);
+    _place();
+  }
+
+  /// Puts [SimpleFilterWheel.pointAt] under the mark, without a turn; with
+  /// none, the cell already there stays.
+  void _place() {
+    _at = _indexOf(widget.pointAt) ?? _at;
     _from = _to = -(_at ?? 0) * _step;
   }
 
@@ -111,8 +117,13 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
   @override
   void didUpdateWidget(SimpleFilterWheel old) {
     super.didUpdateWidget(old);
-    final next = _indexOf(widget.pointAt);
     final n = widget.slots.length;
+    if (n != old.slots.length) {
+      // Another slot count spaces the cells anew: lay them out again, no turn.
+      _place();
+      return;
+    }
+    final next = _indexOf(widget.pointAt);
     if (n == 0 || next == null || next == _at) return;
     if (_at == null) {
       // Opened while the slot was unknown: no angle to turn from, so jump.
