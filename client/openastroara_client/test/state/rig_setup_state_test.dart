@@ -51,8 +51,8 @@ class _Profile extends ProfileApi {
   Future<Phd2Settings> getPhd2Settings() async => phd2;
 }
 
-/// The daemon holds no Guider (its status read is a 404): never connected,
-/// disconnected, or none on the rig.
+/// The daemon holds no Guider, so its status read is a 404: nothing has
+/// connected it since boot, or the user disconnected it.
 class _NoGuider extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async => null;
