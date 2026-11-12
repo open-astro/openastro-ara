@@ -391,6 +391,10 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Secondary:** text or outlined buttons, with Hairline outlines. The `button-secondary` grey exists but is rarely used.
 - **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
 
+### Platform gestures (iOS and iPadOS)
+- **Pull to refresh:** a list that can reload (today the Sky Album and the rig list; the image library and calibration screens still use `RefreshIndicator` and are not converted yet) uses `CupertinoSliverRefreshControl` on iOS and iPadOS and Material's `RefreshIndicator` elsewhere, through one adaptive wrapper. Under Reduce Motion it adds no animation of its own.
+- **Context menu:** a Sky Album Card and a plan target row open a `CupertinoContextMenu` on a long press on iOS and iPadOS, with the actions they already have and the item as rendered for the preview. Other platforms are unchanged. A tap still acts as before; under Reduce Motion the menu does not zoom.
+
 ### Emergency Stop (signature)
 A filled red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms by holding: pressing reads "Hold to confirm" while a darker fill sweeps across, and 2 s of holding sends the stop; letting go early sends nothing. Keyboard and screen-reader activation, which can't hold, get a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP (decided 2026-11-01). In Simple Mode it also carries a ring: a 2 px dark gap, then 1 px of the same red (ALP-4812), and in both densities it fills with `emergency-stop` (#D32F2F, Fault Red darkened so the white label reads at 5:1; Fault Red gives 4.2:1) under a sweep that darkens (HOLD at 7.7:1); the full UI has no ring (it moved off Fault Red and the lighter sweep for AA, #1569). It is the heaviest control on any screen: no other control at rest is filled red.
 

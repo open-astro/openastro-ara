@@ -3010,6 +3010,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get albumArtCreditOpenFailed => 'Couldn\'t open the license page';
+
+  @override
   String get shellAlbum => 'Sky Album';
 
   @override

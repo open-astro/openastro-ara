@@ -182,6 +182,29 @@ void main() {
       expect(nights.map((n) => (n.key, n.lights)), [('2026-03-03', 1), ('2026-03-02', 2)], reason: 'newest first');
     });
 
+    test('Nights follow the site longitude, not the device zone', () {
+      // Sydney Opera House, UTC+10 by the sun (151.2 deg / 15 h): 20:00 and 23:00 local are
+      // 10:00 and 13:00 UTC: one Night, though a UTC device reads 10:00 as the morning before noon.
+      const sydney = 151.215297;
+      final one = albumNights([
+        _frame('evening', captured: DateTime.utc(2026, 3, 2, 10)),
+        _frame('small hours', captured: DateTime.utc(2026, 3, 2, 13)),
+      ], siteLongitudeDeg: sydney);
+      expect(one.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
+      // The next evening is a second Night.
+      final two = albumNights([
+        _frame('a', captured: DateTime.utc(2026, 3, 2, 10)),
+        _frame('b', captured: DateTime.utc(2026, 3, 3, 10)),
+      ], siteLongitudeDeg: sydney);
+      expect(two.map((n) => n.key), ['2026-03-03', '2026-03-02']);
+      // Greenwich: 22:00 and 01:00 UTC straddle midnight but are one Night.
+      final greenwich = albumNights([
+        _frame('a', captured: DateTime.utc(2026, 3, 2, 22)),
+        _frame('b', captured: DateTime.utc(2026, 3, 3, 1)),
+      ], siteLongitudeDeg: -0.0015);
+      expect(greenwich.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
+    });
+
     test('the sub is the most common exposure of the Night, the longer on a tie', () {
       DateTime t(int m) => DateTime(2026, 3, 2, 22, m).toUtc();
       final night = albumNights([

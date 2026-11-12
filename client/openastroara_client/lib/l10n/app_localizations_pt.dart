@@ -3010,6 +3010,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get albumArtCreditOpenFailed => 'Couldn\'t open the license page';
+
+  @override
   String get shellAlbum => 'Sky Album';
 
   @override
@@ -8070,6 +8073,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumArtCredit(String credit) {
     return 'Arte (recortada): $credit';
   }
+
+  @override
+  String get albumArtCreditOpenFailed =>
+      'Não foi possível abrir a página da licença';
 
   @override
   String get shellAlbum => 'Álbum do Céu';

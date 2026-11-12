@@ -851,6 +851,7 @@
   "albumNightsTotal": "Total · {nights, plural, =1{1 noite} other{{nights} noites}}",
   "albumDidYouKnow": "Você sabia?",
   "albumArtCredit": "Arte (recortada): {credit}",
+  "albumArtCreditOpenFailed": "Não foi possível abrir a página da licença",
   "shellAlbum": "Álbum do Céu",
   "albumImageThis": "Fotografar este alvo",
   "albumAddTime": "Adicionar mais tempo",

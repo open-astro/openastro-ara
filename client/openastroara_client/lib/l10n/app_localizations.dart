@@ -5205,6 +5205,12 @@ abstract class AppLocalizations {
   /// **'Art (cropped): {credit}'**
   String albumArtCredit(String credit);
 
+  /// Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the license page'**
+  String get albumArtCreditOpenFailed;
+
   /// Simple Mode left rail: opens the Sky Album
   ///
   /// In en, this message translates to:
