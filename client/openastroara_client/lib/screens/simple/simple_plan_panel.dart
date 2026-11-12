@@ -1610,56 +1610,59 @@ class _QueueList extends ConsumerWidget {
           ),
         ],
       );
-      // On iOS and iPadOS a long press lists what the row's tap and × do.
-      final menu = PlatformContextMenu(
-        items: !open(i) || run.busy
-            ? const []
-            : [
-                ContextMenuItem(
-                  context.l10n.planEditTarget(t.name),
-                  Icons.edit_outlined,
-                  () => onEdit(i),
-                ),
-                ContextMenuItem(
-                  context.l10n.planRemoveFromQueue(t.name),
-                  Icons.close,
-                  () => remove(i),
-                  destructive: true,
-                ),
-              ],
-        child: content,
-      );
       // A swipe left removes it too (the × stays for those who don't swipe).
+      final swipe = !open(i) || run.busy
+          ? content
+          : Dismissible(
+              key: ValueKey('simple-run-swipe-${t.name}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: AraSpace.s16),
+                decoration: BoxDecoration(
+                  color: AraColors.emergencyStop,
+                  borderRadius: BorderRadius.circular(AraRadius.container),
+                ),
+                child: Text(
+                  context.l10n.planRemove,
+                  style: const TextStyle(
+                    color: AraColors.onFill,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // The row goes when the rig confirms, not before.
+              confirmDismiss: (_) async {
+                await remove(i);
+                return false;
+              },
+              child: content,
+            );
+      // On iOS and iPadOS a long press lists what the row's tap and × do. The menu wraps the
+      // Dismissible: inside it the row would get loose width and the preview would stretch.
       return Material(
         key: ValueKey('simple-run-row-${t.name}'),
         type: MaterialType.transparency,
-        child: !open(i) || run.busy
-            ? menu
-            : Dismissible(
-                key: ValueKey('simple-run-swipe-${t.name}'),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: AraSpace.s16),
-                  decoration: BoxDecoration(
-                    color: AraColors.emergencyStop,
-                    borderRadius: BorderRadius.circular(AraRadius.container),
-                  ),
-                  child: Text(
-                    context.l10n.planRemove,
-                    style: const TextStyle(
-                      color: AraColors.onFill,
-                      fontWeight: FontWeight.w600,
+        child: PlatformContextMenu(
+          items: !open(i) || run.busy
+              ? const []
+              : [
+                  // The Calibration block has no rows to edit: only the tap's own targets.
+                  if (editable(i))
+                    ContextMenuItem(
+                      context.l10n.planEditTarget(t.name),
+                      Icons.edit_outlined,
+                      () => onEdit(i),
                     ),
+                  ContextMenuItem(
+                    context.l10n.planRemoveFromQueue(t.name),
+                    Icons.close,
+                    () => remove(i),
+                    destructive: true,
                   ),
-                ),
-                // The row goes when the rig confirms, not before.
-                confirmDismiss: (_) async {
-                  await remove(i);
-                  return false;
-                },
-                child: menu,
-              ),
+                ],
+          child: swipe,
+        ),
       );
     }
 

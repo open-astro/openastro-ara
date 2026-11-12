@@ -6,7 +6,7 @@ import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -1715,6 +1715,62 @@ void main() {
       expect(seq.targets('seq-1'), ['M31', 'M45']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M45']);
       await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the Undo pill fades
+    });
+
+    // The queue's own narrow column on iOS, with M31, M42 and (when asked) the end-of-night Calibration block.
+    Future<ProviderContainer> iosQueue(WidgetTester tester, {bool endFlats = false}) async {
+      final c = await _pump(
+          tester,
+          _Seq(),
+          Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+                  SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+                ]),
+              ),
+            ),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      if (endFlats) c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      await create(tester);
+      return c;
+    }
+
+    Future<void> longPress(WidgetTester tester, Finder row) async {
+      final g = await tester.startGesture(tester.getCenter(row));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('on iOS a long press on the Calibration block lists Remove and no Edit',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final c = await iosQueue(tester, endFlats: true);
+      expect(c.read(simpleRunProvider).targets.last.name, kEndFlatsBlockName);
+      await tester.ensureVisible(find.byKey(const Key('simple-run-edit-2')));
+      await tester.pumpAndSettle();
+      await longPress(tester, find.byKey(const Key('simple-run-edit-2')));
+      expect(find.byType(CupertinoContextMenuAction), findsOneWidget);
+      expect(find.textContaining('Remove'), findsOneWidget);
+      expect(find.textContaining('Edit'), findsNothing);
+    });
+
+    testWidgets('on iOS the lifted queue row is as wide as the row in its 360 px column',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await iosQueue(tester);
+      final row = find.byKey(const Key('simple-run-edit-1'));
+      final inPage = tester.getSize(row).width;
+      await longPress(tester, row);
+      final widths = [for (final e in row.evaluate()) (e.renderObject! as RenderBox).size.width];
+      expect(widths.length, 2, reason: 'the row in the page and its lifted preview');
+      expect(widths, [inPage, inPage]);
     });
 
     testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {

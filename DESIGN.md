@@ -392,7 +392,7 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
 
 ### Platform gestures (iOS and iPadOS)
-- **Pull to refresh:** a list that can reload (the Sky Album, the rig list) uses `CupertinoSliverRefreshControl` on iOS and iPadOS and Material's `RefreshIndicator` elsewhere, through one adaptive wrapper. Under Reduce Motion it adds no animation of its own.
+- **Pull to refresh:** a list that can reload (today the Sky Album and the rig list; the image library and calibration screens still use `RefreshIndicator` and are not converted yet) uses `CupertinoSliverRefreshControl` on iOS and iPadOS and Material's `RefreshIndicator` elsewhere, through one adaptive wrapper. Under Reduce Motion it adds no animation of its own.
 - **Context menu:** a Sky Album Card and a plan target row open a `CupertinoContextMenu` on a long press on iOS and iPadOS, with the actions they already have and the item as rendered for the preview. Other platforms are unchanged. A tap still acts as before; under Reduce Motion the menu does not zoom.
 
 ### Emergency Stop (signature)

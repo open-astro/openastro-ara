@@ -56,6 +56,10 @@ class PlatformContextMenu extends StatelessWidget {
                   child: Text(i.label),
                 ),
             ],
+            cancelButton: CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(sheet).pop(),
+              child: Text(MaterialLocalizations.of(sheet).cancelButtonLabel),
+            ),
           ),
         ),
         child: child,

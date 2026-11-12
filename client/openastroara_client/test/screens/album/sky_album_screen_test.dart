@@ -269,6 +269,11 @@ void main() {
       await hold(tester, find.text('Andromeda Galaxy'));
       expect(find.byType(CupertinoActionSheet), findsOneWidget);
       expect(find.text('Add more time'), findsOneWidget);
+      // A labelled way out: Cancel closes the sheet and runs no action.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.byType(AlbumCardBack), findsNothing);
     });
 
     testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {

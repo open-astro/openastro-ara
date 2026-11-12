@@ -235,9 +235,6 @@ class AlbumCardFront extends StatelessWidget {
   }
 }
 
-/// The card back, a baseball-card back: name banner in the Tier colour, bio
-/// line, the latest Nights and a totals row, the "Did you know?" line, the one
-/// action and the Art credit.
 /// Opens the licence deed; a browser that cannot be reached (false or thrown) says so.
 Future<void> _openLicence(BuildContext context, String url) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
@@ -246,6 +243,9 @@ Future<void> _openLicence(BuildContext context, String url) async {
   if (!opened) messenger?.showSnackBar(SnackBar(content: Text(failed)));
 }
 
+/// The card back, a baseball-card back: name banner in the Tier colour, bio
+/// line, the latest Nights and a totals row, the "Did you know?" line, the one
+/// action and the Art credit.
 class AlbumCardBack extends StatelessWidget {
   const AlbumCardBack(this.card, {super.key, required this.onAction});
   final AlbumCardData card;
