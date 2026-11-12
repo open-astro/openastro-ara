@@ -679,6 +679,22 @@ void main() {
       variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     );
 
+    testWidgets(
+      'the Tag dialog labels its fields Add tags and Remove tags, with Comma-separated as help under each',
+      (tester) async {
+        await selectOne(tester);
+        await tester.ensureVisible(find.text('Tag'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Tag'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        expect(find.text('Add tags'), findsOneWidget);
+        expect(find.text('Remove tags'), findsOneWidget);
+        expect(find.text('Comma-separated'), findsNWidgets(2));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
     testWidgets('the Move to session picker closes on a tap outside it', (
       tester,
     ) async {

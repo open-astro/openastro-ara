@@ -93,7 +93,9 @@ class AdaptiveCheckbox extends StatelessWidget {
 }
 
 /// A progress spinner: the iOS activity indicator on iPhone and iPad, the
-/// Material ring elsewhere. iOS ignores [valueColor] and [strokeWidth].
+/// Material ring elsewhere. iOS ignores [valueColor] and [strokeWidth]. A
+/// determinate ring (a [value]) stays Material everywhere: the iOS indicator
+/// draws it as a fixed 20 px spoke wheel.
 class AdaptiveProgressIndicator extends StatelessWidget {
   // The key belongs to the inner control (tests and state find it there).
   // ignore: use_key_in_widget_constructors
@@ -110,7 +112,8 @@ class AdaptiveProgressIndicator extends StatelessWidget {
   final double? strokeWidth;
 
   @override
-  Widget build(BuildContext context) => useCupertinoControls(context)
+  Widget build(BuildContext context) =>
+      useCupertinoControls(context) && value == null
       ? CircularProgressIndicator.adaptive(
           key: _indicatorKey,
           value: value,
