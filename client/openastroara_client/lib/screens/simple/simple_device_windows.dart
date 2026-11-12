@@ -365,7 +365,9 @@ Widget simpleWindowStepper({
       onPressed: onTap,
       icon: Icon(
         icon,
-        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
+        semanticLabel: name == null
+            ? label(context.l10n)
+            : '$name, ${label(context.l10n)}',
       ),
     ),
   );
@@ -923,15 +925,15 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                       // Dome window's Parking… (user, 2026-11-11).
                       on: true,
                       child: Text(
-                      homing
-                          ? context.l10n.deviceFindingHome
-                          : (parking ?? !m.parked)
-                          ? context.l10n.deviceParking
-                          : context.l10n.deviceUnparking,
-                      style: kSimpleText.copyWith(
-                        color: AraColors.accentConnected,
+                        homing
+                            ? context.l10n.deviceFindingHome
+                            : (parking ?? !m.parked)
+                            ? context.l10n.deviceParking
+                            : context.l10n.deviceUnparking,
+                        style: kSimpleText.copyWith(
+                          color: AraColors.accentConnected,
+                        ),
                       ),
-                    ),
                     ),
                   ),
                 )
@@ -1088,7 +1090,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     children
       ..add(
         LayoutBuilder(
-          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth * scale
+          builder: (context, box) =>
+              box.maxWidth >= kSimpleMountWideWidth * scale
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   spacing: AraSpace.s16,
@@ -1498,10 +1501,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 spacing: 2,
                 children: [
                   Text(l10n.devicePosition, style: AraText.caption),
-                  Text(
-                    simpleSteps(pos),
-                    style: kSimpleReadingLarge,
-                  ),
+                  Text(simpleSteps(pos), style: kSimpleReadingLarge),
                   // Moving is working: blinking green (DESIGN.md status rule).
                   StatusBlink(
                     on: _target == null && s.isMoving,
@@ -3990,9 +3990,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         children.add(
           Text(
             l10n.deviceSafetyLimitsNotLoaded,
-            style: kSimpleCaption.copyWith(
-              color: AraColors.accentWarning,
-            ),
+            style: kSimpleCaption.copyWith(color: AraColors.accentWarning),
           ),
         );
       }
@@ -4340,10 +4338,7 @@ class _WeatherTile extends StatelessWidget {
                       children: [
                         TextSpan(text: value),
                         if (unitBeside && unit.isNotEmpty)
-                          TextSpan(
-                            text: ' $unit',
-                            style: kSimpleUnit,
-                          ),
+                          TextSpan(text: ' $unit', style: kSimpleUnit),
                       ],
                     ),
                     style: kSimpleReading.copyWith(
@@ -4399,9 +4394,18 @@ String simpleWeatherBreachText(
   String n(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   return switch (b.kind) {
-    WeatherBreach.wind => l10n.deviceWindOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
-    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
-    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(n(b.value), n(b.limit)),
+    WeatherBreach.wind => l10n.deviceWindOverLimit(
+      b.value.toStringAsFixed(0),
+      b.limit.round(),
+    ),
+    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(
+      b.value.toStringAsFixed(0),
+      b.limit.round(),
+    ),
+    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(
+      n(b.value),
+      n(b.limit),
+    ),
   };
 }
 
@@ -4485,8 +4489,9 @@ final simpleDomeAskProvider =
 /// pairs of shells fanning open and shut over about as long as this dome's
 /// shutter takes, and a dial from above to turn it (drag to a target, play
 /// in its middle; Stop while it moves). Then the shutter as Open / Closed,
-/// Park and Home. Only what the dome says it can do shows. Sync, set park
-/// and slaving stay in the full UI (#1662, mock
+/// Park and Home, and a Follows the mount switch (#1689). Only what the dome
+/// says it can do shows. Sync, set park and the follow geometry stay in the
+/// full UI (#1662, mock
 /// `design/preview/simple-dome-safety-mock.html` v12, the Baader AllSky
 /// clamshell from the user's photos).
 class SimpleDomeWindow extends ConsumerStatefulWidget {
