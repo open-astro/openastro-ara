@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/app_shell_state.dart' show selectedTabIndexProvider;
+import '../../state/planning/planning_prefs_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -125,6 +127,7 @@ class TonightSkyPanel extends ConsumerWidget {
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     final theme = Theme.of(context);
     final upNow = ref.watch(tonightSkyUpNowProvider);
+    final prefs = ref.watch(planningPrefsProvider);
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -172,6 +175,20 @@ class TonightSkyPanel extends ConsumerWidget {
                 ],
               ),
             ),
+            // #1622 — say which framing the ranking is for; nothing at 1 x 1.
+            if (prefs.mosaicTilesX != 1 || prefs.mosaicTilesY != 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  context.l10n.tonightSkyMosaicFraming(
+                    prefs.mosaicTilesX,
+                    prefs.mosaicTilesY,
+                  ),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+                ),
+              ),
             Expanded(
               child: async.when(
                 // S2 — skeleton rows instead of a bare spinner: the panel's
@@ -719,7 +736,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                               Text(
                                 'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AraColors.textDisabled,
+                                  color: AraColors.textSecondary,
                                   fontSize: 10,
                                 ),
                               ),
@@ -808,7 +825,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         'T = SNR² · (S_target + S_sky) / S_target², per tier; the full and faint '
         'tiers use the surface brightness dimmed by the offsets above.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: AraColors.textDisabled,
+          color: AraColors.textSecondary,
         ),
       ));
     }

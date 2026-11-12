@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
@@ -12,6 +13,7 @@ import 'package:openastroara/models/sequence/draft_sequence.dart';
 import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/planning/planning_prefs_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
@@ -28,6 +30,7 @@ import 'package:openastroara/widgets/settings/editable_field.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
 
@@ -226,6 +229,56 @@ void main() {
   _budgetTests();
   _offlineAddTests();
   _upNowTests();
+  testWidgets('#1622 the framing label shows off 1x1 only', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('Framing for a'), findsNothing);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 3);
+    await tester.pump();
+    expect(find.text('Framing for a 2×3 mosaic'), findsOneWidget);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(1, 1);
+    await tester.pump();
+    expect(find.textContaining('Framing for a'), findsNothing);
+  });
+  testWidgets('#1622 the framing label reads in Brazilian Portuguese', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 3);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: TonightSkyPanel()),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Enquadramento para um mosaico 2×3'), findsOneWidget);
+  });
   testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {
     final client = _RecordingClient();
@@ -899,6 +952,40 @@ void _budgetTests() {
     expect(find.textContaining('Surface brightness: 22.0 mag/arcsec²'), findsOneWidget);
     expect(find.textContaining('Sky flux:'), findsOneWidget);
     expect(find.textContaining('SNR goals: core 5'), findsOneWidget);
+  });
+
+  testWidgets('the hours formula and Glover attribution read in Dim Text', (
+    tester,
+  ) async {
+    final o = TonightSkyObject(
+      id: 'M31',
+      name: 'Andromeda Galaxy',
+      type: 'galaxy',
+      magnitude: 3.4,
+      raDeg: 10.6847,
+      decDeg: 41.269,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      integrationHours: 6.3,
+      score: 88,
+      scoreReasons: const ['fills the frame (+35)'],
+      optimalSubS: 300,
+      budget: budget,
+    );
+    await tester.pumpWidget(host(o));
+    await tester.pump();
+    // DESIGN.md: captions are Dim Text (5.8:1 on Panel Grey); Faint Text is
+    // for disabled text and reads 2.4:1.
+    Color? colorOf(String text) =>
+        tester.widget<Text>(find.textContaining(text)).style?.color;
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pumpAndSettle();
+    expect(colorOf('T = SNR²'), AraColors.textSecondary);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Why?'));
+    await tester.pump();
+    expect(colorOf('Dr. Robin Glover'), AraColors.textSecondary);
   });
 
   testWidgets('#1140 banked hours past the full tier flag diminishing returns', (tester) async {

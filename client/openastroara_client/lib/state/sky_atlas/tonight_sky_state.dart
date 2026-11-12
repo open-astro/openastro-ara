@@ -105,6 +105,8 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
   final planningPrefs = ref.watch(planningPrefsProvider);
   final noiseTolerancePct = planningPrefs.noiseTolerancePct;
   final magnitudeFloor = planningPrefs.magnitudeFloor;
+  final mosaicTilesX = planningPrefs.mosaicTilesX;
+  final mosaicTilesY = planningPrefs.mosaicTilesY;
   // #1140 P2 — the rig's fitted sky-model calibration (passed kinds only); a
   // refit re-ranks. Plain map so it crosses the isolate boundary.
   final skyCalibrationK =
@@ -127,6 +129,8 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       limit: 30,
       noiseTolerancePct: noiseTolerancePct,
       magnitudeFloor: magnitudeFloor,
+      mosaicTilesX: mosaicTilesX,
+      mosaicTilesY: mosaicTilesY,
       skyCalibrationK: skyCalibrationK,
     ),
   );

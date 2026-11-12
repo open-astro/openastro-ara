@@ -225,7 +225,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
             '${PlanningPrefs.minNoiseTolerancePct.toStringAsFixed(0)}–${PlanningPrefs.maxNoiseTolerancePct.toStringAsFixed(0)} %. '
             'Applies to Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor.',
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.textDisabled),
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         // #1176 — optional Tonight's Sky magnitude floor (off by default).
@@ -262,9 +262,42 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
             '(${PlanningPrefs.minMagnitudeFloor.toStringAsFixed(0)}–${PlanningPrefs.maxMagnitudeFloor.toStringAsFixed(0)}). '
             'Targets with no catalogued magnitude stay listed. Off by default.',
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.textDisabled),
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
+        // #1622 — mosaic size the Tonight's Sky framing rank assumes.
+        Padding(
+          padding: const EdgeInsets.only(top: 12, left: 4, bottom: 4),
+          child: Text(
+            context.l10n.imagingMosaicHelp(
+              PlanningPrefs.minMosaicTiles,
+              PlanningPrefs.maxMosaicTiles,
+            ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.textSecondary),
+          ),
+        ),
+        for (final across in [true, false])
+          EditableNumberRow(
+            label: across
+                ? context.l10n.imagingMosaicTilesAcross
+                : context.l10n.imagingMosaicTilesDown,
+            currentValue:
+                '${across ? ref.watch(planningPrefsProvider).mosaicTilesX : ref.watch(planningPrefsProvider).mosaicTilesY}',
+            getCanonical: () =>
+                '${across ? ref.read(planningPrefsProvider).mosaicTilesX : ref.read(planningPrefsProvider).mosaicTilesY}',
+            parse: (s) {
+              final v = int.tryParse(s.trim());
+              if (v == null) return;
+              final p = ref.read(planningPrefsProvider);
+              ref
+                  .read(planningPrefsProvider.notifier)
+                  .setMosaicTiles(
+                    across ? v : p.mosaicTilesX,
+                    across ? p.mosaicTilesY : v,
+                  );
+            },
+          ),
         // #1140 P2 — the sky-model calibration store: k per filter kind, fitted
         // by the daemon from the library's frame backgrounds.
         const SizedBox(height: 16),

@@ -8547,6 +8547,30 @@ abstract class AppLocalizations {
   /// **'Start queue'**
   String get calibrationStartQueueNow;
 
+  /// Settings, Imaging defaults: caption above the two Tonight's Sky mosaic size rows; min and max are the allowed tiles per side
+  ///
+  /// In en, this message translates to:
+  /// **'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ({min}–{max} each way). 1×1 is a single frame.'**
+  String imagingMosaicHelp(int min, int max);
+
+  /// Settings, Imaging defaults: row label, how many mosaic tiles wide Tonight's Sky ranks the framing for
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Sky mosaic tiles across'**
+  String get imagingMosaicTilesAcross;
+
+  /// Settings, Imaging defaults: row label, how many mosaic tiles tall Tonight's Sky ranks the framing for
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Sky mosaic tiles down'**
+  String get imagingMosaicTilesDown;
+
+  /// Tonight's Sky panel: line under the header when the ranking assumes a mosaic, e.g. Framing for a 2×3 mosaic
+  ///
+  /// In en, this message translates to:
+  /// **'Framing for a {across}×{down} mosaic'**
+  String tonightSkyMosaicFraming(int across, int down);
+
   /// Image library, Tag selected frames dialog: helper text under the Add tags and Remove tags fields (type several tags separated by commas)
   ///
   /// In en, this message translates to:

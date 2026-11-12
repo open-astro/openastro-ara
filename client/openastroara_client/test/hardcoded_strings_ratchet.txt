@@ -62,7 +62,7 @@ lib/screens/wizard/screens/screen_your_equipment.dart 49
 lib/screens/wizard/wizard_form_kit.dart 4
 lib/screens/wizard/wizard_shell.dart 19
 lib/services/target_resolve_api.dart 1
-lib/settings/registry.dart 374
+lib/settings/registry.dart 378
 lib/state/diagnostics/diagnostics_state.dart 2
 lib/state/sequencer/create_imaging_run.dart 7
 lib/state/settings/settings_nav.dart 40
