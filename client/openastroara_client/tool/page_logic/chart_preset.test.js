@@ -48,3 +48,40 @@ test('the Full UI keeps the star-map scale at a wide field', () => {
   assert.equal(p.stel.core.star_linear_scale, 0.8);
   assert.equal(p.stel.core.star_relative_scale, 1.1);
 });
+
+// A toggle another device changed reaches the open page live (#1644).
+function livePage(chart) {
+  const calls = { cats: [], renders: 0 };
+  const p = loadPageFunctions(['applyDisplayPrefs', 'applyChartPreset', 'setLayer'], {
+    CHART: chart,
+    stel: { core: core() },
+    catToggle: (id, on, skipPost) => calls.cats.push([id, on, skipPost]),
+    renderDisplayPanel: () => { calls.renders++; },
+  });
+  return { p, calls };
+}
+
+test('a toggle pushed from another device keeps the Simple Mode chart dark', () => {
+  const { p, calls } = livePage(true);
+  p.applyChartPreset(p.stel.core); // as the page booted
+  p.applyDisplayPrefs({ atmosphere: true, landscape: true, dss: true, constellationArt: true,
+    azimuthalGrid: true, dsos: false, 'cat:messier': true }, false);
+  const c = p.stel.core;
+  assert.equal(c.atmosphere.visible, false);
+  assert.equal(c.landscapes.visible, false);
+  assert.equal(c.dss.visible, false);
+  assert.equal(c.constellations.images_visible, false);
+  assert.equal(c.lines.azimuthal.visible, false);
+  assert.equal(c.dsos.visible, true);
+  assert.deepEqual(calls.cats, [['messier', true, true]]); // the rings still follow
+});
+
+test('a toggle pushed from another device reaches the Full UI sky', () => {
+  const { p, calls } = livePage(false);
+  p.applyDisplayPrefs({ atmosphere: false, dss: true, 'cat:messier': false }, false);
+  const c = p.stel.core;
+  assert.equal(c.atmosphere.visible, false);
+  assert.equal(c.dss.visible, true);
+  assert.deepEqual(calls.cats, [['messier', false, true]]);
+  assert.equal(calls.renders, 1);
+});

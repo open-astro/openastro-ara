@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/l10n.dart';
 import '../../../state/simple_mode_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// Settings → System → Experimental: features still being built, off by
-/// default and saved on this computer only.
+/// default. Simple Mode is saved on this computer only; Permanent pier is the
+/// rig's site setting, the same switch as Settings › Location & sky (#1565).
 class ExperimentalPanel extends ConsumerWidget {
   const ExperimentalPanel({super.key});
 
@@ -19,8 +22,8 @@ class ExperimentalPanel extends ConsumerWidget {
       children: [
         const SettingsSectionHeader('Experimental'),
         Text(
-          'Features that are still being built. They may change or go away, '
-          'and they only affect this computer.',
+          'Features that are still being built. They may change or go away. '
+          'Simple Mode only affects this computer.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: AraColors.textSecondary,
           ),
@@ -46,8 +49,22 @@ class ExperimentalPanel extends ConsumerWidget {
               'alignment.',
             ),
             value: ref.watch(simplePermanentPierProvider).value ?? false,
-            onChanged: (v) =>
-                ref.read(simplePermanentPierProvider.notifier).set(v),
+            onChanged: (v) async {
+              final messenger = ScaffoldMessenger.of(context);
+              final l10n = context.l10n;
+              try {
+                await ref.read(simplePermanentPierProvider.notifier).set(v);
+              } catch (e) {
+                // A refused switch-off: the switch shows the rig's value again.
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      friendlyError(l10n, e, action: l10n.actionSave),
+                    ),
+                  ),
+                );
+              }
+            },
           ),
       ],
     );

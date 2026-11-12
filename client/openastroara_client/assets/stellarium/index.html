@@ -389,6 +389,23 @@ function renderClock() {
   var s = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   el.textContent = (pinnedMs === null ? '● ' : '') + s;   // ● = live
 }
+// Apply a `{layer|cat:id: bool}` map: from the load URL at boot (`boot`: an off
+// catalog needs nothing), or pushed live when another device changed a toggle
+// (an off catalog is switched off; nothing is posted back, the value came from
+// the rig's copy of the same prefs). A pushed toggle never lights the Simple
+// Mode chart: its preset goes back on top, as after the saved toggles at boot.
+function applyDisplayPrefs(prefs, boot) {
+  var core = stel.core;
+  Object.keys(prefs).forEach(function (k) {
+    var on = !!prefs[k];
+    if (k.indexOf('cat:') === 0) { if (on || !boot) catToggle(k.slice(4), on, true); }
+    else if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
+    else setLayer(k, on);
+  });
+  if (boot) return;
+  if (CHART) applyChartPreset(core);
+  renderDisplayPanel();
+}
 function setLayer(name, on) {
   if (!stel) return;
   var c = stel.core;
@@ -1768,6 +1785,7 @@ function pollCmd() {
         }
       }
       else if (c.type === 'optics') { pushedOptics = c; applyOptics(c); }
+      else if (c.type === 'prefs' && c.prefs && stel) { applyDisplayPrefs(c.prefs, false); }
       // The daemon's latest solve → the amber scope box ({clear:true} removes it).
       else if (c.type === 'scopeBox') {
         scopeBox = c.clear ? null : { ra: +c.ra, dec: +c.dec, paDeg: +c.paDeg || 0, fovWDeg: +c.fovWDeg, fovHDeg: +c.fovHDeg };
@@ -2094,15 +2112,7 @@ StelWebEngine({
     // prefixed keys restore the Catalogs-overlay rings (rows re-fetch lazily; a
     // failed boot-time fetch reverts the toggle honestly and the merge-save keeps
     // the stored key for the next launch).
-    try {
-      var savedPrefs = JSON.parse(qp('prefs', '{}'));
-      Object.keys(savedPrefs).forEach(function (k) {
-        var on = !!savedPrefs[k];
-        if (k.indexOf('cat:') === 0) { if (on) catToggle(k.slice(4), true, true); }
-        else if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
-        else setLayer(k, on);
-      });
-    } catch (e) {}
+    try { applyDisplayPrefs(JSON.parse(qp('prefs', '{}')), true); } catch (e) {}
     if (CHART) applyChartPreset(core);   // over the saved toggles
     s.zoomTo(90 * D2R, 0);
 

@@ -31,14 +31,18 @@ class PreflightPrefsService {
     }
   }
 
+  /// The sorted, capped list that is stored (locally and on the rig).
+  static List<String> capped(Set<String> nights) {
+    final list = nights.toList()..sort();
+    return list.length > cap ? list.sublist(list.length - cap) : list;
+  }
+
   Future<void> saveAcknowledgedNights(Set<String> nights) {
     final task = _chain.then((_) async {
       try {
         final f = await _file();
-        final list = nights.toList()..sort();
-        final kept = list.length > cap ? list.sublist(list.length - cap) : list;
         await f.writeAsString(
-          jsonEncode({'acknowledged_nights': kept}),
+          jsonEncode({'acknowledged_nights': capped(nights)}),
           flush: true,
         );
       } catch (_) {

@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../helpers/fake_rig_settings.dart';
+
+import 'package:openastroara/state/client_settings_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/ws_event.dart';
@@ -81,12 +85,15 @@ class _Inbox extends NotificationInboxNotifier {
   Future<List<AraNotification>?> build() async => items;
 }
 
+/// Like the real file: a read is a fresh copy, a write keeps the newest
+/// [SessionSummaryPrefsService.cap] entries.
 class _MemPrefs extends SessionSummaryPrefsService {
   Set<String> acked = {};
   @override
-  Future<Set<String>> loadAcknowledged() async => acked;
+  Future<Set<String>> loadAcknowledged() async => {...acked};
   @override
-  Future<void> saveAcknowledged(Set<String> ids) async => acked = ids;
+  Future<void> saveAcknowledged(Set<String> ids) async =>
+      acked = SessionSummaryPrefsService.capped(ids).toSet();
 }
 
 const _daemonList = [
@@ -150,6 +157,7 @@ void main() {
     List<SequenceListItem> list = _daemonList,
     List<AraNotification> inbox = const [],
     bool inboxFails = false,
+    FakeRigSettings? rig,
   }) {
     link = StreamController<WsConnectionState>.broadcast();
     ws = StreamController<WsEvent>.broadcast();
@@ -177,6 +185,7 @@ void main() {
         notificationsApiProvider.overrideWithValue(feed),
         sessionSummaryPrefsProvider.overrideWithValue(prefs),
         sessionSummaryClockProvider.overrideWithValue(() => now),
+        if (rig != null) clientSettingsApiProvider.overrideWithValue(rig),
       ],
     );
     addTearDown(c.dispose);
@@ -514,4 +523,106 @@ void main() {
     );
     expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
   });
+
+  test(
+    '#1644 a dismissal made on another device keeps the card away here',
+    () async {
+      final rig = FakeRigSettings({
+        'session_dismissals': [
+          SessionSummary.ackKeyFor('r1', SequenceRunState.completed),
+        ],
+      });
+      final c = make(rig: rig);
+      await c.read(sessionSummaryProvider.future);
+      await settle();
+      link.add(WsConnectionState.connected);
+      await settle();
+      expect(c.read(sessionSummaryProvider).asData?.value, isNull);
+      expect(
+        prefs.acked,
+        contains('r1:completed'),
+        reason: 'the rig value landed in the local file too',
+      );
+    },
+  );
+
+  test('#1644 dismissing the card sends the key to the rig, next to the other device\'s', () async {
+    final rig = FakeRigSettings({
+      'session_dismissals': ['other:completed'],
+    });
+    final c = make(rig: rig);
+    await c.read(sessionSummaryProvider.future);
+    await settle();
+    link.add(WsConnectionState.connected);
+    await settle();
+    final shown = c.read(sessionSummaryProvider).asData!.value!;
+
+    await c.read(sessionSummaryProvider.notifier).acknowledge(shown);
+    await settle();
+
+    expect(
+      rig.stored['session_dismissals'],
+      containsAll(['other:completed', shown.ackKey]),
+    );
+  });
+
+  test('#1644 a later failure of the same run still shows after a synced "paused" dismissal', () async {
+    final rig = FakeRigSettings({
+      'session_dismissals': [
+        SessionSummary.ackKeyFor('r1', SequenceRunState.pausedAwaitingUser),
+      ],
+    });
+    final c = make(rig: rig);
+    await c.read(sessionSummaryProvider.future);
+    await settle();
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(
+      c.read(sessionSummaryProvider).asData?.value?.runId,
+      'r1',
+      reason: 'completed is a new outcome',
+    );
+  });
+
+  test(
+    '#1644 two devices over the cap settle on one list of dismissals',
+    () async {
+      final rig = FakeRigSettings();
+      final a = make(rig: rig);
+      final onA = prefs
+        ..acked = {for (var i = 1; i <= 49; i++) 'a$i:completed'};
+      await a.read(sessionSummaryProvider.future);
+      await settle(); // A seeds the rig with its 49
+      final b = make(rig: rig);
+      final onB = prefs..acked = {'b1:completed', 'b2:completed'};
+      await b.read(sessionSummaryProvider.future);
+      await settle();
+
+      // Each device reads the rig again after the other one wrote, as the
+      // client_settings.updated event makes it do.
+      Future<void> round() async {
+        for (final device in [a, b]) {
+          await device.read(clientSettingsProvider.notifier).refetch();
+          await settle();
+        }
+      }
+
+      await round();
+      final writes = rig.merges;
+      for (var i = 0; i < 3; i++) {
+        await round();
+      }
+      expect(rig.merges, writes, reason: 'no device keeps sending');
+      final kept = (rig.stored['session_dismissals'] as List).cast<String>();
+      expect(kept, hasLength(SessionSummaryPrefsService.cap));
+      expect(
+        kept,
+        isNot(contains('b1:completed')),
+        reason: 'the free slot takes the newer of the two only B holds',
+      );
+      expect(kept, contains('b2:completed'));
+      expect(onA.acked, kept.toSet());
+      expect(onB.acked, kept.toSet());
+    },
+  );
 }

@@ -97,6 +97,8 @@ namespace OpenAstroAra.Server.Services {
         private string? _lastFrameId;
         private double? _altErrorArcmin;
         private double? _azErrorArcmin;
+        // #1565: in memory only, so a daemon restart (the mount may have moved) forgets it. Guarded by _gate.
+        private PolarAlignLastResultDto? _lastResult;
         private int _liveIterations;
         // Every live frame of the run, failed ones included — the frame-id counter across the stages.
         private int _liveFrames;
@@ -207,7 +209,16 @@ namespace OpenAstroAra.Server.Services {
                     Stage: _stage,
                     WaitingForHome: _waitingForHome,
                     CheckSolvesDone: _checkSolvesDone,
-                    CheckResult: _checkResult));
+                    CheckResult: _checkResult,
+                    LastResult: _lastResult));
+            }
+        }
+
+        // Caller holds _gate. Records the run's final error when it has one (a stop before the first solve has none).
+        // A Stop in the rough stage records nothing: its readout is not an alignment (CompleteAsync refuses Done there).
+        private void RecordLastResultLocked() {
+            if (_stage != PolarAlignStages.Coarse && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
+                _lastResult = new PolarAlignLastResultDto(Math.Sqrt(alt * alt + az * az), DateTimeOffset.UtcNow);
             }
         }
 
@@ -483,6 +494,9 @@ namespace OpenAstroAra.Server.Services {
                 lock (_gate) {
                     wasActive = _active;
                     _active = false;
+                    if (wasActive) {
+                        RecordLastResultLocked();
+                    }
                     // The run's own gen-fenced resets are no-ops once the generation moved on above.
                     _waitingForHome = false;
                     _waitingForCapture = false;
