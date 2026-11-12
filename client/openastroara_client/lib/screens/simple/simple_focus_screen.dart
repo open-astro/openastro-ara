@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/focus/filter_offset_calibration_state.dart';
+
 import '../../l10n/l10n.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
@@ -13,7 +15,7 @@ import '../../state/simple_preflight_state.dart';
 import 'simple_focus_panel.dart';
 import 'simple_screen.dart';
 
-/// Focus: the focus panel, its shutter, Auto/Manual/Guide on the chip.
+/// Focus: the focus panel, its shutter, Auto/Manual/Offsets/Guide on the chip.
 class SimpleFocusScreen extends SimpleScreen {
   const SimpleFocusScreen();
 
@@ -38,6 +40,9 @@ class SimpleFocusScreen extends SimpleScreen {
   Widget? frame(WidgetRef ref) {
     final bytes = ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
         ? ref.watch(guideFocusProvider.select((l) => l.frame))
+        // Offsets shows its curve in the panel, no frame (#1675).
+        : ref.watch(simpleFocusOffsetsProvider)
+        ? null
         : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.bahtinov
         ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
         : ref.watch(simpleFocusStarsShownProvider)
@@ -81,7 +86,9 @@ class SimpleFocusScreen extends SimpleScreen {
         if (prev == null ||
             !prev.hydrated ||
             prev.run.isFailed ||
-            !next.isFailed) {
+            !next.isFailed ||
+            // An offset calibration's failed filter shows in its results.
+            ref.read(filterOffsetCalibrationProvider).isRunning) {
           return;
         }
         ref

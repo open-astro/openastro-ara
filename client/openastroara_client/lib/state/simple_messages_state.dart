@@ -54,6 +54,7 @@ enum SimpleStatusOrigin {
   focus,
   polar,
   guide,
+  calibration,
 }
 
 class SimpleMessageAction {

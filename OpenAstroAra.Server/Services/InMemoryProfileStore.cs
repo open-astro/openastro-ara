@@ -470,6 +470,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1675 — no saved focus offsets until a calibration is saved.
+    private FilterFocusOffsetsDto _filterFocusOffsets = FilterFocusOffsetsDto.Empty;
+
+    public FilterFocusOffsetsDto GetFilterFocusOffsets() {
+        lock (_lock) { return _filterFocusOffsets; }
+    }
+
+    public void PutFilterFocusOffsets(FilterFocusOffsetsDto value) {
+        lock (_lock) { _filterFocusOffsets = value; }
+        RaiseChanged();
+    }
+
     // §36 custom terrain horizon — empty until entered.
     private CustomHorizonDto _customHorizon = new(Points: []);
 

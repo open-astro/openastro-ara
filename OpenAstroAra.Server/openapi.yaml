@@ -680,6 +680,96 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/offsets/calibrate:
+    post:
+      tags:
+        - Equipment
+      operationId: CalibrateFilterOffsets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilterOffsetCalibrationRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/offsets/calibration:
+    get:
+      tags:
+        - Equipment
+      operationId: GetFilterOffsetCalibration
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterOffsetCalibrationDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/offsets/calibration/cancel:
+    post:
+      tags:
+        - Equipment
+      operationId: CancelFilterOffsetCalibration
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/offsets/calibration/save:
+    post:
+      tags:
+        - Equipment
+      operationId: SaveFilterOffsetCalibration
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/filterwheel/offsets/calibration/discard:
+    post:
+      tags:
+        - Equipment
+      operationId: DiscardFilterOffsetCalibration
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/filterwheel/reconnect:
     post:
       tags:
@@ -3093,6 +3183,11 @@ paths:
       tags:
         - Calibration
       operationId: GetDarkLibraryStatus
+      parameters:
+        - name: camera
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -8143,6 +8238,10 @@ components:
             - integer
             - string
           format: int64
+        camera:
+          type:
+            - 'null'
+            - string
     BugReportPreparationDto:
       required:
         - preparation_id
@@ -8464,6 +8563,13 @@ components:
         matching_bias_available:
           type: boolean
           default: false
+        manual_capture:
+          type: boolean
+          default: false
+        camera:
+          type:
+            - 'null'
+            - string
     CalibrationStateDto:
       required:
         - dark_library
@@ -8967,6 +9073,10 @@ components:
             - integer
             - string
           format: int64
+        camera:
+          type:
+            - 'null'
+            - string
     DarkLibraryStateDto:
       required:
         - status
@@ -9022,6 +9132,10 @@ components:
             - array
           items:
             $ref: '#/components/schemas/BiasLibraryEntryDto'
+        camera:
+          type:
+            - 'null'
+            - string
     DataManagerActiveDownloadDto:
       required:
         - download_id
@@ -9729,6 +9843,33 @@ components:
             - integer
             - string
           format: int32
+    FilterFocusOffsetDto:
+      required:
+        - position
+        - offset
+      type: object
+      properties:
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    FilterFocusOffsetsDto:
+      required:
+        - offsets
+      type: object
+      properties:
+        offsets:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterFocusOffsetDto'
     FilterInstalledRequestDto:
       required:
         - position
@@ -9752,6 +9893,155 @@ components:
         - sii
         - duo
         - tri
+    FilterOffsetCalibrationDto:
+      required:
+        - state
+        - job_id
+        - reference_position
+        - reference_name
+        - reference_first_position
+        - reference_second_position
+        - cfz_steps
+        - drift_checked
+        - drift_warning
+        - current_position
+        - run_index
+        - run_count
+        - reason
+        - filters
+      type: object
+      properties:
+        state:
+          type: string
+        job_id:
+          type: string
+          format: uuid
+        reference_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        reference_name:
+          type: string
+        reference_first_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        reference_second_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        cfz_steps:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        drift_checked:
+          type: boolean
+        drift_warning:
+          type: boolean
+        current_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        run_index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        run_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        reason:
+          type:
+            - 'null'
+            - string
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterOffsetResultDto'
+    FilterOffsetCalibrationRequestDto:
+      type: object
+      properties:
+        positions:
+          type:
+            - 'null'
+            - array
+          items:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+    FilterOffsetResultDto:
+      required:
+        - position
+        - name
+        - status
+        - best_position
+        - offset
+        - r_squared
+        - previous_offset
+        - failure_reason
+      type: object
+      properties:
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        name:
+          type: string
+        status:
+          type: string
+        best_position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        r_squared:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        previous_offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        failure_reason:
+          type:
+            - 'null'
+            - string
     FilterSetDto:
       required:
         - filters
@@ -10187,6 +10477,14 @@ components:
           type:
             - 'null'
             - boolean
+        camera_name:
+          type:
+            - 'null'
+            - string
+        camera_id:
+          type:
+            - 'null'
+            - string
     FrameHistogramDto:
       required:
         - bins
@@ -13533,6 +13831,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CoolingFanDto'
+        filter_focus_offsets:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/FilterFocusOffsetsDto'
     QualityScoreBreakdownDto:
       required:
         - composite
