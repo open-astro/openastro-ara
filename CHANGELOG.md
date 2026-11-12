@@ -51,7 +51,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed (WebSocket catalog)
 
-- `GET /api/v1/ws/catalog` now lists every event the daemon emits (#1804). It adds `sequence.failed`, `backup.create.started|complete|failed`, `guider.dark_library.started|progress|complete|failed` and `guider.defect_map.started|progress|complete|failed`, plus the declared events that were left out (`diagnostics.snapshot`, `guider.dark_library.invalidated`, `guider.pa_residual`, `guider.profile_pushed`, `telescope.slew_aborted` and the ten `polar_align.*`). It drops 35 entries nothing ever emitted (backup restore / stream / zip, bugreport, mosaic, notification, migration, `frame.preview.ready` and similar); `calibration.flats_generated` stays as a planned event. `WsEventCatalogCoverageTest` keeps the catalog and the emitters in step.
+- `GET /api/v1/ws/catalog` now lists every event the daemon emits (#1804). It adds `sequence.failed`, `backup.create.started|complete|failed`, `guider.dark_library.started|progress|complete|failed` and `guider.defect_map.started|progress|complete|failed`, plus the declared events that were left out (`diagnostics.snapshot`, `guider.dark_library.invalidated`, `guider.pa_residual`, `guider.profile_pushed`, `telescope.slew_aborted` and the ten `polar_align.*`). It drops 36 entries nothing ever emitted (backup restore / stream / zip, bugreport, mosaic, notification, migration, `frame.preview.ready` and similar); `calibration.flats_generated` stays as a planned event. `WsEventCatalogCoverageTest` keeps the catalog and the emitters in step.
 
 ### Fixed (calibration)
 

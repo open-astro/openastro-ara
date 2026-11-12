@@ -217,7 +217,6 @@ public static class WsEventCatalog {
     // GET /api/v1/calibration/dark-library/status + the sequence.* events). Declaring an event nobody sends is a
     // contract lie, so they are gone; the guider's own library events (guider.dark_library.*) are unrelated.
 
-
     // The sequencer run ended in an unhandled failure (same payload as the other sequence.* run events).
     public const string SequenceFailed = "sequence.failed";
     // §43-2 async backup create (BackupService): started when the worker claims the slot, complete/failed as the terminal.
@@ -265,11 +264,9 @@ public static class WsEventCatalog {
     public const string StorageDevicesChanged = "storage.devices_changed";
 
 
-
     public const string DataManagerDownloadProgress = "data_manager.download.progress";
     public const string DataManagerDownloadComplete = "data_manager.download.complete";
     public const string DataManagerDownloadFailed = "data_manager.download.failed";
-
 
     // §35.4 safety-reaction engine. safety.unsafe fires BEFORE the configured
     // action executes (so the client can raise its alarm modal while the daemon
