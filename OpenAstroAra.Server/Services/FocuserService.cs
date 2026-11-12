@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
@@ -25,170 +23,104 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — fourth real Alpaca-backed device service. Replaces <c>PlaceholderFocuserService</c>:
-/// connects to a discovered Alpaca Focuser, serves its capabilities + live runtime
-/// (position/moving/temperature/temp-comp) over the §6 REST surface, and moves it via
-/// <see cref="MoveAsync"/> (a §60.5 202-Accepted background operation).
+/// §14e — fourth real Alpaca-backed device service: connects to a discovered Alpaca Focuser, serves its
+/// capabilities + live runtime (position/moving/temperature/temp-comp) over the §6 REST surface, and
+/// moves it via <see cref="MoveAsync"/> (a §60.5 202-Accepted background operation).
 ///
-/// Follows the established template: generation-based supersede; §32.4 background-refresh cache
-/// (a timer reads runtime every <see cref="RefreshInterval"/> while Connected). Capabilities are
+/// Its lifecycle (generation supersede, §32.4 background-refresh cache, Halt-before-disconnect, the §42.3
+/// probe and read health) is the shared <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011). Capabilities are
 /// static, so they are read once (lazily) and cached separately from the runtime.
 /// REST-only for now — the <c>IFocuserMediator</c> unification (MoveFocuser/autofocus
 /// instructions) is the follow-up.
 /// </summary>
-public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSource, IDisposable {
+public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
-    // #1127 — the record the card names. The remembered-selection store and this can diverge
-    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
-
-
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly FocuserStateDto IdleRuntime = new("idle", null, null, false);
 
     private readonly ILogger<FocuserService> _logger;
-    private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly IProfileStore? _profiles;
-    private readonly DeviceConnectionProbe _probe = new();
-    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
-    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
-    // Built in the constructor, once the fault sink is known.
-    private readonly DeviceHealthWatch _health;
-    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => _health.Observe(ok, reason, device);
-    private void ResetHealthLocked() => _health.Reset();
-
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    private AlpacaFocuser? _client;
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<IFocuserDevice> _lifecycle;
+    private Func<DiscoveredDeviceDto, IFocuserDevice> _createDevice = AlpacaFocuserDevice.Create;
+    // Guarded by the lifecycle's gate, like the connection state.
     private FocuserCapabilitiesDto? _capabilities;
     private FocuserStateDto _runtime = IdleRuntime;
-    private int _refreshing;
     // #1541 — direction (+1 out / -1 in) of the last move, 0 until one is made on this connection; and whether a
     // compensated move is in flight (reported as `backlash_compensating` until a refresh reads IsMoving false). Both under _gate.
     private int _lastDirection;
     // Sum of the backlash steps added so far (absolute focusers): hardware position = reported position + this.
     private int _backlashOffset;
     private bool _compensating;
-    private long _connectGeneration;
-    private bool _disposed;
 
     public FocuserService(ILogger<FocuserService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IProfileStore? profiles = null) {
         _logger = logger ?? NullLogger<FocuserService>.Instance;
-        _events = events;
         _faults = faults;
         _profiles = profiles;
-        _health = new DeviceHealthWatch(DeviceType.Focuser, faults);
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _lifecycle = new DeviceLifecycle<IFocuserDevice>(this, DeviceType.Focuser, "focuser",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
     }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, IFocuserDevice> DeviceFactory { init => _createDevice = value; }
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
+    internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     public Task<FocuserDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<FocuserDto?>(null);
             }
-            var state = _state;
+            var state = _lifecycle.State;
             var connected = state == EquipmentConnectionState.Connected;
             var runtime = connected ? _runtime : IdleRuntime;
             var caps = connected ? _capabilities : null;
-            return Task.FromResult<FocuserDto?>(new FocuserDto(_device.UniqueId, _device.Name, state, caps, runtime));
+            return Task.FromResult<FocuserDto?>(new FocuserDto(device.UniqueId, device.Name, state, caps, runtime));
         }
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("focuser.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("focuser.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the focuser is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the focuser is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.Focuser, removed.UniqueId, removed.Name);
-            return true;
-        }
-    }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaFocuser? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("focuser.disconnect", idempotencyKey));
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads.
+    private void ResetSessionLocked() {
+        _capabilities = null;   // re-read for the new device
+        _lastDirection = 0;
+        _backlashOffset = 0;
+        _compensating = false;
+        _runtime = IdleRuntime; // don't serve a prior device's runtime
     }
 
     // The rotator's panic-stop shape: await Halt so the 202 means the stop reached the driver.
     // CancellationToken.None: an already-cancelled token would skip the stop.
     public async Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaFocuser? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.ConnectedDevice();
         if (client is null) {
             throw new InvalidOperationException("focuser is not connected");
         }
@@ -198,11 +130,10 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
 
     public Task<OperationAcceptedDto> MoveAsync(FocuserMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        AlpacaFocuser? client;
+        IFocuserDevice? client;
         FocuserCapabilitiesDto? caps;
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.ConnectedDevice();
             caps = _capabilities;
         }
         if (client is null) {
@@ -224,7 +155,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background move boundary: the blocking ASCOM Move / TempComp set can throw arbitrary driver/HTTP exceptions; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. This also covers the dispose-ordering edge — a concurrent DisconnectAsync/Dispose can dispose the captured client before (or during) Move(), so the call throws ObjectDisposed/HTTP here; caught and logged. CA1031's log-and-recover boundary applies.")]
-    private void MoveInBackground(AlpacaFocuser client, int target, bool? useTempComp) {
+    private void MoveInBackground(IFocuserDevice client, int target, bool? useTempComp) {
         try {
             if (useTempComp is bool tc) {
                 // Best-effort: temperature-compensation behaviour during a manual move is
@@ -232,71 +163,37 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
                 try { client.TempComp = tc; } catch (Exception ex) { LogTempCompIgnored(ex); }
             }
             MoveCompensated(client, target);
-            RefreshCacheOnce(); // surface IsMoving/Position promptly
+            _lifecycle.Refresh(); // surface IsMoving/Position promptly
         } catch (Exception ex) {
             LogMoveFailed(ex, target);
         }
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
+    // The runtime read the lifecycle runs each tick; capabilities are read here too until they are known.
+    private DeviceRead ReadRuntime(IFocuserDevice client) {
+        FocuserCapabilitiesDto? knownCaps;
+        lock (_gate) {
+            knownCaps = _capabilities;
         }
-        try {
-            AlpacaFocuser? client;
-            bool needCaps;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
-                }
-                client = _client;
-                needCaps = _capabilities is null;
+        var runtime = ReadRuntime(client, out var readError);
+        var caps = knownCaps is null ? ReadCapabilities(client) : null;
+        // A relative focuser may have no Position to read (NotImplemented is already excluded; some
+        // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
+        var essential = (knownCaps?.AbsoluteFocuser ?? true) ? readError : null;
+        return new DeviceRead(essential, CommitLocked: () => {
+            if (runtime.State != "moving") {
+                _compensating = false; // the compensated move has settled
             }
-            if (client is null) {
-                return;
+            _runtime = FocuserBacklash.Report(runtime with { Position = runtime.Position - _backlashOffset }, _compensating);
+            if (caps is not null) {
+                _capabilities = caps;
             }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
-            // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
-            // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this tick's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, out var readError);
-            var caps = needCaps ? ReadCapabilities(client) : null;
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    if (runtime.State != "moving") {
-                        _compensating = false; // the compensated move has settled
-                    }
-                    _runtime = FocuserBacklash.Report(runtime with { Position = runtime.Position - _backlashOffset }, _compensating);
-                    // A relative focuser may have no Position to read (NotImplemented is already excluded; some
-                    // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
-                    ObserveRuntimeReadLocked(readError is null || !(_capabilities?.AbsoluteFocuser ?? true), readError, _device);
-                    if (caps is not null) {
-                        _capabilities = caps;
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            LogRuntimeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+        });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing focuser property (e.g. Temperature on a focuser with no probe) throws; that field is reported absent/default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static FocuserStateDto ReadRuntime(AlpacaFocuser c, out string? readError) {
+    private static FocuserStateDto ReadRuntime(IFocuserDevice c, out string? readError) {
         bool moving;
         readError = null;
         try { moving = c.IsMoving; } catch (Exception) { moving = false; }
@@ -314,10 +211,10 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported capability property throws; a non-essential field falls back to a default, while a failed MaxStep returns null so capabilities are not cached with a bogus zero range. CA1031's log-and-recover boundary applies.")]
-    private static FocuserCapabilitiesDto? ReadCapabilities(AlpacaFocuser c) {
+    private static FocuserCapabilitiesDto? ReadCapabilities(IFocuserDevice c) {
         int maxStep;
         // MaxStep is essential — if it fails, return null so we DON'T cache a [0,0] range (which
-        // would permanently reject every Move). RefreshCacheOnce leaves _capabilities null and the
+        // would permanently reject every Move). _lifecycle.Refresh leaves _capabilities null and the
         // next tick retries; MoveAsync device-validates the bound until then.
         try { maxStep = c.MaxStep; } catch (Exception) { return null; }
         double stepSize;
@@ -335,158 +232,6 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
             CanTempComp: canTempComp, AbsoluteFocuser: absolute);
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaFocuser is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaFocuser? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaFocuser(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    _capabilities = null;       // re-read for the new device
-                    _lastDirection = 0;
-                    _backlashOffset = 0;
-                    _runtime = IdleRuntime;     // don't serve a prior device's runtime
-                    _probe.Reset(); ResetHealthLocked();             // §42.3 — a fresh session starts a fresh streak
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            RefreshCacheOnce(); // seed capabilities + runtime through the guarded path
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.Focuser, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaFocuser client) {
-        try {
-            // Interrupt any in-flight Move so a disconnect-during-move doesn't wait out the full
-            // ASCOM timeout (the blocking Move on the background task fails fast once halted).
-            client.Halt();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaFocuser client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaFocuser c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
-    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
-    // while a stale probe of the dead session was still in flight. The liveness check and
-    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
-    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
-    // null when the probed client is stale (the observation is discarded).
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaFocuser client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Re-checks the probed client's identity under the gate: a reconnect between the probe
-    // and this trip must never flip the NEW, healthy session to Error (review finding).
-    private void TripConnectionLost(AlpacaFocuser probed) {
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset(); ResetHealthLocked();
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Focuser, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Focuser '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.Focuser, _device?.UniqueId, _device?.Name, state);
-    }
-
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
         new(OperationId: Guid.NewGuid(),
             OperationType: operationType,
@@ -502,27 +247,9 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
             && (target < caps.MinPosition || target > caps.MaxPosition);
 
     public void Dispose() {
-        AlpacaFocuser? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-        }
-        _refreshTimer.Dispose();
-        // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
-        // "Connected = false" is a blocking HTTP call (up to ~3s ASCOM timeout) that would hang
-        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
+        _lifecycle.Dispose();
         GC.SuppressFinalize(this);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser runtime read failed")]
-    private partial void LogRuntimeReadFailed(Exception ex);
 
     // Warning, not Error: a move that the device rejects (e.g. ASCOM InvalidValue for an
     // out-of-range target accepted in the caps-unknown window) is an operation that didn't
@@ -532,13 +259,4 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Focuser TempComp set ignored")]
     private partial void LogTempCompIgnored(Exception ex);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Focuser connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Focuser connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Focuser during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }
