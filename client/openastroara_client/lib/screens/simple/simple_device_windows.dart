@@ -4682,10 +4682,10 @@ final simpleDomeAskProvider =
 /// target), then side by side the dome as it looks from the front, its two
 /// pairs of shells fanning open and shut over about as long as this dome's
 /// shutter takes, and a dial from above to turn it (drag to a target, play
-/// in its middle; Stop while it moves). Then the shutter as Open / Closed,
-/// Park and Home, and a Follows the mount switch (#1689). Only what the dome
-/// says it can do shows. Sync, set park and the follow geometry stay in the
-/// full UI (#1662, mock
+/// in its middle; Stop while it moves). Then Follows the mount On / Off for
+/// a dome that turns (#1689), the shutter as Open / Closed, Park and Home.
+/// Only what the dome says it can do shows. Sync, set park and the follow
+/// geometry stay in the full UI (#1662, mock
 /// `design/preview/simple-dome-safety-mock.html` v12, the Baader AllSky
 /// clamshell from the user's photos).
 class SimpleDomeWindow extends ConsumerStatefulWidget {
