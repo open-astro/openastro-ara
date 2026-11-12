@@ -20,8 +20,8 @@ using System.Threading;
 namespace OpenAstroAra.Test {
 
     /// <summary>ADR 0011 rule 4 — the test adapter a device lifecycle runs against instead of a port.
-    /// <see cref="Answers"/> drives the §42.3 probe; <see cref="ReadFails"/> makes the essential read throw;
-    /// <see cref="HoldReads"/> holds it.</summary>
+    /// <see cref="Answers"/> drives the §42.3 probe (<see cref="ProbePermits"/> gates its failures);
+    /// <see cref="ReadFails"/> makes the essential read throw; <see cref="HoldReads"/> holds it.</summary>
     internal class FakeDeviceAdapter : IDeviceAdapter {
         private int _connects;
         public volatile bool Answers = true;
@@ -30,6 +30,10 @@ namespace OpenAstroAra.Test {
         public ManualResetEventSlim? HoldReads;
         // When set, each failed essential read first waits for a permit, so a test lets exactly N of them through.
         public SemaphoreSlim? ReadPermits;
+        // When set, each failed probe first waits for a permit, so a test lets exactly N of them through.
+        public SemaphoreSlim? ProbePermits;
+        private int _failedProbes;
+        public int FailedProbes => Volatile.Read(ref _failedProbes);
         private int _failedReads;
         public int FailedReads => Volatile.Read(ref _failedReads);
         public int Connects => Volatile.Read(ref _connects);
@@ -38,7 +42,16 @@ namespace OpenAstroAra.Test {
         public bool Disposed { get; private set; }
 
         public void Connect() => Interlocked.Increment(ref _connects);
-        public bool Connected => Answers;
+        public bool Connected {
+            get {
+                if (Answers) {
+                    return true;
+                }
+                ProbePermits?.Wait(TimeSpan.FromSeconds(10));
+                Interlocked.Increment(ref _failedProbes);
+                return false;
+            }
+        }
         public void Stop() { }
         public void Disconnect() => Interlocked.Increment(ref _disconnects);
         public void Dispose() => Disposed = true;

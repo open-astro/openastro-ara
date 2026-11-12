@@ -104,9 +104,9 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// the action it returns runs under the gate on adopt, before the device reads Connected.</param>
     /// <param name="onConnected">Optional, runs off the gate once a connect adopted and its seed read
     /// finished, while the device still reads Connected (Switch: the late cooling-fan catch-up).</param>
-    /// <param name="failedReadTrips">A failed essential read is a lost connection: the device goes to Error
-    /// with a Disconnected fault on that read instead of a degraded episode after the threshold (SafetyMonitor,
-    /// ADR 0011 rule 3: a dead monitor is never read as safe).</param>
+    /// <param name="failedReadTrips">A failed essential read or a failed connection probe is a lost connection:
+    /// the device goes to Error with a Disconnected fault on that read or probe, instead of a degraded episode
+    /// or a lost streak after their thresholds (SafetyMonitor, ADR 0011 rule 3: a dead monitor is never read as safe).</param>
     public DeviceLifecycle(object owner, DeviceType type, string noun,
             Func<DiscoveredDeviceDto, TDevice> createDevice, Func<TDevice, DeviceRead> read,
             Action resetSessionLocked, int failedReadThreshold, ILogger logger,
@@ -302,7 +302,10 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             // failures (an unsupported property must stay benign), so the probe is the only
             // disconnect-detection source; a consecutive-failure streak trips the device to Error.
             if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
+                if (_failedReadTrips) {
+                    // ADR 0011 rule 3 — a failed probe is a failed essential read: no safe verdict outlives it.
+                    TripConnectionLost(client, "stopped answering its connection probe");
+                } else if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
                     TripConnectionLost(client,
                         $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes");
                 }

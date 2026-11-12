@@ -40,8 +40,8 @@ namespace OpenAstroAra.Server.Services;
 /// mediator's <c>GetInfo</c> serve the value synchronously without a per-poll HTTP read (no
 /// thread-per-poll accumulation under aggressive polling).
 ///
-/// ADR 0011 rule 3 — the failed-read threshold is one: the first failed <c>IsSafe</c> read trips the
-/// monitor to Error and reports it as not safe, and no safe verdict stands after a failed read.
+/// ADR 0011 rule 3 — the failed-read threshold is one: the first failed <c>IsSafe</c> read or connection
+/// probe trips the monitor to Error and reports it as not safe, and no safe verdict stands after either.
 ///
 /// This class also serves the Sequencer's <c>ISafetyMonitorMediator</c> (so <c>WaitUntilSafe</c>
 /// reads the live device) — that surface lives in the <c>SafetyMonitorService.Mediator.cs</c>
@@ -60,7 +60,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetai
     public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<SafetyMonitorService>.Instance;
-        // Threshold one, and a failed read trips (rule 3): the monitor goes to Error on the first failed read.
+        // Threshold one, and a failed read trips (rule 3): the monitor goes to Error on the first failed read or probe.
         _lifecycle = new DeviceLifecycle<ISafetyMonitorDevice>(this, DeviceType.SafetyMonitor, "safety monitor",
             d => _createDevice(d), ReadRuntime, ResetSessionLocked,
             failedReadThreshold: 1, _logger, events, faults, failedReadTrips: true);

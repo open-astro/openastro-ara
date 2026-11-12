@@ -276,6 +276,30 @@ namespace OpenAstroAra.Test {
             Assert.That(faults.Faults.Select(f => f.Kind), Does.Contain(EquipmentFaultKind.Disconnected));
         }
 
+        [Test]
+        public async Task A_safety_monitor_that_stops_answering_reads_not_safe_after_one_failed_probe() {
+            var faults = new FaultSink();
+            using var probes = new SemaphoreSlim(0);
+            FakeSafetyMonitorDevice? dead = null;
+            using var svc = new SafetyMonitorService(faults: faults) {
+                RefreshPeriod = Tick,
+                DeviceFactory = _ => dead = new FakeSafetyMonitorDevice { ProbePermits = probes },
+            };
+            await svc.ConnectAsync(new ConnectRequestDto(Record(DeviceType.SafetyMonitor, "dev-1")), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result is { State: EquipmentConnectionState.Connected, Safe: true }, "a safe verdict");
+
+            dead!.Answers = false;
+            probes.Release(1); // exactly ONE failed probe; the IsSafe read itself never fails
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Safe == false, "a not-safe verdict");
+
+            Assert.That(svc.GetInfo().IsSafe, Is.False);
+            Assert.That(dead.FailedProbes, Is.EqualTo(1));
+            Assert.That(dead.FailedReads, Is.Zero);
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.State, Is.EqualTo(EquipmentConnectionState.Error));
+            Assert.That(svc.DesiredConnection, Is.EqualTo(DesiredConnection.Faulted));
+            Assert.That(faults.Faults.Select(f => f.Kind), Does.Contain(EquipmentFaultKind.Disconnected));
+        }
+
         [TestCaseSource(nameof(AllDevices))]
         public async Task The_clean_read_gate_is_closed_by_each_connect(string device) {
             // Every device's essential read is held until the test lets it through: Connected, but no read yet.

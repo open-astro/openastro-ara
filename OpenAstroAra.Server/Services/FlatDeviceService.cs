@@ -206,9 +206,14 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
     private static FlatDeviceStateDto ReadRuntime(IFlatDeviceDevice c, int? maxBrightness, out string? readError) {
         CoverStatus cover;
         readError = null;
-        try { cover = c.CoverState; }
-        catch (ASCOM.NotImplementedException) { cover = CoverStatus.Unknown; } // not a fault: the driver has no cover state
-        catch (Exception ex) { cover = CoverStatus.Unknown; readError = ex.Message; }
+        try {
+            cover = c.CoverState;
+        } catch (ASCOM.NotImplementedException) {
+            cover = CoverStatus.Unknown; // not a fault: the driver has no cover state
+        } catch (Exception ex) {
+            cover = CoverStatus.Unknown;
+            readError = ex.Message;
+        }
         CalibratorStatus cal;
         try { cal = c.CalibratorState; } catch (Exception) { cal = CalibratorStatus.Unknown; }
         int brightness;
