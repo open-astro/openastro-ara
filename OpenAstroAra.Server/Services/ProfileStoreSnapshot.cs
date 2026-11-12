@@ -50,6 +50,7 @@ public static class ProfileStoreSnapshot {
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         CoolingFan: s.GetCoolingFan(),
         FilterFocusOffsets: s.GetFilterFocusOffsets(),
+        Dome: s.GetDomeSettings(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration(),
         EquipmentIdentity: s.GetEquipmentIdentity(),
@@ -109,5 +110,7 @@ public static class ProfileStoreSnapshot {
         s.PutCoolingFan(snap.CoolingFan ?? CoolingFanDto.None);
         // #1675 — offsets belong to one rig's filters: a profile with none saved must not inherit them.
         s.PutFilterFocusOffsets(snap.FilterFocusOffsets ?? FilterFocusOffsetsDto.Empty);
+        // #1689 — selecting a profile with no dome block must not inherit the previous rig's geometry or its follow flag.
+        s.PutDomeSettings(snap.Dome ?? DomeSettingsDto.Default);
     }
 }

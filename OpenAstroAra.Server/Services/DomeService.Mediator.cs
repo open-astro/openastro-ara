@@ -51,8 +51,8 @@ internal readonly record struct DomeCaps(
 /// The control ops drive the device and block on a bounded wait for their terminal condition (so the
 /// instruction's post-op <c>GetInfo().ShutterStatus</c> / success check is accurate), mirroring the
 /// hardened focuser/rotator-mediator move path. The dome-following surface (EnableFollowing/
-/// SyncToScopeCoordinates/IsFollowingScope) stays a no-op stub: software dome-sync is the separate
-/// <c>IDomeFollower</c> subsystem (§38k-21), not yet wired into the headless daemon.
+/// SyncToScopeCoordinates/IsFollowingScope) goes through the <see cref="DomeFollower"/> attached by the
+/// composition root (#1689); with none attached it reports "not following".
 /// </summary>
 public sealed partial class DomeService : IDomeMediator {
 
@@ -116,28 +116,57 @@ public sealed partial class DomeService : IDomeMediator {
         RunDomeOpAsync("dome.shutter.close", c => c.CloseShutter(),
             c => ReadShutter(c) == AscomShutter.Closed, cancellationToken);
 
-    public Task<bool> Park(CancellationToken cancellationToken) =>
-        RunDomeOpAsync("dome.park", c => c.Park(),
+    public Task<bool> Park(CancellationToken cancellationToken) {
+        StopFollowing("the dome was parked");
+        return RunDomeOpAsync("dome.park", c => c.Park(),
             c => ReadAtPark(c) && !ReadSlewing(c), cancellationToken);
+    }
 
-    public Task<bool> FindHome(CancellationToken cancellationToken) =>
-        RunDomeOpAsync("dome.findhome", c => c.FindHome(),
+    public Task<bool> FindHome(CancellationToken cancellationToken) {
+        StopFollowing("the dome was sent home");
+        return RunDomeOpAsync("dome.findhome", c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), cancellationToken);
+    }
 
     public Task<bool> SlewToAzimuth(double degrees, CancellationToken cancellationToken) {
+        StopFollowing("the dome was turned by hand");
+        return FollowSlewAsync(degrees, cancellationToken);
+    }
+
+    // The slew itself, without the stop-following side effect: the follower's own moves and a one-off sync use it.
+    internal Task<bool> FollowSlewAsync(double degrees, CancellationToken cancellationToken) {
         var target = NormalizeAzimuth(degrees);
         return RunDomeOpAsync("dome.slew", c => c.SlewToAzimuth(target),
             c => !ReadSlewing(c) && AzimuthReached(c, target), cancellationToken);
     }
 
-    // The dome-following surface is the separate IDomeFollower subsystem (§38k-21), not wired into the
-    // headless daemon yet — report "not following" / "didn't enable" like the headless stub.
-    public bool IsFollowingScope => false;
-    public Task WaitForDomeSynchronization(CancellationToken cancellationToken) => Task.CompletedTask;
+    // #1689 — the dome-following surface goes through the DomeFollower once the composition root attaches it;
+    // without one (unit tests of the dome alone) it reports "not following" / "didn't enable".
+    public bool IsFollowingScope => _follower?.IsFollowing ?? false;
+
+    public Task WaitForDomeSynchronization(CancellationToken cancellationToken) =>
+        _follower?.WaitForDomeSynchronization(cancellationToken) ?? Task.CompletedTask;
+
     public Task<bool> SyncToScopeCoordinates(Coordinates coordinates, PierSide sideOfPier, CancellationToken cancellationToken) =>
-        Task.FromResult(false);
-    public Task<bool> EnableFollowing(CancellationToken cancellationToken) => Task.FromResult(false);
-    public Task<bool> DisableFollowing(CancellationToken cancellationToken) => Task.FromResult(false);
+        _follower?.SyncToScopeCoordinates(coordinates, sideOfPier, cancellationToken) ?? Task.FromResult(false);
+
+    public async Task<bool> EnableFollowing(CancellationToken cancellationToken) {
+        if (_follower is not { } follower) {
+            return false;
+        }
+        try {
+            await follower.Start().ConfigureAwait(false);
+            return true;
+        } catch (InvalidOperationException ex) {
+            LogDomeOpFailed(ex, "dome.follow.enable");
+            return false;
+        }
+    }
+
+    public Task<bool> DisableFollowing(CancellationToken cancellationToken) {
+        _follower?.TurnOff("turned off");
+        return Task.FromResult(_follower is not null);
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer dome-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]

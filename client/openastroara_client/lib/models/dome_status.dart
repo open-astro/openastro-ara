@@ -21,7 +21,8 @@ class DomeCapabilities {
     this.canSetPark = false,
   });
 
-  factory DomeCapabilities.fromJson(Map<String, dynamic> json) => DomeCapabilities(
+  factory DomeCapabilities.fromJson(Map<String, dynamic> json) =>
+      DomeCapabilities(
         canSetShutter: json['can_set_shutter'] as bool? ?? false,
         canSetAzimuth: json['can_set_azimuth'] as bool? ?? false,
         canSyncAzimuth: json['can_sync_azimuth'] as bool? ?? false,
@@ -43,7 +44,13 @@ class DomeCapabilities {
 
   @override
   int get hashCode => Object.hash(
-      canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome, canSetPark);
+    canSetShutter,
+    canSetAzimuth,
+    canSyncAzimuth,
+    canPark,
+    canFindHome,
+    canSetPark,
+  );
 }
 
 /// Live status of the connected ASCOM Dome
@@ -64,6 +71,10 @@ class DomeStatus extends EquipmentDeviceStatus {
   final bool atHome;
   final bool parked;
 
+  /// The dome follows the mount (#1689); with [runtimeState] `slewing` the
+  /// follower is turning it.
+  final bool following;
+
   DomeStatus({
     required this.deviceId,
     required this.name,
@@ -74,27 +85,35 @@ class DomeStatus extends EquipmentDeviceStatus {
     required this.shutterOpen,
     required this.atHome,
     required this.parked,
+    this.following = false,
   });
 
   /// The dome is mid-operation (rotating or moving the shutter).
   @override
-  bool get isBusy => runtimeState == 'slewing' || runtimeState == 'shutter_moving';
+  bool get isBusy =>
+      runtimeState == 'slewing' || runtimeState == 'shutter_moving';
 
   factory DomeStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic>
+        ? runtime
+        : const <String, dynamic>{};
     return DomeStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
-      capabilities:
-          caps is Map<String, dynamic> ? DomeCapabilities.fromJson(caps) : null,
+      connectionState: equipmentConnectionStateFromWire(
+        json['state'] as String?,
+      ),
+      capabilities: caps is Map<String, dynamic>
+          ? DomeCapabilities.fromJson(caps)
+          : null,
       runtimeState: r['state'] as String? ?? '',
       azimuthDeg: (r['azimuth_deg'] as num?)?.toDouble(),
       shutterOpen: r['shutter_open'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
       parked: r['parked'] as bool? ?? false,
+      following: r['following'] as bool? ?? false,
     );
   }
 
@@ -110,9 +129,20 @@ class DomeStatus extends EquipmentDeviceStatus {
           other.azimuthDeg == azimuthDeg &&
           other.shutterOpen == shutterOpen &&
           other.atHome == atHome &&
-          other.parked == parked);
+          other.parked == parked &&
+          other.following == following);
 
   @override
-  int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, azimuthDeg, shutterOpen, atHome, parked);
+  int get hashCode => Object.hash(
+    deviceId,
+    name,
+    connectionState,
+    capabilities,
+    runtimeState,
+    azimuthDeg,
+    shutterOpen,
+    atHome,
+    parked,
+    following,
+  );
 }

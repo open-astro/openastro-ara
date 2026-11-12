@@ -183,6 +183,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-11 — The dome follows the mount: `POST /equipment/dome/follow`, `GET/PUT /profile/dome`, and `following` on the dome status (#1689)
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/dome/follow` (body `{"enabled": bool}`); new `GET` and `PUT /api/v1/profile/dome` (`dome` profile section); `runtime.following` on `GET /api/v1/equipment/dome`.
+
+**Decision:** "follow the mount" is a per-profile setting (`follow_mount` in the `dome` section, so it survives a restart and a profile switch); the follow command writes it and answers `200 {"enabled": <state>}` (not 202: nothing runs in the background that the caller must wait for). Turning it on is refused `409` Problem, with the reason as `detail`, when the dome is not connected, cannot set its azimuth, or the profile has no dome radius. Turning the dome by hand (`slew`, `park`, `findhome`, `abort`, `disconnect`, or a plan's dome steps), an unsafe-weather reaction, an emergency stop, and a geometry that puts the scope outside the dome for the mount's pointing turn `follow_mount` off. The `dome` section holds the geometry the azimuth math reads (`dome_radius_mm`, `scope_position_north_south_mm` / `_east_west_mm` / `_up_down_mm`, `mount_type` = `equatorial` | `fork_on_wedge`, `gem_axis_mm`, `lateral_axis_mm`, `dec_offset_horizontal_mm`), `azimuth_tolerance_degrees`, `synchronize_during_mount_slew` and `dome_sync_timeout_seconds`. `PUT` keeps the stored `follow_mount` whatever the body says, so only the follow command changes it (a client saving geometry with a stale copy cannot turn following back on, or off). `PUT` is refused `422` with a reason for a scope outside the dome radius, a bad mount type, an out-of-range tolerance or timeout, and for a zero radius while following is on. The new endpoint is an action beside `slew` and `park` (the dome's other commands), rather than a field on one of them, because it changes a setting and starts no motion.
+
+**Reasoning:** the follower was a placeholder that reported "not following" and refused to start, so the dome stayed where the user left it while the target moved 15 degrees an hour. The status flag lets Simple Mode say "Following the mount…" when the follower, not the user, is turning the dome (`state: slewing` with `following: true`).
+
+**Spec ref:** `OpenAstroAra.Server/Services/DomeFollower.cs`, `DomeSettingsValidator.cs`, `DomeService.cs` (`SetFollowingAsync`), `Endpoints/EquipmentEndpoints.cs`, `Endpoints/ProfileEndpoints.cs`; client `lib/models/dome_settings.dart`, `lib/screens/simple/simple_device_windows.dart`, `lib/screens/settings/panels/equipment_dome_panel.dart`.
+
+**Related:** #1689; tests `DomeFollowerTest`, client `simple_dome_window_test`, `equipment_dome_panel_test`.
+
+---
+
 ### 2026-11-05 — Apply multi-star to a connected guider, and find the guide star (#1592)
 
 **Endpoint(s) or area:** new `POST /api/v1/equipment/guider/multi-star/apply`, new `POST /api/v1/equipment/guider/live/find_star`.

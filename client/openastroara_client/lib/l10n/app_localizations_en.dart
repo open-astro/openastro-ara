@@ -339,6 +339,86 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
 
   @override
+  String get deviceFollowsMount => 'Follows the mount';
+
+  @override
+  String get deviceFollowingMount => 'Following the mount…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'The dome no longer follows the mount';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Couldn\'t change whether the dome follows the mount';
+
+  @override
+  String get domePanelFollowingHeader => 'Following the mount';
+
+  @override
+  String get domePanelReadingSettings => 'Reading…';
+
+  @override
+  String get domePanelCouldntSave => 'Couldn\'t save the dome';
+
+  @override
+  String get domePanelFollowNote =>
+      'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.';
+
+  @override
+  String get domePanelFollowMount => 'Follow the mount';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Connect a dome that can turn to an azimuth first';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometry';
+
+  @override
+  String get domePanelMountType => 'Mount type';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'German equatorial';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Fork or alt-az (on a wedge)';
+
+  @override
+  String get domePanelDomeRadius => 'Dome radius (mm)';
+
+  @override
+  String get domePanelScopeNorth => 'Scope north of dome center (mm)';
+
+  @override
+  String get domePanelScopeEast => 'Scope east of dome center (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Scope above dome center (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Mount axis length (mm)';
+
+  @override
+  String get domePanelMountLateralOffset => 'Mount lateral offset (mm)';
+
+  @override
+  String get domePanelDecAxisOffset => 'Dec axis horizontal offset (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Azimuth tolerance (°)';
+
+  @override
+  String get domePanelTurnDuringSlews => 'Turn during mount slews';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Off: the dome turns when the mount has finished slewing';
+
+  @override
+  String get domePanelSlewing => 'Slewing…';
+
+  @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
 
   @override

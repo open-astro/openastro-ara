@@ -141,6 +141,9 @@ public interface IProfileStore {
     // #1675 — the per-slot focus offsets the offset calibration saved.
     FilterFocusOffsetsDto GetFilterFocusOffsets();
     void PutFilterFocusOffsets(FilterFocusOffsetsDto value);
+    // #1689 — the dome's geometry and follow-the-mount setting.
+    DomeSettingsDto GetDomeSettings();
+    void PutDomeSettings(DomeSettingsDto value);
 
     /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
     CustomHorizonDto GetCustomHorizon();

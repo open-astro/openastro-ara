@@ -60,6 +60,11 @@ class DomeNotifier extends EquipmentDeviceNotifier<DomeStatus> {
     (api) => api.command('slew', {'target_azimuth_deg': targetAzimuthDeg}),
   );
 
+  /// Turn "the dome follows the mount" on or off (#1689). Throws the daemon's
+  /// reason when it can't be turned on (no settable azimuth, no dome radius).
+  Future<bool> followMount(bool on) =>
+      performAction((api) => api.command('follow', {'enabled': on}));
+
   Future<bool> park() => performAction((api) => api.command('park'));
 
   // §25.5.5 — the remaining dome motions (each button gates on its capability).
