@@ -63,6 +63,7 @@
   .l .strip{top:8px;left:72px;right:92px}
   .ara{border:0;background:transparent;font-weight:700;letter-spacing:.3px;min-width:44px;min-height:44px;padding:0 8px;cursor:pointer;border-radius:10px;color:var(--text)}
   .dots{flex:1;display:flex;gap:0;align-items:center;min-width:0;overflow-x:auto;scrollbar-width:none}
+  .strip .norig{flex:1;min-width:0;min-height:44px;border:0;background:transparent;color:var(--warn);font-weight:600;text-align:left;padding:0 8px;cursor:pointer;border-radius:10px}
   .dev{flex:none;border:0;background:transparent;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:3px;color:var(--text2);cursor:pointer;border-radius:10px}
   i.d{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok)} i.d.err{background:var(--err)}
   .ib{width:44px;height:44px;border:0;background:transparent;color:var(--text2);display:grid;place-items:center;cursor:pointer;border-radius:10px;flex:none}
@@ -182,7 +183,7 @@
 
 <div class="page">
   <h1>Companion Mode on a phone <span class="tag">mock</span></h1>
-  <p class="note">Simple Mode laid out for a phone, for issue #1772. Portrait is Layout B, the bottom deck (decided 2026-11-11); landscape keeps today's narrow layout. There is no Full UI button, no Experimental toggle and no mention of sequences or templates. Tap anything; hold STOP for 2 s; hold the shutter for 0.6 s while a plan runs. All numbers are made-up examples.</p>
+  <p class="note">Simple Mode laid out for a phone, for issue #1772. Portrait is Layout B, the bottom deck (decided 2026-11-11); landscape keeps today's narrow layout. There is no Full UI button, no Experimental toggle and no mention of sequences or templates. Tap anything; hold STOP for 2 s; while a plan runs, a tap on the shutter pauses it. All numbers are made-up examples.</p>
 
   <div class="controls">
     <div class="group"><span class="lbl">Orientation</span><div class="seg" id="oSeg"><button data-v="p">Portrait 390 × 844</button><button data-v="l">Landscape 844 × 390</button></div></div>
@@ -207,7 +208,7 @@
         <ul>
           <li><b>Screen awake</b>: only while Monitor shows. The other two choices above are for comparison.</li>
           <li><b>Monitor opens from</b>: a sixth word, Monitor, in the section row. The other two are for comparison.</li>
-          <li><b>STOP before a rig</b>: disabled, in its usual place. <b>Emergency Abort</b>: hold 2 s, like STOP.</li>
+          <li><b>STOP before a rig</b> (first run, no rig yet): disabled, in its usual place; after a dropped link it stays enabled (DESIGN.md "No rig connected"). <b>Emergency Abort</b>: hold 2 s, like STOP.</li>
         </ul></div>
       <div><h2>Story to state</h2>
         <table id="map"><thead><tr><th>Story</th><th>Where to see it</th></tr></thead><tbody></tbody></table></div>
@@ -279,7 +280,7 @@ const D = {
   n_siteHint:["Site and time come from this phone or the rig.","Local e hora vêm deste celular ou do equipamento."],
   n_rigWord:["Rig","Equipamento"], n_profile:["Profile","Perfil"], n_connectedTo:["Connected to","Conectado a"],
   n_planFrames:["60 frames · 3 h 00 m","60 quadros · 3 h 00 min"], n_cooler:["Cooler","Resfriador"], n_onTarget:["on target","na meta"],
-  n_noRigStop:["STOP is disabled until a rig is connected.","PARAR fica desativado até um equipamento ser conectado."],
+  n_noRigStop:["STOP is disabled until the first rig is connected.","PARAR fica desativado até o primeiro equipamento ser conectado."],
   n_nextRow:["Next: Settings","A seguir: Ajustes"],
 };
 const T = () => (document.documentElement.lang === 'pt-BR' ? 1 : 0);
@@ -444,7 +445,7 @@ function landscapeRails() {
 }
 function strip() {
   return `<div class="strip glass"><button class="ara" data-a="ara" aria-label="${t('n_aboutAra')}">Ara</button>
-    <div class="dots" role="group" aria-label="${t('devices')}">${DEVS.map(([k,i]) => `<button class="dev" data-a="dev" data-v="${k}" aria-label="${t(k)}">${ic(i)}<i class="d ${k==='weather' && S.alarm ? 'err' : ''}"></i></button>`).join('')}</div>
+    ${S.rig ? `<div class="dots" role="group" aria-label="${t('devices')}">${DEVS.map(([k,i]) => `<button class="dev" data-a="dev" data-v="${k}" aria-label="${t(k)}">${ic(i)}<i class="d ${k==='weather' && S.alarm ? 'err' : ''}"></i></button>`).join('')}</div>` : `<button class="norig" data-a="settings">${t('n_notConnected')}</button>`}
     <button class="ib" data-a="search" aria-label="${t('search')}">${ic('search')}</button>
     <button class="ib" data-a="night" aria-label="${t('night')}" aria-pressed="${S.night}">${ic('night')}</button>
     <button class="ib" data-a="settings" aria-label="${t('settings')}">${ic('settings')}</button></div>`;
@@ -467,7 +468,7 @@ function pageHtml() {
          <button class="b sec full" data-a="rescan">${ic('refresh')} ${t('n_rescan')}</button>
          <div class="box"><b>${t('n_noRigYet')}</b><button class="b full" data-a="wizard">${t('n_startWizard')}</button></div>`
       : `<div class="box"><b>${t('n_pickProfile')}</b>${['Main imaging','Wide field'].map(n => `<button class="navrow" data-a="pickprofile"><span class="grow">${n}</span>${ic('chev')}</button>`).join('')}</div>`;
-    return `<div class="pageover"><div class="appbar"><h3 style="padding-left:12px">${t(S.frStep === 'find' ? 'n_findRig' : 'n_pickProfile')}</h3></div><div class="scroll">${body}</div></div>`;
+    return `<div class="pageover"><div class="appbar"><h3 style="padding-left:12px">${t(S.frStep === 'find' ? 'n_findRig' : 'n_pickProfile')}</h3></div><div class="scroll">${body}</div>${fs}</div>`;
   }
   if (pg === 'wizard') {
     const n = S.wizStep, rows = ['n_wiz1','n_wiz2','n_wiz3','n_wiz4'];
@@ -516,7 +517,7 @@ function render() {
   wire(); fit(); syncUi(); audit();
 }
 
-/* ---------- holds: STOP 2 s; shutter 0.6 s opens Monitor ---------- */
+/* ---------- holds: STOP and Emergency Abort 2 s; shutter 0.6 s opens Monitor (the "Hold the shutter" comparison only) ---------- */
 function wire() {
   phone.querySelectorAll('.stopb').forEach(b => {
     let tm; const cancel = () => { clearTimeout(tm); b.classList.remove('holding'); };
@@ -623,7 +624,7 @@ const GO = {
   settings:['Simple Settings', () => { S.page='settings'; }], rig:['Settings, Rig', () => { S.page='rig'; }], storage:['Rig Storage', () => { S.page='storage'; }], logs:['Logs & bug report, inline confirm', () => { S.page='logs'; S.report='ask'; }],
   firstrun:['First run: find the rig', () => { S.rig=false; S.page='firstrun'; S.frStep='find'; }], profile:['First run: pick a profile', () => { S.rig=false; S.page='firstrun'; S.frStep='profile'; }],
   wizard:['Setup wizard', () => { S.page='wizard'; S.wizStep=2; }], locq:['Location and time question', () => { S.gps='ask'; }],
-  monitor:['Monitor', () => { S.page='monitor'; }], alarm:['Safety alarm', () => { S.alarm=true; }], norig:['No rig connected', () => { S.rig=false; S.run=false; }],
+  monitor:['Monitor', () => { S.page='monitor'; }], alarm:['Safety alarm', () => { S.alarm=true; }], norig:['First run, no rig yet', () => { S.rig=false; S.run=false; S.mode='preview'; }],
 };
 function go(k) { reset(); GO[k][1](); render(); document.getElementById('go').value = k; say(''); }
 function buildGo() { const sel = document.getElementById('go'); const cur = sel.value; sel.innerHTML = Object.entries(GO).map(([k,[l]]) => `<option value="${k}">${l}</option>`).join(''); sel.value = cur || 'glance'; }
