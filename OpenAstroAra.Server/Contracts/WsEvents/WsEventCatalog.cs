@@ -25,10 +25,13 @@ namespace OpenAstroAra.Server.Contracts.WsEvents;
 //      runtime can emit appears in this catalog.
 //
 // To add a new event:
-//   1. Add the type token here (kebab/dot-notation).
+//   1. Declare the event here as a WsEvent (kebab/dot-notation token) and add it to All; the broadcaster
+//      accepts only a declared WsEvent (ADR 0014), and an event nothing emits does not belong here.
 //   2. Document the payload in design/API_CONTRACT.md (WebSocket section); the
 //      generated openapi.yaml cannot carry WebSocket shapes (#1131).
-//   3. Register the emit-point with IWsBroadcaster.
+//   3. Publish it through IWsBroadcaster.
+//   4. Refresh ws-events.json (OPENASTROARA_UPDATE_WS_EVENTS=1, WsEventSnapshotTest) and rerun
+//      scripts/generate-ws-events-dart.py for the client's WsEventTypes.
 //
 // Event envelope is { "type": "<token>", "ts": "<rfc3339>",
 // "seq": <int64>, "payload": <obj> }. Sequence numbers are monotonic across
@@ -36,31 +39,42 @@ namespace OpenAstroAra.Server.Contracts.WsEvents;
 // from a client-provided seq + 1.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>
+/// A declared WebSocket event (ADR 0014). Only <see cref="WsEventCatalog"/> creates one, so
+/// <see cref="IWsBroadcaster.PublishAsync"/> cannot be handed an undeclared string.
+/// </summary>
+public readonly record struct WsEvent {
+    public string Token { get; }
+    internal WsEvent(string token) { Token = token; }
+    public override string ToString() => Token;
+    public static implicit operator string(WsEvent e) => e.Token;
+}
+
 public static class WsEventCatalog {
 
     // Phase 6 — equipment state machine
-    public const string EquipmentStateChanged = "equipment.state_changed";
-    public const string EquipmentConnected = "equipment.connected";
-    public const string EquipmentDisconnected = "equipment.disconnected";
-    public const string EquipmentConnectionFailed = "equipment.connection_failed";
+    public static readonly WsEvent EquipmentStateChanged = new("equipment.state_changed");
+    public static readonly WsEvent EquipmentConnected = new("equipment.connected");
+    public static readonly WsEvent EquipmentDisconnected = new("equipment.disconnected");
+    public static readonly WsEvent EquipmentConnectionFailed = new("equipment.connection_failed");
     // §42.2 — a DETECTED device fault (disconnect streak, stall, value mismatch, …); payload
     // { device_type, device_id, device_name, kind, details, detected_utc }. What was done about
     // it (retries/pause/abort+park) is the §42.3 reaction slice's separate event.
-    public const string EquipmentFault = "equipment.fault";
+    public static readonly WsEvent EquipmentFault = new("equipment.fault");
     // §42.3 — what the FaultReactionService DID about a fault; payload { device_type, device_id,
     // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
     // | gave_up | readopted | released | escalated | notify_only (gave_up carries the terminal action
     // taken; released = the user disconnected the device mid-recovery, #1307, so nothing more is done).
-    public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
+    public static readonly WsEvent EquipmentFaultActionTaken = new("equipment.fault_action_taken");
     // #1298 — the manual filter wheel asked for, or got, a hand swap; payload { pending_slot,
     // pending_name, current_slot, current_name } (pending_* null once the swap is resolved or
     // cancelled). Clients raise / drop their "install the X filter" prompt on it.
-    public const string FilterWheelManualSwap = "equipment.filter_wheel.manual_swap";
+    public static readonly WsEvent FilterWheelManualSwap = new("equipment.filter_wheel.manual_swap");
     // §42.4 — a written switch port whose read-back disagrees with the commanded value beyond
     // the profile tolerance past the settle window; payload { device_id, device_name, port_id,
     // port_name, commanded, read_back, tolerance_pct }. Fires alongside the equipment.fault
     // broadcast (kind value_mismatch) with the structured per-port detail WILMA needs.
-    public const string SwitchValueMismatch = "switch.value_mismatch";
+    public static readonly WsEvent SwitchValueMismatch = new("switch.value_mismatch");
     // Exposure lifecycle, published from the ONE device round-trip every capture takes
     // (CameraService.ExposeAndDownloadAsync): Take One, sequence lights/flats/darks, the §59
     // autofocus probe and the §28 plate-solve capture alike. started payload { frame_id,
@@ -72,9 +86,9 @@ public static class WsEventCatalog {
     // disconnect/supersede, caller cancellation ("cancelled"), a REST abort ("aborted") or a
     // thrown device fault. A persisted frame's
     // frame.complete still follows the exposure_complete once the FITS is catalogued.
-    public const string CameraExposureStarted = "camera.exposure_started";
-    public const string CameraExposureComplete = "camera.exposure_complete";
-    public const string CameraExposureFailed = "camera.exposure_failed";
+    public static readonly WsEvent CameraExposureStarted = new("camera.exposure_started");
+    public static readonly WsEvent CameraExposureComplete = new("camera.exposure_complete");
+    public static readonly WsEvent CameraExposureFailed = new("camera.exposure_failed");
     // §57.8 — slew lifecycle, published from observed IsSlewing transitions in the telescope
     // status poll (every slew source: REST, sequencer, flip, recovery, park/home). started
     // payload { target_ra_hours?, target_dec_degrees?, ra_hours?, dec_degrees? } (targets only
@@ -82,16 +96,16 @@ public static class WsEventCatalog {
     // duration_seconds }; aborted payload { halted_ra_hours?, halted_dec_degrees?, reason }
     // published immediately from the §57.4 panic-stop path (which suppresses that episode's
     // complete event).
-    public const string TelescopeSlewStarted = "telescope.slew_started";
-    public const string TelescopeSlewComplete = "telescope.slew_complete";
-    public const string TelescopeSlewAborted = "telescope.slew_aborted";
+    public static readonly WsEvent TelescopeSlewStarted = new("telescope.slew_started");
+    public static readonly WsEvent TelescopeSlewComplete = new("telescope.slew_complete");
+    public static readonly WsEvent TelescopeSlewAborted = new("telescope.slew_aborted");
     // §63.18 — one event per guide frame while the guider is connected, straight from the
     // daemon's GuideStep stream: payload { frame, time_sec, ra_raw_px, dec_raw_px,
     // ra_arcsec?, dec_arcsec? (null until the guider reports a pixel scale), ra_duration_ms,
     // dec_duration_ms (signed: negative = East / South, PHD2's own graph convention),
     // pixel_scale_arcsec?, star_mass?, snr? }. The client's Live-tab guide graph is built from
     // these; the RMS on GET /equipment/guider stays the daemon's windowed figure.
-    public const string GuiderStep = "guider.step";
+    public static readonly WsEvent GuiderStep = new("guider.step");
     // §63.18 — PHD2's non-step session events, one per PHD2 message, so the client can draw the
     // markers PHD2's own graph draws: payload { kind, ... } with kind = dithered {dx_px, dy_px} |
     // settling {distance_px, time_sec, settle_time_sec} | settle_done {status, error?} |
@@ -101,28 +115,28 @@ public static class WsEventCatalog {
     // paused | resumed | lock_position_lost | guiding_assistant_progress {state} |
     // guiding_assistant_done {state, error?} (#1364 item 4 — re-read GET /equipment/guider/live/assistant
     // for the figures). Detail fields are omitted when PHD2 sent none.
-    public const string GuiderEvent = "guider.event";
+    public static readonly WsEvent GuiderEvent = new("guider.event");
     // #1311 — the polar alignment residual measured from the first minutes of each guided run:
     // payload = PaResidualDto (status measuring → done | unavailable; a dropped measurement
     // republishes the previous result, or { status: "idle" } when there is none).
-    public const string GuiderPaResidual = "guider.pa_residual";
+    public static readonly WsEvent GuiderPaResidual = new("guider.pa_residual");
     // #1156 — the terminal status behind every guider 202 (start, stop, dither): payload
     // { operation_id, operation: "guider.start" | "guider.stop" | "guider.dither", ok, error? }.
     // `ok: false` with no exception is a refusal (not guiding, already stopped, daemon said
     // no); a settle failure or timeout carries the daemon's text in `error`.
-    public const string GuiderOperationComplete = "guider.operation_complete";
+    public static readonly WsEvent GuiderOperationComplete = new("guider.operation_complete");
     // #1156 — one per dither, REST or sequencer-driven: payload { ok, operation_id? (REST only),
     // error? }. Published after SettleDone or the settle failsafe, so `ok` is the settle verdict.
-    public const string GuiderDitherComplete = "guider.dither_complete";
+    public static readonly WsEvent GuiderDitherComplete = new("guider.dither_complete");
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
-    public const string GuiderFaultActionTaken = "guider.fault_action_taken";
+    public static readonly WsEvent GuiderFaultActionTaken = new("guider.fault_action_taken");
     // §63.17 — an on-demand POST /guider/profile/push completed; payload carries the RPC method names
     // attempted so the client can show what reached the daemon.
-    public const string GuiderProfilePushed = "guider.profile_pushed";
+    public static readonly WsEvent GuiderProfilePushed = new("guider.profile_pushed");
     // §63.17 — a profile push changed the guide-camera selection while a dark library exists: the stored
     // darks belong to the previous camera and should be rebuilt. Payload: {reason: "guide_camera_changed"}.
-    public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
+    public static readonly WsEvent GuiderDarkLibraryInvalidated = new("guider.dark_library.invalidated");
     // §45 polar alignment — the routine lifecycle (started/stopped) plus the engine's live stream:
     // progress per solved iteration ({iteration, altitude/azimuth/total_error_arcmin, zone, solved}),
     // frame_started when a capture begins ({frame_id, exposure_seconds}), frame_complete per capture
@@ -130,35 +144,35 @@ public static class WsEventCatalog {
     // dec_deg?}), paused when
     // 5 consecutive solves fail (§45.11 — the loop keeps retrying and resumes on the next good
     // solve), and error on a fatal routine failure ({reason, message}).
-    public const string PolarAlignStarted = "polar_align.started";
-    public const string PolarAlignStopped = "polar_align.stopped";
-    public const string PolarAlignProgress = "polar_align.progress";
-    public const string PolarAlignFrameStarted = "polar_align.frame_started";
-    public const string PolarAlignFrameComplete = "polar_align.frame_complete";
-    public const string PolarAlignPaused = "polar_align.paused";
-    public const string PolarAlignError = "polar_align.error";
+    public static readonly WsEvent PolarAlignStarted = new("polar_align.started");
+    public static readonly WsEvent PolarAlignStopped = new("polar_align.stopped");
+    public static readonly WsEvent PolarAlignProgress = new("polar_align.progress");
+    public static readonly WsEvent PolarAlignFrameStarted = new("polar_align.frame_started");
+    public static readonly WsEvent PolarAlignFrameComplete = new("polar_align.frame_complete");
+    public static readonly WsEvent PolarAlignPaused = new("polar_align.paused");
+    public static readonly WsEvent PolarAlignError = new("polar_align.error");
     // Stages: stage when the routine moves to a new stage ({stage, state}); needs_home when the
     // mount cannot find Home and the routine waits for the user's Continue ({stage, message});
     // checked when the three-point check has its result (the PolarAlignCheckResultDto fields).
     // started and progress also carry {stage}.
-    public const string PolarAlignStage = "polar_align.stage";
-    public const string PolarAlignNeedsHome = "polar_align.needs_home";
-    public const string PolarAlignChecked = "polar_align.checked";
+    public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
+    public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
+    public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
     // refractors / in-focus fields produce no donut and are skipped. Payload:
     // { severity, offset_percent, direction_degrees, stars_used }.
-    public const string AutofocusCollimationVerdict = "autofocus.collimation_verdict";
+    public static readonly WsEvent AutofocusCollimationVerdict = new("autofocus.collimation_verdict");
 
     // §59.15 — the Smart Focus run lifecycle (§59.2 one-frame runner). `started` fires ONCE per AF run
     // with the initially resolved mode ("smart" | "classic"); `shot_complete` per Smart shot with
     // { shot_index, position, hfr, stars }; `fallback_classic` when an in-run Smart failure (§59.11
     // ladder) hands the run to the full Classic sweep, with { reason } — that event IS the mode
     // transition (no second `started`), so a client keys its live panel off started + fallback_classic.
-    public const string AutofocusStarted = "autofocus.started";
-    public const string AutofocusShotComplete = "autofocus.shot_complete";
-    public const string AutofocusFallbackClassic = "autofocus.fallback_classic";
+    public static readonly WsEvent AutofocusStarted = new("autofocus.started");
+    public static readonly WsEvent AutofocusShotComplete = new("autofocus.shot_complete");
+    public static readonly WsEvent AutofocusFallbackClassic = new("autofocus.fallback_classic");
     // §59.12/§59.15 — the Classic sweep's live stream for the Setup tab's Smart Focus pane. `step_complete`
     // per probe (coarse search and fine sweep alike): { step_index, phase: "coarse"|"fine", position, hfr,
     // stars, kept, total_steps } — `kept` false is a probe the sweep measured but dropped (too few stars).
@@ -170,10 +184,10 @@ public static class WsEventCatalog {
     // backlash_verified? (§59.7, a Classic sweep whose backlash probe measured). `failed` closes an unsuccessful one: { reason, restored_position? } —
     // reason "cancelled" is the user's Cancel (POST /api/v1/autofocus/cancel). The full run (every probe,
     // the sampled fit curve, the rendered frame) rehydrates from GET /api/v1/autofocus/state.
-    public const string AutofocusStepComplete = "autofocus.step_complete";
-    public const string AutofocusCurveFit = "autofocus.curve_fit";
-    public const string AutofocusCompleted = "autofocus.completed";
-    public const string AutofocusFailed = "autofocus.failed";
+    public static readonly WsEvent AutofocusStepComplete = new("autofocus.step_complete");
+    public static readonly WsEvent AutofocusCurveFit = new("autofocus.curve_fit");
+    public static readonly WsEvent AutofocusCompleted = new("autofocus.completed");
+    public static readonly WsEvent AutofocusFailed = new("autofocus.failed");
 
     // #1264 — the unguided tracking probe's live stream (the Run tab shows it like an autofocus run).
     // `started` once per probe: { target, rungs: [s…], prior_seconds? }. `rung_complete` per rung:
@@ -181,107 +195,105 @@ public static class WsEventCatalog {
     // once: { ceiling_seconds?, prior_seconds?, source: "measured"|"prior", usable_rungs, summary } —
     // source "prior" means fewer than two usable rungs, so the prior (possibly null) stands. The stored
     // record rehydrates from GET /api/v1/tracking/calibration.
-    public const string TrackingProbeStarted = "tracking_probe.started";
-    public const string TrackingProbeRungComplete = "tracking_probe.rung_complete";
-    public const string TrackingProbeCompleted = "tracking_probe.completed";
+    public static readonly WsEvent TrackingProbeStarted = new("tracking_probe.started");
+    public static readonly WsEvent TrackingProbeRungComplete = new("tracking_probe.rung_complete");
+    public static readonly WsEvent TrackingProbeCompleted = new("tracking_probe.completed");
 
     // Phase 7 — sequence
-    public const string SequenceStarted = "sequence.started";
-    public const string SequencePaused = "sequence.paused";
-    public const string SequenceResumed = "sequence.resumed";
+    public static readonly WsEvent SequenceStarted = new("sequence.started");
+    public static readonly WsEvent SequencePaused = new("sequence.paused");
+    public static readonly WsEvent SequenceResumed = new("sequence.resumed");
     // §38.10 — a same-target resume is running its pre-release refinement
     // (plate-solve re-center and/or autofocus) while the engine stays
     // suspended; payload { sequence_id, run_id, recenter, refocus }. Fires
     // after sequence.resumed; imaging continues when the refinement ends
     // (outcome rides a notification, not a WS event).
-    public const string SequenceResumeRecentering = "sequence.resume_recentering";
-    public const string SequenceAborted = "sequence.aborted";
-    public const string SequenceStopped = "sequence.stopped";
-    public const string SequenceComplete = "sequence.complete";
-    public const string SequenceInstructionStarted = "sequence.instruction_started";
-    public const string SequenceInstructionComplete = "sequence.instruction_complete";
-    public const string SequenceInstructionFailed = "sequence.instruction_failed";
-    public const string SequenceProgress = "sequence.progress";
+    public static readonly WsEvent SequenceResumeRecentering = new("sequence.resume_recentering");
+    public static readonly WsEvent SequenceAborted = new("sequence.aborted");
+    public static readonly WsEvent SequenceStopped = new("sequence.stopped");
+    public static readonly WsEvent SequenceComplete = new("sequence.complete");
+    public static readonly WsEvent SequenceInstructionStarted = new("sequence.instruction_started");
+    public static readonly WsEvent SequenceInstructionComplete = new("sequence.instruction_complete");
+    public static readonly WsEvent SequenceInstructionFailed = new("sequence.instruction_failed");
+    public static readonly WsEvent SequenceProgress = new("sequence.progress");
     // §38.9 — a live mid-run edit (add/remove/move of a pending item) was applied
     // to the executing plan and persisted; payload { sequence_id, run_id, op,
     // instructions_completed, instructions_total, estimated_total_seconds,
     // estimated_remaining_seconds } (#1068). Clients re-fetch the sequence
     // detail (the body changed) and refresh run progress totals.
-    public const string SequenceRunItemsChanged = "sequence.run_items_changed";
-    public const string SequenceAutoFlatsPrompt = "sequence.auto_flats_prompt";
-    public const string SequenceAutoFlatsDecided = "sequence.auto_flats_decided";
-
-    public const string CalibrationFlatsGenerated = "calibration.flats_generated";
+    public static readonly WsEvent SequenceRunItemsChanged = new("sequence.run_items_changed");
+    public static readonly WsEvent SequenceAutoFlatsPrompt = new("sequence.auto_flats_prompt");
+    public static readonly WsEvent SequenceAutoFlatsDecided = new("sequence.auto_flats_decided");
     // #1185 — the four `calibration.dark_library.*` build events that used to be declared here were never
     // published by anything (the §39 dark-library build runs as a sequence and reports through
     // GET /api/v1/calibration/dark-library/status + the sequence.* events). Declaring an event nobody sends is a
     // contract lie, so they are gone; the guider's own library events (guider.dark_library.*) are unrelated.
 
     // The sequencer run ended in an unhandled failure (same payload as the other sequence.* run events).
-    public const string SequenceFailed = "sequence.failed";
+    public static readonly WsEvent SequenceFailed = new("sequence.failed");
     // §43-2 async backup create (BackupService): started when the worker claims the slot, complete/failed as the terminal.
-    public const string BackupCreateStarted = "backup.create.started";
-    public const string BackupCreateComplete = "backup.create.complete";
-    public const string BackupCreateFailed = "backup.create.failed";
+    public static readonly WsEvent BackupCreateStarted = new("backup.create.started");
+    public static readonly WsEvent BackupCreateComplete = new("backup.create.complete");
+    public static readonly WsEvent BackupCreateFailed = new("backup.create.failed");
     // §63.8 / §63.6 guider calibration builds (GuiderService): dark library and defect map; progress is the granular poll.
-    public const string GuiderDarkLibraryStarted = "guider.dark_library.started";
-    public const string GuiderDarkLibraryProgress = "guider.dark_library.progress";
-    public const string GuiderDarkLibraryComplete = "guider.dark_library.complete";
-    public const string GuiderDarkLibraryFailed = "guider.dark_library.failed";
-    public const string GuiderDefectMapStarted = "guider.defect_map.started";
-    public const string GuiderDefectMapProgress = "guider.defect_map.progress";
-    public const string GuiderDefectMapComplete = "guider.defect_map.complete";
-    public const string GuiderDefectMapFailed = "guider.defect_map.failed";
+    public static readonly WsEvent GuiderDarkLibraryStarted = new("guider.dark_library.started");
+    public static readonly WsEvent GuiderDarkLibraryProgress = new("guider.dark_library.progress");
+    public static readonly WsEvent GuiderDarkLibraryComplete = new("guider.dark_library.complete");
+    public static readonly WsEvent GuiderDarkLibraryFailed = new("guider.dark_library.failed");
+    public static readonly WsEvent GuiderDefectMapStarted = new("guider.defect_map.started");
+    public static readonly WsEvent GuiderDefectMapProgress = new("guider.defect_map.progress");
+    public static readonly WsEvent GuiderDefectMapComplete = new("guider.defect_map.complete");
+    public static readonly WsEvent GuiderDefectMapFailed = new("guider.defect_map.failed");
 
     // Phase 8 — frames, sessions, backup, diagnostics
-    public const string FrameComplete = "frame.complete";
+    public static readonly WsEvent FrameComplete = new("frame.complete");
     /// <summary>§59.5 — post-capture star analysis landed (HFR + star count written back).</summary>
-    public const string FrameAnalyzed = "frame.analyzed";
-    public const string FramePreviewVariantEvicted = "frame.preview.variant.evicted";
+    public static readonly WsEvent FrameAnalyzed = new("frame.analyzed");
+    public static readonly WsEvent FramePreviewVariantEvicted = new("frame.preview.variant.evicted");
 
-    public const string SessionStarted = "session.started";
-    public const string SessionEnded = "session.ended";
-    public const string SessionRestretchProgress = "session.restretch.progress";
-    public const string SessionRestretchComplete = "session.restretch.complete";
-    public const string SessionRestretchFailed = "session.restretch.failed";
+    public static readonly WsEvent SessionStarted = new("session.started");
+    public static readonly WsEvent SessionEnded = new("session.ended");
+    public static readonly WsEvent SessionRestretchProgress = new("session.restretch.progress");
+    public static readonly WsEvent SessionRestretchComplete = new("session.restretch.complete");
+    public static readonly WsEvent SessionRestretchFailed = new("session.restretch.failed");
 
-    public const string DiagnosticsIssueDetected = "diagnostics.issue_detected";
-    public const string DiagnosticsAutoActionTaken = "diagnostics.auto_action_taken";
-    public const string DiagnosticsCleared = "diagnostics.cleared";
+    public static readonly WsEvent DiagnosticsIssueDetected = new("diagnostics.issue_detected");
+    public static readonly WsEvent DiagnosticsAutoActionTaken = new("diagnostics.auto_action_taken");
+    public static readonly WsEvent DiagnosticsCleared = new("diagnostics.cleared");
     // Per-connection resync frame sent once after every WS accept (§51
     // reconnect-replay gap): the full set of currently-open issues, so a client
     // whose socket was down when a diagnostics.cleared fired can drop the stale
     // issue instead of showing amber/red forever. Sent directly on the socket
     // (never broadcast), always with seq 0 — it is a statement of state, not a
     // position in the event stream.
-    public const string DiagnosticsSnapshot = "diagnostics.snapshot";
+    public static readonly WsEvent DiagnosticsSnapshot = new("diagnostics.snapshot");
 
     // Phase 9 — server lifecycle + notifications + storage
-    public const string ServerRestartImminent = "server.restart_imminent";
+    public static readonly WsEvent ServerRestartImminent = new("server.restart_imminent");
 
     // §29 — a block device appeared or vanished, or the store mount came/went;
     // clients re-fetch device+space state (empty payload by design).
-    public const string StorageDevicesChanged = "storage.devices_changed";
+    public static readonly WsEvent StorageDevicesChanged = new("storage.devices_changed");
 
 
-    public const string DataManagerDownloadProgress = "data_manager.download.progress";
-    public const string DataManagerDownloadComplete = "data_manager.download.complete";
-    public const string DataManagerDownloadFailed = "data_manager.download.failed";
+    public static readonly WsEvent DataManagerDownloadProgress = new("data_manager.download.progress");
+    public static readonly WsEvent DataManagerDownloadComplete = new("data_manager.download.complete");
+    public static readonly WsEvent DataManagerDownloadFailed = new("data_manager.download.failed");
 
     // §35.4 safety-reaction engine. safety.unsafe fires BEFORE the configured
     // action executes (so the client can raise its alarm modal while the daemon
     // reacts); safety.action_taken reports what the engine actually did (its
     // payload's `action` is the executed policy token, or "auto_resume" for the
     // §35 resume-when-safe path); safety.safe fires on the unsafe→safe transition.
-    public const string SafetyUnsafe = "safety.unsafe";
-    public const string SafetySafe = "safety.safe";
-    public const string SafetyActionTaken = "safety.action_taken";
+    public static readonly WsEvent SafetyUnsafe = new("safety.unsafe");
+    public static readonly WsEvent SafetySafe = new("safety.safe");
+    public static readonly WsEvent SafetyActionTaken = new("safety.action_taken");
 
     // §35.3 emergency stop: fires BEFORE the stop rungs run (same
     // client-can-alarm-while-daemon-reacts contract as safety.unsafe); the
     // per-rung outcome rides the follow-up safety.action_taken event with
     // action == "emergency_stop".
-    public const string SafetyEmergencyStop = "safety.emergency_stop";
+    public static readonly WsEvent SafetyEmergencyStop = new("safety.emergency_stop");
 
     /// <summary>
     /// All registered event tokens. Iteration order is the order declared here.
@@ -289,7 +301,7 @@ public static class WsEventCatalog {
     /// that isn't in this list. Exposed at runtime via <c>/api/v1/ws/catalog</c>
     /// so the WILMA client can validate as well (§60.9.4).
     /// </summary>
-    public static readonly IReadOnlyList<string> All = new[] {
+    public static readonly IReadOnlyList<WsEvent> All = new[] {
         EquipmentStateChanged,
         EquipmentConnected,
         EquipmentDisconnected,
@@ -347,7 +359,6 @@ public static class WsEventCatalog {
         SequenceRunItemsChanged,
         SequenceAutoFlatsPrompt,
         SequenceAutoFlatsDecided,
-        CalibrationFlatsGenerated,
         SequenceFailed,
         BackupCreateStarted,
         BackupCreateComplete,

@@ -361,8 +361,8 @@ namespace OpenAstroAra.Server.Services {
                 }
             }
             double? narrowest = (main, guide) switch {
-                ({ } a, { } b) => Math.Min(a, b),
-                ({ } a, null) => a,
+                ( { } a, { } b) => Math.Min(a, b),
+                ( { } a, null) => a,
                 (null, { } b) => b,
                 _ => null,
             };
@@ -943,7 +943,7 @@ namespace OpenAstroAra.Server.Services {
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort WS emit, also called fire-and-forget: every failure (incl. an incidental OperationCanceledException from a broadcaster) is logged and swallowed so it can neither fail the download nor surface as an unobserved task exception.")]
-        private async Task EmitAsync(string eventType, DownloadJob job, string? error) {
+        private async Task EmitAsync(WsEvent eventType, DownloadJob job, string? error) {
             // Whole body in the try: this is also called fire-and-forget from MaybeEmitProgress, so even the payload
             // build must not throw an unobserved exception. Publish is best-effort — a WS hiccup must not fail the download.
             try {

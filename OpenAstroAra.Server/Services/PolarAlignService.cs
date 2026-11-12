@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -29,7 +30,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
 
 namespace OpenAstroAra.Server.Services {
 
@@ -1357,7 +1357,7 @@ namespace OpenAstroAra.Server.Services {
 
         // ── WS events ────────────────────────────────────────────────────────────────────────
 
-        private Task PublishStateEventAsync(string eventType, string state) =>
+        private Task PublishStateEventAsync(WsEvent eventType, string state) =>
             PublishAsync(eventType, new JsonObject { ["state"] = state });
 
         // The in-loop publishes are generation-fenced like the state writes: a superseded run's
@@ -1434,7 +1434,7 @@ namespace OpenAstroAra.Server.Services {
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "WS publish is best-effort; a broadcaster fault must not abort the routine. Log-and-recover boundary.")]
-        private async Task PublishAsync(string eventType, JsonObject payload) {
+        private async Task PublishAsync(WsEvent eventType, JsonObject payload) {
             if (_ws is null) {
                 return;
             }

@@ -159,8 +159,8 @@ namespace OpenAstroAra.Test {
             var events = new System.Collections.Generic.List<(string Type, string? DeviceId)>();
             var broadcaster = new Moq.Mock<IWsBroadcaster>();
             broadcaster
-                .Setup(b => b.PublishAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<System.Text.Json.JsonElement>(), Moq.It.IsAny<CancellationToken>()))
-                .Returns<string, System.Text.Json.JsonElement, CancellationToken>((type, payload, _) => {
+                .Setup(b => b.PublishAsync(Moq.It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), Moq.It.IsAny<System.Text.Json.JsonElement>(), Moq.It.IsAny<CancellationToken>()))
+                .Returns<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((type, payload, _) => {
                     lock (events) {
                         events.Add((type, payload.GetProperty("device_id").GetString()));
                     }
@@ -298,8 +298,8 @@ namespace OpenAstroAra.Test {
             // dropped and the client leaked, no disconnect ever arrived).
             var ws = new Mock<IWsBroadcaster>();
             var events = new List<(string Type, JsonElement Payload)>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
                 .Returns(Task.CompletedTask);
             using var fake = new FakeSwitchDevice(); // the service disposes it too; a second Dispose is harmless
             using var svc = new SwitchService(events: new EquipmentEventPublisher(ws.Object)) {

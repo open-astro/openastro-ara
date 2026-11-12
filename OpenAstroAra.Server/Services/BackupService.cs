@@ -107,9 +107,9 @@ namespace OpenAstroAra.Server.Services {
 
         // §43-2 async create — WS events (best-effort, like the guider calibration builds'): started when the
         // worker claims the slot, complete/failed as the terminal. Payloads carry the operation/snapshot id.
-        public const string CreateStartedEvent = WsEventCatalog.BackupCreateStarted;
-        public const string CreateCompleteEvent = WsEventCatalog.BackupCreateComplete;
-        public const string CreateFailedEvent = WsEventCatalog.BackupCreateFailed;
+        public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent CreateStartedEvent = WsEventCatalog.BackupCreateStarted;
+        public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent CreateCompleteEvent = WsEventCatalog.BackupCreateComplete;
+        public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent CreateFailedEvent = WsEventCatalog.BackupCreateFailed;
 
         // Disk-space pre-flight headroom: the archive stores the areas compressed (raw sum is an upper bound)
         // but the temp zip + manifest + hashing scratch coexist briefly; refuse only when clearly short.
@@ -366,7 +366,7 @@ namespace OpenAstroAra.Server.Services {
         // the backup work it narrates, but is logged so a silently-dropped event stays visible.
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster must not abort the worker or surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
-        private async Task EmitBackupEventAsync(string eventType, JsonObject payload) {
+        private async Task EmitBackupEventAsync(WsEvent eventType, JsonObject payload) {
             if (_ws is null) {
                 return;
             }

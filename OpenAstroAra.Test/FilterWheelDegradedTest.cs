@@ -67,8 +67,8 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(Wheel(() => Volatile.Read(ref position)));
             var ws = new Mock<IWsBroadcaster>();
             var actions = new List<JsonElement>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, e, _) => {
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, e, _) => {
                     if (t == WsEventCatalog.EquipmentFaultActionTaken) { lock (actions) { actions.Add(e); } }
                 })
                 .Returns(Task.CompletedTask);
@@ -118,8 +118,8 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(Wheel(() => Volatile.Read(ref position)));
             var ws = new Mock<IWsBroadcaster>();
             var actions = new List<JsonElement>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, e, _) => {
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, e, _) => {
                     if (t == WsEventCatalog.EquipmentFaultActionTaken) { lock (actions) { actions.Add(e); } }
                 })
                 .Returns(Task.CompletedTask);

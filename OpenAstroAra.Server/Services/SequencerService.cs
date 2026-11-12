@@ -20,14 +20,14 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
-using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -331,7 +331,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)
                 || run.TryTransition(SequenceRunState.PausedAwaitingUser, SequenceRunState.Running)) {
                 run.SetDescription(ResumedDescription);
-                _ = EmitAsync("sequence.resumed", id, run);
+                _ = EmitAsync(WsEventCatalog.SequenceResumed, id, run);
                 WriteCheckpointIfOwner(run, id);
                 // §38.10 — while the rig sat paused on the SAME target, pointing
                 // (and focus) may have drifted: plate-solve + re-center — and
@@ -375,7 +375,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         if (run.TryTransition(SequenceRunState.Running, target)
             || (target == SequenceRunState.PausedAwaitingUser
                 && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
-            _ = EmitAsync("sequence.paused", sequenceId, run);
+            _ = EmitAsync(WsEventCatalog.SequencePaused, sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
             // §38.10 — snapshot which target the pause interrupted, so a later
             // resume can tell "still on the same target" (re-center applies)
@@ -524,7 +524,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             run.DaemonPaused = false; // custody ends with the release, whoever releases
             run.AdoptablePause = false;
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
-                _ = EmitAsync("sequence.resumed", id, run);
+                _ = EmitAsync(WsEventCatalog.SequenceResumed, id, run);
                 WriteCheckpointIfOwner(run, id);
                 released = true;
             } else if (run.State == SequenceRunState.Running) {
@@ -897,7 +897,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // run.Leaves so it always counts against the current plan shape.
                 run.SetLeaves(CollectLeaves(root));
                 run.UpdateProgress(run.Leaves.Count, completed: 0, runningIndex: null);
-                await EmitAsync("sequence.started", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceStarted, sequenceId, run);
 
                 // §42.4 — sequence.instruction_failed: the engine raises FailureEvent with the
                 // item already FAILED exactly once per failure OCCURRENCE (the exception and
@@ -956,7 +956,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // and collapses a burst into one trailing publish carrying the freshest run
                 // state (read at publish time). Lifecycle events stay unthrottled.
                 progressPublisher = new CoalescingAsyncPublisher(
-                    () => EmitAsync("sequence.progress", sequenceId, run));
+                    () => EmitAsync(WsEventCatalog.SequenceProgress, sequenceId, run));
                 // #1219 — the checkpoint write that rides every progress report is rate-limited:
                 // a solver's per-line output (#1188) reaches this sink, and each report used to
                 // serialize + move the checkpoint on the SD card.
@@ -995,7 +995,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 if (captureSession is Guid sid) {
                     CaptureSessionScope.Enter(sid);
                     _runSessions?.Enter(sid);
-                    await EmitSessionAsync("session.started", sid);
+                    await EmitSessionAsync(WsEventCatalog.SessionStarted, sid);
                 }
 
                 // Real execution. Sequencer.Start runs MainContainer.Run with
@@ -1052,14 +1052,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             run.SetReason(null, null); // #1596 — a run that is over is not waiting on the meridian
             if (run.State == SequenceRunState.Aborting) {
                 run.State = SequenceRunState.Stopped;
-                await EmitAsync("sequence.aborted", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceAborted, sequenceId, run);
             } else if (run.State == SequenceRunState.Stopped) {
-                await EmitAsync("sequence.stopped", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceStopped, sequenceId, run);
             } else if (run.Cts.IsCancellationRequested) {
                 // Defensive: cancelled but the Aborting/Stopped marker was lost
                 // to a race — treat as a stop rather than reporting completion.
                 run.State = SequenceRunState.Stopped;
-                await EmitAsync("sequence.stopped", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceStopped, sequenceId, run);
             } else {
                 // Set CompletedUtc (under the lock) before the volatile State
                 // write, so a reader that observes Completed always also sees
@@ -1069,7 +1069,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 }
                 run.MarkCompleted();
                 run.State = SequenceRunState.Completed;
-                await EmitAsync("sequence.complete", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceComplete, sequenceId, run);
             }
         } catch (OperationCanceledException) {
             // Today NINA's Sequencer.Start swallows OCE and returns normally, so
@@ -1084,7 +1084,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
             run.SetReason(null, null);
             run.State = SequenceRunState.Stopped;
-            await EmitAsync("sequence.stopped", sequenceId, run);
+            await EmitAsync(WsEventCatalog.SequenceStopped, sequenceId, run);
         } catch (Exception ex) {
             LogRunFailed(ex, sequenceId);
             if (progressPublisher is not null) {
@@ -1237,7 +1237,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     private async Task TryEndRunSessionAsync(Guid sessionId) {
         try {
             await _frames!.EndSessionAsync(sessionId, CancellationToken.None);
-            await EmitSessionAsync("session.ended", sessionId);
+            await EmitSessionAsync(WsEventCatalog.SessionEnded, sessionId);
         } catch (Exception ex) {
             LogRunSessionFailed(ex);
         }
@@ -1245,7 +1245,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must not affect the run. Same boundary as EmitAsync.")]
-    private async Task EmitSessionAsync(string eventType, Guid sessionId) {
+    private async Task EmitSessionAsync(WsEvent eventType, Guid sessionId) {
         if (_ws is null) return;
         try {
             var payload = new JsonObject { ["session_id"] = sessionId.ToString() };
@@ -1258,7 +1258,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort and EmitAsync is called fire-and-forget from the progress callback (_ = EmitAsync(...)); ANY failure from a custom IWsBroadcaster (e.g. SocketException) must be swallowed here so it cannot surface as an unobserved task exception or affect the run. CA1031's 'boundary that logs and recovers' exception applies.")]
-    private async Task EmitAsync(string eventType, Guid sequenceId, RunState run) {
+    private async Task EmitAsync(WsEvent eventType, Guid sequenceId, RunState run) {
         if (_ws is null) return;
         try {
             // Built with JsonObject (not string interpolation) so values are

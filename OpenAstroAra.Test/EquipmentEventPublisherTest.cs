@@ -36,7 +36,7 @@ namespace OpenAstroAra.Test {
             public bool FaultAsync { get; set; }
             public long CurrentSequence => Events.Count;
 
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 if (ThrowSync) {
                     throw new InvalidOperationException("channel gone");
                 }
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Test {
             publisher.Removed(DeviceType.Focuser, "foc-1", "Bench focuser");
             Assert.That(broadcaster.Events, Has.Count.EqualTo(1));
             var (type, payload) = broadcaster.Events[0];
-            Assert.That(type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged));
+            Assert.That(type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged.Token));
             Assert.That(payload.GetProperty("device_type").GetString(), Is.EqualTo("focuser"));
             Assert.That(payload.GetProperty("device_id").GetString(), Is.EqualTo("foc-1"));
             Assert.That(payload.GetProperty("state").GetString(), Is.EqualTo("disconnected"));
@@ -77,8 +77,8 @@ namespace OpenAstroAra.Test {
             publisher.StateChanged(DeviceType.Telescope, "dev-1", "EQ6-R", EquipmentConnectionState.Connected);
 
             Assert.That(broadcaster.Events, Has.Count.EqualTo(2));
-            Assert.That(broadcaster.Events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged));
-            Assert.That(broadcaster.Events[1].Type, Is.EqualTo(WsEventCatalog.EquipmentConnected));
+            Assert.That(broadcaster.Events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged.Token));
+            Assert.That(broadcaster.Events[1].Type, Is.EqualTo(WsEventCatalog.EquipmentConnected.Token));
             var payload = broadcaster.Events[0].Payload;
             Assert.That(payload.GetProperty("device_type").GetString(), Is.EqualTo("telescope"),
                 "§60.6 all-lowercase enum token");
@@ -87,8 +87,8 @@ namespace OpenAstroAra.Test {
             Assert.That(payload.GetProperty("state").GetString(), Is.EqualTo("connected"));
         }
 
-        [TestCase(EquipmentConnectionState.Disconnected, WsEventCatalog.EquipmentDisconnected)]
-        [TestCase(EquipmentConnectionState.Error, WsEventCatalog.EquipmentConnectionFailed)]
+        [TestCase(EquipmentConnectionState.Disconnected, "equipment.disconnected")]
+        [TestCase(EquipmentConnectionState.Error, "equipment.connection_failed")]
         public void Notable_states_publish_their_alias(EquipmentConnectionState state, string alias) {
             var (publisher, broadcaster) = NewPublisher();
 
@@ -105,7 +105,7 @@ namespace OpenAstroAra.Test {
             publisher.StateChanged(DeviceType.Focuser, "dev-3", "EAF", EquipmentConnectionState.Connecting);
 
             Assert.That(broadcaster.Events, Has.Count.EqualTo(1));
-            Assert.That(broadcaster.Events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged));
+            Assert.That(broadcaster.Events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentStateChanged.Token));
         }
 
         [Test]
@@ -153,7 +153,7 @@ namespace OpenAstroAra.Test {
             publisher.ExposureStarted(id, 120.5, started, "light", "Ha");
             Assert.That(broadcaster.Events, Has.Count.EqualTo(1));
             var (type, payload) = broadcaster.Events[0];
-            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureStarted));
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureStarted.Token));
             Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
             Assert.That(payload.GetProperty("exposure_sec").GetDouble(), Is.EqualTo(120.5));
             Assert.That(payload.GetProperty("started_utc").GetString(), Does.StartWith("2026-10-04T21:30:15.25"));
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             var id = Guid.NewGuid();
             publisher.ExposureComplete(id, 30, DateTimeOffset.UtcNow, "flat", 31250);
             var (type, payload) = broadcaster.Events[0];
-            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureComplete));
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureComplete.Token));
             Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
             Assert.That(payload.GetProperty("exposure_sec").GetDouble(), Is.EqualTo(30));
             Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("flat"));
@@ -189,7 +189,7 @@ namespace OpenAstroAra.Test {
             var id = Guid.NewGuid();
             publisher.ExposureFailed(id, "light", "cancelled");
             var (type, payload) = broadcaster.Events[0];
-            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureFailed));
+            Assert.That(type, Is.EqualTo(WsEventCatalog.CameraExposureFailed.Token));
             Assert.That(payload.GetProperty("frame_id").GetString(), Is.EqualTo(id.ToString()));
             Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("light"));
             Assert.That(payload.GetProperty("reason").GetString(), Is.EqualTo("cancelled"));

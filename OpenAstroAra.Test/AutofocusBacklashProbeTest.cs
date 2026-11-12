@@ -15,8 +15,8 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -72,8 +72,8 @@ namespace OpenAstroAra.Test {
                 });
             var events = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => events.Add((t, p.Clone())))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => events.Add((t, p.Clone())))
                 .Returns(Task.CompletedTask);
             var tracker = new AutofocusRunTracker();
             var svc = new AutofocusSweepService(store, focuser.Object, frames.Object, tracker: tracker, ws: ws.Object,

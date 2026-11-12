@@ -86,7 +86,7 @@ namespace OpenAstroAra.Test {
         private sealed class WsRecorder : IWsBroadcaster {
             public ConcurrentQueue<(string Type, JsonElement Payload)> Events { get; } = new();
             public long CurrentSequence => 0;
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 Events.Enqueue((eventType, payload.Clone()));
                 return Task.CompletedTask;
             }

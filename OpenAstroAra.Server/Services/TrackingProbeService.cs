@@ -288,7 +288,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must never fail the probe. Log-and-recover boundary.")]
-    private async Task PublishAsync(string type, JsonObject payload) {
+    private async Task PublishAsync(WsEvent type, JsonObject payload) {
         if (_ws is null) {
             return;
         }

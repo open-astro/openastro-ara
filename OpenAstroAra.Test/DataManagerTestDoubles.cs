@@ -25,7 +25,7 @@ namespace OpenAstroAra.Test {
     // No-op WS broadcaster for tests that don't assert on events.
     internal sealed class NullBroadcaster : IWsBroadcaster {
         public long CurrentSequence => 0;
-        public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) => Task.CompletedTask;
+        public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) => Task.CompletedTask;
     }
 
     // Records every published (eventType, payload) pair for download-worker assertions.
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Test {
         public ConcurrentQueue<(string EventType, JsonElement Payload)> Events { get; } = new();
         public long CurrentSequence => Events.Count;
 
-        public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+        public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
             Events.Enqueue((eventType, payload.Clone()));
             return Task.CompletedTask;
         }

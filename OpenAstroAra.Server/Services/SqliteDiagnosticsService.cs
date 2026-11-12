@@ -310,7 +310,7 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster (e.g. SocketException) must not abort the diagnostic write or surface as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private async Task EmitDiagnosticsEventAsync(string eventType, JsonObject payload) {
+    private async Task EmitDiagnosticsEventAsync(WsEvent eventType, JsonObject payload) {
         if (_ws is null) {
             return;
         }

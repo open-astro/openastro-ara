@@ -200,8 +200,8 @@ namespace OpenAstroAra.Test {
                 : null);
             var wsEvents = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (wsEvents) { wsEvents.Add((t, p)); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (wsEvents) { wsEvents.Add((t, p)); } })
                 .Returns(Task.CompletedTask);
             var hub = new EquipmentFaultHub(ws.Object);
             var faults = new List<EquipmentFaultEvent>();
@@ -253,7 +253,7 @@ namespace OpenAstroAra.Test {
                 : null);
             await using var proxy = AlpacaFaultProxy.Start(box.BaseUri);
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             var hub = new EquipmentFaultHub(ws.Object);
             var faults = new List<EquipmentFaultEvent>();

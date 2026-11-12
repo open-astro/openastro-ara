@@ -161,9 +161,9 @@ namespace OpenAstroAra.Test {
             var warnings = logger.Warnings.FindAll(m => m.Contains("progress poll", StringComparison.OrdinalIgnoreCase));
             Assert.That(warnings, Has.Count.EqualTo(1),
                 "exactly one poll-failure warning per build — silent is invisible, per-tick is noise");
-            Assert.That(warnings[0], Does.Contain(GuiderService.DarkLibraryProgressEvent));
+            Assert.That(warnings[0], Does.Contain(GuiderService.DarkLibraryProgressEvent.Token));
             // No progress event can have fired — every poll failed.
-            Assert.That(events, Does.Not.Contain(GuiderService.DarkLibraryProgressEvent));
+            Assert.That(events, Does.Not.Contain(GuiderService.DarkLibraryProgressEvent.Token));
         }
 
         [Test]
@@ -374,7 +374,7 @@ namespace OpenAstroAra.Test {
                 Microsoft.Extensions.Logging.ILogger<GuiderService>? logger = null, IProfileStore? profileStore = null,
                 Func<Guid?>? activeProfileIdResolver = null) {
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
                 .Returns(Task.CompletedTask);
             var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
