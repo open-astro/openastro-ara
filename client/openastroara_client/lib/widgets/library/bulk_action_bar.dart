@@ -309,8 +309,11 @@ class _RatePickerDialog extends StatelessWidget {
               child: IconButton(
                 tooltip: '$stars star${stars == 1 ? '' : 's'}',
                 onPressed: () => Navigator.of(context).pop(stars),
-                icon: Icon(Icons.star,
-                    color: AraColors.accentBusy, size: 20 + stars.toDouble()),
+                icon: Icon(
+                  Icons.star,
+                  color: AraColors.accentBusy,
+                  size: 20 + stars.toDouble(),
+                ),
               ),
             ),
         ],
@@ -375,15 +378,17 @@ class _TagDialogState extends State<_TagDialog> {
           TextField(
             controller: _add,
             decoration: InputDecoration(
-                labelText: 'Add tags',
-                helperText: context.l10n.libraryTagsCommaSeparated),
+              labelText: 'Add tags',
+              helperText: context.l10n.libraryTagsCommaSeparated,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _remove,
             decoration: InputDecoration(
-                labelText: 'Remove tags',
-                helperText: context.l10n.libraryTagsCommaSeparated),
+              labelText: 'Remove tags',
+              helperText: context.l10n.libraryTagsCommaSeparated,
+            ),
           ),
         ],
       ),
