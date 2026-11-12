@@ -442,7 +442,7 @@
   },
   "deviceStoppedFollowingMount": "The dome no longer follows the mount",
   "@deviceStoppedFollowingMount": {
-    "description": "Message pill: a dial turn, Park or Home turned following the mount off"
+    "description": "Message pill: a dial turn, Park, Home or Stop turned following the mount off"
   },
   "deviceCouldntFollowMount": "Couldn't change whether the dome follows the mount",
   "@deviceCouldntFollowMount": {

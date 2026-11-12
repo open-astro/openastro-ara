@@ -663,7 +663,7 @@ abstract class AppLocalizations {
   /// **'Following the mount…'**
   String get deviceFollowingMount;
 
-  /// Message pill: a dial turn, Park or Home turned following the mount off
+  /// Message pill: a dial turn, Park, Home or Stop turned following the mount off
   ///
   /// In en, this message translates to:
   /// **'The dome no longer follows the mount'**
