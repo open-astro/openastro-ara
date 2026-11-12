@@ -100,6 +100,8 @@ public static class ProfileSnapshotNormalizer {
             Unguided = (UnguidedSettingsDto?)snap.Unguided ?? new UnguidedSettingsDto(),
             GuiderAdvanced = (GuiderAdvancedSettingsDto?)snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(),
             FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
+            // #1675 — a pre-#1675 file (or a null list) reads as nothing saved.
+            FilterFocusOffsets = snap.FilterFocusOffsets?.Offsets is null ? FilterFocusOffsetsDto.Empty : snap.FilterFocusOffsets,
             EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
             SavedTargets = SavedTargetsValidator.NormalizeLenient(snap.SavedTargets),
         };

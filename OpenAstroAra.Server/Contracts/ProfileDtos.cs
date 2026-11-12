@@ -687,6 +687,15 @@ public sealed record FilterWheelPolicyDto(
     public static FilterWheelPolicyDto Default { get; } = new();
 }
 
+/// <summary>#1675 — the focus offset saved for a filter wheel slot by the offset calibration's Save, in focuser
+/// steps. On wheel connect it wins over the driver's offset for that slot; a slot without one keeps the driver's.</summary>
+public sealed record FilterFocusOffsetDto(int Position, int Offset);
+
+/// <summary>#1675 — the saved per-slot focus offsets. Empty = none saved.</summary>
+public sealed record FilterFocusOffsetsDto(System.Collections.Generic.IReadOnlyList<FilterFocusOffsetDto> Offsets) {
+    public static FilterFocusOffsetsDto Empty { get; } = new([]);
+}
+
 /// <summary>#1700 — the switch port that runs the camera's cooling fan: the switch's Alpaca
 /// <c>UniqueId</c> and the port's id. Alpaca has no fan capability, so the user designates it. Both
 /// null = no designation, no fan interlock.</summary>
