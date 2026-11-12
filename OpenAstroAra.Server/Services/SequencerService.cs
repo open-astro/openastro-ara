@@ -376,7 +376,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         if (run.TryTransition(SequenceRunState.Running, target)
             || (target == SequenceRunState.PausedAwaitingUser
                 && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
-            run.SetDescription(PausedDescription); // #1784 — drop the last step's stale countdown
+            // #1784 — an ordinary pause drops the last step's stale countdown. A prompt or awaiting-user pause keeps the
+            // text its step reported just before it ("Put the lens cap on … press Resume"): that text is the instruction.
+            if (target == SequenceRunState.Paused) run.SetDescription(PausedDescription);
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
             // §38.10 — snapshot which target the pause interrupted, so a later
@@ -1584,10 +1586,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         public void SetDescription(string? description) {
             if (string.IsNullOrWhiteSpace(description)) return;
-            // #1784 — progress reports are posted to the pool and can land after the pause; a paused run keeps "Paused".
+            // #1784 — progress reports are posted to the pool and can land after an ordinary pause; it keeps "Paused".
             lock (_gate) {
-                if (State is SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser
-                    && description != PausedDescription) return;
+                if (State == SequenceRunState.Paused && description != PausedDescription) return;
                 CurrentInstructionDescription = description;
             }
         }

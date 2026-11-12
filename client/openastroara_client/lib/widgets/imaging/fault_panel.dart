@@ -31,10 +31,8 @@ class _FaultPanelState extends ConsumerState<FaultPanel> {
     final level = n == 0
         ? StatusLevel.connected
         : standing.byDeviceType.values
-              .map((f) => f.level)
-              .reduce(
-                (a, b) => statusLevelRank(a) >= statusLevelRank(b) ? a : b,
-              );
+            .map((f) => f.level)
+            .reduce((a, b) => statusLevelRank(a) >= statusLevelRank(b) ? a : b);
     final label = n == 0
         ? 'Faults: none standing'
         : 'Faults: $n standing — ${level == StatusLevel.error ? 'critical' : 'advisory'}';
@@ -52,11 +50,8 @@ class _FaultPanelState extends ConsumerState<FaultPanel> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 children: [
-                  Icon(
-                    _expanded ? Icons.expand_more : Icons.chevron_right,
-                    size: 18,
-                    color: AraColors.textSecondary,
-                  ),
+                  Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
                   // Expanded, not a Spacer: the label ellipsizes in the
                   // 320 px rail instead of overflowing (as DiagnosticPanel).
@@ -96,32 +91,30 @@ class _FaultHistoryList extends ConsumerWidget {
     final notifier = ref.read(faultFeedProvider.notifier);
     return feed.when(
       loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(12),
-          child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ),
+          child: Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)))),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(
-          friendlyError(context.l10n, e, action: 'load the fault history'),
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
-        ),
+        child: Text(friendlyError(context.l10n, e, action: 'load the fault history'),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: AraColors.textSecondary)),
       ),
       data: (rows) {
         if (rows == null || rows.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              rows == null ? 'No server connected' : 'No faults recorded',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
-            ),
+                rows == null ? 'No server connected' : 'No faults recorded',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AraColors.textSecondary)),
           );
         }
         final groups = groupFaultRows(rows);
@@ -133,12 +126,12 @@ class _FaultHistoryList extends ConsumerWidget {
             if (i == groups.length) {
               return ListTile(
                 dense: true,
-                title: Text(
-                  'Load more…',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: AraColors.textSecondary),
-                ),
+                title: Text('Load more…',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AraColors.textSecondary)),
                 onTap: notifier.loadMore,
               );
             }
@@ -160,12 +153,20 @@ class FaultGroup {
   DateTime get firstUtc => rows.last.detectedUtc;
 }
 
+/// A fault row carries no episode id, so an episode is: same session, device and fault type,
+/// each row within [faultEpisodeGap] of the next. A longer quiet gap starts a new episode.
+const faultEpisodeGap = Duration(minutes: 10);
+
 List<FaultGroup> groupFaultRows(List<FaultRow> rows) {
   String key(FaultRow r) =>
-      '${r.equipmentType}|${r.equipmentId ?? r.equipmentName}|${r.faultType}';
+      '${r.sessionId}|${r.equipmentType}|${r.equipmentId ?? r.equipmentName}|${r.faultType}';
   final groups = <List<FaultRow>>[];
   for (final r in rows) {
-    if (groups.isNotEmpty && key(groups.last.first) == key(r)) {
+    // Newest first: the previous row of the group is the later one.
+    if (groups.isNotEmpty &&
+        key(groups.last.last) == key(r) &&
+        groups.last.last.detectedUtc.difference(r.detectedUtc) <=
+            faultEpisodeGap) {
       groups.last.add(r);
     } else {
       groups.add([r]);
@@ -185,8 +186,6 @@ class FaultGroupTile extends StatelessWidget {
     if (group.count == 1) return FaultHistoryTile(row: group.rows.first);
     final r = group.rows.first;
     final l10n = context.l10n;
-    final small = Theme.of(context).textTheme.labelSmall
-        ?.copyWith(color: AraColors.textSecondary);
     return ExpansionTile(
       dense: true,
       tilePadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -196,17 +195,17 @@ class FaultGroupTile extends StatelessWidget {
         width: 8,
         height: 8,
         decoration: BoxDecoration(
-          color:
-              (group.rows.every((x) => x.resolved)
-                      ? StatusLevel.connected
-                      : faultKindLevel(r.faultType))
-                  .color,
+          color: (group.rows.every((x) => x.resolved)
+                  ? StatusLevel.connected
+                  : faultKindLevel(r.faultType))
+              .color,
           shape: BoxShape.circle,
         ),
       ),
       title: Text(
-        '${r.equipmentName ?? r.equipmentType} — ${r.faultType.replaceAll('_', ' ')}'
-        ' · ${l10n.faultGroupCount(group.count)}',
+        // Count first: the ellipsis in a narrow rail must not cut the number off.
+        '${l10n.faultGroupCount(group.count)} · '
+        '${r.equipmentName ?? r.equipmentType} — ${r.faultType.replaceAll('_', ' ')}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
@@ -216,7 +215,10 @@ class FaultGroupTile extends StatelessWidget {
           FaultHistoryTile.formatTime(group.firstUtc.toLocal()),
           FaultHistoryTile.formatTime(group.lastUtc.toLocal()),
         ),
-        style: small,
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: AraColors.textSecondary),
       ),
       children: [for (final row in group.rows) FaultHistoryTile(row: row)],
     );
@@ -240,8 +242,8 @@ class FaultHistoryTile extends StatelessWidget {
     // (#1307) is not "recovered": say what happened.
     final outcome = row.resolved
         ? (row.actionTaken?.startsWith('released') ?? false)
-              ? 'released — disconnected by hand'
-              : 'recovered'
+            ? 'released — disconnected by hand'
+            : 'recovered'
         : row.actionTaken ?? 'unresolved';
     return ListTile(
       dense: true,
@@ -259,13 +261,17 @@ class FaultHistoryTile extends StatelessWidget {
       ),
       subtitle: Text(
         outcome,
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: AraColors.textDisabled),
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: AraColors.textSecondary),
       ),
       trailing: Text(
         formatTime(row.detectedUtc.toLocal()),
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: AraColors.textDisabled),
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: AraColors.textSecondary),
       ),
     );
   }
