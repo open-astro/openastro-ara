@@ -102,6 +102,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_disconnected_camera_gets_no_heater_even_beside_a_connected_one() {
+            var dto = await EquipmentEndpoints.GetCameraWithHeaterAsync(
+                CameraService(Camera(state: EquipmentConnectionState.Disconnected)).Object, Switches(Heater("ZWO_DEW_SN_A")).Object, CancellationToken.None);
+            Assert.That(dto!.DewHeater, Is.Null);
+        }
+
+        [Test]
         public async Task A_failing_switch_list_leaves_the_camera_status_whole() {
             var sw = new Mock<ISwitchService>();
             sw.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("boom"));
