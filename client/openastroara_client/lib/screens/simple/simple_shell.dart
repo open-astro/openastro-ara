@@ -1642,8 +1642,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 }
 
-/// The object picked in the sky, over it: its name, type and altitude, and
-/// Image this, which opens Plan's sheet with it.
+/// The object picked in the sky, over it: its Album Art and credit if any,
+/// name, type and altitude, and Image this, which opens Plan's sheet with it.
 class _SkyPick extends ConsumerWidget {
   const _SkyPick({required this.selection, required this.onImage});
 
