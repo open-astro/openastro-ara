@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../state/alarm/safety_alarm_state.dart';
 
 /// §35.5 — surfaces the safety alarm as a modal the moment the flow starts
@@ -56,13 +57,13 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
         builder: (dialogContext) => AlertDialog(
           icon: Icon(Icons.notifications_active,
               color: Theme.of(dialogContext).colorScheme.error, size: 32),
-          title: const Text('SAFETY ALERT'),
+          title: Text(dialogContext.l10n.safetyAlertTitle),
           // Live-read: an emergency stop arriving mid-episode escalates the
           // reason in place — the open modal must show it.
           content: Consumer(builder: (context, ref, _) {
             final reason =
                 ref.watch(safetyAlarmProvider.select((s) => s.reason));
-            return Text(reason.isEmpty ? 'Conditions are UNSAFE.' : reason);
+            return Text(reason.isEmpty ? context.l10n.safetyUnsafe : reason);
           }),
           actions: [
             FilledButton(
@@ -73,7 +74,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
               // pop, so Silence and safety.safe share one dismissal path.
               onPressed: () =>
                   ref.read(safetyAlarmProvider.notifier).silence(),
-              child: const Text('Silence alarm'),
+              child: Text(dialogContext.l10n.safetySilence),
             ),
           ],
         ),

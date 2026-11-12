@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
@@ -26,46 +24,24 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — sixth real Alpaca-backed device service. Replaces <c>PlaceholderFilterWheelService</c>:
-/// connects to a discovered Alpaca FilterWheel, serves its slots (position/name/focus-offset, read
-/// once) + live runtime (state + current slot, §32.4-cached) over the §6 REST surface, and selects
-/// a slot via <see cref="ChangeFilterAsync"/> (a §60.5 202-Accepted background operation).
+/// §14e — sixth real Alpaca-backed device service: connects to a discovered Alpaca FilterWheel, serves its
+/// slots (position/name/focus-offset, read once) + live runtime (state + current slot, §32.4-cached) over
+/// the §6 REST surface, and selects a slot via <see cref="ChangeFilterAsync"/> (a §60.5 202-Accepted
+/// background operation). Its lifecycle (generation supersede, §32.4 background-refresh cache, the §42.3
+/// probe and read health) is the shared <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011); the #1066
+/// first-connect home rides on its session hooks.
 /// Mirrors the established control-device template. REST-only — the <c>IFilterWheelMediator</c>
 /// unification (SwitchFilter instruction) is the follow-up.
 /// </summary>
-public sealed partial class FilterWheelService : IFilterWheelService, IRetainedDeviceSource, IDisposable {
+public sealed partial class FilterWheelService : IFilterWheelService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
-    // #1127 — the record the card names. The remembered-selection store and this can diverge
-    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
-
-
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly FilterWheelStateDto IdleRuntime = new("idle", null);
 
     private readonly ILogger<FilterWheelService> _logger;
-    private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
-    private readonly DeviceConnectionProbe _probe = new();
-    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
-    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
-    // Built in the constructor, once the fault sink is known.
-    private readonly DeviceHealthWatch _health;
-    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => _health.Observe(ok, reason, device);
-    private void ResetHealthLocked() => _health.Reset();
-
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<IFilterWheelDevice> _lifecycle;
+    private Func<DiscoveredDeviceDto, IFilterWheelDevice> _createDevice = AlpacaFilterWheelDevice.Create;
     // The Sequencer-facing profile (null in REST-only unit tests): the §14e mediator partial imports
     // the connected wheel's slot list into ActiveProfile.FilterWheelSettings.FilterWheelFilters
     // (NINA's import-on-connect semantics) so SwitchFilter can resolve its filter by name/position.
@@ -77,16 +53,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     // #1675 — the saved offsets as the store's Changed last reported them: the store's getter takes the lock
     // its writes hold across the disk write, so the status poll must not read it.
     private volatile IReadOnlyList<FilterFocusOffsetDto>? _savedOffsets;
+    // Session state below is guarded by the lifecycle's gate, like the connection state.
     // #1667 — the slot the focuser is compensated for; kept across an unconfirmed change so its retry still moves.
     private int? _focusBaseline;
-    private AlpacaFilterWheel? _client;
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private IReadOnlyList<FilterSlotDto>? _slots; // configured names/offsets, read once on connect
     private FilterWheelStateDto _runtime = IdleRuntime;
-    private int _refreshing;
-    private long _connectGeneration;
-    private bool _disposed;
     // #1066 — devices already homed to the default slot this daemon session (by UniqueId). Only the
     // FIRST connect of a wheel homes it: an auto-reconnect after a link blip must never yank a
     // running sequence's filter back to L.
@@ -119,32 +90,53 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         _focusOffset = focusOffset;
         _logger = logger ?? NullLogger<FilterWheelService>.Instance;
         _profileStore = profileStore;
-        _events = events;
         _faults = faults;
-        _health = new DeviceHealthWatch(DeviceType.FilterWheel, faults);
         _profileService = profileService;
         if (_profileStore is not null) {
             _profileStore.Changed += OnProfileChanged;
             OnProfileChanged(null, EventArgs.Empty);
         }
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _lifecycle = new DeviceLifecycle<IFilterWheelDevice>(this, DeviceType.FilterWheel, "filter wheel",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults, PrepareSession);
     }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, IFilterWheelDevice> DeviceFactory { init => _createDevice = value; }
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
+    internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     private void OnProfileChanged(object? sender, EventArgs e) => _savedOffsets = _profileStore?.GetFilterFocusOffsets()?.Offsets;
 
     public Task<FilterWheelDto?> GetAsync(CancellationToken ct) {
         FilterWheelDto dto;
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
             // null ONLY when no device has ever been selected (-> 404); a retained device after
             // disconnect returns Disconnected + idle runtime, consistent across the device services.
-            if (_device is null) {
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<FilterWheelDto?>(null);
             }
-            var connected = _state == EquipmentConnectionState.Connected;
+            var state = _lifecycle.State;
+            var connected = state == EquipmentConnectionState.Connected;
             var runtime = connected ? _runtime : IdleRuntime;
             var slots = (connected ? _slots : null) ?? Array.Empty<FilterSlotDto>();
-            dto = new FilterWheelDto(_device.UniqueId, _device.Name, _state, runtime, slots);
+            dto = new FilterWheelDto(device.UniqueId, device.Name, state, runtime, slots);
         }
         // #1675 — re-applied on every read so a Save shows at once.
         return Task.FromResult<FilterWheelDto?>(dto with { Slots = WithSavedOffsets(dto.Slots) });
@@ -153,94 +145,60 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("filter-wheel.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("filter-wheel.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the filter wheel is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the filter wheel is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.FilterWheel, removed.UniqueId, removed.Name);
-            return true;
-        }
-    }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaFilterWheel? client;
-        string? neverDecided;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
-            neverDecided = TakePendingHomeNeverDecidedLocked();
-            _homeGeneration++; // #1079
-            // Clear the slot list too: it must not outlive the connection, so a ChangeFilterAsync
-            // while disconnected validates against the live (absent) slots and reports "not
-            // connected" rather than an ArgumentOutOfRange against a prior session's slots.
-            _slots = null;
-            _focusBaseline = null;
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate: a connection that ends (disconnect, loss, a newer connect) forgets the last one's
+    // session. The slot list must not outlive it, so a ChangeFilterAsync while disconnected validates against
+    // the live (absent) slots and reports "not connected" rather than an ArgumentOutOfRange against a prior
+    // session's slots. A home still pending leaves a journal line (off the gate: a slow log sink must never sit
+    // on the device lock) and an in-flight home for the old wheel is stale (#1079).
+    private void ResetSessionLocked() {
+        var neverDecided = TakePendingHomeNeverDecidedLocked();
+        _homeGeneration++;
+        _slots = null;          // re-read for the new device
+        _runtime = IdleRuntime; // don't serve a prior device's runtime
+        _focusBaseline = null;
         if (neverDecided is not null) {
-            LogHomeNeverDecided(neverDecided); // outside the gate
+            _ = Task.Run(() => LogHomeNeverDecided(neverDecided), CancellationToken.None);
         }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("filter-wheel.disconnect", idempotencyKey));
+    }
+
+    // #1075 — the policy is read off the gate (the store has its own lock) once the connect succeeded. The
+    // returned action runs under the gate on adopt: #1066 — claim the once-per-session home NOW, position known
+    // or not, so a later reconnect of this wheel (auto or manual) can never home it. The claim is consumed
+    // either way: turning the policy on later never homes an already-connected (or reconnecting) wheel
+    // mid-session. A previous wheel's still-pending decision was already superseded by the session reset.
+    private Action PrepareSession(IFilterWheelDevice client) {
+        var homeEnabled = HomeOnFirstConnectEnabled();
+        return () => {
+            var device = _lifecycle.Device;
+            if (device is null) {
+                return;
+            }
+            var claimed = ClaimFirstConnectHome(device.UniqueId);
+            _pendingHome = claimed && homeEnabled;
+            if (claimed && !homeEnabled) {
+                _ = Task.Run(() => LogHomeSkippedByPolicy(device.Name), CancellationToken.None);
+            }
+            _homeGeneration++; // #1079 — a previous wheel's in-flight home is stale now
+            _pendingHomeDevice = device.Name;
+            _pendingHomeTicks = 0;
+        };
     }
 
     public Task<OperationAcceptedDto> ChangeFilterAsync(FilterChangeRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         // Dispose -> range -> connected ordering, aligned with the other device services.
-        AlpacaFilterWheel? client;
+        IFilterWheelDevice? client;
         IReadOnlyList<FilterSlotDto>? slots;
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.ConnectedDevice();
             slots = _slots;
             _focusBaseline ??= _runtime.CurrentSlot;
         }
@@ -269,10 +227,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background change boundary: setting the blocking ASCOM Position can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client before/during the change; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private async Task ChangeInBackgroundAsync(AlpacaFilterWheel client, int position) {
+    private async Task ChangeInBackgroundAsync(IFilterWheelDevice client, int position) {
         try {
             client.Position = (short)position; // triggers the wheel to rotate; Position reads -1 while moving
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
             if (_focusOffset is { Enabled: true }) {
                 if (await WaitForPositionAsync(client, (short)position, CancellationToken.None).ConfigureAwait(false)) {
                     await ApplyFocusOffsetAsync(position, CancellationToken.None).ConfigureAwait(false);
@@ -355,15 +313,15 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
 
     /// <summary>The current home generation and live client, for the bench test that invokes
     /// <see cref="HomeInBackground"/> with a stale token.</summary>
-    internal (long Generation, AlpacaFilterWheel? Client) HomeTokenForTest() {
+    internal (long Generation, IFilterWheelDevice? Client) HomeTokenForTest() {
         lock (_gate) {
-            return (_homeGeneration, _client);
+            return (_homeGeneration, _lifecycle.Live);
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background home boundary: same as ChangeInBackground — a throwing Position write or a client disposed mid-write must be contained and logged, never fault the fire-and-forget task. CA1031's log-and-recover boundary applies.")]
-    internal void HomeInBackground(AlpacaFilterWheel client, long dispatched) {
+    internal void HomeInBackground(IFilterWheelDevice client, long dispatched) {
         try {
             bool superseded;
             lock (_gate) {
@@ -371,14 +329,14 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
                 // decision (or a disconnect / newer connect) makes this home stale. The log line
                 // is emitted after the gate is released (a slow log sink must never sit on the
                 // device lock — same rule as LogHomeNeverDecided / LogConnectionLost).
-                superseded = !HomeStillWanted(dispatched, _homeGeneration) || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client);
+                superseded = !HomeStillWanted(dispatched, _homeGeneration) || !_lifecycle.IsLive(client);
             }
             if (superseded) {
                 LogHomeSuperseded();
                 return;
             }
             client.Position = (short)DefaultSlot; // Position reads -1 while moving
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
         } catch (Exception ex) {
             LogChangeFailed(ex, DefaultSlot);
         }
@@ -399,96 +357,66 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         return _pendingHomeDevice;
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
+    // The runtime read the lifecycle runs each tick. Position is the essential read (§42.3 second channel). The
+    // slot list is read here too until it is known, and the #1066 first-connect home is decided in the commit
+    // the first time the position reads as known.
+    private DeviceRead ReadRuntime(IFilterWheelDevice client) {
+        bool needSlots;
+        lock (_gate) {
+            needSlots = _slots is null;
         }
-        try {
-            AlpacaFilterWheel? client;
-            bool needSlots;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
+        var runtime = ReadRuntime(client, out var readError);
+        var slots = needSlots ? ReadSlots(client) : null;
+        var adoptedSlots = false;
+        int? homeFrom = null;
+        var homeDevice = string.Empty;
+        long homeGeneration = 0;
+        (string Device, int Ticks)? windowExpired = null;
+        return new DeviceRead(readError,
+            CommitLocked: () => {
+                _runtime = runtime;
+                if (slots is not null) {
+                    _slots = slots;
+                    adoptedSlots = true;
                 }
-                client = _client;
-                needSlots = _slots is null;
-            }
-            if (client is null) {
-                return;
-            }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
-            // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
-            // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this tick's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, out var readError);
-            var slots = needSlots ? ReadSlots(client) : null;
-            var adoptedSlots = false;
-            int? homeFrom = null;
-            string homeDevice = string.Empty;
-            long homeGeneration = 0;
-            (string Device, int Ticks)? windowExpired = null;
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
-                    ObserveRuntimeReadLocked(readError is null, readError, _device);
-                    if (slots is not null) {
-                        _slots = slots;
-                        adoptedSlots = true;
-                    }
-                    // #1066 — the first KNOWN position settles this session's home decision, whether
-                    // or not a move is needed (already-at-0 counts as homed). Unknown (-1 / unreadable)
-                    // leaves it pending for a few more ticks, then it is dropped.
-                    if (_pendingHome) {
-                        if (runtime.CurrentSlot is int slot) {
-                            _pendingHome = false;
-                            if (NeedsHomeToDefaultSlot(slot)) {
-                                homeFrom = slot;
-                                homeDevice = _pendingHomeDevice;
-                                homeGeneration = _homeGeneration; // #1079 — the token the write re-checks
-                            }
-                        } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
-                            _pendingHome = false;
-                            windowExpired = (_pendingHomeDevice, _pendingHomeTicks); // logged after the gate
+                // #1066 — the first KNOWN position settles this session's home decision, whether
+                // or not a move is needed (already-at-0 counts as homed). Unknown (-1 / unreadable)
+                // leaves it pending for a few more ticks, then it is dropped.
+                if (_pendingHome) {
+                    if (runtime.CurrentSlot is int slot) {
+                        _pendingHome = false;
+                        if (NeedsHomeToDefaultSlot(slot)) {
+                            homeFrom = slot;
+                            homeDevice = _pendingHomeDevice;
+                            homeGeneration = _homeGeneration; // #1079 — the token the write re-checks
                         }
+                    } else if (++_pendingHomeTicks > MaxPendingHomeTicks) {
+                        _pendingHome = false;
+                        windowExpired = (_pendingHomeDevice, _pendingHomeTicks); // logged after the gate
                     }
                 }
-            }
-            if (windowExpired is { } expired) {
-                LogHomeWindowExpired(expired.Device, expired.Ticks);
-            }
-            if (homeFrom is int from) {
-                // Daemon policy: happens with no client attached (boot auto-connect), never on a reconnect.
-                LogHomingToDefault(homeDevice, from);
-                _ = Task.Run(() => HomeInBackground(client, homeGeneration), CancellationToken.None);
-            }
-            if (adoptedSlots) {
-                // First slot read for this connection: import the device's filter list into the
-                // active profile (outside the lock — it walks an observable collection).
-                ImportProfileFilters(slots!);
-                MirrorSlotLabels(slots!);
-            }
-        } catch (Exception ex) {
-            LogRuntimeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+            },
+            AfterCommit: () => {
+                if (windowExpired is { } expired) {
+                    LogHomeWindowExpired(expired.Device, expired.Ticks);
+                }
+                if (homeFrom is int from) {
+                    // Daemon policy: happens with no client attached (boot auto-connect), never on a reconnect.
+                    LogHomingToDefault(homeDevice, from);
+                    _ = Task.Run(() => HomeInBackground(client, homeGeneration), CancellationToken.None);
+                }
+                if (adoptedSlots) {
+                    // First slot read for this connection: import the device's filter list into the
+                    // active profile (outside the lock — it walks an observable collection).
+                    ImportProfileFilters(slots!);
+                    MirrorSlotLabels(slots!);
+                }
+            });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transiently-failing Position read reports idle (and logs at Debug) rather than failing the snapshot. CA1031's log-and-recover boundary applies.")]
-    private FilterWheelStateDto ReadRuntime(AlpacaFilterWheel c, out string? readError) {
+    private FilterWheelStateDto ReadRuntime(IFilterWheelDevice c, out string? readError) {
         short pos;
         readError = null;
         // Log at Debug, not silently: a persistent Position fault would otherwise present as a
@@ -503,7 +431,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Slots read boundary: if Names fails, return null so we DON'T cache an empty/partial slot list (the next tick retries). CA1031's log-and-recover boundary applies.")]
-    private List<FilterSlotDto>? ReadSlots(AlpacaFilterWheel c) {
+    private List<FilterSlotDto>? ReadSlots(IFilterWheelDevice c) {
         string[] names;
         try { names = c.Names; } catch (Exception) { return null; }
         if (names is null) {
@@ -529,183 +457,6 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         return slots.Select(s => saved?.LastOrDefault(o => o.Position == s.Position) is { } o ? s with { FocusOffset = o.Offset } : s).ToList();
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaFilterWheel is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaFilterWheel? client = null;
-        var adopted = false;
-        string? neverDecided = null;
-        var homeSkippedByPolicy = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaFilterWheel(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            // #1075 — read the policy off the gate (the store has its own lock). The claim is
-            // consumed either way: turning the policy on later never homes an already-connected
-            // (or reconnecting) wheel mid-session.
-            var homeEnabled = HomeOnFirstConnectEnabled();
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    _slots = null;          // re-read for the new device
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
-                    _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
-                    ResetHealthLocked();
-                    // #1066 — claim the once-per-session home NOW, position known or not, so a
-                    // later reconnect of this wheel (auto or manual) can never home it. A previous
-                    // wheel's still-pending decision is superseded (and its journal line kept).
-                    neverDecided = TakePendingHomeNeverDecidedLocked();
-                    var claimed = ClaimFirstConnectHome(device.UniqueId);
-                    _pendingHome = claimed && homeEnabled;
-                    if (claimed && !homeEnabled) {
-                        homeSkippedByPolicy = true;
-                    }
-                    _homeGeneration++; // #1079 — a previous wheel's in-flight home is stale now
-                    _pendingHomeDevice = device.Name;
-                    _pendingHomeTicks = 0;
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            if (neverDecided is not null) {
-                LogHomeNeverDecided(neverDecided); // outside the gate, like LogConnectionLost
-            }
-            if (homeSkippedByPolicy) {
-                LogHomeSkippedByPolicy(device.Name);
-            }
-            client = null; // ownership transferred to _client
-            // Seed slots + runtime through the guarded path; the #1066 first-connect home is decided
-            // in there (or on a later tick) the first time the position reads as known.
-            RefreshCacheOnce();
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.FilterWheel, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaFilterWheel client) {
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaFilterWheel client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaFilterWheel c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
-    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
-    // while a stale probe of the dead session was still in flight. The liveness check and
-    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
-    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
-    // null when the probed client is stale (the observation is discarded).
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaFilterWheel client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Re-checks the probed client's identity under the gate: a reconnect between the probe
-    // and this trip must never flip the NEW, healthy session to Error (review finding).
-    private void TripConnectionLost(AlpacaFilterWheel probed) {
-        DiscoveredDeviceDto? device;
-        string? neverDecided;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset();
-            ResetHealthLocked();
-            neverDecided = TakePendingHomeNeverDecidedLocked();
-            _homeGeneration++; // #1079 — an in-flight home for a wheel that stopped answering is stale
-        }
-        if (neverDecided is not null) {
-            LogHomeNeverDecided(neverDecided);
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.FilterWheel, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "FilterWheel '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.FilterWheel, _device?.UniqueId, _device?.Name, state);
-    }
-
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
         new(OperationId: Guid.NewGuid(),
             OperationType: operationType,
@@ -718,36 +469,20 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         slots is not null && slots.Count > 0 && (position < 0 || position >= slots.Count);
 
     public void Dispose() {
-        AlpacaFilterWheel? client;
         string? neverDecided;
         lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
             neverDecided = TakePendingHomeNeverDecidedLocked(); // #1079 — daemon shutdown leaves the same trace
             _homeGeneration++;
         }
         if (neverDecided is not null) {
             LogHomeNeverDecided(neverDecided);
         }
-        _refreshTimer.Dispose();
+        _lifecycle.Dispose();
         if (_profileStore is not null) {
             _profileStore.Changed -= OnProfileChanged;
         }
-        // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
-        // Connected=false is a blocking HTTP call (up to ~3s ASCOM timeout) that would hang
-        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
         GC.SuppressFinalize(this);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "FilterWheel runtime read failed")]
-    private partial void LogRuntimeReadFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "FilterWheel Position read failed (reported idle)")]
     private partial void LogPositionReadFailed(Exception ex);
@@ -758,12 +493,4 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     [LoggerMessage(Level = LogLevel.Warning, Message = "FilterWheel change to slot {Position} failed")]
     private partial void LogChangeFailed(Exception ex, int position);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "FilterWheel connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "FilterWheel connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting FilterWheel during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }

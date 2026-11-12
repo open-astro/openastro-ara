@@ -155,7 +155,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       setState(() => _tagBusy = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'update the tag'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionUpdateTag))));
     }
   }
 
@@ -251,7 +251,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       if (!mounted || gen != _fetchGen) return;
       setState(() {
         _loading = false;
-        _error = friendlyError(context.l10n, e, action: 'load the preview');
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionLoadPreview);
         // Keep the last good render on screen, but snap the picker back to
         // the palette it was actually rendered with (r1: the dropdown must
         // never read as if the failed palette succeeded).
@@ -284,7 +284,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'rate the frame'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRateFrame))));
     }
   }
 

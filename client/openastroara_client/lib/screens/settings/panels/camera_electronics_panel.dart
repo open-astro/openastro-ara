@@ -44,7 +44,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -70,7 +70,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }

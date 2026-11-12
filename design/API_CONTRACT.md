@@ -42,6 +42,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — #1786 Verify Position's 409 names its cause
+
+**Endpoint(s) or area:** `POST /api/v1/platesolve/verify-position` (409).
+
+**Decision:** the 409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with, or the device was lost mid-exposure), `camera-busy` (another exposure holds the camera; the sentence says to try again once it has read out) or `gate-stuck` (the capture gate's wait expired; only a daemon restart clears it). `detail` is unchanged. The 422 causes carry no reason.
+
+**Reasoning:** the three causes need three different actions (open Camera settings, wait and Check again, restart the daemon), and a client cannot tell them apart reliably from the sentence. A client that sees a 409 without a `reason` (an older daemon) treats it as `no-camera`.
+
+**Spec ref:** `Endpoints/PlateSolveEndpoints.cs` (`VerifyPositionAsync`); `openapi.yaml` (`VerifyMountPosition`). Tests `VerifyPositionServiceTest`.
+
+---
+
 ## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).
@@ -182,6 +194,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
+
+### 2026-11-11 — The dome follows the mount: `POST /equipment/dome/follow`, `GET/PUT /profile/dome`, and `following` on the dome status (#1689)
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/dome/follow` (body `{"enabled": bool}`); new `GET` and `PUT /api/v1/profile/dome` (`dome` profile section); `runtime.following` on `GET /api/v1/equipment/dome`.
+
+**Decision:** "follow the mount" is a per-profile setting (`follow_mount` in the `dome` section, so it survives a restart and a profile switch); the follow command writes it and answers `200 {"enabled": <state>}` (not 202: nothing runs in the background that the caller must wait for). Turning it on is refused `409` Problem, with the reason as `detail`, when the dome is not connected, cannot set its azimuth, or the profile has no dome radius. Turning the dome by hand (`slew`, `park`, `findhome`, `abort`, `disconnect`, or a plan's dome steps), an unsafe-weather reaction, an emergency stop, and a geometry that puts the scope outside the dome for the mount's pointing turn `follow_mount` off. The `dome` section holds the geometry the azimuth math reads (`dome_radius_mm`, `scope_position_north_south_mm` / `_east_west_mm` / `_up_down_mm`, `mount_type` = `equatorial` | `fork_on_wedge`, `gem_axis_mm`, `lateral_axis_mm`, `dec_offset_horizontal_mm`), `azimuth_tolerance_degrees`, `synchronize_during_mount_slew` and `dome_sync_timeout_seconds`. `PUT` keeps the stored `follow_mount` whatever the body says, so only the follow command changes it (a client saving geometry with a stale copy cannot turn following back on, or off). `PUT` is refused `422` with a reason for a scope outside the dome radius, a bad mount type, an out-of-range tolerance or timeout, and for a zero radius while following is on. The new endpoint is an action beside `slew` and `park` (the dome's other commands), rather than a field on one of them, because it changes a setting and starts no motion.
+
+**Reasoning:** the follower was a placeholder that reported "not following" and refused to start, so the dome stayed where the user left it while the target moved 15 degrees an hour. The status flag lets Simple Mode say "Following the mount…" when the follower, not the user, is turning the dome (`state: slewing` with `following: true`).
+
+**Spec ref:** `OpenAstroAra.Server/Services/DomeFollower.cs`, `DomeSettingsValidator.cs`, `DomeService.cs` (`SetFollowingAsync`), `Endpoints/EquipmentEndpoints.cs`, `Endpoints/ProfileEndpoints.cs`; client `lib/models/dome_settings.dart`, `lib/screens/simple/simple_device_windows.dart`, `lib/screens/settings/panels/equipment_dome_panel.dart`.
+
+**Related:** #1689; tests `DomeFollowerTest`, client `simple_dome_window_test`, `equipment_dome_panel_test`.
+
+---
 
 ### 2026-11-05 — Apply multi-star to a connected guider, and find the guide star (#1592)
 
@@ -1500,3 +1526,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the Guider erases its calibration before it calibrates, so a failed run left none. An unattended plan should not end the night for that.
 
 **Spec ref:** `GuiderService.RecalibrateAndGuide`, `GuiderService.StartGuidingCalibratedTonight`, `MeridianFlipExecutor.MeridianFlip`, `FocuserService.HaltAsync`
+
+---
+
+## 2026-11-11 — Adding devices to a fresh AlpacaBridge: `GET /equipment/alpacabridge/catalog`, `GET …/cameras`, `POST …/devices` (#1580)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/alpacabridge/catalog?host=&port=`, `GET /api/v1/equipment/alpacabridge/cameras?host=&port=&vendor=`, `POST /api/v1/equipment/alpacabridge/devices?host=&port=`. The paths follow `guider/alpacadevicenames`: the AlpacaBridge the Connect screen found is `host` and `port` in the query, validated like every management call (non-empty host, a valid host name or IP, port 1..65535; else 400).
+
+**Decision:** the daemon forwards to AlpacaBridge's management routes and keeps nothing. `catalog` → `200 {"device_types":[{"device_type":"camera","drivers":[…]}]}`: the `devicecatalog` drivers whose `available` is true, grouped by device type in the order first seen, each driver exactly as AlpacaBridge sent it (its camelCase keys and field schema are not renamed). A read that fails, a server that is not an AlpacaBridge, or one without the catalog answers `200` with an empty list (best-effort like the name lookup): the client offers Add your devices only when the list is not empty. `cameras` (`vendor` is a short token, else 400) → `200 {"cameras":[{"index","name","serial"}]}`; a vendor with no lister (AlpacaBridge answers a non-zero `ErrorNumber`) or any failure is an empty list. `devices` takes AlpacaBridge's flat body (`vendor`, `deviceType` and the catalog field keys; both required, else 400) and sends it to `configuredevice` unchanged; the body is never logged. Zero `ErrorNumber` → `200 {"message","warning"?}` (AlpacaBridge's text; `warning` is what follows its "Device registered successfully. Warning: " lead). A non-zero `ErrorNumber` → `422` problem `alpacabridge-refused` whose detail is AlpacaBridge's message (the hardware-allowlist refusal comes as its own HTTP 400, same path). No usable answer (refused connection, timeout, a body that is not an Alpaca envelope) → `502` problem `alpacabridge-unconfirmed`: the device may or may not have been added. This is the one place the management client is loud; the reads stay best-effort. The add waits 30 s (the reads keep 3 s); the 1 MiB response cap stays. Basis: registering a device can open the vendor SDK, so ten times the read cap; nothing measured it yet: rig check pending with the board (time a ZWO camera add on the Pi's AlpacaBridge). Secrets: values of top-level body keys that sound secret (password, key, secret, token, psk) are blanked out of AlpacaBridge's message before it reaches a problem, and nothing about the body reaches a log. `POST …/devices` is a mutating `/api/v1` route, so a stale `X-Ara-Session` is refused with 409 by the existing guard.
+
+**Reasoning:** a fresh rig has an AlpacaBridge with no devices and Retry detection cannot help; the add must be an Ara route because the client cannot always reach the bridge and Ara keeps no device facts. The attached camera fills `serialNumber` and `cameraName` (what AlpacaBridge's own web picker saves: the entry then binds by serial), not `cameraIndex`.
+
+**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`. The Flutter client waits for the board's mock review.

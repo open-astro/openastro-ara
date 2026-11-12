@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../widgets/status_indicator.dart' show StatusBlink;
+import '../../../models/dome_settings.dart';
 import '../../../models/dome_status.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../state/equipment/dome_state.dart';
+import '../../../state/settings/dome_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
@@ -51,21 +53,170 @@ class EquipmentDomePanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.dome, v),
           hint: 'Off by default — dome connect actuates shutter',
         ),
-        const SettingsSectionHeader('Slaving'),
+        SettingsSectionHeader(context.l10n.domePanelFollowingHeader),
+        const _DomeFollowSection(),
+      ],
+    );
+  }
+}
+
+/// #1689 — the dome follows the mount: the switch, then the geometry that
+/// places the slit right (the scope's place in the dome and the mount's axis
+/// offsets), the tolerance and whether the dome also turns during a mount slew.
+/// The daemon refuses a scope outside the dome when it saves.
+class _DomeFollowSection extends ConsumerWidget {
+  const _DomeFollowSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final settings = ref.watch(domeSettingsProvider).value;
+    if (settings == null) return Text(l10n.domePanelReadingSettings);
+    final dome = ref.watch(domeProvider).value;
+    final canTurn = dome?.capabilities?.canSetAzimuth ?? false;
+    // The dome status, not the saved settings: parking, a turn of the dial or
+    // a safety reaction turns following off on the daemon while this is open.
+    final following = dome?.following ?? false;
+
+    Future<void> save(DomeSettings next) async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await ref.read(domeSettingsProvider.notifier).save(next);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${l10n.domePanelCouldntSave}: ${failureReason(l10n, e)}',
+            ),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+      }
+    }
+
+    Future<void> follow(bool on) async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await ref.read(domeProvider.notifier).followMount(on);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${l10n.deviceCouldntFollowMount}: ${failureReason(l10n, e)}',
+            ),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+      }
+    }
+
+    Widget number(
+      String label,
+      double value,
+      DomeSettings Function(double) apply, {
+      String? helpKey,
+    }) => EditableNumberRow(
+      label: label,
+      helpKey: helpKey,
+      currentValue: _num(value),
+      getCanonical: () => _num(value),
+      parse: (text) {
+        final v = double.tryParse(text.trim());
+        if (v != null && v != value) save(apply(v));
+      },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            'Dome slaving and shutter-on-park/unsafe follow the safety '
-            'policies and the mount park routine; there is no separate dome '
-            'setting.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            l10n.domePanelFollowNote,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
+        ),
+        SettingsSwitchRow(
+          label: l10n.domePanelFollowMount,
+          helpKey: 'eq.dome.follow',
+          value: following,
+          onChanged: canTurn || following ? follow : (_) {},
+          hint: canTurn || following ? null : l10n.domePanelFollowNeedsAzimuth,
+        ),
+        SettingsSectionHeader(l10n.domePanelGeometryHeader),
+        SettingsDropdownRow<String>(
+          label: l10n.domePanelMountType,
+          helpKey: 'eq.dome.geometry',
+          value: settings.mountType,
+          items: {
+            'equatorial': l10n.domePanelMountGermanEquatorial,
+            'fork_on_wedge': l10n.domePanelMountForkOnWedge,
+          },
+          onChanged: (v) {
+            if (v != null && v != settings.mountType) {
+              save(settings.copyWith(mountType: v));
+            }
+          },
+        ),
+        number(
+          l10n.domePanelDomeRadius,
+          settings.domeRadiusMm,
+          (v) => settings.copyWith(domeRadiusMm: v),
+          helpKey: 'eq.dome.geometry',
+        ),
+        number(
+          l10n.domePanelScopeNorth,
+          settings.scopePositionNorthSouthMm,
+          (v) => settings.copyWith(scopePositionNorthSouthMm: v),
+        ),
+        number(
+          l10n.domePanelScopeEast,
+          settings.scopePositionEastWestMm,
+          (v) => settings.copyWith(scopePositionEastWestMm: v),
+        ),
+        number(
+          l10n.domePanelScopeAbove,
+          settings.scopePositionUpDownMm,
+          (v) => settings.copyWith(scopePositionUpDownMm: v),
+        ),
+        if (settings.isEquatorial) ...[
+          number(
+            l10n.domePanelMountAxisLength,
+            settings.gemAxisMm,
+            (v) => settings.copyWith(gemAxisMm: v),
+          ),
+          number(
+            l10n.domePanelMountLateralOffset,
+            settings.lateralAxisMm,
+            (v) => settings.copyWith(lateralAxisMm: v),
+          ),
+          number(
+            l10n.domePanelDecAxisOffset,
+            settings.decOffsetHorizontalMm,
+            (v) => settings.copyWith(decOffsetHorizontalMm: v),
+          ),
+        ],
+        number(
+          l10n.domePanelAzimuthTolerance,
+          settings.azimuthToleranceDegrees,
+          (v) => settings.copyWith(azimuthToleranceDegrees: v),
+          helpKey: 'eq.dome.tolerance',
+        ),
+        SettingsSwitchRow(
+          label: l10n.domePanelTurnDuringSlews,
+          helpKey: 'eq.dome.tolerance',
+          value: settings.synchronizeDuringMountSlew,
+          onChanged: (v) =>
+              save(settings.copyWith(synchronizeDuringMountSlew: v)),
+          hint: l10n.domePanelTurnDuringSlewsHint,
         ),
       ],
     );
   }
+
+  static String _num(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 }
 
 /// The connected dome's live body: shutter/azimuth/home/park state + shutter,
@@ -121,7 +272,11 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
             child: StatusBlink(
               on: s.runtimeState == 'slewing',
               child: Text(
-                s.runtimeState == 'slewing' ? 'Slewing…' : 'Shutter moving…',
+                s.runtimeState == 'slewing'
+                    ? (s.following
+                          ? context.l10n.deviceFollowingMount
+                          : context.l10n.domePanelSlewing)
+                    : 'Shutter moving…',
                 style: TextStyle(
                   color: s.runtimeState == 'slewing'
                       ? AraColors.accentConnected

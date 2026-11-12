@@ -111,6 +111,130 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceDriverDto'
+  /api/v1/equipment/alpacabridge/catalog:
+    get:
+      tags:
+        - Equipment
+      summary: 'The built-in drivers of an AlpacaBridge, by device type, with their field schemas as AlpacaBridge sends them.'
+      operationId: GetAlpacaBridgeCatalog
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeCatalogResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/alpacabridge/cameras:
+    get:
+      tags:
+        - Equipment
+      summary: The cameras plugged in for one vendor; empty for a vendor with no lister.
+      operationId: GetAlpacaBridgeCameras
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: vendor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeCamerasResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/alpacabridge/devices:
+    post:
+      tags:
+        - Equipment
+      summary: 'Registers a device on AlpacaBridge: the body goes to configuredevice unchanged.'
+      operationId: AddAlpacaBridgeDevice
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonElement'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeAddDeviceResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/camera:
     get:
       tags:
@@ -964,6 +1088,19 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/DomeSlewRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/dome/follow:
+    post:
+      tags:
+        - Equipment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomeFollowRequestDto'
         required: true
       responses:
         '200':
@@ -3435,6 +3572,7 @@ paths:
       tags:
         - PlateSolve
       summary: '§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount''s reported and intended positions.'
+      description: '409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with), `camera-busy` (another exposure holds the camera; check again once it has read out) or `gate-stuck` (the in-flight gate leaked; a daemon restart clears it).'
       operationId: VerifyMountPosition
       requestBody:
         content:
@@ -6784,6 +6922,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/dome:
+    get:
+      tags:
+        - Profile
+      summary: Get the active profile's dome geometry and follow-the-mount setting.
+      operationId: GetDomeSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomeSettingsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's dome geometry and tolerances (follow_mount is kept; POST /equipment/dome/follow changes it); a scope outside the dome radius is refused with a reason.
+      operationId: PutDomeSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomeSettingsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomeSettingsDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -7183,6 +7358,63 @@ components:
             - 'null'
             - string
           format: date-time
+    AlpacaBridgeAddDeviceResponseDto:
+      required:
+        - message
+        - warning
+      type: object
+      properties:
+        message:
+          type: string
+        warning:
+          type:
+            - 'null'
+            - string
+    AlpacaBridgeCameraDto:
+      required:
+        - index
+        - name
+        - serial
+      type: object
+      properties:
+        index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        name:
+          type: string
+        serial:
+          type: string
+    AlpacaBridgeCamerasResponseDto:
+      required:
+        - cameras
+      type: object
+      properties:
+        cameras:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlpacaBridgeCameraDto'
+    AlpacaBridgeCatalogResponseDto:
+      required:
+        - device_types
+      type: object
+      properties:
+        device_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlpacaBridgeDeviceTypeDto'
+    AlpacaBridgeDeviceTypeDto:
+      required:
+        - device_type
+        - drivers
+      type: object
+      properties:
+        device_type:
+          type: string
+        drivers:
+          type: array
     AlpacaServerVersionDto:
       required:
         - host
@@ -9481,6 +9713,88 @@ components:
           format: int32
         use_https:
           type: boolean
+    DomeFollowRequestDto:
+      required:
+        - enabled
+      type: object
+      properties:
+        enabled:
+          type: boolean
+    DomeSettingsDto:
+      type: object
+      properties:
+        follow_mount:
+          type: boolean
+          default: false
+        dome_radius_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_north_south_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_east_west_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_up_down_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        mount_type:
+          type: string
+          default: equatorial
+        gem_axis_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        lateral_axis_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        dec_offset_horizontal_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        azimuth_tolerance_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 2
+        synchronize_during_mount_slew:
+          type: boolean
+          default: false
+        dome_sync_timeout_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 120
     DomeSlewRequestDto:
       required:
         - target_azimuth_deg
@@ -13835,6 +14149,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/FilterFocusOffsetsDto'
+        dome:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/DomeSettingsDto'
     QualityScoreBreakdownDto:
       required:
         - composite

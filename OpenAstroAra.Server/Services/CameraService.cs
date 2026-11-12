@@ -35,8 +35,8 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — tenth real Alpaca-backed device service and the head of the capture path. Replaces
-/// <c>PlaceholderCameraService</c>: connects to a discovered Alpaca Camera, serves capabilities +
+/// §14e — tenth real Alpaca-backed device service and the head of the capture path.
+/// Connects to a discovered Alpaca Camera, serves capabilities +
 /// §32.4-cached runtime (state/temperature/cooler/progress), drives the cooler and exposure aborts,
 /// and — the substantive part — <see cref="StartExposureAsync"/> runs a REAL capture:
 /// pre-allocates the frame id and returns immediately (§60.5 async semantics: the preview URL 404s
@@ -164,7 +164,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Func<IFilterWheelMediator?>? filterWheel = null,
         IFrameQualitySink? frameQuality = null,
         ISavedLightSink? savedLights = null,
-        Func<IRotatorMediator?>? rotator = null) {
+        Func<IRotatorMediator?>? rotator = null,
+        Func<OpenAstroAra.Equipment.Interfaces.IDomeFollower?>? domeFollower = null) {
+        _domeFollower = domeFollower;
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _rotator = rotator;
         _frameQuality = frameQuality;
@@ -216,6 +218,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // The rotator's mechanical angle at capture, for the ROTATOR card and the catalog — matching
     // flats turn the camera back to it. Func<>: the rotator mediator is registered after this service.
     private readonly Func<IRotatorMediator?>? _rotator;
+    // #1689 — waits for the dome to reach the scope before a light, while the dome follows the mount.
+    private readonly Func<OpenAstroAra.Equipment.Interfaces.IDomeFollower?>? _domeFollower;
 
     /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
     /// J2000 when the transform succeeded, else the mount's native epoch (see

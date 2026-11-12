@@ -121,7 +121,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -150,17 +150,21 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     }
   }
 
+  /// Never save over the rig's settings when they never loaded; say the
+  /// edit was not kept instead of dropping it silently.
+  void _notifyNotLoaded() {
+    const msg = "Not saved: your guider settings haven't loaded from the rig. "
+        'Reopen this page once connected.';
+    if (_lastError != msg) {
+      setState(() => _lastError = msg);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(msg)));
+    }
+  }
+
   void _scheduleSave() {
     if (_syncingDerived || _loading) return;
     if (!_hydrated) {
-      // Never save over the rig's settings when they never loaded; say the
-      // edit was not kept instead of dropping it silently.
-      const msg = "Not saved: your guider settings haven't loaded from the rig. "
-          'Reopen this page once connected.';
-      if (_lastError != msg) {
-        setState(() => _lastError = msg);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(msg)));
-      }
+      _notifyNotLoaded();
       return;
     }
     if (_json() == _savedJson) {
@@ -217,7 +221,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     } catch (e) {
       _savedJson = previous;
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -258,6 +262,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// Save the panel's OpenAstro Guider settings (so the daemon-side profile carries the
   /// current selections), then ask the daemon to re-push them to the guider.
   Future<void> _applyToGuider() async {
+    if (!_hydrated) {
+      _notifyNotLoaded();
+      return;
+    }
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     final unserved = describeUnservedAlpacaSelection(ref.read(phd2SettingsProvider));

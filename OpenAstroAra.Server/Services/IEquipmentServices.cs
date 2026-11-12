@@ -180,6 +180,10 @@ public interface IDomeService {
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
 
+    /// <summary>#1689 — the profile switch's disconnect: the store already holds the new profile's dome block,
+    /// so its "Follow the mount" is left as saved (DisconnectAsync would turn it off).</summary>
+    Task<OperationAcceptedDto> DisconnectForProfileSwitchAsync(CancellationToken ct) => DisconnectAsync(null, ct);
+
     /// <summary>Drop the retained (selected-but-not-connected) device so <c>GetAsync</c> reads null
     /// (404) again — the card's Remove, the single-instance form of the §45 stuck-device escape
     /// hatch. True when a device was dropped, false when none was retained. Throws
@@ -195,6 +199,10 @@ public interface IDomeService {
     Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SetParkAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SyncToAzimuthAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#1689 — turn "the dome follows the mount" on or off; returns the resulting state.
+    /// Throws InvalidOperationException (→ 409) with the reason when it cannot be turned on.</summary>
+    Task<bool> SetFollowingAsync(bool enabled, CancellationToken ct);
 }
 
 public interface ISwitchService {
@@ -323,7 +331,7 @@ public interface IGuiderService {
     Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
 
     /// <summary>§63.17 — request a systemd restart of the guider unit (fire-and-forget 202; §63.3 recovery
-    /// reports the outcome over guider.state). Never requires a connected guider — a manual restart is most
+    /// reports the outcome through the guider connection status). Never requires a connected guider — a manual restart is most
     /// useful when the daemon is hung.</summary>
     Task<OperationAcceptedDto> RestartGuiderAsync(string? idempotencyKey, CancellationToken ct);
 

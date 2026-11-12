@@ -108,7 +108,7 @@ public sealed partial class ProfileDeviceSwitch : IDisposable {
         await AddAsync<IFocuserService>(DeviceType.Focuser, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
         await AddAsync<IFilterWheelService>(DeviceType.FilterWheel, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
         await AddAsync<IRotatorService>(DeviceType.Rotator, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
-        await AddAsync<IDomeService>(DeviceType.Dome, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
+        await AddAsync<IDomeService>(DeviceType.Dome, s => s.DisconnectForProfileSwitchAsync(ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
         await AddAsync<IObservingConditionsService>(DeviceType.ObservingConditions, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
         await AddAsync<IFlatDeviceService>(DeviceType.CoverCalibrator, s => s.DisconnectAsync(null, ct), s => s.ForgetAsync(ct)).ConfigureAwait(false);
 

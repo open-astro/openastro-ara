@@ -19,11 +19,10 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Simpler than ASIAir, not a copy of it.**
 - **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
   - **top:** a status strip (device dots, Night mode, Settings), with the attention banner centred under it when needed;
-  - **top-left:** the message pills (results, errors, questions), up to 420 px; see `simple-mode-pills.md`;
-  - **top-right:** the camera status pill, at most 300 px wide (half the row on a narrow window), sharing the row with the message pills;
+  - **top-left:** one status card: the status lines first (what the rig is doing, one per source), then the message pills (results, errors, questions) behind hairlines, as wide as its widest line up to 420 px; see `simple-mode-pills.md`;
   - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options under the settings icon: "5 s · 100" in Preview, "Auto" or "Manual" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
-  - **left rail:** Sky, Info and Library; Info shows the last frame's facts as fact tiles in the bottom-left corner;
+  - **left rail:** Sky Map, Library, Stats, Sky Album and, from 900 pt wide, Monitor; Info, an On / Off row in Preview's and Focus's panels, shows the last frame's facts as fact tiles in the bottom-left corner;
   - **bottom row, 56 px tall, 16 px from the left edge and from Stop:** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
   - **popovers** (the mode grid, settings, a mode's panel) open left of the right rail and never move it.
 - **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
@@ -46,12 +45,11 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 | Where | What |
 |---|---|
 | Top | Status strip: device dots, Night mode, Settings (menu: System, rig and profile, All settings) |
-| Top-left, under the strip | Message pills (results, errors, questions) |
-| Top-right, under the strip | Camera status pill |
+| Top-left, under the strip | Status card: status lines, then message pills (results, errors, questions) |
 | Bottom-right, above the bottom row | Plan squares (the running plan in the corner, queued plans to its left) |
 | Bottom-left, above the bottom row | Info and System fact tiles (when on) |
 | Centre, under the strip | Attention banner, when something needs the person |
-| Left rail | Sky, Info, Library |
+| Left rail | Sky Map, Library, Stats, Sky Album, Monitor (from 900 pt wide) |
 | Right rail | Mode name, shutter, settings chip |
 | Bottom right | Emergency Stop |
 | Bottom row | Guiding graph (RMS, RA/Dec trace) and histogram |
