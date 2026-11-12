@@ -4899,6 +4899,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9826,4 +9829,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationStartQueueNow => 'Iniciar fila';
+
+  @override
+  String get libraryTagsCommaSeparated => 'Separadas por vírgula';
 }

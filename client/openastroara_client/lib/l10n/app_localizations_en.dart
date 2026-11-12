@@ -4899,4 +4899,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
 }

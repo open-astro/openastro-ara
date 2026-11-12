@@ -6318,5 +6318,9 @@
   "calibrationStartQueueNow": "Start queue",
   "@calibrationStartQueueNow": {
     "description": "Question pill action: start the queue (targets first, then the calibration frames)"
+  },
+  "libraryTagsCommaSeparated": "Comma-separated",
+  "@libraryTagsCommaSeparated": {
+    "description": "Image library, Tag selected frames dialog: helper text under the Add tags and Remove tags fields (type several tags separated by commas)"
   }
 }

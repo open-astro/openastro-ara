@@ -8264,6 +8264,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start queue'**
   String get calibrationStartQueueNow;
+
+  /// Image library, Tag selected frames dialog: helper text under the Add tags and Remove tags fields (type several tags separated by commas)
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated'**
+  String get libraryTagsCommaSeparated;
 }
 
 class _AppLocalizationsDelegate

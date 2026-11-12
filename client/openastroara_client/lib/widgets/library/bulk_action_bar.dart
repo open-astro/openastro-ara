@@ -374,14 +374,16 @@ class _TagDialogState extends State<_TagDialog> {
           // the narrow iOS alert.
           TextField(
             controller: _add,
-            decoration: const InputDecoration(
-                labelText: 'Add tags', helperText: 'Comma-separated'),
+            decoration: InputDecoration(
+                labelText: 'Add tags',
+                helperText: context.l10n.libraryTagsCommaSeparated),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _remove,
-            decoration: const InputDecoration(
-                labelText: 'Remove tags', helperText: 'Comma-separated'),
+            decoration: InputDecoration(
+                labelText: 'Remove tags',
+                helperText: context.l10n.libraryTagsCommaSeparated),
           ),
         ],
       ),
