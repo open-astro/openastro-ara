@@ -854,6 +854,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (!discarded && _askDiscard(() => _leaveForFullUi(discarded: true))) {
       return;
     }
+    // #1774: the Full UI button is hidden in Companion Mode; this guard keeps
+    // any later caller from writing the pref there.
     if (ref.read(companionModeProvider)) return;
     ref.read(simpleModeProvider.notifier).set(false);
   }
