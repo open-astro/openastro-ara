@@ -633,8 +633,9 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         ? l10n.guideToolNotCalibrated
         : dec == null
         ? l10n.guideToolCalibrated
+        // Sign from the rounded value, so -0.4 reads 0°, not -0°.
         : l10n.guideToolCalibratedAt(
-            '${dec < 0 ? '-' : '+'}${dec.abs().round()}°',
+            '${dec.round() > 0 ? '+' : ''}${dec.round()}°',
           );
     final waiting = suggestions.length;
     final failed = status.isFailed;

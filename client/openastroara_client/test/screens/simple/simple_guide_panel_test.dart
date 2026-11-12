@@ -259,6 +259,18 @@ void main() {
       expect(find.text('Calibrated at Dec -34°'), findsOneWidget);
     });
 
+    testWidgets('a Dec that rounds to 0 reads with no sign', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(-0.4)));
+      await _tab(tester, 'tools');
+      expect(find.text('Calibrated at Dec 0°'), findsOneWidget);
+    });
+
+    testWidgets('calibrated with no Dec reads just Calibrated', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _liveState()));
+      await _tab(tester, 'tools');
+      expect(find.text('Calibrated'), findsOneWidget);
+    });
+
     testWidgets('each button is read as its whole action', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
