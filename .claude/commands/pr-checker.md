@@ -261,9 +261,9 @@ The bot is the second pair of eyes, not the test suite. For **every** Defect, in
    - **Settings / help registries**: `node scripts/check-settings-registry.mjs` and
      `node scripts/check-help-registry.mjs` (add `--staged` pre-commit). CI runs these as
      `Settings + Help registry gate`.
-   - **Any branch, always cheap**: `python3 .github/scripts/check-unicode.py` (the `Unicode scan`
-     job) and `python3 -m unittest discover -s scripts/tests -v` (runs inside `Sanity`).
-   - **Workflows**: `zizmor --offline .github/workflows/` (the `zizmor (workflow audit)` job).
+   - **Any branch, always cheap**: `python3 .github/scripts/check-unicode.py` (the Unicode scan
+     step of `Sanity`) and `python3 -m unittest discover -s scripts/tests -v` (runs inside `Sanity`).
+   - **Workflows**: `zizmor --offline .github/workflows/` (the workflow audit step of `Sanity`).
    - **Docs-only branches** still run Sanity + Unicode scan + the Python tooling tests; everything
      else is skipped by the `changes` path gate (#1020). Run those three and push.
 6. **One commit per Defect, one push per round** (this `⚠️ Issues found` path only). Commits stay
@@ -305,7 +305,7 @@ For an `open-astro` branch, the same flow against `origin`.
 
 Commit message: verb-first conventional-prefix title under 70 chars, body explaining what the bot
 found and how it was fixed, then the attribution trailer from the session. If the round introduces
-a user-visible change, add the `CHANGELOG.md` `[Unreleased]` bullet in the same diff. After
+a user-visible change, add the `changelog.d/<branch-slug>.md` fragment in the same diff. After
 pushing, go back to Step 1 and Step 2.
 
 **Never post PR comments replying to the bot** on an ordinary finding. A finding is either a change
@@ -355,9 +355,12 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
    Client (native build) — ${{ matrix.target }}         <- literally this
    ```
    The last one is not a typo: `client-build` is a matrix skipped at job level, so it never expands
-   and reports **one** context under its raw, uninterpolated name. The three
+   and reports **one** context under its raw, uninterpolated name. The macOS and Windows
    `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they are
    gated at *step* level and report `pass` with their steps skipped, never `skipping` (#1025).
+   The `ubuntu-latest` context is the non-matrix `client-test-linux` job: it always runs and
+   reports `pass` when every `ubuntu-latest, shard N/3` job passed, or when the shards were
+   skipped for a docs-only change; the shard jobs themselves report `skipping` then.
 
    **`docs_only` is no longer the only attributable cause.** The `changes` job also emits `dotnet`
    and `client`, which gate the four NON-required contexts in that list:

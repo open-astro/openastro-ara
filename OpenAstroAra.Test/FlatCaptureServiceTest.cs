@@ -401,6 +401,61 @@ namespace OpenAstroAra.Test {
             Assert.That(panel.CoverRequests, Is.EqualTo(OneOpen));
         }
 
+        private static readonly bool[] OneClose = [false];
+
+        [Test]
+        public async Task Closing_the_cover_for_darks_turns_the_panel_off_and_closes_it() {
+            await panel.ApplyFlatPanelAsync(new FlatPanelRequestDto(OpenCover: true, LightOn: true), null, CancellationToken.None);
+            panel.CoverRequests.Clear();
+
+            var ok = await CreateSUT().CloseCoverAsync(CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(panel.CoverOpen, Is.False);
+            Assert.That(panel.LightOn, Is.False, "darks need the panel dark too");
+            Assert.That(panel.CoverRequests, Is.EqualTo(OneClose));
+        }
+
+        [Test]
+        public async Task With_no_panel_or_no_motorised_cover_there_is_nothing_to_close() {
+            panel.HasCover = false;
+            Assert.That(await CreateSUT().CloseCoverAsync(CancellationToken.None), Is.False);
+            Assert.That(panel.CoverRequests, Is.Empty);
+            Assert.That(await new FlatCaptureService().CloseCoverAsync(CancellationToken.None), Is.False, "no panel at all");
+        }
+
+        [Test]
+        public async Task CloseFlatPanelCover_runs_when_the_cover_closes() {
+            var executor = new Mock<IFlatCaptureExecutor>();
+            executor.Setup(x => x.CloseCoverAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            await new CloseFlatPanelCover(executor.Object).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            executor.Verify(x => x.CloseCoverAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task CloseFlatPanelCover_fails_when_nothing_closed_or_nothing_is_wired() {
+            // Unlike OpenFlatPanelCover: darks behind a cover that never closed would be ruined silently.
+            var executor = new Mock<IFlatCaptureExecutor>();
+            executor.Setup(x => x.CloseCoverAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
+                () => new CloseFlatPanelCover(executor.Object).Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(
+                () => new CloseFlatPanelCover().Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
+        public void CloseFlatPanelCover_round_trips_through_a_sequence_body() {
+            var converter = new OpenAstroAra.Sequencer.Serialization.SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults());
+            var container = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            container.Add(new CloseFlatPanelCover());
+
+            var json = converter.Serialize(container);
+            Assert.That(json, Does.Contain("OpenAstroAra.Sequencer.SequenceItem.FlatDevice.CloseFlatPanelCover, OpenAstroAra.Sequencer"));
+            var loaded = converter.Deserialize(json);
+
+            Assert.That(loaded.GetItemsSnapshot().Single(), Is.InstanceOf<CloseFlatPanelCover>());
+        }
+
         [Test]
         public async Task A_panel_with_no_motorised_cover_has_nothing_to_open() {
             panel.HasCover = false;

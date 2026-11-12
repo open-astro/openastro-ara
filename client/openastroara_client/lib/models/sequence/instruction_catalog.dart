@@ -470,6 +470,8 @@ const String startGuidingType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
 const String openFlatPanelCoverType =
     'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.OpenFlatPanelCover, OpenAstroAra.Sequencer';
+const String closeFlatPanelCoverType =
+    'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.CloseFlatPanelCover, OpenAstroAra.Sequencer';
 const String waitForUserType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer';
 
@@ -1018,6 +1020,15 @@ const List<InstructionDef> instructionCatalog = [
     label: 'Open Flat Panel Cover',
     category: InstructionCategory.calibration,
     icon: Icons.door_front_door_outlined,
+    fields: [],
+  ),
+  // #1757 — turns the panel off and closes its motorised cover over the
+  // optics, so darks and bias run unattended; fails without one.
+  InstructionDef(
+    type: closeFlatPanelCoverType,
+    label: 'Close Flat Panel Cover',
+    category: InstructionCategory.calibration,
+    icon: Icons.door_back_door_outlined,
     fields: [],
   ),
   // §58.12-b — pause-for-a-human step: the daemon parks the run in the
