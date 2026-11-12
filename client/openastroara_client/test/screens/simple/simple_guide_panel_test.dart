@@ -5,6 +5,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart' show AppLocalizations;
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -105,7 +106,7 @@ class _GuiderEquipment implements GuiderEquipmentClient {
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const []}) async {
+    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const [], Locale? locale}) async {
   // Tall enough that the whole panel is on screen, so nothing needs scrolling.
   tester.view.physicalSize = const Size(2400, 3600);
   addTearDown(tester.view.resetPhysicalSize);
@@ -114,7 +115,12 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
-    child: MaterialApp(home: Scaffold(body: Center(child: child))),
+    child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: Center(child: child)),
+    ),
   ));
   await tester.pump();
   return c;
@@ -199,6 +205,14 @@ GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
     GuidingAssistantStatus.fromJson({'connected': true, 'state': state, 'recommendations': ?recs});
 
 final _idleAssistant = _assistant('idle');
+
+/// A tap on Tools: it keeps the Guide tab's height and scrolls inside, so scroll to the target first.
+Future<void> _tapTools(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pump();
+  await tester.tap(target);
+  await tester.pump();
+}
 
 Future<void> _tab(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(Key('simple-guider-tab-$name')));
@@ -528,11 +542,9 @@ void main() {
       await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       final row = find.byKey(const Key('simple-guider-assistant-failed'));
-      await tester.tap(row);
-      await tester.pump();
+      await _tapTools(tester, row);
       expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, isNull);
-      await tester.tap(row);
-      await tester.pump();
+      await _tapTools(tester, row);
       expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, 2);
     });
 
@@ -551,9 +563,64 @@ void main() {
       final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
       await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
-      await tester.tap(find.text('Apply 2 suggestions'));
-      await tester.pump();
+      await _tapTools(tester, find.text('Apply 2 suggestions'));
       expect(a.applied, [['min_move_ra', 'min_move_dec']]);
+    });
+
+    testWidgets('a finished run lists each waiting suggestion inline: its name and value, ticked', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('RA minimum move'), findsOneWidget);
+      expect(find.text('0.20 px'), findsOneWidget);
+      expect(find.text('Dec backlash compensation'), findsOneWidget);
+      expect(find.text('140 ms'), findsOneWidget);
+      for (final k in ['min_move_ra', 'dec_backlash']) {
+        expect(tester.widget<CheckboxListTile>(find.byKey(Key('ga-suggest-$k'))).value, isTrue, reason: k);
+      }
+    });
+
+    testWidgets('unticking a suggestion counts it out of Apply, and Apply sends only the ticked ones', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
+      expect(find.text('Done. 2 suggestions to apply.'), findsOneWidget, reason: 'the line still counts what waits');
+      await _tapTools(tester, find.text('Apply 1 suggestion'));
+      expect(a.applied, [['min_move_dec']]);
+    });
+
+    testWidgets('with nothing ticked, Apply is off', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
+      await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_dec')));
+      expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
+    });
+
+    testWidgets('a new run ticks every suggestion again', (tester) async {
+      final recs = {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3};
+      final a = _Assistant(_assistant('done', recs: recs));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
+      a.report(_assistant('running'));
+      await tester.pump();
+      a.report(_assistant('done', recs: recs));
+      await tester.pump();
+      expect(tester.widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-min_move_ra'))).value, isTrue);
+      expect(find.text('Apply 2 suggestions'), findsOneWidget);
+    });
+
+    testWidgets('in Brazilian Portuguese the suggestions are named in Portuguese', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140}));
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a), locale: const Locale('pt', 'BR'));
+      await _tab(tester, 'tools');
+      expect(find.text('Movimento mínimo em AR'), findsOneWidget);
+      expect(find.text('Compensação de folga em Dec'), findsOneWidget);
+      expect(find.text('Aplicar 2 sugestões'), findsOneWidget);
     });
   });
 

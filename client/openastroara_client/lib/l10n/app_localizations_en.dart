@@ -2788,6 +2788,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Calibrate first: it needs a calibration to measure against.';
 
   @override
+  String get guideSuggestExposure => 'Guide exposure';
+
+  @override
+  String get guideSuggestMinMoveRa => 'RA minimum move';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Dec minimum move';
+
+  @override
+  String get guideSuggestDecBacklash => 'Dec backlash compensation';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Dec algorithm';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override

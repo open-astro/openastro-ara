@@ -541,6 +541,25 @@ class _AssistantFailed extends GuidingAssistantNotifier {
       loaded: true);
 }
 
+/// A finished run with all six suggestions waiting: the Tools tab's longest list.
+class _AssistantDoneAll extends GuidingAssistantNotifier {
+  @override
+  GuidingAssistantState build() => GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson({
+        'connected': true,
+        'state': 'done',
+        'recommendations': {
+          'exposure_sec': 2,
+          'min_move_ra_px': 0.25,
+          'min_move_dec_px': 0.3,
+          'dec_backlash_ms': 150,
+          'dec_guide_mode': 'Auto',
+          'dec_algorithm': 'ResistSwitch',
+        },
+      }),
+      loaded: true);
+}
+
 class _GuiderUp extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async =>
@@ -1352,6 +1371,35 @@ void main() {
     expect(find.textContaining('Last run failed'), findsOneWidget);
     expect(scroll.position.maxScrollExtent, 0, reason: 'Tools fits as well');
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
+  });
+
+  testWidgets("with the histogram showing, Tools with every suggestion listed keeps Guide's height and scrolls inside (#1759)",
+      (tester) async {
+    // 1.0x for the reason the Tools step above gives: the test font wraps the prose far more than the iPad's.
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new), guidingAssistantProvider.overrideWith(_AssistantDoneAll.new)]);
+    await _frame(tester, c);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final guideHeight = tester.getRect(find.byKey(const Key('simple-guide-panel'))).height;
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
+    await tester.pump();
+    expect(find.byType(CheckboxListTile), findsNWidgets(6), reason: 'precondition: the whole list shows');
+    final scroll = tester.state<ScrollableState>(
+        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
+    expect(scroll.position.maxScrollExtent, 0, reason: 'the panel fits: no scrolling outside it');
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    expect(panel.height, guideHeight, reason: "the panel keeps the Guide tab's height");
+    expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
+    // A list longer than the room scrolls inside the panel, down to Apply.
+    await tester.ensureVisible(find.text('Apply 6 suggestions'));
+    await tester.pump();
+    expect(find.text('Apply 6 suggestions').hitTestable(), findsOneWidget);
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))), panel, reason: 'the panel did not move or grow');
   });
 
   testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",

@@ -2788,6 +2788,21 @@ class AppLocalizationsPt extends AppLocalizations {
       'Calibrate first: it needs a calibration to measure against.';
 
   @override
+  String get guideSuggestExposure => 'Guide exposure';
+
+  @override
+  String get guideSuggestMinMoveRa => 'RA minimum move';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Dec minimum move';
+
+  @override
+  String get guideSuggestDecBacklash => 'Dec backlash compensation';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Dec algorithm';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override
@@ -7587,6 +7602,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get guideToolCalibrateFirst =>
       'Calibre primeiro: ele precisa de uma calibração como referência.';
+
+  @override
+  String get guideSuggestExposure => 'Exposição de guiagem';
+
+  @override
+  String get guideSuggestMinMoveRa => 'Movimento mínimo em AR';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Movimento mínimo em Dec';
+
+  @override
+  String get guideSuggestDecBacklash => 'Compensação de folga em Dec';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Algoritmo de Dec';
 
   @override
   String get focusNudgeIn => 'Mover para dentro';
