@@ -512,7 +512,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
   }
 }
 
-/// Recalibrate now and the Guiding Assistant, one action each.
+/// Recalibrate and the Guiding Assistant: one row each (name, what it does,
+/// where it stands, a quiet button).
 class _SimpleGuiderTools extends ConsumerStatefulWidget {
   const _SimpleGuiderTools();
 
@@ -610,98 +611,280 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         for (final s in status.recommendations?.suggestions ?? const <GuidingAssistantSuggestion>[])
           if (!done.contains(s.key)) s.key,
     ];
-    final why = planRunning
+    final calibration = ref.watch(
+      guiderLiveProvider.select((s) => s.calibration.data),
+    );
+    final calibrated = calibration?.calibrated == true;
+    // One reason that blocks both tools shows once, above the rows.
+    final shared = planRunning
         ? l10n.guideStopPlanFirst
         : cameraBusy
         ? l10n.shellMainCameraBusy
         : guiding
         ? l10n.guideStopGuidingFirst
-        : active
-        ? l10n.guideStopLoopFirst
         : null;
-    final canRun = connected && !planRunning && !cameraBusy && pending == null;
+    final measuring = status.isRunning;
+    // A loop stops Recalibrate only: the Assistant needs one, so it goes on that row.
+    // While the Assistant measures the runtime is busy too, but stopping it would end the run.
+    final loop = shared == null && active && !measuring ? l10n.guideStopLoopFirst : null;
+    final canRun = connected && shared == null && pending == null;
+    final dec = calibration?.declinationDeg;
+    final calibrationLine = !calibrated
+        ? l10n.guideToolNotCalibrated
+        : dec == null
+        ? l10n.guideToolCalibrated
+        : l10n.guideToolCalibratedAt(
+            '${dec < 0 ? '-' : '+'}${dec.abs().round()}°',
+          );
+    final waiting = suggestions.length;
+    final failed = status.isFailed;
+    final String assistantLine = measuring
+        ? l10n.guideToolMeasuring
+        : failed
+        ? l10n.guideToolFailed(
+            status.error ?? l10n.guideAssistantFailedNoReason,
+          )
+        : status.isDone
+        ? l10n.guideToolDone(waiting)
+        : !calibrated
+        ? l10n.guideToolCalibrateFirst
+        : l10n.guideToolNotRun;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s8,
       children: [
-        FilledButton.tonal(
-          key: const Key('simple-guider-recalibrate'),
-          onPressed: canRun && !active && !_preparing ? _recalibrate : null,
-          child: Text(l10n.guideRecalibrateNow),
-        ),
-        if (why != null) Text(why, style: AraText.caption),
-        FilledButton.tonal(
-          key: const Key('simple-guider-assistant'),
-          onPressed: assistant.busy
+        if (shared != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AraSpace.s8),
+            child: _ToolStatus(
+              key: const Key('simple-guider-tools-refusal'),
+              color: AraColors.accentWarning,
+              text: shared,
+              warning: true,
+            ),
+          ),
+        _ToolRow(
+          title: l10n.guideToolCalibration,
+          what: l10n.guideToolCalibrationWhat,
+          statusText: calibrationLine,
+          button: _toolButton(
+            key: const Key('simple-guider-recalibrate'),
+            label: l10n.guideToolRecalibrate,
+            semantics: l10n.guideRecalibrateNow,
+            onPressed: canRun && !active && !_preparing && !measuring
+                ? _recalibrate
+                : null,
+          ),
+          status: _ToolStatus(
+            key: const Key('simple-guider-calibration-status'),
+            color: calibrated
+                ? AraColors.accentConnected
+                : AraColors.accentInfo,
+            ring: !calibrated,
+            text: calibrationLine,
+          ),
+          extra: loop == null
               ? null
-              : status.isRunning
-              ? notifier.stop
-              : canRun && !guiding && !_preparing
-              ? _runAssistant
-              : null,
-          child: Text(status.isRunning ? l10n.guideStopAssistant : l10n.guideRunAssistant),
+              : _ToolStatus(
+                  color: AraColors.accentWarning,
+                  text: loop,
+                  warning: true,
+                ),
         ),
-        if (status.isRunning) Text(l10n.guideAssistantMeasuring, style: AraText.caption),
-        // Stays while the last run's failure stands, so leaving the tab mid-run loses nothing.
-        if (status.isFailed)
-          _SimpleAssistantFailure(
-            l10n.guideAssistantFailed(status.error ?? l10n.guideAssistantFailedNoReason),
+        const Divider(height: 1, thickness: 1, color: AraColors.border),
+        _ToolRow(
+          title: l10n.guideToolAssistant,
+          what: l10n.guideToolAssistantWhat,
+          statusText: assistantLine,
+          button: _toolButton(
+            key: const Key('simple-guider-assistant'),
+            label: measuring
+                ? l10n.guideToolStop
+                : status.isDone || failed
+                ? l10n.guideToolRunAgain
+                : l10n.guideToolRun,
+            semantics: measuring
+                ? l10n.guideStopAssistant
+                : l10n.guideRunAssistant,
+            onPressed: assistant.busy
+                ? null
+                : measuring
+                ? notifier.stop
+                : canRun && !guiding && !_preparing && calibrated
+                ? _runAssistant
+                : null,
           ),
-        if (suggestions.isNotEmpty)
-          FilledButton(
-            style: kSimpleGoStyle,
-            onPressed: assistant.busy ? null : () => notifier.apply(suggestions),
-            child: Text(l10n.guideAssistantApply(suggestions.length)),
+          status: _ToolStatus(
+            key: const Key('simple-guider-assistant-status'),
+            color: measuring || status.isDone
+                ? AraColors.accentConnected
+                : failed || !calibrated
+                ? AraColors.accentWarning
+                : AraColors.accentInfo,
+            ring: !measuring && !status.isDone && !failed && calibrated,
+            blink: measuring,
+            warning: failed || (!calibrated && !measuring && !status.isDone),
+            // Stays while the last run's failure stands, so leaving the tab mid-run loses nothing.
+            expandable: failed,
+            text: assistantLine,
           ),
+          extra: waiting == 0
+              ? null
+              : FilledButton(
+                  style: kSimpleGoStyle,
+                  onPressed: assistant.busy
+                      ? null
+                      : () => notifier.apply(suggestions),
+                  child: Text(l10n.guideAssistantApply(waiting)),
+                ),
+        ),
       ],
     );
   }
 }
 
-/// A failed Guiding Assistant run's reason, in amber. Two lines at most, so
-/// Tools keeps Guide's height; a tap shows the rest in place. A pill carries
-/// the reason too, but only for a run that fails while Tools is open.
-class _SimpleAssistantFailure extends StatefulWidget {
-  const _SimpleAssistantFailure(this.reason);
+/// One tool: its name and quiet button, what it does, where it stands (and
+/// anything extra under it, such as a refusal or Apply).
+class _ToolRow extends StatelessWidget {
+  const _ToolRow({
+    required this.title,
+    required this.what,
+    required this.button,
+    required this.status,
+    required this.statusText,
+    this.extra,
+  });
 
-  final String reason;
+  final String title;
+  final String what;
+  final String statusText;
+  final Widget button;
+  final Widget status;
+  final Widget? extra;
 
   @override
-  State<_SimpleAssistantFailure> createState() => _SimpleAssistantFailureState();
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AraSpace.s8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: [
+        // One spoken node per row (name, what it does, where it stands) on the
+        // title; the lines below are drawn but left out of the tree.
+        Row(
+          spacing: AraSpace.s12,
+          children: [
+            Expanded(
+              child: Semantics(
+                container: true,
+                header: true,
+                label: '$title. $what $statusText',
+                excludeSemantics: true,
+                child: Text(
+                  title,
+                  style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            button,
+          ],
+        ),
+        ExcludeSemantics(child: Text(what, style: AraText.caption)),
+        ExcludeSemantics(child: status),
+        if (extra != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            child: extra,
+          ),
+      ],
+    ),
+  );
 }
 
-class _SimpleAssistantFailureState extends State<_SimpleAssistantFailure> {
+/// A tool's quiet button: outlined with a Hairline border, 44 pt tall. The
+/// spoken name is the whole action, since "Run" alone says nothing.
+Widget _toolButton({
+  required Key key,
+  required String label,
+  required String semantics,
+  required VoidCallback? onPressed,
+}) => OutlinedButton(
+  key: key,
+  style: OutlinedButton.styleFrom(
+    minimumSize: const Size(104, 44),
+    foregroundColor: AraColors.textPrimary,
+    disabledForegroundColor: AraColors.textDisabled,
+    side: const BorderSide(color: AraColors.border),
+  ),
+  onPressed: onPressed,
+  child: Semantics(label: semantics, excludeSemantics: true, child: Text(label)),
+);
+
+/// A status line: a dot (a ring for blue, blinking while a tool works) and the
+/// words, two lines at most so Tools keeps Guide's height. [expandable] shows
+/// the rest in place on a tap; [warning] writes the words in amber.
+class _ToolStatus extends StatefulWidget {
+  const _ToolStatus({
+    super.key,
+    required this.color,
+    required this.text,
+    this.ring = false,
+    this.blink = false,
+    this.warning = false,
+    this.expandable = false,
+  });
+
+  final Color color;
+  final String text;
+  final bool ring;
+  final bool blink;
+  final bool warning;
+  final bool expandable;
+
+  @override
+  State<_ToolStatus> createState() => _ToolStatusState();
+}
+
+class _ToolStatusState extends State<_ToolStatus> {
   bool _whole = false;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    expanded: _whole,
-    child: InkWell(
+  Widget build(BuildContext context) {
+    final line = Row(
+      spacing: AraSpace.s8,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: StatusBlink(
+            on: widget.blink,
+            child: StatusDot(color: widget.color, ring: widget.ring),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            widget.text,
+            maxLines: _whole ? null : 2,
+            overflow: _whole ? null : TextOverflow.ellipsis,
+            style: AraText.caption.copyWith(
+              color: widget.warning ? widget.color : AraColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+    if (!widget.expandable) return line;
+    // Sighted tap only: the row's one semantics label already reads the whole reason.
+    return InkWell(
       key: const Key('simple-guider-assistant-failed'),
       borderRadius: BorderRadius.circular(AraRadius.container),
       onTap: () => setState(() => _whole = !_whole),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 44),
-        child: Row(
-          spacing: AraSpace.s8,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
-            Expanded(
-              child: Text(
-                widget.reason,
-                maxLines: _whole ? null : 2,
-                overflow: _whole ? null : TextOverflow.ellipsis,
-                style: AraText.caption.copyWith(color: AraColors.accentWarning),
-              ),
-            ),
-          ],
-        ),
+        child: line,
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// How strongly the guider corrects one axis: 0-100 % in 5s, set when the

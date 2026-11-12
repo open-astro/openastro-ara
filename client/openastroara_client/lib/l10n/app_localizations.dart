@@ -4785,12 +4785,6 @@ abstract class AppLocalizations {
   /// **'Stop Guiding Assistant'**
   String get guideStopAssistant;
 
-  /// No description provided for @guideAssistantMeasuring.
-  ///
-  /// In en, this message translates to:
-  /// **'Measuring. Guide corrections are off for now.'**
-  String get guideAssistantMeasuring;
-
   /// No description provided for @guideAssistantApply.
   ///
   /// In en, this message translates to:
@@ -4830,7 +4824,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideAssistantCalibrateFirst.
   ///
   /// In en, this message translates to:
-  /// **'Calibrate first: press Recalibrate now, then run the Guiding Assistant.'**
+  /// **'Calibrate first: press Recalibrate, then run the Guiding Assistant.'**
   String get guideAssistantCalibrateFirst;
 
   /// No description provided for @guideAssistantNoStar.
@@ -4851,17 +4845,107 @@ abstract class AppLocalizations {
   /// **'Autofocus has the focuser. Wait for it to finish, or cancel it.'**
   String get focusNudgeAutofocusRunning;
 
-  /// No description provided for @guideAssistantFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'The Guiding Assistant stopped: {reason}'**
-  String guideAssistantFailed(String reason);
-
   /// No description provided for @guideAssistantFailedNoReason.
   ///
   /// In en, this message translates to:
   /// **'the guider gave no reason'**
   String get guideAssistantFailedNoReason;
+
+  /// No description provided for @guideToolRecalibrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalibrate'**
+  String get guideToolRecalibrate;
+
+  /// No description provided for @guideToolCalibration.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration'**
+  String get guideToolCalibration;
+
+  /// No description provided for @guideToolCalibrationWhat.
+  ///
+  /// In en, this message translates to:
+  /// **'Measures again how the mount moves the guide star. Redo it after turning the camera or moving far in Dec.'**
+  String get guideToolCalibrationWhat;
+
+  /// No description provided for @guideToolCalibratedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrated at Dec {dec}'**
+  String guideToolCalibratedAt(String dec);
+
+  /// No description provided for @guideToolCalibrated.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrated'**
+  String get guideToolCalibrated;
+
+  /// No description provided for @guideToolNotCalibrated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not calibrated. The next start calibrates first.'**
+  String get guideToolNotCalibrated;
+
+  /// No description provided for @guideToolAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding Assistant'**
+  String get guideToolAssistant;
+
+  /// No description provided for @guideToolAssistantWhat.
+  ///
+  /// In en, this message translates to:
+  /// **'Watches the star drift with guiding off, then suggests settings for this mount and sky.'**
+  String get guideToolAssistantWhat;
+
+  /// No description provided for @guideToolRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get guideToolRun;
+
+  /// No description provided for @guideToolRunAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Run again'**
+  String get guideToolRunAgain;
+
+  /// No description provided for @guideToolStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get guideToolStop;
+
+  /// No description provided for @guideToolNotRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Not run yet'**
+  String get guideToolNotRun;
+
+  /// No description provided for @guideToolMeasuring.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring drift…'**
+  String get guideToolMeasuring;
+
+  /// No description provided for @guideToolDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Done. Nothing to apply.} =1{Done. 1 suggestion to apply.} other{Done. {count} suggestions to apply.}}'**
+  String guideToolDone(int count);
+
+  /// No description provided for @guideToolFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run failed: {reason}'**
+  String guideToolFailed(String reason);
+
+  /// No description provided for @guideToolCalibrateFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate first: it needs a calibration to measure against.'**
+  String get guideToolCalibrateFirst;
 
   /// No description provided for @focusNudgeIn.
   ///

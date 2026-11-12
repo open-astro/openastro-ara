@@ -54,6 +54,8 @@ import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/guiding_assistant.dart';
+import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -556,6 +558,14 @@ class _GuideStarting extends GuideFocusNotifier {
   @override
   GuideFocusLive build() =>
       const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 0));
+}
+
+/// A Guiding Assistant whose last run failed with a reason far too long for two lines.
+class _AssistantFailed extends GuidingAssistantNotifier {
+  @override
+  GuidingAssistantState build() => GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost ' * 40}),
+      loaded: true);
 }
 
 class _GuiderUp extends GuiderStatusNotifier {
@@ -1339,8 +1349,9 @@ void main() {
     // draws the panel shorter than the iPad's, so 1.3x text stands in for it.
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
     final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
-        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new), guidingAssistantProvider.overrideWith(_AssistantFailed.new)]);
     await _frame(tester, c);
     await tester.pump();
     expect(find.byKey(const Key('simple-histogram')), findsOneWidget, reason: 'precondition: the bottom row shows');
@@ -1361,6 +1372,16 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsOneWidget);
     expect(scroll.position.maxScrollExtent, 0, reason: 'Tuning fits as well');
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
+    // #1759 — Tools with its longest lines: the shared refusal (guiding) above a failed run's reason, cut to
+    // two lines. The test font is about twice as wide as the iPad's, so the prose wraps to five lines here
+    // (two on the iPad): 1.3x text no longer stands in for it on this tab, and 1.0x does.
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
+    await tester.pump();
+    tester.platformDispatcher.textScaleFactorTestValue = 1.0;
+    await tester.pump();
+    expect(find.textContaining('Last run failed'), findsOneWidget);
+    expect(scroll.position.maxScrollExtent, 0, reason: 'Tools fits as well');
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
   });
 
