@@ -355,6 +355,12 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 return; // REST-only construction (unit tests): no profile to import into
             }
             SyncProfileFilters(filters, slots);
+            // #1675 — a saved offset also wins over an entry this daemon run imported earlier (another profile's).
+            foreach (var saved in _profileStore?.GetFilterFocusOffsets()?.Offsets ?? []) {
+                if (filters.FirstOrDefault(f => f.Position == saved.Position) is { } filter) {
+                    filter.FocusOffset = saved.Offset;
+                }
+            }
         }
         LogProfileFiltersImported(slots.Count);
     }

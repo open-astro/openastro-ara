@@ -69,6 +69,8 @@ INERT_DIRS = (
     "docs/",
     ".claude/",
     ".github/ISSUE_TEMPLATE/",
+    # #1812: changelog fragments, read only by scripts/changelog-fragments.py in the Sanity job.
+    "changelog.d/",
 )
 
 # Root-level files that are prose and nothing else. Deliberately short:
@@ -132,6 +134,10 @@ SCRIPT_RULES = {
     "scripts/check-settings-registry.mjs": NONE,
     "scripts/check-help-registry.mjs": NONE,
     "scripts/fit-star-count-model.py": NONE,
+    # Changelog fragment check (#1812): run by the Sanity job, read by no .NET or client job.
+    "scripts/changelog-fragments.py": NONE,
+    # Run by merge-queue.yml on a merge group only.
+    "scripts/merge-gate.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a

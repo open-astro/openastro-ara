@@ -479,7 +479,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                  quality_score_json, rating, tags_json, focuser_position,
                  background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c,
-                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc, pointing_probed_utc)
+                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc, pointing_probed_utc,
+                 camera_name, camera_id)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
@@ -487,7 +488,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
                  $quality_score_json, $rating, $tags_json, $focuser_position,
                  $background_adu, $median_adu, $bin, $rotator_mechanical_deg, $cooler_setpoint_c,
-                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $updated_utc, $probed_utc);
+                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $updated_utc, $probed_utc,
+                 $camera_name, $camera_id);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -525,6 +527,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$dec_deg", DbValue(f.DecDeg));
         cmd.Parameters.AddWithValue("$pixel_scale_arcsec", DbValue(f.PixelScaleArcsec));
         cmd.Parameters.AddWithValue("$captured_by_ara", f.CapturedByAra is bool ara ? (ara ? 1 : 0) : DBNull.Value);
+        cmd.Parameters.AddWithValue("$camera_name", (object?)f.CameraName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$camera_id", (object?)f.CameraId ?? DBNull.Value);
         var now = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
         cmd.Parameters.AddWithValue("$updated_utc", now);
         // A frame Ara captured already holds exact values; its header is a lossy copy (OBJCTRA rounded
@@ -633,7 +637,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                    quality_score_json, rating, tags_json, focuser_position,
                    background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c,
-                   ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara
+                   ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, camera_name, camera_id
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -687,7 +691,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             RaDeg: await reader.IsDBNullAsync(29, ct) ? null : reader.GetDouble(29),
             DecDeg: await reader.IsDBNullAsync(30, ct) ? null : reader.GetDouble(30),
             PixelScaleArcsec: await reader.IsDBNullAsync(31, ct) ? null : reader.GetDouble(31),
-            CapturedByAra: await reader.IsDBNullAsync(32, ct) ? null : reader.GetInt32(32) != 0);
+            CapturedByAra: await reader.IsDBNullAsync(32, ct) ? null : reader.GetInt32(32) != 0,
+            CameraName: await reader.IsDBNullAsync(33, ct) ? null : reader.GetString(33),
+            CameraId: await reader.IsDBNullAsync(34, ct) ? null : reader.GetString(34));
     }
 
     /// <inheritdoc />
