@@ -34,9 +34,9 @@ class SkyAlbumScreen extends ConsumerStatefulWidget {
   const SkyAlbumScreen({super.key, required this.onImageTarget});
 
   /// Fired from a card back's action, grid and shelf alike, with the card's
-  /// object. The shell decides what imaging it means (Simple Mode opens the
-  /// plan sheet with the target picked).
-  final void Function(PlanningDso target) onImageTarget;
+  /// object and its label ("M 31", "RCW 38"). The shell decides what imaging
+  /// it means (Simple Mode opens the plan sheet with the target picked).
+  final void Function(PlanningDso target, String label) onImageTarget;
 
   @override
   ConsumerState<SkyAlbumScreen> createState() => _SkyAlbumScreenState();
@@ -176,7 +176,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     };
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
-    Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
+    void imageTarget(PlanningDso d) => widget.onImageTarget(d, bookLabel(d, bookOf[d.id]!));
+    Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => imageTarget(d));
     // The new-cards shelf: the catalogs shown, in Book order, and only cards that are
     // collected, so it hides under Missing. Its cards play their reveal once.
     final fresh = _filter == AlbumFilter.missing
@@ -192,7 +193,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     ].join(' · ');
     Widget freshCard(PlanningDso d) => AlbumCard(
           cardFor(d),
-          onAction: () => widget.onImageTarget(d),
+          onAction: () => imageTarget(d),
           reveal: !_revealed.contains(d.id),
           revealFrom: _revealFrom[d.id],
           onRevealed: () => setState(() => _revealed.add(d.id)),

@@ -58,7 +58,7 @@ Future<ProviderContainer> _pump(
   WidgetTester tester, {
   required List<AlbumFrame> frames,
   List<PlanningDso> tonight = const [],
-  void Function(PlanningDso)? onImageTarget,
+  void Function(PlanningDso, String)? onImageTarget,
   AlbumFetcher? fetcher,
   List<TonightSkyObject>? tonightRows,
   bool bookPending = false,
@@ -98,11 +98,11 @@ Future<ProviderContainer> _pump(
   return container;
 }
 
-Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
+Widget _app(void Function(PlanningDso, String)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}) : const SizedBox(),
+      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_, _) {}) : const SizedBox(),
     );
 
 Finder _onShelf(String text) =>
@@ -143,7 +143,8 @@ void main() {
 
   testWidgets('a missing card\'s action calls back with that object', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked = d);
+    String? label;
+    await _pump(tester, frames: _m31Frames, onImageTarget: (d, l) => (picked, label) = (d, l));
 
     await tester.tap(find.text('Crab Nebula'));
     await tester.pumpAndSettle();
@@ -151,12 +152,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picked, same(_m1));
+    expect(label, 'M 1', reason: "the card's label, so the plan names it the same");
     expect(find.text('Image this target'), findsNothing, reason: 'the card flips back and the album hands over');
   });
 
   testWidgets('a collected card shows its Nights and totals and offers more time', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked = d);
+    await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked = d);
 
     expect(find.text('1 / 4 collected'), findsOneWidget);
     await tester.tap(find.text('Andromeda Galaxy'));
@@ -403,7 +405,7 @@ void main() {
 
   testWidgets('a shelf card fires the same callback, in ranker order', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d) => picked = d);
+    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d, _) => picked = d);
     expect(tester.getTopLeft(_onShelf('Orion Nebula')).dx, lessThan(tester.getTopLeft(_onShelf('Crab Nebula')).dx));
 
     await tester.tap(_onShelf('Orion Nebula'));
@@ -680,7 +682,7 @@ void main() {
   for (final scale in [1.0, 1.3, 2.0]) {
     testWidgets('a flipped back with every part fits a landscape phone at text ${scale}x', (tester) async {
       PlanningDso? picked;
-      await _pump(tester, frames: _m31Frames, size: const Size(800, 400), textScale: scale, onImageTarget: (d) => picked = d, manifest: const {
+      await _pump(tester, frames: _m31Frames, size: const Size(800, 400), textScale: scale, onImageTarget: (d, _) => picked = d, manifest: const {
         'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'NASA, ESA, and the Hubble Heritage Team',
             licence: 'Public domain', distance: '2.5 million ly',
             trivia: 'The nearest large galaxy to the Milky Way, it is approaching us at about 110 km/s.'),

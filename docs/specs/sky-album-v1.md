@@ -120,8 +120,8 @@ Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from
 ### Tonight's Sky tie-in ([#1501](https://github.com/open-astro/openastro-ara/issues/1501))
 
 - The shelf is `tonightSkyProvider` (the ranking Simple Mode already shows as Tonight's best) filtered to the missing cards of the catalogs shown, in ranker order, capped at 8. No extra threshold. Hidden when the ranker returns nothing, when no album rows have loaded (every card would look missing) and under the Collected filter. Title: "N missing cards well placed tonight". Shelf cards flip like grid cards; there is no separate start button.
-- Callback contract: the shell passes `void Function(PlanningDso target)`. The album fires it from the card back's action button, grid and shelf alike.
-- Simple Mode's implementation: pop the album, set the planetarium selection the way `simpleSelectionOf` does for a Tonight's best tap (altitude and rise from the ranker when the object is in it, else from the catalog position only), and open the plan sheet with the target picked. Nothing is queued automatically.
+- Callback contract: the shell passes `void Function(PlanningDso target, String label)`. The album fires it from the card back's action button, grid and shelf alike, with the Card's label ("M 31", "RCW 38").
+- Simple Mode's implementation: pop the album, set the planetarium selection the way `simpleSelectionOf` does for a Tonight's best tap (altitude and rise from the ranker when the object is in it, else from the catalog position only), and open the plan sheet with the target picked. The label leads the selection's designations, so the plan reads "M 31 (Andromeda Galaxy)" as the Card did, not "NGC 224 (Andromeda Galaxy)". Nothing is queued automatically.
 
 ### Entry point
 

@@ -359,8 +359,16 @@ List<DsoSuggestion> searchSuggestions(
 }
 
 /// A designation as people write it: OpenNGC's zero-padded "NGC0246" is "NGC 246", "C 056" is "C 56".
-String prettyDesignation(String id) => id.replaceFirstMapped(
-    RegExp(r'^(NGC|IC|C)\s?0*(\d+)$'), (m) => '${m[1]} ${m[2]}');
+String prettyDesignation(String id) =>
+    id.replaceFirstMapped(_paddedDesignation, (m) => '${m[1]} ${m[2]}');
+
+// Built once: the plan header and every search row use them on each build.
+final RegExp _paddedDesignation = RegExp(r'^(NGC|IC|C)\s?0*(\d+)$');
+final RegExp _catalogDesignation = RegExp(r'^[A-Za-z]+[ -]?\d');
+
+/// Whether [s] is a catalog designation ("M 31", "NGC0224", "Abell 21",
+/// "Sh2-129"): letters, then a number. A name or a SIMBAD "NAME ..." is not.
+bool isCatalogDesignation(String s) => _catalogDesignation.hasMatch(s);
 
 /// #1720 display form `designation (name)`: "NGC 246 (Skull Nebula)". Just the
 /// designation when there is no other name; just the name when it already
@@ -374,11 +382,16 @@ String designationWithName(String designation, String name) {
   return '$d ($n)';
 }
 
-/// A search suggestion's title: the designation that matched (or the id, when
-/// a nickname did) with the object's name in brackets.
+/// The designation a search suggestion shows: the one that matched, or the id
+/// when a name did. A pick hands it to the plan, so its header names the same.
+String suggestionDesignation(DsoSuggestion s) =>
+    s.label == s.dso.id || isCatalogDesignation(s.label) ? s.label : s.dso.id;
+
+/// A search suggestion's title, `designation (name)`: the name is a nickname
+/// that matched, so the row says why it is listed, else the object's name.
 String suggestionTitle(DsoSuggestion s) {
-  final matchedDesignation = s.label == s.dso.id || RegExp(r'\d').hasMatch(s.label) && s.label != s.dso.name;
-  return designationWithName(matchedDesignation ? s.label : s.dso.id, s.dso.name);
+  final d = suggestionDesignation(s);
+  return designationWithName(d, d == s.label ? s.dso.name : s.label);
 }
 
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
