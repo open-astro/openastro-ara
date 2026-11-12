@@ -171,6 +171,34 @@ class CameraCapabilities {
 /// (`GET /api/v1/equipment/camera` → `CameraDto`). `runtimeState` is the device
 /// activity (idle / exposing / downloading / error), distinct from the
 /// connection [connectionState].
+/// #1663 — the switch port that is the camera's own anti-dew heater: the
+/// switch device's id and the port's id. The level and range stay on the
+/// switch list.
+class DewHeaterRef {
+  final String deviceId;
+  final int portId;
+  const DewHeaterRef({required this.deviceId, required this.portId});
+
+  /// Null when the object is absent or incomplete (a daemon before #1663).
+  static DewHeaterRef? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final id = json['device_id'];
+    final port = json['port_id'];
+    return id is String && id.isNotEmpty && port is num
+        ? DewHeaterRef(deviceId: id, portId: port.toInt())
+        : null;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is DewHeaterRef &&
+      other.deviceId == deviceId &&
+      other.portId == portId;
+
+  @override
+  int get hashCode => Object.hash(deviceId, portId);
+}
+
 class CameraStatus extends EquipmentDeviceStatus {
   final String deviceId;
   @override
@@ -190,6 +218,10 @@ class CameraStatus extends EquipmentDeviceStatus {
   final String? readoutMode;
   // #1185 — the cooler's hot side; null when the driver does not report it.
   final double? heatSinkTemperatureC;
+
+  /// #1663 — the heater the daemon paired with this camera by serial; null
+  /// when none.
+  final DewHeaterRef? dewHeater;
   CameraStatus({
     required this.deviceId,
     required this.name,
@@ -203,6 +235,7 @@ class CameraStatus extends EquipmentDeviceStatus {
     this.coolerSetpointC,
     this.readoutMode,
     this.heatSinkTemperatureC,
+    this.dewHeater,
   });
 
   bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
@@ -228,6 +261,7 @@ class CameraStatus extends EquipmentDeviceStatus {
       coolerSetpointC: (r['cooler_setpoint_c'] as num?)?.toDouble(),
       readoutMode: r['readout_mode'] as String?,
       heatSinkTemperatureC: (r['heat_sink_temperature_c'] as num?)?.toDouble(),
+      dewHeater: DewHeaterRef.fromJson(json['dew_heater']),
     );
   }
 
@@ -246,10 +280,11 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.exposureProgressPct == exposureProgressPct &&
           other.coolerSetpointC == coolerSetpointC &&
           other.heatSinkTemperatureC == heatSinkTemperatureC &&
-          other.readoutMode == readoutMode);
+          other.readoutMode == readoutMode &&
+          other.dewHeater == dewHeater);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
       runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
-      coolerSetpointC, readoutMode, heatSinkTemperatureC);
+      coolerSetpointC, readoutMode, heatSinkTemperatureC, dewHeater);
 }

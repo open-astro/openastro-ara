@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/album/album_art.dart';
 import 'package:openastroara/state/album/album_frame.dart';
 import 'package:openastroara/state/album/album_matching.dart';
 
@@ -181,6 +182,29 @@ void main() {
       expect(nights.map((n) => (n.key, n.lights)), [('2026-03-03', 1), ('2026-03-02', 2)], reason: 'newest first');
     });
 
+    test('Nights follow the site longitude, not the device zone', () {
+      // Sydney Opera House, UTC+10 by the sun (151.2 deg / 15 h): 20:00 and 23:00 local are
+      // 10:00 and 13:00 UTC: one Night, though a UTC device reads 10:00 as the morning before noon.
+      const sydney = 151.215297;
+      final one = albumNights([
+        _frame('evening', captured: DateTime.utc(2026, 3, 2, 10)),
+        _frame('small hours', captured: DateTime.utc(2026, 3, 2, 13)),
+      ], siteLongitudeDeg: sydney);
+      expect(one.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
+      // The next evening is a second Night.
+      final two = albumNights([
+        _frame('a', captured: DateTime.utc(2026, 3, 2, 10)),
+        _frame('b', captured: DateTime.utc(2026, 3, 3, 10)),
+      ], siteLongitudeDeg: sydney);
+      expect(two.map((n) => n.key), ['2026-03-03', '2026-03-02']);
+      // Greenwich: 22:00 and 01:00 UTC straddle midnight but are one Night.
+      final greenwich = albumNights([
+        _frame('a', captured: DateTime.utc(2026, 3, 2, 22)),
+        _frame('b', captured: DateTime.utc(2026, 3, 3, 1)),
+      ], siteLongitudeDeg: -0.0015);
+      expect(greenwich.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
+    });
+
     test('the sub is the most common exposure of the Night, the longer on a tie', () {
       DateTime t(int m) => DateTime(2026, 3, 2, 22, m).toUtc();
       final night = albumNights([
@@ -210,6 +234,45 @@ void main() {
       expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['z', 'x']);
       expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['y']);
     });
+
+    test('the RCW Book holds only RCW-prefixed objects, in catalog-number order, labelled RCW n (#1629)', () {
+      final catalog = [
+        _dso('NGC3372', aliases: ['RCW 53', 'Gum 33']),
+        _dso('RCW 8'),
+        _dso('Sh2-1'),
+        _dso('NGC2359', aliases: ['RCW 5', 'RCW 9']),
+      ];
+      final rcw = bookObjects(catalog, AlbumBook.rcw);
+      expect(rcw.map((d) => d.id), ['NGC2359', 'RCW 8', 'NGC3372']);
+      expect(rcw.map((d) => bookLabel(d, AlbumBook.rcw)), ['RCW 5', 'RCW 8', 'RCW 53']);
+      expect(rcw.map((d) => bookNumberOf(d, AlbumBook.rcw)), [5, 8, 53]);
+    });
+
+    test("a row's RCW number is worked out once, not again on every build of the Album (#1629)", () {
+      // Rows never change, so the scan runs once per row; an alias added afterwards (only a
+      // test can) is not seen.
+      final aliases = ['Gum 22'];
+      final row = _dso('RCW 38', aliases: aliases);
+      expect(rcwNumOf(row), 38);
+      aliases.add('RCW 1');
+      expect(rcwNumOf(row), 38);
+    });
+
+    test('an object in two Books is a Card in each, so the RCW count is the true count (#1629)', () {
+      final catalog = [_dso('NGC3114', c: 90, aliases: ['RCW 40']), _dso('RCW 41'), _dso('NGC1976', m: 42, aliases: ['RCW 9'])];
+      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
+      expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['NGC3114']);
+      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
+    });
+
+    test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {
+      final rcw15 = _dso('RCW 15', aliases: ['Gum 15', 'NGC 2736']);
+      for (final name in ['Gum 15', 'Gum15', 'gum 015', 'NGC 2736', 'RCW 15']) {
+        final stats = aggregateBook([_frame('a', ra: null, target: name)], [rcw15]);
+        expect(stats.keys, ['RCW 15'], reason: name);
+      }
+      expect(aggregateBook([_frame('a', ra: null, target: 'Gum 16')], [rcw15]), isEmpty);
+    });
   });
 
   test('AlbumFrame parses the snake_case wire row', () {
@@ -230,4 +293,21 @@ void main() {
             f.filterName, f.targetName, f.updatedUtc),
         reason: 'the cache file round-trips the row');
   });
+
+  test(
+    'skyPickArt finds the Art by the engine\'s NAME-prefixed common name alone',
+    () {
+      final catalog = [_dso('NGC1976', name: 'Orion Nebula', m: 42)];
+      const art = AlbumArt(asset: 'assets/album/m42.webp');
+      expect(
+        skyPickArt(
+          ['NAME Orion Nebula'],
+          'Selected object',
+          catalog,
+          {'M42': art},
+        ),
+        same(art),
+      );
+    },
+  );
 }

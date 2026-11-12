@@ -123,12 +123,6 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more message} other{{count} more messages}}'**
   String pillsMoreSemantics(int count);
 
-  /// Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 more status} other{{count} more statuses}}'**
-  String statusMoreSemantics(int count);
-
   /// Simple Mode message pills: tooltip of the close button on an error message
   ///
   /// In en, this message translates to:
@@ -236,6 +230,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save the target'**
   String get deviceCouldntSaveTarget;
+
+  /// Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader
+  ///
+  /// In en, this message translates to:
+  /// **'Dew heater'**
+  String get deviceDewHeater;
 
   /// Error message when the camera refused a cooler change
   ///
@@ -422,12 +422,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Slot {position}'**
   String deviceSlot(int position);
-
-  /// Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it
-  ///
-  /// In en, this message translates to:
-  /// **'{filter} (slot {position})'**
-  String deviceFilterInSlot(String filter, int position);
 
   /// Filter wheel window: a filter's segment, its slot number then its name (e.g. 1 · Ha)
   ///
@@ -656,6 +650,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t stop the dome'**
   String get deviceCouldntStopDome;
+
+  /// Dome window: the On / Off row that makes the dome keep its slit in front of the telescope
+  ///
+  /// In en, this message translates to:
+  /// **'Follows the mount'**
+  String get deviceFollowsMount;
+
+  /// Dome window: the moving line while the dome turns to follow the mount
+  ///
+  /// In en, this message translates to:
+  /// **'Following the mount…'**
+  String get deviceFollowingMount;
+
+  /// Message pill: a dial turn, Park or Home turned following the mount off
+  ///
+  /// In en, this message translates to:
+  /// **'The dome no longer follows the mount'**
+  String get deviceStoppedFollowingMount;
+
+  /// Error message when the daemon refused the Follows the mount On / Off
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change whether the dome follows the mount'**
+  String get deviceCouldntFollowMount;
+
+  /// Full UI Dome panel: the section header above the Follow the mount switch and its note
+  ///
+  /// In en, this message translates to:
+  /// **'Following the mount'**
+  String get domePanelFollowingHeader;
+
+  /// Full UI Dome panel: shown while the dome settings load
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get domePanelReadingSettings;
+
+  /// Full UI Dome panel: error lead when the daemon refused a geometry change (the reason follows after a colon)
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the dome'**
+  String get domePanelCouldntSave;
+
+  /// Full UI Dome panel: the note under Following the mount; names what turns the dome and what turns following off
+  ///
+  /// In en, this message translates to:
+  /// **'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.'**
+  String get domePanelFollowNote;
+
+  /// Full UI Dome panel: the switch that makes the dome keep its slit in front of the telescope
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the mount'**
+  String get domePanelFollowMount;
+
+  /// Full UI Dome panel: hint under Follow the mount when the connected dome cannot turn to an azimuth
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a dome that can turn to an azimuth first'**
+  String get domePanelFollowNeedsAzimuth;
+
+  /// Full UI Dome panel: the section header above the dome and mount measurements
+  ///
+  /// In en, this message translates to:
+  /// **'Geometry'**
+  String get domePanelGeometryHeader;
+
+  /// Full UI Dome panel: the mount type picker in the dome geometry
+  ///
+  /// In en, this message translates to:
+  /// **'Mount type'**
+  String get domePanelMountType;
+
+  /// Full UI Dome panel: mount type choice; a German equatorial mount adds its axis offsets to the slit math
+  ///
+  /// In en, this message translates to:
+  /// **'German equatorial'**
+  String get domePanelMountGermanEquatorial;
+
+  /// Full UI Dome panel: mount type choice for a fork or alt-az mount on an equatorial wedge
+  ///
+  /// In en, this message translates to:
+  /// **'Fork or alt-az (on a wedge)'**
+  String get domePanelMountForkOnWedge;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Dome radius (mm)'**
+  String get domePanelDomeRadius;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is south
+  ///
+  /// In en, this message translates to:
+  /// **'Scope north of dome center (mm)'**
+  String get domePanelScopeNorth;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is west
+  ///
+  /// In en, this message translates to:
+  /// **'Scope east of dome center (mm)'**
+  String get domePanelScopeEast;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is below
+  ///
+  /// In en, this message translates to:
+  /// **'Scope above dome center (mm)'**
+  String get domePanelScopeAbove;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Mount axis length (mm)'**
+  String get domePanelMountAxisLength;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Mount lateral offset (mm)'**
+  String get domePanelMountLateralOffset;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Dec axis horizontal offset (mm)'**
+  String get domePanelDecAxisOffset;
+
+  /// Full UI Dome panel: how far the slit may fall behind before the dome turns again, in degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Azimuth tolerance (°)'**
+  String get domePanelAzimuthTolerance;
+
+  /// Full UI Dome panel: switch; the dome starts turning while the mount is still slewing
+  ///
+  /// In en, this message translates to:
+  /// **'Turn during mount slews'**
+  String get domePanelTurnDuringSlews;
+
+  /// Full UI Dome panel: hint under Turn during mount slews
+  ///
+  /// In en, this message translates to:
+  /// **'Off: the dome turns when the mount has finished slewing'**
+  String get domePanelTurnDuringSlewsHint;
+
+  /// Full UI Dome panel: the moving line while the dome turns on its own (not following the mount)
+  ///
+  /// In en, this message translates to:
+  /// **'Slewing…'**
+  String get domePanelSlewing;
 
   /// Dome window: the daemon couldn't read the dome
   ///
@@ -2244,8 +2388,14 @@ abstract class AppLocalizations {
   /// Simple Mode left rail button: show the sky (planetarium)
   ///
   /// In en, this message translates to:
-  /// **'Sky'**
+  /// **'Sky Map'**
   String get shellSky;
+
+  /// Simple Mode left rail button: open the Stats page
+  ///
+  /// In en, this message translates to:
+  /// **'Stats'**
+  String get shellStats;
 
   /// Simple Mode left rail button: show the info strips
   ///
@@ -4857,6 +5007,12 @@ abstract class AppLocalizations {
   /// **'Caldwell'**
   String get albumBookCaldwell;
 
+  /// Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language
+  ///
+  /// In en, this message translates to:
+  /// **'RCW'**
+  String get albumBookRcw;
+
   /// Deep-sky object type on a Sky Album card back's bio line
   ///
   /// In en, this message translates to:
@@ -5048,6 +5204,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Art (cropped): {credit}'**
   String albumArtCredit(String credit);
+
+  /// Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the license page'**
+  String get albumArtCreditOpenFailed;
 
   /// Simple Mode left rail: opens the Sky Album
   ///
@@ -6566,6 +6728,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Camera settings'**
   String get pointingOpenCamera;
+
+  /// Mount window Check failure: the main camera is busy with an exposure; no settings fix it, so no button
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is taking another frame. Check again once it finishes.'**
+  String get pointingCameraBusy;
 
   /// Mount window: asked when Home is tapped while a plan runs
   ///
@@ -8288,6 +8456,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Framing for a {across}x{down} mosaic'**
   String tonightSkyMosaicFraming(int across, int down);
+
+  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  ///
+  /// In en, this message translates to:
+  /// **'Rig setup'**
+  String get rigSetupTitle;
+
+  /// Simple Mode: one line under the Rig setup title
+  ///
+  /// In en, this message translates to:
+  /// **'Before a first night, Ara needs a few facts about this rig.'**
+  String get rigSetupIntro;
+
+  /// Rig setup line: where the rig stands
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get rigSetupSite;
+
+  /// Rig setup line: what is missing for the site
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude and longitude are not set.'**
+  String get rigSetupSiteMissing;
+
+  /// Rig setup: button that opens the place where latitude and longitude are set
+  ///
+  /// In en, this message translates to:
+  /// **'Set site'**
+  String get rigSetupSiteAction;
+
+  /// Rig setup line: the sensor and the focal length
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera and telescope'**
+  String get rigSetupOptics;
+
+  /// Rig setup line: what is missing for the main camera and telescope
+  ///
+  /// In en, this message translates to:
+  /// **'The sensor or the focal length is not set.'**
+  String get rigSetupOpticsMissing;
+
+  /// Rig setup: button that opens the optics panel
+  ///
+  /// In en, this message translates to:
+  /// **'Set up optics'**
+  String get rigSetupOpticsAction;
+
+  /// Rig setup line: the guide focal length and the Guide Camera's pixel size
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope'**
+  String get rigSetupGuideScope;
+
+  /// Rig setup line: what is missing for the guide scope
+  ///
+  /// In en, this message translates to:
+  /// **'The guide focal length or the Guide Camera\'s pixel size is not set.'**
+  String get rigSetupGuideScopeMissing;
+
+  /// Rig setup: button that opens the guide focal length and pixel size
+  ///
+  /// In en, this message translates to:
+  /// **'Set guide scope'**
+  String get rigSetupGuideScopeAction;
+
+  /// Rig setup line: the Guider's calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Guider calibration'**
+  String get rigSetupCalibration;
+
+  /// Rig setup line: what is missing for the Guider calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Not calibrated yet, or Ara says to calibrate again.'**
+  String get rigSetupCalibrationMissing;
+
+  /// Rig setup line: the Guider is not connected, so its calibration cannot be checked
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the Guider to check its calibration.'**
+  String get rigSetupCalibrationConnect;
+
+  /// Rig setup: button that closes the sheet and shows Guider mode
+  ///
+  /// In en, this message translates to:
+  /// **'Open Guider mode'**
+  String get rigSetupCalibrationAction;
+
+  /// Rig setup: what a screen reader says for a line with a tick
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get rigSetupItemDone;
+
+  /// Rig setup: closes the sheet and keeps it closed for this rig on this device
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get rigSetupNotNow;
+
+  /// Simple Mode result pill when the last Rig setup item is done
+  ///
+  /// In en, this message translates to:
+  /// **'Rig set up'**
+  String get rigSetupDonePill;
 }
 
 class _AppLocalizationsDelegate

@@ -87,7 +87,14 @@ public sealed record CameraDto(
     string Name,
     EquipmentConnectionState State,
     CameraCapabilitiesDto? Capabilities,
-    CameraStateDto Runtime);
+    CameraStateDto Runtime,
+    // #1663 — the switch port that is THIS camera's own anti-dew heater (paired by serial, see
+    // DewHeaterPairing), or null: none, not connected, or not known. Additive; older clients ignore it.
+    DewHeaterDto? DewHeater = null);
+
+/// <summary>#1663 — a camera's heater: the switch's Alpaca UniqueId and the port's id. The level, range and
+/// write permission come from the switch list; writes use the switch set-value path.</summary>
+public sealed record DewHeaterDto(string DeviceId, int PortId);
 
 public sealed record CameraCapabilitiesDto(
     int SensorWidth, int SensorHeight,
@@ -398,7 +405,10 @@ public sealed record DomeCapabilitiesDto(
     // §25.5.5 — optional ctor default so pre-slice serialized shapes still deserialize.
     bool CanSetPark = false);
 
-public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked);
+// #1689 — Following: the dome is turning to keep the slit in front of the mount.
+public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked, bool Following = false);
+
+public sealed record DomeFollowRequestDto(bool Enabled);
 
 public sealed record DomeSlewRequestDto(double TargetAzimuthDeg);
 
@@ -798,6 +808,25 @@ public sealed record AlpacaDeviceNamesResponseDto(
     // #1308 — "type/number" → the server's UniqueID, so a picker can pin the guide camera by identity;
     // entries the server reports no UniqueID for are left out. Additive; older clients ignore it.
     IReadOnlyDictionary<string, string>? UniqueIds = null);
+
+/// <summary>#1580 — AlpacaBridge's device catalog as the wizard shows it: the drivers that are built in
+/// (<c>available</c> true), grouped by device type. Each driver (and so each field schema) is AlpacaBridge's own
+/// JSON, passed through unchanged (its keys are AlpacaBridge's camelCase, not Ara's snake_case). Empty when the
+/// server is not an AlpacaBridge with a catalog, or does not answer: the client then offers no Add.</summary>
+public sealed record AlpacaBridgeCatalogResponseDto(IReadOnlyList<AlpacaBridgeDeviceTypeDto> DeviceTypes);
+
+/// <summary>#1580 — the drivers of one device type (lowercase token, e.g. <c>camera</c>).</summary>
+public sealed record AlpacaBridgeDeviceTypeDto(string DeviceType, IReadOnlyList<System.Text.Json.JsonElement> Drivers);
+
+/// <summary>#1580 — the cameras plugged in for one vendor; empty for a vendor with no lister.</summary>
+public sealed record AlpacaBridgeCamerasResponseDto(IReadOnlyList<AlpacaBridgeCameraDto> Cameras);
+
+/// <summary>#1580 — one attached camera: AlpacaBridge's enumeration index, model name and serial.</summary>
+public sealed record AlpacaBridgeCameraDto(int Index, string Name, string Serial);
+
+/// <summary>#1580 — a device was added. <c>Message</c> is AlpacaBridge's own text; <c>Warning</c> is its warning
+/// when it registered the device with one, else null.</summary>
+public sealed record AlpacaBridgeAddDeviceResponseDto(string Message, string? Warning);
 
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for

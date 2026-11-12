@@ -312,7 +312,7 @@ flutter build linux --release   # ships from build/linux/x64/release/bundle/
 
 ### macOS
 
-Full Xcode (not just Command Line Tools) + CocoaPods (`brew install cocoapods`).
+Full Xcode (not just Command Line Tools). CocoaPods is not needed: the client's native plugins come through Swift Package Manager.
 First-time Xcode setup needs both:
 
 ```bash

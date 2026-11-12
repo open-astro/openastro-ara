@@ -43,6 +43,7 @@ void main() {
     expect(catalogFamily('NGC7000'), 'openngc');
     expect(catalogFamily('IC0434'), 'openngc');
     expect(catalogFamily('Sh2-117'), 'sharpless');
+    expect(catalogFamily('RCW 38'), 'rcw');
     expect(catalogFamily('B33'), 'barnard');
     expect(catalogFamily('LDN 1235'), 'ldn');
     expect(catalogFamily('vdB 28'), 'vdb');
@@ -157,6 +158,18 @@ void main() {
       'WR 2',
     ]);
     expect(merged.first.aliases, ['vdB 21']);
+  });
+
+  test('a folded row\'s common name shows on a survivor that has none, never over one it has (#1629)', () {
+    final merged = mergeDuplicates([
+      _row('NGC6334', ra: 260.0, dec: -35.9),
+      _row('RCW 127', name: "Cat's Paw Nebula", ra: 260.1, dec: -35.8, aliases: ['NGC 6334']),
+      _row('NGC7000', name: 'North America Nebula', ra: 314.7, dec: 44.5),
+      _row('Sh2-117', name: 'Sh2 name', ra: 314.8, dec: 44.6, aliases: ['NGC 7000']),
+    ]);
+    expect(merged.map((d) => d.id), ['NGC6334', 'NGC7000']);
+    expect(merged[0].name, "Cat's Paw Nebula");
+    expect(merged[1].name, 'North America Nebula');
   });
 
   test('the row with photometry wins, then the NGC/IC designation', () {

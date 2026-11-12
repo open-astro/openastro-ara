@@ -34,17 +34,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count more statuses',
-      one: '1 more status',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -97,6 +86,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
+
+  @override
+  String get deviceDewHeater => 'Dew heater';
 
   @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
@@ -194,11 +186,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String deviceSlot(int position) {
     return 'Slot $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
   }
 
   @override
@@ -337,6 +324,86 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
+
+  @override
+  String get deviceFollowsMount => 'Follows the mount';
+
+  @override
+  String get deviceFollowingMount => 'Following the mount…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'The dome no longer follows the mount';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Couldn\'t change whether the dome follows the mount';
+
+  @override
+  String get domePanelFollowingHeader => 'Following the mount';
+
+  @override
+  String get domePanelReadingSettings => 'Reading…';
+
+  @override
+  String get domePanelCouldntSave => 'Couldn\'t save the dome';
+
+  @override
+  String get domePanelFollowNote =>
+      'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.';
+
+  @override
+  String get domePanelFollowMount => 'Follow the mount';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Connect a dome that can turn to an azimuth first';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometry';
+
+  @override
+  String get domePanelMountType => 'Mount type';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'German equatorial';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Fork or alt-az (on a wedge)';
+
+  @override
+  String get domePanelDomeRadius => 'Dome radius (mm)';
+
+  @override
+  String get domePanelScopeNorth => 'Scope north of dome center (mm)';
+
+  @override
+  String get domePanelScopeEast => 'Scope east of dome center (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Scope above dome center (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Mount axis length (mm)';
+
+  @override
+  String get domePanelMountLateralOffset => 'Mount lateral offset (mm)';
+
+  @override
+  String get domePanelDecAxisOffset => 'Dec axis horizontal offset (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Azimuth tolerance (°)';
+
+  @override
+  String get domePanelTurnDuringSlews => 'Turn during mount slews';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Off: the dome turns when the mount has finished slewing';
+
+  @override
+  String get domePanelSlewing => 'Slewing…';
 
   @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
@@ -1263,7 +1330,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSettings => 'Settings';
 
   @override
-  String get shellSky => 'Sky';
+  String get shellSky => 'Sky Map';
+
+  @override
+  String get shellStats => 'Stats';
 
   @override
   String get shellInfo => 'Info';
@@ -2815,6 +2885,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumBookRcw => 'RCW';
+
+  @override
   String get dsoTypeGalaxy => 'Galaxy';
 
   @override
@@ -2935,6 +3008,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String albumArtCredit(String credit) {
     return 'Art (cropped): $credit';
   }
+
+  @override
+  String get albumArtCreditOpenFailed => 'Couldn\'t open the license page';
 
   @override
   String get shellAlbum => 'Sky Album';
@@ -3863,6 +3939,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get pointingCameraBusy =>
+      'The camera is taking another frame. Check again once it finishes.';
 
   @override
   String get devicePlanRunningHomeAnyway =>
@@ -4915,6 +4995,65 @@ class AppLocalizationsPt extends AppLocalizations {
   String tonightSkyMosaicFraming(int across, int down) {
     return 'Framing for a ${across}x$down mosaic';
   }
+
+  @override
+  String get rigSetupTitle => 'Rig setup';
+
+  @override
+  String get rigSetupIntro =>
+      'Before a first night, Ara needs a few facts about this rig.';
+
+  @override
+  String get rigSetupSite => 'Site';
+
+  @override
+  String get rigSetupSiteMissing => 'Latitude and longitude are not set.';
+
+  @override
+  String get rigSetupSiteAction => 'Set site';
+
+  @override
+  String get rigSetupOptics => 'Main camera and telescope';
+
+  @override
+  String get rigSetupOpticsMissing =>
+      'The sensor or the focal length is not set.';
+
+  @override
+  String get rigSetupOpticsAction => 'Set up optics';
+
+  @override
+  String get rigSetupGuideScope => 'Guide scope';
+
+  @override
+  String get rigSetupGuideScopeMissing =>
+      'The guide focal length or the Guide Camera\'s pixel size is not set.';
+
+  @override
+  String get rigSetupGuideScopeAction => 'Set guide scope';
+
+  @override
+  String get rigSetupCalibration => 'Guider calibration';
+
+  @override
+  String get rigSetupCalibrationMissing =>
+      'Not calibrated yet, or Ara says to calibrate again.';
+
+  @override
+  String get rigSetupCalibrationConnect =>
+      'Connect the Guider to check its calibration.';
+
+  @override
+  String get rigSetupCalibrationAction => 'Open Guider mode';
+
+  @override
+  String get rigSetupItemDone => 'Done';
+
+  @override
+  String get rigSetupNotNow => 'Not now';
+
+  @override
+  String get rigSetupDonePill => 'Rig set up';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -4941,17 +5080,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       locale: localeName,
       other: 'Mais $count mensagens',
       one: 'Mais 1 mensagem',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Mais $count status',
-      one: 'Mais 1 status',
     );
     return '$_temp0';
   }
@@ -5009,6 +5137,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntSaveTarget => 'Não foi possível salvar o alvo';
+
+  @override
+  String get deviceDewHeater => 'Aquecedor anti-orvalho';
 
   @override
   String get deviceCouldntChangeCooler =>
@@ -5108,11 +5239,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceSlot(int position) {
     return 'Posição $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (posição $position)';
   }
 
   @override
@@ -5252,6 +5378,91 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntStopDome => 'Não foi possível parar a cúpula';
+
+  @override
+  String get deviceFollowsMount => 'Segue a montagem';
+
+  @override
+  String get deviceFollowingMount => 'Seguindo a montagem…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'A cúpula deixou de seguir a montagem';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Não foi possível alterar se a cúpula segue a montagem';
+
+  @override
+  String get domePanelFollowingHeader => 'Seguindo a montagem';
+
+  @override
+  String get domePanelReadingSettings => 'Lendo…';
+
+  @override
+  String get domePanelCouldntSave =>
+      'Não foi possível salvar os ajustes da cúpula';
+
+  @override
+  String get domePanelFollowNote =>
+      'Com isto ligado, o Ara gira a cúpula para manter a janela na frente do telescópio: depois de um movimento da montagem, depois de uma virada de meridiano e, durante o rastreamento, sempre que a janela ficar para trás mais do que a tolerância. Girar a cúpula manualmente, estacioná-la, mandá-la para o Início, pará-la ou desconectá-la desliga isto, assim como uma parada de emergência, uma reação a clima inseguro e uma geometria que coloque o telescópio fora da cúpula. A cúpula precisa conseguir girar até um azimute.';
+
+  @override
+  String get domePanelFollowMount => 'Seguir a montagem';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Conecte primeiro uma cúpula que consiga girar até um azimute';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometria';
+
+  @override
+  String get domePanelMountType => 'Tipo de montagem';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'Equatorial alemã';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Garfo ou alt-az (numa cunha)';
+
+  @override
+  String get domePanelDomeRadius => 'Raio da cúpula (mm)';
+
+  @override
+  String get domePanelScopeNorth =>
+      'Telescópio ao norte do centro da cúpula (mm)';
+
+  @override
+  String get domePanelScopeEast =>
+      'Telescópio a leste do centro da cúpula (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Telescópio acima do centro da cúpula (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Comprimento do eixo da montagem (mm)';
+
+  @override
+  String get domePanelMountLateralOffset =>
+      'Deslocamento lateral da montagem (mm)';
+
+  @override
+  String get domePanelDecAxisOffset =>
+      'Deslocamento horizontal do eixo de declinação (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Tolerância de azimute (°)';
+
+  @override
+  String get domePanelTurnDuringSlews => 'Girar enquanto a montagem se move';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Desligado: a cúpula gira quando a montagem termina de se mover';
+
+  @override
+  String get domePanelSlewing => 'Girando…';
 
   @override
   String get deviceDomeReadFailed =>
@@ -6191,7 +6402,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSettings => 'Ajustes';
 
   @override
-  String get shellSky => 'Céu';
+  String get shellSky => 'Mapa do céu';
+
+  @override
+  String get shellStats => 'Números';
 
   @override
   String get shellInfo => 'Info';
@@ -7752,6 +7966,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumBookRcw => 'RCW';
+
+  @override
   String get dsoTypeGalaxy => 'Galáxia';
 
   @override
@@ -7872,6 +8089,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumArtCredit(String credit) {
     return 'Arte (recortada): $credit';
   }
+
+  @override
+  String get albumArtCreditOpenFailed =>
+      'Não foi possível abrir a página da licença';
 
   @override
   String get shellAlbum => 'Álbum do Céu';
@@ -8805,6 +9026,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get pointingOpenCamera => 'Configurações da câmera';
+
+  @override
+  String get pointingCameraBusy =>
+      'A câmera está fazendo outra captura. Verifique de novo quando terminar.';
 
   @override
   String get devicePlanRunningHomeAnyway =>
@@ -9860,4 +10085,63 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String tonightSkyMosaicFraming(int across, int down) {
     return 'Enquadramento para um mosaico ${across}x$down';
   }
+
+  @override
+  String get rigSetupTitle => 'Configuração do setup';
+
+  @override
+  String get rigSetupIntro =>
+      'Antes da primeira noite, o Ara precisa de alguns dados deste setup.';
+
+  @override
+  String get rigSetupSite => 'Local';
+
+  @override
+  String get rigSetupSiteMissing => 'Latitude e longitude não definidas.';
+
+  @override
+  String get rigSetupSiteAction => 'Definir local';
+
+  @override
+  String get rigSetupOptics => 'Câmera principal e telescópio';
+
+  @override
+  String get rigSetupOpticsMissing =>
+      'O sensor ou a distância focal não está definido.';
+
+  @override
+  String get rigSetupOpticsAction => 'Configurar ótica';
+
+  @override
+  String get rigSetupGuideScope => 'Luneta de guiagem';
+
+  @override
+  String get rigSetupGuideScopeMissing =>
+      'A distância focal da guiagem ou o tamanho do pixel da câmera de guiagem não está definido.';
+
+  @override
+  String get rigSetupGuideScopeAction => 'Definir luneta de guiagem';
+
+  @override
+  String get rigSetupCalibration => 'Calibração do guiador';
+
+  @override
+  String get rigSetupCalibrationMissing =>
+      'Ainda não calibrado, ou o Ara pede para calibrar de novo.';
+
+  @override
+  String get rigSetupCalibrationConnect =>
+      'Conecte o guiador para verificar a calibração.';
+
+  @override
+  String get rigSetupCalibrationAction => 'Abrir modo Guiagem';
+
+  @override
+  String get rigSetupItemDone => 'Pronto';
+
+  @override
+  String get rigSetupNotNow => 'Agora não';
+
+  @override
+  String get rigSetupDonePill => 'Setup configurado';
 }

@@ -27,7 +27,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Server.Services.Equipment;
 
 /// <summary>
-/// §38k-21 — headless no-op stub for <see cref="IDomeFollower"/>. Same pattern
+/// §38k-21 — headless no-op stub (the daemon registers the real <c>DomeFollower</c> since #1689; this stub is the sequencer factory's default) for <see cref="IDomeFollower"/>. Same pattern
 /// as the §38k-9 … §38k-20 mediator stubs, for the one non-mediator dependency
 /// the <c>SynchronizeDome</c> instruction needs. Reports "not synchronized /
 /// not following" and no-ops the start/stop/sync operations.
@@ -36,7 +36,7 @@ namespace OpenAstroAra.Server.Services.Equipment;
 /// <see cref="NotSupportedException"/> — there is no honest headless sentinel
 /// for a computed dome azimuth (same reasoning as the camera stub's exposure
 /// members). No registered prototype executes, so this is never reached; the
-/// real dome-following math lands with real dome support.
+/// the real follower is <c>DomeFollower</c>.
 /// </summary>
 public sealed class HeadlessDomeFollower : IDomeFollower {
 
@@ -50,7 +50,7 @@ public sealed class HeadlessDomeFollower : IDomeFollower {
 
     public TopocentricCoordinates GetSynchronizedDomeCoordinates(TelescopeInfo telescopeInfo) =>
         throw new NotSupportedException(
-            "Headless dome-follower stub does not compute dome coordinates; real dome-following lands with real dome support.");
+            "Headless dome-follower stub does not compute dome coordinates; the real follower is DomeFollower.");
 
     public bool IsDomeWithinTolerance(Angle currentDomeAzimuth, TopocentricCoordinates targetDomeCoordinates) => false;
 

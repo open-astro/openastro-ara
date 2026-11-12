@@ -9,6 +9,7 @@ import 'package:openastroara/state/album/album_frame.dart';
 import 'package:openastroara/state/album/album_matching.dart';
 import 'package:openastroara/state/album/album_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
+import 'package:openastroara/state/sky_atlas/site_location_state.dart';
 
 /// Sky Album slice 8 (#1595, ADR 0001): the device's collection cache fetches
 /// each rig with its own `since`, merges by frame id, never removes a row, and
@@ -115,6 +116,26 @@ void main() {
     expect(view.objects.map((d) => d.id), ['NGC1', 'NGC2']);
     expect(view.collected, 2, reason: 'one frame on top of both objects credits each');
     expect(view.stats['NGC1']!.tier, AlbumTier.bronze);
+  });
+
+  test('the Book dates Nights by the site longitude read from the profile', () async {
+    // Sydney Opera House: 10:00 and 13:00 UTC are 20:00 and 23:00 by the sun, one Night.
+    AlbumFrame at(String id, int hour) => AlbumFrame(
+        frameId: id, raDeg: 10, decDeg: 20, width: 100, height: 100, pixelScaleArcsec: 1, exposureSeconds: 60,
+        capturedUtc: DateTime.utc(2026, 3, 2, hour));
+    final c = container(
+        (baseUrl, {since}) async => AlbumFramesPage(totalLights: 2, frames: [at('a', 10), at('b', 13)]),
+        more: [
+          bundledCatalogProvider.overrideWith((ref) async => [
+                PlanningDso(id: 'NGC1', name: 'NGC1', type: 'G', magnitude: 5, raDeg: 10, decDeg: 20, messierNum: 1),
+              ]),
+          siteLocationProvider.overrideWith((ref) async => const SiteLocation(latitudeDeg: -33.856784, longitudeDeg: 151.215297, elevationM: 42)),
+        ]);
+    c.listen(siteLocationProvider, (_, _) {});
+    await c.read(siteLocationProvider.future);
+    await c.read(albumFramesProvider.notifier).refresh('http://rig:1888');
+    final view = await c.read(albumBookProvider(AlbumBook.messier).future);
+    expect(view.stats['NGC1']!.nights.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
   });
 
   test('the fetch reads the daemon\'s snake_case reply and sends since as UTC', () async {

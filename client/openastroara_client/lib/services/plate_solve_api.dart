@@ -69,11 +69,17 @@ class PlateSolveApi {
                 (code == 409
                     ? 'The camera cannot take the verification image right now (not connected, or busy with an exposure).'
                     : 'The plate solver is not configured (check focal length, pixel size, and the ASTAP path in settings).'),
-            statusCode: code);
+            statusCode: code,
+            reason: _problemReason(e.response?.data));
       }
       rethrow;
     }
   }
+
+  static String? _problemReason(Object? body) =>
+      body is Map<String, dynamic> && body['reason'] is String
+      ? body['reason'] as String
+      : null;
 
   static String? _problemDetail(Object? body) {
     if (body is Map<String, dynamic>) {
@@ -92,7 +98,11 @@ class PlateSolveException implements Exception {
   /// The rig's HTTP status when it refused (409: no camera to look with,
   /// 422: solver or optics not set up); null otherwise.
   final int? statusCode;
-  const PlateSolveException(this.message, {this.statusCode});
+
+  /// The daemon's stable cause on a 409 of Verify Position: `no-camera`,
+  /// `camera-busy` or `gate-stuck`; null from a daemon that doesn't say.
+  final String? reason;
+  const PlateSolveException(this.message, {this.statusCode, this.reason});
 
   @override
   String toString() => message;
