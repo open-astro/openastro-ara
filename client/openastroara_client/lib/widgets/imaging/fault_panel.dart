@@ -165,6 +165,8 @@ class FaultHistoryTile extends StatelessWidget {
         : row.actionTaken ?? 'unresolved';
     return ListTile(
       dense: true,
+      // The 8 px dot needs no 40 px leading slot; the title gets the room.
+      minLeadingWidth: 8,
       leading: Container(
         width: 8,
         height: 8,
@@ -173,8 +175,9 @@ class FaultHistoryTile extends StatelessWidget {
       title: Text(
         '$device — ${row.faultType.replaceAll('_', ' ')}'
         '${row.details == null ? '' : ' (${row.details})'}',
-        // Two lines: the narrow iOS alert cut the fault type off at one.
-        maxLines: 2,
+        // Three lines: in the narrow iOS alert a camera name plus the fault
+        // type needs three, and the fault type must not be cut off.
+        maxLines: 3,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
       ),
