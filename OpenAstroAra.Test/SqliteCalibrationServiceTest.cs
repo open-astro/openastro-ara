@@ -93,6 +93,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_session_is_marked_manual_capture_only_when_every_light_is_a_manual_capture() {
+            var run = Guid.Parse("33333333-3333-3333-3333-333333333342");
+            var mixed = Guid.Parse("33333333-3333-3333-3333-333333333343");
+            await InsertSessionAsync(run);
+            await InsertSessionAsync(mixed);
+            await InsertFrameAsync(Session, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(Session, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(run, "light", "Ha", 300, 100, "M42");
+            await InsertFrameAsync(mixed, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(mixed, "light", "Ha", 300, 100, "M42");
+
+            var listed = (await _svc.ListSessionsAsync(10, null, CancellationToken.None)).Items.ToDictionary(s => s.Id, s => s.ManualCapture);
+            Assert.That(listed[Session], Is.True, "only manual-capture lights");
+            Assert.That(listed[run], Is.False, "a run session");
+            Assert.That(listed[mixed], Is.False, "mixed");
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.ManualCapture, Is.True);
+            Assert.That((await _svc.GetSessionAsync(mixed, CancellationToken.None))!.ManualCapture, Is.False);
+        }
+
+        [Test]
         public async Task ListSessions_paginates_over_the_cursor() {
             var s2 = Guid.Parse("33333333-3333-3333-3333-333333333332");
             var s3 = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -355,6 +375,51 @@ namespace OpenAstroAra.Test {
             page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
             Assert.That(page.Items.Single(i => i.Id == Session).MatchingBiasAvailable, Is.True,
                 "the batched list agrees with the single-session read");
+        }
+
+        // #1757 — darks, bias and flats belong to the camera that took them.
+        private async Task SeedCalibrationFramesAsync(string? camera) {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(FlatsSession, "dark", null, 300, 100, "DARK", offset: 50, camera: camera);
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "BIAS", offset: 50, camera: camera);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "FLAT", offset: 50, camera: camera);
+        }
+
+        [Test]
+        public async Task Coverage_ignores_another_cameras_darks_bias_and_flats() {
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", offset: 50, camera: "A");
+            await SeedCalibrationFramesAsync("B");
+
+            var session = (await _svc.GetSessionAsync(Session, CancellationToken.None))!;
+            var listed = (await _svc.ListSessionsAsync(10, null, CancellationToken.None)).Items.Single(s => s.Id == Session);
+            var plan = await _svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, IncludeBias: true, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+
+            Assert.That(session.Camera, Is.EqualTo("A"), "the lights' camera");
+            Assert.That((session.MatchingDarksAvailable, session.MatchingBiasAvailable, session.MatchingFlatsAvailable),
+                Is.EqualTo((false, false, false)), "camera B's frames don't calibrate camera A's lights");
+            Assert.That((listed.Camera, listed.MatchingDarksAvailable, listed.MatchingBiasAvailable, listed.MatchingFlatsAvailable),
+                Is.EqualTo(("A", false, false, false)), "the batched list agrees");
+            Assert.That((plan.TotalDarkFrames > 0, plan.TotalBiasFrames > 0, plan.Steps.Count), Is.EqualTo((true, true, 1)),
+                "the generator shoots them again for camera A");
+        }
+
+        [Test]
+        public async Task Legacy_camera_less_frames_count_for_any_camera() {
+            var legacyLights = Guid.Parse("33333333-3333-3333-3333-333333333351");
+            await InsertSessionAsync(legacyLights);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", offset: 50, camera: "A");
+            await InsertFrameAsync(legacyLights, "light", "Ha", 120, 100, "M42", offset: 50, camera: null);
+            await SeedCalibrationFramesAsync(null);
+
+            var session = (await _svc.GetSessionAsync(Session, CancellationToken.None))!;
+            Assert.That((session.MatchingDarksAvailable, session.MatchingBiasAvailable, session.MatchingFlatsAvailable),
+                Is.EqualTo((true, true, true)), "legacy darks, bias and flats count for camera A");
+
+            await InsertFrameAsync(FlatsSession, "dark", null, 120, 100, "DARK", offset: 50, camera: "B"); // only camera B shot 120 s darks
+            var legacy = (await _svc.ListSessionsAsync(10, null, CancellationToken.None)).Items.Single(s => s.Id == legacyLights);
+            Assert.That((legacy.Camera, legacy.MatchingDarksAvailable), Is.EqualTo(((string?)null, true)), "legacy lights match any camera too");
         }
 
         [Test]
@@ -1179,16 +1244,17 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null, double? rotatorDeg = null, double? coolerSetpointC = null, int? bin = null) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null, double? rotatorDeg = null, double? coolerSetpointC = null, int? bin = null, string? camera = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, "offset", focuser_position, temperature_c, captured_utc, file_path,
-                    file_size_bytes, width, height, bit_depth, rotator_mechanical_deg, cooler_setpoint_c, bin)
+                    file_size_bytes, width, height, bit_depth, rotator_mechanical_deg, cooler_setpoint_c, bin, camera_name)
                 VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $offset, $focus, $temp, $utc,
-                    $path, 1000, 16, 16, 16, $rot, $setpoint, $bin);
+                    $path, 1000, 16, 16, 16, $rot, $setpoint, $bin, $camera);
                 """;
+            cmd.Parameters.AddWithValue("$camera", (object?)camera ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$bin", bin is null ? DBNull.Value : bin.Value);
             cmd.Parameters.AddWithValue("$rot", rotatorDeg is null ? DBNull.Value : rotatorDeg.Value);
             cmd.Parameters.AddWithValue("$setpoint", coolerSetpointC is null ? DBNull.Value : coolerSetpointC.Value);

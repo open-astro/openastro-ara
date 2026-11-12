@@ -17,7 +17,7 @@ import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf, conditionsOf;
-import 'package:openastroara/models/sequence/instruction_catalog.dart' show parkScopeType, waitForTimeType;
+import 'package:openastroara/models/sequence/instruction_catalog.dart' show parkScopeType, waitForTimeType, flatPanelFlatsType, waitForUserType, switchFilterType;
 import 'package:openastroara/models/sequence/condition_catalog.dart' show timeConditionType, timeProviders;
 import 'package:openastroara/util/tonight_sky_local.dart' show darkStart, nightEnd;
 import 'package:openastroara/models/sky_model_calibration.dart';
@@ -53,8 +53,6 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
-import 'package:openastroara/state/simple_flats_choice_state.dart';
-import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -318,6 +316,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
 }
 
 final _en = lookupAppLocalizations(const Locale('en'));
+
 
 
 /// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
@@ -659,6 +658,56 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // The queue's root children's names, in order.
+  List<String?> blocks(_Seq seq) =>
+      [for (final c in childrenOf(seq.bodies.values.first)) c['Name'] as String?];
+
+  testWidgets("#1757 a target set to After target shoots its filters' flats right after its frames, asking for a screen with no panel", (tester) async {
+    final (c, seq) = await run(tester);
+    expect(c.read(simpleRunFlatsProvider), SimpleTargetFlats.none, reason: 'no flats unless asked');
+    await tester.ensureVisible(find.byKey(const Key('simple-run-flats-after')));
+    await tester.tap(find.byKey(const Key('simple-run-flats-after')));
+    await tester.pumpAndSettle();
+    await create(tester);
+
+    final target = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == 'M31');
+    final kids = childrenOf(target);
+    final types = [for (final k in kids) k[r'$type']];
+    final lastLight = kids.lastIndexWhere((k) => '${k['Name']}'.endsWith(' Imaging'));
+    final flats = [for (var i = 0; i < types.length; i++) if (types[i] == flatPanelFlatsType) i];
+    expect(flats, hasLength(c.read(simpleRunPlanProvider).length), reason: 'one set per filter');
+    expect(flats.first, greaterThan(lastLight), reason: 'after its last frame, at its rotator angle');
+    expect(types.indexOf(waitForUserType), greaterThan(lastLight), reason: 'no panel: a screen is asked for first');
+    expect(c.read(simpleRunProvider).targets.single.flats, SimpleTargetFlats.afterTarget);
+  });
+
+  testWidgets('#1757 End of night: one Flats block after the targets, for every filter set to it', (tester) async {
+    final (c, seq) = await run(tester);
+    c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+    await create(tester);
+    expect(blocks(seq), containsAllInOrder(['M31', kEndFlatsBlockName]));
+
+    c.read(planetariumSelectionProvider.notifier).set(_m42);
+    c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20)]);
+    await tester.pump();
+    await create(tester);
+
+    expect(blocks(seq).where((n) => n == kEndFlatsBlockName), hasLength(1), reason: 'rebuilt, not doubled');
+    expect(blocks(seq).indexOf('M42'), lessThan(blocks(seq).indexOf(kEndFlatsBlockName)), reason: 'targets first');
+    final end = childrenOf(seq.bodies.values.first).firstWhere((b) => b['Name'] == kEndFlatsBlockName);
+    final filters = [for (final k in childrenOf(end)) if (k[r'$type'] == switchFilterType) (k['Filter'] as Map)['_name']];
+    expect(filters, containsAll(['L', 'Ha']));
+    expect(c.read(simpleRunProvider).targets.last.name, kEndFlatsBlockName);
+  });
+
+  testWidgets('#1757 the Flats row reads as Flats to screen readers', (tester) async {
+    final handle = tester.ensureSemantics();
+    await run(tester);
+    final node = tester.getSemantics(find.byKey(const Key('simple-run-flats-end')));
+    expect(node.label, allOf(contains('Flats'), contains('End of night')));
+    handle.dispose();
+  });
+
   testWidgets('a plan on a rig with no filter wheel never stops to ask for a filter change', (tester) async {
     final (_, seq) = await run(tester);
     await create(tester);
@@ -709,6 +758,50 @@ void main() {
       expectBlocks(1, 'edit');
       expect(await n.restore(t, 0), isTrue);
       expectBlocks(2, 'restore');
+    });
+
+    test('editing a queued target keeps its After target flats on the rig and in the queue', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.afterTarget);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      const l20 = [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 20)];
+      expect(await n.edit(0, l20), isTrue);
+      final block = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == 'M31');
+      expect([for (final k in childrenOf(block)) k[r'$type']], contains(flatPanelFlatsType));
+      final t = c.read(simpleRunProvider).targets.single;
+      expect(t.flats, SimpleTargetFlats.afterTarget);
+      expect(t.steps.single.frameCount, 20);
+    });
+
+    test('editing an End of night target moves its filters in the Flats block at once', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      List<Object?> endFilters() {
+        final end = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == kEndFlatsBlockName);
+        return [for (final k in childrenOf(end)) if (k[r'$type'] == switchFilterType) (k['Filter'] as Map)['_name']];
+      }
+
+      expect(endFilters(), ['L']);
+      const ha = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20)];
+      expect(await n.edit(0, ha), isTrue);
+      expect(endFilters(), ['Ha'], reason: 'no other target joined: the edit alone re-syncs the block');
+    });
+
+    test('removing the last End of night target takes its Flats block and the empty queue with it', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', kEndFlatsBlockName]);
+      await n.remove(0);
+      expect(c.read(simpleRunProvider).sequenceId, isNull, reason: 'no empty sequence left selected');
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+      expect(seq.calls, contains('delete seq-1'));
     });
 
     test('Add to queue reads the picked target itself: one block on the rig, one Target queued', () async {
@@ -1378,41 +1471,6 @@ void main() {
     expect(prefs.value, isTrue, reason: 'Settings opens over Simple Mode (the shell shows it)');
   });
 
-  testWidgets('a profile set to ask offers flats inline on the Plan sheet, not tonight first', (tester) async {
-    final c = await _pump(tester, _Seq(),
-        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
-    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
-    await tester.pump();
-
-    expect(find.byType(DropdownButton<String>), findsNothing);
-    expect(find.text('None'), findsOneWidget);
-    expect(find.text('Sky'), findsOneWidget);
-    await tester.ensureVisible(find.text('Panel'));
-    await tester.tap(find.text('Panel'));
-    await tester.pumpAndSettle();
-    expect(c.read(simpleFlatsChoiceProvider), 'panel_at_end');
-  });
-
-  testWidgets('each Flats segment says it is about Flats to screen readers', (tester) async {
-    final handle = tester.ensureSemantics();
-    final c = await _pump(tester, _Seq(),
-        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
-    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
-    await tester.pump();
-    final node = tester.getSemantics(find.byKey(const Key('simple-run-flats-sky')));
-    expect(node.label, allOf(contains('Flats'), contains('Sky')));
-    handle.dispose();
-  });
-
-  testWidgets('a profile with its own flats setting shows no flats choice', (tester) async {
-    final c = await _pump(tester, _Seq(),
-        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
-    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.never);
-    await tester.pump();
-
-    expect(find.byKey(const Key('simple-run-flats')), findsNothing);
-  });
-
   testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',
       (tester) async {
     final start = DateTime.utc(2026, 11, 2, 21);
@@ -1521,6 +1579,26 @@ void main() {
     expect(simpleCurrentTarget([a, b], 9), 0);
     expect(simpleCurrentTarget([a, b], 10), 1);
     expect(simpleCurrentTarget([a, b], 99), 1, reason: 'the last once all are full');
+  });
+
+  test('After target flats count in the plan squares of their target: the next target waits for them', () {
+    const a = SimpleTarget(
+      name: 'M31',
+      flats: SimpleTargetFlats.afterTarget,
+      steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)],
+    );
+    const b = SimpleTarget(name: 'M42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+    // The daemon counts every frame of the session, flats included.
+    expect(simpleCurrentTarget([a, b], 10 + 24), 0, reason: 'A is still shooting its flats');
+    expect(simpleCurrentTarget([a, b], 10 + kSimpleFlatFrames), 1);
+    expect(simpleTargetProgress([a, b], 10 + kSimpleFlatFrames + 3), [
+      [10],
+      [3],
+    ], reason: 'the flats take their frames off the count, B starts after them');
+    expect(simpleTargetProgress([a, b], 10 + 25), [
+      [10],
+      [0],
+    ], reason: 'B does not read done');
   });
 
   group('the queue', () {

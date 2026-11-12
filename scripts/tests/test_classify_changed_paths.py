@@ -204,6 +204,13 @@ class ClassifyTest(unittest.TestCase):
                 self.assertFalse(r["dotnet"], p)
                 self.assertFalse(r["client"], p)
 
+    def test_a_changelog_fragment_is_prose_like_the_changelog(self):
+        # #1812: a fragment replaces a CHANGELOG.md edit, so it must classify the same way.
+        for paths in (("changelog.d/fix-1.md",), ("changelog.d/README.md", "CHANGELOG.md")):
+            with self.subTest(paths=paths):
+                self.assertEqual(self.c(*paths), self.c("CHANGELOG.md"))
+        self.assertTrue(self.c("changelog.d/fix-1.md", "OpenAstroAra.Core/A.cs")["dotnet"])
+
     def test_the_repos_own_python_tooling_skips_both(self):
         for p in ("scripts/tests/test_port_driver_guards.py",
                   "scripts/check-flutter-release.py"):
@@ -268,12 +275,14 @@ class ClassifyTest(unittest.TestCase):
             "scripts/check-adr-authorization.py",
             "scripts/check-adr-scope.py",
             "scripts/check-adr-shape.py",
+            "scripts/changelog-fragments.py",
             "scripts/check-falsified-by.py",
             "scripts/check-pr-template.py",
             "scripts/check-flutter-release.py",
             "scripts/check-settings-registry.mjs",
             "scripts/check-help-registry.mjs",
             "scripts/fit-star-count-model.py",
+            "scripts/merge-gate.sh",
             "scripts/tests/<anything>",
         }
         probe = sorted(

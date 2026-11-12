@@ -18,7 +18,15 @@ import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
 import 'simple_mode_state.dart';
 
-enum SimpleModeScreen { preflight, preview, focus, polarAlign, guide, plan }
+enum SimpleModeScreen {
+  preflight,
+  preview,
+  focus,
+  polarAlign,
+  guide,
+  calibration,
+  plan,
+}
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
@@ -27,6 +35,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
     SimpleModeScreen.focus => l10n.shellModeFocus,
     SimpleModeScreen.guide => l10n.shellModeGuide,
+    SimpleModeScreen.calibration => l10n.shellModeCalibration,
     SimpleModeScreen.plan => l10n.shellModePlan,
   };
 
@@ -43,6 +52,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
     SimpleModeScreen.guide => Icons.track_changes,
+    SimpleModeScreen.calibration => Icons.layers_outlined,
     SimpleModeScreen.plan => Icons.playlist_play,
   };
 }

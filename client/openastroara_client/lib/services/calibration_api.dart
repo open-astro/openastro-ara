@@ -24,7 +24,8 @@ abstract interface class CalibrationClient {
   /// after the flats for each combination of the lights that has none yet;
   /// [pauseForLensCap] opens the panel's cover and waits for the user to put
   /// the lens cap on before them. [includeFlats] false shoots no flats: a
-  /// bias-and-darks-only run.
+  /// bias-and-darks-only run. [flavor] is where the flats' light comes
+  /// from: "panel" or "sky" (the twilight sky).
   Future<GeneratedFlatSequence> generateMatchingFlats(
     String sessionId, {
     int? frameCount,
@@ -38,6 +39,7 @@ abstract interface class CalibrationClient {
     bool includeDarks = false,
     bool pauseForLensCap = false,
     bool includeFlats = true,
+    String flavor = 'panel',
   });
 
   Future<DarkLibraryState> darkLibraryStatus();
@@ -119,6 +121,7 @@ class CalibrationApi implements CalibrationClient {
     bool includeDarks = false,
     bool pauseForLensCap = false,
     bool includeFlats = true,
+    String flavor = 'panel',
   }) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/calibration/sessions/$sessionId/matching-flats',
@@ -134,6 +137,7 @@ class CalibrationApi implements CalibrationClient {
         'include_darks': includeDarks,
         'pause_for_lens_cap': pauseForLensCap,
         'include_flats': includeFlats,
+        'flavor': flavor,
       },
     );
     final data = res.data;

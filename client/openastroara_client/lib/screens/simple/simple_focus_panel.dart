@@ -4,9 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
+import '../../models/filter_offset_calibration.dart';
+import '../../models/filter_wheel_status.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
+import '../../state/focus/filter_offset_calibration_state.dart';
+import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/settings/autofocus_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../models/focuser_status.dart';
@@ -24,7 +31,7 @@ import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_preflight_state.dart';
 import 'simple_preview_panel.dart'
     show SimpleInfoToggle, SimpleShutterButton, kSimpleText;
-import 'simple_device_windows.dart' show simpleCelsius;
+import 'simple_device_windows.dart' show simpleCelsius, simpleSigned;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../util/friendly_error.dart';
@@ -37,13 +44,15 @@ double? simpleFocusHfr(AutofocusRun run) {
   return kept.isEmpty ? null : kept.last.hfr;
 }
 
-/// "Auto", "Manual" or "Guide": the rail chip's caption in Focus mode. For
-/// the main telescope the method is the one Smart Focus would use: the user's
-/// pick, else autofocus with a focuser connected, by hand without (as
-/// `MainFocusCard` decides).
+/// "Auto", "Manual", "Offsets" or "Guide": the rail chip's caption in Focus
+/// mode. For the main telescope the method is the one Smart Focus would use:
+/// the user's pick, else autofocus with a focuser connected, by hand without
+/// (as `MainFocusCard` decides).
 String simpleFocusSummary(WidgetRef ref) =>
     ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
     ? ref.context.l10n.focusGuide
+    : ref.watch(simpleFocusOffsetsProvider)
+    ? ref.context.l10n.focusOffsets
     : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.autofocus
     ? ref.context.l10n.focusAuto
     : ref.context.l10n.focusManual;
@@ -72,6 +81,87 @@ final simpleFocusScopeProvider =
     NotifierProvider<SimpleFocusScopeNotifier, SimpleFocusScope>(
       SimpleFocusScopeNotifier.new,
     );
+
+/// #1675 — the main telescope's routine row: Auto and Manual are the focus
+/// method; Offsets measures each filter's focus offset.
+enum SimpleFocusRoutine { auto, manual, offsets }
+
+/// Whether the Offsets routine is picked (session only; off to start). A
+/// calibration found on the rig, running or with results waiting, picks it.
+class SimpleFocusOffsetsNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.listen(
+      filterOffsetCalibrationProvider.select((l) => l.calibration != null),
+      (_, found) {
+        if (found) state = true;
+      },
+    );
+    return ref.read(filterOffsetCalibrationProvider).calibration != null;
+  }
+
+  void set(bool picked) => state = picked;
+}
+
+final simpleFocusOffsetsProvider =
+    NotifierProvider<SimpleFocusOffsetsNotifier, bool>(
+      SimpleFocusOffsetsNotifier.new,
+    );
+
+/// Search's Focus offsets hit: the main telescope's Offsets routine, unless
+/// a focus routine runs (the row is locked then).
+void simpleOpenFocusOffsets(WidgetRef ref) {
+  final busy =
+      ref.read(autofocusLiveProvider).run.isRunning ||
+      ref.read(bahtinovFocusProvider).status.active ||
+      ref.read(guideFocusProvider).status.active;
+  if (busy) return;
+  ref.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.main);
+  ref.read(simpleFocusOffsetsProvider.notifier).set(true);
+}
+
+/// The filters the calibration will measure: the user's picks, else the
+/// daemon's defaults, always with the reference (which can't be unticked).
+/// Returns the picks and the reference slot (null with no named slot).
+(Set<int>, int?) simpleOffsetPicks(WidgetRef ref) {
+  final slots = ref.watch(filterWheelProvider).value?.slots ?? const [];
+  final picks =
+      ref.watch(filterOffsetCalibrationProvider.select((l) => l.picks)) ??
+      defaultOffsetPicks(slots);
+  final reference = offsetReference(
+    slots,
+    picks,
+    ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)),
+  );
+  return ({...picks, ?reference}, reference);
+}
+
+/// Why the Offsets routine can't start now, in words; null when it can. A
+/// plan or another focus routine first, then a missing or unsuitable device,
+/// then the picks (the daemon checks the same and says why on a 409).
+String? simpleOffsetsBlocker(WidgetRef ref, AppLocalizations l10n) {
+  final plan =
+      ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+  if (plan) return l10n.focusOffsetsPlanRunning;
+  final focusing =
+      ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning)) ||
+      ref.watch(bahtinovFocusProvider.select((b) => b.status.active)) ||
+      ref.watch(guideFocusProvider.select((g) => g.status.active));
+  if (focusing) return l10n.focusOffsetsFocusBusy;
+  final camera = ref.watch(cameraStatusProvider).value;
+  if (!(camera?.isConnected ?? false)) return l10n.focusOffsetsNeedsCamera;
+  final focuser = ref.watch(focuserProvider).value;
+  if (!(focuser?.isConnected ?? false)) return l10n.focusOffsetsNeedsFocuser;
+  final wheel = ref.watch(filterWheelProvider).value;
+  if (!(wheel?.isConnected ?? false)) return l10n.focusOffsetsNeedsWheel;
+  if (wheel!.manual) return l10n.focusOffsetsNeedsMotorisedWheel;
+  if (!(focuser!.capabilities?.absoluteFocuser ?? false)) {
+    return l10n.focusOffsetsNeedsAbsoluteFocuser;
+  }
+  final (picks, reference) = simpleOffsetPicks(ref);
+  if (reference == null || picks.length < 2) return l10n.focusOffsetsPickOne;
+  return null;
+}
 
 /// The guide camera's live-focus exposures, and the one picked (2 s to
 /// start), as the full UI's card offers them.
@@ -126,6 +216,29 @@ class SimpleFocusShutter extends ConsumerWidget {
     final cameraBusy = ref.watch(mainCameraBusyProvider);
     if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
       return const SimpleGuideLiveShutter();
+    }
+    if (ref.watch(simpleFocusOffsetsProvider)) {
+      // Offsets: starts the calibration; its square cancels it.
+      final offsets = ref.watch(filterOffsetCalibrationProvider);
+      final running = offsets.isRunning;
+      final notifier = ref.read(filterOffsetCalibrationProvider.notifier);
+      final blocker = simpleOffsetsBlocker(ref, context.l10n);
+      final (picks, _) = simpleOffsetPicks(ref);
+      return SimpleShutterButton(
+        start: true,
+        running: running,
+        label: running
+            ? context.l10n.focusOffsetsCancel
+            : context.l10n.focusOffsetsStart,
+        whyOff: offsets.busy
+            ? null
+            : blocker ?? context.l10n.shellMainCameraBusy,
+        onPressed: offsets.busy || (!running && (blocker != null || cameraBusy))
+            ? null
+            : running
+            ? notifier.cancel
+            : () => notifier.start(picks.toList()..sort()),
+      );
     }
     if (ref.watch(effectiveFocusMethodProvider) != MainFocusMethod.autofocus) {
       // Manual: starts and stops the Bahtinov readout.
@@ -258,8 +371,14 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final method = ref.watch(effectiveFocusMethodProvider);
     final guide = ref.watch(guideFocusProvider);
     final scope = ref.watch(simpleFocusScopeProvider);
+    final offsets = ref.watch(filterOffsetCalibrationProvider);
+    final offsetsPicked = ref.watch(simpleFocusOffsetsProvider);
     final locked =
-        live.run.isRunning || bahtinov.status.active || bahtinov.busy;
+        live.run.isRunning ||
+        bahtinov.status.active ||
+        bahtinov.busy ||
+        offsets.isRunning ||
+        offsets.busy;
     final anyRunning = locked || guide.status.active || guide.busy;
     final run = live.run;
     final focuser = ref.watch(focuserProvider).asData?.value;
@@ -347,22 +466,42 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                         },
                 ),
                 // The method: Smart Focus with the focuser, or by hand with a
-                // Bahtinov mask. Locked while a run goes.
+                // Bahtinov mask; or Offsets, which measures each filter's
+                // focus offset (#1675). Locked while a run goes.
                 if (scope == SimpleFocusScope.main)
-                  SimpleSegments<MainFocusMethod>(
+                  SimpleSegments<SimpleFocusRoutine>(
                     keyPrefix: 'simple-focus-method',
                     options: [
-                      (MainFocusMethod.autofocus, l10n.focusAuto, 'auto'),
-                      (MainFocusMethod.bahtinov, l10n.focusManual, 'manual'),
+                      (SimpleFocusRoutine.auto, l10n.focusAuto, 'auto'),
+                      (SimpleFocusRoutine.manual, l10n.focusManual, 'manual'),
+                      (SimpleFocusRoutine.offsets, l10n.focusOffsets, 'offsets'),
                     ],
-                    selected: method,
+                    selected: offsetsPicked
+                        ? SimpleFocusRoutine.offsets
+                        : method == MainFocusMethod.autofocus
+                        ? SimpleFocusRoutine.auto
+                        : SimpleFocusRoutine.manual,
                     onPick: locked
                         ? null
-                        : (m) {
-                            void pick() => ref
-                                .read(mainFocusMethodProvider.notifier)
-                                .pick(m);
-                            m == MainFocusMethod.autofocus
+                        : (r) {
+                            void pick() {
+                              ref
+                                  .read(simpleFocusOffsetsProvider.notifier)
+                                  .set(r == SimpleFocusRoutine.offsets);
+                              if (r != SimpleFocusRoutine.offsets) {
+                                ref
+                                    .read(mainFocusMethodProvider.notifier)
+                                    .pick(
+                                      r == SimpleFocusRoutine.auto
+                                          ? MainFocusMethod.autofocus
+                                          : MainFocusMethod.bahtinov,
+                                    );
+                              }
+                            }
+
+                            r != SimpleFocusRoutine.manual &&
+                                    method == MainFocusMethod.bahtinov &&
+                                    !offsetsPicked
                                 ? _leaveManual(bahtinov, pick)
                                 : pick();
                           },
@@ -374,6 +513,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ..._guide(l10n, guide)
             else if (_askMask)
               ..._maskQuestion(l10n)
+            else if (offsetsPicked)
+              ..._offsets(l10n, offsets, live.run)
             else if (method == MainFocusMethod.bahtinov) ...[
               ..._bahtinov(l10n, bahtinov, connected ? focuser : null),
               ?preflightDone,
@@ -530,6 +671,255 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       ),
     );
   }
+
+  /// Offsets (#1675): before a run, the reference and the filter picker; while
+  /// it runs, the filter being measured and its live curve; once it ends, the
+  /// results with Save and Discard. The shutter starts and stops it.
+  List<Widget> _offsets(
+    AppLocalizations l10n,
+    FilterOffsetLive live,
+    AutofocusRun run,
+  ) {
+    final cal = live.calibration;
+    final error = live.error == null ? null : failureReason(l10n, live.error!);
+    final errorText = error == null
+        ? null
+        : Text(error, style: kSimpleText.copyWith(color: AraColors.errorText));
+    if (cal != null && cal.isRunning) {
+      final name = cal.currentName ??
+          (cal.currentPosition == null ? null : l10n.deviceSlot(cal.currentPosition!));
+      return [
+        _twoLines(
+          name == null || cal.runIndex == 0
+              ? l10n.focusOffsetsStarting
+              : l10n.focusOffsetsMeasuring(name, cal.runIndex, cal.runCount),
+          kSimpleText.copyWith(color: AraColors.accentConnected),
+        ),
+        LinearProgressIndicator(
+          value: cal.runCount == 0
+              ? null
+              : ((cal.runIndex - 1).clamp(0, cal.runCount) / cal.runCount),
+        ),
+        SizedBox(
+          height: _kFocusChartHeight,
+          child: VCurveChart(run: run),
+        ),
+        ?errorText,
+      ];
+    }
+    if (cal != null) {
+      final measured = cal.filters.any(
+        (f) => f.isMeasured && f.position != cal.referencePosition,
+      );
+      final drift = cal.referenceFirstPosition != null &&
+              cal.referenceSecondPosition != null
+          ? (cal.referenceFirstPosition! - cal.referenceSecondPosition!).abs()
+          : null;
+      return [
+        Text(
+          switch (cal.state) {
+            'complete' => l10n.focusOffsetsResults,
+            'cancelled' => l10n.focusOffsetsStopped,
+            _ => l10n.focusOffsetsFailed,
+          },
+          style: kSimpleText.copyWith(
+            color: cal.state == 'failed' ? AraColors.errorText : null,
+          ),
+        ),
+        if (cal.reason case final reason? when reason.isNotEmpty)
+          Text(reason, style: kSimpleText.copyWith(color: AraColors.errorText)),
+        _offsetTable(l10n, cal),
+        if (cal.isComplete && cal.driftWarning && drift != null && cal.cfzSteps != null)
+          _warning(
+            const Key('simple-offsets-drift'),
+            l10n.focusOffsetsDrift(drift, cal.cfzSteps!),
+          )
+        else if (cal.isComplete && !cal.driftChecked)
+          Text(l10n.focusOffsetsDriftNotChecked, style: AraText.caption),
+        ?errorText,
+        Row(
+          spacing: AraSpace.s8,
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                key: const Key('simple-offsets-discard'),
+                onPressed: live.busy
+                    ? null
+                    : ref.read(filterOffsetCalibrationProvider.notifier).discard,
+                child: Text(l10n.focusOffsetsDiscard),
+              ),
+            ),
+            // A stopped or failed run leaves the saved offsets as they were.
+            if (cal.isComplete && measured)
+              Expanded(
+                child: FilledButton(
+                  key: const Key('simple-offsets-save'),
+                  style: kSimpleGoStyle,
+                  onPressed: live.busy
+                      ? null
+                      : ref.read(filterOffsetCalibrationProvider.notifier).save,
+                  child: Text(l10n.focusOffsetsSave),
+                ),
+              ),
+          ],
+        ),
+      ];
+    }
+    // Before a run: what it does, the reference, the picks, and why not yet.
+    final wheel = ref.watch(filterWheelProvider).value;
+    final slots = wheel?.slots ?? const <FilterSlot>[];
+    final (picks, reference) = simpleOffsetPicks(ref);
+    final blocker = simpleOffsetsBlocker(ref, l10n);
+    String named(FilterSlot s) =>
+        s.name.isEmpty ? l10n.deviceSlot(s.position) : s.name;
+    final referenceSlot =
+        slots.where((s) => s.position == reference).firstOrNull;
+    return [
+      if (live.saved)
+        Text(
+          l10n.focusOffsetsSaved,
+          key: const Key('simple-offsets-saved'),
+          style: kSimpleText.copyWith(color: AraColors.accentConnected),
+        ),
+      Text(l10n.focusOffsetsIntro, style: AraText.caption),
+      if (referenceSlot != null)
+        Text(l10n.focusOffsetsReference(named(referenceSlot)), style: kSimpleText),
+      if (slots.isNotEmpty) ...[
+        Text(l10n.focusOffsetsPicker, style: AraText.caption),
+        Wrap(
+          spacing: AraSpace.s8,
+          runSpacing: AraSpace.s8,
+          children: [
+            for (final s in slots)
+              FilterChip(
+                key: Key('simple-offsets-pick-${s.position}'),
+                // Picked: Plan's solid blue with white words and tick.
+                label: Text(
+                  s.position == reference
+                      ? l10n.focusOffsetsReferenceChip(named(s))
+                      : named(s),
+                  style: kSimpleText.copyWith(
+                    color: picks.contains(s.position)
+                        ? AraColors.selectionFg
+                        : AraColors.textPrimary,
+                  ),
+                ),
+                selected: picks.contains(s.position),
+                selectedColor: AraColors.selectionBg,
+                checkmarkColor: AraColors.selectionFg,
+                // The reference is always measured.
+                onSelected: s.position == reference || live.busy
+                    ? null
+                    : (on) => ref
+                          .read(filterOffsetCalibrationProvider.notifier)
+                          .setPicks(
+                            on
+                                ? {...picks, s.position}
+                                : ({...picks}..remove(s.position)),
+                          ),
+              ),
+          ],
+        ),
+      ],
+      if (blocker != null)
+        Text(
+          blocker,
+          key: const Key('simple-offsets-blocker'),
+          style: kSimpleText.copyWith(color: AraColors.accentBusy),
+        ),
+      ?errorText,
+    ];
+  }
+
+  /// The results: filter, offset, fit R² and the offset saved before, one row
+  /// per filter, each read out whole; a weak fit and a failure say so under it.
+  Widget _offsetTable(AppLocalizations l10n, FilterOffsetCalibration cal) {
+    Widget cells(List<String> texts, TextStyle style) => Row(
+      spacing: AraSpace.s8,
+      children: [
+        for (final (i, t) in texts.indexed)
+          Expanded(
+            flex: i == 0 ? 3 : 2,
+            child: Text(t, style: style, textAlign: i == 0 ? null : TextAlign.end),
+          ),
+      ],
+    );
+    return Column(
+      key: const Key('simple-offsets-table'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: [
+        ExcludeSemantics(
+          child: cells([
+            l10n.focusOffsetsColFilter,
+            l10n.focusOffsetsColOffset,
+            l10n.focusFitR2,
+            l10n.focusOffsetsColPrevious,
+          ], AraText.caption),
+        ),
+        for (final f in cal.filters)
+          () {
+            final filter = f.name.isEmpty ? l10n.deviceSlot(f.position) : f.name;
+            final name = f.position == cal.referencePosition
+                ? l10n.focusOffsetsReferenceChip(filter)
+                : filter;
+            final offset = switch (f.status) {
+              'measured' => f.offset == null ? '—' : simpleSigned(f.offset!),
+              'failed' => l10n.focusOffsetsRowFailed,
+              'skipped' => l10n.focusOffsetsRowSkipped,
+              _ => l10n.focusOffsetsRowPending,
+            };
+            final r2 = f.rSquared?.toStringAsFixed(2) ?? '—';
+            final previous = simpleSigned(f.previousOffset);
+            return Semantics(
+              key: Key('simple-offsets-row-${f.position}'),
+              container: true,
+              label: '$name, ${l10n.focusOffsetsColOffset} $offset, '
+                  '${l10n.focusFitR2} $r2, ${l10n.focusOffsetsColPrevious} $previous'
+                  '${f.isWeak ? '. ${l10n.focusOffsetsWeakFit(r2)}' : ''}'
+                  '${f.isFailed && f.failureReason != null ? '. ${f.failureReason}' : ''}',
+              excludeSemantics: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 2,
+                children: [
+                  cells(
+                    [name, offset, r2, previous],
+                    kSimpleText.copyWith(
+                      color: f.isFailed ? AraColors.errorText : null,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  if (f.isWeak) _warning(null, l10n.focusOffsetsWeakFit(r2)),
+                  if (f.isFailed && f.failureReason != null)
+                    Text(
+                      f.failureReason!,
+                      style: AraText.caption.copyWith(color: AraColors.errorText),
+                    ),
+                ],
+              ),
+            );
+          }(),
+      ],
+    );
+  }
+
+  /// Icon + colour + text (DESIGN.md): the tint alone all but vanishes in
+  /// night mode.
+  Widget _warning(Key? key, String text) => Row(
+    key: key,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    spacing: AraSpace.s8,
+    children: [
+      const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+      Expanded(
+        child: Text(
+          text,
+          style: AraText.caption.copyWith(color: AraColors.accentWarning),
+        ),
+      ),
+    ],
+  );
 
   List<Widget> _maskQuestion(AppLocalizations l10n) => [
     Text(l10n.bahtinovMaskQuestion, style: kSimpleText),

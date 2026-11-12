@@ -22,6 +22,10 @@ class RigCapabilities {
   /// Simple Mode's plans don't: the glass in the camera is the session's.
   final bool pauseForFilterSwap;
 
+  /// A flat panel the run can light. Without one, a Flat row first waits for
+  /// the user to put a screen or light box over the scope (#1757).
+  final bool flatPanel;
+
   const RigCapabilities({
     this.focuser = false,
     this.filterWheel = false,
@@ -29,6 +33,7 @@ class RigCapabilities {
     this.guider = false,
     this.coolerRegulates = false,
     this.pauseForFilterSwap = true,
+    this.flatPanel = false,
   });
 
   static const everything = RigCapabilities(
@@ -37,6 +42,7 @@ class RigCapabilities {
     rotator: true,
     guider: true,
     coolerRegulates: true,
+    flatPanel: true,
   );
 
   static const nothing = RigCapabilities();
@@ -48,6 +54,7 @@ class RigCapabilities {
     bool? guider,
     bool? coolerRegulates,
     bool? pauseForFilterSwap,
+    bool? flatPanel,
   }) => RigCapabilities(
     focuser: focuser ?? this.focuser,
     filterWheel: filterWheel ?? this.filterWheel,
@@ -55,6 +62,7 @@ class RigCapabilities {
     guider: guider ?? this.guider,
     coolerRegulates: coolerRegulates ?? this.coolerRegulates,
     pauseForFilterSwap: pauseForFilterSwap ?? this.pauseForFilterSwap,
+    flatPanel: flatPanel ?? this.flatPanel,
   );
 
   @override

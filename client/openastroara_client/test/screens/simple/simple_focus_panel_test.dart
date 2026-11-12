@@ -8,7 +8,15 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/camera_status.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
@@ -527,4 +535,219 @@ void main() {
       expect(find.text('Manual'), findsOneWidget);
     });
   });
+
+  group('Offsets (#1675)', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    Future<_Offsets> offsets(WidgetTester tester,
+        {FilterOffsetCalibration? calibration,
+        bool saved = false,
+        bool camera = true,
+        bool plan = false,
+        bool manualWheel = false,
+        AutofocusRun run = AutofocusRun.idle,
+        bool reading = false,
+        Widget child = const SimpleFocusPanel()}) async {
+      final o = _Offsets(FilterOffsetLive(calibration: calibration, saved: saved));
+      _c = ProviderContainer(overrides: [
+        focuserProvider.overrideWith(() => _Focuser(_focuser())),
+        autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: run))),
+        filterOffsetCalibrationProvider.overrideWith(() => o),
+        filterWheelProvider.overrideWith(() => _Wheel(manual: manualWheel)),
+        if (camera) cameraStatusProvider.overrideWith(_Camera.new),
+        if (plan) sequenceRunStateProvider.overrideWith(_PlanRunning.new),
+        if (reading) bahtinovFocusProvider.overrideWith(_Reading.new),
+      ]);
+      addTearDown(_c.dispose);
+      await _c.read(focuserProvider.future);
+      await _c.read(filterWheelProvider.future);
+      if (camera) await _c.read(cameraStatusProvider.future);
+      _c.read(simpleFocusOffsetsProvider.notifier).set(true);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: _c,
+        child: MaterialApp(home: Scaffold(body: Center(child: SingleChildScrollView(child: child)))),
+      ));
+      await tester.pump();
+      await tester.pump();
+      return o;
+    }
+
+    testWidgets('Offsets is a third routine on the Auto / Manual row, locked while autofocus runs', (tester) async {
+      await _pump(tester, focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
+      final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
+      final offsets = find.byKey(const Key('simple-focus-method-offsets'));
+      expect(tester.getRect(offsets).top, auto.top, reason: 'one row');
+      expect(tester.widget<SimpleSegment>(offsets).onTap, isNull);
+    });
+
+    testWidgets('Offsets is locked while a plan runs, and says why', (tester) async {
+      await offsets(tester, plan: true);
+      expect(find.text(en.focusOffsetsPlanRunning), findsOneWidget);
+    });
+
+    testWidgets('Offsets is locked while another focus routine runs, and says why', (tester) async {
+      await offsets(tester, reading: true);
+      expect(find.text(en.focusOffsetsFocusBusy), findsOneWidget);
+    });
+
+    testWidgets('Offsets names the missing device', (tester) async {
+      await offsets(tester, camera: false);
+      expect(find.text(en.focusOffsetsNeedsCamera), findsOneWidget);
+    });
+
+    testWidgets('Offsets says it needs a motorised wheel', (tester) async {
+      await offsets(tester, manualWheel: true);
+      expect(find.text(en.focusOffsetsNeedsMotorisedWheel), findsOneWidget);
+    });
+
+    testWidgets("the picker ticks every named filter but a dark; the reference is shown and can't be unticked",
+        (tester) async {
+      await offsets(tester);
+      FilterChip chip(int p) => tester.widget<FilterChip>(find.byKey(Key('simple-offsets-pick-$p')));
+      expect([for (var p = 0; p < 6; p++) chip(p).selected], [true, true, true, true, false, false],
+          reason: 'L R G OIII ticked; Dark and the unnamed slot not');
+      expect(find.text(en.focusOffsetsReference('L')), findsOneWidget);
+      expect(find.text('L · reference'), findsOneWidget);
+      expect(chip(0).onSelected, isNull, reason: 'the reference is always measured');
+      expect(find.byKey(const Key('simple-offsets-blocker')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-offsets-pick-4')));
+      await tester.pump();
+      expect(chip(4).selected, isTrue);
+    });
+
+    test('the reference: the autofocus filter, then L or Lum, then the lowest pick', () {
+      const slots = [
+        FilterSlot(position: 0, name: 'Ha', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Lum', focusOffset: 0),
+        FilterSlot(position: 2, name: 'oiii', focusOffset: 0),
+      ];
+      expect(offsetReference(slots, {0, 1, 2}, 'OIII'), 2);
+      expect(offsetReference(slots, {0, 1, 2}, 'L'), 1);
+      expect(offsetReference(slots.where((s) => s.position != 1).toList(), {2, 0}, 'L'), 0);
+    });
+
+    testWidgets('the shutter starts the calibration with the picks, and its red square cancels it', (tester) async {
+      final o = await offsets(tester, child: const SimpleFocusShutter());
+      expect(find.bySemanticsLabel(en.focusOffsetsStart), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(o.starts, [[0, 1, 2, 3]]);
+      o.state = const FilterOffsetLive(calibration: _running);
+      await tester.pump();
+      expect(find.bySemanticsLabel(en.focusOffsetsCancel), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(o.cancels, 1);
+    });
+
+    testWidgets('while it runs: the filter being measured, which run of how many, and the live curve', (tester) async {
+      await offsets(tester,
+          calibration: _running,
+          run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1), _probe(1, 2.4)]));
+      expect(find.text(en.focusOffsetsMeasuring('OIII', 4, 7)), findsOneWidget);
+      expect(find.byType(VCurveChart), findsOneWidget);
+    });
+
+    testWidgets('the results table: offsets, R², a weak fit and a failed row, and the drift warning', (tester) async {
+      await offsets(tester, calibration: _done);
+      final row = find.byKey(const Key('simple-offsets-row-3'));
+      for (final t in ['OIII', '+42', '0.97', '+30']) {
+        expect(find.descendant(of: row, matching: find.text(t)), findsOneWidget, reason: t);
+      }
+      expect(find.descendant(of: find.byKey(const Key('simple-offsets-row-1')), matching: find.text('−12')),
+          findsOneWidget, reason: 'a real minus');
+      expect(find.text(en.focusOffsetsWeakFit('0.62')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-offsets-row-2')), matching: find.text('Failed')),
+          findsOneWidget);
+      expect(find.text('no stars found'), findsOneWidget);
+      expect(find.text(en.focusOffsetsDrift(30, 20)), findsOneWidget);
+    });
+
+    testWidgets('each result row is read out whole: filter, offset, fit and the one before', (tester) async {
+      final handle = tester.ensureSemantics();
+      await offsets(tester, calibration: _done);
+      expect(tester.getSemantics(find.byKey(const Key('simple-offsets-row-3'))),
+          matchesSemantics(label: 'OIII, Offset +42, Fit R² 0.97, Before +30'));
+      handle.dispose();
+    });
+
+    testWidgets('Save and Discard call the notifier; after Save, the hint', (tester) async {
+      final o = await offsets(tester, calibration: _done);
+      await tester.tap(find.byKey(const Key('simple-offsets-save')));
+      expect(o.saves, 1);
+      await tester.tap(find.byKey(const Key('simple-offsets-discard')));
+      expect(o.discards, 1);
+      o.state = const FilterOffsetLive(saved: true);
+      await tester.pump();
+      expect(find.text(en.focusOffsetsSaved), findsOneWidget);
+    });
+
+    testWidgets('a stopped run offers Discard only: the saved offsets stay as they were', (tester) async {
+      await offsets(tester,
+          calibration: FilterOffsetCalibration.fromJson({..._doneJson, 'state': 'cancelled'}));
+      expect(find.text(en.focusOffsetsStopped), findsOneWidget);
+      expect(find.byKey(const Key('simple-offsets-save')), findsNothing);
+      expect(find.byKey(const Key('simple-offsets-discard')), findsOneWidget);
+    });
+  });
+}
+
+/// A calibration on its 4th autofocus run of 7, measuring OIII.
+const _running = FilterOffsetCalibration(
+    state: 'running', referencePosition: 0, referenceName: 'L', currentPosition: 3, runIndex: 4, runCount: 7,
+    filters: [FilterOffsetRow(position: 3, name: 'OIII', status: 'pending')]);
+
+final _doneJson = <String, dynamic>{
+  'state': 'complete', 'job_id': 'j', 'reference_position': 0, 'reference_name': 'L',
+  'reference_first_position': 1000, 'reference_second_position': 1030, 'cfz_steps': 20,
+  'drift_checked': true, 'drift_warning': true, 'run_index': 5, 'run_count': 5,
+  'filters': [
+    {'position': 0, 'name': 'L', 'status': 'measured', 'best_position': 1015, 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+    {'position': 1, 'name': 'R', 'status': 'measured', 'best_position': 1003, 'offset': -12, 'r_squared': 0.62, 'previous_offset': -10},
+    {'position': 2, 'name': 'G', 'status': 'failed', 'previous_offset': 5, 'failure_reason': 'no stars found'},
+    {'position': 3, 'name': 'OIII', 'status': 'measured', 'best_position': 1057, 'offset': 42, 'r_squared': 0.97, 'previous_offset': 30},
+  ],
+};
+final _done = FilterOffsetCalibration.fromJson(_doneJson);
+
+class _Offsets extends FilterOffsetCalibrationNotifier {
+  _Offsets(this.initial);
+  final FilterOffsetLive initial;
+  final starts = <List<int>>[];
+  int cancels = 0, saves = 0, discards = 0;
+  @override
+  FilterOffsetLive build() => initial;
+  @override
+  Future<void> refresh() async {}
+  @override
+  Future<void> start(List<int> positions) async => starts.add(positions);
+  @override
+  Future<void> cancel() async => cancels++;
+  @override
+  Future<void> save() async => saves++;
+  @override
+  Future<void> discard() async => discards++;
+}
+
+class _Camera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async => CameraStatus.fromJson({'name': 'ASI2600MM', 'state': 'connected'});
+}
+
+class _Wheel extends FilterWheelNotifier {
+  _Wheel({this.manual = false});
+  final bool manual;
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
+        'device_id': 'w', 'name': 'EFW', 'state': 'connected', 'manual': manual,
+        'slots': [
+          for (final (i, n) in ['L', 'R', 'G', 'OIII', 'Dark', ''].indexed) {'position': i, 'name': n},
+        ],
+        'runtime': {'state': 'idle', 'current_slot': 0},
+      });
+  @override
+  Future<void> refresh([client]) async {}
+}
+
+class _PlanRunning extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running);
 }

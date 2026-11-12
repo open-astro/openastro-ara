@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
@@ -33,6 +35,12 @@ class _LiveSnapshots extends AutofocusLiveNotifier {
   @override
   Future<void> refresh() async {}
   void snapshot(AutofocusRun run) => state = applyRunSnapshot(state, run);
+}
+
+class _Calibrating extends FilterOffsetCalibrationNotifier {
+  @override
+  FilterOffsetLive build() => const FilterOffsetLive(
+      calibration: FilterOffsetCalibration(state: 'running', referencePosition: 0, referenceName: 'L'));
 }
 
 class _BahtinovFrame extends BahtinovFocusNotifier {
@@ -161,6 +169,19 @@ void main() {
     live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'focuser error'));
     await tester.pump();
     expect(c.read(simpleMessagesProvider).single.detail, 'Focuser error.');
+  });
+
+  testWidgets("a filter's autofocus failing inside an offset calibration posts no pill: its results say so (#1675)", (tester) async {
+    final live = _LiveSnapshots();
+    final c = await _pump(tester, [
+      autofocusLiveProvider.overrideWith(() => live),
+      filterOffsetCalibrationProvider.overrideWith(_Calibrating.new),
+    ]);
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.running));
+    await tester.pump();
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'no stars'));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   testWidgets('a failed polar alignment says so, with why, as a message', (tester) async {

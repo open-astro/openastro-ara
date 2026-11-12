@@ -174,22 +174,24 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         }
 
         // 1) Session headers from their LIGHT frames.
-        var headers = new Dictionary<string, (int Count, DateTimeOffset Start, DateTimeOffset End, string Target)>(StringComparer.Ordinal);
+        var headers = new Dictionary<string, (int Count, DateTimeOffset Start, DateTimeOffset End, string Target, bool Manual)>(StringComparer.Ordinal);
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = $"""
-                SELECT session_id, COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
+                SELECT session_id, COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name), {ManualCaptureColumn}
                 FROM frames
                 WHERE frame_type = 'light' AND session_id IN ({placeholders})
                 GROUP BY session_id;
                 """;
             BindIds(cmd);
+            cmd.Parameters.AddWithValue("$manual", CameraService.ManualCaptureTarget);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) {
                 headers[reader.GetString(0)] = (
                     reader.GetInt32(1),
                     ParseUtc(reader.GetString(2)),
                     ParseUtc(reader.GetString(3)),
-                    await reader.IsDBNullAsync(4, ct) ? "(unknown)" : reader.GetString(4));
+                    await reader.IsDBNullAsync(4, ct) ? "(unknown)" : reader.GetString(4),
+                    reader.GetBoolean(5));
             }
         }
 
@@ -230,7 +232,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var darksUncovered = await UncoveredSessionsAsync(conn, $"""
             SELECT DISTINCT l.session_id
             FROM (SELECT DISTINCT session_id, exposure_seconds, gain,
-                         ROUND(COALESCE(temperature_c, 0), 0) AS temp_bucket
+                         ROUND(COALESCE(temperature_c, 0), 0) AS temp_bucket, camera_name
                   FROM frames
                   WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
             WHERE NOT EXISTS (
@@ -238,14 +240,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                   WHERE d.frame_type = 'dark'
                     AND d.exposure_seconds IS l.exposure_seconds
                     AND d.gain IS l.gain
-                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS l.temp_bucket)
+                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS l.temp_bucket
+                    AND {SameCamera("d", "l")})
             """, BindIds, ct);
 
         // 4b) Bias coverage — global like the darks, keyed by (gain, offset, binning). A row from
         // before binning was recorded counts as 1×1, the overwhelmingly common case.
         var biasUncovered = await UncoveredSessionsAsync(conn, $"""
             SELECT DISTINCT l.session_id
-            FROM (SELECT DISTINCT session_id, gain, "offset", COALESCE(bin, 1) AS bin
+            FROM (SELECT DISTINCT session_id, gain, "offset", COALESCE(bin, 1) AS bin, camera_name
                   FROM frames
                   WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
             WHERE NOT EXISTS (
@@ -253,11 +256,13 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                   WHERE b.frame_type = 'bias'
                     AND b.gain IS l.gain
                     AND b."offset" IS l."offset"
-                    AND COALESCE(b.bin, 1) IS l.bin)
+                    AND COALESCE(b.bin, 1) IS l.bin
+                    AND {SameCamera("b", "l")})
             """, BindIds, ct);
 
-        // 5) The lights' cooler set-point (modal per session).
+        // 5) The lights' cooler set-point and camera (modal per session).
         var setpoints = await ModalCoolerSetpointsAsync(conn, $"session_id IN ({placeholders})", BindIds, ct);
+        var cameras = await ModalCamerasAsync(conn, $"session_id IN ({placeholders})", BindIds, ct);
 
         // 6) Owning profile ids.
         var profiles = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -289,7 +294,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 MatchingDarksAvailable: !darksUncovered.Contains(sid),
                 ProfileId: profiles.GetValueOrDefault(sid),
                 CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null,
-                MatchingBiasAvailable: !biasUncovered.Contains(sid)));
+                MatchingBiasAvailable: !biasUncovered.Contains(sid),
+                ManualCapture: h.Manual,
+                Camera: cameras.GetValueOrDefault(sid)));
         }
         return items;
     }
@@ -522,23 +529,28 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         return result;
     }
 
+    // Every light of the group is a Take One frame ($manual binds CameraService.ManualCaptureTarget).
+    private const string ManualCaptureColumn = "SUM(CASE WHEN target_name = $manual THEN 1 ELSE 0 END) = COUNT(*)";
+
     private static async Task<CalibrationSessionDto?> BuildSessionDtoAsync(SqliteConnection conn, Guid sessionId, CancellationToken ct) {
         var sid = sessionId.ToString();
 
         // Session header from its LIGHT frames. Null row (no lights) ⇒ not a calibration session.
         string targetName;
+        bool manualCapture;
         int lightCount;
         DateTimeOffset start, end;
         await using (var cmd = conn.CreateCommand()) {
             // MIN(target_name) picks the lexicographically-first target for a multi-target session (mosaic /
             // back-to-back nights). Acceptable for v0.0.1 — one representative name; a fuller multi-target
             // summary is a future refinement.
-            cmd.CommandText = """
-                SELECT COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
+            cmd.CommandText = $"""
+                SELECT COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name), {ManualCaptureColumn}
                 FROM frames
                 WHERE frame_type = 'light' AND session_id = $sid;
                 """;
             cmd.Parameters.AddWithValue("$sid", sid);
+            cmd.Parameters.AddWithValue("$manual", CameraService.ManualCaptureTarget);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             // COUNT(*) is never NULL (0 for an empty set), so the zero check is the real "no lights" guard.
             if (!await reader.ReadAsync(ct) || reader.GetInt32(0) == 0) {
@@ -548,6 +560,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             start = ParseUtc(reader.GetString(1));
             end = ParseUtc(reader.GetString(2));
             targetName = await reader.IsDBNullAsync(3, ct) ? "(unknown)" : reader.GetString(3);
+            manualCapture = reader.GetBoolean(4);
         }
 
         // Per-filter summary.
@@ -584,11 +597,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // NULL since the sentinel pass; legacy rows may hold the old 0.0 sentinel — COALESCE buckets NULL with 0
         // so uncooled lights/darks keep matching across both generations, exactly the documented semantics.
         // No trailing ';' — this is embedded as a subquery in AllCoveredAsync's SELECT COUNT(*) FROM (...).
-        var darksAvailable = await AllCoveredAsync(conn, sid, """
-            SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'light' AND session_id = $sid
-            EXCEPT
-            SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'dark'
-            """, ct);
+        var darksAvailable = await AllCoveredAsync(conn, sid, DarkRequirementsSql, ct);
 
         var biasAvailable = await AllCoveredAsync(conn, sid, BiasRequirementsSql, ct);
 
@@ -614,16 +623,45 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ProfileId: profileId,
             CoolerSetpointC: (await ModalCoolerSetpointsAsync(conn, "session_id = $sid",
                 cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null,
-            MatchingBiasAvailable: biasAvailable);
+            MatchingBiasAvailable: biasAvailable,
+            ManualCapture: manualCapture,
+            Camera: (await ModalCamerasAsync(conn, "session_id = $sid",
+                cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).GetValueOrDefault(sid));
     }
 
-    // The session's (gain, offset, binning) combinations no bias frame covers yet. EXCEPT treats
-    // NULLs as equal, so camera-default lights match camera-default biases. No trailing ';' — it is
-    // embedded as a subquery.
-    private const string BiasRequirementsSql = """
-        SELECT DISTINCT gain, "offset", COALESCE(bin, 1) FROM frames WHERE frame_type = 'light' AND session_id = $sid
-        EXCEPT
-        SELECT DISTINCT gain, "offset", COALESCE(bin, 1) FROM frames WHERE frame_type = 'bias'
+    /// <summary>#1757 — darks, bias and flats calibrate only the camera that took them. A frame from before the
+    /// camera was recorded (NULL, on either side) is legacy and matches any camera, so an existing library still
+    /// counts. <paramref name="a"/> and <paramref name="b"/> are the two frame aliases.</summary>
+    internal static string SameCamera(string a, string b) =>
+        $"({a}.camera_name IS NULL OR {b}.camera_name IS NULL OR {a}.camera_name = {b}.camera_name)";
+
+    // The session's (gain, offset, binning) combinations no bias frame covers yet. IS treats NULLs as
+    // equal, so camera-default lights match camera-default biases. No trailing ';' — it is embedded as a
+    // subquery.
+    private static readonly string BiasRequirementsSql = $"""
+        SELECT DISTINCT l.gain, l."offset", COALESCE(l.bin, 1) FROM frames l
+        WHERE l.frame_type = 'light' AND l.session_id = $sid
+          AND NOT EXISTS (
+              SELECT 1 FROM frames b
+              WHERE b.frame_type = 'bias'
+                AND b.gain IS l.gain
+                AND b."offset" IS l."offset"
+                AND COALESCE(b.bin, 1) IS COALESCE(l.bin, 1)
+                AND {SameCamera("b", "l")})
+        """;
+
+    // The session's (exposure, gain, temperature bucket) combinations no dark covers yet (the bucket rule is
+    // above). No trailing ';' — it is embedded as a subquery.
+    private static readonly string DarkRequirementsSql = $"""
+        SELECT DISTINCT l.exposure_seconds, l.gain, ROUND(COALESCE(l.temperature_c, 0), 0) FROM frames l
+        WHERE l.frame_type = 'light' AND l.session_id = $sid
+          AND NOT EXISTS (
+              SELECT 1 FROM frames d
+              WHERE d.frame_type = 'dark'
+                AND d.exposure_seconds IS l.exposure_seconds
+                AND d.gain IS l.gain
+                AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0)
+                AND {SameCamera("d", "l")})
         """;
 
     // The session's (exposure, gain, temperature) combinations no dark covers yet, with the gain,
@@ -631,11 +669,13 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // temperature to shoot their darks at: the set-point the lights ran at, else (lights from before
     // the catalog recorded it, or taken with the cooler off) their recorded sensor temperature, which
     // is the bucket the darks have to land in.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The only composed fragment is SameCamera's fixed alias text; the session id is a bound $sid parameter.")]
     private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, bool canCool, CancellationToken ct) {
         var result = new List<DarkStepSpec>();
         var seen = new HashSet<(double, int?, double)>();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT l.exposure_seconds, l.gain, ROUND(COALESCE(l.temperature_c, 0), 0) AS temp_bucket,
                    l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c, MAX(l.cooler_setpoint_c) AS setpoint,
                    MAX(ROUND(l.temperature_c, 0)) AS recorded_temp
@@ -646,7 +686,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                   WHERE d.frame_type = 'dark'
                     AND d.exposure_seconds IS l.exposure_seconds
                     AND d.gain IS l.gain
-                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0))
+                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0)
+                    AND {SameCamera("d", "l")})
             GROUP BY l.exposure_seconds, l.gain, temp_bucket, l."offset", bin
             ORDER BY l.exposure_seconds, l.gain, temp_bucket, c DESC, l."offset", bin;
             """;
@@ -683,6 +724,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The only composed fragment is SameCamera's fixed alias text; the session id is a bound $sid parameter.")]
     private static async Task<List<BiasStepSpec>> UncoveredBiasAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
         var result = new List<BiasStepSpec>();
         await using var cmd = conn.CreateCommand();
@@ -706,7 +749,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     private static bool FlatsCoverAll(IReadOnlyList<CalibrationFilterSummaryDto>? filters) =>
         filters is { Count: > 0 } && filters.All(f => f.MatchingFlatFrames > 0);
 
-    private sealed record FlatGroup(double? RotatorDeg, int Count, DateTimeOffset Newest);
+    private sealed record FlatGroup(double? RotatorDeg, int Count, DateTimeOffset Newest, string? Camera);
 
     // Flats calibrate lights taken through the same optical train, so a set is reused across nights
     // until something changes. Ara can see two parts of that train: the filter and the rotator angle
@@ -720,28 +763,29 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         Justification = "The 'sessionFilter' argument is a locally-composed literal (a bound $sid or a generated placeholder list); every value is bound as a parameter.")]
     private static async Task ApplyFlatCoverageAsync(SqliteConnection conn, string sessionFilter, Action<SqliteCommand> bind,
             Dictionary<string, List<CalibrationFilterSummaryDto>> filtersBySession, CancellationToken ct) {
-        var lightAngles = new Dictionary<(string Sid, string Filter), double?>();
+        var lightAngles = new Dictionary<(string Sid, string Filter), (double? Angle, string? Camera)>();
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = $"""
-                SELECT session_id, filter_name, ROUND(rotator_mechanical_deg, 1) AS rotator, COUNT(*) AS c
+                SELECT session_id, filter_name, ROUND(rotator_mechanical_deg, 1) AS rotator, COUNT(*) AS c, camera_name
                 FROM frames
                 WHERE frame_type = 'light' AND {sessionFilter}
-                GROUP BY session_id, filter_name, rotator
-                ORDER BY session_id, filter_name, c DESC, rotator;
+                GROUP BY session_id, filter_name, rotator, camera_name
+                ORDER BY session_id, filter_name, c DESC, rotator, camera_name;
                 """;
             bind(cmd);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) {
                 var key = (reader.GetString(0), await reader.IsDBNullAsync(1, ct) ? NoFilter : reader.GetString(1));
-                lightAngles.TryAdd(key, await reader.IsDBNullAsync(2, ct) ? null : reader.GetDouble(2)); // first = modal
+                lightAngles.TryAdd(key, (await reader.IsDBNullAsync(2, ct) ? null : reader.GetDouble(2),
+                    await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4))); // first = modal
             }
         }
         var flats = new Dictionary<string, List<FlatGroup>>(StringComparer.Ordinal);
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = """
-                SELECT filter_name, ROUND(rotator_mechanical_deg, 1), COUNT(*), MAX(captured_utc)
+                SELECT filter_name, ROUND(rotator_mechanical_deg, 1), COUNT(*), MAX(captured_utc), camera_name
                 FROM frames WHERE frame_type = 'flat'
-                GROUP BY filter_name, ROUND(rotator_mechanical_deg, 1);
+                GROUP BY filter_name, ROUND(rotator_mechanical_deg, 1), camera_name;
                 """;
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) {
@@ -752,14 +796,17 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 groups.Add(new FlatGroup(
                     await reader.IsDBNullAsync(1, ct) ? null : reader.GetDouble(1),
                     reader.GetInt32(2),
-                    ParseUtc(reader.GetString(3))));
+                    ParseUtc(reader.GetString(3)),
+                    await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4)));
             }
         }
         foreach (var (sid, list) in filtersBySession) {
             for (var i = 0; i < list.Count; i++) {
                 var f = list[i];
-                var angle = lightAngles.GetValueOrDefault((sid, f.FilterName));
-                var (count, newest, note, verified) = FlatCoverage(angle, flats.GetValueOrDefault(f.FilterName));
+                var (angle, camera) = lightAngles.GetValueOrDefault((sid, f.FilterName));
+                // #1757 — another camera's flats don't count; legacy (camera-less) ones match any camera.
+                var sameCamera = flats.GetValueOrDefault(f.FilterName)?.Where(g => camera is null || g.Camera is null || g.Camera == camera).ToList();
+                var (count, newest, note, verified) = FlatCoverage(angle, sameCamera);
                 list[i] = f with { MatchingFlatFrames = count, MatchingFlatsNewestUtc = newest, FlatsNote = note, FlatsVerified = verified };
             }
         }
@@ -810,6 +857,28 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) {
             result.TryAdd(reader.GetString(0), reader.GetDouble(1)); // first row per session is the modal set-point
+        }
+        return result;
+    }
+
+    // #1757 — the camera most of each session's lights were taken with (camera-less legacy lights don't vote).
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The 'sessionFilter' argument is a locally-composed literal (a bound $sid or a generated placeholder list); every value is bound as a parameter.")]
+    private static async Task<Dictionary<string, string>> ModalCamerasAsync(
+            SqliteConnection conn, string sessionFilter, Action<SqliteCommand> bind, CancellationToken ct) {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT session_id, camera_name, COUNT(*) AS c
+            FROM frames
+            WHERE frame_type = 'light' AND camera_name IS NOT NULL AND {sessionFilter}
+            GROUP BY session_id, camera_name
+            ORDER BY session_id, c DESC, camera_name;
+            """;
+        bind(cmd);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            result.TryAdd(reader.GetString(0), reader.GetString(1));
         }
         return result;
     }

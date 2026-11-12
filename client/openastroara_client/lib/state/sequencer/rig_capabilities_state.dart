@@ -5,6 +5,7 @@ import '../../models/guider_status.dart';
 import '../../models/sequence/rig_capabilities.dart';
 import '../equipment/camera_state.dart';
 import '../equipment/filter_wheel_state.dart';
+import '../equipment/flat_panel_state.dart';
 import '../equipment/focuser_state.dart';
 import '../equipment/rotator_state.dart';
 import '../guider/guider_state.dart';
@@ -42,6 +43,10 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
     () => container.read(rotatorProvider.future),
     'rotator',
   );
+  final flatPanel = present(
+    () => container.read(flatPanelProvider.future),
+    'flat panel',
+  );
   GuiderStatus? guider;
   try {
     guider = await container
@@ -70,6 +75,7 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
     focuser: await focuser,
     filterWheel: await wheel,
     rotator: await rotator,
+    flatPanel: await flatPanel,
     guider: guiderConfigured(guider, container.read(phd2SettingsProvider)),
   );
 }
