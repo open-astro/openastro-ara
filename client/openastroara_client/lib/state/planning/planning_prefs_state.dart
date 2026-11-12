@@ -107,11 +107,12 @@ class PlanningPrefsNotifier extends Notifier<PlanningPrefs> {
   /// [PlanningPrefs.minMosaicTiles]..[PlanningPrefs.maxMosaicTiles].
   void setMosaicTiles(int x, int y) {
     _userTouched = true;
+    _edits++;
     state = state.withMosaicTiles(
       x.clamp(PlanningPrefs.minMosaicTiles, PlanningPrefs.maxMosaicTiles),
       y.clamp(PlanningPrefs.minMosaicTiles, PlanningPrefs.maxMosaicTiles),
     );
-    unawaited(ref.read(planningPrefsServiceProvider).save(state));
+    unawaited(_persist());
   }
 }
 

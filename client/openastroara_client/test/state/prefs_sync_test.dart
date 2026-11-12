@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,7 @@ class _Device {
     Directory? dir,
     bool noRig = false,
     ClientSettingsClient? api,
+    SyncedPrefsPendingService? pending,
   }) : dir = dir ?? Directory.systemTemp.createTempSync('ara-sync-') {
     Future<Directory> support() async => this.dir;
     container = ProviderContainer(
@@ -39,7 +41,7 @@ class _Device {
           PreflightPrefsService(supportDir: support),
         ),
         syncedPrefsPendingProvider.overrideWithValue(
-          SyncedPrefsPendingService(supportDir: support),
+          pending ?? SyncedPrefsPendingService(supportDir: support),
         ),
       ],
     );
@@ -289,6 +291,57 @@ void main() {
     },
   );
 
+  test(
+    'a mosaic size set on this device survives a later rig reconcile',
+    () async {
+      final rig = FakeRigSettings({
+        'planning': const PlanningPrefs(noiseTolerancePct: 3).toJson(),
+      });
+      final a = _Device(rig);
+      await a.open();
+      a.container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 2);
+      await settle();
+
+      // Any later settings change (a reconnect refetch) reconciles again.
+      await a.container.read(clientSettingsProvider.notifier).refetch();
+      await settle();
+
+      expect(a.planning.mosaicTilesX, 2);
+      expect(a.planning.mosaicTilesY, 2);
+      expect((rig.stored['planning'] as Map)['mosaic_tiles_x'], 2);
+    },
+  );
+
+  test(
+    'a reconcile in flight when the mosaic size changes never lands over it',
+    () async {
+      final rig = FakeRigSettings({
+        'planning': const PlanningPrefs(noiseTolerancePct: 3).toJson(),
+      });
+      final dir = Directory.systemTemp.createTempSync('ara-sync-');
+      final pending = _GatedPending(() async => dir);
+      final a = _Device(rig, dir: dir, pending: pending);
+      await a.open();
+      final seen = <int>[];
+      a.container.listen(
+        planningPrefsProvider,
+        (_, next) => seen.add(next.mosaicTilesX),
+      );
+
+      // The reconcile has read the rig (1x1) and waits on the pending marker.
+      final gate = pending.gate = Completer<void>();
+      await a.container.read(clientSettingsProvider.notifier).refetch();
+      await settle();
+      a.container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 2);
+      await settle();
+      gate.complete();
+      await settle();
+
+      expect(seen, everyElement(2));
+      expect(a.planning.mosaicTilesX, 2);
+    },
+  );
+
   test('a night answered on A is answered on B', () async {
     final rig = FakeRigSettings();
     final a = _Device(rig);
@@ -405,4 +458,17 @@ void main() {
 class _Down extends FakeRigSettings {
   @override
   Future<ClientSettings> fetch() async => throw StateError('unreachable');
+}
+
+class _GatedPending extends SyncedPrefsPendingService {
+  _GatedPending(Future<Directory> Function() dir) : super(supportDir: dir);
+  Completer<void>? gate;
+
+  @override
+  Future<Set<String>> load() async {
+    final g = gate;
+    gate = null; // only the next reconcile waits
+    await g?.future;
+    return super.load();
+  }
 }
