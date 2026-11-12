@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Equipment.MyDome;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
@@ -200,7 +201,7 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
     // so it turns following off: one pill, not one per tick or per wait poll.
     private bool TryFollowTarget(TelescopeInfo tel, out TopocentricCoordinates target) {
         target = null!;
-        if (_profile.ActiveProfile.DomeSettings.MountType == MountType.EQUATORIAL && tel.SideOfPier == PierSide.pierUnknown) {
+        if (PierSideMissing(tel.SideOfPier)) {
             if (!_geometryFailureLogged) {
                 _geometryFailureLogged = true;
                 LogPierSideUnknown();
@@ -222,6 +223,9 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         }
         return false;
     }
+
+    private bool PierSideMissing(PierSide sideOfPier) =>
+        _profile.ActiveProfile.DomeSettings.MountType == MountType.EQUATORIAL && sideOfPier == PierSide.pierUnknown;
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Follow-slew boundary: the dome call can throw arbitrary driver/HTTP exceptions; a failure is logged and shown once as a message pill, and the next tick retries. Cancellation by TurnOff() is swallowed. CA1031's log-and-recover boundary applies.")]
@@ -276,16 +280,31 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         return await SyncToScopeCoordinates(tel.Coordinates, tel.SideOfPier, cancellationToken).ConfigureAwait(false);
     }
 
+    // Centering and the sequencer's Synchronize dome act only on a false result, so a sync the geometry cannot work
+    // out or the dome does not finish is false, not an exception. A cancel still throws.
     public async Task<bool> SyncToScopeCoordinates(Coordinates coordinates, PierSide sideOfPier, CancellationToken cancellationToken) {
         var dome = _dome.GetInfo();
-        // No dome radius: the geometry was never set, and the math would send the dome due north or south.
+        // No dome radius: the geometry was never set, and its radius check would refuse it with an error pill.
         if (!dome.Connected || !dome.CanSetAzimuth || _profile.ActiveProfile.DomeSettings.DomeRadiusMm <= 0) {
             return false;
         }
-        var target = TargetFor(coordinates, sideOfPier);
+        if (PierSideMissing(sideOfPier)) {
+            LogSyncPierSideUnknown();
+            return false;
+        }
+        TopocentricCoordinates target;
+        try {
+            target = TargetFor(coordinates, sideOfPier);
+        } catch (InvalidOperationException ex) {
+            LogGeometryFailed(ex);
+            return false;
+        }
         await _moveGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
             return await _dome.FollowSlewAsync(target.Azimuth.Degree, cancellationToken).ConfigureAwait(false);
+        } catch (SequenceEntityFailedException ex) {
+            LogSyncFailed(ex);
+            return false;
         } finally {
             _moveGate.Release();
         }
@@ -385,6 +404,12 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome cannot follow the mount yet: the mount reports no side of the pier, which a German equatorial mount needs; trying again")]
     private partial void LogPierSideUnknown();
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome not turned to the scope: the mount reports no side of the pier, which a German equatorial mount needs")]
+    private partial void LogSyncPierSideUnknown();
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome could not turn to the scope")]
+    private partial void LogSyncFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome did not reach the mount's azimuth within {Seconds} s; carrying on")]
     private partial void LogWaitTimedOut(int seconds);

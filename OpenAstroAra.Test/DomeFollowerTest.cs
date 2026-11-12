@@ -16,11 +16,13 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Equipment.MyDome;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -89,6 +91,15 @@ namespace OpenAstroAra.Test {
             public void Notify(bool isError, string? header, string message) => Seen.Add((isError, header, message));
         }
 
+        private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<DomeFollower> {
+            public readonly List<string> Lines = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                lock (Lines) { Lines.Add(formatter(state, exception)); }
+            }
+        }
+
         // A pinned clock (local sidereal time about 12 h at the site), so 10h/-45 and 14h/-20 sit either side
         // of the meridian, far more than the tolerance apart, whatever the time the suite runs.
         private static readonly DateTime Now = new(2026, 4, 20, 12, 0, 0, DateTimeKind.Utc);
@@ -101,6 +112,7 @@ namespace OpenAstroAra.Test {
         private DomeService _svc = null!;
         private TelescopeInfo _mount = null!;
         private DomeFollower _follower = null!;
+        private CapturingLogger _log = null!;
 
         [SetUp]
         public async Task SetUp() {
@@ -121,7 +133,8 @@ namespace OpenAstroAra.Test {
             };
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(() => _mount);
-            _follower = new DomeFollower(_svc, mount.Object, new DomeSynchronization(_profile), _profile, _store) {
+            _log = new CapturingLogger();
+            _follower = new DomeFollower(_svc, mount.Object, new DomeSynchronization(_profile), _profile, _store, _log) {
                 WaitPollInterval = TimeSpan.FromMilliseconds(20),
                 UtcNow = () => Now,
             };
@@ -155,6 +168,18 @@ namespace OpenAstroAra.Test {
             _dome.Az = azimuth;
             await CachedAzimuthAsync();
         }
+
+        // The validator accepts it (the mount sits at the centre of a 1 m dome), but the mount's 1.5 m axis
+        // puts the aperture outside the dome for every pointing.
+        private DomeSettingsDto OutsideTheDome() => _store.GetDomeSettings() with {
+            DomeRadiusMm = 1000,
+            ScopePositionNorthSouthMm = 0,
+            ScopePositionEastWestMm = 0,
+            ScopePositionUpDownMm = 0,
+            GemAxisMm = 1500,
+            LateralAxisMm = 0,
+            DecOffsetHorizontalMm = 0,
+        };
 
         [Test]
         public async Task Off_sends_no_dome_commands() {
@@ -344,17 +369,7 @@ namespace OpenAstroAra.Test {
         public async Task A_geometry_that_puts_the_scope_outside_the_dome_shows_one_pill_and_stops_following() {
             var sink = new RecordingSink();
             Notifier.Use(sink);
-            // The validator accepts it (the mount sits at the centre of a 1 m dome), but the mount's 1.5 m axis
-            // puts the aperture outside the dome for every pointing.
-            _store.PutDomeSettings(_store.GetDomeSettings() with {
-                DomeRadiusMm = 1000,
-                ScopePositionNorthSouthMm = 0,
-                ScopePositionEastWestMm = 0,
-                ScopePositionUpDownMm = 0,
-                GemAxisMm = 1500,
-                LateralAxisMm = 0,
-                DecOffsetHorizontalMm = 0,
-            });
+            _store.PutDomeSettings(OutsideTheDome());
             Assert.That(DomeSettingsValidator.Error(_store.GetDomeSettings()), Is.Null);
             await _follower.TickAsync();
             await _follower.TickAsync();
@@ -509,11 +524,60 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Synchronize_dome_without_a_dome_radius_sends_nothing() {
-            // A profile that never set the geometry: a meridian flip's dome sync must not turn the dome to
-            // the azimuth a zero radius works out (due north or south).
+            // A profile that never set the geometry: a meridian flip's or a centering's dome sync sends nothing, and
+            // the geometry's radius check (an error pill) is not reached.
+            var sink = new RecordingSink();
+            Notifier.Use(sink);
             _store.PutDomeSettings(DomeSettingsDto.Default);
             await PlaceDomeAtAsync(90);
             Assert.That(await _follower.TriggerTelescopeSync(CancellationToken.None), Is.False);
+            Assert.That(_dome.Slews, Is.Empty);
+            Assert.That(sink.Seen, Is.Empty, "a dome with no geometry set is not an error");
+        }
+
+        // Centering and the Synchronize dome item act only on a false result: a dome sync that cannot be worked
+        // out, or that the dome does not finish, must not throw into them.
+        [Test]
+        public async Task Synchronize_dome_with_an_unknown_pier_side_is_false_and_logs_the_pier_side() {
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = false });
+            await PlaceDomeAtAsync(Target() + 30);
+            _mount.SideOfPier = PierSide.pierUnknown;
+            Assert.That(await _follower.TriggerTelescopeSync(CancellationToken.None), Is.False);
+            Assert.That(_dome.Slews, Is.Empty);
+            Assert.That(_log.Lines, Has.Some.Contains("side of the pier"), "the cause is the mount, not the geometry");
+        }
+
+        [Test]
+        public async Task Synchronize_dome_with_the_scope_outside_the_dome_is_false_and_sends_nothing() {
+            _store.PutDomeSettings(OutsideTheDome() with { FollowMount = false });
+            Assert.That(await _follower.TriggerTelescopeSync(CancellationToken.None), Is.False);
+            Assert.That(_dome.Slews, Is.Empty);
+        }
+
+        [Test]
+        public async Task Synchronize_dome_whose_dome_slew_fails_is_false() {
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = false });
+            await PlaceDomeAtAsync(Target() + 30);
+            _dome.FailSlews = true;
+            Assert.That(await _follower.TriggerTelescopeSync(CancellationToken.None), Is.False);
+        }
+
+        [Test]
+        public async Task The_Synchronize_dome_item_fails_with_its_own_message_when_the_dome_cannot_sync() {
+            _store.PutDomeSettings(OutsideTheDome() with { FollowMount = false });
+            var mount = new Mock<ITelescopeMediator>();
+            mount.Setup(m => m.GetInfo()).Returns(() => _mount);
+            var item = new SynchronizeDome(_svc, _follower, mount.Object);
+            await Assert.ThatAsync(() => item.Execute(null!, CancellationToken.None),
+                Throws.TypeOf<SequenceEntityFailedException>().With.Message.EqualTo("Synchronize dome operation didn't complete successfully"));
+        }
+
+        [Test]
+        public async Task A_profile_brought_back_with_no_dome_radius_turns_following_off_and_sends_nothing() {
+            // Start() refuses following without a dome radius, but selecting a profile restores the setting as saved.
+            _store.PutDomeSettings(DomeSettingsDto.Default with { FollowMount = true });
+            await _follower.TickAsync();
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.False);
             Assert.That(_dome.Slews, Is.Empty);
         }
 
