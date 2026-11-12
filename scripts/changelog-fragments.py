@@ -102,8 +102,8 @@ def parse_body(lines: list[str]) -> tuple[Entries, list[str]]:
             # a bullet's own text stays on one line; a nested bullet, a fence or a paragraph after a blank line may follow
             if not in_fence and not pending and not line.lstrip().startswith("- ") and not fence_match(line, content_col):
                 problems.append("a bullet is wrapped onto a second line, put it on one line: %r" % line[:60])
-            # a blank line stays only inside a bullet: before an indented line or within a fence
-            if pending and (in_fence or line[0] in " \t"):
+            # a blank line before a continuation stays, so a paragraph does not join the bullet's text
+            if pending:
                 entries[category][-1].extend(pending)
             entries[category][-1].append(line)  # continuation or nested bullet
         else:
@@ -153,12 +153,12 @@ def validate(name: str, text: str) -> list[str]:
 def fragment_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
-    return sorted(p for p in directory.iterdir() if p.is_file() and p.name != "README.md")
+    return sorted(p for p in directory.iterdir() if p.is_file() and p.name != "README.md" and not p.name.startswith("."))
 
 
 def problems_of(directory: Path, changelog: Path) -> list[str]:
     """Every fragment problem, plus an undated section a PR wrote into the changelog."""
-    out = ["%s: %s" % (p, pr) for p in fragment_files(directory) for pr in validate(p.name, p.read_text(encoding="utf-8"))]
+    out = ["%s: %s" % (p, problem) for p in fragment_files(directory) for problem in validate(p.name, p.read_text(encoding="utf-8"))]
     if changelog.is_file():
         for i, line in enumerate(changelog.read_text(encoding="utf-8").split("\n"), 1):
             m = HEADING_RE.match(line)

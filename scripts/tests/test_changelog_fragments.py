@@ -103,6 +103,11 @@ class CheckTest(FragmentTestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("(0 file(s))", r.stdout)
 
+    def test_a_dotfile_is_not_a_fragment(self):
+        self.t.fragment(".DS_Store", "\0binary")
+        r = self.t.run("--check")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_an_unreleased_section_in_the_changelog_is_refused(self):
         self.t.changelog.write_text("# Changelog\n\n## [Unreleased]\n\n### Fixed\n- x\n")
         r = self.t.run("--check")
@@ -126,6 +131,12 @@ class PreviewTest(FragmentTestCase):
             "### Fixed\n- **a fix**\n- **b fix**\n\n"
             "### Security\n- **a sec**\n",
         )
+
+    def test_a_paragraph_after_a_blank_line_keeps_the_blank_line(self):
+        self.t.fragment("a.md", "### Fixed\n- **x**\n\nsecond paragraph\n")
+        r = self.t.run("--preview")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "## [Unreleased]\n\n### Fixed\n- **x**\n\nsecond paragraph\n")
 
     def test_preview_consumes_nothing(self):
         p = self.t.fragment("a.md", GOOD)

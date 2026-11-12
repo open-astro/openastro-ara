@@ -4031,7 +4031,7 @@ Example structure:
 ...
 ```
 
-Entry-writing discipline: every PR that ships a user-visible change adds a `### <Type>` line under `## [Unreleased]`. The release tag-cut process (Phase 15 + future releases) renames `## [Unreleased]` → `## [<version>] — <date>` and creates a fresh `## [Unreleased]` placeholder.
+Entry-writing discipline: every PR that ships a user-visible change adds a `changelog.d/<branch-slug>.md` fragment with `### <Type>` subsections (`changelog.d/README.md`, #1812). The release tag-cut process (Phase 15 + future releases) runs `scripts/changelog-fragments.py --release <version> --date <date>`, which writes `## [<version>] - <date>` from the fragments and deletes them.
 
 **Server-side endpoint** (already declared in §34.7):
 
@@ -4143,8 +4143,8 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 **Release process integration:**
 
 - The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
-- COMMIT-PR-RULES.md's per-phase PR rhythm (future bake) adds "update CHANGELOG.md [Unreleased] section" to the pre-PR gate (§14.4) for any PR with user-visible changes — same enforcement style as the settings-registry gate
-- Release tags (manual, user-driven): rename `[Unreleased]` → `[<version>] — <date>`, create fresh `[Unreleased]`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
+- Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**

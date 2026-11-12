@@ -129,13 +129,13 @@ SCRIPT_RULES = {
     "scripts/check-adr-authorization.py": NONE,
     "scripts/check-adr-scope.py": NONE,
     "scripts/check-adr-shape.py": NONE,
-    # Changelog fragment check (#1812): run by the Sanity job, read by no .NET or client job.
-    "scripts/changelog-fragments.py": NONE,
     "scripts/check-falsified-by.py": NONE,
     "scripts/check-pr-template.py": NONE,
     "scripts/check-settings-registry.mjs": NONE,
     "scripts/check-help-registry.mjs": NONE,
     "scripts/fit-star-count-model.py": NONE,
+    # Changelog fragment check (#1812): run by the Sanity job, read by no .NET or client job.
+    "scripts/changelog-fragments.py": NONE,
     # Run by merge-queue.yml on a merge group only.
     "scripts/merge-gate.sh": NONE,
 }
