@@ -569,7 +569,7 @@ class _PlanTargetCard extends StatelessWidget {
                         overlayShape:
                             const RoundSliderOverlayShape(overlayRadius: 12),
                       ),
-                      child: Slider(
+                      child: Slider.adaptive(
                         min: 0,
                         max: 359,
                         divisions: 359,

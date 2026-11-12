@@ -225,7 +225,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Checkbox(
+                    Checkbox.adaptive(
                       key: const Key('guiding-assistant-backlash'),
                       value: _measureBacklash,
                       visualDensity: VisualDensity.compact,

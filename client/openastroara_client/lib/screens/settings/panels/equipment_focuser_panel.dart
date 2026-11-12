@@ -182,7 +182,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
-                Checkbox(
+                Checkbox.adaptive(
                   value: _useTempComp,
                   onChanged: (v) => setState(() => _useTempComp = v ?? false),
                 ),

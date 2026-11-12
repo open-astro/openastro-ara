@@ -167,7 +167,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
         ),
         Row(
           children: [
-            Checkbox(
+            Checkbox.adaptive(
               value: _useSkyAngle,
               onChanged: (v) => setState(() => _useSkyAngle = v ?? true),
             ),

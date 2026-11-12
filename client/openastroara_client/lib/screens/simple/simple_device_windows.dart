@@ -207,7 +207,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           );
           children.add(
-            Slider(
+            Slider.adaptive(
               key: const Key('simple-camera-target'),
               min: lo,
               max: hi,
@@ -1213,7 +1213,7 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
           id: 'Gain',
           Text(text(gain), style: kSimpleText),
         ),
-        Slider(
+        Slider.adaptive(
           key: Key(widget.id),
           min: lo.toDouble(),
           max: hi.toDouble(),
@@ -1339,7 +1339,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         id: 'Refocus temp',
         Text(text(c), style: kSimpleText),
       ),
-      Slider(
+      Slider.adaptive(
         key: const Key('simple-focuser-refocus'),
         min: 0,
         max: 10,
@@ -2332,7 +2332,7 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
     final slider = MergeSemantics(
       child: Semantics(
         label: context.l10n.deviceGain,
-        child: Slider(
+        child: Slider.adaptive(
           key: const Key('simple-guider-gain'),
           min: 0,
           max: 100,
@@ -3386,7 +3386,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                   ignoring: dimmed,
                   child: Semantics(
                     label: p.label,
-                    child: Slider(
+                    child: Slider.adaptive(
                       key: Key('simple-switch-$id'),
                       min: p.min,
                       max: p.max,
@@ -3691,7 +3691,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
           Row(
             children: [
               Expanded(
-                child: Slider(
+                child: Slider.adaptive(
                   key: const Key('simple-flat-brightness'),
                   value: level.toDouble(),
                   // Slider needs max > min: held at 1 and disabled until the

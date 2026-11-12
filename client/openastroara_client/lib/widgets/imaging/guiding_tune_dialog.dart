@@ -453,7 +453,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
           child: Text(label, style: Theme.of(context).textTheme.bodySmall),
         ),
         Expanded(
-          child: Slider(
+          child: Slider.adaptive(
             value: value.clamp(0.0, 1.0),
             min: 0,
             max: 1,

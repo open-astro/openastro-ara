@@ -740,7 +740,7 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
       MergeSemantics(
         child: Semantics(
           label: widget.label,
-          child: Slider(
+          child: Slider.adaptive(
             key: Key('simple-guide-aggressiveness-${widget.id}'),
             min: 0,
             max: 1,

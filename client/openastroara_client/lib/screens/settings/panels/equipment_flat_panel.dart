@@ -217,7 +217,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
             children: [
               const SizedBox(width: 28, child: Text('0')),
               Expanded(
-                child: Slider(
+                child: Slider.adaptive(
                   value: level.toDouble(),
                   min: 0,
                   // A device whose MaxBrightness hasn't been read yet reports 0;

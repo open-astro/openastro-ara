@@ -619,7 +619,7 @@ class _LevelCardState extends State<_LevelCard> {
                         thumbShape:
                             const RoundSliderThumbShape(enabledThumbRadius: 7),
                       ),
-                      child: Slider(
+                      child: Slider.adaptive(
                         min: port.min,
                         max: port.max,
                         // Snap to the device's step, or to whole steps when the
