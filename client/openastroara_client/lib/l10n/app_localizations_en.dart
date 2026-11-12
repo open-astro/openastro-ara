@@ -4899,4 +4899,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1 × 1 is a single frame.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross => 'Tonight\'s Sky mosaic tiles across';
+
+  @override
+  String get imagingMosaicTilesDown => 'Tonight\'s Sky mosaic tiles down';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Framing for a ${across}x$down mosaic';
+  }
 }

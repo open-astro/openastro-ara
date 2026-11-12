@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
@@ -250,6 +251,32 @@ void main() {
     container.read(planningPrefsProvider.notifier).setMosaicTiles(1, 1);
     await tester.pump();
     expect(find.textContaining('Framing for a'), findsNothing);
+  });
+  testWidgets('#1622 the framing label reads in Brazilian Portuguese', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 3);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: TonightSkyPanel()),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Enquadramento para um mosaico 2x3'), findsOneWidget);
   });
   testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/app_shell_state.dart' show selectedTabIndexProvider;
 import '../../state/planning/planning_prefs_state.dart';
@@ -178,9 +179,13 @@ class TonightSkyPanel extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
-                  'Framing for a ${prefs.mosaicTilesX}x${prefs.mosaicTilesY} mosaic',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: AraColors.textSecondary),
+                  context.l10n.tonightSkyMosaicFraming(
+                    prefs.mosaicTilesX,
+                    prefs.mosaicTilesY,
+                  ),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
                 ),
               ),
             Expanded(

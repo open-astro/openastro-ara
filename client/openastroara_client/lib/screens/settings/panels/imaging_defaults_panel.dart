@@ -269,9 +269,10 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         Padding(
           padding: const EdgeInsets.only(top: 12, left: 4, bottom: 4),
           child: Text(
-            'Ranks Tonight\'s Sky framing for a mosaic of this many tiles '
-            '(${PlanningPrefs.minMosaicTiles}–${PlanningPrefs.maxMosaicTiles} each way). '
-            '1 × 1 is a single frame.',
+            context.l10n.imagingMosaicHelp(
+              PlanningPrefs.minMosaicTiles,
+              PlanningPrefs.maxMosaicTiles,
+            ),
             style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: AraColors.textSecondary),
           ),
@@ -279,8 +280,8 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         for (final across in [true, false])
           EditableNumberRow(
             label: across
-                ? 'Tonight\'s Sky mosaic tiles across'
-                : 'Tonight\'s Sky mosaic tiles down',
+                ? context.l10n.imagingMosaicTilesAcross
+                : context.l10n.imagingMosaicTilesDown,
             currentValue:
                 '${across ? ref.watch(planningPrefsProvider).mosaicTilesX : ref.watch(planningPrefsProvider).mosaicTilesY}',
             getCanonical: () =>

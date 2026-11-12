@@ -4899,6 +4899,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1 × 1 is a single frame.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross => 'Tonight\'s Sky mosaic tiles across';
+
+  @override
+  String get imagingMosaicTilesDown => 'Tonight\'s Sky mosaic tiles down';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Framing for a ${across}x$down mosaic';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9826,4 +9842,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationStartQueueNow => 'Iniciar fila';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Classifica o enquadramento do Céu desta noite para um mosaico com esta quantidade de painéis ($min–$max em cada direção). 1 × 1 é um único quadro.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross =>
+      'Painéis do mosaico na horizontal (Céu desta noite)';
+
+  @override
+  String get imagingMosaicTilesDown =>
+      'Painéis do mosaico na vertical (Céu desta noite)';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Enquadramento para um mosaico ${across}x$down';
+  }
 }

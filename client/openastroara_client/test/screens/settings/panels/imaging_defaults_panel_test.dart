@@ -89,7 +89,9 @@ void main() {
     },
   );
 
-  testWidgets('#1622 the mosaic rows change and persist the tile counts', (tester) async {
+  testWidgets('#1622 the mosaic rows change and persist the tile counts', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -115,11 +117,19 @@ void main() {
     await tester.pumpAndSettle();
     Future<void> type(String label, String text) async {
       final row = find.widgetWithText(EditableNumberRow, label);
-      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
-      await tester.enterText(find.descendant(of: row, matching: find.byType(TextField)), text);
+      await tester.scrollUntilVisible(
+        row,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.descendant(of: row, matching: find.byType(TextField)),
+        text,
+      );
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
     }
+
     await type('Tonight\'s Sky mosaic tiles across', '2');
     await type('Tonight\'s Sky mosaic tiles down', '9');
     final got = container.read(planningPrefsProvider);
