@@ -72,7 +72,7 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
     // no scope, or the store failed: spec-sheet model
   }
   if (!context.mounted) return null;
-  return showAdaptiveDialog<TargetPlanChoice>(
+  return showAdaptiveAlert<TargetPlanChoice>(
     context: context,
     builder: (_) => _TargetPlanDialog(
       targetName: targetName,

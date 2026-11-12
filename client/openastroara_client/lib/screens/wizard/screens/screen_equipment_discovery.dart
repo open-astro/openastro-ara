@@ -15,6 +15,7 @@ import '../../../l10n/l10n.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 // The discovery factory moved to the state layer (the Switch card's fallback
 // needs it); re-exported so existing importers keep working.
@@ -246,7 +247,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering, size: 18),
             label: Text(_testing ? 'Detecting…' : 'Retry detection'),
@@ -472,7 +473,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                 future: _future,
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator.adaptive());
+                    return const Center(child: AdaptiveProgressIndicator());
                   }
                   if (snap.hasError) {
                     return _SheetMessage(

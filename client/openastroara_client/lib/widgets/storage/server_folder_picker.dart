@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/server.dart';
 import '../../services/storage_browse_api.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// Injectable factory so widget tests can hand the dialog a fake walker.
 final storageBrowseApiFactoryProvider =
@@ -166,7 +167,7 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
         width: 440,
         height: 360,
         child: _loading
-            ? const Center(child: CircularProgressIndicator.adaptive())
+            ? const Center(child: AdaptiveProgressIndicator())
             : _error != null
                 ? Center(
                     child: Text(_error!,

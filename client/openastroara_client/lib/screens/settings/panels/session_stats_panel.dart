@@ -8,6 +8,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §50 Stats maintenance. The Stats views (and the image library) are fed by
 /// the rig's frame catalog; in the take-home-drive world the connected disk
@@ -124,7 +125,7 @@ class _SessionStatsPanelState extends ConsumerState<SessionStatsPanel> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.restart_alt, size: 16),
             label: const Text('Clear & rebuild stats…'),

@@ -10,6 +10,7 @@ import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../widgets/adaptive_dialog.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// §40.5 frame viewer over the live wire model. 12f.2 shipped the pinch-zoom
 /// thumbnail + metadata; this slice adds the §65 stretched preview — a palette
@@ -165,7 +166,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
   }
 
   Future<void> _promptAddTag() async {
-    final tag = await showAdaptiveDialog<String>(
+    final tag = await showAdaptiveAlert<String>(
       context: context,
       builder: (_) => const _AddTagDialog(),
     );
@@ -399,7 +400,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
                     child: SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 if (_error != null)
@@ -456,7 +457,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
                         child: SizedBox(
                           width: 12,
                           height: 12,
-                          child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                          child: AdaptiveProgressIndicator(strokeWidth: 2),
                         ),
                       ),
                   ],

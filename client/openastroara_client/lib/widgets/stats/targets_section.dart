@@ -7,6 +7,7 @@ import '../../models/stats/stats_target.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import 'stats_format.dart';
+import '../adaptive_controls.dart';
 
 /// §50 Stats dashboard Targets section — per-target imaging rollups from the
 /// live daemon (`GET /api/v1/stats/targets`), replacing the Phase 12g.1 demo
@@ -67,7 +68,7 @@ class _TargetsSectionState extends ConsumerState<TargetsSection> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

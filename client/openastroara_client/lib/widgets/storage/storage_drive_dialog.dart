@@ -12,6 +12,7 @@ import '../../theme/ara_metrics.dart';
 import '../inline_choices.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// §29.1.1/§29.1.3 — "choose a disk for your frames", after the Time Machine
 /// model: one list of disks, select, confirm. Erasing (for disks ARA can't use
@@ -225,7 +226,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     final async = ref.watch(storageDevicesProvider);
     final body = async.when(
           loading: () => const SizedBox(
-              height: 140, child: Center(child: CircularProgressIndicator.adaptive())),
+              height: 140, child: Center(child: AdaptiveProgressIndicator())),
           error: (e, _) => SizedBox(
             height: 140,
             child: Center(
@@ -398,7 +399,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                     const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator.adaptive(strokeWidth: 2)),
+                        child: AdaptiveProgressIndicator(strokeWidth: 2)),
                     const SizedBox(width: 10),
                     Text(
                         _needsErase

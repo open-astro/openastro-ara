@@ -557,7 +557,7 @@ void main() {
     );
 
     testWidgets(
-      'on Android the confirm stays a Material alert with the filled red Stop',
+      'on Android and macOS the confirm stays a Material alert with the filled red Stop',
       (tester) async {
         await pumpButton(tester);
         await activateWithoutPointer(tester);
@@ -568,15 +568,19 @@ void main() {
         await tester.pumpAndSettle();
         expect(fake.calls, 1);
       },
-      variant: TargetPlatformVariant.only(TargetPlatform.android),
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.macOS,
+      }),
     );
 
     for (final (platform, ios) in [
       (TargetPlatform.iOS, true),
       (TargetPlatform.android, false),
+      (TargetPlatform.macOS, false),
     ]) {
       testWidgets(
-        'a stop in flight spins the ${ios ? 'iOS' : 'Material'} indicator',
+        'a stop in flight on ${platform.name} spins the ${ios ? 'iOS' : 'Material'} indicator',
         (tester) async {
           await pumpButton(tester);
           fake.hold = Completer<void>();

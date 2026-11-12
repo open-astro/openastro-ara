@@ -18,6 +18,7 @@ import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
 import 'polar_align_readout.dart';
+import '../adaptive_controls.dart';
 
 export 'polar_align_readout.dart';
 
@@ -384,7 +385,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           if (waiting)
             const Icon(Icons.home_outlined, size: 32, color: AraColors.accentBusy)
           else
-            const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
+            const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           Text(
             waiting ? 'Put the mount in its home position' : 'Sending the mount Home',
@@ -436,7 +437,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         children: [
           Align(alignment: Alignment.centerLeft, child: _sectionLabel('Three-point check')),
           const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
+          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           Text(
             'Check solve ${live.checkSolvesDone} of ${live.checkSolvesTotal}',
@@ -708,7 +709,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         children: [
           Align(alignment: Alignment.centerLeft, child: _sectionLabel('RA axis')),
           const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
+          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           const Text(
             'Measuring the RA axis',

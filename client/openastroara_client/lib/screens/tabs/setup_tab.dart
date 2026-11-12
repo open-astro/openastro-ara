@@ -19,6 +19,7 @@ import '../../widgets/guider/guider_setup_wizard.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
 import '../../widgets/preflight/preflight_checklist_card.dart';
 import '../calibration/calibration_screen.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// Setup tab — the dusk ritual as a two-pane surface (§25 flow redesign).
 /// Left: the checklist (Connect equipment → Smart Focus → Polar align →
@@ -556,7 +557,7 @@ class _PreSleepPane extends ConsumerWidget {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                child: AdaptiveProgressIndicator(strokeWidth: 2),
               ),
             ),
           },

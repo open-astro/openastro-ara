@@ -21,6 +21,7 @@ import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/input_coordinates.dart';
+import '../adaptive_controls.dart';
 
 // TakeExposure (the node the advisor attaches to) and SwitchFilter (the
 // sibling it scans for) come from the instruction catalog's named constants;
@@ -273,7 +274,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           const SizedBox(
             width: 12,
             height: 12,
-            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 8),
           Text('Computing optimal sub…', style: dim),

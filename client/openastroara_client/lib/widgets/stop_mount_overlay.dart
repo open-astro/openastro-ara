@@ -15,6 +15,7 @@ import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
 import '../theme/ara_colors.dart';
 import 'adaptive_dialog.dart';
+import 'adaptive_controls.dart';
 
 /// §57.8 telescope slew lifecycle WS tokens (mirrors `WsEventCatalog`).
 abstract final class SlewWsEvents {
@@ -261,7 +262,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   void _showStoppedModal({double? haltedRa, double? haltedDec}) {
     unawaited(
-      showAdaptiveDialog<void>(
+      showAdaptiveAlert<void>(
         context: context,
         builder: (dialogContext) => _MountStoppedDialog(
           haltedRa: haltedRa,
@@ -415,7 +416,7 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
             key: const ValueKey('stop_modal_verify'),
             onPressed: _verifying ? null : _verify,
             icon: _verifying
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.camera_alt_outlined, size: 18),
             label: Text(_verifying ? 'Taking a 2 s image and solving…' : 'Verify Position — show me an image'),
           ),

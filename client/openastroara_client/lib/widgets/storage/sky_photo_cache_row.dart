@@ -6,6 +6,7 @@ import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../help_icon.dart';
+import '../adaptive_controls.dart';
 
 /// Files and bytes in this computer's DSS2 tile cache.
 typedef SkyPhotoCacheInfo = ({int files, int bytes});
@@ -125,7 +126,7 @@ class _SkyPhotoCacheRowState extends ConsumerState<SkyPhotoCacheRow> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.cleaning_services_outlined, size: 16),
             label: Text(_cleaning ? 'Cleaning…' : 'Clean cache'),

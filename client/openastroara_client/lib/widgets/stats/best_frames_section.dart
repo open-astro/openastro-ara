@@ -7,6 +7,7 @@ import '../../models/stats/best_frame.dart';
 import '../../state/stats/best_frames_state.dart';
 import '../../theme/ara_colors.dart';
 import 'stats_format.dart';
+import '../adaptive_controls.dart';
 
 /// §50 Stats dashboard Best Frames section — the catalog's top-ranked frames
 /// (best composite quality first) from the live daemon
@@ -67,7 +68,7 @@ class _BestFramesSectionState extends ConsumerState<BestFramesSection> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

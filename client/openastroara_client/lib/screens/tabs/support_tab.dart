@@ -11,6 +11,7 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/support/daemon_restart_card.dart';
 import '../../widgets/support/bug_report_card.dart';
 import '../../widgets/support/client_log_card.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// §54 Support tab — a live tail of the daemon's §29.9 logs with a level +
 /// substring filter and a "Download daemon log" action, the §54 bug-report
@@ -267,7 +268,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.download, size: 18),
             label: const Text('Download log'),
@@ -294,7 +295,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
           ),
         );
       }
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return const Center(child: AdaptiveProgressIndicator());
     }
     // Entries already loaded: keep them visible. A failed refresh shows an inline
     // banner above the (last good) list rather than hiding the logs.
@@ -322,7 +323,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                                     )
                                   : OutlinedButton.icon(
                                       onPressed: _loading ? null : _loadOlder,

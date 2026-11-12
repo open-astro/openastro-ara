@@ -69,6 +69,7 @@ import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -211,7 +212,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           );
           children.add(
-            Slider.adaptive(
+            AdaptiveSlider(
               key: const Key('simple-camera-target'),
               min: lo,
               max: hi,
@@ -1217,7 +1218,7 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
           id: 'Gain',
           Text(text(gain), style: kSimpleText),
         ),
-        Slider.adaptive(
+        AdaptiveSlider(
           key: Key(widget.id),
           min: lo.toDouble(),
           max: hi.toDouble(),
@@ -1343,7 +1344,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         id: 'Refocus temp',
         Text(text(c), style: kSimpleText),
       ),
-      Slider.adaptive(
+      AdaptiveSlider(
         key: const Key('simple-focuser-refocus'),
         min: 0,
         max: 10,
@@ -2336,7 +2337,7 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
     final slider = MergeSemantics(
       child: Semantics(
         label: context.l10n.deviceGain,
-        child: Slider.adaptive(
+        child: AdaptiveSlider(
           key: const Key('simple-guider-gain'),
           min: 0,
           max: 100,
@@ -3416,7 +3417,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                   ignoring: dimmed,
                   child: Semantics(
                     label: p.label,
-                    child: Slider.adaptive(
+                    child: AdaptiveSlider(
                       key: Key('simple-switch-$id'),
                       min: p.min,
                       max: p.max,
@@ -3721,7 +3722,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
           Row(
             children: [
               Expanded(
-                child: Slider.adaptive(
+                child: AdaptiveSlider(
                   key: const Key('simple-flat-brightness'),
                   value: level.toDouble(),
                   // Slider needs max > min: held at 1 and disabled until the

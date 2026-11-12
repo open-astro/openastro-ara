@@ -14,6 +14,7 @@ import '../util/friendly_error.dart';
 import '../state/simple_messages_state.dart';
 import '../state/ws/client_session_state.dart';
 import 'adaptive_dialog.dart';
+import 'adaptive_controls.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
@@ -145,7 +146,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   Future<void> _confirmAndStop() async {
     final l10n = context.l10n;
-    final confirmed = await showAdaptiveDialog<bool>(
+    final confirmed = await showAdaptiveAlert<bool>(
       context: context,
       builder: (dialogContext) => adaptiveAlertDialog(
         icon: Icon(
@@ -283,7 +284,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         ? SizedBox(
             width: simple ? 18 : 14,
             height: simple ? 18 : 14,
-            child: const CircularProgressIndicator.adaptive(strokeWidth: 2),
+            child: const AdaptiveProgressIndicator(strokeWidth: 2),
           )
         : Icon(Icons.report, size: large ? 32 : (simple ? 20 : 16));
     final label = Text(

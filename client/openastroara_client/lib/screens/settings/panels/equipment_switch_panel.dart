@@ -18,6 +18,7 @@ import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/equipment/switch_device_body.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §6 Switch panel. Unlike the single-instance device panels, several ASCOM
 /// Switch devices can be connected at once (each addressed by its Alpaca device
@@ -197,7 +198,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
             _ => const [
               Padding(
                 padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator.adaptive()),
+                child: Center(child: AdaptiveProgressIndicator()),
               ),
             ],
           },

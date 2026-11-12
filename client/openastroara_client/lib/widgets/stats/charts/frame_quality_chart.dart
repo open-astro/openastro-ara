@@ -9,6 +9,7 @@ import '../../../state/stats/frame_quality_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
+import '../../adaptive_controls.dart';
 
 /// §50.10 frame-quality composite — a histogram of composite quality scores
 /// (0–1, higher = better) over the catalog's scored frames, from the live
@@ -82,7 +83,7 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ),

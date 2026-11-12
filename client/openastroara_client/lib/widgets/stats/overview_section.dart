@@ -9,6 +9,7 @@ import '../../theme/ara_colors.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import 'stats_format.dart';
+import '../adaptive_controls.dart';
 
 /// §50 Stats Overview section — headline catalog totals from the live daemon
 /// (`GET /api/v1/stats/overview`), replacing the Phase 12g.1 demo-data tiles.
@@ -76,7 +77,7 @@ class _OverviewSectionState extends ConsumerState<OverviewSection> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

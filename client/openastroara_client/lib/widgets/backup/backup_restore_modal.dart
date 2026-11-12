@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/backup_snapshot.dart';
 import '../../state/backup/backup_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// §43 Backup & Restore — lists the active server's profile-config snapshots
 /// (`/api/v1/backup/*`), creates a new backup, downloads a snapshot, and
@@ -95,7 +96,7 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
               child: TextButton.icon(
                 onPressed: (_creating || snapshots == null) ? null : () => unawaited(_createBackup()),
                 icon: _creating
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                    ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.add),
                 label: const Text('Create backup'),
               ),
@@ -109,7 +110,7 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
 
   Widget _body(BuildContext context, AsyncValue<List<BackupSnapshot>?> asyncValue, List<BackupSnapshot>? snapshots) {
     if (asyncValue.isLoading && snapshots == null) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return const Center(child: AdaptiveProgressIndicator());
     }
     if (asyncValue.hasError) {
       return _Centered(
@@ -286,7 +287,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
             TextButton(
               onPressed: (_restoring || _downloading) ? null : () => unawaited(_restore()),
               child: _restoring
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                  ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Text('Restore'),
             ),
           ],

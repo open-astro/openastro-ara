@@ -16,6 +16,7 @@ import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.4 Focuser panel. Shows the connected focuser's live position / temperature
 /// and a move control via the shared connection card. The §37.11 autofocus
@@ -182,7 +183,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
-                Checkbox.adaptive(
+                AdaptiveCheckbox(
                   value: _useTempComp,
                   onChanged: (v) => setState(() => _useTempComp = v ?? false),
                 ),
@@ -374,7 +375,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.center_focus_strong, size: 16),
             label: Text(_running ? _runningLabel : 'Run autofocus'),

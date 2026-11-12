@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/capture_progress_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// Live capture progress for the Imaging tab: shown while a Take One is in
 /// flight (exposing → downloading → done/failed). Replaces the old blind
@@ -221,7 +222,7 @@ class _Row extends StatelessWidget {
           const SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
           )
         else
           // The exposing row (no colour of its own) is working: blinking green.

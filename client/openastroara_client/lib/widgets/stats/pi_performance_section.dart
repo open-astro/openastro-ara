@@ -8,6 +8,7 @@ import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
+import '../adaptive_controls.dart';
 
 /// §66.7 — the Stats "Pi performance" section: what the server process is
 /// doing right now (memory, CPU, GC, threads, connected clients, host load).
@@ -61,7 +62,7 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection> {
               visualDensity: VisualDensity.compact,
               onPressed: spinning ? null : () => unawaited(_refresh()),
               icon: spinning
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+                  ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

@@ -13,6 +13,7 @@ import '../../theme/ara_colors.dart';
 import 'run_state_badge.dart';
 import 'sequence_delete.dart';
 import 'sequence_import.dart';
+import '../adaptive_controls.dart';
 
 /// §38 "Load sequence" picker. Lists the active server's saved sequences
 /// (newest-first) from [sequenceListProvider]; tapping one records it as the
@@ -62,7 +63,7 @@ class SequenceLoadDialog extends ConsumerWidget {
     return async.when(
           loading: () => const SizedBox(
             height: 120,
-            child: Center(child: CircularProgressIndicator.adaptive()),
+            child: Center(child: AdaptiveProgressIndicator()),
           ),
           error: (e, st) {
             // Keep the raw error in the logs (diagnosable in dev); show the user
@@ -288,7 +289,7 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.upload_file, size: 18),
       label: const Text('Import NINA…'),
@@ -359,7 +360,7 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     return IconButton(
       icon: _busy
           ? const SizedBox(
-              width: 18, height: 18, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
+              width: 18, height: 18, child: AdaptiveProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.save_alt, size: 18),
       tooltip: 'Export…',
       onPressed: _busy ? null : _run,

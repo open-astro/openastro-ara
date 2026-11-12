@@ -13,6 +13,7 @@ import '../help_icon.dart';
 import 'rotation_overlay.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// The by-hand rotation readout, docked beside the planetarium on the Plan
 /// screen. The planned angle is the framing dial's; the daemon plate-solves
@@ -159,7 +160,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                                 icon: const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator.adaptive(
+                                  child: AdaptiveProgressIndicator(
                                     strokeWidth: 2,
                                   ),
                                 ),
@@ -176,7 +177,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
-                                        child: CircularProgressIndicator.adaptive(
+                                        child: AdaptiveProgressIndicator(
                                           strokeWidth: 2,
                                         ),
                                       )

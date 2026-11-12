@@ -8,6 +8,7 @@ import 'editable_field.dart';
 import 'settings_row.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// §31.1 waterfall steps 4 + 5, surfaced in the Site panel: the daemon's
 /// time-sync status, the "use a GPS dongle on this computer" guidance
@@ -32,7 +33,7 @@ class TimeSyncSection extends ConsumerWidget {
                 child: SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 ),
               ),
             ),

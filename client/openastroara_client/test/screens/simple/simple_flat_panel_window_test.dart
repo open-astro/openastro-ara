@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoSlider;
+import 'package:flutter/cupertino.dart'
+    show CupertinoAlertDialog, CupertinoDialogAction, CupertinoSlider;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +16,8 @@ import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
-import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart' show confirmMaskRemoved;
+import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart'
+    show confirmMaskRemoved;
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
 /// A flat panel that records what it was asked to do.
@@ -466,13 +468,16 @@ void adaptiveMain() {
   );
 
   testWidgets(
-    'the brightness slider is the Material slider on Android',
+    'the brightness slider is the Material slider on Android and macOS',
     (tester) async {
       await _pump(tester, _wire(light: true));
       expect(find.byType(CupertinoSlider), findsNothing);
       expect(find.byType(Slider), findsOneWidget);
     },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.macOS,
+    }),
   );
 
   Future<bool?> openMaskDialog(WidgetTester tester) async {
@@ -506,13 +511,16 @@ void adaptiveMain() {
   );
 
   testWidgets(
-    'the Bahtinov mask dialog is a Material alert on Android',
+    'the Bahtinov mask dialog is a Material alert on Android and macOS',
     (tester) async {
       await openMaskDialog(tester);
       expect(find.byType(CupertinoAlertDialog), findsNothing);
       expect(find.text('Remove the Bahtinov mask'), findsOneWidget);
       expect(find.byType(FilledButton), findsOneWidget);
     },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.macOS,
+    }),
   );
 }

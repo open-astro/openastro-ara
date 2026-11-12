@@ -14,6 +14,7 @@ import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.4 Rotator panel. Shows the connected rotator's live sky/mechanical angle
 /// with move, reverse, and sky-angle sync controls, via the shared connection
@@ -167,7 +168,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
         ),
         Row(
           children: [
-            Checkbox.adaptive(
+            AdaptiveCheckbox(
               value: _useSkyAngle,
               onChanged: (v) => setState(() => _useSkyAngle = v ?? true),
             ),

@@ -36,6 +36,7 @@ import 'simple_preview_panel.dart'
         formatExposure,
         kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
+import '../../widgets/adaptive_controls.dart';
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -740,7 +741,7 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
       MergeSemantics(
         child: Semantics(
           label: widget.label,
-          child: Slider.adaptive(
+          child: AdaptiveSlider(
             key: Key('simple-guide-aggressiveness-${widget.id}'),
             min: 0,
             max: 1,

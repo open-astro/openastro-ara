@@ -1,8 +1,19 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'adaptive_controls.dart';
+
+/// Opens an alert in the theme's platform look: `showAdaptiveDialog` (iOS
+/// alert route) on iPhone and iPad, `showDialog` elsewhere, macOS included.
+Future<T?> showAdaptiveAlert<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) => useCupertinoControls(context)
+    ? showAdaptiveDialog<T>(context: context, builder: builder)
+    : showDialog<T>(context: context, builder: builder);
+
 /// An alert dialog in the theme's platform look: the iOS alert on iPhone and
-/// iPad, Material elsewhere. Open it with `showAdaptiveDialog`. The content
+/// iPad, Material elsewhere. Open it with [showAdaptiveAlert]. The content
 /// sits on a transparent [Material] because the iOS alert has none, and the
 /// buttons and fields inside need one.
 Widget adaptiveAlertDialog({
@@ -12,16 +23,30 @@ Widget adaptiveAlertDialog({
   List<Widget>? actions,
   bool scrollable = false,
   Color? backgroundColor,
-}) => AlertDialog.adaptive(
-  icon: icon,
-  title: title,
-  content: content == null
+}) {
+  final wrapped = content == null
       ? null
-      : Material(type: MaterialType.transparency, child: content),
-  actions: actions,
-  scrollable: scrollable,
-  backgroundColor: backgroundColor,
-);
+      : Material(type: MaterialType.transparency, child: content);
+  return Builder(
+    builder: (context) => useCupertinoControls(context)
+        ? AlertDialog.adaptive(
+            icon: icon,
+            title: title,
+            content: wrapped,
+            actions: actions,
+            scrollable: scrollable,
+            backgroundColor: backgroundColor,
+          )
+        : AlertDialog(
+            icon: icon,
+            title: title,
+            content: wrapped,
+            actions: actions,
+            scrollable: scrollable,
+            backgroundColor: backgroundColor,
+          ),
+  );
+}
 
 /// One action of an [adaptiveAlertDialog]: the iOS dialog action on iOS
 /// (bold when [isDefault], red when [isDestructive]), else a text button, or a
@@ -35,11 +60,7 @@ Widget adaptiveDialogAction(
   bool isDestructive = false,
   bool filled = false,
 }) {
-  final ios = switch (Theme.of(context).platform) {
-    TargetPlatform.iOS || TargetPlatform.macOS => true,
-    _ => false,
-  };
-  if (ios) {
+  if (useCupertinoControls(context)) {
     return CupertinoDialogAction(
       key: key,
       onPressed: onPressed,

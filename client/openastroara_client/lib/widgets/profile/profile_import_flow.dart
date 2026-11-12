@@ -12,6 +12,7 @@ import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// Opens the OS file picker for a profile share. Swappable in widget tests
 /// (the real FilePicker plugin isn't available there) — the same seam shape as
@@ -191,7 +192,7 @@ Future<T> runWithBlockingSpinner<T>(
     barrierDismissible: false,
     builder: (_) => const PopScope(
       canPop: false,
-      child: Center(child: CircularProgressIndicator.adaptive()),
+      child: Center(child: AdaptiveProgressIndicator()),
     ),
   );
   unawaited(navigator.push(spinner));

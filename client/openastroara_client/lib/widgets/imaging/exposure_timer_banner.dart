@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/exposure_activity_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// The Live tab's exposure timer, in the right rail under Take One while the
 /// camera is exposing — for every exposure the daemon runs (a sequence's
@@ -71,7 +72,7 @@ class _ExposureTimerBannerState extends ConsumerState<ExposureTimerBanner> {
                 const SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 )
               else
                 const StatusBlink(

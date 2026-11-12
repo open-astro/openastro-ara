@@ -8,6 +8,7 @@ import '../../state/notifications/notifications_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// §46 — the inbox the app never had. Things Ara decides on its own overnight
 /// (the guider gave up, a fault reaction fired, the sequence stopped early)
@@ -166,7 +167,7 @@ class _NotificationCenter extends ConsumerWidget {
                                   child: SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator.adaptive(
+                                      child: AdaptiveProgressIndicator(
                                           strokeWidth: 2)))),
                           error: (e, _) => _Empty(
                             icon: Icons.cloud_off,
