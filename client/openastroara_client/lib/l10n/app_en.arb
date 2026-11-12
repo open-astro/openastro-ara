@@ -3949,7 +3949,7 @@
       }
     }
   },
-  "albumArtCreditOpenFailed": "Couldn't open the licence page",
+  "albumArtCreditOpenFailed": "Couldn't open the license page",
   "@albumArtCreditOpenFailed": {
     "description": "Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser"
   },
