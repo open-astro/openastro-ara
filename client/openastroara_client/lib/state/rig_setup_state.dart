@@ -75,7 +75,8 @@ List<RigSetupGap> rigSetupGaps(RigSetupFacts f) => [
 
 /// The profile's site, optics and guide values are read from the rig once the
 /// link is up, so the defaults they start with are never mistaken for a gap.
-/// False while that read has not finished or failed.
+/// False while that read has not finished or failed; a failed read is tried
+/// again the next time the link comes up.
 final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return false;
@@ -86,6 +87,9 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
       ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
       ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
     ]);
+    // Kept until the rig changes: a read when a dropped link comes back would
+    // undo a Settings edit not saved yet.
+    if (ref.mounted) ref.keepAlive();
     return true;
   } catch (_) {
     return false;

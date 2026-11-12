@@ -38,7 +38,7 @@ class _Profile extends ProfileApi {
     this.optics = _setUpOptics,
     this.phd2 = const Phd2Settings(guideFocalLength: 240, guidePixelSize: 3.75),
   }) : super(const AraServer(hostname: '192.0.2.10', port: 5555));
-  final SiteSettings? site;
+  SiteSettings? site;
   final OpticsSettings? optics;
   final Phd2Settings phd2;
   @override
@@ -81,6 +81,15 @@ class _Calibration implements GuiderLiveClient {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+/// The rig link, which a test drops and brings back.
+class _Link extends Notifier<bool> {
+  @override
+  bool build() => true;
+  void set(bool up) => state = up;
+}
+
+final _link = NotifierProvider<_Link, bool>(_Link.new);
+
 Future<void> _settle() async {
   for (var i = 0; i < 5; i++) {
     await Future<void>.delayed(Duration.zero);
@@ -96,7 +105,7 @@ Future<ProviderContainer> _trust(
 }) async {
   final c = ProviderContainer(
     overrides: [
-      serverLinkUpProvider.overrideWithValue(linkUp),
+      serverLinkUpProvider.overrideWith((ref) => ref.watch(_link)),
       profileApiProvider.overrideWithValue(api),
       guiderStatusProvider.overrideWith(guider ?? _NoGuider.new),
       if (live != null) guiderLiveApiProvider.overrideWithValue(live),
@@ -106,9 +115,18 @@ Future<ProviderContainer> _trust(
     ],
   );
   addTearDown(c.dispose);
+  c.read(_link.notifier).set(linkUp);
   c.listen(rigSetupGapsProvider, (_, _) {});
   await _settle();
   return c;
+}
+
+/// Drops the link, then brings it back.
+Future<void> _relink(ProviderContainer c) async {
+  c.read(_link.notifier).set(false);
+  await _settle();
+  c.read(_link.notifier).set(true);
+  await _settle();
 }
 
 /// A fully set-up rig without a Guider.
@@ -302,6 +320,27 @@ void main() {
           RigSetupGap.guideScope,
           RigSetupGap.guiderCalibration,
         ]);
+      },
+    );
+
+    test('a link that drops and comes back reads nothing over a Settings edit not yet saved', () async {
+      final c = await _trust(_Profile());
+      // The user types a focal length in Settings and has not saved it yet.
+      c.read(opticsSettingsProvider.notifier).setFocalLengthMm(1000);
+      await _relink(c);
+      expect(c.read(opticsSettingsProvider).focalLengthMm, 1000);
+      expect(c.read(rigSetupFactsProvider), isNotNull);
+    });
+
+    test(
+      'a read that failed is tried again when the link comes back',
+      () async {
+        final api = _Profile(site: null);
+        final c = await _trust(api);
+        expect(c.read(rigSetupFactsProvider), isNull);
+        api.site = _setUpSite; // the rig has finished booting
+        await _relink(c);
+        expect(c.read(rigSetupFactsProvider)?.latitudeDeg, -33.856784);
       },
     );
   });
