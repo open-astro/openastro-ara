@@ -227,6 +227,8 @@ class FaultGroupTile extends StatelessWidget {
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: AraColors.textSecondary),
       ),
+      // Indented, so an open group's rows read as its own and not as the next entries.
+      childrenPadding: const EdgeInsetsDirectional.only(start: 16),
       children: [for (final row in group.rows) FaultHistoryTile(row: row)],
     );
   }
@@ -275,10 +277,10 @@ class FaultHistoryTile extends StatelessWidget {
       ),
       trailing: Text(
         formatTime(row.detectedUtc.toLocal()),
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: AraColors.textSecondary),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: AraColors.textSecondary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
