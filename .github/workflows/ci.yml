@@ -1378,7 +1378,9 @@ jobs:
     # #1025 deadlock verbatim — gate it at step level like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
+    # Not in the merge queue: merge-gate.sh requires these green on the PR head, and the queue's
+    # copies only held macOS runners while every group waited.
+    if: ${{ !cancelled() && github.event_name != 'merge_group' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
     # Native compile gate (desktop + Android + iOS). `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO

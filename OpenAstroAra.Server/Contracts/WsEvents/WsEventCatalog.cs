@@ -43,7 +43,6 @@ public static class WsEventCatalog {
     public const string EquipmentConnected = "equipment.connected";
     public const string EquipmentDisconnected = "equipment.disconnected";
     public const string EquipmentConnectionFailed = "equipment.connection_failed";
-    public const string EquipmentDiscoveryRefreshed = "equipment.discovery_refreshed";
     // §42.2 — a DETECTED device fault (disconnect streak, stall, value mismatch, …); payload
     // { device_type, device_id, device_name, kind, details, detected_utc }. What was done about
     // it (retries/pause/abort+park) is the §42.3 reaction slice's separate event.
@@ -86,8 +85,6 @@ public static class WsEventCatalog {
     public const string TelescopeSlewStarted = "telescope.slew_started";
     public const string TelescopeSlewComplete = "telescope.slew_complete";
     public const string TelescopeSlewAborted = "telescope.slew_aborted";
-    public const string TelescopeParkChanged = "telescope.park_changed";
-    public const string GuiderState = "guider.state";
     // §63.18 — one event per guide frame while the guider is connected, straight from the
     // daemon's GuideStep stream: payload { frame, time_sec, ra_raw_px, dec_raw_px,
     // ra_arcsec?, dec_arcsec? (null until the guider reports a pixel scale), ra_duration_ms,
@@ -189,9 +186,6 @@ public static class WsEventCatalog {
     public const string TrackingProbeCompleted = "tracking_probe.completed";
 
     // Phase 7 — sequence
-    public const string SequenceCreated = "sequence.created";
-    public const string SequenceUpdated = "sequence.updated";
-    public const string SequenceDeleted = "sequence.deleted";
     public const string SequenceStarted = "sequence.started";
     public const string SequencePaused = "sequence.paused";
     public const string SequenceResumed = "sequence.resumed";
@@ -214,8 +208,6 @@ public static class WsEventCatalog {
     // estimated_remaining_seconds } (#1068). Clients re-fetch the sequence
     // detail (the body changed) and refresh run progress totals.
     public const string SequenceRunItemsChanged = "sequence.run_items_changed";
-    public const string SequenceImported = "sequence.imported";
-    public const string SequenceImportWarning = "sequence.import_warning";
     public const string SequenceAutoFlatsPrompt = "sequence.auto_flats_prompt";
     public const string SequenceAutoFlatsDecided = "sequence.auto_flats_decided";
 
@@ -225,20 +217,27 @@ public static class WsEventCatalog {
     // GET /api/v1/calibration/dark-library/status + the sequence.* events). Declaring an event nobody sends is a
     // contract lie, so they are gone; the guider's own library events (guider.dark_library.*) are unrelated.
 
-    public const string MosaicCreated = "mosaic.created";
-    public const string MosaicPanelComplete = "mosaic.panel_complete";
-    public const string MosaicComplete = "mosaic.complete";
+    // The sequencer run ended in an unhandled failure (same payload as the other sequence.* run events).
+    public const string SequenceFailed = "sequence.failed";
+    // §43-2 async backup create (BackupService): started when the worker claims the slot, complete/failed as the terminal.
+    public const string BackupCreateStarted = "backup.create.started";
+    public const string BackupCreateComplete = "backup.create.complete";
+    public const string BackupCreateFailed = "backup.create.failed";
+    // §63.8 / §63.6 guider calibration builds (GuiderService): dark library and defect map; progress is the granular poll.
+    public const string GuiderDarkLibraryStarted = "guider.dark_library.started";
+    public const string GuiderDarkLibraryProgress = "guider.dark_library.progress";
+    public const string GuiderDarkLibraryComplete = "guider.dark_library.complete";
+    public const string GuiderDarkLibraryFailed = "guider.dark_library.failed";
+    public const string GuiderDefectMapStarted = "guider.defect_map.started";
+    public const string GuiderDefectMapProgress = "guider.defect_map.progress";
+    public const string GuiderDefectMapComplete = "guider.defect_map.complete";
+    public const string GuiderDefectMapFailed = "guider.defect_map.failed";
 
     // Phase 8 — frames, sessions, backup, diagnostics
     public const string FrameComplete = "frame.complete";
     /// <summary>§59.5 — post-capture star analysis landed (HFR + star count written back).</summary>
     public const string FrameAnalyzed = "frame.analyzed";
-    public const string FrameRecoveredOrphan = "frame.recovered_orphan";
-    public const string FramePreviewReady = "frame.preview.ready";
-    public const string FramePreviewVariantReady = "frame.preview.variant.ready";
     public const string FramePreviewVariantEvicted = "frame.preview.variant.evicted";
-    public const string FrameQualityScored = "frame.quality_scored";
-    public const string FramesBulkOperationComplete = "frames.bulk_operation_complete";
 
     public const string SessionStarted = "session.started";
     public const string SessionEnded = "session.ended";
@@ -246,14 +245,8 @@ public static class WsEventCatalog {
     public const string SessionRestretchComplete = "session.restretch.complete";
     public const string SessionRestretchFailed = "session.restretch.failed";
 
-    public const string BackupStreamFrameAvailable = "backup.stream.frame_available";
-    public const string BackupStreamFrameClaimed = "backup.stream.frame_claimed";
-    public const string BackupStreamBackpressure = "backup.stream.backpressure";
-
-    public const string DiagnosticsHealthChanged = "diagnostics.health_changed";
     public const string DiagnosticsIssueDetected = "diagnostics.issue_detected";
     public const string DiagnosticsAutoActionTaken = "diagnostics.auto_action_taken";
-    public const string DiagnosticsAutoActionSkipped = "diagnostics.auto_action_skipped";
     public const string DiagnosticsCleared = "diagnostics.cleared";
     // Per-connection resync frame sent once after every WS accept (§51
     // reconnect-replay gap): the full set of currently-open issues, so a client
@@ -269,33 +262,16 @@ public static class WsEventCatalog {
     public const string ClientSettingsUpdated = "client_settings.updated";
 
     // Phase 9 — server lifecycle + notifications + storage
-    public const string ServerPendingRestart = "server.pending_restart";
     public const string ServerRestartImminent = "server.restart_imminent";
-    public const string ServerMigratingDatabase = "server.migrating_database";
-    public const string ServerMigrationComplete = "server.migration_complete";
-    public const string ServerMigrationFailed = "server.migration_failed";
 
-    public const string StorageLogPressure = "storage.log_pressure";
     // §29 — a block device appeared or vanished, or the store mount came/went;
     // clients re-fetch device+space state (empty payload by design).
     public const string StorageDevicesChanged = "storage.devices_changed";
 
-    public const string NotificationPosted = "notification.posted";
-    public const string NotificationDismissed = "notification.dismissed";
-    public const string NotificationCleared = "notification.cleared";
-    public const string NotificationAlarmStarted = "notification.alarm.started";
-    public const string NotificationAlarmStopped = "notification.alarm.stopped";
-
-    public const string BugReportPrepared = "bugreport.prepared";
-    public const string BugReportSharingModeSet = "bugreport.sharing_mode_set";
 
     public const string DataManagerDownloadProgress = "data_manager.download.progress";
     public const string DataManagerDownloadComplete = "data_manager.download.complete";
     public const string DataManagerDownloadFailed = "data_manager.download.failed";
-
-    public const string BackupZipCreated = "backup.zip_created";
-    public const string BackupRestoreProgress = "backup.restore_progress";
-    public const string BackupRestoreComplete = "backup.restore_complete";
 
     // §35.4 safety-reaction engine. safety.unsafe fires BEFORE the configured
     // action executes (so the client can raise its alarm modal while the daemon
@@ -319,54 +295,99 @@ public static class WsEventCatalog {
     /// so the WILMA client can validate as well (§60.9.4).
     /// </summary>
     public static readonly IReadOnlyList<string> All = new[] {
-        EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
-        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault, EquipmentFaultActionTaken,
+        EquipmentStateChanged,
+        EquipmentConnected,
+        EquipmentDisconnected,
+        EquipmentConnectionFailed,
+        EquipmentFault,
+        EquipmentFaultActionTaken,
         FilterWheelManualSwap,
         SwitchValueMismatch,
-        CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
-        TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
-        GuiderState, GuiderStep, GuiderEvent, GuiderOperationComplete, GuiderDitherComplete, GuiderFaultActionTaken,
+        CameraExposureStarted,
+        CameraExposureComplete,
+        CameraExposureFailed,
+        TelescopeSlewStarted,
+        TelescopeSlewComplete,
+        TelescopeSlewAborted,
+        GuiderStep,
+        GuiderEvent,
+        GuiderPaResidual,
+        GuiderOperationComplete,
+        GuiderDitherComplete,
+        GuiderFaultActionTaken,
+        GuiderProfilePushed,
+        GuiderDarkLibraryInvalidated,
+        PolarAlignStarted,
+        PolarAlignStopped,
+        PolarAlignProgress,
+        PolarAlignFrameStarted,
+        PolarAlignFrameComplete,
+        PolarAlignPaused,
+        PolarAlignError,
+        PolarAlignStage,
+        PolarAlignNeedsHome,
+        PolarAlignChecked,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,
         AutofocusFallbackClassic,
-        AutofocusStepComplete, AutofocusCurveFit, AutofocusCompleted, AutofocusFailed,
-        TrackingProbeStarted, TrackingProbeRungComplete, TrackingProbeCompleted,
-
-        SequenceCreated, SequenceUpdated, SequenceDeleted,
-        SequenceStarted, SequencePaused, SequenceResumed, SequenceResumeRecentering, SequenceAborted,
-        SequenceStopped, SequenceComplete,
-        SequenceInstructionStarted, SequenceInstructionComplete, SequenceInstructionFailed,
-        SequenceProgress, SequenceRunItemsChanged, SequenceImported, SequenceImportWarning,
-        SequenceAutoFlatsPrompt, SequenceAutoFlatsDecided,
-
+        AutofocusStepComplete,
+        AutofocusCurveFit,
+        AutofocusCompleted,
+        AutofocusFailed,
+        TrackingProbeStarted,
+        TrackingProbeRungComplete,
+        TrackingProbeCompleted,
+        SequenceStarted,
+        SequencePaused,
+        SequenceResumed,
+        SequenceResumeRecentering,
+        SequenceAborted,
+        SequenceStopped,
+        SequenceComplete,
+        SequenceInstructionStarted,
+        SequenceInstructionComplete,
+        SequenceInstructionFailed,
+        SequenceProgress,
+        SequenceRunItemsChanged,
+        SequenceAutoFlatsPrompt,
+        SequenceAutoFlatsDecided,
         CalibrationFlatsGenerated,
-
-        MosaicCreated, MosaicPanelComplete, MosaicComplete,
-
-        FrameComplete, FrameAnalyzed, FrameRecoveredOrphan,
-        FramePreviewReady, FramePreviewVariantReady, FramePreviewVariantEvicted,
-        FrameQualityScored, FramesBulkOperationComplete,
-
-        SessionStarted, SessionEnded,
-        SessionRestretchProgress, SessionRestretchComplete, SessionRestretchFailed,
-
-        BackupStreamFrameAvailable, BackupStreamFrameClaimed, BackupStreamBackpressure,
-
-        ProfileUpdated, ClientSettingsUpdated,
-        DiagnosticsHealthChanged, DiagnosticsIssueDetected,
-        DiagnosticsAutoActionTaken, DiagnosticsAutoActionSkipped, DiagnosticsCleared,
-
-        ServerPendingRestart, ServerRestartImminent,
-        ServerMigratingDatabase, ServerMigrationComplete, ServerMigrationFailed,
-        StorageLogPressure,
+        SequenceFailed,
+        BackupCreateStarted,
+        BackupCreateComplete,
+        BackupCreateFailed,
+        GuiderDarkLibraryStarted,
+        GuiderDarkLibraryProgress,
+        GuiderDarkLibraryComplete,
+        GuiderDarkLibraryFailed,
+        GuiderDefectMapStarted,
+        GuiderDefectMapProgress,
+        GuiderDefectMapComplete,
+        GuiderDefectMapFailed,
+        FrameComplete,
+        FrameAnalyzed,
+        FramePreviewVariantEvicted,
+        SessionStarted,
+        SessionEnded,
+        SessionRestretchProgress,
+        SessionRestretchComplete,
+        SessionRestretchFailed,
+        DiagnosticsIssueDetected,
+        DiagnosticsAutoActionTaken,
+        DiagnosticsCleared,
+        DiagnosticsSnapshot,
+        ProfileUpdated,
+        ClientSettingsUpdated,
+        ServerRestartImminent,
         StorageDevicesChanged,
-        NotificationPosted, NotificationDismissed, NotificationCleared,
-        NotificationAlarmStarted, NotificationAlarmStopped,
-        BugReportPrepared, BugReportSharingModeSet,
-        DataManagerDownloadProgress, DataManagerDownloadComplete, DataManagerDownloadFailed,
-        BackupZipCreated, BackupRestoreProgress, BackupRestoreComplete,
-        SafetyUnsafe, SafetySafe, SafetyActionTaken, SafetyEmergencyStop
+        DataManagerDownloadProgress,
+        DataManagerDownloadComplete,
+        DataManagerDownloadFailed,
+        SafetyUnsafe,
+        SafetySafe,
+        SafetyActionTaken,
+        SafetyEmergencyStop,
     };
 }
 
