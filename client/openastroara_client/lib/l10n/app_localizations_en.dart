@@ -200,11 +200,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
-  }
-
-  @override
   String deviceSlotFilter(int position, String filter) {
     return '$position · $filter';
   }

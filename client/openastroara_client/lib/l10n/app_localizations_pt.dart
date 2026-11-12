@@ -200,11 +200,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
-  }
-
-  @override
   String deviceSlotFilter(int position, String filter) {
     return '$position · $filter';
   }
@@ -4922,11 +4917,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceSlot(int position) {
     return 'Posição $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (posição $position)';
   }
 
   @override

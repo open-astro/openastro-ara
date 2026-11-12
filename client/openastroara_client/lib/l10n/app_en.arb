@@ -245,18 +245,6 @@
       }
     }
   },
-  "deviceFilterInSlot": "{filter} (slot {position})",
-  "@deviceFilterInSlot": {
-    "description": "Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it",
-    "placeholders": {
-      "filter": {
-        "type": "String"
-      },
-      "position": {
-        "type": "int"
-      }
-    }
-  },
   "deviceSlotFilter": "{position} · {filter}",
   "@deviceSlotFilter": {
     "description": "Filter wheel window: a filter's segment, its slot number then its name (e.g. 1 · Ha)",
