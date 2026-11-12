@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/sequencer/sequence_list_state.dart';
-import '../state/simple_flats_choice_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
@@ -62,7 +61,9 @@ class _AutoFlatsPromptListenerState
     try {
       await api.decideAutoFlats(
         sequenceId,
-        choice: ref.read(simpleFlatsChoiceProvider),
+        // Simple Mode's flats are per target, in the queue itself (#1757):
+        // the rig's own end-of-run flats would shoot them twice.
+        choice: 'later',
         remember: false,
       );
     } catch (e) {

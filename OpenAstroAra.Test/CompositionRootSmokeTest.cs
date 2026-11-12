@@ -144,6 +144,12 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public void Offset_calibration_resolves_from_the_composition_root() {
+            // #1675 — POST /equipment/focuser/autofocus takes it as a parameter, so a missing dependency would break autofocus too.
+            Assert.That(app.Services.GetRequiredService<FilterOffsetCalibrationService>(), Is.Not.Null);
+        }
+
         private void AssertLive<TMediator, TService>() where TMediator : class where TService : class {
             object mediator = app.Services.GetRequiredService<TMediator>();
             object service = app.Services.GetRequiredService<TService>();

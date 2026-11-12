@@ -93,6 +93,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_capture_records_the_camera_it_came_from() {
+            // #1757 — the name is the one the FITS INSTRUME header carries (the selected camera's), plus its unique id.
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.EnsureManualCaptureSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Session);
+            using var camera = new CameraService(frames: frames.Object, profileStore: new InMemoryProfileStore());
+            await camera.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(UniqueId: "cam-uid", Name: "ZWO ASI2600MM Pro",
+                Type: DeviceType.Camera, HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 1, AlpacaDeviceNumber: 0, UseHttps: false)),
+                null, CancellationToken.None);
+            var path = Path.Combine(_dir, "dark.fits");
+            await File.WriteAllBytesAsync(path, new byte[64]);
+
+            var id = Guid.NewGuid();
+            await camera.RegisterFrameAsync(id, new ExposureRequestDto(300, 100), FrameType.Dark, "DARK", Captured, path, 100, 80);
+
+            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id
+                && d.CameraName == "ZWO ASI2600MM Pro" && d.CameraId == "cam-uid"), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task The_backfill_leaves_a_frame_Ara_captured_as_the_capture_stored_it() {
             // Review of #1523: a captured row was never marked probed, so the next boot re-read it from
             // its header, whose OBJCTRA is rounded to whole seconds and whose XPIXSZ follows the
