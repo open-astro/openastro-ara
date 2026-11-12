@@ -183,8 +183,8 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
 }
 
 /// A line narrower than this at 1x text puts its button under its words, so
-/// no word breaks mid-word: about what pt-BR's guide scope label and button
-/// need side by side. It grows with the text, as the sheet does.
+/// no word breaks mid-word (pt-BR's longest label and button take about
+/// 350 px side by side). It grows with the text, as the sheet does.
 const double _kLineBesideWidth = 400;
 
 /// One line: a tick when done, else what is missing and the button for it,
