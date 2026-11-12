@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/command_palette.dart';
 
+/// Opens the real palette with the Companion Mode seams set to [platform]
+/// and [shortestSide], so the test goes through `companionModeProvider`.
 Future<void> _openPalette(
   WidgetTester tester, {
   required TargetPlatform platform,
@@ -39,23 +41,21 @@ Future<void> _search(WidgetTester tester, String q) async {
 }
 
 void main() {
-  testWidgets(
-    '#1774 the command palette on a phone finds no Experimental or Image Library hit',
-    (tester) async {
-      await _openPalette(
-        tester,
-        platform: TargetPlatform.iOS,
-        shortestSide: 390,
-      );
-      await _search(tester, 'experimental');
-      expect(find.text('Experimental'), findsNothing);
-      await _search(tester, 'library');
-      expect(find.text('Open Image Library'), findsNothing);
-    },
-  );
+  // #1774: the palette is where a search hit turns into a way into the full UI.
+  testWidgets('#1774 the command palette on a phone offers no full UI hit', (
+    tester,
+  ) async {
+    await _openPalette(tester, platform: TargetPlatform.iOS, shortestSide: 390);
+    await _search(tester, 'experimental');
+    expect(find.text('Experimental'), findsNothing);
+    await _search(tester, 'planning');
+    expect(find.text('Go to Planning'), findsNothing);
+    await _search(tester, 'library');
+    expect(find.text('Open Image Library'), findsNothing);
+  });
 
   testWidgets(
-    '#1774 the command palette on a desktop still finds Experimental and Image Library',
+    '#1774 the command palette on a desktop still offers the full UI hits',
     (tester) async {
       await _openPalette(
         tester,
@@ -64,6 +64,8 @@ void main() {
       );
       await _search(tester, 'experimental');
       expect(find.text('Experimental'), findsWidgets);
+      await _search(tester, 'planning');
+      expect(find.text('Go to Planning'), findsOneWidget);
       await _search(tester, 'library');
       expect(find.text('Open Image Library'), findsOneWidget);
     },
