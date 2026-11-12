@@ -1,13 +1,16 @@
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/cursor_page.dart';
+import 'package:openastroara/models/fault_row.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/screens/library/image_library_screen.dart';
 import 'package:openastroara/services/library_api.dart';
 import 'package:openastroara/widgets/library/bulk_action_bar.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/faults/fault_feed_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
@@ -642,6 +645,91 @@ void main() {
       find.textContaining('Orion'),
       findsNothing,
       reason: 'the 12f.1 demo sessions are gone from this screen',
+    );
+  });
+
+  group('iOS dialogs (#1632)', () {
+    Future<_FakeLibraryClient> selectOne(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final fake = _FakeLibraryClient(
+        sessions: [_session()],
+        frames: {
+          'sess-1': [_frame('f1')],
+        },
+      );
+      await _pump(tester, fake);
+      await tester.longPress(find.text('Ha').first);
+      await tester.pumpAndSettle();
+      return fake;
+    }
+
+    testWidgets(
+      'the rate picker fits the iOS alert and its 5 stars button rates 5',
+      (tester) async {
+        final fake = await selectOne(tester);
+        await tester.tap(find.text('Rate'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        await tester.tap(find.byTooltip('5 stars'));
+        await tester.pumpAndSettle();
+        expect(fake.rated!.$2, 5);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets('the Move to session picker closes on a tap outside it', (
+      tester,
+    ) async {
+      final fake = await selectOne(tester);
+      await tester.ensureVisible(find.text('Move to session'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to session'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsNothing);
+      expect(fake.moved, isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets(
+      'the session faults dialog opens as an iOS alert with every fault',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final row = FaultRow(
+          id: 'fault-1',
+          sessionId: 'sess-1',
+          detectedUtc: DateTime.utc(2026, 6, 30, 23),
+          equipmentType: 'telescope',
+          equipmentId: 'dev-1',
+          equipmentName: 'Mount',
+          faultType: 'disconnected',
+          details: null,
+          actionTaken: null,
+          resolvedUtc: null,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              libraryApiProvider.overrideWithValue(
+                _FakeLibraryClient(sessions: [_session()]),
+              ),
+              sessionFaultsProvider.overrideWith((ref, id) async => [row]),
+            ],
+            child: const MaterialApp(home: ImageLibraryScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('1 fault'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        expect(find.text('Mount — disconnected'), findsOneWidget);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     );
   });
 }

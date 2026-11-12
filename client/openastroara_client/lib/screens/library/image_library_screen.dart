@@ -23,6 +23,7 @@ import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
 import '../../widgets/adaptive_dialog.dart';
+import '../../widgets/adaptive_controls.dart';
 
 const _monthNames = [
   'Jan',
@@ -66,7 +67,7 @@ class ImageLibraryScreen extends ConsumerWidget {
         ),
       ),
       body: sessions.when(
-        loading: () => const Center(child: CircularProgressIndicator.adaptive()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => _CenteredNotice(
           message: friendlyError(context.l10n, e, action: 'load your library'),
           action: OutlinedButton(
@@ -703,16 +704,18 @@ class _SessionFaultsBadge extends ConsumerWidget {
     // status field, and a fault-log hiccup must not clutter every card.
     if (rows == null || rows.isEmpty) return const SizedBox.shrink();
     return TextButton.icon(
-      onPressed: () => showAdaptiveDialog<void>(
+      onPressed: () => showAdaptiveAlert<void>(
         context: context,
         builder: (_) => adaptiveAlertDialog(
           title: Text('Faults — $targetName'),
+          // A Column, not a ListView: the iOS alert measures its content's
+          // height, which a lazy list cannot report. At most 50 rows.
+          scrollable: true,
           content: SizedBox(
             width: 480,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: rows.length,
-              itemBuilder: (context, i) => FaultHistoryTile(row: rows[i]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [for (final row in rows) FaultHistoryTile(row: row)],
             ),
           ),
           actions: [
@@ -756,7 +759,7 @@ class _SessionFramesGrid extends ConsumerWidget {
             child: SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             ),
           ),
         ),

@@ -83,7 +83,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final rating = await showAdaptiveDialog<int>(
+                              final rating = await showAdaptiveAlert<int>(
                                 context: context,
                                 builder: (_) => const _RatePickerDialog(),
                               );
@@ -103,7 +103,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final tags = await showAdaptiveDialog<_TagEdit>(
+                              final tags = await showAdaptiveAlert<_TagEdit>(
                                 context: context,
                                 builder: (_) => const _TagDialog(),
                               );
@@ -123,7 +123,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final target = await showAdaptiveDialog<String>(
+                              final target = await showDialog<String>(
                                 context: context,
                                 builder: (_) => const _SessionPickerDialog(),
                               );
@@ -197,7 +197,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final confirmed = await showAdaptiveDialog<bool>(
+                              final confirmed = await showAdaptiveAlert<bool>(
                                 context: context,
                                 builder: (_) =>
                                     _DeleteConfirmDialog(count: ids.length),
@@ -302,12 +302,16 @@ class _RatePickerDialog extends StatelessWidget {
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Flexible: five 48 px buttons overflow the 270 pt iOS alert, so
+          // each shrinks to its share there (about 47 px); Material keeps 48.
           for (var stars = 1; stars <= 5; stars++)
-            IconButton(
-              tooltip: '$stars star${stars == 1 ? '' : 's'}',
-              onPressed: () => Navigator.of(context).pop(stars),
-              icon: Icon(Icons.star,
-                  color: AraColors.accentBusy, size: 20 + stars.toDouble()),
+            Flexible(
+              child: IconButton(
+                tooltip: '$stars star${stars == 1 ? '' : 's'}',
+                onPressed: () => Navigator.of(context).pop(stars),
+                icon: Icon(Icons.star,
+                    color: AraColors.accentBusy, size: 20 + stars.toDouble()),
+              ),
             ),
         ],
       ),
@@ -366,16 +370,18 @@ class _TagDialogState extends State<_TagDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // "comma-separated" as helper text: in the label it was cut off in
+          // the narrow iOS alert.
           TextField(
             controller: _add,
-            decoration:
-                const InputDecoration(labelText: 'Add tags (comma-separated)'),
+            decoration: const InputDecoration(
+                labelText: 'Add tags', helperText: 'Comma-separated'),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _remove,
             decoration: const InputDecoration(
-                labelText: 'Remove tags (comma-separated)'),
+                labelText: 'Remove tags', helperText: 'Comma-separated'),
           ),
         ],
       ),
