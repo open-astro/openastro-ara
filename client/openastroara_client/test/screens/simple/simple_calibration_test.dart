@@ -521,6 +521,25 @@ void main() {
         expect(find.textContaining('ASI2600MM'), findsOneWidget, reason: 'the library belongs to the camera');
       });
 
+      testWidgets('a set built today reads "taken today", and one frame is not "1 frames"', (tester) async {
+        await library(tester, [
+          DarkLibraryEntry(id: 'n', exposureSeconds: 300, gain: 100, temperatureC: -10, frameCount: 1,
+              capturedUtc: DateTime.now().toUtc(), fileSizeBytes: 1),
+        ]);
+        expect(find.text('taken today · 1 frame'), findsOneWidget);
+        expect(find.textContaining('today old'), findsNothing);
+      });
+
+      testWidgets('no plan queued is not a problem: the head is dim, not amber', (tester) async {
+        await _pump(tester, [_session()], child: panelView(), overrides: [
+          simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+        ]);
+        expect(find.byKey(const Key('simple-calibration-library-cover')), findsOneWidget);
+        final head = tester.widget<Text>(find.descendant(
+            of: find.byKey(const Key('simple-calibration-library-cover')), matching: find.byType(Text)).first);
+        expect(head.style?.color, AraColors.textSecondary);
+      });
+
       testWidgets('the library is the camera the rig names, and a set from before cameras were recorded says so', (tester) async {
         final (c, cal, _, _) = await library(tester, [_dark(300)]);
         cal.library = DarkLibraryState(status: 'idle', totalCombinations: 0, completedCombinations: 0,
