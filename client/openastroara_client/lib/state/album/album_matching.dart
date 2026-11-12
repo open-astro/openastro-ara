@@ -20,7 +20,13 @@ final RegExp _rcwDesignation = RegExp(r'^RCW (\d+)$');
 
 /// The RCW number of [d]: the lowest `RCW n` among its id and aliases (a nebula that
 /// carries two RCW numbers is one Card, labelled by the first), null without one.
-int? rcwNumOf(PlanningDso d) {
+/// Worked out once per row: until its Books are matched the Album asks it of every
+/// catalog row on each build.
+int? rcwNumOf(PlanningDso d) => (_rcwNums[d] ??= (_scanRcwNum(d),)).$1;
+
+final Expando<(int?,)> _rcwNums = Expando('rcwNum');
+
+int? _scanRcwNum(PlanningDso d) {
   int? best;
   for (final s in [d.id, ...d.aliases]) {
     final n = int.tryParse(_rcwDesignation.firstMatch(s)?.group(1) ?? '');

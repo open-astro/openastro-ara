@@ -224,6 +224,16 @@ void main() {
       expect(rcw.map((d) => bookNumberOf(d, AlbumBook.rcw)), [5, 8, 53]);
     });
 
+    test("a row's RCW number is worked out once, not again on every build of the Album (#1629)", () {
+      // Rows never change, so the scan runs once per row; an alias added afterwards (only a
+      // test can) is not seen.
+      final aliases = ['Gum 22'];
+      final row = _dso('RCW 38', aliases: aliases);
+      expect(rcwNumOf(row), 38);
+      aliases.add('RCW 1');
+      expect(rcwNumOf(row), 38);
+    });
+
     test('an object in two Books is a Card in each, so the RCW count is the true count (#1629)', () {
       final catalog = [_dso('NGC3114', c: 90, aliases: ['RCW 40']), _dso('RCW 41'), _dso('NGC1976', m: 42, aliases: ['RCW 9'])];
       expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
