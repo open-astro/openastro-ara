@@ -38,6 +38,10 @@ _Avoid_: calibration (alone, for the frames: it also names the Guider's mount ca
 One camera's darks and bias, kept on the rig and reused for months: darks by exposure, gain and temperature, bias by gain, offset and binning. Simple Mode's Calibration › Darks & bias shows it and whether it covers the queued plan.
 _Avoid_: tonight's darks (they are the camera's, not the night's)
 
+**Guide Camera Custody**:
+Which activity holds the Guide Camera at a given moment, and how it passes from one to the next.
+_Avoid_: lease (the guider program's own word), lock
+
 **Polar Align Routine**:
 The steps that measure the polar alignment error while the person turns the mount's bolts.
 _Avoid_: Polar Align session, Polar Align run
@@ -47,6 +51,20 @@ _Avoid_: Polar Align session, Polar Align run
 **Control Slot**:
 The single right to command the rig, held by one connected client at a time and handed over through a takeover request.
 _Avoid_: session (for holding the slot)
+
+**Event Declaration**:
+The one statement of an event the rig sends to the app: its name and what it carries.
+_Avoid_: event catalog entry, message type
+
+### Rig
+
+**Profile Section**:
+One named part of a profile, such as Storage or Site, read and saved as a whole.
+_Avoid_: settings group, settings page
+
+**Device Command**:
+One instruction to a device that the rig waits on until it is done, stalls or fails.
+_Avoid_: operation, action, move (when the wait is meant)
 
 ### Presentations
 

@@ -91,3 +91,6 @@ referred to by its slug until it is written, and numbered then.
 - [A device's lifecycle is one module](0011-device-lifecycle-is-one-module.md)
 - [A profile section is declared once](0012-a-profile-section-is-declared-once.md)
 - [Presentations render shared client modules](0013-presentations-render-shared-client-modules.md)
+- [A WebSocket event is declared once](0014-a-websocket-event-is-declared-once.md)
+- [A client profile section is loaded before it is saved](0015-a-client-profile-section-is-loaded-before-it-is-saved.md)
+- [Guide Camera custody is one module in the daemon](0016-guide-camera-custody-is-one-module.md)
