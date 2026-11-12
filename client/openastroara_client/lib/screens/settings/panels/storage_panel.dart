@@ -4,6 +4,7 @@ import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/simple_messages_state.dart';
 import '../../../state/simple_mode_state.dart';
@@ -95,8 +96,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
   }
 
   ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    return ref.read(profileApiProvider);
   }
 
   @override
