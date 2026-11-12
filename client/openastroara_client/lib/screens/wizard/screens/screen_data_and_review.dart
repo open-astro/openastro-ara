@@ -424,7 +424,7 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       draft.plateSolve.solverDatabasePackageIds = const [];
       setState(() {
         _loading = false;
-        _error = friendlyError(context.l10n, e, action: 'work out which star database this rig needs');
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionStarDatabase);
       });
     }
   }

@@ -267,6 +267,7 @@ class ClassifyTest(unittest.TestCase):
             ".github/workflows/pr-body.yml",
             ".github/workflows/label-trusted-authors.yml",
             ".github/workflows/merge-queue.yml",
+            ".github/workflows/auto-queue.yml",
             ".github/dependabot.yml",
             ".github/FUNDING.yml",
             ".github/pull_request_template.md",
@@ -283,6 +284,7 @@ class ClassifyTest(unittest.TestCase):
             "scripts/check-help-registry.mjs",
             "scripts/fit-star-count-model.py",
             "scripts/merge-gate.sh",
+            "scripts/auto-queue.sh",
             "scripts/tests/<anything>",
         }
         probe = sorted(

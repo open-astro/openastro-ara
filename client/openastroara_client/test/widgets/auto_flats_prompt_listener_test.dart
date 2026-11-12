@@ -89,6 +89,7 @@ void main() {
   Future<(_FakeConnector, _RecordingClient)> pumpListener(
     WidgetTester tester, {
     bool simple = false,
+    bool companion = false,
   }) async {
     final conn = _FakeConnector();
     final client = _RecordingClient();
@@ -108,6 +109,10 @@ void main() {
           sequenceApiProvider.overrideWith((ref) => client),
           simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
           simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(simple)),
+          companionPlatformProvider.overrideWithValue(TargetPlatform.android),
+          companionShortestSideProvider.overrideWithValue(
+            companion ? 390 : 800,
+          ),
         ],
         child: const MaterialApp(
           home: Scaffold(
@@ -155,6 +160,21 @@ void main() {
       expect(client.lastId, 'seq-1');
       expect(client.lastChoice, 'panel_at_end');
       expect(client.lastRemember, isTrue);
+    });
+
+    // Falsified by: auto_flats_prompt_listener.dart build, drop the companionModeProvider term.
+    testWidgets('#1774 Companion Mode with both prefs off says not tonight, with no popup', (tester) async {
+      final (conn, client) = await pumpListener(tester, companion: true);
+      await tester.pump();
+
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.lastId, 'seq-1');
+      expect(client.lastChoice, 'later');
+      expect(client.lastRemember, isFalse);
     });
 
     testWidgets("Simple Mode says not tonight: its flats are per target, in the queue (#1757)", (tester) async {

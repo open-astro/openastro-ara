@@ -26,7 +26,15 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../services/dso_catalog_service.dart'
-    show DsoSuggestion, PlanningDso, designationKey, searchSuggestions;
+    show
+        DsoSuggestion,
+        PlanningDso,
+        designationKey,
+        designationWithName,
+        isCatalogDesignation,
+        searchSuggestions,
+        suggestionDesignation,
+        suggestionTitle;
 import '../../state/sky_atlas/dso_catalog_state.dart'
     show bundledCatalogProvider;
 import '../../services/tonight_sky_api.dart';
@@ -134,23 +142,32 @@ String simpleSuggestionLine(AppLocalizations l, TonightSkyObject o) {
   return [if (o.type.isNotEmpty) o.type, where].join(' · ');
 }
 
+/// [all] with [first] in front: the designation the object was picked by, so
+/// the plan header names what the row or Card showed. [all] when null.
+List<String> _pickedFirst(String? first, List<String> all) => first == null
+    ? all
+    : [first, ...all.where((d) => designationKey(d) != designationKey(first))];
+
 /// A suggestion as the planetarium's selection, so the plan takes it as if
-/// tapped in the sky. Pure — unit-tested.
+/// tapped in the sky; [designation] as in [simpleSelectionOfDso]. Pure —
+/// unit-tested.
 // shortcut: the ranker's position is J2000 and stands in for JNOW too; only
 // the plan (J2000) reads it, the planetarium isn't pointed at it.
-PlanetariumSelection simpleSelectionOf(TonightSkyObject o) =>
-    PlanetariumSelection(
-      name: o.name,
-      kind: o.type,
-      raHours: o.raDeg / 15,
-      decDeg: o.decDeg,
-      raJ2000Hours: o.raDeg / 15,
-      decJ2000Deg: o.decDeg,
-      altDeg: o.altitudeDeg,
-      maxAltDeg: o.maxAltitudeDeg,
-      rise: o.windowStartUtc?.toLocal(),
-      designations: [o.id, ...o.aliases],
-    );
+PlanetariumSelection simpleSelectionOf(
+  TonightSkyObject o, {
+  String? designation,
+}) => PlanetariumSelection(
+  name: o.name,
+  kind: o.type,
+  raHours: o.raDeg / 15,
+  decDeg: o.decDeg,
+  raJ2000Hours: o.raDeg / 15,
+  decJ2000Deg: o.decDeg,
+  altDeg: o.altitudeDeg,
+  maxAltDeg: o.maxAltitudeDeg,
+  rise: o.windowStartUtc?.toLocal(),
+  designations: _pickedFirst(designation, [o.id, ...o.aliases]),
+);
 
 /// A position's altitude above the site at [utc], in degrees. Pure —
 /// unit-tested.
@@ -170,8 +187,13 @@ double simpleAltitudeDeg(
   utc: utc,
 );
 
-/// A picked catalog object as the selection, at the site and time now.
-PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
+/// A picked catalog object as the selection, at the site and time now;
+/// [designation] as in [simpleSelectionOfDso].
+PlanetariumSelection simplePickDso(
+  WidgetRef ref,
+  PlanningDso d, {
+  String? designation,
+}) {
   final site = ref.read(siteSettingsProvider);
   return simpleSelectionOfDso(
     d,
@@ -180,6 +202,7 @@ PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
     // 0, 0 is the unset site (as tonight_sky_state reads it): no altitude from a made-up position.
     longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0 ? null : site.longitudeDeg,
     utc: ref.read(clockProvider)().toUtc(),
+    designation: designation,
   );
 }
 
@@ -187,13 +210,15 @@ PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
 /// when it lists the object under any designation, so altitude and rise come
 /// with it; else the catalog position, with the altitude computed when
 /// [longitudeDeg] and [utc] are given and the transit altitude from
-/// [latitudeDeg]. Pure — unit-tested.
+/// [latitudeDeg]. [designation], the one it was picked by (a search row's or
+/// a Card's), leads its designations. Pure — unit-tested.
 PlanetariumSelection simpleSelectionOfDso(
   PlanningDso d,
   List<TonightSkyObject> ranked, {
   required double latitudeDeg,
   double? longitudeDeg,
   DateTime? utc,
+  String? designation,
 }) {
   final keys = {for (final n in [d.id, ...d.aliases]) designationKey(n)};
   final row = ranked
@@ -201,7 +226,7 @@ PlanetariumSelection simpleSelectionOfDso(
         (o) => [o.id, ...o.aliases].any((n) => keys.contains(designationKey(n))),
       )
       .firstOrNull;
-  if (row != null) return simpleSelectionOf(row);
+  if (row != null) return simpleSelectionOf(row, designation: designation);
   return PlanetariumSelection(
     name: d.name,
     kind: d.type,
@@ -219,7 +244,7 @@ PlanetariumSelection simpleSelectionOfDso(
             utc: utc,
           ),
     maxAltDeg: 90 - (latitudeDeg - d.decDeg).abs(),
-    designations: [d.id, ...d.aliases],
+    designations: _pickedFirst(designation, [d.id, ...d.aliases]),
   );
 }
 
@@ -1133,7 +1158,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   // The target at once, and the Plan sheet stays up.
                   ref
                       .read(planetariumSelectionProvider.notifier)
-                      .set(simplePickDso(ref, hit.dso));
+                      .set(
+                        simplePickDso(
+                          ref,
+                          hit.dso,
+                          designation: suggestionDesignation(hit),
+                        ),
+                      );
                   setState(() => _suggesting = false);
                 },
               ),
@@ -1145,13 +1176,20 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Wraps, never cut short: whole up to 2x text.
                           Text(
-                            sel.name,
+                            designationWithName(
+                              // The first catalog designation: the one it was
+                              // picked by, not a SIMBAD "NAME ..." identifier.
+                              sel.designations
+                                      .where(isCatalogDesignation)
+                                      .firstOrNull ??
+                                  '',
+                              sel.name,
+                            ),
                             style: kSimpleText.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             simpleTargetStatus(sel, context.l10n),
@@ -2051,10 +2089,9 @@ class SimpleRunPanel extends ConsumerWidget {
   }
 }
 
-/// One search suggestion: the designation that matched, the common name and
-/// what it is, 44 pt tall.
-/// A catalog suggestion as a row: the designation, then its common name and
-/// magnitude. Plan's search and Simple Mode's search list them.
+/// A catalog suggestion as a row, 44 pt tall: `designation (name)` (the
+/// nickname that matched, when one did) and the magnitude. Plan's search and
+/// Simple Mode's search list them.
 class SimpleSuggestion extends StatelessWidget {
   const SimpleSuggestion({super.key, required this.hit, required this.onTap});
 
@@ -2065,7 +2102,6 @@ class SimpleSuggestion extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = hit.dso;
     final detail = [
-      if (o.name.isNotEmpty && o.name != hit.label) o.name,
       if (o.magnitude != null)
         context.l10n.planMagnitude(o.magnitude!.toStringAsFixed(1)),
     ].join(' · ');
@@ -2084,17 +2120,19 @@ class SimpleSuggestion extends StatelessWidget {
                 size: 18,
                 color: AraColors.textSecondary,
               ),
-              Text(
-                hit.label,
-                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+              // Both wrap, never cut short: whole up to 2x text.
+              Flexible(
+                flex: 3,
+                child: Text(
+                  suggestionTitle(hit),
+                  style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
               if (detail.isNotEmpty)
                 Expanded(
                   child: Text(
                     detail,
                     style: kSimpleText.copyWith(color: AraColors.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
             ],

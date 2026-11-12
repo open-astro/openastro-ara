@@ -34,9 +34,9 @@ class SkyAlbumScreen extends ConsumerStatefulWidget {
   const SkyAlbumScreen({super.key, required this.onImageTarget});
 
   /// Fired from a card back's action, grid and shelf alike, with the card's
-  /// object. The shell decides what imaging it means (Simple Mode opens the
-  /// plan sheet with the target picked).
-  final void Function(PlanningDso target) onImageTarget;
+  /// object and its label ("M 31", "RCW 38"). The shell decides what imaging
+  /// it means (Simple Mode opens the plan sheet with the target picked).
+  final void Function(PlanningDso target, String label) onImageTarget;
 
   @override
   ConsumerState<SkyAlbumScreen> createState() => _SkyAlbumScreenState();
@@ -111,7 +111,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
         if (_catalogs.isEmpty || _catalogs.contains(b)) b,
     ];
     final views = {for (final b in AlbumBook.values) b: ref.watch(albumBookProvider(b)).value};
-    // Before a Book is matched its cards still show, all grey.
+    // Before a Book is matched its cards still show, all grey. An object in two Books
+    // shows once, as its first Book's Card.
     final bookOf = <String, AlbumBook>{};
     final bookSize = <AlbumBook, int>{};
     final objects = <PlanningDso>[];
@@ -119,6 +120,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       final list = views[b]?.objects ?? bookObjects(catalog, b);
       bookSize[b] = list.length;
       for (final d in list) {
+        if (bookOf.containsKey(d.id)) continue;
         bookOf[d.id] = b;
         objects.add(d);
       }
@@ -131,15 +133,20 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
     AlbumCardData cardFor(PlanningDso d) {
       final book = bookOf[d.id]!;
-      final n = (book == AlbumBook.messier ? d.messierNum : d.caldwellNum)!;
-      final label = book == AlbumBook.messier ? 'M $n' : 'C $n';
+      final n = bookNumberOf(d, book)!;
+      final label = bookLabel(d, book);
       return AlbumCardData(
         dso: d,
         label: label,
         number: n,
         bookSize: bookSize[book]!,
         stats: stats[d.id],
-        art: manifest[albumArtId(label)],
+        // Its own Book's Art, else the picture another Book has of the same object.
+        art: [book, ...AlbumBook.values]
+            .where((b) => bookNumberOf(d, b) != null)
+            .map((b) => manifest[albumArtId(bookLabel(d, b))])
+            .nonNulls
+            .firstOrNull,
       );
     }
 
@@ -169,7 +176,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     };
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
-    Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
+    void imageTarget(PlanningDso d) => widget.onImageTarget(d, bookLabel(d, bookOf[d.id]!));
+    Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => imageTarget(d));
     // The new-cards shelf: the catalogs shown, in Book order, and only cards that are
     // collected, so it hides under Missing. Its cards play their reveal once.
     final fresh = _filter == AlbumFilter.missing
@@ -185,7 +193,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     ].join(' · ');
     Widget freshCard(PlanningDso d) => AlbumCard(
           cardFor(d),
-          onAction: () => widget.onImageTarget(d),
+          onAction: () => imageTarget(d),
           reveal: !_revealed.contains(d.id),
           revealFrom: _revealFrom[d.id],
           onRevealed: () => setState(() => _revealed.add(d.id)),
@@ -231,7 +239,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             height: 44,
             child: FilterChip(
               label: Text(l.albumBookCount(
-                  b == AlbumBook.messier ? l.albumBookMessier : l.albumBookCaldwell, views[b]?.collected ?? 0)),
+                  switch (b) {
+                    AlbumBook.messier => l.albumBookMessier,
+                    AlbumBook.caldwell => l.albumBookCaldwell,
+                    AlbumBook.rcw => l.albumBookRcw,
+                  },
+                  views[b]?.collected ?? 0)),
               selected: _catalogs.contains(b),
               labelStyle: headerText,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

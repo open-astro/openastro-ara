@@ -50,7 +50,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -85,8 +85,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       setState(
         () => _lastError = siteSaved
             ? 'Site preferences saved, but the horizon skyline was not. '
-                '${friendlyError(context.l10n, e, action: 'save the horizon skyline')}'
-            : friendlyError(context.l10n, e, action: 'save that'),
+                '${friendlyError(context.l10n, e, action: context.l10n.actionSaveHorizon)}'
+            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }

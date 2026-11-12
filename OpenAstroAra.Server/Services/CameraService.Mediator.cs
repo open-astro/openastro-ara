@@ -115,6 +115,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         if (_frames is null) {
             throw new InvalidOperationException("frame catalog is not configured; captures cannot be stored");
         }
+        // #1689 — a light is not taken through the dome wall: while the dome follows the mount, wait (up to
+        // the profile's dome sync timeout) for it to arrive. Calibration frames don't look through the slit.
+        if (string.IsNullOrWhiteSpace(sequence.ImageType) || sequence.ImageType == ImageTypes.LIGHT) {
+            if (_domeFollower?.Invoke() is { IsFollowing: true } follower) {
+                await follower.WaitForDomeSynchronization(token).ConfigureAwait(false);
+            }
+        }
 
         var request = new ExposureRequestDto(
             ExposureSec: sequence.ExposureTime,

@@ -166,8 +166,7 @@ public interface IWsBroadcaster {
 
 /// <summary>
 /// Buffered event channel feeding <see cref="IWsBroadcaster"/>. Bounded so
-/// fast emitters don't drown the consumer; backpressure surfaces as a
-/// <c>backup.stream.backpressure</c> event when buffers approach capacity.
+/// fast emitters don't drown the consumer.
 /// </summary>
 public interface IWsEventChannel {
     Task EnqueueAsync(WsEventEnvelopeDto envelope, CancellationToken ct);
