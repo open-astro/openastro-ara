@@ -590,11 +590,11 @@ void main() {
       final rig = FakeRigSettings();
       final a = make(rig: rig);
       final onA = prefs
-        ..acked = {for (var i = 1; i <= 50; i++) 'a$i:completed'};
+        ..acked = {for (var i = 1; i <= 49; i++) 'a$i:completed'};
       await a.read(sessionSummaryProvider.future);
-      await settle(); // A seeds the rig with its 50
+      await settle(); // A seeds the rig with its 49
       final b = make(rig: rig);
-      final onB = prefs..acked = {'b1:completed'};
+      final onB = prefs..acked = {'b1:completed', 'b2:completed'};
       await b.read(sessionSummaryProvider.future);
       await settle();
 
@@ -615,6 +615,12 @@ void main() {
       expect(rig.merges, writes, reason: 'no device keeps sending');
       final kept = (rig.stored['session_dismissals'] as List).cast<String>();
       expect(kept, hasLength(SessionSummaryPrefsService.cap));
+      expect(
+        kept,
+        isNot(contains('b1:completed')),
+        reason: 'the free slot takes the newer of the two only B holds',
+      );
+      expect(kept, contains('b2:completed'));
       expect(onA.acked, kept.toSet());
       expect(onB.acked, kept.toSet());
     },
