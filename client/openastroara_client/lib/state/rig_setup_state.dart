@@ -7,6 +7,7 @@ import 'guider/guider_live_state.dart' show guiderLiveApiProvider;
 import 'guider/guider_state.dart';
 import 'profile_management_state.dart';
 import 'saved_server_state.dart';
+import 'sequencer/rig_capabilities_state.dart' show guiderConfigured;
 import 'settings/optics_settings_state.dart';
 import 'settings/phd2_settings_state.dart';
 import 'settings/site_settings_state.dart';
@@ -38,7 +39,8 @@ class RigSetupFacts {
   /// width, sensor height and pixel size.
   final bool opticsConfigured;
 
-  /// The profile has a Guider (its equipment status is known, connected or not).
+  /// The rig has a Guider, connected or not ([guiderConfigured]): the daemon
+  /// reports one, or the profile names its guide camera.
   final bool hasGuider;
   final int guideFocalLengthMm;
   final double guidePixelSizeUm;
@@ -124,7 +126,7 @@ final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
     latitudeDeg: site.latitudeDeg,
     longitudeDeg: site.longitudeDeg,
     opticsConfigured: optics.isConfigured,
-    hasGuider: guider != null,
+    hasGuider: guiderConfigured(guider, guide),
     guideFocalLengthMm: guide.guideFocalLength,
     guidePixelSizeUm: guide.guidePixelSize,
     guiderConnected: connected,

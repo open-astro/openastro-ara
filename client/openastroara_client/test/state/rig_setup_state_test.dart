@@ -33,10 +33,14 @@ const _setUpOptics = OpticsSettings(
 /// The profile reads the facts wait for, without Dio. A null value is a read
 /// that fails, as against a rig that is still booting.
 class _Profile extends ProfileApi {
-  _Profile({this.site = _setUpSite, this.optics = _setUpOptics})
-    : super(const AraServer(hostname: '192.0.2.10', port: 5555));
+  _Profile({
+    this.site = _setUpSite,
+    this.optics = _setUpOptics,
+    this.phd2 = const Phd2Settings(guideFocalLength: 240, guidePixelSize: 3.75),
+  }) : super(const AraServer(hostname: '192.0.2.10', port: 5555));
   final SiteSettings? site;
   final OpticsSettings? optics;
+  final Phd2Settings phd2;
   @override
   Future<SiteSettings> getSiteSettings() async =>
       site ?? (throw Exception('connection refused'));
@@ -44,11 +48,11 @@ class _Profile extends ProfileApi {
   Future<OpticsSettings> getOptics() async =>
       optics ?? (throw Exception('connection refused'));
   @override
-  Future<Phd2Settings> getPhd2Settings() async =>
-      const Phd2Settings(guideFocalLength: 240, guidePixelSize: 3.75);
+  Future<Phd2Settings> getPhd2Settings() async => phd2;
 }
 
-/// A profile without a Guider.
+/// The daemon holds no Guider (its status read is a 404): never connected,
+/// disconnected, or none on the rig.
 class _NoGuider extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async => null;
@@ -280,6 +284,26 @@ void main() {
 
       expect(c.read(rigSetupGapsProvider), isEmpty);
     });
+
+    test(
+      'a Guider the profile names counts while the daemon reports none',
+      () async {
+        // Never connected, disconnected, or not connected at boot: the status
+        // read is a 404, but the profile names the guide camera.
+        final c = await _trust(
+          _Profile(
+            phd2: const Phd2Settings(
+              guiderCamera: 'Alpaca Camera [192.0.2.10:11111/1]',
+            ),
+          ),
+        );
+        expect(c.read(rigSetupFactsProvider)?.calibrationUnchecked, isTrue);
+        expect(c.read(rigSetupGapsProvider), [
+          RigSetupGap.guideScope,
+          RigSetupGap.guiderCalibration,
+        ]);
+      },
+    );
   });
 
   group('rigSetupRigKey', () {
