@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
+import '../../../models/filter_offset_calibration.dart';
 import '../../../models/filter_wheel_status.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
+import '../../../state/focus/filter_offset_calibration_state.dart';
+import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/filter_wheel_policy_state.dart';
@@ -89,6 +92,10 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           value: policy.useFilterWheelOffsets,
           onChanged: policyN.setUseFilterWheelOffsets,
         ),
+        // #1675: measure the offsets that switch uses (Simple Mode's Focus ›
+        // Offsets drives the same daemon routine; ADR 0009 rule 1).
+        if (status.value case final s? when s.isConnected && !s.manual)
+          _FocusOffsetsSection(slots: s.slots),
         // Local slot labels — the user's filter names used when authoring
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
         // independent of the connected wheel's own names shown live above. Hidden
@@ -446,5 +453,117 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
         context,
       ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSaveSlotLabels))));
     }
+  }
+}
+
+/// Calibrate the wheel's focus offsets: every named filter but a dark, from
+/// the reference (the autofocus filter, else L or Lum, else the lowest), then
+/// the results to save or discard. The daemon refuses a start it can't run
+/// (a plan or focus routine running, no camera or absolute focuser) and says
+/// why.
+class _FocusOffsetsSection extends ConsumerWidget {
+  final List<FilterSlot> slots;
+  const _FocusOffsetsSection({required this.slots});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
+    final live = ref.watch(filterOffsetCalibrationProvider);
+    final notifier = ref.read(filterOffsetCalibrationProvider.notifier);
+    final cal = live.calibration;
+    final running = live.isRunning;
+    final picks = defaultOffsetPicks(slots);
+    final reference = offsetReference(
+        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)));
+    final all = {...picks, ?reference}.toList()..sort();
+    final theme = Theme.of(context).textTheme;
+    final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    String rowValue(FilterOffsetRow r) => r.isMeasured
+        ? '${r.offset! >= 0 ? '+' : ''}${r.offset} · R² ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
+            ' · ${l.focusOffsetsColPrevious} ${r.previousOffset}'
+        : r.isFailed
+            ? '${l.focusOffsetsRowFailed}${r.failureReason == null ? '' : ': ${r.failureReason}'}'
+            : running
+                ? l.focusOffsetsRowPending
+                : l.focusOffsetsRowSkipped;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SettingsSectionHeader(
+          l.focusOffsetsTitle,
+          trailing: running
+              ? OutlinedButton(
+                  key: const Key('settings-offsets-cancel'),
+                  onPressed: live.busy ? null : notifier.cancel,
+                  child: Text(l.focusOffsetsCancel),
+                )
+              : OutlinedButton(
+                  key: const Key('settings-offsets-start'),
+                  onPressed: live.busy || reference == null || all.length < 2
+                      ? null
+                      : () => notifier.start(all),
+                  child: Text(l.focusOffsetsStart),
+                ),
+        ),
+        if (cal == null)
+          Text(
+            reference == null || all.length < 2
+                ? l.focusOffsetsPickOne
+                : l.focusOffsetsReference(
+                    slots.firstWhere((s) => s.position == reference).name),
+            style: dim,
+          )
+        else ...[
+          if (running)
+            Text(
+              cal.currentName == null
+                  ? l.focusOffsetsStarting
+                  : l.focusOffsetsMeasuring(cal.currentName!, cal.runIndex, cal.runCount),
+            )
+          else if (cal.state == 'cancelled')
+            Text(l.focusOffsetsStopped, style: dim)
+          else if (cal.state == 'failed')
+            Text(cal.reason ?? l.focusOffsetsFailed,
+                style: const TextStyle(color: AraColors.errorText)),
+          for (final r in cal.filters)
+            SettingsRow(label: r.name.isEmpty ? 'Slot ${r.position}' : r.name, value: rowValue(r)),
+          if (cal.driftWarning && cal.referenceFirstPosition != null && cal.referenceSecondPosition != null)
+            Text(
+              l.focusOffsetsDrift(
+                  (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
+              style: const TextStyle(color: AraColors.accentWarning),
+            ),
+          if (cal.isComplete && !live.saved)
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  key: const Key('settings-offsets-save'),
+                  onPressed: live.busy ? null : notifier.save,
+                  child: Text(l.focusOffsetsSave),
+                ),
+                OutlinedButton(
+                  key: const Key('settings-offsets-discard'),
+                  onPressed: live.busy ? null : notifier.discard,
+                  child: Text(l.focusOffsetsDiscard),
+                ),
+              ],
+            )
+          else if (!running && !live.saved)
+            OutlinedButton(
+              key: const Key('settings-offsets-discard'),
+              onPressed: live.busy ? null : notifier.discard,
+              child: Text(l.focusOffsetsDiscard),
+            ),
+          if (live.saved) Text(l.focusOffsetsSaved, style: dim),
+        ],
+        if (live.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(friendlyError(l, live.error!, action: l.focusOffsetsStart.toLowerCase()),
+                style: const TextStyle(color: AraColors.errorText)),
+          ),
+      ],
+    );
   }
 }

@@ -12,7 +12,6 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
-import 'package:openastroara/state/simple_flats_choice_state.dart';
 import 'package:openastroara/widgets/auto_flats_prompt_listener.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 
@@ -158,24 +157,7 @@ void main() {
       expect(client.lastRemember, isTrue);
     });
 
-    testWidgets('Simple Mode sends the flats choice made on the Plan sheet, with no popup or pill', (tester) async {
-      final (conn, client) = await pumpListener(tester, simple: true);
-      await tester.pump();
-      final c = ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)));
-      c.read(simpleFlatsChoiceProvider.notifier).set('panel_at_end');
-
-      emitPrompt(conn);
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Capture calibration frames tonight?'), findsNothing);
-      expect(client.lastId, 'seq-1');
-      expect(client.lastChoice, 'panel_at_end');
-      expect(client.lastRemember, isFalse, reason: 'this plan only');
-      expect(c.read(simpleMessagesProvider), isEmpty);
-    });
-
-    testWidgets('Simple Mode says not tonight when nothing was picked', (tester) async {
+    testWidgets("Simple Mode says not tonight: its flats are per target, in the queue (#1757)", (tester) async {
       final (conn, client) = await pumpListener(tester, simple: true);
       await tester.pump();
 

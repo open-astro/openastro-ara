@@ -123,6 +123,8 @@ Map<String, dynamic> buildImagingRunBody({
   String? stopAtDawn,
   // #1560 — park the mount once the last target is done (before the warm-up).
   bool parkAtEnd = false,
+  // #1757 — see [buildTargetBlock].
+  bool flatsAfter = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -148,6 +150,7 @@ Map<String, dynamic> buildImagingRunBody({
     rig: rig,
     unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
+    flatsAfter: flatsAfter,
     coolToC: coolToC,
     alwaysCenter: alwaysCenter,
     stopAtDawn: stopAtDawn,
@@ -237,6 +240,9 @@ Map<String, dynamic> buildTargetBlock({
   bool alwaysCenter = false,
   // #1560 — see [buildImagingRunBody].
   String? stopAtDawn,
+  // #1757 — flats for the plan's filters right after its last frame, at its
+  // rotator angle.
+  bool flatsAfter = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -499,11 +505,11 @@ Map<String, dynamic> buildTargetBlock({
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),
-        imagingLoop(
-          name: '${plan[i].filterName.trim()} Imaging',
-          expSeconds: plan[i].exposureSeconds,
-          count: plan[i].frameCount,
-        ),
+          imagingLoop(
+            name: '${plan[i].filterName.trim()} Imaging',
+            expSeconds: plan[i].exposureSeconds,
+            count: plan[i].frameCount,
+          ),
       ]
     else
       imagingLoop(
@@ -511,6 +517,8 @@ Map<String, dynamic> buildTargetBlock({
         expSeconds: exposureSeconds,
         count: frameCount,
       ),
+    if (flatsAfter && plan != null)
+      ...flatSets([for (final p in plan) p.filterName], rig, gain: gain, offset: offset),
   ];
 
   var block = _item(sequentialContainerType);
@@ -590,8 +598,139 @@ Map<String, dynamic> inheritDawnStop(
 Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
     withChildren(root, [
       for (final c in childrenOf(root))
-        isContainer(c) ? _blockDawn(c, dawn) : c,
+        // Darks and bias need no dark sky: the Calibration block runs after it.
+        isContainer(c) &&
+                c['Name'] != kCalibrationBlockName &&
+                c['Name'] != kEndFlatsBlockName
+            ? _blockDawn(c, dawn)
+            : c,
     ]);
+
+/// A queue of its own for a calibration [block] started with nothing queued.
+Map<String, dynamic> calibrationQueueBody(Map<String, dynamic> block) =>
+    withChildren(
+      _item(sequentialContainerType)..['Name'] = kCalibrationBlockName,
+      [block],
+    )..['schemaVersion'] = sequenceSchemaVersion;
+
+/// Flats per set Simple Mode shoots.
+const kSimpleFlatFrames = 25;
+
+/// The name of the Queue's end-of-night flats block (#1757, ADR 0010 rule 4).
+const kEndFlatsBlockName = 'Flats';
+
+/// One auto-exposure flat set per filter in [filters] (the generator's
+/// FlatPanelFlats: it solves the exposure with or without a panel). With no
+/// panel the run first asks for a screen or light box over the scope.
+List<Map<String, dynamic>> flatSets(
+  List<String> filters,
+  RigCapabilities rig, {
+  int gain = -1,
+  int offset = -1,
+  int frames = kSimpleFlatFrames,
+}) => [
+  if (!rig.flatPanel)
+    _item(waitForUserType)
+      ..['Text'] =
+          'Put the screen or light box over the scope for the flats, then press Resume.',
+  for (final f in {for (final f in filters) f.trim()}.where((f) => f.isNotEmpty)) ...[
+    if (rig.filterWheel) _item(switchFilterType)..['Filter'] = buildFilterInfo(f),
+    _item(flatPanelFlatsType)
+      ..['FrameCount'] = frames
+      ..['Gain'] = gain
+      ..['Offset'] = offset,
+  ],
+];
+
+/// The Queue's end-of-night flats: [flatSets] for [filters] under one
+/// container named [kEndFlatsBlockName], with no slew or dawn stop.
+Map<String, dynamic> endFlatsBlock(
+  List<String> filters,
+  RigCapabilities rig, {
+  int gain = -1,
+  int offset = -1,
+}) => withChildren(
+  _item(sequentialContainerType)..['Name'] = kEndFlatsBlockName,
+  flatSets(filters, rig, gain: gain, offset: offset),
+);
+
+/// The name of the Queue's one Calibration block (#1757, ADR 0010 rule 4):
+/// the rig finds a block by its name.
+const kCalibrationBlockName = 'Calibration';
+
+/// The Calibration block from a generated darks-and-bias run's [root]: its
+/// steps under one container named [kCalibrationBlockName], with no slew,
+/// centring, autofocus or guiding. With [closeCover] the panel's cover
+/// closes first, so the run needs no one (the generator then asks for no lens
+/// cap).
+Map<String, dynamic> calibrationBlockFrom(
+  Map<String, dynamic> root, {
+  bool closeCover = false,
+}) {
+  var block = _item(sequentialContainerType)..['Name'] = kCalibrationBlockName;
+  block = withChildren(block, [
+    if (closeCover) _item(closeFlatPanelCoverType),
+    ...childrenOf(root),
+  ]);
+  return block;
+}
+
+/// [frames] bias frames at [gain] / [offset] (-1: the camera's): the shortest
+/// exposure with the shutter closed, as the rig's own generator writes them.
+Map<String, dynamic> biasSet({
+  required int gain,
+  int? offset,
+  required int frames,
+}) {
+  final exposure = _item(takeExposureType)
+    ..['ExposureTime'] = 0.001
+    ..['ImageType'] = 'BIAS'
+    ..['Gain'] = gain
+    ..['Offset'] = offset ?? -1;
+  var set = _item(sequentialContainerType)..['Name'] = 'Bias ($frames×)';
+  set = withChildren(set, [exposure]);
+  return withConditions(set, [
+    conditionForType(loopConditionType)!.build()..['Iterations'] = frames,
+  ]);
+}
+
+/// A Wait for User asking [text]: the lens cap goes on before darks.
+Map<String, dynamic> withLensCap(String text) =>
+    _item(waitForUserType)..['Text'] = text;
+
+/// The frames a Calibration block takes and their time: each loop's
+/// iterations times its exposures, and each flat set's frames. Pure —
+/// unit-tested.
+({int frames, double seconds}) calibrationBlockTime(Map<String, dynamic> block) {
+  var frames = 0;
+  var seconds = 0.0;
+  void walk(Map<String, dynamic> node, int times) {
+    for (final c in conditionsOf(node)) {
+      if (c[r'$type'] == loopConditionType) {
+        times *= (c['Iterations'] as num?)?.toInt() ?? 1;
+      }
+    }
+    for (final child in childrenOf(node)) {
+      if (child[r'$type'] == takeExposureType) {
+        frames += times;
+        seconds += times * ((child['ExposureTime'] as num?)?.toDouble() ?? 0);
+      } else if (child[r'$type'] == flatPanelFlatsType ||
+          child[r'$type'] == skyFlatsType) {
+        // An auto-exposure flat set: a few seconds a frame, its solve included.
+        // shortcut: one guess for every panel and filter; read the rig's flat
+        // training if the time shown is visibly off.
+        final n = times * ((child['FrameCount'] as num?)?.toInt() ?? 0);
+        frames += n;
+        seconds += n * 3;
+      } else if (isContainer(child)) {
+        walk(child, times);
+      }
+    }
+  }
+
+  walk(block, 1);
+  return (frames: frames, seconds: seconds);
+}
 
 /// [block] and its child containers without their dawn conditions, then with
 /// [dawn]'s when given.
