@@ -3179,6 +3179,7 @@ class _SimpleFilterWheelWindowState
                                     .toLowerCase(),
                                 style: AraText.caption,
                               ),
+                            ?offset,
                           ],
                         ),
                       ),

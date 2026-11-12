@@ -472,4 +472,14 @@ void main() {
     expect(find.descendant(of: _slot(1), matching: find.textContaining('42')), findsNothing,
         reason: 'the cells don\'t change');
   });
+
+  testWidgets("a large wheel shows the saved offset in its hub, under the slot line (#1675)", (tester) async {
+    final wire = _wire(current: 1, extra: 6); // 9 slots
+    (wire['slots'] as List)[1] = {'position': 1, 'name': 'Ha', 'focus_offset': 7};
+    await _pump(tester, wire, width: 360);
+    final hub = find.descendant(of: find.byType(SimpleFilterWheel), matching: find.text('Offset +7 steps'));
+    expect(hub, findsOneWidget);
+    final line = tester.getRect(find.descendant(of: find.byType(SimpleFilterWheel), matching: find.text('slot 1')));
+    expect(tester.getRect(hub).top, greaterThanOrEqualTo(line.bottom), reason: 'under the slot line');
+  });
 }
