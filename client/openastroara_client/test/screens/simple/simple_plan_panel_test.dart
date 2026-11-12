@@ -1011,6 +1011,34 @@ void main() {
           reason: 'what matched, so the row says why it is listed');
     });
 
+    testWidgets('at twice the text size a search row and the plan header show their whole designation (name)',
+        (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(
+                      id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
+                      aliases: ['M 33', 'Triangulum Pinwheel']),
+                ]),
+          ]);
+      void whole(String text) =>
+          expect(tester.renderObject<RenderParagraph>(find.text(text)).didExceedMaxLines, isFalse, reason: '"$text" is cut off');
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
+      await tester.pump();
+      await tester.pump();
+      whole('NGC 598 (Triangulum Pinwheel)');
+      whole('mag 5.7');
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      whole('NGC 598 (Triangulum Galaxy)');
+    });
+
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
         (tester) async {
       var created = 0;

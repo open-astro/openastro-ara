@@ -1175,6 +1175,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Wraps, never cut short: whole up to 2x text.
                           Text(
                             designationWithName(
                               // The first catalog designation: the one it was
@@ -1188,8 +1189,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                             style: kSimpleText.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             simpleTargetStatus(sel, context.l10n),
@@ -2101,13 +2100,12 @@ class SimpleSuggestion extends StatelessWidget {
                 size: 18,
                 color: AraColors.textSecondary,
               ),
+              // Both wrap, never cut short: whole up to 2x text.
               Flexible(
                 flex: 3,
                 child: Text(
                   suggestionTitle(hit),
                   style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (detail.isNotEmpty)
@@ -2115,8 +2113,6 @@ class SimpleSuggestion extends StatelessWidget {
                   child: Text(
                     detail,
                     style: kSimpleText.copyWith(color: AraColors.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
             ],
