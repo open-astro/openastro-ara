@@ -320,12 +320,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               label: l10n.guideDecMode,
               value: phd2.decGuideMode,
               options: const ['auto', 'north', 'south', 'off'],
-              format: (m) => switch (m) {
-                'north' => l10n.guideDecNorth,
-                'south' => l10n.guideDecSouth,
-                'off' => l10n.deviceOff,
-                _ => l10n.guideDecAuto,
-              },
+              format: (m) => _decModeName(l10n, m) ?? l10n.guideDecAuto,
               onSelected: (m) => simpleSaveGuider(
                 context,
                 ref,
@@ -774,7 +769,11 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
                                   }
                                 }),
                           title: Text(_suggestionName(l10n, s), style: kSimpleText),
-                          secondary: Text(s.value, style: kSimpleText),
+                          secondary: Text(
+                            // The guider names its Dec mode in English ("North").
+                            s.key == 'dec_guide_mode' ? _decModeName(l10n, s.value.toLowerCase()) ?? s.value : s.value,
+                            style: kSimpleText,
+                          ),
                         ),
                       ),
                     FilledButton(
@@ -801,6 +800,15 @@ String _suggestionName(AppLocalizations l10n, GuidingAssistantSuggestion s) => s
   'dec_guide_mode' => l10n.guideDecMode,
   'dec_algorithm' => l10n.guideSuggestDecAlgorithm,
   _ => s.label,
+};
+
+/// A Dec guide mode (auto, north, south, off) in the user's language; null for any other word.
+String? _decModeName(AppLocalizations l10n, String mode) => switch (mode) {
+  'north' => l10n.guideDecNorth,
+  'south' => l10n.guideDecSouth,
+  'off' => l10n.deviceOff,
+  'auto' => l10n.guideDecAuto,
+  _ => null,
 };
 
 /// One tool: its name and quiet button, what it does, where it stands (and

@@ -622,6 +622,19 @@ void main() {
       expect(find.text('Compensação de folga em Dec'), findsOneWidget);
       expect(find.text('Aplicar 2 sugestões'), findsOneWidget);
     });
+
+    testWidgets('in Brazilian Portuguese a suggested Dec guide mode reads in Portuguese, an unknown one as sent',
+        (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'dec_guide_mode': 'North'}));
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a), locale: const Locale('pt', 'BR'));
+      await _tab(tester, 'tools');
+      final row = find.byKey(const Key('ga-suggest-dec_guide_mode'));
+      expect(find.descendant(of: row, matching: find.text('Norte')), findsOneWidget);
+      a.report(_assistant('done', recs: {'dec_guide_mode': 'Sideways'}));
+      await tester.pump();
+      expect(find.descendant(of: row, matching: find.text('Sideways')), findsOneWidget);
+    });
   });
 
   test('the guider follows the DESIGN.md status rule: green good (blinking while guiding), blue changing, '
@@ -879,6 +892,7 @@ void main() {
     final c = await _pump(tester, _wire(), rig: rig);
     final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
     expect(tile.options, ['auto', 'north', 'south', 'off']);
+    expect(tile.options.map(tile.format), ['Auto', 'North', 'South', 'Off']);
     tile.onSelected!('north');
     await tester.pump();
     await tester.pump();
