@@ -3941,7 +3941,19 @@ class _ThisRig extends ConsumerWidget {
           l10n.shellPermanentPier,
           l10n.shellPermanentPierHint,
           ref.watch(simplePermanentPierProvider).value ?? false,
-          (v) => ref.read(simplePermanentPierProvider.notifier).set(v),
+          (v) async {
+            final notify = userNotifier(context);
+            try {
+              await ref.read(simplePermanentPierProvider.notifier).set(v);
+            } catch (e) {
+              // A refused switch-off: the switch shows the rig's value again.
+              notify(
+                l10n.shellCouldntSave,
+                detail: friendlyError(l10n, e),
+                error: true,
+              );
+            }
+          },
         ),
         // Each language in its own words; System follows the device.
         Wrap(

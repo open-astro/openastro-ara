@@ -9,9 +9,9 @@ import 'package:openastroara/state/simple_mode_state.dart';
 
 class _File extends SimpleModePrefsService {
   _File(this.value);
-  bool value;
+  bool? value; // null: no file on this device
   @override
-  Future<bool> load() async => value;
+  Future<bool> load() async => value ?? false;
   @override
   Future<void> save(bool enabled) async => value = enabled;
 }
@@ -137,6 +137,49 @@ void main() {
     await c.read(simplePermanentPierProvider.notifier).set(true);
     expect(c.read(simplePermanentPierProvider).value, isTrue);
     expect(file.value, isTrue);
+  });
+
+  test(
+    'a refused switch-off puts the switch back to what the rig holds',
+    () async {
+      final rig = _Rig(pier: true)..failPut = true;
+      final file = _File(null);
+      final c = _app(file, rig);
+      await c.read(simplePermanentPierProvider.future);
+
+      await expectLater(
+        c.read(simplePermanentPierProvider.notifier).set(false),
+        throwsA(isA<StateError>()),
+        reason: 'so the screen can say the save failed',
+      );
+
+      expect(c.read(simplePermanentPierProvider).value, isTrue);
+      expect(rig.site.permanentPier, isTrue);
+      expect(file.value, isNull, reason: 'the refused off is not written down');
+    },
+  );
+
+  test('a refused switch-off drops an on still waiting for the rig', () async {
+    final rig = _Rig()..failPut = true;
+    final file = _File(false);
+    final c = _app(file, rig);
+    await c.read(simplePermanentPierProvider.future);
+    final pier = c.read(simplePermanentPierProvider.notifier);
+    await pier.set(true); // refused: kept on this device for the next start
+    await pier.set(false); // refused too, but the rig holds off already
+    expect(c.read(simplePermanentPierProvider).value, isFalse);
+    expect(file.value, isFalse);
+
+    rig.failPut = false;
+    expect(
+      await _app(file, rig).read(simplePermanentPierProvider.future),
+      isFalse,
+    );
+    expect(
+      rig.site.permanentPier,
+      isFalse,
+      reason: 'the off was the last word',
+    );
   });
 
   test('no rig: the file alone decides', () async {

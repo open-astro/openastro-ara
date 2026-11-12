@@ -297,8 +297,22 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.permanent_pier',
           hint: context.l10n.shellPermanentPierHint,
           value: ref.watch(simplePermanentPierProvider).value ?? false,
-          onChanged: (v) =>
-              ref.read(simplePermanentPierProvider.notifier).set(v),
+          onChanged: (v) async {
+            final messenger = ScaffoldMessenger.of(context);
+            final l10n = context.l10n;
+            try {
+              await ref.read(simplePermanentPierProvider.notifier).set(v);
+            } catch (e) {
+              // A refused switch-off: the switch shows the rig's value again.
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    friendlyError(l10n, e, action: l10n.actionSave),
+                  ),
+                ),
+              );
+            }
+          },
         ),
         const SettingsSectionHeader('Time sync'),
         const TimeSyncSection(),

@@ -82,7 +82,9 @@ final simplePermanentPierPrefsProvider = Provider<SimpleModePrefsService>(
 /// site profile, so every device agrees. The old device-local file is carried
 /// over once: while it still says on and the profile says off, it goes to the
 /// profile and is cleared when that write lands (a failed write keeps it, and
-/// the next start retries). With no rig, the file alone decides.
+/// the next start retries). The file cannot carry an off: a switch-off the rig
+/// refuses shows what the rig holds again, and [set] throws while that is on,
+/// so the screen can say so. With no rig, the file alone decides.
 class SimplePermanentPierController extends AsyncNotifier<bool> {
   bool _writing = false;
 
@@ -124,9 +126,16 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
       await _writePier(api, on);
       await files.save(false);
     } catch (_) {
-      await files.save(
-        on,
-      ); // the rig did not hear: keep it here, retry next start
+      if (!on) {
+        // A refused switch-off shows what the rig holds again. Still on there:
+        // throw, so the screen can say so, and write nothing to the file.
+        final onRig = ref.read(siteSettingsProvider).permanentPier;
+        state = AsyncData(onRig);
+        if (onRig) rethrow;
+      }
+      // An on the rig did not hear waits here for the next start; an off the
+      // rig already holds drops an on still waiting.
+      await files.save(on);
     } finally {
       _writing = false;
     }

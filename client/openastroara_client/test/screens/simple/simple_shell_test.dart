@@ -621,6 +621,23 @@ class _GuideOpticsApi extends ProfileApi {
   Future<OpticsSettings> getOptics() async => const OpticsSettings();
 }
 
+/// A rig that holds the permanent pier on and refuses to change it.
+class _PierRefusedApi extends ProfileApi {
+  _PierRefusedApi() : super(const AraServer(hostname: 'test', port: 1));
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async =>
+      throw StateError('unreachable');
+  @override
+  Future<SiteSettings> getSiteSettings() async =>
+      const SiteSettings(permanentPier: true);
+  @override
+  Future<SiteSettings> putSiteSettings(SiteSettings value) async =>
+      throw StateError('The rig refused the change.');
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+}
+
 /// The rig's guider section as a store: reads return it, saves replace it.
 class _Phd2StoreApi extends ProfileApi {
   _Phd2StoreApi() : super(const AraServer(hostname: 'test', port: 1));
@@ -2915,6 +2932,39 @@ void main() {
     expect(c.read(simplePermanentPierProvider).value, isTrue);
     expect(find.byKey(const Key('simple-menu-simple-mode')), findsNothing);
   });
+
+  testWidgets(
+    'Rig: a refused pier switch-off says so and shows the rig again',
+    (tester) async {
+      final c = await _pump(
+        tester,
+        const Size(1024, 768),
+        feature: true,
+        pier: true,
+        profiles: const ProfileList(
+          activeId: 'p1',
+          profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')],
+        ),
+        gear: [profileApiProvider.overrideWithValue(_PierRefusedApi())],
+      );
+      await _openSection(tester, 'Rig');
+      final pier = find.byKey(const Key('simple-menu-pier'));
+      await tester.ensureVisible(pier); // Rig scrolls
+      expect(tester.widget<Switch>(pier).value, isTrue);
+
+      await tester.tap(pier);
+      await tester.pump();
+
+      expect(tester.widget<Switch>(pier).value, isTrue);
+      final m = c
+          .read(simpleMessagesProvider)
+          .singleWhere((m) => m.title == "Couldn't save that");
+      expect(
+        (m.kind, m.detail),
+        (SimpleMessageKind.error, 'The rig refused the change.'),
+      );
+    },
+  );
 
   testWidgets('Rig: a language picker, System first, for this device only', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
