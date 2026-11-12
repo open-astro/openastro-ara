@@ -114,9 +114,14 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
     final next = _indexOf(widget.pointAt);
     final n = widget.slots.length;
     if (n == 0 || next == null || next == _at) return;
+    if (_at == null) {
+      // Opened while the slot was unknown: no angle to turn from, so jump.
+      _at = next;
+      _from = _to = -next * _step;
+      return;
+    }
     // The short way round, a signed number of slots.
-    final prev = _at ?? next;
-    var d = (next - prev) % n;
+    var d = (next - _at!) % n;
     if (d > n / 2) d -= n;
     final start = _rot;
     _at = next;
