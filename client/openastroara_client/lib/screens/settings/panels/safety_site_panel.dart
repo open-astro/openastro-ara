@@ -294,6 +294,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         // site.permanent_pier at once, not through this panel's Save.
         SettingsSwitchRow(
           label: context.l10n.shellPermanentPier,
+          helpKey: 'safety.site.permanent_pier',
           hint: context.l10n.shellPermanentPierHint,
           value: ref.watch(simplePermanentPierProvider).value ?? false,
           onChanged: (v) =>

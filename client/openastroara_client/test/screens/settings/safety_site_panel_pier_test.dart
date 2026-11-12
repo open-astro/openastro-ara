@@ -11,6 +11,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/widgets/help_icon.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -78,6 +79,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('Permanent pier'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is HelpIcon && w.helpKey == 'safety.site.permanent_pier',
+      ),
+      findsOneWidget,
+      reason: 'an info button like every other row of the panel',
+    );
     expect(rig.site.permanentPier, isFalse);
 
     await tester.tap(find.byType(Switch).first);
