@@ -94,5 +94,42 @@ namespace OpenAstroAra.Test {
             slots = (await wheel.GetAsync(CancellationToken.None))!.Slots;
             Assert.That(slots.Select(s => s.FocusOffset), Is.EqualTo(DriverWithNewSlot1), "a Save while connected shows at once");
         }
+
+        [Test]
+        public async Task The_status_poll_never_reads_the_profile_store_and_a_Save_still_shows_at_once() {
+            // The store's getter takes the lock its writes hold across the disk write, so a poll that read
+            // it would wait out every profile save; the wheel answers from what Changed last told it.
+            var saved = Saved;
+            var reads = 0;
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetFilterFocusOffsets()).Returns(() => { Interlocked.Increment(ref reads); return saved; });
+            using var profile = new OpenAstroAra.Profile.Profile();
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile).Returns(profile);
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/position", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/names", StringComparison.Ordinal) ? "[\"L\",\"R\",\"Ha\"]"
+                : path.EndsWith("/focusoffsets", StringComparison.Ordinal) ? "[100,40,-20]"
+                : null);
+            using var wheel = new FilterWheelService(profileService: profileService.Object, profileStore: store.Object) { RefreshPeriod = TimeSpan.FromMilliseconds(50) };
+            var device = new DiscoveredDeviceDto(UniqueId: "efw", Name: "EFW", Type: DeviceType.FilterWheel,
+                HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port, AlpacaDeviceNumber: 0, UseHttps: false);
+            await wheel.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
+            for (var i = 0; i < 500 && profile.FilterWheelSettings.FilterWheelFilters.Count < 3; i++) {
+                await Task.Delay(20);
+            }
+
+            Interlocked.Exchange(ref reads, 0);
+            for (var i = 0; i < 3; i++) {
+                Assert.That((await wheel.GetAsync(CancellationToken.None))!.Slots.Select(s => s.FocusOffset), Is.EqualTo(DriverWithSavedSlot1));
+            }
+            Assert.That(reads, Is.Zero, "a poll reads no profile store");
+
+            saved = new FilterFocusOffsetsDto([new FilterFocusOffsetDto(1, 55)]);
+            store.Raise(s => s.Changed += null, EventArgs.Empty);
+            Assert.That((await wheel.GetAsync(CancellationToken.None))!.Slots.Select(s => s.FocusOffset), Is.EqualTo(DriverWithNewSlot1),
+                "a Save while connected shows at once");
+        }
     }
 }
