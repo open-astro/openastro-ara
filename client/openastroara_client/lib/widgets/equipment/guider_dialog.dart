@@ -7,6 +7,7 @@ import '../../state/guider/guider_state.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import 'equipment_state_chip.dart';
+import '../adaptive_controls.dart';
 
 /// Human-readable runtime-phase label (one wording for every screen, #1364).
 String guiderRuntimeLabel(AppLocalizations l, GuiderRuntimeState state) => guiderRuntimeText(l, state);
@@ -67,7 +68,7 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
         child: busy && status == null
             ? const Padding(
                 padding: EdgeInsets.all(12),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: AdaptiveProgressIndicator()),
               )
             : async.hasError
                 ? Row(
@@ -135,7 +136,7 @@ class _BusySpinner extends StatelessWidget {
   const _BusySpinner();
   @override
   Widget build(BuildContext context) =>
-      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
+      const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2));
 }
 
 class _StatusBody extends StatelessWidget {

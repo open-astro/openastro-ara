@@ -159,6 +159,7 @@ internal static class ProfileStoreMapper {
         ApplyImageFile(store.GetStorageSettings(), profile);
         ApplyPlateSolve(store.GetPlateSolveSettings(), profile);
         ApplyMeridian(store.GetSafetyPolicies(), profile);
+        ApplyDome(store.GetDomeSettings(), profile);
     }
 
     internal static void ApplySite(SiteSettingsDto site, IProfile profile) {
@@ -259,6 +260,23 @@ internal static class ProfileStoreMapper {
         meridian.AutoFocusAfterFlip = MeridianFlipPolicy.RefocusMode(policies.MeridianRefocus) != MeridianFlipPolicy.RefocusNever;
         meridian.AutoFlip = policies.MeridianFlipAuto;
         // The guider re-calibration flag rides on the §63 PHD2 wiring — store-only here.
+    }
+
+    // #1689 — the geometry the dome-azimuth math reads (DomeSynchronization) and the follower's tolerances.
+    // FollowMount stays store-only: the follower reads it from the store.
+    internal static void ApplyDome(DomeSettingsDto dome, IProfile profile) {
+        var settings = profile.DomeSettings;
+        settings.DomeRadiusMm = dome.DomeRadiusMm;
+        settings.ScopePositionNorthSouthMm = dome.ScopePositionNorthSouthMm;
+        settings.ScopePositionEastWestMm = dome.ScopePositionEastWestMm;
+        settings.ScopePositionUpDownMm = dome.ScopePositionUpDownMm;
+        settings.MountType = DomeSettingsValidator.ParseMountType(dome.MountType);
+        settings.GemAxisMm = dome.GemAxisMm;
+        settings.LateralAxisMm = dome.LateralAxisMm;
+        settings.DecOffsetHorizontalMm = dome.DecOffsetHorizontalMm;
+        settings.AzimuthToleranceDegrees = dome.AzimuthToleranceDegrees;
+        settings.SynchronizeDuringMountSlew = dome.SynchronizeDuringMountSlew;
+        settings.DomeSyncTimeoutSeconds = dome.DomeSyncTimeoutSeconds;
     }
 
     // FileFormat tokens per the §29 contract: fits / xisf (#1148). The retired fits_rice/fits_gzip

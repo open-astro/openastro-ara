@@ -24,6 +24,7 @@ import 'screen_equipment_discovery.dart'
     show DeviceChoice, DiscoverySheet, equipmentDiscoveryApiFactoryProvider;
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 // ── shared parse helpers (same guards as the other wizard screens) ──────────
 
@@ -342,7 +343,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
         if (_preparing && readiness.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: AdaptiveProgressIndicator()),
           ),
         for (final type in _factTypes)
           _slotGet(_draft.equipment, type) == null
@@ -583,7 +584,7 @@ class _DeviceCard extends ConsumerWidget {
                 const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: AdaptiveProgressIndicator(strokeWidth: 2))
               else
                 Icon(icon, size: 18, color: color),
               const SizedBox(width: 10),

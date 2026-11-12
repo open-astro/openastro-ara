@@ -9,6 +9,7 @@ import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/target_preview_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/mosaic_geometry.dart';
+import '../adaptive_controls.dart';
 
 /// A landscape DSS2 cutout of [object] — what it actually looks like —
 /// filling whatever width it is given (sensor-ish 1.6:1 aspect), with the
@@ -69,7 +70,7 @@ class TargetPreview extends ConsumerWidget {
         child: SizedBox(
           width: 18,
           height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: AdaptiveProgressIndicator(strokeWidth: 2),
         ),
       ),
       error: (_, _) => const _NoPreview(),

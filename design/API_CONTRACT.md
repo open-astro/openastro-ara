@@ -42,6 +42,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — #1786 Verify Position's 409 names its cause
+
+**Endpoint(s) or area:** `POST /api/v1/platesolve/verify-position` (409).
+
+**Decision:** the 409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with, or the device was lost mid-exposure), `camera-busy` (another exposure holds the camera; the sentence says to try again once it has read out) or `gate-stuck` (the capture gate's wait expired; only a daemon restart clears it). `detail` is unchanged. The 422 causes carry no reason.
+
+**Reasoning:** the three causes need three different actions (open Camera settings, wait and Check again, restart the daemon), and a client cannot tell them apart reliably from the sentence. A client that sees a 409 without a `reason` (an older daemon) treats it as `no-camera`.
+
+**Spec ref:** `Endpoints/PlateSolveEndpoints.cs` (`VerifyPositionAsync`); `openapi.yaml` (`VerifyMountPosition`). Tests `VerifyPositionServiceTest`.
+
+---
+
 ## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).
@@ -182,6 +194,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
+
+### 2026-11-11 — The dome follows the mount: `POST /equipment/dome/follow`, `GET/PUT /profile/dome`, and `following` on the dome status (#1689)
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/dome/follow` (body `{"enabled": bool}`); new `GET` and `PUT /api/v1/profile/dome` (`dome` profile section); `runtime.following` on `GET /api/v1/equipment/dome`.
+
+**Decision:** "follow the mount" is a per-profile setting (`follow_mount` in the `dome` section, so it survives a restart and a profile switch); the follow command writes it and answers `200 {"enabled": <state>}` (not 202: nothing runs in the background that the caller must wait for). Turning it on is refused `409` Problem, with the reason as `detail`, when the dome is not connected, cannot set its azimuth, or the profile has no dome radius. Turning the dome by hand (`slew`, `park`, `findhome`, `abort`, `disconnect`, or a plan's dome steps), an unsafe-weather reaction, an emergency stop, and a geometry that puts the scope outside the dome for the mount's pointing turn `follow_mount` off. The `dome` section holds the geometry the azimuth math reads (`dome_radius_mm`, `scope_position_north_south_mm` / `_east_west_mm` / `_up_down_mm`, `mount_type` = `equatorial` | `fork_on_wedge`, `gem_axis_mm`, `lateral_axis_mm`, `dec_offset_horizontal_mm`), `azimuth_tolerance_degrees`, `synchronize_during_mount_slew` and `dome_sync_timeout_seconds`. `PUT` keeps the stored `follow_mount` whatever the body says, so only the follow command changes it (a client saving geometry with a stale copy cannot turn following back on, or off). `PUT` is refused `422` with a reason for a scope outside the dome radius, a bad mount type, an out-of-range tolerance or timeout, and for a zero radius while following is on. The new endpoint is an action beside `slew` and `park` (the dome's other commands), rather than a field on one of them, because it changes a setting and starts no motion.
+
+**Reasoning:** the follower was a placeholder that reported "not following" and refused to start, so the dome stayed where the user left it while the target moved 15 degrees an hour. The status flag lets Simple Mode say "Following the mount…" when the follower, not the user, is turning the dome (`state: slewing` with `following: true`).
+
+**Spec ref:** `OpenAstroAra.Server/Services/DomeFollower.cs`, `DomeSettingsValidator.cs`, `DomeService.cs` (`SetFollowingAsync`), `Endpoints/EquipmentEndpoints.cs`, `Endpoints/ProfileEndpoints.cs`; client `lib/models/dome_settings.dart`, `lib/screens/simple/simple_device_windows.dart`, `lib/screens/settings/panels/equipment_dome_panel.dart`.
+
+**Related:** #1689; tests `DomeFollowerTest`, client `simple_dome_window_test`, `equipment_dome_panel_test`.
+
+---
 
 ### 2026-11-05 — Apply multi-star to a connected guider, and find the guide star (#1592)
 
@@ -1500,6 +1526,20 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the Guider erases its calibration before it calibrates, so a failed run left none. An unattended plan should not end the night for that.
 
 **Spec ref:** `GuiderService.RecalibrateAndGuide`, `GuiderService.StartGuidingCalibratedTonight`, `MeridianFlipExecutor.MeridianFlip`, `FocuserService.HaltAsync`
+
+---
+
+## 2026-11-11 — The camera status names its own dew heater: `dew_heater` (#1663)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/camera` gains `dew_heater` (`CameraDto`, new `DewHeaterDto`).
+
+**Decision:** `dew_heater` is `{device_id, port_id}` (the heater switch's Alpaca UniqueId and the port's id) or null. It is additive: a client that does not know it ignores it, and a body without it reads as null. The daemon fills it while the main camera is connected and a connected switch carries the same serial after `_SN_` in its UniqueId and a port named `DewHeater` (`ZWO_SN_x` with `ZWO_DEW_SN_x`, the ToupTek family's `TOUPTEK_THERMALSW_SN_x`, `PLAYERONE_SW_SN_x`). A missing serial on either side, no such port, a switch that is not connected, or a failed switch-list read gives null; the status itself never fails for it. Only the main camera is paired, never the guide camera, and never by name or order. The level, range and write permission stay on the switch list, and a write goes through `POST /equipment/switch/{id}/value`; the camera adds no write path.
+
+**Reasoning:** the heater is a separate Switch device and nothing said which camera it belongs to. Pairing by serial does not depend on the order devices were found in.
+
+**Spec ref:** `Services/DewHeaterPairing.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetCameraWithHeaterAsync`), `OpenAstroAra.Test/DewHeaterPairingTest.cs`
+
+**Related:** #1651, #1065
 
 ---
 

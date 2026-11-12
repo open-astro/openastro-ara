@@ -13,6 +13,7 @@ import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.4 Flat Panel (CoverCalibrator under Alpaca). Connect/disconnect/reconnect
 /// run through the shared [EquipmentConnectionCard] on the live [flatPanelProvider]
@@ -217,7 +218,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
             children: [
               const SizedBox(width: 28, child: Text('0')),
               Expanded(
-                child: Slider(
+                child: AdaptiveSlider(
                   value: level.toDouble(),
                   min: 0,
                   // A device whose MaxBrightness hasn't been read yet reports 0;

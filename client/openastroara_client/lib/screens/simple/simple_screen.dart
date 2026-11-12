@@ -51,9 +51,6 @@ abstract class SimpleScreen {
   /// Screens without one.
   Widget? overlay(SimpleScreenHost host) => null;
 
-  /// What stays in the bottom-right corner (Queue: the plan squares).
-  Widget? tracker(SimpleScreenHost host) => null;
-
   /// The rail's shutter button.
   Widget get shutter;
 
@@ -99,7 +96,6 @@ class SimpleScreenHost {
     this.onShowSky,
     this.onPickInSky,
     this.onSheetDone,
-    this.onTrackerTap,
   });
 
   /// Queue: open the run sheet to add a target, or to edit row [i].
@@ -107,10 +103,9 @@ class SimpleScreenHost {
   final ValueChanged<int> onEditTarget;
 
   /// Queue: the row the sheet edits; the sheet's sky buttons; the sheet done
-  /// (a plan created); a tap on the plan squares.
+  /// (a plan created).
   final int? editing;
   final VoidCallback? onShowSky;
   final VoidCallback? onPickInSky;
   final VoidCallback? onSheetDone;
-  final VoidCallback? onTrackerTap;
 }

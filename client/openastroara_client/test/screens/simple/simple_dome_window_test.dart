@@ -50,6 +50,8 @@ class _Dome extends DomeNotifier {
   @override
   Future<bool> abortSlew() => _call('abort');
   @override
+  Future<bool> followMount(bool on) => _call('follow ${on ? 'on' : 'off'}');
+  @override
   Future<bool> slew(double targetAzimuthDeg) =>
       _call('slew ${targetAzimuthDeg.round()}');
 
@@ -80,6 +82,7 @@ Map<String, dynamic> _wire({
   bool rotates = true,
   bool canPark = true,
   bool canHome = true,
+  bool following = false,
 }) => {
   'device_id': 'd',
   'name': 'ScopeDome',
@@ -96,6 +99,7 @@ Map<String, dynamic> _wire({
     'shutter_open': open,
     'at_home': home,
     'parked': parked,
+    'following': following,
   },
 };
 
@@ -729,6 +733,146 @@ void main() {
     expect(find.text('Not connected'), findsOneWidget);
     expect(_key('shutter-open'), findsNothing);
     expect(_key('front'), findsNothing);
+  });
+
+  testWidgets('Follows the mount shows only for a dome that turns', (
+    tester,
+  ) async {
+    await _pump(tester, _wire());
+    expect(find.text('Follows the mount'), findsOneWidget);
+    expect(_key('follow-on'), findsOneWidget);
+    expect(_key('follow-off'), findsOneWidget);
+
+    await _pump(tester, _wire(rotates: false, azimuth: null));
+    expect(find.text('Follows the mount'), findsNothing);
+    expect(_key('follow-on'), findsNothing);
+  });
+
+  testWidgets('each Follows the mount segment sends the follow command', (
+    tester,
+  ) async {
+    final (_, dome) = await _pump(tester, _wire());
+    expect(tester.widget<SimpleSegment>(_key('follow-off')).selected, isTrue);
+    await tester.tap(_key('follow-on'));
+    await tester.pump();
+    dome.set(_wire(following: true));
+    await tester.pump();
+    expect(tester.widget<SimpleSegment>(_key('follow-on')).selected, isTrue);
+    await tester.tap(_key('follow-off'));
+    await tester.pump();
+    expect(dome.calls, ['follow on', 'follow off']);
+  });
+
+  testWidgets('a refused Follows the mount says why in a pill', (tester) async {
+    final (c, dome) = await _pump(tester, _wire());
+    dome.refuse = true;
+    await tester.tap(_key('follow-on'));
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(
+      (pill.kind, pill.title),
+      (
+        SimpleMessageKind.error,
+        "Couldn't change whether the dome follows the mount",
+      ),
+    );
+  });
+
+  testWidgets(
+    'the dial, Park and Home stay usable, send the move, and say once '
+    'that following is off',
+    (tester) async {
+      final (c, dome) = await _pump(tester, _wire(following: true));
+      expect(tester.widget<SimpleWindowButton>(_key('park')).onTap, isNotNull);
+
+      await tester.tap(_key('park'));
+      await tester.pump();
+      expect(dome.calls, ['park']);
+      var pills = c.read(simpleMessagesProvider);
+      expect(pills.map((m) => m.title), [
+        'The dome no longer follows the mount',
+      ]);
+      await tester.pump(const Duration(seconds: 4)); // the ask's timer
+
+      // The daemon turned it off with the move: a later Home says nothing more.
+      dome.set(_wire());
+      await tester.pump();
+      await tester.tap(_key('home'));
+      await tester.pump();
+      expect(dome.calls, ['park', 'home']);
+      pills = c.read(simpleMessagesProvider);
+      expect(pills, hasLength(1), reason: 'once, not on every move');
+      await tester.pump(const Duration(seconds: 11));
+    },
+  );
+
+  testWidgets('a turn of the dial says following is off', (tester) async {
+    final (c, dome) = await _pump(tester, _wire(following: true));
+    final dial = tester.getRect(_key('dial'));
+    await tester.dragFrom(
+      Offset(dial.right - 10, dial.center.dy - 30),
+      const Offset(0, 30),
+    );
+    await tester.pump();
+    await tester.tap(_key('hub'));
+    await tester.pump();
+    expect(dome.calls, ['slew 90']);
+    expect(c.read(simpleMessagesProvider).map((m) => m.title), [
+      'The dome no longer follows the mount',
+    ]);
+    await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('the follower turning the dome reads Following the mount…, '
+      'blinking green', (tester) async {
+    await _pump(tester, _wire(runtime: 'slewing', following: true));
+    expect(find.text('Following the mount…'), findsOneWidget);
+    expect(find.text('Moving…'), findsNothing);
+    final blink = tester.widget<StatusBlink>(
+      find.ancestor(
+        of: find.text('Following the mount…'),
+        matching: find.byType(StatusBlink),
+      ),
+    );
+    expect(blink.on, isTrue);
+    expect(
+      tester.widget<Text>(find.text('Following the mount…')).style?.color,
+      AraColors.accentConnected,
+    );
+  });
+
+  testWidgets('Follows the mount reads to a screen reader as its name, the '
+      'word and the state', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _wire(following: true));
+    final on = tester.getSemantics(_key('follow-on'));
+    final off = tester.getSemantics(_key('follow-off'));
+    expect(on.label, contains('Follows the mount'));
+    expect(on.label, contains('On'));
+    expect(off.label, contains('Follows the mount'));
+    expect(off.label, contains('Off'));
+    expect(
+      tester.getSemantics(_key('follow-on')),
+      matchesSemantics(
+        label: 'Follows the mount\nOn',
+        isButton: true,
+        isSelected: true,
+        isEnabled: true,
+        hasEnabledState: true,
+        hasSelectedState: true,
+      ),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('Follows the mount in pt-BR', (tester) async {
+    await _pump(
+      tester,
+      _wire(runtime: 'slewing', following: true),
+      locale: const Locale('pt', 'BR'),
+    );
+    expect(find.text('Segue a montagem'), findsOneWidget);
+    expect(find.text('Seguindo a montagem…'), findsOneWidget);
   });
 
   testWidgets('in pt-BR', (tester) async {

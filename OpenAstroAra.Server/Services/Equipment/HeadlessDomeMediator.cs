@@ -31,9 +31,8 @@ namespace OpenAstroAra.Server.Services.Equipment;
 /// Same pattern as the §38k-9 … §38k-13 stubs. Backs the dome instruction
 /// prototypes (<c>OpenDomeShutter</c>, <c>CloseDomeShutter</c>, <c>ParkDome</c>,
 /// <c>FindHomeDome</c>, <c>SlewDomeAzimuth</c>, <c>EnableDomeSynchronization</c>,
-/// <c>DisableDomeSynchronization</c>). <c>SynchronizeDome</c> is deferred — it
-/// also needs an <c>IDomeFollower</c>, which the headless daemon does not yet
-/// wire.
+/// <c>DisableDomeSynchronization</c>). <c>SynchronizeDome</c> also needs an
+/// <c>IDomeFollower</c>; the factory pairs it with the headless follower stub.
 /// </summary>
 public sealed class HeadlessDomeMediator : IDomeMediator {
 

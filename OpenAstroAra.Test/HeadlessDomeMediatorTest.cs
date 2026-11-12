@@ -26,7 +26,7 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// §38k-18 — verifies <see cref="HeadlessDomeMediator"/> sentinel behavior
     /// + that the seven dome instructions register and resolve via the factory.
-    /// (SynchronizeDome is deferred — it also needs IDomeFollower.)
+    /// (SynchronizeDome registers separately — it also needs an IDomeFollower.)
     /// </summary>
     [TestFixture]
     public class HeadlessDomeMediatorTest {

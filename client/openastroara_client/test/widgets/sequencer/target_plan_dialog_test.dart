@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -125,6 +126,18 @@ void main() {
         await t.tap(find.text('Cancel'));
       });
     });
+
+    testWidgets('on iOS it is an iOS alert and Create run, its default action, returns the plan', (tester) async {
+      final choice = await open(tester, filters: shoSet, interact: (t) async {
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        final create = find.widgetWithText(CupertinoDialogAction, 'Create run');
+        expect(t.widget<CupertinoDialogAction>(create).isDefaultAction, isTrue);
+        await t.ensureVisible(create);
+        await t.pumpAndSettle();
+        await t.tap(create);
+      });
+      expect(choice, isNotNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('no guider on the rig: no toggle, no guiding', (tester) async {
       final choice = await open(tester, filters: shoSet, guider: false,

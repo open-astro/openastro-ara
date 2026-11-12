@@ -34,17 +34,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count more statuses',
-      one: '1 more status',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -97,6 +86,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
+
+  @override
+  String get deviceDewHeater => 'Dew heater';
 
   @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
@@ -194,11 +186,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String deviceSlot(int position) {
     return 'Slot $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
   }
 
   @override
@@ -337,6 +324,86 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
+
+  @override
+  String get deviceFollowsMount => 'Follows the mount';
+
+  @override
+  String get deviceFollowingMount => 'Following the mount…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'The dome no longer follows the mount';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Couldn\'t change whether the dome follows the mount';
+
+  @override
+  String get domePanelFollowingHeader => 'Following the mount';
+
+  @override
+  String get domePanelReadingSettings => 'Reading…';
+
+  @override
+  String get domePanelCouldntSave => 'Couldn\'t save the dome';
+
+  @override
+  String get domePanelFollowNote =>
+      'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.';
+
+  @override
+  String get domePanelFollowMount => 'Follow the mount';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Connect a dome that can turn to an azimuth first';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometry';
+
+  @override
+  String get domePanelMountType => 'Mount type';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'German equatorial';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Fork or alt-az (on a wedge)';
+
+  @override
+  String get domePanelDomeRadius => 'Dome radius (mm)';
+
+  @override
+  String get domePanelScopeNorth => 'Scope north of dome center (mm)';
+
+  @override
+  String get domePanelScopeEast => 'Scope east of dome center (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Scope above dome center (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Mount axis length (mm)';
+
+  @override
+  String get domePanelMountLateralOffset => 'Mount lateral offset (mm)';
+
+  @override
+  String get domePanelDecAxisOffset => 'Dec axis horizontal offset (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Azimuth tolerance (°)';
+
+  @override
+  String get domePanelTurnDuringSlews => 'Turn during mount slews';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Off: the dome turns when the mount has finished slewing';
+
+  @override
+  String get domePanelSlewing => 'Slewing…';
 
   @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
@@ -1263,7 +1330,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSettings => 'Settings';
 
   @override
-  String get shellSky => 'Sky';
+  String get shellSky => 'Sky Map';
+
+  @override
+  String get shellStats => 'Stats';
 
   @override
   String get shellInfo => 'Info';
@@ -2679,10 +2749,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideStopAssistant => 'Stop Guiding Assistant';
 
   @override
-  String get guideAssistantMeasuring =>
-      'Measuring. Guide corrections are off for now.';
-
-  @override
   String guideAssistantApply(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2710,7 +2776,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideAssistantCalibrateFirst =>
-      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+      'Calibrate first: press Recalibrate, then run the Guiding Assistant.';
 
   @override
   String get guideAssistantNoStar =>
@@ -2724,12 +2790,72 @@ class AppLocalizationsEn extends AppLocalizations {
       'Autofocus has the focuser. Wait for it to finish, or cancel it.';
 
   @override
-  String guideAssistantFailed(String reason) {
-    return 'The Guiding Assistant stopped: $reason';
+  String get guideAssistantFailedNoReason => 'the guider gave no reason';
+
+  @override
+  String get guideToolRecalibrate => 'Recalibrate';
+
+  @override
+  String get guideToolCalibration => 'Calibration';
+
+  @override
+  String get guideToolCalibrationWhat =>
+      'Measures again how the mount moves the guide star. Redo it after turning the camera or moving far in Dec.';
+
+  @override
+  String guideToolCalibratedAt(String dec) {
+    return 'Calibrated at Dec $dec';
   }
 
   @override
-  String get guideAssistantFailedNoReason => 'the guider gave no reason';
+  String get guideToolCalibrated => 'Calibrated';
+
+  @override
+  String get guideToolNotCalibrated =>
+      'Not calibrated. The next start calibrates first.';
+
+  @override
+  String get guideToolAssistant => 'Guiding Assistant';
+
+  @override
+  String get guideToolAssistantWhat =>
+      'Watches the star drift with guiding off, then suggests settings for this mount and sky.';
+
+  @override
+  String get guideToolRun => 'Run';
+
+  @override
+  String get guideToolRunAgain => 'Run again';
+
+  @override
+  String get guideToolStop => 'Stop';
+
+  @override
+  String get guideToolNotRun => 'Not run yet';
+
+  @override
+  String get guideToolMeasuring => 'Measuring drift…';
+
+  @override
+  String guideToolDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Done. $count suggestions to apply.',
+      one: 'Done. 1 suggestion to apply.',
+      zero: 'Done. Nothing to apply.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String guideToolFailed(String reason) {
+    return 'Last run failed: $reason';
+  }
+
+  @override
+  String get guideToolCalibrateFirst =>
+      'Calibrate first: it needs a calibration to measure against.';
 
   @override
   String get focusNudgeIn => 'Nudge in';
@@ -2938,6 +3064,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String albumArtCredit(String credit) {
     return 'Art (cropped): $credit';
   }
+
+  @override
+  String get albumArtCreditOpenFailed => 'Couldn\'t open the license page';
 
   @override
   String get shellAlbum => 'Sky Album';
@@ -3866,6 +3995,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get pointingCameraBusy =>
+      'The camera is taking another frame. Check again once it finishes.';
 
   @override
   String get devicePlanRunningHomeAnyway =>
@@ -4902,6 +5035,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
 
   @override
   String get rigSetupTitle => 'Rig setup';

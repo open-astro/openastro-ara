@@ -9,6 +9,8 @@ import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../../widgets/adaptive_dialog.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// §40.5 frame viewer over the live wire model. 12f.2 shipped the pinch-zoom
 /// thumbnail + metadata; this slice adds the §65 stretched preview — a palette
@@ -44,7 +46,7 @@ class _AddTagDialogState extends State<_AddTagDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: const Text('Add tag'),
       content: TextField(
         controller: _controller,
@@ -52,11 +54,15 @@ class _AddTagDialogState extends State<_AddTagDialog> {
         onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: const Text('Add'),
         ),
@@ -160,7 +166,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
   }
 
   Future<void> _promptAddTag() async {
-    final tag = await showDialog<String>(
+    final tag = await showAdaptiveAlert<String>(
       context: context,
       builder: (_) => const _AddTagDialog(),
     );
@@ -394,7 +400,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
                     child: SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 if (_error != null)
@@ -451,7 +457,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
                         child: SizedBox(
                           width: 12,
                           height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: AdaptiveProgressIndicator(strokeWidth: 2),
                         ),
                       ),
                   ],

@@ -13,6 +13,7 @@ import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 import '../settings/editable_field.dart';
 import 'guider_advanced_dialog.dart';
+import '../adaptive_controls.dart';
 
 /// Open the §63.18 guiding-tune dialog (the quick-adjust controls that used to
 /// live inline in the Imaging tab's Guiding panel — moved to a focused dialog
@@ -417,7 +418,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
+                            child: AdaptiveProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.send, size: 18),
                     label: const Text('Apply'),
                   ),
@@ -453,7 +454,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
           child: Text(label, style: Theme.of(context).textTheme.bodySmall),
         ),
         Expanded(
-          child: Slider(
+          child: AdaptiveSlider(
             value: value.clamp(0.0, 1.0),
             min: 0,
             max: 1,

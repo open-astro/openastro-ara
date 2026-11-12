@@ -16,7 +16,6 @@ using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Endpoints;
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace OpenAstroAra.Server;
@@ -90,6 +89,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CalibrationSessionDto))]
 [JsonSerializable(typeof(CameraCapabilitiesDto))]
 [JsonSerializable(typeof(CameraDto))]
+[JsonSerializable(typeof(DewHeaterDto))]
 [JsonSerializable(typeof(CameraStateDto))]
 [JsonSerializable(typeof(CameraCoolerRequestDto))]
 [JsonSerializable(typeof(LiveViewStartRequestDto))]
@@ -204,6 +204,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CoolingFanDto))]
 [JsonSerializable(typeof(FilterFocusOffsetsDto))]
 [JsonSerializable(typeof(FilterFocusOffsetDto))]
+[JsonSerializable(typeof(DomeSettingsDto))]
+[JsonSerializable(typeof(DomeFollowRequestDto))]
 [JsonSerializable(typeof(FilterKind))]
 // NEXTGEN §1 Tonight's Sky filter advice.
 [JsonSerializable(typeof(Phd2SettingsDto))]

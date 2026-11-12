@@ -19,6 +19,7 @@ import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'hfr_trend_chart.dart';
 import '../../util/friendly_error.dart';
+import '../adaptive_controls.dart';
 
 /// Guide camera: a live readout for the hand-turned helical focuser on a guide
 /// scope or off-axis guider. Frames come through the guider (Ara never opens
@@ -94,7 +95,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
         ? FilledButton.tonalIcon(
             onPressed: live.busy ? null : () => ref.read(guideFocusProvider.notifier).stop(),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.stop_rounded, size: 18),
             label: const Text('Stop'),
           )
@@ -103,7 +104,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
                 ? null
                 : () => ref.read(guideFocusProvider.notifier).start(exposureSec: _exposureSec),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.play_arrow_rounded, size: 18),
             label: Text(hasData ? 'Start again' : 'Start live focus'),
           );

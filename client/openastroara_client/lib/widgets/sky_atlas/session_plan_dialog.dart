@@ -17,6 +17,7 @@ import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
 import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
 import 'target_preview.dart';
+import '../adaptive_controls.dart';
 
 /// §36.8 "What-if run" — plan an imaging session: the user gives the window
 /// they can actually shoot (say 22:00–01:00) and how many targets they want,
@@ -353,7 +354,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                             width: 14,
                             height: 14,
                             child:
-                                CircularProgressIndicator(strokeWidth: 2))
+                                AdaptiveProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.auto_awesome, size: 16),
                     label: Text(_planning
                         ? 'Planning…'
@@ -414,7 +415,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                               ? const SizedBox(
                                   width: 14,
                                   height: 14,
-                                  child: CircularProgressIndicator(
+                                  child: AdaptiveProgressIndicator(
                                       strokeWidth: 2))
                               : const Icon(Icons.playlist_add, size: 16),
                           label: Text(_adding
@@ -569,7 +570,7 @@ class _PlanTargetCard extends StatelessWidget {
                         overlayShape:
                             const RoundSliderOverlayShape(overlayRadius: 12),
                       ),
-                      child: Slider(
+                      child: AdaptiveSlider(
                         min: 0,
                         max: 359,
                         divisions: 359,

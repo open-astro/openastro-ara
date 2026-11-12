@@ -11,6 +11,7 @@ import '../../state/settings/equipment_connection_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../inline_choices.dart';
+import '../adaptive_controls.dart';
 
 /// §52.2 Alpaca device chooser. Calls `/api/v1/equipment/discover/{type}`
 /// against the active server, shows the discovered devices, lets the user
@@ -102,7 +103,7 @@ class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
     future: _future,
     builder: (context, snap) {
       if (snap.connectionState == ConnectionState.waiting) {
-        return const Center(heightFactor: 2, child: CircularProgressIndicator());
+        return const Center(heightFactor: 2, child: AdaptiveProgressIndicator());
       }
       if (snap.hasError) {
         return _ErrorState(error: snap.error, onRetry: _refresh);

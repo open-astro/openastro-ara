@@ -9,6 +9,7 @@ import '../../../state/stats/focus_temp_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
+import '../../adaptive_controls.dart';
 
 /// §50.4 Focus & Temperature scatter — each captured frame that recorded a
 /// focuser position is a point at (sensor temp, focus position), read from the
@@ -100,7 +101,7 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ),

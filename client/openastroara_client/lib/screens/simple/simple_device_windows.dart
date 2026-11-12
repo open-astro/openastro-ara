@@ -10,6 +10,7 @@ import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/camera_status.dart' show DewHeaterRef;
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
@@ -17,6 +18,7 @@ import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
 import '../../models/weather_status.dart';
 import '../../widgets/equipment/cooling_fan_picker.dart';
+import '../../widgets/simple/filter_wheel.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../models/mount_status.dart';
@@ -69,6 +71,7 @@ import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -211,7 +214,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           );
           children.add(
-            Slider(
+            AdaptiveSlider(
               key: const Key('simple-camera-target'),
               min: lo,
               max: hi,
@@ -232,6 +235,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
           const Divider(height: AraSpace.s16),
           const ProfileCoolingFanPicker(style: kSimpleText),
         ]);
+      }
+      // The camera's own heater, when the rig paired one by serial (#1663).
+      if (s.dewHeater != null) {
+        children.add(_DewHeaterRow(heater: s.dewHeater!));
       }
       // The camera's gain, shared with Preview's chip.
       children.add(
@@ -309,6 +316,154 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   static Widget _row(String id, String label, Widget value) =>
       simpleWindowRow(label, value, id: id);
+}
+
+/// The Camera window's Dew heater (#1663): the heater switch the rig paired
+/// with the main camera, as On / Off for an on/off port, else a slider with
+/// its level. Shown while that switch is connected and the port writable;
+/// the level and range come from the switch list, and a write goes through
+/// the Switches window's path (`switchListProvider`), rounded alike.
+class _DewHeaterRow extends ConsumerStatefulWidget {
+  const _DewHeaterRow({required this.heater});
+
+  final DewHeaterRef heater;
+
+  @override
+  ConsumerState<_DewHeaterRow> createState() => _DewHeaterRowState();
+}
+
+class _DewHeaterRowState extends ConsumerState<_DewHeaterRow> {
+  /// The value asked, until the rig answers: the control shows it meanwhile.
+  double? _asked;
+
+  /// A slider being dragged, and where.
+  double? _drag;
+
+  @override
+  void initState() {
+    super.initState();
+    // The list has no live updates: read it fresh as the row appears.
+    Future.microtask(() {
+      if (mounted) ref.read(switchListProvider.notifier).refresh();
+    });
+  }
+
+  SwitchPort? _port(List<SwitchDevice> devices) {
+    for (final d in devices) {
+      if (!d.isConnected || d.deviceId != widget.heater.deviceId) continue;
+      for (final p in d.ports) {
+        if (p.id == widget.heater.portId && p.canWrite && p.max > p.min) {
+          return p;
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final p = _port(ref.watch(switchListProvider).value ?? const []);
+    if (p == null) return const SizedBox.shrink();
+    final busy = _asked != null;
+    final shown = (_drag ?? _asked ?? p.value).clamp(p.min, p.max);
+    final level = _switchPercent(p, simpleSwitchRound(p, shown));
+    final Widget control;
+    if (p.isBoolean) {
+      control = Semantics(
+        label: l10n.deviceDewHeater,
+        value: shown >= 0.5 ? l10n.deviceOn : l10n.deviceOff,
+        container: true,
+        child: Opacity(
+          opacity: busy ? AraOpacity.locked : 1,
+          child: _OnOff(
+            id: 'simple-camera-dewheater',
+            on: shown >= 0.5,
+            enabled: !busy,
+            onChanged: (on) => _write(p, on ? p.max : p.min),
+          ),
+        ),
+      );
+    } else {
+      control = SizedBox(
+        width: kSimpleWindowControlWidth,
+        child: Row(
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: busy ? AraOpacity.locked : 1,
+                child: IgnorePointer(
+                  ignoring: busy,
+                  // Merged, so the adjustable node is named "Dew heater".
+                  child: MergeSemantics(
+                    child: Semantics(
+                      label: l10n.deviceDewHeater,
+                      child: Slider(
+                        key: const Key('simple-camera-dewheater'),
+                        min: p.min,
+                        max: p.max,
+                        divisions: usableSwitchStep(p) == null
+                            ? null
+                            : switchSliderDivisions(p),
+                        value: shown,
+                        semanticFormatterCallback: (x) =>
+                            _switchPercent(p, simpleSwitchRound(p, x)),
+                        onChanged: (x) => setState(() => _drag = x),
+                        onChangeEnd: (x) {
+                          setState(() => _drag = null);
+                          _write(p, x);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // The slider already reads its level to a screen reader.
+            ExcludeSemantics(
+              child: simpleSliderLevel(
+                context,
+                level,
+                key: const Key('simple-camera-dewheater-level'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return simpleWindowRow(
+      l10n.deviceDewHeater,
+      control,
+      id: 'dewheater',
+      labelInControl: true,
+    );
+  }
+
+  Future<void> _write(SwitchPort p, double value) async {
+    final v = simpleSwitchRound(p, value);
+    final l10n = context.l10n;
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
+    setState(() => _asked = v);
+    try {
+      // Re-reads the list once the rig takes it.
+      final performed = await ref
+          .read(switchListProvider.notifier)
+          .setValue(
+            deviceId: widget.heater.deviceId,
+            portId: widget.heater.portId,
+            value: v,
+          );
+      if (!performed && mounted) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSetPort(l10n.deviceDewHeater),
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _asked = null);
+    }
+  }
 }
 
 /// A tap the device's notifier dropped (its last command still running)
@@ -505,10 +660,15 @@ class _OnOff extends StatelessWidget {
     this.enabled = true,
     this.fill = false,
     this.known = true,
+    this.group,
   });
 
   final String id;
   final bool on;
+
+  /// What the segments choose, read to a screen reader with each segment's
+  /// word and state ("Follows the mount, On, selected").
+  final String? group;
 
   /// False: the state isn't known (a faulted shutter), so neither segment
   /// reads as selected and both take a tap.
@@ -541,6 +701,7 @@ class _OnOff extends StatelessWidget {
             child: SimpleSegment(
               key: Key('$id-$key'),
               label: word,
+              group: group,
               selected: known && on == v,
               radius: AraRadius.container,
               onTap: (known && on == v) || !enabled ? null : () => onChanged(v),
@@ -1217,7 +1378,7 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
           id: 'Gain',
           Text(text(gain), style: kSimpleText),
         ),
-        Slider(
+        AdaptiveSlider(
           key: Key(widget.id),
           min: lo.toDouble(),
           max: hi.toDouble(),
@@ -1343,7 +1504,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         id: 'Refocus temp',
         Text(text(c), style: kSimpleText),
       ),
-      Slider(
+      AdaptiveSlider(
         key: const Key('simple-focuser-refocus'),
         min: 0,
         max: 10,
@@ -2336,7 +2497,7 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
     final slider = MergeSemantics(
       child: Semantics(
         label: context.l10n.deviceGain,
-        child: Slider(
+        child: AdaptiveSlider(
           key: const Key('simple-guider-gain'),
           min: 0,
           max: 100,
@@ -2879,10 +3040,12 @@ class _SimpleFilterWheelWindowState
       ? context.l10n.deviceSlot(slot.position)
       : context.l10n.deviceSlotFilter(slot.position, slot.name);
 
-  /// The filter in place with its position, as the full UI shows it.
-  String _placed(FilterSlot slot) => slot.name.isEmpty
-      ? context.l10n.deviceSlot(slot.position)
-      : context.l10n.deviceFilterInSlot(slot.name, slot.position);
+  /// A cell's own words: the filter's name when it fits (four letters), else
+  /// its slot number.
+  String _cellLabel(FilterSlot slot) =>
+      slot.name.isNotEmpty && slot.name.characters.length <= 4
+      ? slot.name
+      : '${slot.position}';
 
   @override
   Widget build(BuildContext context) {
@@ -2933,42 +3096,148 @@ class _SimpleFilterWheelWindowState
           : w.slots.where((s) => s.position == sentSlot).firstOrNull;
       final moving = sent != null || w.isMoving;
       final pending = w.isAwaitingUser ? w.pending : null;
-      children.add(
-        simpleWindowRow(
-          l10n.deviceFilter,
-          id: 'Filter',
-          // Moving is working: blinking green (DESIGN.md status rule).
-          StatusBlink(
-            on: moving,
-            child: Text(
-              sent != null
-                  ? l10n.deviceMovingTo(_name(sent))
-                  : w.isMoving
-                  ? l10n.deviceMoving
-                  : w.current == null
-                  ? '—'
-                  : _placed(w.current!),
-              style: kSimpleText.copyWith(
-                color: moving ? AraColors.accentConnected : null,
-              ),
-            ),
+      // The filter in place until the wheel lands; the status line names the
+      // target meanwhile.
+      final shownSlot = w.current;
+      final shownName = shownSlot == null ? '—' : _name(shownSlot);
+      // Moving is working: blinking green (DESIGN.md status rule); a hand
+      // swap waits in amber.
+      final status = sent != null
+          ? l10n.deviceMovingTo(_name(sent))
+          : w.isMoving
+          ? l10n.deviceMoving
+          : pending != null
+          ? l10n.deviceSwapIn(_name(pending))
+          : '';
+      final statusLine = StatusBlink(
+        on: moving,
+        child: Text(
+          status,
+          style: AraText.caption.copyWith(
+            color: pending != null && !moving
+                ? AraColors.accentBusy
+                : AraColors.accentConnected,
           ),
         ),
       );
-      // The saved offset of the filter in place, once any slot has one.
-      if (!moving &&
-          w.current != null &&
-          w.slots.any((s) => s.focusOffset != 0)) {
+      final asked =
+          command.phase == DeviceCommandPhase.asking && command.by == this;
+      final cmd = ref.read(filterWheelCommandProvider.notifier);
+      if (w.slots.isEmpty) {
+        children.add(Text(l10n.deviceNoFilters, style: AraText.caption));
+      } else {
+        final large = w.slots.length > 8;
+        final scale = simpleRailScale(context);
+        // The saved offset of the filter in place, once any slot has one
+        // (#1675): a caption under the slot line.
+        final offset =
+            !moving &&
+                shownSlot != null &&
+                w.slots.any((s) => s.focusOffset != 0)
+            ? Text(
+                l10n.deviceFocusOffset(simpleSigned(shownSlot.focusOffset)),
+                key: const Key('simple-filterwheel-offset'),
+                style: AraText.caption,
+              )
+            : null;
+        FilterCellRing ringOf(int position) => sentSlot == position
+            ? FilterCellRing.moving
+            : asked && command.target == position
+            ? FilterCellRing.asked
+            : pending?.position == position
+            ? FilterCellRing.swap
+            : w.currentSlot == position && !moving
+            ? FilterCellRing.here
+            : FilterCellRing.none;
         children.add(
-          Text(
-            l10n.deviceFocusOffset(simpleSigned(w.current!.focusOffset)),
-            key: const Key('simple-filterwheel-offset'),
-            style: AraText.caption,
+          LayoutBuilder(
+            builder: (context, box) {
+              // 180 pt (260 with more than 8 slots), more with large text;
+              // the small wheel never more than about half a narrow window,
+              // so the reading keeps its room.
+              final size = large
+                  ? math.min(260 * scale, box.maxWidth)
+                  : math.min(180 * scale, box.maxWidth * 0.55);
+              final wheel = SimpleFilterWheel(
+                slots: w.slots,
+                size: size,
+                large: large,
+                // A manual wheel turns only once the hand swap is confirmed.
+                pointAt: w.manual ? w.currentSlot : sentSlot ?? w.currentSlot,
+                ringOf: ringOf,
+                locked: moving || pending != null || asked,
+                semanticLabel: _labelled,
+                slotLabel: _cellLabel,
+                onPick: (position) => cmd.request(position, by: this),
+                hub: !large
+                    ? null
+                    // Scaled down as one block when the hub is small.
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(l10n.deviceFilter, style: AraText.caption),
+                            Text(shownName, maxLines: 1, style: kSimpleReading),
+                            if (shownSlot != null && shownSlot.name.isNotEmpty)
+                              Text(
+                                l10n
+                                    .deviceSlot(shownSlot.position)
+                                    .toLowerCase(),
+                                style: AraText.caption,
+                              ),
+                            ?offset,
+                          ],
+                        ),
+                      ),
+              );
+              if (large) {
+                return Column(
+                  spacing: AraSpace.s8,
+                  children: [
+                    wheel,
+                    Center(child: statusLine),
+                  ],
+                );
+              }
+              return Row(
+                spacing: AraSpace.s12,
+                children: [
+                  Expanded(
+                    child: Column(
+                      key: const Key('simple-filterwheel-reading'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 2,
+                      children: [
+                        Text(l10n.deviceFilter, style: AraText.caption),
+                        // Shrinks in a narrow window rather than wrap.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            shownName,
+                            maxLines: 1,
+                            style: kSimpleReadingLarge,
+                          ),
+                        ),
+                        if (shownSlot != null && shownSlot.name.isNotEmpty)
+                          Text(
+                            l10n.deviceSlot(shownSlot.position),
+                            style: AraText.caption,
+                          ),
+                        ?offset,
+                        statusLine,
+                      ],
+                    ),
+                  ),
+                  wheel,
+                ],
+              );
+            },
           ),
         );
       }
-      if (command.phase == DeviceCommandPhase.asking && command.by == this) {
-        final cmd = ref.read(filterWheelCommandProvider.notifier);
+      if (asked) {
         children.add(
           simpleWindowConfirm(
             question: l10n.devicePlanRunningChangeFilter,
@@ -2979,11 +3248,7 @@ class _SimpleFilterWheelWindowState
         );
       }
       if (pending != null) {
-        children.addAll([
-          Text(
-            l10n.deviceSwapIn(_name(pending)),
-            style: kSimpleText.copyWith(color: AraColors.accentBusy),
-          ),
+        children.add(
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             spacing: AraSpace.s8,
@@ -2999,70 +3264,8 @@ class _SimpleFilterWheelWindowState
               ),
             ],
           ),
-        ]);
+        );
       }
-      children.add(
-        w.slots.isEmpty
-            ? Text(l10n.deviceNoFilters, style: AraText.caption)
-            : LayoutBuilder(
-                builder: (context, box) {
-                  // Full-width rows; the labels left-justified and centred as
-                  // a block, so the slot numbers line up.
-                  final scaler = MediaQuery.textScalerOf(context);
-                  final widest = w.slots
-                      .map((slot) {
-                        final painter = TextPainter(
-                          text: TextSpan(
-                            text: _labelled(slot),
-                            style: kSimpleText,
-                          ),
-                          textScaler: scaler,
-                          maxLines: 1,
-                          textDirection: Directionality.of(context),
-                        )..layout();
-                        final width = painter.width;
-                        painter.dispose();
-                        return width;
-                      })
-                      .reduce(math.max);
-                  final inset = math.max(14.0, (box.maxWidth - widest) / 2);
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(AraRadius.container),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final slot in w.slots)
-                          SimpleSegment(
-                            key: Key(
-                              'simple-filterwheel-slot-${slot.position}',
-                            ),
-                            alignment: Alignment.centerLeft,
-                            padding: EdgeInsetsDirectional.only(
-                              start: inset,
-                              end: 14,
-                            ),
-                            label: _labelled(slot),
-                            selected:
-                                (sentSlot ?? w.currentSlot) == slot.position,
-                            radius: AraRadius.container,
-                            onTap:
-                                moving ||
-                                    pending != null ||
-                                    slot.position == w.currentSlot
-                                ? null
-                                : () => ref
-                                      .read(filterWheelCommandProvider.notifier)
-                                      .request(slot.position, by: this),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      );
     }
     if (widget.inSettings) {
       children.addAll(
@@ -3110,6 +3313,16 @@ String _simpleLevel(double v) {
       ? r.toStringAsFixed(0)
       : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
+
+/// A switch port's value as it is sent: on the device's step (#1680); without
+/// one, whole numbers over a range of 10 or more, else to 0.01. The Switches
+/// window and the Camera window's Dew heater (#1663) round with this one
+/// function, so the two renderings of one port can't disagree.
+double simpleSwitchRound(SwitchPort p, double v) =>
+    snapToSwitchStep(p, v) ??
+    (p.max - p.min >= 10
+        ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
+        : (v * 100).roundToDouble() / 100);
 
 /// A slider port's level as a percent of its range ("50 %"); anything off
 /// the bottom reads at least 1 % and anything short of the top at most 99 %,
@@ -3216,14 +3429,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     // The list has no live updates: read it fresh as the window opens.
     Future.microtask(() => ref.read(switchListProvider.notifier).refresh());
   }
-
-  /// On the device's step (#1680); without one, whole numbers over a range of
-  /// 10 or more, else to 0.01.
-  static double _round(SwitchPort p, double v) =>
-      snapToSwitchStep(p, v) ??
-      (p.max - p.min >= 10
-          ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
-          : (v * 100).roundToDouble() / 100);
 
   @override
   Widget build(BuildContext context) {
@@ -3416,7 +3621,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                   ignoring: dimmed,
                   child: Semantics(
                     label: p.label,
-                    child: Slider(
+                    child: AdaptiveSlider(
                       key: Key('simple-switch-$id'),
                       min: p.min,
                       max: p.max,
@@ -3425,7 +3630,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                           : switchSliderDivisions(p),
                       value: v,
                       semanticFormatterCallback: (x) =>
-                          _switchPercent(p, _round(p, x)),
+                          _switchPercent(p, simpleSwitchRound(p, x)),
                       // Locked: it takes nothing; once dimmed it fades as
                       // the segments do and takes no touch or screen-reader
                       // action, so a fast answer doesn't flash it.
@@ -3450,7 +3655,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                 opacity: dimmed ? AraOpacity.locked : 1,
                 child: simpleSliderLevel(
                   context,
-                  _switchPercent(p, _round(p, v)),
+                  _switchPercent(p, simpleSwitchRound(p, v)),
                   key: Key('simple-switch-$id-level'),
                 ),
               ),
@@ -3469,7 +3674,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
   }
 
   Future<void> _write(SwitchDevice d, SwitchPort p, double value) async {
-    final v = _round(p, value);
+    final v = simpleSwitchRound(p, value);
     final l10n = context.l10n;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.switches);
     final setting = ref.read(simpleSwitchSettingProvider.notifier);
@@ -3721,7 +3926,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
           Row(
             children: [
               Expanded(
-                child: Slider(
+                child: AdaptiveSlider(
                   key: const Key('simple-flat-brightness'),
                   value: level.toDouble(),
                   // Slider needs max > min: held at 1 and disabled until the
@@ -4479,8 +4684,9 @@ final simpleDomeAskProvider =
 /// pairs of shells fanning open and shut over about as long as this dome's
 /// shutter takes, and a dial from above to turn it (drag to a target, play
 /// in its middle; Stop while it moves). Then the shutter as Open / Closed,
-/// Park and Home. Only what the dome says it can do shows. Sync, set park
-/// and slaving stay in the full UI (#1662, mock
+/// Park and Home, and a Follows the mount switch (#1689). Only what the dome
+/// says it can do shows. Sync, set park and the follow geometry stay in the
+/// full UI (#1662, mock
 /// `design/preview/simple-dome-safety-mock.html` v12, the Baader AllSky
 /// clamshell from the user's photos).
 class SimpleDomeWindow extends ConsumerStatefulWidget {
@@ -4580,7 +4786,8 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           ? StatusBlink(
               on: true,
               child: Text(
-                l10n.deviceMoving,
+                // The follower is turning it (#1689): not a move the user asked for.
+                s.following ? l10n.deviceFollowingMount : l10n.deviceMoving,
                 style: kSimpleText.copyWith(color: AraColors.accentConnected),
               ),
             )
@@ -4713,6 +4920,23 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           },
         ),
       );
+      // Only a dome that can turn to an azimuth can follow the mount (#1689).
+      if (caps?.canSetAzimuth ?? false) {
+        children.add(const SizedBox(height: AraSpace.s12));
+        children.add(
+          simpleWindowRow(
+            l10n.deviceFollowsMount,
+            _OnOff(
+              id: 'simple-dome-follow',
+              on: s.following,
+              group: l10n.deviceFollowsMount,
+              onChanged: _follow,
+            ),
+            id: 'dome-follow',
+            labelInControl: true,
+          ),
+        );
+      }
       if (caps?.canSetShutter ?? false) {
         children.add(
           // Clear of the drawing's plinth (user, 2026-11-08).
@@ -4814,6 +5038,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     final l10n = context.l10n;
     final asks = ref.read(simpleDomeAskProvider.notifier)
       ..ask((kind: SimpleDomeAskKind.turn, target: target));
+    final wasFollowing = ref.read(domeProvider).value?.following ?? false;
     try {
       final performed = await ref
           .read(domeProvider.notifier)
@@ -4821,6 +5046,9 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       if (!performed) {
         asks.clear();
         _sayBusy(ref, l10n);
+      } else if (wasFollowing) {
+        // The daemon turned following off with the move: say so once.
+        notify(l10n.deviceStoppedFollowingMount);
       }
     } catch (e) {
       asks.clear();
@@ -4836,6 +5064,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
     final l10n = context.l10n;
     final n = ref.read(domeProvider.notifier);
+    final wasFollowing = ref.read(domeProvider).value?.following ?? false;
     if (move == _DomeMove.open || move == _DomeMove.close) {
       ref.read(domeShutterProvider.notifier).asked();
     }
@@ -4861,12 +5090,32 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
         asks.clear();
         ref.read(domeShutterProvider.notifier).cancelAsk();
         _sayBusy(ref, l10n);
+      } else if (wasFollowing &&
+          (move == _DomeMove.park || move == _DomeMove.home)) {
+        // The daemon turned following off with the move: say so once.
+        notify(l10n.deviceStoppedFollowingMount);
       }
     } catch (e) {
       asks.clear();
       ref.read(domeShutterProvider.notifier).cancelAsk();
       notify(
         l10n.deviceCouldntMoveDome,
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    }
+  }
+
+  /// The Follows the mount segments: the daemon says why when it can't.
+  Future<void> _follow(bool on) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
+    final l10n = context.l10n;
+    try {
+      final performed = await ref.read(domeProvider.notifier).followMount(on);
+      if (!performed) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntFollowMount,
         detail: failureReason(l10n, e),
         error: true,
       );

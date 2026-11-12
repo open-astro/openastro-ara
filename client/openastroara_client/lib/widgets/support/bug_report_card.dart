@@ -17,6 +17,7 @@ import '../../theme/ara_colors.dart';
 import 'client_log_card.dart';
 import '../inline_choices.dart';
 import 'support_card_row.dart';
+import '../adaptive_controls.dart';
 
 /// §54 "Send me a bug report" action — prepares a diagnostic bundle on the
 /// daemon, shows the user exactly what it contains (a PII disclosure, required
@@ -353,7 +354,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(logOnly ? Icons.save_alt : Icons.bug_report, size: 18),
               label: Text(logOnly ? l.bugCardSaveLog : l.bugCardPrepare),

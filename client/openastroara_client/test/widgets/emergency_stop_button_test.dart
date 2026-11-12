@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, kSecondaryMouseButton;
+import 'package:flutter/cupertino.dart'
+    show CupertinoActivityIndicator, CupertinoAlertDialog, CupertinoDialogAction;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,9 +39,13 @@ class _FakeServerApi implements ServerApi {
 
   /// The daemon can't be reached: the stop never happened.
   Object? error;
+
+  /// When set, the stop stays in flight until this completes.
+  Completer<void>? hold;
   @override
   Future<EmergencyStopResult> emergencyStop() async {
     calls++;
+    await hold?.future;
     if (error != null) throw error!;
     return result;
   }
@@ -97,7 +105,8 @@ void main() {
         ],
         child: MaterialApp(
           // The app's own theme: its onError is black, not the default white.
-          theme: araTheme,
+          // araTheme is built once at load, so the platform is set per test.
+          theme: araTheme.copyWith(platform: defaultTargetPlatform),
           home: Scaffold(
             body: pills
                 // The pill the stop's message lands in, as Simple Mode shows it.
@@ -525,5 +534,78 @@ void main() {
 
       expect(find.textContaining('camera cooler off'), findsOneWidget);
     });
+  });
+
+  group('adaptive look (#1632)', () {
+    testWidgets(
+      'on iOS the confirm is an iOS alert and its Stop action is the default one',
+      (tester) async {
+        await pumpButton(tester);
+        await activateWithoutPointer(tester);
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        final stop = tester.widget<CupertinoDialogAction>(
+          find.widgetWithText(CupertinoDialogAction, 'EMERGENCY STOP'),
+        );
+        expect(stop.isDefaultAction, isTrue);
+        expect(stop.isDestructiveAction, isTrue);
+        stop.onPressed!();
+        await tester.pumpAndSettle();
+        expect(fake.calls, 1);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets(
+      'on Android and macOS the confirm stays a Material alert with the filled red Stop',
+      (tester) async {
+        await pumpButton(tester);
+        await activateWithoutPointer(tester);
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoAlertDialog), findsNothing);
+        expect(find.byType(CupertinoDialogAction), findsNothing);
+        await tester.tap(find.text('EMERGENCY STOP'));
+        await tester.pumpAndSettle();
+        expect(fake.calls, 1);
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.macOS,
+      }),
+    );
+
+    for (final (platform, ios) in [
+      (TargetPlatform.iOS, true),
+      (TargetPlatform.android, false),
+      (TargetPlatform.macOS, false),
+    ]) {
+      testWidgets(
+        'a stop in flight on ${platform.name} spins the ${ios ? 'iOS' : 'Material'} indicator',
+        (tester) async {
+          await pumpButton(tester);
+          fake.hold = Completer<void>();
+          await activateWithoutPointer(tester);
+          await tester.pumpAndSettle();
+          if (ios) {
+            tester
+                .widget<CupertinoDialogAction>(
+                  find.widgetWithText(CupertinoDialogAction, 'EMERGENCY STOP'),
+                )
+                .onPressed!();
+          } else {
+            await tester.tap(find.text('EMERGENCY STOP'));
+          }
+          await tester.pump();
+          expect(
+            find.byType(CupertinoActivityIndicator),
+            ios ? findsOneWidget : findsNothing,
+          );
+          expect(find.byType(CircularProgressIndicator), findsOneWidget);
+          fake.hold!.complete();
+          await tester.pumpAndSettle();
+        },
+        variant: TargetPlatformVariant.only(platform),
+      );
+    }
   });
 }

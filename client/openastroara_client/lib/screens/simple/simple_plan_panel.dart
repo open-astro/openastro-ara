@@ -45,6 +45,7 @@ import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
 import '../../util/tonight_sky_local.dart'
     show altitudeDegAt, darkStart, nightEnd;
+import '../../widgets/platform_context_menu.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show suggestedSubSeconds;
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
@@ -71,6 +72,7 @@ import 'simple_shell.dart'
         kSimpleInset,
         kSimpleRailWidth,
         simpleRailScale;
+import '../../widgets/adaptive_controls.dart';
 
 /// The plan's one-line hint: the suggested sub length of every row that
 /// differs from it, rows sharing a length together ("L 120 s · GB 180 s",
@@ -275,12 +277,12 @@ String _sub(FilterPlanStep s) {
   return s.filterName.isEmpty ? len : '${s.filterName} · $len';
 }
 
-/// The plan squares under the strip, for the queue's whole life, right to
-/// left in queue order: each target's tag, frames done of its total, the
-/// filter and sub length in hand, and the time (total before it starts, left
-/// while imaging). The target in hand is green ready, blue imaging, amber
-/// paused; the others green. Nothing without a plan. A tap on any square:
-/// the sheet (where the queue is managed) or the progress panel.
+/// The plan squares in every Screen's bottom-right corner (the shell places
+/// them, #1789), for the queue's whole life, right to left in queue order:
+/// each target's tag, frames done of its total, the filter and sub length in
+/// hand, and the time (total before it starts, left while imaging). The
+/// target in hand is green ready, blue imaging, amber paused; the others
+/// green. Nothing without a plan. A tap on any square opens the queue panel.
 class SimpleRunTracker extends ConsumerStatefulWidget {
   const SimpleRunTracker({super.key, required this.onTap});
 
@@ -767,12 +769,14 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                     duration: _hold.value > 0
                         ? Duration.zero
                         : const Duration(milliseconds: 900),
-                    builder: (_, v, _) => CircularProgressIndicator(
+                    builder: (_, v, _) => AdaptiveProgressIndicator(
                       value: v,
                       strokeWidth: 3,
-                      color: _hold.value > 0
-                          ? AraColors.accentError
-                          : AraColors.selectionBg,
+                      valueColor: AlwaysStoppedAnimation(
+                        _hold.value > 0
+                            ? AraColors.accentError
+                            : AraColors.selectionBg,
+                      ),
                     ),
                   ),
                 ),
@@ -1648,36 +1652,58 @@ class _QueueList extends ConsumerWidget {
         ],
       );
       // A swipe left removes it too (the × stays for those who don't swipe).
+      final swipe = !open(i) || run.busy
+          ? content
+          : Dismissible(
+              key: ValueKey('simple-run-swipe-${t.name}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: AraSpace.s16),
+                decoration: BoxDecoration(
+                  color: AraColors.emergencyStop,
+                  borderRadius: BorderRadius.circular(AraRadius.container),
+                ),
+                child: Text(
+                  context.l10n.planRemove,
+                  style: const TextStyle(
+                    color: AraColors.onFill,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // The row goes when the rig confirms, not before.
+              confirmDismiss: (_) async {
+                await remove(i);
+                return false;
+              },
+              child: content,
+            );
+      // On iOS and iPadOS a long press lists what the row's tap and × do. The menu wraps the
+      // Dismissible: inside it the row would get loose width and the preview would stretch.
       return Material(
         key: ValueKey('simple-run-row-${t.name}'),
         type: MaterialType.transparency,
-        child: !open(i) || run.busy
-            ? content
-            : Dismissible(
-                key: ValueKey('simple-run-swipe-${t.name}'),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: AraSpace.s16),
-                  decoration: BoxDecoration(
-                    color: AraColors.emergencyStop,
-                    borderRadius: BorderRadius.circular(AraRadius.container),
-                  ),
-                  child: Text(
-                    context.l10n.planRemove,
-                    style: const TextStyle(
-                      color: AraColors.onFill,
-                      fontWeight: FontWeight.w600,
+        child: PlatformContextMenu(
+          items: !open(i) || run.busy
+              ? const []
+              : [
+                  // The Calibration block has no rows to edit: only the tap's own targets.
+                  if (editable(i))
+                    ContextMenuItem(
+                      context.l10n.planEditTarget(t.name),
+                      Icons.edit_outlined,
+                      () => onEdit(i),
                     ),
+                  ContextMenuItem(
+                    context.l10n.planRemoveFromQueue(t.name),
+                    Icons.close,
+                    () => remove(i),
+                    destructive: true,
                   ),
-                ),
-                // The row goes when the rig confirms, not before.
-                confirmDismiss: (_) async {
-                  await remove(i);
-                  return false;
-                },
-                child: content,
-              ),
+                ],
+          child: swipe,
+        ),
       );
     }
 

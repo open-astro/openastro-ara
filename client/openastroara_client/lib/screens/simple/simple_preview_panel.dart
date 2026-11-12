@@ -80,6 +80,7 @@ import 'simple_device_windows.dart'
         simpleSwitchSettingProvider;
 import 'simple_mount_controls.dart'
     show SimplePointingPhase, simplePointingProvider;
+import 'simple_status_card.dart' show SimpleCardHairline;
 import 'simple_shell.dart'
     show
         SimplePanel,
@@ -87,8 +88,7 @@ import 'simple_shell.dart'
         SimpleSegments,
         simpleStackText,
         kSimpleRailWidth,
-        simpleRailScale,
-        kSimpleStatusMaxWidth,
+        kSimpleMessagesMaxWidth,
         simpleFrost;
 
 // kSimpleText moved to the theme so the Sky Album shares it; re-exported for Simple Mode's panels.
@@ -1169,7 +1169,7 @@ class SimpleStopSquare extends StatelessWidget {
   );
 }
 
-/// The status pill's height (Plan's sheet starts below it).
+/// A status line's height (Plan's sheet starts below it).
 const double kSimpleStatusHeight = 48;
 
 /// One status pill's content.
@@ -1214,9 +1214,9 @@ class _PillData {
   final String? spoken;
 }
 
-/// One pill: tapping it opens what it's about. Within one state (its label)
-/// it keeps the widest it has been, so a countdown or a falling temperature
-/// doesn't make it jitter (ALP-4937).
+/// One status line of the status card: tapping it opens what it's about.
+/// Within one state (its label) it keeps the widest it has been, so a
+/// countdown or a falling temperature doesn't make the card jitter (ALP-4937).
 class _StatusPill extends StatefulWidget {
   const _StatusPill({required this.data, this.onHeight, this.onOpen});
 
@@ -1253,7 +1253,7 @@ class _StatusPillState extends State<_StatusPill> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _keepWidth());
     final open = widget.onOpen == null ? null : () => widget.onOpen!(d.origin);
-    final maxWidth = kSimpleStatusMaxWidth * simpleRailScale(context);
+    final maxWidth = kSimpleMessagesMaxWidth;
     return Semantics(
       container: true,
       liveRegion: true,
@@ -1273,7 +1273,7 @@ class _StatusPillState extends State<_StatusPill> {
             minWidth: math.min(_width, maxWidth),
             maxWidth: maxWidth,
           ),
-          child: SimplePanel(
+          child: Padding(
             key: _panelKey,
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
             child: Stack(
@@ -1315,8 +1315,6 @@ class _StatusPillState extends State<_StatusPill> {
                             ],
                           ),
                           style: kSimpleText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (d.shotProgress != null) ...[
@@ -1360,7 +1358,15 @@ class _StatusPillState extends State<_StatusPill> {
 }
 
 class SimpleStatusPill extends ConsumerStatefulWidget {
-  const SimpleStatusPill({super.key, this.onFirstHeight, this.onOpen});
+  const SimpleStatusPill({
+    super.key,
+    this.onFirstHeight,
+    this.onOpen,
+    this.hairlineBelow = false,
+  });
+
+  /// Messages follow in the card: a hairline closes the last line.
+  final bool hairlineBelow;
 
   /// The top pill's height, 0 with none: a pill grows with large text.
   final ValueChanged<double>? onFirstHeight;
@@ -1973,6 +1979,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       pills: pills,
       onFirstHeight: widget.onFirstHeight,
       onOpen: widget.onOpen,
+      hairlineBelow: widget.hairlineBelow,
     );
   }
 }
@@ -1992,14 +1999,18 @@ class _KeptPill {
   bool fading = false;
 }
 
-/// The status pills, one per kind. A pill stays at least [_kPillMinimum], in
-/// its slot, then fades; a new pill of its kind takes over at once.
+/// The status lines, one per kind. A line stays at least [_kPillMinimum], in
+/// its slot, then fades; a new line of its kind takes over at once.
 class _StatusPillStack extends StatefulWidget {
   const _StatusPillStack({
     required this.pills,
     this.onFirstHeight,
     this.onOpen,
+    this.hairlineBelow = false,
   });
+
+  /// Messages follow in the card: a hairline closes the last line.
+  final bool hairlineBelow;
 
   final ValueChanged<double>? onFirstHeight;
 
@@ -2079,19 +2090,12 @@ class _StatusPillStackState extends State<_StatusPillStack> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final pills = [for (final d in widget.pills) _kept[d.origin]!];
     for (final (i, origin) in _order.indexed) {
       final kept = _kept[origin];
       if (kept != null && !kept.live) {
         pills.insert(math.min(i, pills.length), kept);
       }
-    }
-    // A fade ends only on a shown pill: one past the third goes at once.
-    for (final k in pills.skip(3).where((k) => k.fading).toList()) {
-      k.minimum.cancel();
-      _kept.remove(k.data.origin);
-      pills.remove(k);
     }
     _order = [for (final k in pills) k.data.origin];
     if (pills.isEmpty) {
@@ -2100,15 +2104,13 @@ class _StatusPillStackState extends State<_StatusPillStack> {
       );
       return const SizedBox.shrink();
     }
-    // Three at most; the rest fold into "+n", which opens the first one left.
-    final shown = pills.take(3).toList();
-    final more = pills.length - shown.length;
+    // Every line shows, in the stack's order; a hairline under each, the last
+    // one only when messages follow in the card.
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      spacing: AraSpace.s8,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final (i, k) in shown.indexed)
+        for (final (i, k) in pills.indexed) ...[
           AnimatedOpacity(
             key: ValueKey(k.data.origin),
             opacity: k.fading ? 0 : 1,
@@ -2123,33 +2125,9 @@ class _StatusPillStackState extends State<_StatusPillStack> {
               onOpen: widget.onOpen,
             ),
           ),
-        if (more > 0)
-          Semantics(
-            button: widget.onOpen != null,
-            child: SimpleTapTarget(
-              onTap: widget.onOpen == null
-                  ? null
-                  : () => widget.onOpen!(pills[3].data.origin),
-              child: SimplePanel(
-                padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minHeight: 44,
-                    minWidth: 44,
-                  ),
-                  child: Center(
-                    widthFactor: 1,
-                    heightFactor: 1,
-                    child: Text(
-                      '+$more',
-                      semanticsLabel: l10n.statusMoreSemantics(more),
-                      style: kSimpleText,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          if (i < pills.length - 1 || widget.hairlineBelow)
+            const SimpleCardHairline(),
+        ],
       ],
     );
   }

@@ -1092,6 +1092,19 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/dome/follow:
+    post:
+      tags:
+        - Equipment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomeFollowRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/dome/park:
     post:
       tags:
@@ -3559,6 +3572,7 @@ paths:
       tags:
         - PlateSolve
       summary: '§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount''s reported and intended positions.'
+      description: '409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with), `camera-busy` (another exposure holds the camera; check again once it has read out) or `gate-stuck` (the in-flight gate leaked; a daemon restart clears it).'
       operationId: VerifyMountPosition
       requestBody:
         content:
@@ -6908,6 +6922,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/dome:
+    get:
+      tags:
+        - Profile
+      summary: Get the active profile's dome geometry and follow-the-mount setting.
+      operationId: GetDomeSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomeSettingsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's dome geometry and tolerances (follow_mount is kept; POST /equipment/dome/follow changes it); a scope outside the dome radius is refused with a reason.
+      operationId: PutDomeSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomeSettingsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomeSettingsDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -9662,6 +9713,88 @@ components:
           format: int32
         use_https:
           type: boolean
+    DomeFollowRequestDto:
+      required:
+        - enabled
+      type: object
+      properties:
+        enabled:
+          type: boolean
+    DomeSettingsDto:
+      type: object
+      properties:
+        follow_mount:
+          type: boolean
+          default: false
+        dome_radius_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_north_south_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_east_west_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        scope_position_up_down_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        mount_type:
+          type: string
+          default: equatorial
+        gem_axis_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        lateral_axis_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        dec_offset_horizontal_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        azimuth_tolerance_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 2
+        synchronize_during_mount_slew:
+          type: boolean
+          default: false
+        dome_sync_timeout_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 120
     DomeSlewRequestDto:
       required:
         - target_azimuth_deg
@@ -14016,6 +14149,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/FilterFocusOffsetsDto'
+        dome:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/DomeSettingsDto'
     QualityScoreBreakdownDto:
       required:
         - composite

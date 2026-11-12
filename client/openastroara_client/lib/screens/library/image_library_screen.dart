@@ -23,6 +23,8 @@ import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
+import '../../widgets/adaptive_dialog.dart';
+import '../../widgets/adaptive_controls.dart';
 
 const _monthNames = [
   'Jan',
@@ -66,7 +68,7 @@ class ImageLibraryScreen extends ConsumerWidget {
         ),
       ),
       body: sessions.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => _CenteredNotice(
           message: friendlyError(context.l10n, e, action: context.l10n.actionLoadLibrary),
           action: OutlinedButton(
@@ -704,20 +706,24 @@ class _SessionFaultsBadge extends ConsumerWidget {
     if (rows == null || rows.isEmpty) return const SizedBox.shrink();
     final groups = groupFaultRows(rows);
     return TextButton.icon(
-      onPressed: () => showDialog<void>(
+      onPressed: () => showAdaptiveAlert<void>(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (_) => adaptiveAlertDialog(
           title: Text('Faults — $targetName'),
+          // A Column, not a ListView: the iOS alert measures its content's
+          // height, which a lazy list cannot report. At most 50 rows.
+          scrollable: true,
           content: SizedBox(
             width: 480,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: groups.length,
-              itemBuilder: (context, i) => FaultGroupTile(group: groups[i]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [for (final group in groups) FaultGroupTile(group: group)],
             ),
           ),
           actions: [
-            TextButton(
+            adaptiveDialogAction(
+              context,
+              isDefault: true,
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
@@ -755,7 +761,7 @@ class _SessionFramesGrid extends ConsumerWidget {
             child: SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             ),
           ),
         ),

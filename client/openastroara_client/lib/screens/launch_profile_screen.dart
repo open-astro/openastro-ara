@@ -12,6 +12,7 @@ import '../widgets/plan_offline_button.dart';
 import '../widgets/profile/delete_profile_dialog.dart';
 import '../widgets/profile/profile_import_flow.dart';
 import 'wizard/wizard_shell.dart';
+import '../widgets/adaptive_controls.dart';
 
 /// §30.2 launch profile box — after the server gate, before the main shell.
 /// Skipped on a session's first entry when the rig has an active profile
@@ -87,7 +88,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
-                      Center(child: CircularProgressIndicator()),
+                      Center(child: AdaptiveProgressIndicator()),
                     ],
                     error: (e, _) => [
                       Text(
@@ -215,7 +216,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         child: _entering
             ? const SizedBox(
                 width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: AdaptiveProgressIndicator(strokeWidth: 2))
             : const Text('Image'),
       ),
     ];

@@ -19,7 +19,7 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
-/// abort active sequence runs FIRST (so a still-running instruction can't
+/// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then stop the mount where it is, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
@@ -44,6 +44,8 @@ public sealed partial class EmergencyStopService {
     private readonly IPolarAlignService? _polarAlign;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
+    // #1689 — Func<>: the follower is registered after this service.
+    private readonly Func<DomeFollower?>? _domeFollower;
     private readonly ILogger<EmergencyStopService> _logger;
 
     // Single-flight: a panicked double-press must not queue a second full
@@ -72,7 +74,9 @@ public sealed partial class EmergencyStopService {
             IGuideFocusService? guideFocus = null,
             IBahtinovFocusService? bahtinov = null,
             AutofocusRunTracker? autofocus = null,
-            IPolarAlignService? polarAlign = null) {
+            IPolarAlignService? polarAlign = null,
+            Func<DomeFollower?>? domeFollower = null) {
+        _domeFollower = domeFollower;
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -120,6 +124,13 @@ public sealed partial class EmergencyStopService {
         // Failed = attempted but faulted; a device that isn't connected at all
         // is NOT a failure (a rig without a flat panel must not yell about it).
         var failedRungs = new List<string>();
+
+        // #1689 — first: following the mount off, so the follower does not turn the dome once the mount's slew
+        // is aborted (it reads a slew that ended as "the mount arrived"). A settings write, not a device call:
+        // a failure is logged by the rung and is not a failed_rungs token.
+        var follower = _domeFollower?.Invoke();
+        await RungAsync("dome follow off", null,
+            follower is null ? null : _ => { follower.TurnOff("emergency stop"); return Task.CompletedTask; }).ConfigureAwait(false);
 
         var (runsAborted, abortRunsOutcome) = await AbortRunsQuietlyAsync().ConfigureAwait(false);
         if (abortRunsOutcome is RungOutcome.Failed) { failedRungs.Add("abort_runs"); }

@@ -16,6 +16,7 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/profile/delete_profile_dialog.dart';
 import '../../widgets/profile/profile_import_flow.dart';
 import '../wizard/wizard_shell.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// §37/§30 multi-profile management. Lists the daemon's known profiles with the
 /// active one badged, and offers Select / Rename / Delete per profile plus an
@@ -45,7 +46,7 @@ class ProfileManagementScreen extends ConsumerWidget {
         ],
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => _ErrorState(
           message: friendlyDaemonError(e, fallback: "Couldn't load the profiles"),
           onRetry: () => ref.read(profileManagementProvider.notifier).refresh(),
