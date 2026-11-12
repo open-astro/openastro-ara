@@ -4733,4 +4733,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String faultGroupSpan(String first, String last) {
     return 'First $first · last $last';
   }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count unresolved';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recovered';
 }

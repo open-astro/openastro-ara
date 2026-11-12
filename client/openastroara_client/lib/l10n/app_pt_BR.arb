@@ -1306,5 +1306,7 @@
   "calibrationStartQueue": "Os quadros de calibração estão na fila após os seus alvos. Iniciar a fila agora?",
   "calibrationStartQueueNow": "Iniciar fila",
   "faultGroupCount": "{count} vezes",
-  "faultGroupSpan": "Primeira {first} · última {last}"
+  "faultGroupSpan": "Primeira {first} · última {last}",
+  "faultGroupUnresolved": "{count} sem solução",
+  "faultGroupRecovered": "recuperado"
 }

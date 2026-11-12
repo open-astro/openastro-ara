@@ -51,21 +51,26 @@ void main() {
   });
 
   // #1767 — one device dropping again and again reads as one row; every row stays behind it.
-  FaultRow at(int minute,
-          {String id = 'f', String device = 'dev-1', String? session}) =>
-      FaultRow(
-        id: '$id$minute',
-        sessionId: session,
-        detectedUtc: DateTime.utc(2026, 10, 8, 23).add(Duration(minutes: minute)),
-        equipmentType: 'guider',
-        equipmentId: device,
-        equipmentName: 'Guide cam',
-        faultType: 'disconnected',
-        details: null,
-        actionTaken: 'recovered',
-        resolvedUtc: DateTime.utc(2026, 10, 8, 23, 0, 5)
-            .add(Duration(minutes: minute)),
-      );
+  FaultRow at(
+    int minute, {
+    String id = 'f',
+    String device = 'dev-1',
+    String? session,
+    bool resolved = true,
+  }) => FaultRow(
+    id: '$id$minute',
+    sessionId: session,
+    detectedUtc: DateTime.utc(2026, 10, 8, 23).add(Duration(minutes: minute)),
+    equipmentType: 'guider',
+    equipmentId: device,
+    equipmentName: 'Guide cam',
+    faultType: 'disconnected',
+    details: null,
+    actionTaken: 'recovered',
+    resolvedUtc: resolved
+        ? DateTime.utc(2026, 10, 8, 23, 0, 5).add(Duration(minutes: minute))
+        : null,
+  );
 
   test('groupFaultRows folds consecutive rows of one device and keeps others apart', () {
     final groups = groupFaultRows([
@@ -80,30 +85,101 @@ void main() {
 
   test('two episodes of one device stay apart: a quiet gap or another session splits them', () {
     final gap = faultEpisodeGap.inMinutes;
-    final byGap = groupFaultRows([at(300), at(300 - gap), at(60), at(60 - gap)]);
+    final byGap = groupFaultRows([
+      at(300),
+      at(300 - gap),
+      at(60),
+      at(60 - gap),
+    ]);
     expect(byGap.map((g) => g.count), [2, 2]);
     final tooFar = groupFaultRows([at(300), at(300 - gap - 1)]);
     expect(tooFar.map((g) => g.count), [1, 1]);
-    final bySession = groupFaultRows([at(30, session: 's2'), at(25, session: 's1')]);
+    final bySession = groupFaultRows([
+      at(30, session: 's2'),
+      at(25, session: 's1'),
+    ]);
     expect(bySession.map((g) => g.count), [1, 1]);
   });
 
   testWidgets(
-      'a collapsed group shows the count and first / last time, rows behind a tap',
-      (tester) async {
-    final group = groupFaultRows([at(30), at(20), at(10)]).single;
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      locale: const Locale('en'),
-      home: Scaffold(
-          body: SingleChildScrollView(child: FaultGroupTile(group: group))),
-    ));
-    expect(find.textContaining('3 times'), findsOneWidget);
-    expect(find.textContaining('First '), findsOneWidget);
-    expect(find.byType(FaultHistoryTile), findsNothing);
-    await tester.tap(find.textContaining('3 times'));
-    await tester.pumpAndSettle();
-    expect(find.byType(FaultHistoryTile), findsNWidgets(3));
-  });
+    'a collapsed group shows the count and first / last time, rows behind a tap',
+    (tester) async {
+      final group = groupFaultRows([at(30), at(20), at(10)]).single;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: SingleChildScrollView(child: FaultGroupTile(group: group)),
+          ),
+        ),
+      );
+      expect(find.textContaining('3 times'), findsOneWidget);
+      expect(find.textContaining('First '), findsOneWidget);
+      expect(find.byType(FaultHistoryTile), findsNothing);
+      await tester.tap(find.textContaining('3 times'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FaultHistoryTile), findsNWidgets(3));
+    },
+  );
+
+  Widget localized(Widget child) => MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: const Locale('en'),
+    home: Scaffold(body: child),
+  );
+
+  testWidgets(
+    'a group says in words whether a drop is still open or all recovered',
+    (tester) async {
+      // Night mode's red filter makes the dot colours look alike.
+      await tester.pumpWidget(
+        localized(
+          Column(
+            children: [
+              FaultGroupTile(
+                group: groupFaultRows([at(40, resolved: false), at(35), at(30)])
+                    .single,
+              ),
+              FaultGroupTile(group: groupFaultRows([at(10), at(5)]).single),
+            ],
+          ),
+        ),
+      );
+      expect(find.textContaining('1 unresolved'), findsOneWidget);
+      expect(find.textContaining('recovered'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an opened group stays open when a newer row from another device arrives',
+    (tester) async {
+      // The feed refreshes after each fault event; the list shifts by one row.
+      final rows = ValueNotifier([at(30), at(20), at(10)]);
+      await tester.pumpWidget(
+        localized(
+          ValueListenableBuilder<List<FaultRow>>(
+            valueListenable: rows,
+            builder: (context, list, _) {
+              final groups = groupFaultRows(list);
+              return ListView.builder(
+                itemCount: groups.length,
+                itemBuilder: (context, i) => FaultGroupTile(group: groups[i]),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.tap(find.textContaining('3 times'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FaultHistoryTile), findsNWidgets(3));
+
+      rows.value = [at(40, device: 'dev-2'), ...rows.value];
+      await tester.pumpAndSettle();
+      // The other device's single row, plus the three rows of the group still open.
+      expect(find.byType(FaultHistoryTile), findsNWidgets(4));
+    },
+  );
 }

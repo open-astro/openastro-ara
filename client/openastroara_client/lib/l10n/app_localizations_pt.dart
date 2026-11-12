@@ -4733,6 +4733,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String faultGroupSpan(String first, String last) {
     return 'First $first · last $last';
   }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count unresolved';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recovered';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9494,4 +9502,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String faultGroupSpan(String first, String last) {
     return 'Primeira $first · última $last';
   }
+
+  @override
+  String faultGroupUnresolved(int count) {
+    return '$count sem solução';
+  }
+
+  @override
+  String get faultGroupRecovered => 'recuperado';
 }

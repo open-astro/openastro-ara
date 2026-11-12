@@ -373,12 +373,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var target = kind >= OpenAstroAra.Sequencer.Utility.PauseKind.Prompt
             ? SequenceRunState.PausedAwaitingUser
             : SequenceRunState.Paused;
+        var escalated = false;
         if (run.TryTransition(SequenceRunState.Running, target)
             || (target == SequenceRunState.PausedAwaitingUser
-                && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
+                && (escalated = run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser)))) {
             // #1784 — an ordinary pause drops the last step's stale countdown. A prompt or awaiting-user pause keeps the
             // text its step reported just before it ("Put the lens cap on … press Resume"): that text is the instruction.
             if (target == SequenceRunState.Paused) run.SetDescription(PausedDescription);
+            // A branch's "… press Resume" that landed while the run was still Paused is that instruction too.
+            if (escalated) run.ShowHeldDescription();
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
             // §38.10 — snapshot which target the pause interrupted, so a later
@@ -1584,12 +1587,26 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// cached ETA walk is stale even though <see cref="UpdateProgress"/> would see nothing new.</summary>
         public void NoteTreeChanged() => Interlocked.Increment(ref _treeVersion);
 
+        // The last report that landed during an ordinary pause, shown if the pause escalates to awaiting the user.
+        private string? _heldDescription;
+
         public void SetDescription(string? description) {
             if (string.IsNullOrWhiteSpace(description)) return;
             // #1784 — progress reports are posted to the pool and can land after an ordinary pause; it keeps "Paused".
             lock (_gate) {
-                if (State == SequenceRunState.Paused && description != PausedDescription) return;
+                if (State == SequenceRunState.Paused && description != PausedDescription) {
+                    _heldDescription = description;
+                    return;
+                }
+                _heldDescription = null;
                 CurrentInstructionDescription = description;
+            }
+        }
+
+        public void ShowHeldDescription() {
+            lock (_gate) {
+                if (_heldDescription is not null) CurrentInstructionDescription = _heldDescription;
+                _heldDescription = null;
             }
         }
 

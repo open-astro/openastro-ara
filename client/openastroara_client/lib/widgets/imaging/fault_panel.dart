@@ -186,7 +186,18 @@ class FaultGroupTile extends StatelessWidget {
     if (group.count == 1) return FaultHistoryTile(row: group.rows.first);
     final r = group.rows.first;
     final l10n = context.l10n;
+    final unresolved = group.rows.where((x) => !x.resolved).length;
+    final span = l10n.faultGroupSpan(
+      FaultHistoryTile.formatTime(group.firstUtc.toLocal()),
+      FaultHistoryTile.formatTime(group.lastUtc.toLocal()),
+    );
+    // The outcome in words too: night mode's red filter makes the dot colours look alike.
+    final outcome = unresolved == 0
+        ? l10n.faultGroupRecovered
+        : l10n.faultGroupUnresolved(unresolved);
     return ExpansionTile(
+      // The oldest row is the group's: an open group stays open when the feed refreshes.
+      key: PageStorageKey('fault-group-${group.rows.last.id}'),
       dense: true,
       tilePadding: const EdgeInsets.symmetric(horizontal: 16),
       shape: const Border(),
@@ -195,10 +206,11 @@ class FaultGroupTile extends StatelessWidget {
         width: 8,
         height: 8,
         decoration: BoxDecoration(
-          color: (group.rows.every((x) => x.resolved)
-                  ? StatusLevel.connected
-                  : faultKindLevel(r.faultType))
-              .color,
+          color:
+              (unresolved == 0
+                      ? StatusLevel.connected
+                      : faultKindLevel(r.faultType))
+                  .color,
           shape: BoxShape.circle,
         ),
       ),
@@ -211,13 +223,8 @@ class FaultGroupTile extends StatelessWidget {
         style: Theme.of(context).textTheme.bodySmall,
       ),
       subtitle: Text(
-        l10n.faultGroupSpan(
-          FaultHistoryTile.formatTime(group.firstUtc.toLocal()),
-          FaultHistoryTile.formatTime(group.lastUtc.toLocal()),
-        ),
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
+        '$span · $outcome',
+        style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: AraColors.textSecondary),
       ),
       children: [for (final row in group.rows) FaultHistoryTile(row: row)],

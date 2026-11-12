@@ -7940,6 +7940,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'First {first} · last {last}'**
   String faultGroupSpan(String first, String last);
+
+  /// Fault log: how many rows of the collapsed row are not resolved yet
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unresolved'**
+  String faultGroupUnresolved(int count);
+
+  /// Fault log: every row of the collapsed row is resolved
+  ///
+  /// In en, this message translates to:
+  /// **'recovered'**
+  String get faultGroupRecovered;
 }
 
 class _AppLocalizationsDelegate

@@ -6086,5 +6086,14 @@
   "@faultGroupSpan": {
     "description": "Fault log: first and last time (clock strings) of the collapsed row",
     "placeholders": { "first": { "type": "String" }, "last": { "type": "String" } }
+  },
+  "faultGroupUnresolved": "{count} unresolved",
+  "@faultGroupUnresolved": {
+    "description": "Fault log: how many rows of the collapsed row are not resolved yet",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "faultGroupRecovered": "recovered",
+  "@faultGroupRecovered": {
+    "description": "Fault log: every row of the collapsed row is resolved"
   }
 }
