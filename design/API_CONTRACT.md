@@ -1582,7 +1582,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ## 2026-11-11 — Tonight's progress: `last_result` on the polar-align state, `permanent_pier` on the site block (#1565)
 
-**Endpoint(s) or area:** `GET /api/v1/polaralign/state` (`PolarAlignStateDto`); `GET`/`PUT /api/v1/profile/site` (`SiteSettingsDto`).
+**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` (`PolarAlignStateDto`); `GET`/`PUT /api/v1/profile/site` (`SiteSettingsDto`).
 
 **Decision:** `PolarAlignStateDto` gains `last_result { error_arcmin, completed_utc }`, null until a routine has stopped or finished with an error reading. The daemon keeps it in memory for the boot, so a restart clears it (a restart may mean the mount moved); a new run does not clear it, and a routine that never produced an error reading (a stop before the first solve, a failed run) or was stopped in the rough stage (its readout is not an alignment; Done is refused there too) leaves the previous value. `SiteSettingsDto` gains `permanent_pier` (bool, default false, so an older `profile.json` and an older client body still parse; an older client's PUT carries no `permanent_pier`, so it writes false: the PUT is a plain replace, as for any defaulted field a client predates). The focus half of #1565 needs no daemon change: `GET /api/v1/autofocus/state` already carries the last run's state and `completed_utc`.
 
