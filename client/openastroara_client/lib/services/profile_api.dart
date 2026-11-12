@@ -49,14 +49,7 @@ class ProfileApi {
               receiveTimeout: const Duration(seconds: 5),
             ),
           ) {
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onResponse: (res, handler) {
-          _noteOwnWrite(res.requestOptions.method, res.requestOptions.path);
-          handler.next(res);
-        },
-      ),
-    );
+    _dio.interceptors.add(ownWriteRecorder);
   }
 
   // #1644 — when this device last wrote each profile section. The daemon's
@@ -64,11 +57,29 @@ class ProfileApi {
   // must not reset the screen the writer is still editing.
   static final Map<String, DateTime> _ownWrites = {};
 
-  static void _noteOwnWrite(String method, String path) {
-    const prefix = '/api/v1/profile/';
-    if (method.toUpperCase() == 'GET' || !path.startsWith(prefix)) return;
-    _ownWrites[path.substring(prefix.length).split('/').first] = DateTime.now();
-  }
+  /// Notes each profile-section write as it goes out (the daemon publishes the
+  /// event before its HTTP answer) and drops the note when the daemon refuses
+  /// the write (an error answer, e.g. 409 stale-session): that published
+  /// nothing, and must not hide another device's change to the section.
+  static final Interceptor ownWriteRecorder = InterceptorsWrapper(
+    onRequest: (req, handler) {
+      const prefix = '/api/v1/profile/';
+      if (req.method.toUpperCase() != 'GET' && req.path.startsWith(prefix)) {
+        final section = req.path.substring(prefix.length).split('/').first;
+        req.extra[_ownWriteAt] = _ownWrites[section] = DateTime.now();
+      }
+      handler.next(req);
+    },
+    onError: (err, handler) {
+      final at = err.requestOptions.extra[_ownWriteAt];
+      if (at != null && err.response != null) {
+        _ownWrites.removeWhere((_, t) => identical(t, at));
+      }
+      handler.next(err);
+    },
+  );
+
+  static const _ownWriteAt = 'ownWriteAt';
 
   /// True when this device wrote [section] within [within] of now.
   static bool wroteRecently(
@@ -78,6 +89,10 @@ class ProfileApi {
     final at = _ownWrites[section];
     return at != null && DateTime.now().difference(at) < within;
   }
+
+  /// Process-wide, so tests start each case without the last one's writes.
+  @visibleForTesting
+  static void forgetOwnWrites() => _ownWrites.clear();
 
   /// §37 multi-profile — list the known profiles + which one is active
   /// (`GET /api/v1/profiles`).
