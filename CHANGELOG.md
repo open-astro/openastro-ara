@@ -51,6 +51,8 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed (calibration)
 
+- **Apply to guider** no longer writes default settings over the rig's guider settings when they failed to load; it says "Not saved" instead (#1806).
+
 - An edited sequence body (a daemon-generated run with a step added) no longer fails to load on the rig: a new collection wrapper writes `$type` before `$values`, as Json.NET needs.
 
 ### Added (mount by hand)
