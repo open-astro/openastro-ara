@@ -6537,6 +6537,10 @@
   },
   "faultGroupRecovered": "recovered",
   "@faultGroupRecovered": {
-    "description": "Fault log: every row of the collapsed row is resolved"
+    "description": "Fault log: every row of the collapsed row is resolved and the newest one recovered"
+  },
+  "faultGroupReleased": "released — disconnected by hand",
+  "@faultGroupReleased": {
+    "description": "Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered"
   }
 }

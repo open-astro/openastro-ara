@@ -5115,6 +5115,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get faultGroupRecovered => 'recovered';
+
+  @override
+  String get faultGroupReleased => 'released — disconnected by hand';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10264,4 +10267,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get faultGroupRecovered => 'recuperado';
+
+  @override
+  String get faultGroupReleased => 'liberado — desconectado à mão';
 }

@@ -1425,5 +1425,6 @@
   "faultGroupCount": "{count} vezes",
   "faultGroupSpan": "Primeira {first} · última {last}",
   "faultGroupUnresolved": "{count} sem solução",
-  "faultGroupRecovered": "recuperado"
+  "faultGroupRecovered": "recuperado",
+  "faultGroupReleased": "liberado — desconectado à mão"
 }

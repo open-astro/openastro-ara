@@ -717,7 +717,9 @@ class _SessionFaultsBadge extends ConsumerWidget {
             width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [for (final group in groups) FaultGroupTile(group: group)],
+              children: [
+                for (final group in groups) FaultGroupTile(group: group),
+              ],
             ),
           ),
           actions: [

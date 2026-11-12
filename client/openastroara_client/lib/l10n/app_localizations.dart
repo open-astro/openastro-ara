@@ -8649,11 +8649,17 @@ abstract class AppLocalizations {
   /// **'{count} unresolved'**
   String faultGroupUnresolved(int count);
 
-  /// Fault log: every row of the collapsed row is resolved
+  /// Fault log: every row of the collapsed row is resolved and the newest one recovered
   ///
   /// In en, this message translates to:
   /// **'recovered'**
   String get faultGroupRecovered;
+
+  /// Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered
+  ///
+  /// In en, this message translates to:
+  /// **'released — disconnected by hand'**
+  String get faultGroupReleased;
 }
 
 class _AppLocalizationsDelegate

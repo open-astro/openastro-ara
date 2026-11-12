@@ -192,47 +192,75 @@ class FaultGroupTile extends StatelessWidget {
       FaultHistoryTile.formatTime(group.firstUtc.toLocal()),
       FaultHistoryTile.formatTime(group.lastUtc.toLocal()),
     );
+    // Once every row is resolved, the newest says how the run of faults ended.
+    final o = unresolved > 0 ? FaultOutcome.unresolved : FaultOutcome.of(r);
     // The outcome in words too: night mode's red filter makes the dot colours look alike.
-    final outcome = unresolved == 0
-        ? l10n.faultGroupRecovered
-        : l10n.faultGroupUnresolved(unresolved);
-    return ExpansionTile(
-      // The oldest row is the group's: an open group stays open when the feed refreshes.
-      key: PageStorageKey('fault-group-${group.rows.last.id}'),
-      dense: true,
-      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-      shape: const Border(),
-      collapsedShape: const Border(),
-      leading: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          color:
-              (unresolved == 0
-                      ? StatusLevel.connected
-                      : faultKindLevel(r.faultType))
-                  .color,
-          shape: BoxShape.circle,
+    final outcome = switch (o) {
+      FaultOutcome.unresolved => l10n.faultGroupUnresolved(unresolved),
+      FaultOutcome.recovered => l10n.faultGroupRecovered,
+      FaultOutcome.released => l10n.faultGroupReleased,
+    };
+    // A single row's 8 px leading slot, so group and row titles line up.
+    return ListTileTheme.merge(
+      minLeadingWidth: 8,
+      child: ExpansionTile(
+        // The oldest row is the group's: an open group stays open when the feed refreshes.
+        key: PageStorageKey('fault-group-${group.rows.last.id}'),
+        dense: true,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: o.level(r.faultType).color,
+            shape: BoxShape.circle,
+          ),
         ),
+        title: Text(
+          // Count first, so an ellipsis never cuts the number; three lines, as a
+          // single row, so the narrow iOS alert keeps the fault type.
+          '${l10n.faultGroupCount(group.count)} · '
+          '${r.equipmentName ?? r.equipmentType} — ${r.faultType.replaceAll('_', ' ')}',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        subtitle: Text(
+          '$span · $outcome',
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(color: AraColors.textSecondary),
+        ),
+        // Indented, so an open group's rows read as its own and not as the next entries.
+        childrenPadding: const EdgeInsetsDirectional.only(start: 16),
+        children: [for (final row in group.rows) FaultHistoryTile(row: row)],
       ),
-      title: Text(
-        // Count first: the ellipsis in a narrow rail must not cut the number off.
-        '${l10n.faultGroupCount(group.count)} · '
-        '${r.equipmentName ?? r.equipmentType} — ${r.faultType.replaceAll('_', ' ')}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      subtitle: Text(
-        '$span · $outcome',
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: AraColors.textSecondary),
-      ),
-      // Indented, so an open group's rows read as its own and not as the next entries.
-      childrenPadding: const EdgeInsetsDirectional.only(start: 16),
-      children: [for (final row in group.rows) FaultHistoryTile(row: row)],
     );
   }
+}
+
+/// How a fault row ended. A row resolved because the user disconnected the device
+/// mid-recovery (#1307) is released, not recovered. A row's dot and words read this,
+/// and so do a group's.
+enum FaultOutcome {
+  unresolved,
+  recovered,
+  released;
+
+  static FaultOutcome of(FaultRow row) => !row.resolved
+      ? unresolved
+      : (row.actionTaken?.startsWith('released') ?? false)
+      ? released
+      : recovered;
+
+  /// The dot: an open fault by its kind; released is grey, the device is off
+  /// (DESIGN.md status rule), not the recovered green.
+  StatusLevel level(String faultType) => switch (this) {
+    FaultOutcome.unresolved => faultKindLevel(faultType),
+    FaultOutcome.recovered => StatusLevel.connected,
+    FaultOutcome.released => StatusLevel.disconnected,
+  };
 }
 
 /// One fault-history row: severity/resolution dot, device + kind, details,
@@ -244,17 +272,16 @@ class FaultHistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dot = row.resolved
-        ? StatusLevel.connected
-        : faultKindLevel(row.faultType);
+    final o = FaultOutcome.of(row);
+    final dot = o.level(row.faultType);
     final device = row.equipmentName ?? row.equipmentType;
     // A row resolved because the user disconnected the device mid-recovery
     // (#1307) is not "recovered": say what happened.
-    final outcome = row.resolved
-        ? (row.actionTaken?.startsWith('released') ?? false)
-            ? 'released — disconnected by hand'
-            : 'recovered'
-        : row.actionTaken ?? 'unresolved';
+    final outcome = switch (o) {
+      FaultOutcome.unresolved => row.actionTaken ?? 'unresolved',
+      FaultOutcome.recovered => 'recovered',
+      FaultOutcome.released => 'released — disconnected by hand',
+    };
     return ListTile(
       dense: true,
       // The 8 px dot needs no 40 px leading slot; the title gets the room.

@@ -5115,4 +5115,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faultGroupRecovered => 'recovered';
+
+  @override
+  String get faultGroupReleased => 'released — disconnected by hand';
 }
