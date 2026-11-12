@@ -36,6 +36,7 @@ on:
       - 'docs/**'
       - '.claude/**'
       - '.github/ISSUE_TEMPLATE/**'
+      - 'changelog.d/**'
       - '**.md'
   schedule:
     # Weekly catch-all so advisories published after a quiet period still surface.
