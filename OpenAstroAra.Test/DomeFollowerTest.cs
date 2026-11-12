@@ -575,10 +575,14 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_profile_brought_back_with_no_dome_radius_turns_following_off_and_sends_nothing() {
             // Start() refuses following without a dome radius, but selecting a profile restores the setting as saved.
+            var sink = new RecordingSink();
+            Notifier.Use(sink);
             _store.PutDomeSettings(DomeSettingsDto.Default with { FollowMount = true });
             await _follower.TickAsync();
             Assert.That(_store.GetDomeSettings().FollowMount, Is.False);
             Assert.That(_dome.Slews, Is.Empty);
+            Assert.That(sink.Seen, Is.Empty, "a dome with no geometry set is not an error");
+            Assert.That(_log.Lines, Has.Some.Contains("no dome radius"), "the log names the real cause");
         }
 
         [Test]

@@ -194,13 +194,19 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         }
     }
 
+    // Start() refuses following without a dome radius, but a profile switch or import brings the setting back as
+    // saved: turn following off here, before the geometry's radius check shows its error pill.
     // A German mount's dome azimuth needs the side of the pier, which the mount does not report for a moment after
     // a connect, or ever when its driver has no SideOfPier: wait (exposures keep waiting) and retry on the next tick.
-    // With that checked here and the position checked by both callers, the only InvalidOperationException left is
+    // With those checked here and the position checked by both callers, the only InvalidOperationException left is
     // the geometry's radius check (the scope outside the dome for this pointing). It shows an error pill each time,
     // so it turns following off: one pill, not one per tick or per wait poll.
     private bool TryFollowTarget(TelescopeInfo tel, out TopocentricCoordinates target) {
         target = null!;
+        if (_profile.ActiveProfile.DomeSettings.DomeRadiusMm <= 0) {
+            TurnOff("no dome radius is set");
+            return false;
+        }
         if (PierSideMissing(tel.SideOfPier)) {
             if (!_geometryFailureLogged) {
                 _geometryFailureLogged = true;
