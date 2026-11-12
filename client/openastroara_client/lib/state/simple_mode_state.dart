@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/profile_api.dart';
 import '../services/simple_mode_prefs_service.dart';
 import 'profile_management_state.dart' show profileApiProvider;
 import 'settings/site_settings_state.dart';
@@ -104,8 +105,7 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     final onRig = ref.read(siteSettingsProvider).permanentPier;
     if (local && !onRig) {
       try {
-        site.setPermanentPier(true);
-        await site.persistToServer(api);
+        await _writePier(api, true);
         await files.save(false);
       } catch (_) {} // kept on the device; the next start retries
       return true;
@@ -121,10 +121,7 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     if (api == null) return files.save(on);
     _writing = true;
     try {
-      final site = ref.read(siteSettingsProvider.notifier);
-      await site.hydrateFromServer(api); // never write over a section not read
-      site.setPermanentPier(on);
-      await site.persistToServer(api);
+      await _writePier(api, on);
       await files.save(false);
     } catch (_) {
       await files.save(
@@ -133,6 +130,14 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     } finally {
       _writing = false;
     }
+  }
+
+  /// Puts only the pier onto the rig's stored site and into the local copy, so
+  /// a site edit the Full UI panel has not saved yet stays as typed.
+  Future<void> _writePier(ProfileApi api, bool on) async {
+    final stored = await api.getSiteSettings();
+    await api.putSiteSettings(stored.copyWith(permanentPier: on));
+    ref.read(siteSettingsProvider.notifier).setPermanentPier(on);
   }
 }
 

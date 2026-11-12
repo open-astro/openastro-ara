@@ -77,6 +77,28 @@ void main() {
     },
   );
 
+  test(
+    'the switch keeps a site edit the Full UI panel has not saved',
+    () async {
+      final rig = _Rig();
+      final c = _app(_File(false), rig);
+      await c.read(simplePermanentPierProvider.future);
+      // Typed in Settings > Location & sky; Save not pressed yet.
+      c.read(siteSettingsProvider.notifier).setLatitudeDeg(51.477833);
+
+      await c.read(simplePermanentPierProvider.notifier).set(true);
+
+      expect(c.read(siteSettingsProvider).latitudeDeg, 51.477833);
+      expect(c.read(siteSettingsProvider).permanentPier, isTrue);
+      expect(
+        rig.site.latitudeDeg,
+        -33.856784,
+        reason: 'only the pier is saved',
+      );
+      expect(rig.site.permanentPier, isTrue);
+    },
+  );
+
   test('the old device-local answer is carried to the profile once', () async {
     final rig = _Rig();
     final file = _File(true);
