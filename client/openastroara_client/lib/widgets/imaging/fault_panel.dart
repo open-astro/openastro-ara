@@ -210,14 +210,7 @@ class FaultGroupTile extends StatelessWidget {
         tilePadding: const EdgeInsets.symmetric(horizontal: 16),
         shape: const Border(),
         collapsedShape: const Border(),
-        leading: Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: o.level(r.faultType).color,
-            shape: BoxShape.circle,
-          ),
-        ),
+        leading: StatusDot.of(o.level(r.faultType), size: 8),
         title: Text(
           // Count first, so an ellipsis never cuts the number; three lines, as a
           // single row, so the narrow iOS alert keeps the fault type.
@@ -229,8 +222,11 @@ class FaultGroupTile extends StatelessWidget {
         ),
         subtitle: Text(
           '$span · $outcome',
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: AraColors.textSecondary),
+          // Tabular, as the rows' times: a new drop changes "last" without a shift.
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AraColors.textSecondary,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
         // Indented, so an open group's rows read as its own and not as the next entries.
         childrenPadding: const EdgeInsetsDirectional.only(start: 16),
@@ -286,11 +282,7 @@ class FaultHistoryTile extends StatelessWidget {
       dense: true,
       // The 8 px dot needs no 40 px leading slot; the title gets the room.
       minLeadingWidth: 8,
-      leading: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: dot.color, shape: BoxShape.circle),
-      ),
+      leading: StatusDot.of(dot, size: 8),
       title: Text(
         '$device — ${row.faultType.replaceAll('_', ' ')}'
         '${row.details == null ? '' : ' (${row.details})'}',
