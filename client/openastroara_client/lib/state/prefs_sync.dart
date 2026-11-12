@@ -112,8 +112,11 @@ class PrefsSync {
   /// [value] was just written to the local file: send it to the rig, or leave
   /// the key marked pending for the next load when that fails or no rig is
   /// connected. An older daemon (no merge route) keeps it local, unmarked.
-  Future<void> push<T>(SyncedPref<T> pref, T value) =>
+  /// [after] is a local save still running: the push queues now, so a
+  /// reconcile started after the change can't apply the rig's older value.
+  Future<void> push<T>(SyncedPref<T> pref, T value, {Future<void>? after}) =>
       _serial(pref.key, () async {
+        await after;
         if (!_ref.mounted) return;
         var v = value;
         final raw = _ref

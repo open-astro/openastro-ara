@@ -68,8 +68,8 @@ class PlanningPrefsNotifier extends Notifier<PlanningPrefs> {
   Future<void> _persist() async {
     final pref = _synced;
     final value = state;
-    await ref.read(planningPrefsServiceProvider).save(value);
-    if (ref.mounted) await ref.read(prefsSyncProvider).push(pref, value);
+    final saved = ref.read(planningPrefsServiceProvider).save(value);
+    await ref.read(prefsSyncProvider).push(pref, value, after: saved);
   }
 
   /// Clamped to [PlanningPrefs.minNoiseTolerancePct]..[PlanningPrefs.maxNoiseTolerancePct];

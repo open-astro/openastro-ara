@@ -342,6 +342,55 @@ void main() {
     },
   );
 
+  /// A rig read lands just after a planning edit: the reconcile it starts
+  /// must queue behind the edit's upload, so the old value never shows.
+  Future<void> editDuringRigRead(
+    void Function(PlanningPrefsNotifier n) edit,
+    Object Function(PlanningPrefs p) field,
+    Object edited,
+  ) async {
+    final rig = _GatedRig({
+      'planning': const PlanningPrefs(noiseTolerancePct: 3).toJson(),
+    });
+    final a = _Device(rig);
+    await a.open();
+    final seen = <Object>[];
+    a.container.listen(
+      planningPrefsProvider,
+      (_, next) => seen.add(field(next)),
+    );
+
+    final gate = rig.gate = Completer<void>();
+    a.container.invalidate(clientSettingsProvider);
+    await settle();
+    edit(a.container.read(planningPrefsProvider.notifier));
+    gate.complete();
+    await settle();
+
+    expect(seen, isNotEmpty);
+    expect(seen, everyElement(edited));
+    expect(field(a.planning), edited);
+  }
+
+  test(
+    'a rig read landing just after a mosaic edit never shows the old size',
+    () async {
+      await editDuringRigRead(
+        (n) => n.setMosaicTiles(2, 2),
+        (p) => p.mosaicTilesX,
+        2,
+      );
+    },
+  );
+
+  test('a rig read landing just after a noise tolerance edit never shows the old value', () async {
+    await editDuringRigRead(
+      (n) => n.setNoiseTolerancePct(6),
+      (p) => p.noiseTolerancePct,
+      6.0,
+    );
+  });
+
   test('a night answered on A is answered on B', () async {
     final rig = FakeRigSettings();
     final a = _Device(rig);
@@ -470,5 +519,18 @@ class _GatedPending extends SyncedPrefsPendingService {
     gate = null; // only the next reconcile waits
     await g?.future;
     return super.load();
+  }
+}
+
+class _GatedRig extends FakeRigSettings {
+  _GatedRig(super.stored);
+  Completer<void>? gate;
+
+  @override
+  Future<ClientSettings> fetch() async {
+    final g = gate;
+    gate = null; // only the next read waits
+    await g?.future;
+    return super.fetch();
   }
 }
