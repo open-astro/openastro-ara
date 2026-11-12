@@ -305,7 +305,7 @@ For an `open-astro` branch, the same flow against `origin`.
 
 Commit message: verb-first conventional-prefix title under 70 chars, body explaining what the bot
 found and how it was fixed, then the attribution trailer from the session. If the round introduces
-a user-visible change, add the `CHANGELOG.md` `[Unreleased]` bullet in the same diff. After
+a user-visible change, add the `changelog.d/<branch-slug>.md` fragment in the same diff. After
 pushing, go back to Step 1 and Step 2.
 
 **Never post PR comments replying to the bot** on an ordinary finding. A finding is either a change

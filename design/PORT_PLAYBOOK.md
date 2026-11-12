@@ -1800,7 +1800,7 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
    - Run a 2-target sequence with simulator camera + simulator mount; openastro-phd2 connects and dithers.
    - Disconnect the client mid-sequence; wait 5 minutes; reconnect; verify session continued and frames were captured.
    - Open every section of the app. Note regressions.
-4. Update `CHANGELOG.md` (per §33.7) — rename `## [Unreleased]` → `## [0.0.1-ara.1] — <date>` with sections:
+4. Update `CHANGELOG.md` (per §33.7) — run `python3 scripts/changelog-fragments.py --release 0.0.1-ara.1 --date <date>`, which writes `## [0.0.1-ara.1] - <date>` from the `changelog.d/` fragments and deletes them (#1812); add a fragment first with sections:
    - Headless server + cross-platform desktop client architecture
    - Alpaca-only equipment (per §52, §68)
    - Plugin support deferred — see the `P1`–`P5` issue backlog
@@ -1808,9 +1808,8 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
    - Behavioral parity goals vs. upstream NINA where applicable
    - Lineage attribution
    - Known issues, install instructions
-   - Create fresh `## [Unreleased]` placeholder for the next release's work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes cut from `CHANGELOG.md` `[Unreleased]` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
+6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes from `scripts/changelog-fragments.py --preview` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
 
 ---
 
@@ -4012,9 +4011,7 @@ Example structure:
 ```markdown
 # Changelog
 
-## [Unreleased]
-
-## [0.0.1-ara.6] — 2026-06-01
+## [0.0.1-ara.6] - 2026-06-01
 
 ### Added
 - Smart Focus collimation detection (§59.4)
@@ -4027,14 +4024,19 @@ Example structure:
 ### Security
 - Bug-report bundles now strip §70 share-sensitive fields (§54.3)
 
-## [0.0.1-ara.5] — 2026-05-25
+<details>
+<summary><strong>[0.0.1-ara.5] - 2026-05-25</strong></summary>
 
 ### Added
 - Initial release of OpenAstroAra
+
+</details>
 ...
 ```
 
-Entry-writing discipline: every PR that ships a user-visible change adds a `### <Type>` line under `## [Unreleased]`. The release tag-cut process (Phase 15 + future releases) renames `## [Unreleased]` → `## [<version>] — <date>` and creates a fresh `## [Unreleased]` placeholder.
+Only the newest release is expanded; `--release` folds each older one into a `<details>` block, so the release-notes parser reads both forms.
+
+Entry-writing discipline: every PR that ships a user-visible change adds a `changelog.d/<branch-slug>.md` fragment with `### <Type>` subsections (`changelog.d/README.md`, #1812). The release tag-cut process (Phase 15 + future releases) runs `scripts/changelog-fragments.py --release <version> --date <date>`, which writes `## [<version>] - <date>` from the fragments and deletes them.
 
 **Server-side endpoint** (already declared in §34.7):
 
@@ -4145,9 +4147,9 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 
 **Release process integration:**
 
-- The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
-- COMMIT-PR-RULES.md's per-phase PR rhythm (future bake) adds "update CHANGELOG.md [Unreleased] section" to the pre-PR gate (§14.4) for any PR with user-visible changes — same enforcement style as the settings-registry gate
-- Release tags (manual, user-driven): rename `[Unreleased]` → `[<version>] — <date>`, create fresh `[Unreleased]`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- The Phase 15 PR (final port → master) adds the `## [0.0.1-ara.1] - <date>` section to CHANGELOG.md with `--release`
+- Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
+- Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**
