@@ -317,7 +317,7 @@ void main() {
       await tester.tap(find.byKey(const Key('album-art-credit')));
       await tester.pump();
       await tester.pump();
-      expect(find.text("Couldn't open the licence page"), findsOneWidget);
+      expect(find.text("Couldn't open the license page"), findsOneWidget);
     });
   }
 
