@@ -26,6 +26,7 @@ test('the chart drops the realistic layers and keeps lines, names, grid and deep
   assert.equal(c.constellations.lines_visible, true);
   assert.equal(c.constellations.labels_visible, true);
   assert.equal(c.lines.equatorial.visible, true);
+  assert.equal(c.lines.azimuthal.visible, false);
   assert.equal(c.dsos.visible, true);
   assert.equal(c.dsos.hints_visible, true);
 });
