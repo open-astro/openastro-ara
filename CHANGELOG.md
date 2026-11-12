@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (mosaic framing rank)
+
+- Settings → Imaging → Defaults sets a mosaic size, 1 to 4 tiles across and down. Tonight's Sky then ranks the framing for that many tiles, and its panel says "Framing for a 2x3 mosaic" when the size is not 1x1 (#1622).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

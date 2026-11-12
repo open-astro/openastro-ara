@@ -89,6 +89,44 @@ void main() {
     },
   );
 
+  testWidgets('#1622 the mosaic rows change and persist the tile counts', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final prior = FlutterError.onError;
+    FlutterError.onError = (d) {
+      if (!d.exceptionAsString().contains('overflowed')) prior?.call(d);
+    };
+    addTearDown(() => FlutterError.onError = prior);
+    final prefs = _MemPrefs();
+    final container = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWithValue(null),
+        planningPrefsServiceProvider.overrideWithValue(prefs),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ImagingDefaultsPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> type(String label, String text) async {
+      final row = find.widgetWithText(EditableNumberRow, label);
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.enterText(find.descendant(of: row, matching: find.byType(TextField)), text);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+    }
+    await type('Tonight\'s Sky mosaic tiles across', '2');
+    await type('Tonight\'s Sky mosaic tiles down', '9');
+    final got = container.read(planningPrefsProvider);
+    expect((got.mosaicTilesX, got.mosaicTilesY), (2, 4));
+    expect((prefs.stored.mosaicTilesX, prefs.stored.mosaicTilesY), (2, 4));
+  });
+
   testWidgets('#1140 P2 the sky-model section lists each filter kind\'s standing; offline it says to connect', (tester) async {
     tester.view.physicalSize = const Size(1600, 2400);
     tester.view.devicePixelRatio = 1.0;

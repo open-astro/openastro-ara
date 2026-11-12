@@ -265,6 +265,38 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
                 ?.copyWith(color: AraColors.textDisabled),
           ),
         ),
+        // #1622 — mosaic size the Tonight's Sky framing rank assumes.
+        for (final across in [true, false])
+          EditableNumberRow(
+            label: across
+                ? 'Tonight\'s Sky mosaic tiles across'
+                : 'Tonight\'s Sky mosaic tiles down',
+            currentValue:
+                '${across ? ref.watch(planningPrefsProvider).mosaicTilesX : ref.watch(planningPrefsProvider).mosaicTilesY}',
+            getCanonical: () =>
+                '${across ? ref.read(planningPrefsProvider).mosaicTilesX : ref.read(planningPrefsProvider).mosaicTilesY}',
+            parse: (s) {
+              final v = int.tryParse(s.trim());
+              if (v == null) return;
+              final p = ref.read(planningPrefsProvider);
+              ref
+                  .read(planningPrefsProvider.notifier)
+                  .setMosaicTiles(
+                    across ? v : p.mosaicTilesX,
+                    across ? p.mosaicTilesY : v,
+                  );
+            },
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 4),
+          child: Text(
+            'Ranks Tonight\'s Sky framing for a mosaic of this many tiles '
+            '(${PlanningPrefs.minMosaicTiles}–${PlanningPrefs.maxMosaicTiles} each way). '
+            '1 × 1 is a single frame.',
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.textDisabled),
+          ),
+        ),
         // #1140 P2 — the sky-model calibration store: k per filter kind, fitted
         // by the daemon from the library's frame backgrounds.
         const SizedBox(height: 16),

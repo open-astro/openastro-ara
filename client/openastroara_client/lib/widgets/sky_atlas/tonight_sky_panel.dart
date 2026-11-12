@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
 import '../../state/app_shell_state.dart' show selectedTabIndexProvider;
+import '../../state/planning/planning_prefs_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -124,6 +125,7 @@ class TonightSkyPanel extends ConsumerWidget {
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     final theme = Theme.of(context);
     final upNow = ref.watch(tonightSkyUpNowProvider);
+    final prefs = ref.watch(planningPrefsProvider);
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -171,6 +173,16 @@ class TonightSkyPanel extends ConsumerWidget {
                 ],
               ),
             ),
+            // #1622 — say which framing the ranking is for; nothing at 1 x 1.
+            if (prefs.mosaicTilesX != 1 || prefs.mosaicTilesY != 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Framing for a ${prefs.mosaicTilesX}x${prefs.mosaicTilesY} mosaic',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textSecondary),
+                ),
+              ),
             Expanded(
               child: async.when(
                 // S2 — skeleton rows instead of a bare spinner: the panel's

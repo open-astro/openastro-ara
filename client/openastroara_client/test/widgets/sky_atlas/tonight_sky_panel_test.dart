@@ -12,6 +12,7 @@ import 'package:openastroara/models/sequence/draft_sequence.dart';
 import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
+import 'package:openastroara/state/planning/planning_prefs_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
@@ -226,6 +227,30 @@ void main() {
   _budgetTests();
   _offlineAddTests();
   _upNowTests();
+  testWidgets('#1622 the framing label shows off 1x1 only', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('Framing for a'), findsNothing);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 3);
+    await tester.pump();
+    expect(find.text('Framing for a 2x3 mosaic'), findsOneWidget);
+    container.read(planningPrefsProvider.notifier).setMosaicTiles(1, 1);
+    await tester.pump();
+    expect(find.textContaining('Framing for a'), findsNothing);
+  });
   testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {
     final client = _RecordingClient();

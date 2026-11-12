@@ -14,10 +14,20 @@ class PlanningPrefs {
   /// #1176 — Tonight's Sky magnitude floor: targets fainter than this are
   /// hidden. Null = off (the default); magnitude-less targets always stay.
   final double? magnitudeFloor;
+
+  /// #1622 — the mosaic size (tiles across / down) Tonight's Sky ranks the
+  /// framing for. 1 x 1 = a single frame, today's ranking.
+  final int mosaicTilesX;
+  final int mosaicTilesY;
   const PlanningPrefs({
     this.noiseTolerancePct = defaultNoiseTolerancePct,
     this.magnitudeFloor,
+    this.mosaicTilesX = minMosaicTiles,
+    this.mosaicTilesY = minMosaicTiles,
   });
+
+  static const int minMosaicTiles = 1;
+  static const int maxMosaicTiles = 4;
 
   static const double minMagnitudeFloor = 6.0;
   static const double maxMagnitudeFloor = 15.0;
@@ -30,18 +40,35 @@ class PlanningPrefs {
   PlanningPrefs copyWith({double? noiseTolerancePct}) => PlanningPrefs(
     noiseTolerancePct: noiseTolerancePct ?? this.noiseTolerancePct,
     magnitudeFloor: magnitudeFloor,
+    mosaicTilesX: mosaicTilesX,
+    mosaicTilesY: mosaicTilesY,
   );
 
   /// Sets or clears (null) the floor; copyWith cannot express "clear".
   PlanningPrefs withMagnitudeFloor(double? floor) => PlanningPrefs(
     noiseTolerancePct: noiseTolerancePct,
     magnitudeFloor: floor,
+    mosaicTilesX: mosaicTilesX,
+    mosaicTilesY: mosaicTilesY,
+  );
+
+  PlanningPrefs withMosaicTiles(int x, int y) => PlanningPrefs(
+    noiseTolerancePct: noiseTolerancePct,
+    magnitudeFloor: magnitudeFloor,
+    mosaicTilesX: x,
+    mosaicTilesY: y,
   );
 
   Map<String, dynamic> toJson() => {
     'noise_tolerance_pct': noiseTolerancePct,
     'magnitude_floor': magnitudeFloor,
+    'mosaic_tiles_x': mosaicTilesX,
+    'mosaic_tiles_y': mosaicTilesY,
   };
+
+  static int _tiles(Object? v) => v is num && v.isFinite
+      ? v.round().clamp(minMosaicTiles, maxMosaicTiles)
+      : minMosaicTiles;
 
   /// Tolerant parse: a missing or hand-edited value falls back to the default
   /// (clamped like the write path).
@@ -50,6 +77,8 @@ class PlanningPrefs {
     final v = json['noise_tolerance_pct'];
     final f = json['magnitude_floor'];
     return PlanningPrefs(
+      mosaicTilesX: _tiles(json['mosaic_tiles_x']),
+      mosaicTilesY: _tiles(json['mosaic_tiles_y']),
       magnitudeFloor: f is num && f.isFinite
           ? f.toDouble().clamp(minMagnitudeFloor, maxMagnitudeFloor)
           : null,
