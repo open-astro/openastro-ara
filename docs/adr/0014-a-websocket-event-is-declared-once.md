@@ -30,7 +30,7 @@ We decided (2026-11-12, [#1805](https://github.com/open-astro/openastro-ara/issu
 
 - Adding an event is one declaration, and the catalog endpoint, the snapshot and the client types follow from it.
 - About 30 daemon files change in step 1, and every later event family change regenerates two committed files.
-- The 36 entries with no emitter leave the catalog; `calibration.flats_generated` stays as the one planned entry and gets its emitter or goes.
+- The 36 entries with no emitter leave the catalog. `calibration.flats_generated` also has no emitter and breaks rule 2 while it stays; [#1814](https://github.com/open-astro/openastro-ara/issues/1814) tracks giving it an emitter or removing it before step 1.
 - Typed payload records keep a Native AOT publish possible; the claim in about ten comments that hand-built payloads are required by an AOT gate is checked by a build in step 1 before any of them is reworded.
 
 ## How to reverse
@@ -39,6 +39,7 @@ Give the broadcaster its string overload back and stop regenerating the snapshot
 
 ## Links
 
+- [#1814](https://github.com/open-astro/openastro-ara/issues/1814) (the one event kept without an emitter)
 - [#1805](https://github.com/open-astro/openastro-ara/issues/1805)
 - [#1804](https://github.com/open-astro/openastro-ara/issues/1804) (the catalog drift fix)
 - [`design/API_CONTRACT.md`](../../design/API_CONTRACT.md) (WebSocket wire protocol)
