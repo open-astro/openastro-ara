@@ -1455,6 +1455,35 @@ jobs:
           channel: stable
           cache: true
 
+      # The runner image lacks the NDK that Flutter pins (flutter.ndkVersion) and the CMake a
+      # plugin's native build asks for, so each Android build downloaded about 1 GB of them.
+      # The key carries the NDK version read from the pinned Flutter SDK: a Flutter bump that
+      # moves the NDK is a new cache entry.
+      - name: Read the Android NDK and CMake paths
+        if: matrix.target == 'android'
+        id: android-sdk
+        run: |
+          set -euo pipefail
+          NDK="$(sed -n 's/.*val ndkVersion: String = "\(.*\)".*/\1/p' "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt")"
+          if [[ -z "$NDK" ]]; then
+            echo "::error::flutter.ndkVersion not found in the Flutter SDK"
+            exit 1
+          fi
+          {
+            echo "ndk=$NDK"
+            echo "ndk-path=$ANDROID_HOME/ndk/$NDK"
+            echo "cmake-path=$ANDROID_HOME/cmake/3.22.1"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Cache Android NDK and CMake
+        if: matrix.target == 'android'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ${{ steps.android-sdk.outputs.ndk-path }}
+            ${{ steps.android-sdk.outputs.cmake-path }}
+          key: android-ndk-${{ steps.android-sdk.outputs.ndk }}-cmake-3.22.1
+
       - name: pub get
         working-directory: client/openastroara_client
         run: flutter pub get
