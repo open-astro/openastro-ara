@@ -449,6 +449,106 @@
   "@deviceCouldntStopDome": {
     "description": "Error message when the dome refused Stop"
   },
+  "deviceFollowsMount": "Follows the mount",
+  "@deviceFollowsMount": {
+    "description": "Dome window: the On / Off row that makes the dome keep its slit in front of the telescope"
+  },
+  "deviceFollowingMount": "Following the mount…",
+  "@deviceFollowingMount": {
+    "description": "Dome window: the moving line while the dome turns to follow the mount"
+  },
+  "deviceStoppedFollowingMount": "The dome no longer follows the mount",
+  "@deviceStoppedFollowingMount": {
+    "description": "Message pill: a dial turn, Park or Home turned following the mount off"
+  },
+  "deviceCouldntFollowMount": "Couldn't change whether the dome follows the mount",
+  "@deviceCouldntFollowMount": {
+    "description": "Error message when the daemon refused the Follows the mount On / Off"
+  },
+  "domePanelFollowingHeader": "Following the mount",
+  "@domePanelFollowingHeader": {
+    "description": "Full UI Dome panel: the section header above the Follow the mount switch and its note"
+  },
+  "domePanelReadingSettings": "Reading…",
+  "@domePanelReadingSettings": {
+    "description": "Full UI Dome panel: shown while the dome settings load"
+  },
+  "domePanelCouldntSave": "Couldn't save the dome",
+  "@domePanelCouldntSave": {
+    "description": "Full UI Dome panel: error lead when the daemon refused a geometry change (the reason follows after a colon)"
+  },
+  "domePanelFollowNote": "With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.",
+  "@domePanelFollowNote": {
+    "description": "Full UI Dome panel: the note under Following the mount; names what turns the dome and what turns following off"
+  },
+  "domePanelFollowMount": "Follow the mount",
+  "@domePanelFollowMount": {
+    "description": "Full UI Dome panel: the switch that makes the dome keep its slit in front of the telescope"
+  },
+  "domePanelFollowNeedsAzimuth": "Connect a dome that can turn to an azimuth first",
+  "@domePanelFollowNeedsAzimuth": {
+    "description": "Full UI Dome panel: hint under Follow the mount when the connected dome cannot turn to an azimuth"
+  },
+  "domePanelGeometryHeader": "Geometry",
+  "@domePanelGeometryHeader": {
+    "description": "Full UI Dome panel: the section header above the dome and mount measurements"
+  },
+  "domePanelMountType": "Mount type",
+  "@domePanelMountType": {
+    "description": "Full UI Dome panel: the mount type picker in the dome geometry"
+  },
+  "domePanelMountGermanEquatorial": "German equatorial",
+  "@domePanelMountGermanEquatorial": {
+    "description": "Full UI Dome panel: mount type choice; a German equatorial mount adds its axis offsets to the slit math"
+  },
+  "domePanelMountForkOnWedge": "Fork or alt-az (on a wedge)",
+  "@domePanelMountForkOnWedge": {
+    "description": "Full UI Dome panel: mount type choice for a fork or alt-az mount on an equatorial wedge"
+  },
+  "domePanelDomeRadius": "Dome radius (mm)",
+  "@domePanelDomeRadius": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters"
+  },
+  "domePanelScopeNorth": "Scope north of dome center (mm)",
+  "@domePanelScopeNorth": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is south"
+  },
+  "domePanelScopeEast": "Scope east of dome center (mm)",
+  "@domePanelScopeEast": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is west"
+  },
+  "domePanelScopeAbove": "Scope above dome center (mm)",
+  "@domePanelScopeAbove": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is below"
+  },
+  "domePanelMountAxisLength": "Mount axis length (mm)",
+  "@domePanelMountAxisLength": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelMountLateralOffset": "Mount lateral offset (mm)",
+  "@domePanelMountLateralOffset": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelDecAxisOffset": "Dec axis horizontal offset (mm)",
+  "@domePanelDecAxisOffset": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelAzimuthTolerance": "Azimuth tolerance (°)",
+  "@domePanelAzimuthTolerance": {
+    "description": "Full UI Dome panel: how far the slit may fall behind before the dome turns again, in degrees"
+  },
+  "domePanelTurnDuringSlews": "Turn during mount slews",
+  "@domePanelTurnDuringSlews": {
+    "description": "Full UI Dome panel: switch; the dome starts turning while the mount is still slewing"
+  },
+  "domePanelTurnDuringSlewsHint": "Off: the dome turns when the mount has finished slewing",
+  "@domePanelTurnDuringSlewsHint": {
+    "description": "Full UI Dome panel: hint under Turn during mount slews"
+  },
+  "domePanelSlewing": "Slewing…",
+  "@domePanelSlewing": {
+    "description": "Full UI Dome panel: the moving line while the dome turns on its own (not following the mount)"
+  },
   "deviceDomeReadFailed": "Dome read failed — check the device.",
   "@deviceDomeReadFailed": {
     "description": "Dome window: the daemon couldn't read the dome"
@@ -1735,9 +1835,13 @@
   "@shellSettings": {
     "description": "Simple Mode top bar: Settings button tooltip; title of the Settings page"
   },
-  "shellSky": "Sky",
+  "shellSky": "Sky Map",
   "@shellSky": {
     "description": "Simple Mode left rail button: show the sky (planetarium)"
+  },
+  "shellStats": "Stats",
+  "@shellStats": {
+    "description": "Simple Mode left rail button: open the Stats page"
   },
   "shellInfo": "Info",
   "@shellInfo": {

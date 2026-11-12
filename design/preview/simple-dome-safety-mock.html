@@ -209,7 +209,7 @@
     <div class="new"><h2>Why unsafe</h2><p>An ASCOM safety monitor reports only safe or unsafe, never why: the cause is inside the device (its own cloud, rain or wind limits). So the window names the device and says it doesn't give a reason. What Ara can add: a weather reading past its safety limit (when "Weather triggers safety" is on), the same check the daemon makes and the Weather window marks in amber. That one shows even while the monitor reads Safe, since Ara then treats the rig as unsafe too.</p></div>
     <div class="new"><h2>What Ara does</h2><p>Read-only lines from the safety policy, shown while unsafe: "On unsafe: pause the plan, park and close the dome", then "Resumes 10 min after Safe" or "Stays paused until you resume". The policy loads when the window opens and is never written here; it is edited in the full UI.</p></div>
     <div><h2>Moving</h2><p>"Moving…" blinking green while it turns, parks or finds home; "Opening…" / "Closing…" with a blue ring dot while the shutter goes (a change between two states). Segments and Park / Home lock; Stop never locks. While a plan runs, a shutter change, Park or Home asks first; Stop never asks.</p></div>
-    <div><h2>Stays in the full UI</h2><p>Dome: slew to azimuth, sync, set park here, auto-connect, slaving. Safety: editing On unsafe, auto-resume and its delay, auto-connect.</p></div>
+    <div><h2>Stays in the full UI</h2><p>Dome: slew to azimuth, sync, set park here, auto-connect, the follow geometry. (The Follows the mount switch is in the window, #1689.) Safety: editing On unsafe, auto-resume and its delay, auto-connect.</p></div>
   </div>
 </div>
 

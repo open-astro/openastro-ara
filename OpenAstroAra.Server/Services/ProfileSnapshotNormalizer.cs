@@ -104,6 +104,8 @@ public static class ProfileSnapshotNormalizer {
             FilterFocusOffsets = snap.FilterFocusOffsets?.Offsets is null ? FilterFocusOffsetsDto.Empty : snap.FilterFocusOffsets,
             EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
             SavedTargets = SavedTargetsValidator.NormalizeLenient(snap.SavedTargets),
+            // #1689 — a pre-#1689 file back-fills to the defaults (not following).
+            Dome = snap.Dome ?? DomeSettingsDto.Default,
         };
     }
 

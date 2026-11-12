@@ -482,6 +482,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1689 — not following, no geometry, until the user sets them.
+    private DomeSettingsDto _dome = DomeSettingsDto.Default;
+
+    public DomeSettingsDto GetDomeSettings() {
+        lock (_lock) { return _dome; }
+    }
+
+    public void PutDomeSettings(DomeSettingsDto value) {
+        lock (_lock) { _dome = value; }
+        RaiseChanged();
+    }
+
     // §36 custom terrain horizon — empty until entered.
     private CustomHorizonDto _customHorizon = new(Points: []);
 

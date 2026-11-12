@@ -525,6 +525,20 @@ public static class ProfileEndpoints {
             .WithName("PutCoolingFan")
             .WithSummary("Designate the active profile's cooling fan: a switch's device_id and port_id, or both null for none.");
 
+        // #1689 — the dome's geometry, tolerance and follow-the-mount setting.
+        profile.MapGet("/dome", (IProfileStore store) =>
+                Results.Ok(store.GetDomeSettings()))
+            .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetDomeSettings")
+            .WithSummary("Get the active profile's dome geometry and follow-the-mount setting.");
+
+        profile.MapPut("/dome", PutDomeSettings)
+            .Accepts<DomeSettingsDto>("application/json")
+            .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("PutDomeSettings")
+            .WithSummary("Replace the active profile's dome geometry and tolerances (follow_mount is kept; POST /equipment/dome/follow changes it); a scope outside the dome radius is refused with a reason.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
@@ -588,6 +602,22 @@ public static class ProfileEndpoints {
             GuiderSetupType = setupType,
             GuiderRotator = GuiderSettings.UsesGuideCameraRotator(setupType) ? body.GuiderRotator : string.Empty,
         };
+    }
+
+    /// <summary>#1689 — <c>PUT /profile/dome</c>. <c>follow_mount</c> is only changed by
+    /// <c>POST /equipment/dome/follow</c> (it checks the dome first), so the stored value is kept: a client
+    /// saving geometry with a stale copy must not turn following back on, or off.</summary>
+    internal static IResult PutDomeSettings(DomeSettingsDto body, IProfileStore store) {
+        body = body with { FollowMount = store.GetDomeSettings().FollowMount };
+        if (DomeSettingsValidator.Error(body) is { } error) {
+            return Results.Problem(
+                type: "https://openastro.net/errors/validation",
+                title: "Invalid dome settings",
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                detail: error);
+        }
+        store.PutDomeSettings(body);
+        return Results.Ok(body);
     }
 
     /// <summary>#1215 — <c>PUT /profile/plate-solve</c> echoes what the store HOLDS, not the body as
