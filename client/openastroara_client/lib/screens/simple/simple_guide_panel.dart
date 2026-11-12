@@ -769,11 +769,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
                                   }
                                 }),
                           title: Text(_suggestionName(l10n, s), style: kSimpleText),
-                          secondary: Text(
-                            // The guider names its Dec mode in English ("North").
-                            s.key == 'dec_guide_mode' ? _decModeName(l10n, s.value.toLowerCase()) ?? s.value : s.value,
-                            style: kSimpleText,
-                          ),
+                          secondary: Text(_suggestionValue(l10n, s), style: kSimpleText),
                         ),
                       ),
                     FilledButton(
@@ -800,6 +796,12 @@ String _suggestionName(AppLocalizations l10n, GuidingAssistantSuggestion s) => s
   'dec_guide_mode' => l10n.guideDecMode,
   'dec_algorithm' => l10n.guideSuggestDecAlgorithm,
   _ => s.label,
+};
+
+/// A suggestion's value; the guider names its Dec guide mode in English ("North").
+String _suggestionValue(AppLocalizations l10n, GuidingAssistantSuggestion s) => switch (s.key) {
+  'dec_guide_mode' => _decModeName(l10n, s.value.toLowerCase()) ?? s.value,
+  _ => s.value,
 };
 
 /// A Dec guide mode (auto, north, south, off) in the user's language; null for any other word.
