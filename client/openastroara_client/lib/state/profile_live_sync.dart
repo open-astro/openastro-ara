@@ -4,15 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/profile_api.dart';
+import 'polar_align/polar_align_routine_state.dart';
 import 'profile_cache_state.dart';
 import 'profile_management_state.dart';
 import 'settings/autofocus_settings_state.dart';
 import 'settings/camera_electronics_state.dart';
+import 'settings/cooling_fan_state.dart';
 import 'settings/custom_horizon_state.dart';
 import 'settings/diagnostics_mode_state.dart';
 import 'settings/equipment_connection_state.dart';
 import 'settings/filenames_settings_state.dart';
 import 'settings/filter_set_state.dart';
+import 'settings/filter_wheel_labels_state.dart';
 import 'settings/filter_wheel_policy_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/notifications_settings_state.dart';
@@ -28,7 +31,9 @@ import 'settings/unguided_settings_state.dart';
 /// (`profile.updated`): read that section again so an open screen never shows
 /// stale values, and refresh the offline profile cache. The write this device
 /// made itself is skipped, so editing never resets its own screen. A section
-/// no screen holds in memory needs nothing: it is read when opened.
+/// no screen holds in memory needs nothing: it is read when opened. Custom
+/// targets (`saved-targets`) are held but left out: syncing them is a separate
+/// spec (#1644, Out of Scope).
 Future<void> applyProfileUpdated(
   ProviderContainer container,
   String section,
@@ -64,8 +69,13 @@ final Map<String, _Hydrate> _hydrators = {
       c.read(unguidedSettingsProvider.notifier).hydrateFromServer(api),
   'filter-set': (c, api) =>
       c.read(filterSetProvider.notifier).hydrateFromServer(api),
-  'filter-wheel': (c, api) =>
-      c.read(filterWheelPolicyProvider.notifier).hydrateFromServer(api),
+  // One section, two routes: filter-wheel/labels and filter-wheel/policy.
+  'filter-wheel': (c, api) async {
+    await c.read(filterWheelPolicyProvider.notifier).hydrateFromServer(api);
+    await c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api);
+  },
+  'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
+  'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
   'camera-electronics': (c, api) =>
       c.read(cameraElectronicsProvider.notifier).hydrateFromServer(api),
   'optics': (c, api) =>

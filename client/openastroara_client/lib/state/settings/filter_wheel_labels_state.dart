@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
 import '../profile_management_state.dart';
 
 /// §37.4 + §46.2 filter wheel slot labels, daemon-backed (the 12h.2b
 /// round-trip): the notifier SELF-HYDRATES from
 /// `GET /api/v1/profile/filter-wheel/labels` whenever the active server
-/// changes, so every consumer — the §38 editor's filter picker, the
+/// changes (and when another device changes them, #1644), so every
+/// consumer — the §38 editor's filter picker, the
 /// filter-set "seed from wheel labels" button, the Settings panel — sees the
 /// profile's labels without per-surface plumbing; offline it keeps the
 /// reference-8 defaults (which the daemon's own default mirrors, so first
@@ -80,6 +82,15 @@ class FilterWheelLabelsNotifier extends Notifier<FilterWheelLabels> {
       });
     }
     return FilterWheelLabels();
+  }
+
+  /// #1644 — another device changed the labels (`profile.updated`): read them
+  /// again in place. An invalidate would show the reference defaults until the
+  /// read lands, and the filter pickers would offer those meanwhile.
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    final gen = _generation;
+    final loaded = await api.getFilterWheelLabels();
+    if (ref.mounted && _generation == gen) state = loaded;
   }
 
   // Bumped on every local edit: an in-flight PUT's echo is only adopted when

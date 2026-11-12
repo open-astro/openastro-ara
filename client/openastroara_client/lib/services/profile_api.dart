@@ -60,7 +60,8 @@ class ProfileApi {
   /// Notes each profile-section write as it goes out (the daemon publishes the
   /// event before its HTTP answer) and drops the note when the daemon refuses
   /// the write (an error answer, e.g. 409 stale-session): that published
-  /// nothing, and must not hide another device's change to the section.
+  /// nothing, and must not hide another device's change to the section. Shared
+  /// with `PolarAlignApi`, whose settings save is a profile write too.
   static final Interceptor ownWriteRecorder = InterceptorsWrapper(
     onRequest: (req, handler) {
       const prefix = '/api/v1/profile/';

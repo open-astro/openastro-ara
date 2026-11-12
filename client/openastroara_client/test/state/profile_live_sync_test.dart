@@ -5,19 +5,30 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
+import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 /// The rig's profile endpoints, as far as this test needs: the site section
-/// (whatever name it currently holds) and the profile list.
+/// (whatever name it currently holds), the profile list, and any other
+/// section's stored JSON in [stored].
 class _Rig implements HttpClientAdapter {
   String siteName = 'Backyard';
   int siteReads = 0;
+
+  /// Other sections' JSON by request path, and how often each path was read.
+  final stored = <String, Object>{};
+  final reads = <String, int>{};
 
   /// Holds each write's answer until completed: the daemon publishes
   /// `profile.updated` before it writes the HTTP response.
@@ -43,6 +54,9 @@ class _Rig implements HttpClientAdapter {
       }
       await holdWrites?.future;
     }
+    if (options.method == 'GET') {
+      reads.update(options.path, (n) => n + 1, ifAbsent: () => 1);
+    }
     Object body;
     if (options.path.endsWith('/profile/site')) {
       if (options.method == 'GET') siteReads++;
@@ -50,7 +64,7 @@ class _Rig implements HttpClientAdapter {
     } else if (options.path.endsWith('/profiles')) {
       body = {'active_id': null, 'profiles': <Object>[]};
     } else {
-      body = <String, Object>{};
+      body = stored[options.path] ?? <String, Object>{};
     }
     return ResponseBody.fromString(
       jsonEncode(body),
@@ -67,12 +81,14 @@ class _Rig implements HttpClientAdapter {
 
 const _server = AraServer(hostname: 'host', port: 5555);
 
-/// Until the rig has seen [n] writes (each one's request went out).
-Future<void> _sent(_Rig rig, int n) async {
-  while (rig.writes < n) {
+Future<void> _until(bool Function() done) async {
+  while (!done()) {
     await Future<void>.delayed(Duration.zero);
   }
 }
+
+/// Until the rig has seen [n] writes (each one's request went out).
+Future<void> _sent(_Rig rig, int n) => _until(() => rig.writes >= n);
 
 class _Cache extends ProfileCacheService {
   int listSaves = 0;
@@ -85,9 +101,11 @@ class _Cache extends ProfileCacheService {
 
 ProviderContainer _container(_Rig rig, {_Cache? cache}) {
   final api = ProfileApi(_server, dio: Dio()..httpClientAdapter = rig);
+  final polar = PolarAlignApi(_server, dio: Dio()..httpClientAdapter = rig);
   final c = ProviderContainer(
     overrides: [
       profileApiProvider.overrideWithValue(api),
+      polarAlignApiProvider.overrideWithValue(polar),
       if (cache != null) profileCacheServiceProvider.overrideWithValue(cache),
     ],
   );
@@ -197,6 +215,86 @@ void main() {
       await applyProfileUpdated(c, 'site'); // the event for the saved write
 
       expect(rig.siteReads, reads);
+    },
+  );
+
+  test(
+    'profile.updated for filter-wheel reads the slot labels again too',
+    () async {
+      const labels = '/api/v1/profile/filter-wheel/labels';
+      final rig = _Rig()
+        ..stored[labels] = {
+          'labels': ['Ha', 'OIII', 'SII'],
+        };
+      final c = _container(rig);
+      // A screen holds them; wait for their first read from the rig.
+      await _until(
+        () => c.read(filterWheelLabelsProvider).labelAt(2) == 'OIII',
+      );
+      rig.stored[labels] = {
+        'labels': ['Ha', 'Sulphur', 'SII'],
+      };
+
+      await applyProfileUpdated(c, 'filter-wheel');
+
+      expect(c.read(filterWheelLabelsProvider).labelAt(2), 'Sulphur');
+    },
+  );
+
+  test('profile.updated for cooling-fan reads the chosen fan again', () async {
+    const fan = '/api/v1/profile/cooling-fan';
+    final rig = _Rig()..stored[fan] = {'device_id': 'switch-1', 'port_id': 0};
+    final c = _container(rig);
+    expect((await c.read(coolingFanProvider.future)).portId, 0);
+    rig.stored[fan] = {'device_id': 'switch-1', 'port_id': 3};
+
+    await applyProfileUpdated(c, 'cooling-fan');
+
+    expect((await c.read(coolingFanProvider.future)).portId, 3);
+  });
+
+  test(
+    'profile.updated for polar-align reads the routine settings again',
+    () async {
+      const path = '/api/v1/profile/polar-align';
+      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final c = _container(rig);
+      expect(
+        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
+        2,
+      );
+      rig.stored[path] = {'exposure_seconds': 5};
+
+      await applyProfileUpdated(c, 'polar-align');
+
+      expect(
+        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
+        5,
+      );
+    },
+  );
+
+  test(
+    'a polar-align save from this device is not read back over it',
+    () async {
+      const path = '/api/v1/profile/polar-align';
+      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final c = _container(rig);
+      c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
+      await c.read(polarAlignSettingsProvider.future);
+      rig.holdWrites = Completer<void>();
+      final save = c
+          .read(polarAlignSettingsProvider.notifier)
+          .save(const PolarAlignSettings(exposureSeconds: 5));
+      await _sent(rig, 1); // the answer is still held
+      final reads = rig.reads[path];
+
+      await applyProfileUpdated(c, 'polar-align');
+      rig.holdWrites!.complete();
+      await save;
+      await c.read(polarAlignSettingsProvider.future);
+
+      expect(rig.reads[path], reads);
     },
   );
 
