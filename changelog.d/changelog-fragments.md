@@ -1,0 +1,2 @@
+### Changed (tooling)
+- **Changelog fragments replace CHANGELOG.md edits** (#1812): a PR adds `changelog.d/<branch-slug>.md` instead of a line under `[Unreleased]`, so parallel PRs no longer conflict on `CHANGELOG.md`. `scripts/changelog-fragments.py` checks the fragments in the Sanity job (`--check`), previews the next release (`--preview`) and writes the dated section at release (`--release`). The `[Unreleased]` section moved into `changelog.d/unreleased-NNN-*.md` word for word. The scheme is AlpacaBridge's, without its version derivation.
