@@ -94,8 +94,7 @@ public static class ProfileEndpoints {
             .WithName("PutImagingDefaults")
             .WithSummary("Replace the active profile's imaging defaults.");
 
-        profile.MapGet("/storage", (IProfileStore store) =>
-                Results.Ok(store.GetStorageSettings()))
+        profile.MapGet("/storage", GetStorageSettings)
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .WithName("GetStorageSettings")
             .WithSummary("Get the active profile's storage settings.");
@@ -104,6 +103,7 @@ public static class ProfileEndpoints {
             .Accepts<StorageSettingsDto>("application/json")
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
             .WithName("PutStorageSettings")
             .WithSummary("Replace the active profile's storage settings.");
 
@@ -673,7 +673,18 @@ public static class ProfileEndpoints {
     /// <summary>§29 / §43-2b / §42.5 — <c>PUT /profile/storage</c> write-boundary validation: an invalid
     /// disk-space pair or a negative retention value is a 400 and never reaches the store. Extracted so
     /// the 400s are unit-testable without a host (#1145).</summary>
-    internal static IResult PutStorageSettings(StorageSettingsDto body, IProfileStore store) {
+    internal static IResult PutStorageSettings(StorageSettingsDto body, IProfileStore store,
+        [Microsoft.AspNetCore.Mvc.FromHeader(Name = "If-Match")] string? ifMatch = null, HttpContext? http = null) {
+        // ADR 0015 — a client that sent If-Match saves only over the copy it loaded: a mismatch is a 412 and
+        // nothing is written. No If-Match is accepted as before (refusing it is a later slice).
+        if (ifMatch is not null) {
+            var current = StorageETag(store.GetStorageSettings());
+            if (ifMatch.Trim() != "*" && ifMatch.Trim() != current) {
+                return Results.Problem(
+                    detail: "The storage settings changed since they were loaded; reload before saving.",
+                    statusCode: StatusCodes.Status412PreconditionFailed);
+            }
+        }
         // §29 — reject an invalid disk-space threshold pair at write so the stored profile always matches
         // what the monitor enforces (no silent fallback to defaults while the UI shows the bad numbers).
         if (body.MinFreeDiskCriticalGb < 1 || body.MinFreeDiskWarnGb <= body.MinFreeDiskCriticalGb) {
@@ -698,8 +709,22 @@ public static class ProfileEndpoints {
         // current meaning; the echo carries what was stored so the client adopts it.
         body = StorageFormatTokens.Normalize(body);
         store.PutStorageSettings(body);
+        if (http is not null) http.Response.Headers.ETag = StorageETag(body);
         return Results.Ok(body);
     }
+
+    /// <summary><c>GET /profile/storage</c> with an <c>ETag</c> derived from the section (nothing stored).</summary>
+    internal static IResult GetStorageSettings(IProfileStore store, HttpContext? http = null) {
+        var value = store.GetStorageSettings();
+        if (http is not null) http.Response.Headers.ETag = StorageETag(value);
+        return Results.Ok(value);
+    }
+
+    /// <summary>Strong ETag: SHA-256 of the section's JSON. The store holds the normalized section, so equal
+    /// content gives an equal tag.</summary>
+    internal static string StorageETag(StorageSettingsDto? value) =>
+        "\"" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(value)))) + "\"";
 
     /// <summary>#1264 — write-boundary validation: the guard's two eccentricity bars must be ordered and
     /// in (0, 1], its counts positive, the ladder ascending and positive, the re-centre figures positive,
