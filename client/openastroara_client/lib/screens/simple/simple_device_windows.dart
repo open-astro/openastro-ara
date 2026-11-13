@@ -1460,6 +1460,113 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
 
   /// The knobs move nothing while autofocus runs (a touch would spoil its
   /// curve) or while the position is unknown (a roll would jump from 0).
+  /// Set zero asked, waiting for its confirm.
+  bool _askZero = false;
+
+  /// Settings' Position section (mock `design/preview/simple-focuser-zero-mock.html`
+  /// B): Set zero and Calibrate travel, each only when the driver offers it.
+  /// Rare, and a zero moves every saved position, so neither is on the
+  /// window the night runs on.
+  List<Widget> _position(FocuserStatus s) {
+    final c = s.capabilities;
+    if (c == null || !(c.canSetZero || c.canCalibrate)) return const [];
+    final l10n = context.l10n;
+    final calibrating = s.calibration == 'calibrating';
+    final still = !s.isMoving && !calibrating;
+    final pos = s.position ?? 0;
+    return [
+      const Divider(height: AraSpace.s16),
+      Text(
+        l10n.focuserPosition,
+        key: const Key('simple-focuser-position-section'),
+        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+      ),
+      if (c.canSetZero) ...[
+        simpleWindowRow(
+          l10n.focuserSetZero,
+          id: 'SetZero',
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              key: const Key('simple-focuser-set-zero'),
+              onPressed: still && !_askZero && pos != 0
+                  ? () => setState(() => _askZero = true)
+                  : null,
+              child: Text(l10n.focuserSetZeroButton),
+            ),
+          ),
+        ),
+        Text(l10n.focuserSetZeroHint, style: AraText.caption),
+        if (_askZero)
+          simpleWindowConfirm(
+            question: l10n.focuserSetZeroAsk('$pos'),
+            confirm: l10n.focuserSetZero,
+            onCancel: () => setState(() => _askZero = false),
+            onConfirm: () => _run(
+              () => ref.read(focuserProvider.notifier).setZero(),
+              l10n.focuserCouldntSetZero,
+            ),
+          ),
+      ],
+      if (c.canCalibrate) ...[
+        simpleWindowRow(
+          l10n.focuserCalibrate,
+          id: 'Calibrate',
+          Align(
+            alignment: Alignment.centerRight,
+            child: calibrating
+                ? FilledButton(
+                    key: const Key('simple-focuser-calibrate-stop'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AraColors.emergencyStop,
+                      foregroundColor: AraColors.selectionFg,
+                    ),
+                    onPressed: () => _run(
+                      () => ref
+                          .read(focuserProvider.notifier)
+                          .calibrate(abort: true),
+                      l10n.focuserCouldntCalibrate,
+                    ),
+                    child: Text(l10n.deviceStop),
+                  )
+                : OutlinedButton(
+                    key: const Key('simple-focuser-calibrate'),
+                    onPressed: still
+                        ? () => _run(
+                            () => ref.read(focuserProvider.notifier).calibrate(),
+                            l10n.focuserCouldntCalibrate,
+                          )
+                        : null,
+                    child: Text(l10n.focuserCalibrateButton),
+                  ),
+          ),
+        ),
+        Text(
+          switch (s.calibration) {
+            'calibrating' => l10n.focuserCalibrating,
+            'calibrated' => l10n.focuserCalibrated,
+            _ => l10n.focuserCalibrateHint,
+          },
+          key: const Key('simple-focuser-calibration'),
+          style: AraText.caption,
+        ),
+        if (calibrating) const LinearProgressIndicator(),
+      ],
+    ];
+  }
+
+  /// One Position action; a refusal or a lost rig says why in a pill.
+  Future<void> _run(Future<bool> Function() action, String failed) async {
+    setState(() => _askZero = false);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
+    final l10n = context.l10n;
+    try {
+      if (!await action()) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(failed, detail: failureReason(l10n, e), error: true);
+    }
+  }
+
   bool _locked(FocuserStatus s) =>
       s.position == null || ref.read(autofocusLiveProvider).run.isRunning;
 
@@ -1744,9 +1851,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
       ]);
     }
     if (widget.inSettings) {
-      children.addAll(
-        _versions(context, ref.watch(deviceDriverProvider('focuser')).value),
-      );
+      children.addAll([
+        if (s != null && s.isConnected) ..._position(s),
+        ..._versions(context, ref.watch(deviceDriverProvider('focuser')).value),
+      ]);
     }
     return Column(
       key: const Key('simple-device-focuser'),

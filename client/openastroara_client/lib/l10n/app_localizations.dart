@@ -8756,6 +8756,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'released — disconnected by hand'**
   String get faultGroupReleased;
+
+  /// Settings › Focuser: title of the section with Set zero and Calibrate travel
+  ///
+  /// In en, this message translates to:
+  /// **'Position'**
+  String get focuserPosition;
+
+  /// Settings › Focuser: the row and confirm button that make the focuser's current position 0
+  ///
+  /// In en, this message translates to:
+  /// **'Set zero'**
+  String get focuserSetZero;
+
+  /// Settings › Focuser: button that asks before making the current position 0
+  ///
+  /// In en, this message translates to:
+  /// **'Set zero…'**
+  String get focuserSetZeroButton;
+
+  /// Settings › Focuser: what Set zero does
+  ///
+  /// In en, this message translates to:
+  /// **'Make where it is now 0. The focuser doesn\'t move.'**
+  String get focuserSetZeroHint;
+
+  /// Settings › Focuser: the question before Set zero
+  ///
+  /// In en, this message translates to:
+  /// **'Make {position} the new 0? The last autofocus position and plan steps that move to a set position will be off by {position} steps until the next autofocus. Filter offsets stay as they are.'**
+  String focuserSetZeroAsk(String position);
+
+  /// Settings › Focuser: the row that runs the focuser to both stops to find its travel
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate travel'**
+  String get focuserCalibrate;
+
+  /// Settings › Focuser: button that starts a travel calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate'**
+  String get focuserCalibrateButton;
+
+  /// Settings › Focuser: what Calibrate travel does, before it runs
+  ///
+  /// In en, this message translates to:
+  /// **'The focuser runs to both stops and sets 0 at the inner one. Take off anything that could touch first.'**
+  String get focuserCalibrateHint;
+
+  /// Settings › Focuser: a travel calibration is running
+  ///
+  /// In en, this message translates to:
+  /// **'Running to both stops…'**
+  String get focuserCalibrating;
+
+  /// Settings › Focuser: the focuser's travel is calibrated
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrated'**
+  String get focuserCalibrated;
+
+  /// Error when the focuser refused Set zero
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t set the focuser\'s zero'**
+  String get focuserCouldntSetZero;
+
+  /// Error when the focuser refused to start or stop a calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t calibrate the focuser'**
+  String get focuserCouldntCalibrate;
 }
 
 class _AppLocalizationsDelegate

@@ -15,6 +15,7 @@
 using ASCOM.Common.DeviceInterfaces;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace OpenAstroAra.Test {
@@ -158,8 +159,9 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeFocuserDevice : FakeDeviceAdapter, IFocuserDevice {
+        private int _position = 500;
         public bool IsMoving => false;
-        public int Position { get { ThrowIfReadFails(); return 500; } }
+        public int Position { get { ThrowIfReadFails(); return Volatile.Read(ref _position); } }
         public double Temperature => 8;
         public bool TempComp { get; set; }
         public int MaxStep => 1000;
@@ -168,5 +170,18 @@ namespace OpenAstroAra.Test {
         public bool Absolute => true;
         public void Move(int position) { }
         public void Halt() { }
+        public List<string> Actions { get; } = [];
+        public System.Collections.Concurrent.ConcurrentQueue<string> ActionCalls { get; } = new();
+        public volatile string CalibrationStatus = "NotCalibrated";
+        public IList<string> SupportedActions => Actions;
+        public string Action(string actionName, string actionParameters) {
+            if (actionName != FocuserService.CalibrationStatusAction) {
+                ActionCalls.Enqueue(actionName);
+            }
+            if (actionName == FocuserService.SetZeroAction) {
+                Volatile.Write(ref _position, 0);
+            }
+            return actionName == FocuserService.CalibrationStatusAction ? CalibrationStatus : string.Empty;
+        }
     }
 }

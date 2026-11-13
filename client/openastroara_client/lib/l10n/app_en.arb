@@ -6617,5 +6617,58 @@
   "faultGroupReleased": "released — disconnected by hand",
   "@faultGroupReleased": {
     "description": "Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered"
+  },
+  "focuserPosition": "Position",
+  "@focuserPosition": {
+    "description": "Settings › Focuser: title of the section with Set zero and Calibrate travel"
+  },
+  "focuserSetZero": "Set zero",
+  "@focuserSetZero": {
+    "description": "Settings › Focuser: the row and confirm button that make the focuser's current position 0"
+  },
+  "focuserSetZeroButton": "Set zero…",
+  "@focuserSetZeroButton": {
+    "description": "Settings › Focuser: button that asks before making the current position 0"
+  },
+  "focuserSetZeroHint": "Make where it is now 0. The focuser doesn't move.",
+  "@focuserSetZeroHint": {
+    "description": "Settings › Focuser: what Set zero does"
+  },
+  "focuserSetZeroAsk": "Make {position} the new 0? The last autofocus position and plan steps that move to a set position will be off by {position} steps until the next autofocus. Filter offsets stay as they are.",
+  "@focuserSetZeroAsk": {
+    "description": "Settings › Focuser: the question before Set zero",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "focuserCalibrate": "Calibrate travel",
+  "@focuserCalibrate": {
+    "description": "Settings › Focuser: the row that runs the focuser to both stops to find its travel"
+  },
+  "focuserCalibrateButton": "Calibrate",
+  "@focuserCalibrateButton": {
+    "description": "Settings › Focuser: button that starts a travel calibration"
+  },
+  "focuserCalibrateHint": "The focuser runs to both stops and sets 0 at the inner one. Take off anything that could touch first.",
+  "@focuserCalibrateHint": {
+    "description": "Settings › Focuser: what Calibrate travel does, before it runs"
+  },
+  "focuserCalibrating": "Running to both stops…",
+  "@focuserCalibrating": {
+    "description": "Settings › Focuser: a travel calibration is running"
+  },
+  "focuserCalibrated": "Calibrated",
+  "@focuserCalibrated": {
+    "description": "Settings › Focuser: the focuser's travel is calibrated"
+  },
+  "focuserCouldntSetZero": "Couldn't set the focuser's zero",
+  "@focuserCouldntSetZero": {
+    "description": "Error when the focuser refused Set zero"
+  },
+  "focuserCouldntCalibrate": "Couldn't calibrate the focuser",
+  "@focuserCouldntCalibrate": {
+    "description": "Error when the focuser refused to start or stop a calibration"
   }
 }

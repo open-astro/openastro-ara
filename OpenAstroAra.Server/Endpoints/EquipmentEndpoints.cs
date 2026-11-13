@@ -367,6 +367,15 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
         focuser.MapPost("/halt", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.HaltAsync(key, ct)));
+        focuser.MapPost("/setzero", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SetZeroAsync(key, ct)))
+            .WithName("SetFocuserZero").WithSummary("Make where the focuser is now 0 (the driver's SetZero action); it doesn't move.");
+        focuser.MapPost("/calibrate", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.CalibrateAsync(key, ct)))
+            .WithName("CalibrateFocuser").WithSummary("Start the driver's travel calibration (it runs to both stops).");
+        focuser.MapPost("/calibrate/abort", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.AbortCalibrationAsync(key, ct)))
+            .WithName("AbortFocuserCalibration").WithSummary("Stop a travel calibration.");
         // §59 — run one autofocus V-curve sweep with the profile's §37.11 settings, as a
         // §65.5 background job (a sweep is minutes of focuser moves + probe exposures — far too
         // long for a request). Returns 202 + the job; poll GET /api/v1/jobs/{id} for state, and

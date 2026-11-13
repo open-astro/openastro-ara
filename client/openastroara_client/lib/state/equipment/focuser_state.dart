@@ -82,6 +82,14 @@ class FocuserNotifier extends EquipmentDeviceNotifier<FocuserStatus> {
     await api.command('halt');
     return true;
   }
+
+  /// Make where the focuser is now 0 (the driver's SetZero); it doesn't move.
+  Future<bool> setZero() => performAction((api) => api.command('setzero'));
+
+  /// Start the driver's travel calibration, or stop one ([abort]).
+  Future<bool> calibrate({bool abort = false}) => performAction(
+    (api) => api.command(abort ? 'calibrate/abort' : 'calibrate'),
+  );
 }
 
 final focuserProvider = AsyncNotifierProvider<FocuserNotifier, FocuserStatus?>(
