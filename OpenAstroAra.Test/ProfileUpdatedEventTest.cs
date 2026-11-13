@@ -33,7 +33,7 @@ namespace OpenAstroAra.Test {
             public readonly List<(string Type, JsonElement Payload)> Published = new();
             public bool Throw { get; set; }
             public long CurrentSequence { get; private set; }
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 if (Throw) {
                     throw new InvalidOperationException("broadcaster is down");
                 }

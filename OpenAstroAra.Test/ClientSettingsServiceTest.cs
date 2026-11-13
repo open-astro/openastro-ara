@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
             private readonly List<(string Type, JsonElement Payload)> _sink;
             public RecordingWs(List<(string Type, JsonElement Payload)> sink) => _sink = sink;
             public long CurrentSequence { get; private set; }
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 CurrentSequence++;
                 _sink.Add((eventType, payload.Clone()));
                 return Task.CompletedTask;

@@ -81,6 +81,8 @@
     { "name": "DiagnosticsAutoActionTaken", "type": "diagnostics.auto_action_taken" },
     { "name": "DiagnosticsCleared", "type": "diagnostics.cleared" },
     { "name": "DiagnosticsSnapshot", "type": "diagnostics.snapshot" },
+    { "name": "ProfileUpdated", "type": "profile.updated" },
+    { "name": "ClientSettingsUpdated", "type": "client_settings.updated" },
     { "name": "ServerRestartImminent", "type": "server.restart_imminent" },
     { "name": "StorageDevicesChanged", "type": "storage.devices_changed" },
     { "name": "DataManagerDownloadProgress", "type": "data_manager.download.progress" },
