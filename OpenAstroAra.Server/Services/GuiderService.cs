@@ -489,7 +489,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 if (generation != _connectGeneration) {
                     return; // superseded by a newer connect/disconnect
                 }
-                SetStateLocked(ok ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
+                if (ok && !guider.Connected) {
+                    // #1850: the event socket dropped during the post-connect init, while OnConnectionLost
+                    // ignored it (state was Connecting). Treat it as the link-down it is, not as Connected.
+                    ok = false;
+                    HandleLinkDownLocked();
+                } else {
+                    SetStateLocked(ok ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
+                }
             }
             if (ok) {
                 // #1362 — after the state is Connected and outside this try's failure path: the reconcile
