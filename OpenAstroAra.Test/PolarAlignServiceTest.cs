@@ -230,12 +230,11 @@ namespace OpenAstroAra.Test {
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
                 Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
-                IGuideFocusService? guideFocus = null, Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
+                Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
                 IPolarAlignMainCameraSolver? mainCamera = null) {
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
-                fetcher ?? new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus,
-                mainCamera: mainCamera) {
+                fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
@@ -320,28 +319,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Start_stops_a_running_guide_camera_focus_loop_first() {
+        public async Task Start_takes_the_camera_from_a_running_guide_camera_focus_loop_first() {
             // Both borrow frames through the guider: the focus loop must give the camera up before the
-            // routine takes its lease. An idle loop is left alone.
+            // routine takes its lease (ADR 0016: the custody module stops the older holder).
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls, answerCaptures: false);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var focus = new Mock<IGuideFocusService>();
-            focus.SetupGet(f => f.IsActive).Returns(true);
-            focus.Setup(f => f.StopAsync()).Returns(Task.CompletedTask);
-            using var svc = NewService(guider, new ScriptedSolver(), guideFocus: focus.Object);
+            var stops = 0;
+            await guider.Custody.TakeAsync(CameraUse.GuideFocus, guider, _ => { stops++; return Task.CompletedTask; }, CancellationToken.None).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver());
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
 
-            focus.Verify(f => f.StopAsync(), Times.Once);
+            Assert.That(stops, Is.EqualTo(1));
+            Assert.That(guider.Custody.Holder, Is.EqualTo(CameraUse.PolarAlign));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            var idle = new Mock<IGuideFocusService>();
-            idle.SetupGet(f => f.IsActive).Returns(false);
-            using var svc2 = NewService(guider, new ScriptedSolver(), guideFocus: idle.Object);
-            await svc2.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            idle.Verify(f => f.StopAsync(), Times.Never);
-            await svc2.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(guider.Custody.Holder, Is.Null, "Stop gives the camera back");
         }
 
         [Test]
@@ -979,7 +972,10 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
 
             Assert.That(ex!.Message, Does.Contain("Guide Camera loop"));
-            Assert.That(paCalls, Is.Empty, "no lease is taken for a start that failed");
+            // The custody module takes the lease before the loop stop (a new loop cannot start under it); a start
+            // that then fails gives it straight back and leaves nobody holding the camera.
+            Assert.That(paCalls.ToArray().Last(), Is.False, "the lease is released after a start that failed");
+            Assert.That(guider.Custody.Holder, Is.Null);
         }
 
 
@@ -1196,7 +1192,7 @@ namespace OpenAstroAra.Test {
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB);
             using var svc = NewService(guider, solver);
-            svc.LeaseRenewInterval = TimeSpan.FromMilliseconds(30);
+            guider.Custody.LeaseRenewInterval = TimeSpan.FromMilliseconds(30);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);

@@ -73,12 +73,12 @@ namespace OpenAstroAra.Test {
         [TestCase("Calibrating")]
         [TestCase("Paused")]
         [TestCase("LostLock")]
-        public void A_setup_activity_is_refused_with_a_reason_while_the_guider_is_busy(string state) {
+        public async Task A_setup_activity_is_refused_with_a_reason_while_the_guider_is_busy(string state) {
             foreach (var use in Setup) {
                 var custody = new GuideCameraCustody();
                 var port = new FakePort { State = state };
-                var ex = Assert.ThrowsAsync<InvalidOperationException>(() => custody.TakeAsync(use, port, _ => Task.CompletedTask, CancellationToken.None));
-                Assert.That(ex!.Message, Does.Contain(state.ToLowerInvariant()).And.Contain("stop guiding"), use.ToString());
+                var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => custody.TakeAsync(use, port, _ => Task.CompletedTask, CancellationToken.None));
+                Assert.That(ex!.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"), use.ToString());
                 Assert.That(custody.Holder, Is.Null, "a refusal holds nothing");
                 Assert.That(port.Calls, Is.Empty, "a refusal never touches the lease");
             }
@@ -120,12 +120,12 @@ namespace OpenAstroAra.Test {
 
             await custody.TakeForGuidingAsync(port, CancellationToken.None);
 
-            Assert.That(port.Calls, Is.EqualTo(new[] { "get-lease", "lease-off" }));
+            Assert.That(port.Calls, Is.EqualTo(new List<string> { "get-lease", "lease-off" }));
 
             port.Calls.Clear();
             port.LeaseReported = false;
             await custody.TakeForGuidingAsync(port, CancellationToken.None);
-            Assert.That(port.Calls, Is.EqualTo(new[] { "get-lease" }), "no lease, nothing to release");
+            Assert.That(port.Calls, Is.EqualTo(new List<string> { "get-lease" }), "no lease, nothing to release");
         }
 
         [Test]
@@ -134,11 +134,11 @@ namespace OpenAstroAra.Test {
             var port = new FakePort { FailRelease = true };
             await custody.TakeAsync(CameraUse.GuideFocus, port, _ => throw new InvalidOperationException("loop stuck"), CancellationToken.None);
 
-            Assert.DoesNotThrowAsync(() => custody.TakeForGuidingAsync(port, CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => custody.TakeForGuidingAsync(port, CancellationToken.None));
             Assert.That(custody.Holder, Is.Null, "the holder is gone even though its stop and the release faulted");
 
             // A guider that cannot report its lease is no reason not to guide either.
-            Assert.DoesNotThrowAsync(() => custody.TakeForGuidingAsync(new ThrowingPort(), CancellationToken.None));
+            await Assert.DoesNotThrowAsync(() => custody.TakeForGuidingAsync(new ThrowingPort(), CancellationToken.None));
         }
 
         private sealed class ThrowingPort : IGuideCameraPort {
@@ -155,7 +155,7 @@ namespace OpenAstroAra.Test {
             Assert.That(GuideCameraCustody.LeaseTimeoutSeconds, Is.EqualTo(600));
             var port = new FakePort();
             var claim = await custody.TakeAsync(CameraUse.PolarAlign, port, _ => Task.CompletedTask, CancellationToken.None);
-            Assert.That(port.Calls, Is.EqualTo(new[] { "lease-on:600" }));
+            Assert.That(port.Calls, Is.EqualTo(new List<string> { "lease-on:600" }));
 
             now += TimeSpan.FromSeconds(240);
             await claim.RenewIfDueAsync(CancellationToken.None);
@@ -163,7 +163,7 @@ namespace OpenAstroAra.Test {
 
             now += TimeSpan.FromSeconds(1);
             await claim.RenewIfDueAsync(CancellationToken.None);
-            Assert.That(port.Calls, Is.EqualTo(new[] { "lease-on:600", "lease-on:600" }));
+            Assert.That(port.Calls, Is.EqualTo(new List<string> { "lease-on:600", "lease-on:600" }));
 
             await claim.RenewIfDueAsync(CancellationToken.None);
             Assert.That(port.Calls, Has.Count.EqualTo(2), "a renew restarts the interval");
@@ -191,7 +191,7 @@ namespace OpenAstroAra.Test {
             Assert.That(port.Calls, Is.Empty, "the older claim no longer owns the lease");
             Assert.That(custody.Holder, Is.EqualTo(CameraUse.GuideFocus));
             await second.ReleaseAsync();
-            Assert.That(port.Calls, Is.EqualTo(new[] { "lease-off" }));
+            Assert.That(port.Calls, Is.EqualTo(new List<string> { "lease-off" }));
         }
 
         [Test]

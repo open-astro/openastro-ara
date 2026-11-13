@@ -121,24 +121,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async System.Threading.Tasks.Task Mediator_StartGuiding_hands_the_guide_camera_back_first_and_tolerates_a_failing_release() {
-            // The live-focus loop holds the guider's polar-align lease; a guide request under it is
-            // refused ("polar-alignment session in progress", 2026-10-03). The release hook runs
-            // before guiding and a fault in it never blocks the attempt.
+        public async System.Threading.Tasks.Task Mediator_StartGuiding_without_a_connected_guider_leaves_the_camera_holder_alone() {
+            // Not connected: no guider to drive, so no setup holder is stopped either.
             using var svc = NewService();
-            var released = 0;
-            svc.ReleaseGuideCameraAsync = () => { released++; return System.Threading.Tasks.Task.CompletedTask; };
-            await svc.ReleaseGuideCameraQuietlyAsync();
-            Assert.That(released, Is.EqualTo(1));
-
-            svc.ReleaseGuideCameraAsync = () => throw new InvalidOperationException("loop stuck");
-            await Assert.DoesNotThrowAsync(() => svc.ReleaseGuideCameraQuietlyAsync());
-
-            // Not connected: no guider to drive, so nothing is released either.
-            released = 0;
-            svc.ReleaseGuideCameraAsync = () => { released++; return System.Threading.Tasks.Task.CompletedTask; };
+            var stopped = 0;
+            await svc.Custody.TakeAsync(CameraUse.LiveView, svc, _ => { stopped++; return System.Threading.Tasks.Task.CompletedTask; }, CancellationToken.None);
             Assert.That(await svc.StartGuiding(false, null!, CancellationToken.None), Is.False);
-            Assert.That(released, Is.Zero);
+            Assert.That(stopped, Is.Zero);
         }
 
         [Test]
@@ -175,30 +164,6 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderService.MapGuidingState("Paused"), Is.EqualTo("paused"));
             Assert.That(GuiderService.MapGuidingState("Stopped"), Is.EqualTo("stopped"));
             Assert.That(GuiderService.MapGuidingState(null), Is.EqualTo("stopped"));
-        }
-
-        [Test]
-        public void Start_guiding_releases_a_stale_pa_lease_and_ends_an_open_polar_alignment_when_it_can() {
-            using var svc = NewService();
-            Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");
-            Assert.That(svc.ShouldReleasePaLease(false), Is.False);
-            Assert.That(svc.ShouldReleasePaLease(null), Is.False);
-
-            var aligning = true;
-            svc.PolarAlignActive = () => aligning;
-            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease and nothing can end it");
-            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Keep));
-            aligning = false;
-            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
-            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Release));
-
-            // An alignment left open (no Done) when a run asks to guide is ended first, then the lease
-            // released — guiding is the explicit request for the mount and guide camera.
-            aligning = true;
-            svc.EndPolarAlignAsync = _ => System.Threading.Tasks.Task.CompletedTask;
-            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.EndPolarAlignThenRelease));
-            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
-            Assert.That(svc.PaLeaseActionFor(false), Is.EqualTo(GuiderService.PaLeaseAction.Keep), "no lease, nothing to do");
         }
 
         [Test]

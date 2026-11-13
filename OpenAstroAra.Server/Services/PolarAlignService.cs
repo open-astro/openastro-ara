@@ -70,9 +70,7 @@ namespace OpenAstroAra.Server.Services {
         private readonly SemaphoreSlim _opLock = new(1, 1);
 
         // §45.12 defaults (profile-configurable settings are the next slice — these are the playbook
-        // values). The lease is renewed at less than half its 600 s timeout so one missed renew
-        // (e.g. a slow solve) still leaves margin.
-        private const int LeaseTimeoutSeconds = 600;
+        // values). The PA-session lease (timeout, renew interval) belongs to GuideCameraCustody.
         internal const int MaxConsecutiveSolveFailures = 5;
         private const int SeedSolveAttempts = 3;
 
@@ -80,8 +78,6 @@ namespace OpenAstroAra.Server.Services {
         // would make a paused-then-resume loop test take tens of seconds of wall clock. The §45.12
         // user-facing knobs (exposure, binning, seed Δ, cadence, settle) come from the profile's
         // PolarAlignSettingsDto, read once at Start.
-        internal TimeSpan LeaseRenewInterval { get; set; } = TimeSpan.FromSeconds(240);
-
         /// <summary>How long a start waits for a looping Guide Camera to stop (#1749).</summary>
         internal TimeSpan LoopStopTimeout { get; set; } = TimeSpan.FromSeconds(10);
         internal TimeSpan PausedRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
@@ -132,8 +128,7 @@ namespace OpenAstroAra.Server.Services {
         // superseded run's late effects are no-ops (its unique work dir keeps the files apart too).
         private int _generation;
 
-        /// <summary>True while the routine runs — the guide-camera focus loop refuses to start then (one
-        /// PA-session lease, one capture stream).</summary>
+        /// <summary>True while the routine runs.</summary>
         public bool IsActive {
             get {
                 lock (_gate) {
@@ -165,8 +160,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
-        // The guide-camera focus loop shares the daemon's PA-session lease; a Start ends it first.
-        private readonly Func<IGuideFocusService?>? _guideFocus;
+        // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
+        private GuideCameraCustody.Claim? _claim;
 
         public PolarAlignService(
                 GuiderService guider,
@@ -177,7 +172,6 @@ namespace OpenAstroAra.Server.Services {
                 IWsBroadcaster? ws = null,
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
-                Func<IGuideFocusService?>? guideFocus = null,
                 IPolarAlignMainCameraSolver? mainCamera = null) {
             _guider = guider;
             _mainCamera = mainCamera;
@@ -189,7 +183,6 @@ namespace OpenAstroAra.Server.Services {
             _log = log;
             _ownsFetcher = frameFetcher is null; // the DI-provided fetcher is container-owned
             _frameFetcher = frameFetcher ?? new HttpPolarAlignFrameFetcher();
-            _guideFocus = guideFocus;
         }
 
         public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) {
@@ -351,9 +344,6 @@ namespace OpenAstroAra.Server.Services {
                 }
                 priorCts?.Dispose();
                 var guiderClient = _guider.RequireConnectedGuider();
-                if (_guideFocus?.Invoke() is { IsActive: true } focus) {
-                    await focus.StopAsync().ConfigureAwait(false);
-                }
                 var mountInfo = _mount.GetInfo();
                 if (mountInfo?.Connected != true) {
                     throw new InvalidOperationException("mount is not connected");
@@ -388,17 +378,28 @@ namespace OpenAstroAra.Server.Services {
                     PolarAlignStages.Coarse => settings.UseHome ? "homing" : "seeding",
                     _ => FineStartHomesFirst(settings) ? "homing" : "seeding",
                 };
-                // #1711: a capture the previous run abandoned may still be exposing; the guider refuses a new one until it ends.
-                await guiderClient.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
+                // ADR 0016: the custody module refuses while the Guider is busy, stops guide focus or the live
+                // view if one holds the camera, and takes the guider's lease (a new loop cannot start under it).
+                var claim = await _guider.Custody.TakeAsync(CameraUse.PolarAlign, _guider,
+                    _ => StopAsync(null, CancellationToken.None), ct).ConfigureAwait(false);
+                try {
+                    // #1711: a capture the previous run abandoned may still be exposing; the guider refuses a new one until it ends.
+                    await guiderClient.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
+                    lock (_gate) {
+                        _abandonedCaptureDebts.Clear(); // idle: that capture's event has been delivered, nothing is owed
+                    }
+                    // #1749: the guider refuses a single frame while it loops.
+                    if (!await guiderClient.StopLoopForCaptureAsync(LoopStopTimeout, ct).ConfigureAwait(false)) {
+                        ct.ThrowIfCancellationRequested();
+                        throw new InvalidOperationException("the Guide Camera loop did not stop — stop looping in the Guider, then start Polar Align again");
+                    }
+                } catch {
+                    await claim.ReleaseAsync().ConfigureAwait(false);
+                    throw;
+                }
                 lock (_gate) {
-                    _abandonedCaptureDebts.Clear(); // idle: that capture's event has been delivered, nothing is owed
+                    _claim = claim;
                 }
-                // #1749: the guider refuses a single frame while it loops. The lease below then stops a new loop starting.
-                if (!await guiderClient.StopLoopForCaptureAsync(LoopStopTimeout, ct).ConfigureAwait(false)) {
-                    ct.ThrowIfCancellationRequested();
-                    throw new InvalidOperationException("the Guide Camera loop did not stop — stop looping in the Guider, then start Polar Align again");
-                }
-                await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
                 int startSeq;
                 lock (_gate) {
@@ -515,7 +516,7 @@ namespace OpenAstroAra.Server.Services {
                     // already wrote its own, and a repeated Stop must not duplicate.
                     await WriteSessionRowBestEffortAsync(outcome, ct).ConfigureAwait(false);
                 }
-                await ReleaseLeaseBestEffortAsync(ct).ConfigureAwait(false);
+                await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
                 LogStopped();
                 if (becameStopped) {
                     await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
@@ -652,7 +653,7 @@ namespace OpenAstroAra.Server.Services {
                 var startPointing = CurrentMountPointingJnow();
                 // One PA-session lease renewer for the whole run: the stages share its clock, so a
                 // hand-off never renews twice back to back.
-                var renew = MakeLeaseRenewer(guiderClient, ct);
+                Func<Task> renew = () => RenewLeaseAsync(ct);
 
                 // The stages run in order from the one the user started at; each live loop returns
                 // when the user taps Next, and the check ends the run itself (state `checked`).
@@ -866,31 +867,14 @@ namespace OpenAstroAra.Server.Services {
             ct.ThrowIfCancellationRequested();
         }
 
-        /// <summary>The guider PA-session lease renewer for a run: best-effort, at most once per
-        /// <see cref="LeaseRenewInterval"/>.</summary>
-        private Func<Task> MakeLeaseRenewer(PHD2Guider guiderClient, CancellationToken ct) {
-            var lastRenew = DateTimeOffset.UtcNow;
-            return async () => {
-                var now = DateTimeOffset.UtcNow;
-                if (now - lastRenew <= LeaseRenewInterval) {
-                    return;
-                }
-                // Renewal is best-effort: a transient RPC fault must not abort a long adjust
-                // session (the interval leaves ~2.5 renew windows inside the 600s lease, and an
-                // expired lease just makes captures fail → the paused path).
-                try {
-                    await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
-                    lastRenew = now;
-                } catch (OperationCanceledException) {
-                    throw;
-                } catch (GuiderRpcException ex) {
-                    LogLeaseRenewFailed(ex);
-                } catch (InvalidOperationException ex) {
-                    // Guider dropped mid-session — captures will fail the same way; let the
-                    // solve-failure path (pause + retry) own the outcome.
-                    LogLeaseRenewFailed(ex);
-                }
-            };
+        /// <summary>The guider PA-session lease renewer for a run: the custody module renews it, at most once
+        /// per its interval.</summary>
+        private Task RenewLeaseAsync(CancellationToken ct) {
+            GuideCameraCustody.Claim? claim;
+            lock (_gate) {
+                claim = _claim;
+            }
+            return claim?.RenewIfDueAsync(ct) ?? Task.CompletedTask;
         }
 
         /// <summary>Single-frame mode: park until the client asks for a frame (or switches back to
@@ -1264,7 +1248,7 @@ namespace OpenAstroAra.Server.Services {
             }
             await PublishErrorAsync(reason, ex.Message).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("failed", CancellationToken.None).ConfigureAwait(false);
-            await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
+            await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
 
         private static double Wrap180(double deg) => ((deg + 540.0) % 360.0) - 180.0;
@@ -1329,21 +1313,16 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // Releasing the lease must not fail Stop: the guider may already be disconnected (nothing to
-        // release, and the lease auto-expires), or the daemon may reject the call.
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "Lease release is best-effort: Stop must always succeed and the lease auto-expires. Log-and-recover boundary.")]
-        private async Task ReleaseLeaseBestEffortAsync(CancellationToken ct) {
-            PHD2Guider guiderClient;
-            try {
-                guiderClient = _guider.RequireConnectedGuider();
-            } catch (InvalidOperationException) {
-                return;
+        // Releasing the camera must not fail Stop: the custody module logs a release fault (the guider may
+        // already be disconnected, and the lease auto-expires).
+        private async Task ReleaseLeaseBestEffortAsync() {
+            GuideCameraCustody.Claim? claim;
+            lock (_gate) {
+                claim = _claim;
+                _claim = null;
             }
-            try {
-                await guiderClient.SetPaSessionAsync(active: false, timeoutS: null, ct).ConfigureAwait(false);
-            } catch (Exception ex) {
-                LogLeaseReleaseFailed(ex);
+            if (claim is not null) {
+                await claim.ReleaseAsync().ConfigureAwait(false);
             }
         }
 
@@ -1484,8 +1463,6 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4511, Level = LogLevel.Information, Message = "§45 polar-align routine stopped (PA-session lease released)")]
         private partial void LogStopped();
 
-        [LoggerMessage(EventId = 4512, Level = LogLevel.Warning, Message = "§45 PA-session lease release failed (best-effort; the lease auto-expires)")]
-        private partial void LogLeaseReleaseFailed(Exception exception);
 
         [LoggerMessage(EventId = 4513, Level = LogLevel.Warning, Message = "§45 WS publish of a polar-align event failed (best-effort)")]
         private partial void LogWsPublishFailed(Exception exception);
@@ -1511,8 +1488,6 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4519, Level = LogLevel.Warning, Message = "§45.13 polar-alignment session row insert failed (best-effort)")]
         private partial void LogSessionRowFailed(Exception exception);
 
-        [LoggerMessage(EventId = 4520, Level = LogLevel.Warning, Message = "§45 PA-session lease renewal failed (best-effort; retrying next iteration — the lease has margin)")]
-        private partial void LogLeaseRenewFailed(Exception exception);
 
         [LoggerMessage(EventId = 4521, Level = LogLevel.Information, Message = "§45 live frame unavailable: {Reason}")]
         private partial void LogLiveFrameUnavailable(string reason);
