@@ -20,6 +20,7 @@ import '../../widgets/inline_choices.dart' show InlineConfirm;
 import 'simple_preview_panel.dart' show SimpleShutterButton, formatExposure;
 import 'simple_device_windows.dart' show SimpleWindowButton;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, simpleRailScale;
+import '../../util/reduce_motion.dart';
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 
@@ -681,6 +682,10 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
   /// Bias picked by hand; null: on when the library lacks it (#1790).
   bool? _biasPicked;
 
+  /// The gain and temperature groups opened or closed by hand; the rest
+  /// follow the plan (its pair open).
+  final _folds = <String, bool>{};
+
   String _age(AppLocalizations l, DateTime at) {
     final d = DateTime.now().toUtc().difference(at);
     return d.inDays < 14
@@ -730,6 +735,30 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       for (final d in darks)
         if (now.difference(d.capturedUtc) > kSimpleLibraryOldAfter) d,
     };
+    String pair(int? gain, double? t) =>
+        '${gain ?? ''}-${t?.toStringAsFixed(0) ?? ''}';
+    // Longest exposure first in each group, as the list was.
+    final groups = <String, List<DarkLibraryEntry>>{};
+    for (final d in [...darks]
+      ..sort((a, b) => b.exposureSeconds.compareTo(a.exposureSeconds))) {
+      (groups[pair(d.gain, d.temperatureC)] ??= []).add(d);
+    }
+    final needed = need == null ? null : pair(need.gain, temp);
+    bool isOpen(String id) => _folds[id] ?? id == needed;
+    Widget darkRow(String id, DarkLibraryEntry d, {required bool withSettings}) =>
+        _setRow(
+          [
+            _secs(d.exposureSeconds),
+            if (withSettings) settings(d.gain, d.temperatureC),
+          ].where((s) => s.isNotEmpty).join(' · '),
+          [
+            l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
+            if (d.camera == null) l.calibrationLibraryNoCamera,
+          ].join(' · '),
+          covered: !old.contains(d),
+          tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
+          key: Key('simple-calibration-dark-$id-${d.exposureSeconds.round()}'),
+        );
     final (String head, String? detail, bool? ok) = switch (cover) {
       null => (l.calibrationLibraryNoPlan, null, null),
       _ when darks.isEmpty && bias.isEmpty => (
@@ -815,20 +844,56 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
         if (darks.isEmpty)
           Text(l.calibrationLibraryNone, style: _dim)
         else
+          // One row per gain and temperature (a plan uses one pair), its
+          // darks under it once opened; a pair with one dark stays a row.
           _rows([
-            for (final d in [...darks]
-              ..sort((a, b) => b.exposureSeconds.compareTo(a.exposureSeconds)))
-              _setRow(
-                [_secs(d.exposureSeconds), settings(d.gain, d.temperatureC)]
-                    .where((s) => s.isNotEmpty)
-                    .join(' · '),
-                [
-                  l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
-                  if (d.camera == null) l.calibrationLibraryNoCamera,
-                ].join(' · '),
-                covered: !old.contains(d),
-                tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
-              ),
+            for (final MapEntry(key: id, value: sets) in groups.entries)
+              if (sets.length == 1)
+                darkRow(id, sets.single, withSettings: true)
+              else ...[
+                InkWell(
+                  key: Key('simple-calibration-darks-group-$id'),
+                  onTap: () => setState(() => _folds[id] = !isOpen(id)),
+                  child: Semantics(
+                    expanded: isOpen(id),
+                    child: Row(
+                      spacing: AraSpace.s8,
+                      children: [
+                        AnimatedRotation(
+                          turns: isOpen(id) ? 0.25 : 0,
+                          duration: reduceMotionOf(context)
+                              ? Duration.zero
+                              : const Duration(milliseconds: 150),
+                          child: const Icon(
+                            Icons.chevron_right,
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                        Expanded(
+                          child: _setRow(
+                            settings(sets.first.gain, sets.first.temperatureC),
+                            [
+                              l.calibrationDarkGroupCount(sets.length),
+                              '${_secs(sets.last.exposureSeconds)}–${_secs(sets.first.exposureSeconds)}',
+                              _age(l, sets.map((d) => d.capturedUtc).reduce((a, b) => a.isAfter(b) ? a : b)),
+                            ].join(' · '),
+                            covered: !sets.any(old.contains),
+                            tag: sets.any(old.contains)
+                                ? l.calibrationOld
+                                : l.calibrationOnFileTag,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (isOpen(id))
+                  for (final d in sets)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 32),
+                      child: darkRow(id, d, withSettings: false),
+                    ),
+              ],
           ]),
         _section(l.calibrationBias),
         if (bias.isEmpty)
@@ -946,8 +1011,27 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
   String? _deleteAsk;
 
   @override
+  void initState() {
+    super.initState();
+    // The status is read once per rig: read it again each time the tab
+    // opens, so an old failure doesn't stay up.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(guiderCalibrationProvider.notifier).refresh();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    // A Guider back from a restart: its files read again.
+    ref.listen(
+      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
+      (was, now) {
+        if (now && was == false) {
+          ref.read(guiderCalibrationProvider.notifier).refresh();
+        }
+      },
+    );
     final guider = ref.watch(guiderStatusProvider).value;
     if (guider == null || !guider.isConnected) {
       return Text(l.calibrationGuideNoGuider, style: _dim);
@@ -957,6 +1041,9 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
     final notifier = ref.read(guiderCalibrationProvider.notifier);
     final busy = cal.isLoading;
     final guiding = guider.isBusy;
+    // No status (still reading, a failed read, or the rig can't reach the
+    // Guider, as during its restart) is unknown, never "Not built".
+    final unknown = status == null;
     final darks = status?.darkLibraryExists ?? false;
     final defects = status?.defectMapExists ?? false;
     final min = status?.darkMinExposureSecondsLoaded,
@@ -966,7 +1053,7 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
         ? l.calibrationGuideCovers(_secs(min), _secs(max))
         : l.calibrationGuideReady;
     // Building covers the guide scope and shoots with it: never under guiding.
-    VoidCallback? build(Future<void> Function() action) => busy || guiding
+    VoidCallback? build(Future<void> Function() action) => busy || guiding || unknown
         ? null
         : () => _askGuideCover(context, ref, action);
     // A rebuild takes minutes of frames with the scope covered: Delete asks
@@ -1017,10 +1104,40 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
+        if (unknown && busy)
+          Text(l.calibrationGuideChecking, style: _dim)
+        else if (unknown)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: AraColors.border),
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: AraSpace.s8,
+              children: [
+                Text(
+                  l.calibrationGuideUnread,
+                  style: kSimpleText.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AraColors.accentBusy,
+                  ),
+                ),
+                Text(l.calibrationGuideUnreadNote, style: _dim),
+                SimpleWindowButton(
+                  key: const Key('simple-calibration-guide-retry'),
+                  outlined: true,
+                  label: l.calibrationGuideRetry,
+                  onTap: notifier.refresh,
+                ),
+              ],
+            ),
+          ),
         _section(l.calibrationGuideDarks),
         _rows([
           _setRow(
-            darks ? covers : l.calibrationGuideNotBuilt,
+            darks ? covers : unknown ? '—' : l.calibrationGuideNotBuilt,
             null,
             covered: darks,
             tag: darks ? l.calibrationOnFileTag : null,
@@ -1045,7 +1162,11 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
         _section(l.calibrationGuideDefect),
         _rows([
           _setRow(
-            defects ? l.calibrationGuideReady : l.calibrationGuideNotBuilt,
+            defects
+                ? l.calibrationGuideReady
+                : unknown
+                ? '—'
+                : l.calibrationGuideNotBuilt,
             null,
             covered: defects,
             tag: defects ? l.calibrationOnFileTag : null,

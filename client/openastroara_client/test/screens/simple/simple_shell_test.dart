@@ -2318,6 +2318,35 @@ void main() {
     expect(card.top, greaterThanOrEqualTo(strip.bottom), reason: 'strip $strip, card $card');
   });
 
+  testWidgets('with Preflight showing on a window wide enough for both, the status card stays under the top strip, beside the steps', (tester) async {
+    final c = await _pump(tester, const Size(1920, 1080));
+    await _startPreflight(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final strip = tester.getRect(find.byKey(const Key('preflight-strip')));
+    final card = tester.getRect(find.byType(SimpleStatusCard));
+    expect(card.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight), reason: 'strip $strip, card $card');
+    expect(card.right, lessThan(strip.left), reason: 'beside the steps, never over them');
+  });
+
+  testWidgets('with Preflight showing, a status card tall enough to move beside the left rail never runs over the steps', (tester) async {
+    // 1760 wide: a 420 px card fits left of the steps at the inset, but not
+    // once it moves beside the rail.
+    final c = await _pump(tester, const Size(1760, 700));
+    await _startPreflight(tester);
+    for (var i = 0; i < 3; i++) {
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message $i: the camera did not answer in time');
+    }
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final strip = tester.getRect(find.byKey(const Key('preflight-strip')));
+    final card = tester.getRect(find.byType(SimpleStatusCard));
+    expect(card.left, greaterThan(kSimpleInset), reason: 'precondition: beside the rail, card $card');
+    expect(card.right < strip.left || card.top >= strip.bottom, isTrue, reason: 'strip $strip, card $card');
+  });
+
   testWidgets('in the immersive view the status card stays, in the top-left corner', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true);
     await _frame(tester, c);

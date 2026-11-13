@@ -1,0 +1,222 @@
+<title>Ara Calibration and Pills Mock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: three studies stacked (Darks & bias, Guide Camera states, status pill), each a row of 340 pt Calibration panels or screen crops. Single dark look = Ara's own palette. */
+:root{
+  color-scheme:dark;
+  --bg:#141414; --app:#1A1A1A; --panel:#262626; --panel2:#2E2E2E; --input:#333;
+  --tile:rgba(56,56,56,.55); --border:#404040; --fg:#E0E0E0; --fg2:#A0A0A0; --fg3:#606060;
+  --ok:#4CAF50; --warn:#FFB300; --info:#42A5F5; --sel:#1976D2; --err:#FF8A80;
+  --sky1:#2b3157; --sky2:#141a33;
+  --sans:"Roboto",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:44px}
+h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance}
+h2{font-size:17px;font-weight:600;margin:0 0 6px}
+p{margin:0}
+.lede,.note{color:var(--fg2);max-width:72ch;line-height:1.5}
+.note b,.lede b{color:var(--fg)}
+.note{margin-bottom:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+.tab{background:var(--panel);color:var(--fg2);border:1px solid var(--border);border-radius:999px;padding:7px 14px;font:inherit;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--sel);border-color:var(--sel);color:#fff}
+.tab:focus-visible,button:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.frames{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.frame{display:grid;gap:6px;min-width:0}
+.cap{font-size:12px;color:var(--fg2);letter-spacing:.04em;text-transform:uppercase}
+
+/* Calibration panel */
+.cal{width:340px;max-width:100%;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;display:grid;gap:8px;align-content:start}
+.cal .seg{display:flex;gap:2px;padding:2px;background:var(--tile);border-radius:8px}
+.cal .seg span{flex:1;text-align:center;padding:9px 0;border-radius:8px;color:var(--fg)}
+.cal .seg .on{background:var(--sel);color:#fff}
+.sec{color:var(--fg2);font-size:13px;margin-top:6px}
+.box{border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+.box b{color:var(--ok);font-weight:600}
+.rows{display:grid}
+.r{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border);min-width:0}
+.r:first-child{border-top:none}
+.r .t{flex:1;min-width:0}
+.r .t small{display:block;color:var(--fg2);font-size:13px}
+.clip .t{white-space:nowrap;overflow:hidden}
+.pill{font-size:12px;border-radius:10px;padding:2px 8px;border:1px solid var(--ok);color:var(--ok);white-space:nowrap}
+.pill.old{border-color:var(--warn);color:var(--warn)}
+.pill.dim{border-color:var(--fg3);color:var(--fg2)}
+.grp{cursor:pointer;background:none;border:none;color:inherit;font:inherit;text-align:left;width:100%;display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border);min-height:44px}
+.rows .grp:first-child{border-top:none}
+.chev{width:18px;color:var(--fg2);transition:transform .15s;flex:none}
+.grp[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.kids{padding-left:28px}
+.kids .r{padding:6px 0}
+.more{background:none;border:none;color:var(--info);font:inherit;padding:10px 0;text-align:left;cursor:pointer;min-height:44px}
+.btns{display:flex;gap:8px}
+.btn{flex:1;min-height:48px;border-radius:10px;background:var(--tile);color:var(--fg);border:none;font:inherit;font-weight:600}
+.btn.out{background:none;border:1px solid var(--border)}
+.btn[disabled]{opacity:.4}
+.oo{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border)}
+.oo .seg{width:150px}
+.dim{color:var(--fg2);font-size:13px;line-height:1.4}
+.errt{color:var(--err);font-size:13px}
+.spin{width:14px;height:14px;border:2px solid var(--fg3);border-top-color:var(--fg);border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px}
+@media (prefers-reduced-motion:no-preference){.spin{animation:sp 1s linear infinite}}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bad{outline:2px dashed var(--err);outline-offset:3px;border-radius:6px}
+
+/* screen crops for the pill */
+.screen{width:560px;max-width:100%;height:300px;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:linear-gradient(180deg,var(--sky1),var(--sky2))}
+.screen.narrow{width:360px}
+.strip{position:absolute;left:12px;right:12px;top:12px;height:44px;border-radius:12px;background:#202020;border:1px solid #333;display:flex;align-items:center;gap:18px;padding:0 14px;color:var(--fg)}
+.strip i{width:18px;height:14px;border-radius:3px;background:#cfcfcf;display:inline-block;position:relative}
+.strip i::after{content:"";position:absolute;right:-4px;top:-4px;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.steps{position:absolute;top:68px;display:flex;align-items:center;gap:10px;background:#1d1d1d;border:1px solid #333;border-radius:12px;padding:6px 10px;white-space:nowrap;font-size:13px}
+.steps .s{display:flex;gap:6px;align-items:center;padding:5px 8px;border-radius:8px;color:var(--fg)}
+.steps .s.on{background:#16304f}
+.steps .n{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--fg2);display:grid;place-items:center;font-size:11px}
+.steps .on .n{border-color:var(--info);color:var(--info)}
+.steps .gt{color:var(--fg3)}
+.spill{position:absolute;left:12px;background:#1d1d1d;border:1px solid #333;border-radius:12px;padding:9px 12px;display:flex;gap:8px;align-items:center;font-size:13px;white-space:nowrap}
+.spill .d{width:9px;height:9px;border-radius:50%;background:var(--warn)}
+.spill b{font-weight:500}
+.spill span{color:var(--fg2)}
+.gapmark{position:absolute;left:30px;width:2px;background:var(--err)}
+.gaplbl{position:absolute;left:40px;font-size:11px;color:var(--err)}
+.rail{position:absolute;left:12px;width:48px;bottom:12px;top:180px;border-radius:12px;background:#1d1d1d;border:1px solid #333}
+.screen.narrow .rail{top:200px}
+.verdict{color:var(--fg2);font-size:13px;line-height:1.45;max-width:640px;margin-top:10px}
+.verdict b{color:var(--fg)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Darks &amp; bias, Guide Camera files, status pill</h1>
+    <p class="lede">Mocks for the second round of feedback (13 Nov). The Calibration panels are 340 pt, the width the mode's panel has in the app. The example rig has 14 darks at three gain/temperature pairs.</p>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <h2>1 · Calibration › Darks &amp; bias: fold the darks</h2>
+    <p class="note">Today every dark is its own row, longest exposure first, so a big library runs past the panel and its lines get cut off. Pick a fold:</p>
+    <div class="tabs" role="tablist" aria-label="Darks fold">
+      <button class="tab" role="tab" aria-selected="true" data-d="a">A · Group by gain &amp; temperature (recommended)</button>
+      <button class="tab" role="tab" aria-selected="false" data-d="b">B · First 4, then "Show all 14"</button>
+    </div>
+    <div class="frames">
+      <div class="frame"><span class="cap">Today</span><div class="cal" id="today"></div></div>
+      <div class="frame"><span class="cap" id="dcap">Proposed · A</span><div class="cal" id="prop"></div></div>
+    </div>
+    <p class="verdict" id="dnote"></p>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <h2>2 · Guide Camera: the bad-pixel map was not forgotten</h2>
+    <p class="note">I checked the rig at 12:43. <b>The map is on disk, matches the camera and is in use</b> (profile 3, <code>PHD2_defect_map_3.txt</code>, built 11 Nov 23:28, <code>defect_map_loaded: true</code>). The guider package was last installed on 31 Oct, and its files live in <code>/var/lib/openastro-guider</code>, which an update leaves alone. So a rebuild did not delete it. But the guider restarted twice at 12:01–12:02, and while Ara can't read the guider's file status (a restart, a failed read, or still loading), this tab shows <b>Not built</b> and <b>Build bad-pixel map</b>. That is very likely what you saw. The fix is in Ara: show "unknown" as unknown.</p>
+    <div class="tabs" role="tablist" aria-label="Guide Camera state">
+      <button class="tab" role="tab" aria-selected="true" data-g="read">Ara can't read it (restart)</button>
+      <button class="tab" role="tab" aria-selected="false" data-g="loading">Still reading</button>
+      <button class="tab" role="tab" aria-selected="false" data-g="ok">Read: on file, in use</button>
+      <button class="tab" role="tab" aria-selected="false" data-g="idle">Read: on file, camera off</button>
+    </div>
+    <div class="frames">
+      <div class="frame"><span class="cap">Today</span><div class="cal" id="gtoday"></div></div>
+      <div class="frame"><span class="cap">Proposed</span><div class="cal" id="gprop"></div></div>
+    </div>
+    <p class="verdict"><b>Also in this change:</b> the read retries when the guider comes back after a restart, so the tab stops showing an old failure. The dark library really is missing on the rig (<code>dark_library_exists: false</code>). That's a separate fact, and the tab is right to offer Build for it.</p>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <h2>3 · Status pill under the top strip</h2>
+    <p class="note">The status card starts below the Preflight steps whenever they show (<code>messagesTop</code> in <code>simple_shell.dart</code>), even when the centred steps leave the left side free. The proposal places the card right under the strip, the usual spot, whenever the steps leave room for it. It drops below them only when the two would overlap. The other pills share that card, so they all move with it.</p>
+    <div class="frames">
+      <div class="frame"><span class="cap">Today · iPad</span>
+        <div class="screen">
+          <div class="strip"><i></i><i></i><i></i><i></i></div>
+          <div class="steps" style="right:-60px"><span class="s on"><span class="n">1</span>Plan</span><span class="gt">›</span><span class="s"><span class="n">2</span>Focus</span><span class="gt">›</span><span class="s"><span class="n">3</span>Polar align</span><span class="gt">›</span><span class="s"><span class="n">4</span>Guide</span></div>
+          <div class="gapmark" style="top:57px;height:62px"></div><span class="gaplbl" style="top:80px">gap</span>
+          <div class="spill" style="top:120px"><span class="d"></span><b>Preflight</b><span>Plan: waiting for you</span></div>
+          <div class="rail"></div>
+        </div></div>
+      <div class="frame"><span class="cap">Proposed · iPad</span>
+        <div class="screen">
+          <div class="strip"><i></i><i></i><i></i><i></i></div>
+          <div class="steps" style="right:-60px"><span class="s on"><span class="n">1</span>Plan</span><span class="gt">›</span><span class="s"><span class="n">2</span>Focus</span><span class="gt">›</span><span class="s"><span class="n">3</span>Polar align</span><span class="gt">›</span><span class="s"><span class="n">4</span>Guide</span></div>
+          <div class="spill" style="top:68px"><span class="d"></span><b>Preflight</b><span>Plan: waiting for you</span></div>
+          <div class="rail"></div>
+        </div></div>
+      <div class="frame"><span class="cap">Proposed · narrow window (stays stacked)</span>
+        <div class="screen narrow">
+          <div class="strip"><i></i><i></i><i></i></div>
+          <div class="steps" style="left:12px;right:12px;justify-content:center"><span class="s on"><span class="n">1</span>Plan</span><span class="gt">›</span><span class="s"><span class="n">2</span>Focus</span><span class="gt">›</span><span class="s"><span class="n">3</span>Polar</span></div>
+          <div class="spill" style="top:120px;right:12px"><span class="d"></span><b>Preflight</b><span>Plan: waiting for you</span></div>
+          <div class="rail"></div>
+        </div></div>
+    </div>
+    <p class="verdict">Rule: the card sits at the strip's line when its left inset, plus its widest width (420 px), plus 12 px is no more than where the centred steps begin. Otherwise it stays under them, as today. Other pills (camera, dew, questions) live in the same card, so they follow the same rule.</p>
+  </section>
+</div>
+
+<script>
+const darks=[
+ ['300 s','gain 100 · −10 °C','3 days · 20 frames','On file'],['180 s','gain 100 · −10 °C','3 days · 20 frames','On file'],['120 s','gain 100 · −10 °C','3 days · 20 frames','On file'],['60 s','gain 100 · −10 °C','3 days · 20 frames','On file'],['30 s','gain 100 · −10 °C','3 days · 20 frames','On file'],
+ ['300 s','gain 0 · −10 °C','2 months · 15 frames','Old'],['180 s','gain 0 · −10 °C','2 months · 15 frames','Old'],['120 s','gain 0 · −10 °C','2 months · 15 frames','Old'],['60 s','gain 0 · −10 °C','2 months · 15 frames','Old'],
+ ['300 s','gain 100 · 0 °C','5 weeks · 20 frames','On file'],['180 s','gain 100 · 0 °C','5 weeks · 20 frames','On file'],['120 s','gain 100 · 0 °C','5 weeks · 20 frames','On file'],['60 s','gain 100 · 0 °C','5 weeks · 20 frames','On file'],['10 s','gain 100 · 0 °C','5 weeks · camera not recorded · 20 frames','On file']];
+const head=`<div class="seg"><span>Flats</span><span class="on">Darks &amp; bias</span><span>Guide Camera</span></div>
+ <div class="sec">ZWO ASI533MC Pro · reused for months</div>
+ <div class="box"><b>Covers your plan</b></div><div class="sec">Darks</div>`;
+const tail=`<div class="sec">Bias</div><div class="rows"><div class="r"><div class="t">gain 100 · offset 50 · 1×1<small>3 days · 50 frames</small></div><span class="pill">On file</span></div></div>
+ <div class="sec">Build or refresh</div><div class="btns"><button class="btn">Build darks</button><button class="btn out">Add to queue</button></div>`;
+const row=d=>`<div class="r"><div class="t">${d[0]} · ${d[1]}<small>${d[2]}</small></div><span class="pill ${d[3]==='Old'?'old':''}">${d[3]}</span></div>`;
+document.getElementById('today').innerHTML=head+`<div class="rows clip">${[...darks].sort((a,b)=>parseInt(b[0])-parseInt(a[0])).map(row).join('')}</div>`+tail;
+function groups(){
+  const g={};darks.forEach(d=>{(g[d[1]]=g[d[1]]||[]).push(d)});
+  return Object.entries(g).map(([k,v],i)=>{
+    const old=v.some(d=>d[3]==='Old');const secs=v.map(d=>parseInt(d[0]));
+    const kidRow=d=>`<div class="r"><div class="t">${d[0]}<small>${d[2]}</small></div><span class="pill ${d[3]==='Old'?'old':''}">${d[3]}</span></div>`;
+    return `<button class="grp" aria-expanded="${i===0}" data-i="${i}"><span class="chev">▸</span><span class="t" style="flex:1;min-width:0">${k}<small style="display:block;color:var(--fg2);font-size:13px">${v.length} exposures · ${Math.min(...secs)}–${Math.max(...secs)} s · ${v[0][2].split(' · ')[0]}</small></span><span class="pill ${old?'old':''}">${old?'Old':'On file'}</span></button><div class="kids" ${i===0?'':'hidden'}>${v.map(kidRow).join('')}</div>`;
+  }).join('');
+}
+const notesD={
+ a:"<b>A</b> puts one row per gain and temperature, which is how the library is used (a plan needs one pair). Each row shows a count, the exposure range, its age and the worst tag. The pair the queued plan needs opens by itself. Three rows replace fourteen, and the rows stay short enough to fit 340 pt.",
+ b:"<b>B</b> keeps today's flat list, but shows only the first four rows and a \"Show all 14\" link. It's simpler to build, but you have to read every row to see which settings you have, and the long lines still get cut."};
+function renderD(v){
+  document.getElementById('dcap').textContent='Proposed · '+v.toUpperCase();
+  document.getElementById('dnote').innerHTML=notesD[v];
+  const sorted=[...darks].sort((a,b)=>parseInt(b[0])-parseInt(a[0]));
+  const body=v==='a'?`<div class="rows">${groups()}</div>`:`<div class="rows">${sorted.slice(0,4).map(row).join('')}<div class="kids" hidden style="padding:0">${sorted.slice(4).map(row).join('')}</div></div><button class="more" data-more>Show all 14</button>`;
+  document.getElementById('prop').innerHTML=head+body+tail;
+  document.querySelectorAll('[data-d]').forEach(t=>t.setAttribute('aria-selected',t.dataset.d===v));
+}
+document.getElementById('prop').addEventListener('click',e=>{
+  const g=e.target.closest('.grp');
+  if(g){const open=g.getAttribute('aria-expanded')!=='true';g.setAttribute('aria-expanded',open);g.nextElementSibling.hidden=!open;}
+  const m=e.target.closest('[data-more]');
+  if(m){const k=m.previousElementSibling.querySelector('.kids');k.hidden=!k.hidden;m.textContent=k.hidden?'Show all 14':'Show fewer';}
+});
+document.querySelectorAll('[data-d]').forEach(t=>t.addEventListener('click',()=>renderD(t.dataset.d)));
+renderD('a');
+
+const gHead=`<div class="seg"><span>Flats</span><span>Darks &amp; bias</span><span class="on">Guide Camera</span></div>`;
+const darksBlock=`<div class="sec">Dark library</div><div class="rows"><div class="r"><div class="t">Not built</div></div></div><div class="btns"><button class="btn">Build dark library</button></div>`;
+const darksUnknown=`<div class="sec">Dark library</div><div class="rows"><div class="r"><div class="t" style="color:var(--fg2)">—</div></div></div><div class="btns"><button class="btn" disabled>Build dark library</button></div>`;
+const foot=`<p class="dim">Building asks you to cover the guide scope first.</p>`;
+const todayG={
+ read:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows bad"><div class="r"><div class="t">Not built</div></div></div><div class="btns"><button class="btn">Build bad-pixel map</button></div>`+foot+`<p class="errt">Couldn't reach the Guider.</p>`,
+ loading:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows bad"><div class="r"><div class="t">Not built</div></div></div><div class="btns"><button class="btn" disabled>Build bad-pixel map</button></div>`+foot,
+ ok:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t">Built</div><span class="pill">On file</span></div><div class="oo"><span>Use while guiding</span><div class="seg"><span class="on">On</span><span>Off</span></div></div></div><div class="btns"><button class="btn">Rebuild</button><button class="btn out">Delete</button></div>`+foot,
+ idle:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t">Built</div><span class="pill">On file</span></div><div class="oo"><span>Use while guiding</span><div class="seg"><span>On</span><span class="on">Off</span></div></div></div><div class="btns"><button class="btn">Rebuild</button><button class="btn out">Delete</button></div>`+foot};
+const propG={
+ read:gHead+`<div class="box"><span style="color:var(--warn);font-weight:600">Couldn't read the Guider's files</span><p class="dim">The Guider may be restarting. Ara tries again when it is back.</p></div>`+darksUnknown+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t" style="color:var(--fg2)">—</div></div></div><div class="btns"><button class="btn" disabled>Build bad-pixel map</button></div><div class="btns"><button class="btn out">Try again</button></div>`,
+ loading:gHead+`<p class="dim"><span class="spin"></span>Checking the Guider's files…</p>`+darksUnknown+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t" style="color:var(--fg2)">—</div></div></div><div class="btns"><button class="btn" disabled>Build bad-pixel map</button></div>`,
+ ok:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t">Built 11 Nov · in use</div><span class="pill">On file</span></div><div class="oo"><span>Use while guiding</span><div class="seg"><span class="on">On</span><span>Off</span></div></div></div><div class="btns"><button class="btn">Rebuild</button><button class="btn out">Delete</button></div>`+foot,
+ idle:gHead+darksBlock+`<div class="sec">Bad-pixel map</div><div class="rows"><div class="r"><div class="t">Built 11 Nov<small>Loads when the Guide Camera connects</small></div><span class="pill">On file</span></div></div><div class="btns"><button class="btn">Rebuild</button><button class="btn out">Delete</button></div>`+foot};
+function renderG(v){
+  document.getElementById('gtoday').innerHTML=todayG[v];
+  document.getElementById('gprop').innerHTML=propG[v];
+  document.querySelectorAll('[data-g]').forEach(t=>t.setAttribute('aria-selected',t.dataset.g===v));
+}
+document.querySelectorAll('[data-g]').forEach(t=>t.addEventListener('click',()=>renderG(t.dataset.g)));
+renderG('read');
+</script>
