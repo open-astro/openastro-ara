@@ -102,11 +102,10 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
   @override
   Widget build(BuildContext context) {
     final section = ref.watch(storageSettingsProvider);
-    // A new rig or profile resets the section (migrated_sections.dart): load it again.
-    ref.listen(storageSettingsProvider, (prev, next) {
-      if (next.source == SectionSource.notLoaded &&
-          next.lastFailure == null &&
-          prev?.source != SectionSource.notLoaded) {
+    // A new rig or profile resets the section (migrated_sections.dart), also
+    // after a failed load: load it again.
+    ref.listen(storageSettingsProvider, (_, next) {
+      if (next.source == SectionSource.notLoaded && next.lastFailure == null) {
         _hydrate();
       }
     });
