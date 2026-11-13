@@ -259,8 +259,8 @@ class _Battery extends StatelessWidget {
   }
 }
 
-/// The tiles: two fixed right columns, the left two sharing the rest. Which
-/// areas show comes from the rig's profile.
+/// The tiles: two fixed right columns, the left two sharing the rest; on a
+/// phone, one column. Which areas show comes from the rig's profile.
 class _Grid extends StatelessWidget {
   const _Grid({required this.s, required this.onOpen});
 
