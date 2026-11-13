@@ -46,7 +46,7 @@ internal static class ProfileSectionSamples {
         ["TrackingCalibration"] = new TrackingCalibrationDto(CeilingSeconds: 45, MeasuredUtc: Now, PolarAlignErrorArcmin: 3,
             PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []),
         ["SkyModelCalibration"] = new SkyModelCalibrationDto(Now, 5, []),
-        ["CalibrationState"] = new CalibrationStateDto(new GuiderCalibrationEntryDto(true, Now), new GuiderCalibrationEntryDto()),
+        ["CalibrationState"] = new CalibrationStateDto(new GuiderCalibrationEntryDto(true, Now), new GuiderCalibrationEntryDto(true, Now)),
         ["EquipmentIdentity"] = new EquipmentIdentityDto(new Dictionary<string, DeviceIdentityDto> { ["camera"] = new("uid-1", "Sample cam", Now) }),
         ["SavedTargets"] = new SavedTargetsDto([new SavedTargetDto("M31", ["Andromeda"], 10.5, 41.25, "typed", Now)]),
         ["FilterFocusOffsets"] = new FilterFocusOffsetsDto([new FilterFocusOffsetDto(2, 14)]),
@@ -63,11 +63,8 @@ internal static class ProfileSectionSamples {
         var ps = ctor.GetParameters();
         var nudged = false;
         for (var i = 0; i < ps.Length; i++) {
-            var t = ps[i].ParameterType;
-            if (t == typeof(string)) { args[i] = args[i] + "-x"; nudged = true; }
-            else if (t == typeof(int)) { args[i] = (int)args[i]! + 1; nudged = true; }
-            else if (t == typeof(double)) { args[i] = (double)args[i]! + 1.5; nudged = true; }
-            else if (t == typeof(bool)) { args[i] = !(bool)args[i]!; nudged = true; }
+            var t = Nullable.GetUnderlyingType(ps[i].ParameterType) ?? ps[i].ParameterType;
+            if (t == typeof(string)) { args[i] = args[i] + "-x"; nudged = true; } else if (t == typeof(int)) { args[i] = args[i] is int n ? n + 1 : 7; nudged = true; } else if (t == typeof(double)) { args[i] = args[i] is double d ? d + 1.5 : 7.5; nudged = true; } else if (t == typeof(bool)) { args[i] = args[i] is bool b ? !b : true; nudged = true; }
         }
         if (nudged) { return ctor.Invoke(args); }
         throw new InvalidOperationException($"No sample for section {section.Name}: add one to ProfileSectionSamples.Hand.");
@@ -97,22 +94,42 @@ internal static class ProfileSectionSamples {
 [TestFixture]
 public class ProfileSectionTableTest {
 
-    // The sections that ship in a share file unchanged, by the CTO's decision on #1697: tuning judgement only.
-    private static readonly string[] KeptWhole = [
-        "ImagingDefaults", "Filenames", "SafetyPolicies", "Autofocus", "DiagnosticsMode", "EquipmentConnection",
-        "StretchDefaults", "FilterWheelLabels", "PolarAlign", "Unguided", "GuiderAdvanced", "FilterWheelPolicy",
-    ];
+    [Test]
+    public void The_table_declares_every_section_of_the_snapshot_once() {
+        var declared = ProfileSections.All.Select(x => x.Name).ToList();
+        declared.Should().OnlyHaveUniqueItems();
+        declared.Should().BeEquivalentTo(ProfileSectionSamples.Sections.Select(p => p.Name),
+            "a snapshot section missing from the table is skipped by Capture, Apply, the normalizer and the share strip");
+    }
 
     [Test]
-    public void Every_section_the_share_strip_leaves_whole_is_on_the_approved_keep_list() {
+    public void Every_field_of_every_section_is_classified_kept_or_stripped_exactly_once() {
+        foreach (var section in ProfileSections.All) {
+            var fields = section.DtoType.GetConstructors().OrderByDescending(c => c.GetParameters().Length).First()
+                .GetParameters().Select(p => p.Name!).ToList();
+            var classified = section.Kept.Concat(section.Stripped).Select(f => f.ToUpperInvariant()).ToList();
+            classified.Should().OnlyHaveUniqueItems($"{section.Name} lists a field twice");
+            classified.Should().BeEquivalentTo(fields.Select(f => f.ToUpperInvariant()),
+                $"{section.Name} must classify each DTO field as kept or stripped");
+        }
+    }
+
+    [Test]
+    public void The_share_strip_changes_exactly_the_fields_the_table_says_it_strips() {
         var snap = ProfileSectionSamples.AllSampled();
         var shared = ProfileShareService.StripForShare(snap);
-        var shippedWhole = ProfileSectionSamples.Sections
-            .Where(p => ProfileSectionSamples.Json(p, p.GetValue(shared)) == ProfileSectionSamples.Json(p, p.GetValue(snap)))
-            .Select(p => p.Name)
-            .ToList();
-        shippedWhole.Except(KeptWhole).Should().BeEmpty(
-            "a section the share file carries verbatim must be a deliberate keep, not a default (the donor's saved targets shipped before this)");
+        foreach (var section in ProfileSections.All) {
+            var before = section.ValueIn(snap);
+            var after = section.ValueIn(shared);
+            foreach (var field in section.Kept.Concat(section.Stripped)) {
+                var prop = section.DtoType.GetProperty(field)!;
+                var was = before is null ? null : prop.GetValue(before);
+                var now = after is null ? null : prop.GetValue(after);
+                if (was is null && section.Stripped.Contains(field)) { continue; } // the sample left it empty: a strip shows nothing
+                var changed = JsonSerializer.Serialize(was) != JsonSerializer.Serialize(now);
+                changed.Should().Be(section.Stripped.Contains(field), $"{section.Name}.{field} is {(section.Stripped.Contains(field) ? "stripped" : "kept")}");
+            }
+        }
     }
 
     [Test]
