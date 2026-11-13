@@ -66,7 +66,8 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<ImagingDefaults> getImagingDefaults() async => const ImagingDefaults();
   @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) => _put('imaging', v);
+  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) =>
+      _put('imaging', v);
   @override
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
   @override
@@ -84,7 +85,8 @@ class _FakeProfileApi extends ProfileApi {
   Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) =>
       _put('autofocus', v);
   @override
-  Future<CameraElectronics> getCameraElectronics() async => const CameraElectronics();
+  Future<CameraElectronics> getCameraElectronics() async =>
+      const CameraElectronics();
   @override
   Future<CameraElectronics> putCameraElectronics(CameraElectronics v) =>
       _put('electronics', v);
@@ -114,19 +116,20 @@ void main() {
 
       expect(api.createCalls, 1);
       expect(
-          api.putCalls,
-          containsAll([
-            'site',
-            'optics',
-            'imaging',
-            'phd2',
-            'platesolve',
-            'autofocus',
-            'electronics',
-            'filterset',
-            'storage',
-            'safety'
-          ]));
+        api.putCalls,
+        containsAll([
+          'site',
+          'optics',
+          'imaging',
+          'phd2',
+          'platesolve',
+          'autofocus',
+          'electronics',
+          'filterset',
+          'storage',
+          'safety',
+        ]),
+      );
       expect(draft.savedProfileId, 'profile-1');
     });
 
@@ -134,50 +137,85 @@ void main() {
       final api = _FakeProfileApi()..failSections.add('optics');
       final draft = ProfileDraft()..profileName = 'Rig';
 
-      await expectLater(saveWizardProfile(api, draft), throwsA(isA<Exception>()));
+      await expectLater(
+        saveWizardProfile(api, draft),
+        throwsA(isA<Exception>()),
+      );
       expect(api.createCalls, 1);
-      expect(draft.savedProfileId, 'profile-1',
-          reason: 'id is stamped so a retry re-uses the same profile');
+      expect(
+        draft.savedProfileId,
+        'profile-1',
+        reason: 'id is stamped so a retry re-uses the same profile',
+      );
     });
 
     test('a retry after failure does NOT create a second profile', () async {
       final api = _FakeProfileApi()..failSections.add('optics');
       final draft = ProfileDraft()..profileName = 'Rig';
-      await expectLater(saveWizardProfile(api, draft), throwsA(isA<Exception>()));
+      await expectLater(
+        saveWizardProfile(api, draft),
+        throwsA(isA<Exception>()),
+      );
 
       api.failSections.clear(); // the transient failure clears
       await saveWizardProfile(api, draft); // retry
 
-      expect(api.createCalls, 1, reason: 'createProfile is skipped once savedProfileId is set');
+      expect(
+        api.createCalls,
+        1,
+        reason: 'createProfile is skipped once savedProfileId is set',
+      );
       expect(api.putCalls, containsAll(['site', 'optics', 'imaging', 'phd2']));
     });
 
-    test('aggregates every concurrent section failure into one error', () async {
-      final api = _FakeProfileApi()..failSections.addAll({'site', 'phd2'});
-      final draft = ProfileDraft()..profileName = 'Rig';
+    test(
+      'aggregates every concurrent section failure into one error',
+      () async {
+        final api = _FakeProfileApi()..failSections.addAll({'site', 'phd2'});
+        final draft = ProfileDraft()..profileName = 'Rig';
 
-      await expectLater(
-        saveWizardProfile(api, draft),
-        throwsA(predicate((e) => e.toString().contains('2 profile section'))),
-      );
-    });
+        await expectLater(
+          saveWizardProfile(api, draft),
+          throwsA(predicate((e) => e.toString().contains('2 profile section'))),
+        );
+      },
+    );
   });
 
-  test('#1137: every section dying in transit is a ProfileSaveTransportFailure; a rejected section is not',
-      () async {
+  test('#1137: every section dying in transit is a ProfileSaveTransportFailure; a rejected section is not', () async {
     final api = _FakeProfileApi()..failTransport = true;
     final draft = ProfileDraft()..profileName = 'Lost';
-    await expectLater(saveWizardProfile(api, draft), throwsA(isA<ProfileSaveTransportFailure>()));
-    expect(draft.savedProfileId, 'profile-1', reason: 'the create landed before the link dropped');
+    await expectLater(
+      saveWizardProfile(api, draft),
+      throwsA(isA<ProfileSaveTransportFailure>()),
+    );
+    expect(
+      draft.savedProfileId,
+      'profile-1',
+      reason: 'the create landed before the link dropped',
+    );
 
     final mixed = _FakeProfileApi()..failSections.add('site');
-    await expectLater(saveWizardProfile(mixed, ProfileDraft()..profileName = 'Rejected'),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('1 profile section'))));
+    await expectLater(
+      saveWizardProfile(mixed, ProfileDraft()..profileName = 'Rejected'),
+      throwsA(
+        isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          contains('1 profile section'),
+        ),
+      ),
+    );
   });
 
   test('#1700: a chosen cooling fan is saved; a wizard that left it alone sends nothing', () async {
     final api = _FakeProfileApi();
-    await saveWizardProfile(api, ProfileDraft()..profileName = 'P'..coolingFan = const CoolingFan(deviceId: 'box', portId: 3));
+    await saveWizardProfile(
+      api,
+      ProfileDraft()
+        ..profileName = 'P'
+        ..coolingFan = const CoolingFan(deviceId: 'box', portId: 3),
+    );
     expect(api.putCalls, contains('cooling-fan'));
     final untouched = _FakeProfileApi();
     await saveWizardProfile(untouched, ProfileDraft()..profileName = 'P');

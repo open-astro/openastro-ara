@@ -37,7 +37,10 @@ class _FakeProfileApi extends ProfileApi {
       throw DioException(
         requestOptions: RequestOptions(path: '/profiles'),
         type: DioExceptionType.badResponse,
-        response: Response(requestOptions: RequestOptions(path: '/profiles'), statusCode: 409),
+        response: Response(
+          requestOptions: RequestOptions(path: '/profiles'),
+          statusCode: 409,
+        ),
       );
     }
     created.add(name);
@@ -274,13 +277,21 @@ void main() {
     await pend('Dark site');
     final api = _FakeProfileApi()..busy = true;
 
-    final first = await replayPendingProfileDrafts(store, api, serverKey: 'rig-a:5555');
+    final first = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
 
     expect(first, (0, 1, 0, 0));
     expect((await store.loadAll()).single.name, 'Dark site');
 
     api.busy = false;
-    final second = await replayPendingProfileDrafts(store, api, serverKey: 'rig-a:5555');
+    final second = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
     expect(second, (1, 0, 0, 0));
     expect(await store.loadAll(), isEmpty);
   });
@@ -296,7 +307,9 @@ void main() {
     );
 
     expect(first, (0, 0, 0, 1));
-    expect(api.created, ['Bad value'], reason: 'the profile it did create stays on the rig');
+    expect(api.created, [
+      'Bad value',
+    ], reason: 'the profile it did create stays on the rig');
     expect(await store.loadAll(), isEmpty, reason: 'nothing left to retry');
 
     // The user moves the rig to their real profile; a reconnect must not swap it back.
@@ -309,7 +322,11 @@ void main() {
       serverKey: 'rig-a:5555',
     );
     expect(second, (0, 0, 0, 0));
-    expect(api.selected, isEmpty, reason: 'no re-select of the rejected profile');
+    expect(
+      api.selected,
+      isEmpty,
+      reason: 'no re-select of the rejected profile',
+    );
     expect(api.activeId, 'real');
   });
 
@@ -325,7 +342,11 @@ void main() {
     expect(first, (0, 1, 0, 0));
     final left = (await store.loadAll()).single;
     expect(left.draft.savedProfileId, 'profile-1');
-    expect(left.serverKey, 'rig-a:5555', reason: 'the profile now lives on rig A');
+    expect(
+      left.serverKey,
+      'rig-a:5555',
+      reason: 'the profile now lives on rig A',
+    );
 
     final rigB = _FakeProfileApi();
     final onB = await replayPendingProfileDrafts(

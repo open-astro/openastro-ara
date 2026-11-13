@@ -64,8 +64,8 @@ class _FastProfileApi extends ProfileApi {
       const PlateSolveSettings();
   @override
   Future<PlateSolveSettings> putPlateSolveSettings(
-          PlateSolveSettings v) async =>
-      v;
+    PlateSolveSettings v,
+  ) async => v;
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
       const AutofocusSettings();
@@ -154,75 +154,90 @@ Future<ProviderContainer> _pump(
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  final container = ProviderContainer(overrides: [
-    activeServerProvider.overrideWithValue(server),
-    guiderEquipmentApiProvider.overrideWithValue(guider),
-    guiderCalibrationApiFactoryProvider.overrideWithValue((_) => calibration),
-    // The Done view watches guiderBuildActivityProvider, which would open a
-    // real WS to 'daemon' and leave reconnect timers pending at teardown —
-    // inert it (null stream = empty activity map, the pre-first-tick state).
-    wsEventStreamProvider.overrideWithValue(null),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      activeServerProvider.overrideWithValue(server),
+      guiderEquipmentApiProvider.overrideWithValue(guider),
+      guiderCalibrationApiFactoryProvider.overrideWithValue((_) => calibration),
+      // The Done view watches guiderBuildActivityProvider, which would open a
+      // real WS to 'daemon' and leave reconnect timers pending at teardown —
+      // inert it (null stream = empty activity map, the pre-first-tick state).
+      wsEventStreamProvider.overrideWithValue(null),
+    ],
+  );
   addTearDown(container.dispose);
   // Jump to the final step so the bottom-nav button is "Save Profile" (the
   // finalSave path that provisions the guider + kicks darks).
   container
       .read(wizardControllerProvider.notifier)
       .jumpTo(ProfileWizard.totalSteps);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+      ),
     ),
-  ));
+  );
   await tester.pump();
   return container;
 }
 
 void main() {
   testWidgets(
-      'final Save provisions the guider, kicks darks over the chosen range, '
-      'and lands on the Done view instead of popping', (tester) async {
+    'final Save provisions the guider, kicks darks over the chosen range, '
+    'and lands on the Done view instead of popping',
+    (tester) async {
+      final api = _FastProfileApi();
+      final guider = _FakeGuiderEquipment();
+      final calibration = _FakeCalibration();
+      final container = await _pump(
+        tester,
+        api: api,
+        guider: guider,
+        calibration: calibration,
+      );
+
+      final g = container.read(wizardControllerProvider).draft.guider;
+      g.darkMinExposureMs = 500;
+      g.darkMaxExposureMs = 2000;
+      g.darkFrameCount = 8;
+
+      await tester.tap(find.text('Save Profile'));
+      // Bounded pumps: the Done view's indeterminate darks bar animates
+      // forever, so pumpAndSettle would never settle.
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(guider.pushes, 1, reason: 'guider twin gets the final config');
+      expect(calibration.builds, 1);
+      expect(calibration.lastMinMs, 500);
+      expect(calibration.lastMaxMs, 2000);
+      expect(calibration.lastFrames, 8);
+      // The persisted phd2 section carries the same range (one choice, two
+      // consumers).
+      expect(api.lastPhd2Put?.guideExposureMinMs, 500);
+      expect(api.lastPhd2Put?.guideExposureMaxMs, 2000);
+      // Done view with live darks progress, not an exit.
+      expect(find.text('You\'re all set'), findsOneWidget);
+      expect(find.textContaining('dark library'), findsWidgets);
+      expect(find.widgetWithText(FilledButton, 'Finish'), findsOneWidget);
+    },
+  );
+
+  testWidgets('darks toggle off: no build, wizard exits as before', (
+    tester,
+  ) async {
     final api = _FastProfileApi();
     final guider = _FakeGuiderEquipment();
     final calibration = _FakeCalibration();
-    final container =
-        await _pump(tester, api: api, guider: guider, calibration: calibration);
-
-    final g = container.read(wizardControllerProvider).draft.guider;
-    g.darkMinExposureMs = 500;
-    g.darkMaxExposureMs = 2000;
-    g.darkFrameCount = 8;
-
-    await tester.tap(find.text('Save Profile'));
-    // Bounded pumps: the Done view's indeterminate darks bar animates
-    // forever, so pumpAndSettle would never settle.
-    for (var i = 0; i < 8; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-
-    expect(guider.pushes, 1, reason: 'guider twin gets the final config');
-    expect(calibration.builds, 1);
-    expect(calibration.lastMinMs, 500);
-    expect(calibration.lastMaxMs, 2000);
-    expect(calibration.lastFrames, 8);
-    // The persisted phd2 section carries the same range (one choice, two
-    // consumers).
-    expect(api.lastPhd2Put?.guideExposureMinMs, 500);
-    expect(api.lastPhd2Put?.guideExposureMaxMs, 2000);
-    // Done view with live darks progress, not an exit.
-    expect(find.text('You\'re all set'), findsOneWidget);
-    expect(find.textContaining('dark library'), findsWidgets);
-    expect(find.widgetWithText(FilledButton, 'Finish'), findsOneWidget);
-  });
-
-  testWidgets('darks toggle off: no build, wizard exits as before',
-      (tester) async {
-    final api = _FastProfileApi();
-    final guider = _FakeGuiderEquipment();
-    final calibration = _FakeCalibration();
-    final container =
-        await _pump(tester, api: api, guider: guider, calibration: calibration);
+    final container = await _pump(
+      tester,
+      api: api,
+      guider: guider,
+      calibration: calibration,
+    );
     container.read(wizardControllerProvider).draft.guider.buildDarksOnFinish =
         false;
 
@@ -245,19 +260,30 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.text('You\'re all set'), findsNothing,
-        reason: 'no Done view when the build never started');
-    expect(find.textContaining('couldn\'t start'), findsOneWidget,
-        reason: 'the degrade is surfaced in the exit snackbar');
+    expect(
+      find.text('You\'re all set'),
+      findsNothing,
+      reason: 'no Done view when the build never started',
+    );
+    expect(
+      find.textContaining('couldn\'t start'),
+      findsOneWidget,
+      reason: 'the degrade is surfaced in the exit snackbar',
+    );
   });
 
-  testWidgets('a mid-wizard Save & Exit never provisions or shoots darks',
-      (tester) async {
+  testWidgets('a mid-wizard Save & Exit never provisions or shoots darks', (
+    tester,
+  ) async {
     final api = _FastProfileApi();
     final guider = _FakeGuiderEquipment();
     final calibration = _FakeCalibration();
-    final container =
-        await _pump(tester, api: api, guider: guider, calibration: calibration);
+    final container = await _pump(
+      tester,
+      api: api,
+      guider: guider,
+      calibration: calibration,
+    );
     container.read(wizardControllerProvider.notifier).jumpTo(1);
     await tester.pump();
 
@@ -269,36 +295,49 @@ void main() {
   });
 
   DioException refusal(int status, String detail) => DioException(
-        requestOptions: RequestOptions(path: '/x'),
-        type: DioExceptionType.badResponse,
-        response: Response(
-          requestOptions: RequestOptions(path: '/x'),
-          statusCode: status,
-          data: {'title': 'refused', 'detail': detail},
-        ),
-        message: 'This exception was thrown because the response has a '
-            'status code of $status and RequestOptions.validateStatus was '
-            'configured to throw',
-      );
+    requestOptions: RequestOptions(path: '/x'),
+    type: DioExceptionType.badResponse,
+    response: Response(
+      requestOptions: RequestOptions(path: '/x'),
+      statusCode: status,
+      data: {'title': 'refused', 'detail': detail},
+    ),
+    message:
+        'This exception was thrown because the response has a '
+        'status code of $status and RequestOptions.validateStatus was '
+        'configured to throw',
+  );
 
   testWidgets('a refused guider push shows the server\'s reason, skips the '
       'dark-library build and says so', (tester) async {
     final guider = _FakeGuiderEquipment()
-      ..pushError = refusal(422, 'The guide camera is the main imaging camera.');
+      ..pushError = refusal(
+        422,
+        'The guide camera is the main imaging camera.',
+      );
     final calibration = _FakeCalibration();
-    await _pump(tester,
-        api: _FastProfileApi(), guider: guider, calibration: calibration);
+    await _pump(
+      tester,
+      api: _FastProfileApi(),
+      guider: guider,
+      calibration: calibration,
+    );
 
     await tester.tap(find.text('Save Profile'));
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.textContaining('The guide camera is the main imaging camera.'),
-        findsOneWidget);
+    expect(
+      find.textContaining('The guide camera is the main imaging camera.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('when the guider is reachable'), findsNothing);
-    expect(calibration.builds, 0,
-        reason: 'darks would shoot with the previous profile\'s guide camera');
+    expect(
+      calibration.builds,
+      0,
+      reason: 'darks would shoot with the previous profile\'s guide camera',
+    );
     expect(find.textContaining('Dark-library build skipped'), findsOneWidget);
     expect(find.text('You\'re all set'), findsNothing);
   });
@@ -307,10 +346,16 @@ void main() {
       'advice and still skips the build', (tester) async {
     final guider = _FakeGuiderEquipment()
       ..pushError = DioException.connectionError(
-          requestOptions: RequestOptions(path: '/x'), reason: 'refused');
+        requestOptions: RequestOptions(path: '/x'),
+        reason: 'refused',
+      );
     final calibration = _FakeCalibration();
-    await _pump(tester,
-        api: _FastProfileApi(), guider: guider, calibration: calibration);
+    await _pump(
+      tester,
+      api: _FastProfileApi(),
+      guider: guider,
+      calibration: calibration,
+    );
 
     await tester.tap(find.text('Save Profile'));
     for (var i = 0; i < 8; i++) {
@@ -333,26 +378,32 @@ void main() {
       http.listen((req) async {
         req.response.headers.contentType = ContentType('application', 'json');
         if (req.uri.path == '/api/v1/equipment/discover/camera') {
-          req.response.write(jsonEncode([
-            {
-              'unique_id': 'cam-1',
-              'name': 'Sim camera',
-              'type': 'camera',
-              'host_name': 'localhost',
-              'ip_address': '127.0.0.1',
-              'ip_port': 32323,
-              'alpaca_device_number': 0,
-              'use_https': false,
-            }
-          ]));
+          req.response.write(
+            jsonEncode([
+              {
+                'unique_id': 'cam-1',
+                'name': 'Sim camera',
+                'type': 'camera',
+                'host_name': 'localhost',
+                'ip_address': '127.0.0.1',
+                'ip_port': 32323,
+                'alpaca_device_number': 0,
+                'use_https': false,
+              },
+            ]),
+          );
         } else if (req.uri.path == '/api/v1/equipment/camera/connect') {
           req.response.statusCode = 409;
-          req.response.headers.contentType =
-              ContentType('application', 'problem+json');
-          req.response.write(jsonEncode({
-            'title': 'guide_camera_in_use',
-            'detail': 'The guider is using this camera.',
-          }));
+          req.response.headers.contentType = ContentType(
+            'application',
+            'problem+json',
+          );
+          req.response.write(
+            jsonEncode({
+              'title': 'guide_camera_in_use',
+              'detail': 'The guider is using this camera.',
+            }),
+          );
         } else {
           req.response.write('{}');
         }
@@ -360,23 +411,28 @@ void main() {
       });
     });
     addTearDown(() => http.close(force: true));
-    final container = await _pump(tester,
-        api: _FastProfileApi(),
-        guider: _FakeGuiderEquipment(),
-        calibration: _FakeCalibration(),
-        server: AraServer(hostname: '127.0.0.1', port: http.port));
+    final container = await _pump(
+      tester,
+      api: _FastProfileApi(),
+      guider: _FakeGuiderEquipment(),
+      calibration: _FakeCalibration(),
+      server: AraServer(hostname: '127.0.0.1', port: http.port),
+    );
     container.read(wizardControllerProvider).draft.equipment.cameraDeviceId =
         'cam-1';
 
     await tester.tap(find.text('Save Profile'));
     for (var i = 0; i < 40; i++) {
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.textContaining('Camera: The guider is using this camera.'),
-        findsOneWidget);
+    expect(
+      find.textContaining('Camera: The guider is using this camera.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('RequestOptions'), findsNothing);
     expect(find.textContaining('DioException'), findsNothing);
     // Elapse the Dio request timeouts armed inside the fake-async zone.

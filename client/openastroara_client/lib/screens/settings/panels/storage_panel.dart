@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -124,9 +126,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ExpansionTile(
           title: Text(
             'Advanced',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AraColors.textSecondary),
           ),
           tilePadding: EdgeInsets.zero,
           childrenPadding: const EdgeInsets.only(bottom: 8),
@@ -203,9 +204,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             s.fileFormat == StorageFileFormat.xisf
                 ? 'PixInsight reads compressed XISF directly.'
                 : 'FITS is always written uncompressed. Pick XISF to compress frames.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         const SettingsRow(
@@ -361,9 +361,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
             'snapshot on Ara, download a snapshot, or restore one.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         Align(
@@ -817,7 +816,13 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCheckDisk)),
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionCheckDisk,
+            ),
+          ),
         ),
       );
     } finally {
@@ -895,7 +900,13 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCleanPreviewCache)),
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionCleanPreviewCache,
+            ),
+          ),
         ),
       );
     } finally {
@@ -929,9 +940,8 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
               children: [
                 Text(
                   'Thumbnails + previews',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
                 const HelpIcon(helpKey: 'session.storage.preview_cache'),
               ],

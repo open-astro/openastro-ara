@@ -25,11 +25,14 @@ class SectionNotLoaded extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            failure == null
-                ? 'Loading these settings from your rig…'
-                : 'Not loaded — these settings are on your rig and it did not answer. '
-                      '${friendlyError(context.l10n, failure, action: context.l10n.actionLoadSettings)}',
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              failure == null
+                  ? 'Loading these settings from your rig…'
+                  : 'Not loaded — these settings are on your rig and it did not answer. '
+                        '${friendlyError(context.l10n, failure, action: context.l10n.actionLoadSettings)}',
+            ),
           ),
           const SizedBox(height: 12),
           OutlinedButton(
@@ -57,10 +60,13 @@ class SectionConflictBanner extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              'These settings were changed on another device. Nothing was saved. '
-              'Reload to see the new values (your edits here will be replaced).',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                'These settings were changed on another device. Nothing was saved. '
+                'Reload to see the new values (your edits here will be replaced).',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ),
           ),
           TextButton(

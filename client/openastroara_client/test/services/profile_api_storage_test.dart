@@ -128,8 +128,14 @@ void main() {
     });
 
     test('legacy formats read as plain FITS', () async {
-      expect((await read('fits_rice', 'rice')).fileFormat, StorageFileFormat.fits);
-      expect((await read('fits_gzip', 'gzip')).fileFormat, StorageFileFormat.fits);
+      expect(
+        (await read('fits_rice', 'rice')).fileFormat,
+        StorageFileFormat.fits,
+      );
+      expect(
+        (await read('fits_gzip', 'gzip')).fileFormat,
+        StorageFileFormat.fits,
+      );
       expect((await read('XISF', null)).fileFormat, StorageFileFormat.xisf);
     });
 
@@ -165,10 +171,14 @@ void main() {
           final body = a.requestData as Map;
           expect(body['file_format'], anyOf('fits', 'xisf'));
           expect(body['compression'], anyOf('off', 'zstd'));
-          expect(StorageFileFormat.fromWire(body['file_format'] as String),
-              format);
-          expect(StorageCompression.fromWire(body['compression'] as String),
-              compression);
+          expect(
+            StorageFileFormat.fromWire(body['file_format'] as String),
+            format,
+          );
+          expect(
+            StorageCompression.fromWire(body['compression'] as String),
+            compression,
+          );
           expect(echoed.fileFormat, format);
           expect(echoed.compression, compression);
         });

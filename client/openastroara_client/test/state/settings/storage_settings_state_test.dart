@@ -156,13 +156,18 @@ void main() {
       );
     });
 
-    test('§29 thresholdsValid flags an inverted pair (the save-time check)', () {
-      final n = container.read(storageSettingsProvider.notifier);
-      expect(n.thresholdsValid, isTrue); // defaults 10 > 2
-      n.setMinFreeDiskCriticalGb(8); // 8 >= warn? no, warn=10 → 8 < 10 still valid
-      expect(n.thresholdsValid, isTrue);
-      n.setMinFreeDiskWarnGb(5); // now critical(8) >= warn(5) → invalid
-      expect(n.thresholdsValid, isFalse);
-    });
+    test(
+      '§29 thresholdsValid flags an inverted pair (the save-time check)',
+      () {
+        final n = container.read(storageSettingsProvider.notifier);
+        expect(n.thresholdsValid, isTrue); // defaults 10 > 2
+        n.setMinFreeDiskCriticalGb(
+          8,
+        ); // 8 >= warn? no, warn=10 → 8 < 10 still valid
+        expect(n.thresholdsValid, isTrue);
+        n.setMinFreeDiskWarnGb(5); // now critical(8) >= warn(5) → invalid
+        expect(n.thresholdsValid, isFalse);
+      },
+    );
   });
 }

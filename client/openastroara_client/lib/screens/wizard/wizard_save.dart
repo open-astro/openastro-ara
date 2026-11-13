@@ -40,11 +40,15 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
   // trim/empty→null guard; the numeric fields are already nullable so a null is
   // passed straight through to the same preserve-on-null behavior.
   return base.copyWith(
-    siteName: (d.siteName?.trim().isNotEmpty ?? false) ? d.siteName!.trim() : null,
+    siteName: (d.siteName?.trim().isNotEmpty ?? false)
+        ? d.siteName!.trim()
+        : null,
     latitudeDeg: d.latitudeDeg,
     longitudeDeg: d.longitudeDeg,
     elevationM: d.altitudeMeters,
-    timeZone: (d.timezone?.trim().isNotEmpty ?? false) ? d.timezone!.trim() : null,
+    timeZone: (d.timezone?.trim().isNotEmpty ?? false)
+        ? d.timezone!.trim()
+        : null,
     // Screen 16 — horizon floor + twilight + runtime cap (null keeps the base).
     defaultHorizonAltitudeDeg: d.site.hardMinAltitudeDeg,
     maxSequenceRuntimeMin: d.site.maxSequenceRuntimeMin,
@@ -64,12 +68,17 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
 /// like every mapper here, which also keeps the ASCOM-auto-captured fields
 /// (sensor name, full well, e-/ADU, gain) exactly as the camera connect wrote
 /// them; QE converts from the entered percent to the stored fraction.
-CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileDraft d) {
+CameraElectronics applyDraftToCameraElectronics(
+  CameraElectronics base,
+  ProfileDraft d,
+) {
   final rn = d.camera.readNoiseE;
   final qe = d.camera.qePeakPct;
   return base.copyWith(
     readNoiseE: (rn != null && rn > 0) ? rn : null,
-    quantumEfficiencyPeak: (qe != null && qe > 0 && qe <= 100) ? qe / 100.0 : null,
+    quantumEfficiencyPeak: (qe != null && qe > 0 && qe <= 100)
+        ? qe / 100.0
+        : null,
   );
 }
 
@@ -80,7 +89,10 @@ CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileD
 /// two entry paths agree; the user can refine kinds later in Settings →
 /// Imaging → Filter set. An empty/unnamed draft list preserves the base —
 /// until this mapper, the wizard's filter entries were saved nowhere at all.
-FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) {
+FilterSetSettings applyDraftToFilterSet(
+  FilterSetSettings base,
+  ProfileDraft d,
+) {
   // Dedupe case-insensitively (keep-first), mirroring the daemon's PUT
   // validation and the Settings notifier's addFilter/seedFromWheelLabels —
   // duplicate wheel labels (multiple unset slots, case variants) must degrade
@@ -93,24 +105,25 @@ FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) 
         (f.name!.trim(), f),
   ];
   if (named.isEmpty) return base;
-  return FilterSetSettings(filters: [
-    for (final (name, def) in named)
-      PlanningFilter(
-        // Kind by the same name heuristic as the Settings seed ("Ha 6nm" → Hα,
-        // "Red" → r); an oddly-named filter's kind is directly editable in
-        // Settings → Imaging → Filter set.
-        name: name,
-        kind: FilterSetNotifier.guessKind(name),
-        // The screen's explicit bandwidth entry (the "3nm/6nm/12nm" printed
-        // on the filter) — the number the Optimal-Sub math runs on. 0 (unset)
-        // falls back to the kind's default passband.
-        bandwidthNm: (def.bandwidthNm != null && def.bandwidthNm! > 0)
-            ? def.bandwidthNm!
-            : 0,
-      ),
-  ]);
+  return FilterSetSettings(
+    filters: [
+      for (final (name, def) in named)
+        PlanningFilter(
+          // Kind by the same name heuristic as the Settings seed ("Ha 6nm" → Hα,
+          // "Red" → r); an oddly-named filter's kind is directly editable in
+          // Settings → Imaging → Filter set.
+          name: name,
+          kind: FilterSetNotifier.guessKind(name),
+          // The screen's explicit bandwidth entry (the "3nm/6nm/12nm" printed
+          // on the filter) — the number the Optimal-Sub math runs on. 0 (unset)
+          // falls back to the kind's default passband.
+          bandwidthNm: (def.bandwidthNm != null && def.bandwidthNm! > 0)
+              ? def.bandwidthNm!
+              : 0,
+        ),
+    ],
+  );
 }
-
 
 OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
   final fl = d.telescope.focalLengthMm;
@@ -163,7 +176,10 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
 /// recommendation and Save read the same number. Returns the seeded value, or
 /// null when the draft already had one or there is no rig to read (offline:
 /// the draft stays null and Save keeps whatever the profile has).
-Future<double?> seedReducerFromBaseProfile(WidgetRef ref, ProfileDraft draft) async {
+Future<double?> seedReducerFromBaseProfile(
+  WidgetRef ref,
+  ProfileDraft draft,
+) async {
   if (draft.telescope.reducerFactor != null) return null;
   final api = ref.read(profileApiProvider);
   if (api == null) return null;
@@ -185,10 +201,14 @@ Future<double?> seedReducerFromBaseProfile(WidgetRef ref, ProfileDraft draft) as
 /// resolve to different modes.
 String resolveGuiderSetupType(String? draftSetupType, String baseSetupType) =>
     Phd2SettingsNotifier.normalizeGuiderSetupType(
-        draftSetupType ?? baseSetupType);
+      draftSetupType ?? baseSetupType,
+    );
 
-Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
-    {OpticsSettings? baseOptics}) {
+Phd2Settings applyDraftToPhd2(
+  Phd2Settings base,
+  ProfileDraft d, {
+  OpticsSettings? baseOptics,
+}) {
   final g = d.guider;
   // §63.19 — with an OAG the guide focal length is derived from the main
   // optics: the telescope screen's focal length × the reducer factor the
@@ -198,12 +218,19 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
   final setupType = g.setupType == null
       ? null
       : Phd2SettingsNotifier.normalizeGuiderSetupType(g.setupType!);
-  final effectiveType = resolveGuiderSetupType(g.setupType, base.guiderSetupType);
+  final effectiveType = resolveGuiderSetupType(
+    g.setupType,
+    base.guiderSetupType,
+  );
   int? focalLength;
   if (effectiveType == 'oag') {
-    final reducer = effectiveOagReducerFactor(d.telescope.reducerFactor ?? baseOptics?.reducerFactor);
-    final derived =
-        derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, reducer);
+    final reducer = effectiveOagReducerFactor(
+      d.telescope.reducerFactor ?? baseOptics?.reducerFactor,
+    );
+    final derived = derivedOagGuideFocalLength(
+      d.telescope.focalLengthMm ?? 0,
+      reducer,
+    );
     focalLength = derived == 0 ? null : derived;
   } else {
     // Leaving an OAG: its derived value is the main scope's, not this guide scope's (#1715).
@@ -256,7 +283,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
 /// ([ClearableField] in [ProfileDraft.clearedFields]) writes the section
 /// default instead — the new profile clones the active one, so keep-on-blank
 /// alone would trap an old rig's path with no way to shed it.
-PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft d) {
+PlateSolveSettings applyDraftToPlateSolve(
+  PlateSolveSettings base,
+  ProfileDraft d,
+) {
   final ps = d.plateSolve;
   const defaults = PlateSolveSettings();
   return base.copyWith(
@@ -282,7 +312,10 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
 /// §37.4 screen 12 — map the draft's autofocus subset onto the profile's
 /// autofocus section. Every field is nullable, so copyWith's `??` keeps the base
 /// for anything the user left blank/untouched.
-AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) {
+AutofocusSettings applyDraftToAutofocus(
+  AutofocusSettings base,
+  ProfileDraft d,
+) {
   final af = d.autofocus;
   return base.copyWith(
     exposureSeconds: af.exposureSeconds,
@@ -291,12 +324,14 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
     // the focuser's read step size + the optics' focal ratio when both are
     // known — but only when the base is still at the section default: a
     // cloned profile's hand-tuned step size survives (null keeps the base).
-    stepSize: af.stepSize ??
+    stepSize:
+        af.stepSize ??
         (base.stepSize == const AutofocusSettings().stepSize
             ? derivedAutofocusStepSize(
                 focuserStepUm: d.focuser.stepSizeMicrons,
                 focalLengthMm: d.telescope.focalLengthMm,
-                apertureMm: d.telescope.apertureMm)
+                apertureMm: d.telescope.apertureMm,
+              )
             : null),
     runAfterFilterChange: af.runAfterFilterChange,
     // §59.4 — the draft carries the wire string (null = untouched, keep base).
@@ -333,10 +368,12 @@ int? derivedAutofocusStepSize({
   return steps.clamp(5, 500).toInt();
 }
 
-/// The wizard's reset-to-stock values for the two clearable Storage fields.
+/// The wizard's reset-to-stock values for the two clearable Storage fields. The PUT body has no way to
+/// say "leave it to the daemon", so these repeat the daemon's own defaults
+/// (`ProfileSnapshotNormalizer.BuildDefaults`); wizard_save_test.dart pins the two together.
 const wizardStockSaveDirectory = '/media/openastroara';
 const wizardStockFilenameTemplate =
-    r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s';
+    r'$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s';
 
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's
 /// storage section. The screen stores trimmed-or-null strings (null keeps base);
@@ -420,33 +457,63 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   // and the caller (_saveAndExit) runs this under a non-dismissible spinner that
   // blocks a second Save, so there is no GET-after-PUT overlap to worry about.
   final errors = (await Future.wait([
-    _trySave(() async => api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d))),
-    _trySave(() async => api.putOptics(applyDraftToOptics(await api.getOptics(), d))),
-    _trySave(() async =>
-        api.putImagingDefaults(applyDraftToImaging(await api.getImagingDefaults(), d))),
+    _trySave(
+      () async =>
+          api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d)),
+    ),
+    _trySave(
+      () async => api.putOptics(applyDraftToOptics(await api.getOptics(), d)),
+    ),
+    _trySave(
+      () async => api.putImagingDefaults(
+        applyDraftToImaging(await api.getImagingDefaults(), d),
+      ),
+    ),
     // §63.19 — the OAG derivation needs the base optics reducer factor only
     // when the draft has none (§36.10: a set draft reducer wins), so reading
     // it concurrently with the optics-section save above is race-free either
     // way.
-    _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(
-        await api.getPhd2Settings(), d,
-        baseOptics: await api.getOptics()))),
-    _trySave(() async => api.putPlateSolveSettings(
-        applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
-    _trySave(() async => api.putAutofocusSettings(
-        applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
-    _trySave(() async => api.putCameraElectronics(
-        applyDraftToCameraElectronics(await api.getCameraElectronics(), d))),
-    _trySave(() async =>
-        api.putFilterSet(applyDraftToFilterSet(await api.getFilterSet(), d))),
-    _trySave(() async => api.putStorageSettings(
-        applyDraftToStorage(await api.getStorageSettings(), d))),
-    _trySave(() async => api.putSafetyPolicies(
-        applyDraftToSafety(await api.getSafetyPolicies(), d))),
-    if (d.coolingFan case final fan?) _trySave(() async => api.putCoolingFan(fan)),
-  ]))
-      .whereType<Object>()
-      .toList();
+    _trySave(
+      () async => api.putPhd2Settings(
+        applyDraftToPhd2(
+          await api.getPhd2Settings(),
+          d,
+          baseOptics: await api.getOptics(),
+        ),
+      ),
+    ),
+    _trySave(
+      () async => api.putPlateSolveSettings(
+        applyDraftToPlateSolve(await api.getPlateSolveSettings(), d),
+      ),
+    ),
+    _trySave(
+      () async => api.putAutofocusSettings(
+        applyDraftToAutofocus(await api.getAutofocusSettings(), d),
+      ),
+    ),
+    _trySave(
+      () async => api.putCameraElectronics(
+        applyDraftToCameraElectronics(await api.getCameraElectronics(), d),
+      ),
+    ),
+    _trySave(
+      () async =>
+          api.putFilterSet(applyDraftToFilterSet(await api.getFilterSet(), d)),
+    ),
+    _trySave(
+      () async => api.putStorageSettings(
+        applyDraftToStorage(await api.getStorageSettings(), d),
+      ),
+    ),
+    _trySave(
+      () async => api.putSafetyPolicies(
+        applyDraftToSafety(await api.getSafetyPolicies(), d),
+      ),
+    ),
+    if (d.coolingFan case final fan?)
+      _trySave(() async => api.putCoolingFan(fan)),
+  ])).whereType<Object>().toList();
   if (errors.isNotEmpty) {
     // #1137 — every FAILED section died in transit (no response at all): the
     // daemon stopped answering, it did not refuse anything. The shell keeps the
@@ -456,8 +523,10 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     if (errors.every((e) => e is DioException && e.response == null)) {
       throw ProfileSaveTransportFailure(errors.length);
     }
-    throw Exception('Failed to save ${errors.length} profile section(s): '
-        '${errors.map((e) => e.toString()).join('; ')}');
+    throw Exception(
+      'Failed to save ${errors.length} profile section(s): '
+      '${errors.map((e) => e.toString()).join('; ')}',
+    );
   }
 }
 

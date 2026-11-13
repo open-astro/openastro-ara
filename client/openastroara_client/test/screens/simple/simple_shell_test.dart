@@ -40,6 +40,7 @@ import 'package:openastroara/state/imaging/live_view_state.dart';
 import 'package:openastroara/state/imaging/live_view_frame_state.dart';
 import 'package:openastroara/services/live_view_api.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider, simpleSwitchSettingProvider;
 import 'package:openastroara/models/switch_device.dart';
@@ -666,6 +667,10 @@ class _GuideOpticsApi extends ProfileApi {
   _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
   int unsetReads;
   int reads = 0;
+  // The Storage block loads its section when Rig opens; no network here.
+  @override
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
   Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
@@ -680,6 +685,10 @@ class _GuideOpticsApi extends ProfileApi {
 /// A rig that holds the permanent pier on and refuses to change it.
 class _PierRefusedApi extends ProfileApi {
   _PierRefusedApi() : super(const AraServer(hostname: 'test', port: 1));
+  // The Storage block loads its section when Rig opens; no network here.
+  @override
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
   Future<SafetyPolicies> getSafetyPolicies() async =>

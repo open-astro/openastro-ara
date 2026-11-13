@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -45,8 +47,11 @@ class _SessionNotificationsPanelState
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
         );
       }
     }
@@ -74,7 +79,13 @@ class _SessionNotificationsPanelState
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionSave,
+        ),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }

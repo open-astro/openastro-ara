@@ -82,18 +82,16 @@ class StorageSettings {
     int? minFreeDiskCriticalGb,
     int? backupRetentionCount,
     int? faultLogRetentionDays,
-  }) =>
-      StorageSettings(
-        saveDirectory: saveDirectory ?? this.saveDirectory,
-        fileFormat: fileFormat ?? this.fileFormat,
-        compression: compression ?? this.compression,
-        filenameTemplate: filenameTemplate ?? this.filenameTemplate,
-        minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
-        minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
-        backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
-        faultLogRetentionDays:
-            faultLogRetentionDays ?? this.faultLogRetentionDays,
-      );
+  }) => StorageSettings(
+    saveDirectory: saveDirectory ?? this.saveDirectory,
+    fileFormat: fileFormat ?? this.fileFormat,
+    compression: compression ?? this.compression,
+    filenameTemplate: filenameTemplate ?? this.filenameTemplate,
+    minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
+    minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
+    backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
+    faultLogRetentionDays: faultLogRetentionDays ?? this.faultLogRetentionDays,
+  );
 }
 
 class StorageSettingsNotifier extends SectionNotifier<StorageSettings> {

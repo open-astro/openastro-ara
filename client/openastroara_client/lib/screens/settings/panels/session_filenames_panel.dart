@@ -66,8 +66,11 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
         );
       }
     }
@@ -151,7 +154,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
         if (section.conflict) SectionConflictBanner(onReload: _reloadStorage),
         _PreviewCard(
           template: ss.filenameTemplate,
-          extension: ss.fileFormat == StorageFileFormat.xisf ? '.xisf' : '.fits',
+          extension: ss.fileFormat == StorageFileFormat.xisf
+              ? '.xisf'
+              : '.fits',
         ),
         const SizedBox(height: 20),
         if (model != null) ...[
@@ -201,9 +206,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             'This naming template was written by hand (or imported), so the '
             'usual choices are hidden to avoid rewriting it. Edit it below, '
             'or start over with the standard naming.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 8),
           EditableTextRow(

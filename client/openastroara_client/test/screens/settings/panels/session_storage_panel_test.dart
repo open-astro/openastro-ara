@@ -26,27 +26,34 @@ void main() {
         overrides: [profileApiProvider.overrideWithValue(FakeStorageApi())],
       );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: StoragePanel())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: StoragePanel())),
+        ),
+      );
       await tester.pump();
       await tester.tap(find.text('Advanced'));
       await tester.pumpAndSettle();
       return container;
     }
 
-    testWidgets('FITS hides the compression control and says FITS is uncompressed',
-        (tester) async {
-      await pumpPanel(tester);
-      expect(find.text('File format'), findsOneWidget);
-      expect(find.text('Compression'), findsNothing);
-      expect(find.textContaining('FITS is always written uncompressed'),
-          findsOneWidget);
-    });
+    testWidgets(
+      'FITS hides the compression control and says FITS is uncompressed',
+      (tester) async {
+        await pumpPanel(tester);
+        expect(find.text('File format'), findsOneWidget);
+        expect(find.text('Compression'), findsNothing);
+        expect(
+          find.textContaining('FITS is always written uncompressed'),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('XISF shows lossless Zstandard and the PixInsight note',
-        (tester) async {
+    testWidgets('XISF shows lossless Zstandard and the PixInsight note', (
+      tester,
+    ) async {
       final container = await pumpPanel(tester);
       container
           .read(storageSettingsProvider.notifier)
@@ -54,8 +61,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Compression'), findsOneWidget);
       expect(find.text('Lossless (Zstandard)'), findsOneWidget);
-      expect(find.text('PixInsight reads compressed XISF directly.'),
-          findsOneWidget);
+      expect(
+        find.text('PixInsight reads compressed XISF directly.'),
+        findsOneWidget,
+      );
       // The retired FITS + RICE / gzip choices are gone.
       expect(find.textContaining('RICE'), findsNothing);
       expect(find.textContaining('gzip'), findsNothing);

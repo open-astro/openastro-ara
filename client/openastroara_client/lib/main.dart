@@ -115,7 +115,9 @@ class OpenAstroAraApp extends StatelessWidget {
               // Simple Mode's alarm (the one popup kept) and its message
               // pills, over every screen; every snackbar there is a pill.
               child: SimpleScaffoldMessenger(
-                child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+                child: SimpleSafetyAlarmLayer(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
@@ -208,7 +210,9 @@ class _RootRouter extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Something went wrong starting up. Please try again.'),
+                  const Text(
+                    'Something went wrong starting up. Please try again.',
+                  ),
                   const SizedBox(height: 12),
                   // Self-gated on a cached profile existing.
                   const PlanOfflineButton(),

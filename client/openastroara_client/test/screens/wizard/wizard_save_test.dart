@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../support/storage_fixture.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,7 +30,9 @@ void main() {
         ..longitudeDeg = -97.7
         ..altitudeMeters = 200
         ..timezone = 'America/Chicago';
-      const base = SiteSettings(bortleClass: 4); // a field the wizard doesn't set
+      const base = SiteSettings(
+        bortleClass: 4,
+      ); // a field the wizard doesn't set
       final out = applyDraftToSite(base, d);
 
       expect(out.siteName, 'Backyard');
@@ -36,7 +40,11 @@ void main() {
       expect(out.longitudeDeg, -97.7);
       expect(out.elevationM, 200);
       expect(out.timeZone, 'America/Chicago');
-      expect(out.bortleClass, 4, reason: 'unset-by-wizard fields keep their base value');
+      expect(
+        out.bortleClass,
+        4,
+        reason: 'unset-by-wizard fields keep their base value',
+      );
     });
 
     test('applyDraftToSite maps screen-16 horizon + twilight', () {
@@ -51,30 +59,37 @@ void main() {
 
     test('applyDraftToSite keeps base horizon/twilight on a blank draft', () {
       final base = const SiteSettings().copyWith(
-          defaultHorizonAltitudeDeg: 35,
-          twilightDefinition: TwilightDefinition.civil);
+        defaultHorizonAltitudeDeg: 35,
+        twilightDefinition: TwilightDefinition.civil,
+      );
       final out = applyDraftToSite(base, ProfileDraft());
       expect(out.defaultHorizonAltitudeDeg, 35);
       expect(out.twilightDefinition, TwilightDefinition.civil);
     });
 
-    test('applyDraftToSite maps Bortle + SQM; null keeps base; SQM 0 clears', () {
-      final d = ProfileDraft();
-      d.site
-        ..bortleClass = 3
-        ..sqmMagPerArcsec2 = 21.4;
-      final out = applyDraftToSite(const SiteSettings(), d);
-      expect(out.bortleClass, 3);
-      expect(out.sqmMagPerArcsec2, 21.4);
+    test(
+      'applyDraftToSite maps Bortle + SQM; null keeps base; SQM 0 clears',
+      () {
+        final d = ProfileDraft();
+        d.site
+          ..bortleClass = 3
+          ..sqmMagPerArcsec2 = 21.4;
+        final out = applyDraftToSite(const SiteSettings(), d);
+        expect(out.bortleClass, 3);
+        expect(out.sqmMagPerArcsec2, 21.4);
 
-      const base = SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 20.5);
-      final kept = applyDraftToSite(base, ProfileDraft());
-      expect(kept.bortleClass, 4);
-      expect(kept.sqmMagPerArcsec2, 20.5);
+        const base = SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 20.5);
+        final kept = applyDraftToSite(base, ProfileDraft());
+        expect(kept.bortleClass, 4);
+        expect(kept.sqmMagPerArcsec2, 20.5);
 
-      final cleared = applyDraftToSite(base, ProfileDraft()..site.sqmMagPerArcsec2 = 0);
-      expect(cleared.sqmMagPerArcsec2, 0);
-    });
+        final cleared = applyDraftToSite(
+          base,
+          ProfileDraft()..site.sqmMagPerArcsec2 = 0,
+        );
+        expect(cleared.sqmMagPerArcsec2, 0);
+      },
+    );
 
     test('applyDraftToSite leaves base untouched when the draft is empty', () {
       const base = SiteSettings(siteName: 'Existing', latitudeDeg: 12.0);
@@ -91,7 +106,11 @@ void main() {
       final out = applyDraftToOptics(base, d);
       expect(out.focalLengthMm, 714);
       expect(out.pixelSizeUm, 3.76);
-      expect(out.reducerFactor, 0.8, reason: 'an unset wizard reducer keeps the profile value');
+      expect(
+        out.reducerFactor,
+        0.8,
+        reason: 'an unset wizard reducer keeps the profile value',
+      );
     });
 
     test('applyDraftToOptics maps the reducer factor and the camera sensor size (§36.10)', () {
@@ -136,14 +155,18 @@ void main() {
       expect(out.defaultFrameKind, FrameKind.flat);
     });
 
-    test('applyDraftToImaging keeps base exposure/frame kind on a blank draft', () {
-      final base = const ImagingDefaults().copyWith(
+    test(
+      'applyDraftToImaging keeps base exposure/frame kind on a blank draft',
+      () {
+        final base = const ImagingDefaults().copyWith(
           defaultExposure: const Duration(seconds: 300),
-          defaultFrameKind: FrameKind.dark);
-      final out = applyDraftToImaging(base, ProfileDraft());
-      expect(out.defaultExposure, const Duration(seconds: 300));
-      expect(out.defaultFrameKind, FrameKind.dark);
-    });
+          defaultFrameKind: FrameKind.dark,
+        );
+        final out = applyDraftToImaging(base, ProfileDraft());
+        expect(out.defaultExposure, const Duration(seconds: 300));
+        expect(out.defaultFrameKind, FrameKind.dark);
+      },
+    );
 
     test('applyDraftToImaging maps warmup "off" to false', () {
       final d = ProfileDraft();
@@ -173,22 +196,29 @@ void main() {
       final d = ProfileDraft();
       d.guider.guiderCamera = 'Alpaca Camera [rig.lan:6800/2]';
       final out = applyDraftToPhd2(
-          const Phd2Settings(
-              guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
-              guiderCameraAlpacaUniqueId: 'old-camera'),
-          d);
+        const Phd2Settings(
+          guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
+          guiderCameraAlpacaUniqueId: 'old-camera',
+        ),
+        d,
+      );
       expect(out.guiderCamera, 'Alpaca Camera [rig.lan:6800/2]');
       expect(out.guiderCameraAlpacaUniqueId, '');
     });
 
-    test('applyDraftToPhd2 #1308: an untouched guide camera keeps its UniqueID', () {
-      final out = applyDraftToPhd2(
+    test(
+      'applyDraftToPhd2 #1308: an untouched guide camera keeps its UniqueID',
+      () {
+        final out = applyDraftToPhd2(
           const Phd2Settings(
-              guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
-              guiderCameraAlpacaUniqueId: 'cam-1'),
-          ProfileDraft());
-      expect(out.guiderCameraAlpacaUniqueId, 'cam-1');
-    });
+            guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
+            guiderCameraAlpacaUniqueId: 'cam-1',
+          ),
+          ProfileDraft(),
+        );
+        expect(out.guiderCameraAlpacaUniqueId, 'cam-1');
+      },
+    );
 
     test('§76 S5 — ASTAP downsample stays automatic (0); the daemon derives it '
         'per frame (#1136)', () {
@@ -196,8 +226,11 @@ void main() {
       d.camera.pixelSizeMicrons = 2.4;
       d.telescope.focalLengthMm = 2000; // 0.25″/px: used to seed 4
       final out = applyDraftToPlateSolve(const PlateSolveSettings(), d);
-      expect(out.downsampleFactor, 0,
-          reason: 'no client-side seeding: 0 = the daemon picks per solve');
+      expect(
+        out.downsampleFactor,
+        0,
+        reason: 'no client-side seeding: 0 = the daemon picks per solve',
+      );
       // Search radius is pointing-uncertainty-driven, never derived — the
       // §37.8 default survives untouched.
       expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
@@ -213,7 +246,9 @@ void main() {
       expect(out.backlashOutSteps, 50);
 
       final kept = applyDraftToAutofocus(
-          const AutofocusSettings(backlashInSteps: 7, backlashOutSteps: 9), ProfileDraft());
+        const AutofocusSettings(backlashInSteps: 7, backlashOutSteps: 9),
+        ProfileDraft(),
+      );
       expect(kept.backlashInSteps, 7);
       expect(kept.backlashOutSteps, 9);
     });
@@ -226,44 +261,65 @@ void main() {
         ..apertureMm = 106; // f/5
       d.focuser.stepSizeMicrons = 1.2; // → 23 steps, ≠ default 50
       final out = applyDraftToAutofocus(const AutofocusSettings(), d);
-      expect(out.stepSize, 23,
-          reason: 'the mapper wiring, not just the formula, must derive');
+      expect(
+        out.stepSize,
+        23,
+        reason: 'the mapper wiring, not just the formula, must derive',
+      );
     });
 
-    test('§76 S5 derivations respect a cloned profile\'s hand-tuned values',
-        () {
-      final d = ProfileDraft();
-      d.camera.pixelSizeMicrons = 3.76;
-      d.telescope
-        ..focalLengthMm = 530
-        ..apertureMm = 106;
-      d.focuser.stepSizeMicrons = 1.2;
-      // Base carries explicit non-default customizations (cloned profile) —
-      // the derivations must not clobber them.
-      final ps = applyDraftToPlateSolve(
-          const PlateSolveSettings().copyWith(downsampleFactor: 3), d);
-      expect(ps.downsampleFactor, 3);
-      final af = applyDraftToAutofocus(
-          const AutofocusSettings().copyWith(stepSize: 80), d);
-      expect(af.stepSize, 80);
-    });
+    test(
+      '§76 S5 derivations respect a cloned profile\'s hand-tuned values',
+      () {
+        final d = ProfileDraft();
+        d.camera.pixelSizeMicrons = 3.76;
+        d.telescope
+          ..focalLengthMm = 530
+          ..apertureMm = 106;
+        d.focuser.stepSizeMicrons = 1.2;
+        // Base carries explicit non-default customizations (cloned profile) —
+        // the derivations must not clobber them.
+        final ps = applyDraftToPlateSolve(
+          const PlateSolveSettings().copyWith(downsampleFactor: 3),
+          d,
+        );
+        expect(ps.downsampleFactor, 3);
+        final af = applyDraftToAutofocus(
+          const AutofocusSettings().copyWith(stepSize: 80),
+          d,
+        );
+        expect(af.stepSize, 80);
+      },
+    );
 
     test('§76 S5 derivations — AF step size from CFZ + focuser step', () {
       // f/5 → CFZ ≈ 55 µm; half-CFZ over 1.2 µm/step → 23 steps.
       expect(
-          derivedAutofocusStepSize(
-              focuserStepUm: 1.2, focalLengthMm: 530, apertureMm: 106),
-          23);
+        derivedAutofocusStepSize(
+          focuserStepUm: 1.2,
+          focalLengthMm: 530,
+          apertureMm: 106,
+        ),
+        23,
+      );
       // Unreported focuser step (the EAF case) → null, base default stands.
       expect(
-          derivedAutofocusStepSize(
-              focuserStepUm: null, focalLengthMm: 530, apertureMm: 106),
-          isNull);
+        derivedAutofocusStepSize(
+          focuserStepUm: null,
+          focalLengthMm: 530,
+          apertureMm: 106,
+        ),
+        isNull,
+      );
       // Degenerate fast train clamps to the 5-step floor.
       expect(
-          derivedAutofocusStepSize(
-              focuserStepUm: 50, focalLengthMm: 400, apertureMm: 200),
-          5);
+        derivedAutofocusStepSize(
+          focuserStepUm: 50,
+          focalLengthMm: 400,
+          apertureMm: 200,
+        ),
+        5,
+      );
     });
 
     test('applyDraftToPhd2 §76.2 persists the guide exposure range', () {
@@ -289,7 +345,10 @@ void main() {
 
       // Untouched draft keeps the base values.
       final base = const Phd2Settings(
-          guiderSetupType: 'oag', guideFocalLength: 999, guidePixelSize: 3.8);
+        guiderSetupType: 'oag',
+        guideFocalLength: 999,
+        guidePixelSize: 3.8,
+      );
       final kept = applyDraftToPhd2(base, ProfileDraft());
       expect(kept.guiderSetupType, 'oag');
       expect(kept.guidePixelSize, 3.8);
@@ -306,26 +365,35 @@ void main() {
       expect(out.guideFocalLength, 0);
 
       d.guider.guideFocalLengthMm = 128;
-      expect(applyDraftToPhd2(
-        const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375), d).guideFocalLength, 128);
+      expect(
+        applyDraftToPhd2(
+          const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
+          d,
+        ).guideFocalLength,
+        128,
+      );
     });
 
-    test('applyDraftToPhd2 §63.19 OAG derives FL × the base optics reducer', () {
-      final d = ProfileDraft();
-      d.telescope.focalLengthMm = 1480;
-      d.guider
-        ..setupType = 'oag'
-        ..guideFocalLengthMm = 240 // ignored for OAG
-        ..guidePixelSizeUm = 2.9;
-      final out = applyDraftToPhd2(
-        const Phd2Settings(guideFocalLength: 111),
-        d,
-        baseOptics: const OpticsSettings(reducerFactor: 0.8),
-      );
-      expect(out.guiderSetupType, 'oag');
-      expect(out.guideFocalLength, 1184); // 1480 × 0.8
-      expect(out.guidePixelSize, 2.9);
-    });
+    test(
+      'applyDraftToPhd2 §63.19 OAG derives FL × the base optics reducer',
+      () {
+        final d = ProfileDraft();
+        d.telescope.focalLengthMm = 1480;
+        d.guider
+          ..setupType = 'oag'
+          ..guideFocalLengthMm =
+              240 // ignored for OAG
+          ..guidePixelSizeUm = 2.9;
+        final out = applyDraftToPhd2(
+          const Phd2Settings(guideFocalLength: 111),
+          d,
+          baseOptics: const OpticsSettings(reducerFactor: 0.8),
+        );
+        expect(out.guiderSetupType, 'oag');
+        expect(out.guideFocalLength, 1184); // 1480 × 0.8
+        expect(out.guidePixelSize, 2.9);
+      },
+    );
 
     test('applyDraftToPhd2 §36.10 OAG uses the draft reducer over the base profile\'s', () {
       final d = ProfileDraft();
@@ -338,81 +406,118 @@ void main() {
         d,
         baseOptics: const OpticsSettings(reducerFactor: 0.8),
       );
-      expect(out.guideFocalLength, 932, reason: '1480 × 0.63, not × the base 0.8');
-    });
-
-    test('applyDraftToPhd2 §63.19 OAG falls back to reducer 1.0 when unset', () {
-      final d = ProfileDraft();
-      d.telescope.focalLengthMm = 1480;
-      d.guider.setupType = 'oag';
-      // Invalid/unset reducer (≤ 0) → 1.0; missing baseOptics entirely → 1.0.
-      final invalid = applyDraftToPhd2(const Phd2Settings(), d,
-          baseOptics: const OpticsSettings(reducerFactor: 0));
-      expect(invalid.guideFocalLength, 1480);
-      final absent = applyDraftToPhd2(const Phd2Settings(), d);
-      expect(absent.guideFocalLength, 1480);
-    });
-
-    test('§63.19 resolveGuiderSetupType — untouched dropdown follows the base', () {
-      // Display and save both resolve through this helper, so an oag base
-      // profile with an untouched dropdown stays OAG in both places.
-      expect(resolveGuiderSetupType(null, 'oag'), 'oag');
-      expect(resolveGuiderSetupType(null, 'guide_scope'), 'guide_scope');
-      // An explicit pick wins over the base.
-      expect(resolveGuiderSetupType('guide_scope', 'oag'), 'guide_scope');
-      expect(resolveGuiderSetupType('oag', 'guide_scope'), 'oag');
-      // Unknown tokens coerce to guide_scope, same as everywhere else.
-      expect(resolveGuiderSetupType(null, 'bogus'), 'guide_scope');
-    });
-
-    test('applyDraftToPhd2 §63.19 untouched dropdown on an oag base stays OAG', () {
-      final d = ProfileDraft();
-      d.telescope.focalLengthMm = 1480;
-      d.guider.guideFocalLengthMm = 240; // typed but mode is OAG via the base
-      final out = applyDraftToPhd2(
-        const Phd2Settings(guiderSetupType: 'oag'),
-        d,
-        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      expect(
+        out.guideFocalLength,
+        932,
+        reason: '1480 × 0.63, not × the base 0.8',
       );
-      expect(out.guiderSetupType, 'oag'); // null draft keeps the base
-      expect(out.guideFocalLength, 1184); // derived, matching the UI branch
     });
 
-    test('§63.19 preview and save derive the same value (0.8 base reducer)', () {
-      // The wizard preview computes derivedOagGuideFocalLength(fl,
-      // effectiveOagReducerFactor(baseReducer)) — assert it equals what
-      // applyDraftToPhd2 persists for the same inputs.
-      const baseOptics = OpticsSettings(reducerFactor: 0.8);
-      final preview = derivedOagGuideFocalLength(
-          1480, effectiveOagReducerFactor(baseOptics.reducerFactor));
-      final d = ProfileDraft();
-      d.telescope.focalLengthMm = 1480;
-      d.guider.setupType = 'oag';
-      final saved =
-          applyDraftToPhd2(const Phd2Settings(), d, baseOptics: baseOptics);
-      expect(preview, 1184);
-      expect(saved.guideFocalLength, preview);
-      // §36.10 — a draft reducer wins in both places (the guiding screen's
-      // preview reads draft ?? base, exactly as applyDraftToPhd2 does).
-      d.telescope.reducerFactor = 0.63;
-      final previewDraft = derivedOagGuideFocalLength(
-          1480, effectiveOagReducerFactor(d.telescope.reducerFactor ?? baseOptics.reducerFactor));
-      final savedDraft =
-          applyDraftToPhd2(const Phd2Settings(), d, baseOptics: baseOptics);
-      expect(previewDraft, 932);
-      expect(savedDraft.guideFocalLength, previewDraft);
-      // Unavailable base reducer → both fall back to 1.0.
-      expect(effectiveOagReducerFactor(null), 1.0);
-      expect(effectiveOagReducerFactor(0), 1.0);
-    });
+    test(
+      'applyDraftToPhd2 §63.19 OAG falls back to reducer 1.0 when unset',
+      () {
+        final d = ProfileDraft();
+        d.telescope.focalLengthMm = 1480;
+        d.guider.setupType = 'oag';
+        // Invalid/unset reducer (≤ 0) → 1.0; missing baseOptics entirely → 1.0.
+        final invalid = applyDraftToPhd2(
+          const Phd2Settings(),
+          d,
+          baseOptics: const OpticsSettings(reducerFactor: 0),
+        );
+        expect(invalid.guideFocalLength, 1480);
+        final absent = applyDraftToPhd2(const Phd2Settings(), d);
+        expect(absent.guideFocalLength, 1480);
+      },
+    );
 
-    test('applyDraftToPhd2 §63.19 OAG without telescope FL keeps the base FL', () {
-      final d = ProfileDraft();
-      d.guider.setupType = 'oag';
-      final out = applyDraftToPhd2(const Phd2Settings(guideFocalLength: 350), d);
-      expect(out.guiderSetupType, 'oag');
-      expect(out.guideFocalLength, 350);
-    });
+    test(
+      '§63.19 resolveGuiderSetupType — untouched dropdown follows the base',
+      () {
+        // Display and save both resolve through this helper, so an oag base
+        // profile with an untouched dropdown stays OAG in both places.
+        expect(resolveGuiderSetupType(null, 'oag'), 'oag');
+        expect(resolveGuiderSetupType(null, 'guide_scope'), 'guide_scope');
+        // An explicit pick wins over the base.
+        expect(resolveGuiderSetupType('guide_scope', 'oag'), 'guide_scope');
+        expect(resolveGuiderSetupType('oag', 'guide_scope'), 'oag');
+        // Unknown tokens coerce to guide_scope, same as everywhere else.
+        expect(resolveGuiderSetupType(null, 'bogus'), 'guide_scope');
+      },
+    );
+
+    test(
+      'applyDraftToPhd2 §63.19 untouched dropdown on an oag base stays OAG',
+      () {
+        final d = ProfileDraft();
+        d.telescope.focalLengthMm = 1480;
+        d.guider.guideFocalLengthMm = 240; // typed but mode is OAG via the base
+        final out = applyDraftToPhd2(
+          const Phd2Settings(guiderSetupType: 'oag'),
+          d,
+          baseOptics: const OpticsSettings(reducerFactor: 0.8),
+        );
+        expect(out.guiderSetupType, 'oag'); // null draft keeps the base
+        expect(out.guideFocalLength, 1184); // derived, matching the UI branch
+      },
+    );
+
+    test(
+      '§63.19 preview and save derive the same value (0.8 base reducer)',
+      () {
+        // The wizard preview computes derivedOagGuideFocalLength(fl,
+        // effectiveOagReducerFactor(baseReducer)) — assert it equals what
+        // applyDraftToPhd2 persists for the same inputs.
+        const baseOptics = OpticsSettings(reducerFactor: 0.8);
+        final preview = derivedOagGuideFocalLength(
+          1480,
+          effectiveOagReducerFactor(baseOptics.reducerFactor),
+        );
+        final d = ProfileDraft();
+        d.telescope.focalLengthMm = 1480;
+        d.guider.setupType = 'oag';
+        final saved = applyDraftToPhd2(
+          const Phd2Settings(),
+          d,
+          baseOptics: baseOptics,
+        );
+        expect(preview, 1184);
+        expect(saved.guideFocalLength, preview);
+        // §36.10 — a draft reducer wins in both places (the guiding screen's
+        // preview reads draft ?? base, exactly as applyDraftToPhd2 does).
+        d.telescope.reducerFactor = 0.63;
+        final previewDraft = derivedOagGuideFocalLength(
+          1480,
+          effectiveOagReducerFactor(
+            d.telescope.reducerFactor ?? baseOptics.reducerFactor,
+          ),
+        );
+        final savedDraft = applyDraftToPhd2(
+          const Phd2Settings(),
+          d,
+          baseOptics: baseOptics,
+        );
+        expect(previewDraft, 932);
+        expect(savedDraft.guideFocalLength, previewDraft);
+        // Unavailable base reducer → both fall back to 1.0.
+        expect(effectiveOagReducerFactor(null), 1.0);
+        expect(effectiveOagReducerFactor(0), 1.0);
+      },
+    );
+
+    test(
+      'applyDraftToPhd2 §63.19 OAG without telescope FL keeps the base FL',
+      () {
+        final d = ProfileDraft();
+        d.guider.setupType = 'oag';
+        final out = applyDraftToPhd2(
+          const Phd2Settings(guideFocalLength: 350),
+          d,
+        );
+        expect(out.guiderSetupType, 'oag');
+        expect(out.guideFocalLength, 350);
+      },
+    );
 
     test('applyDraftToPlateSolve maps ASTAP paths + search tuning', () {
       final d = ProfileDraft();
@@ -428,38 +533,48 @@ void main() {
       expect(out.downsampleFactor, 4);
     });
 
-    test('applyDraftToPlateSolve preserves base values when the draft is blank',
-        () {
-      final base = const PlateSolveSettings().copyWith(
-        pathOrEndpoint: '/keep/astap',
-        indexDownloadPath: '/keep/db',
-        searchRadiusDeg: 12,
-        downsampleFactor: 4,
-      );
-      final out = applyDraftToPlateSolve(base, ProfileDraft());
-      // A blank draft (all-null) keeps every base value, including the numerics.
-      expect(out.pathOrEndpoint, '/keep/astap');
-      expect(out.indexDownloadPath, '/keep/db');
-      expect(out.searchRadiusDeg, 12);
-      expect(out.downsampleFactor, 4);
-    });
+    test(
+      'applyDraftToPlateSolve preserves base values when the draft is blank',
+      () {
+        final base = const PlateSolveSettings().copyWith(
+          pathOrEndpoint: '/keep/astap',
+          indexDownloadPath: '/keep/db',
+          searchRadiusDeg: 12,
+          downsampleFactor: 4,
+        );
+        final out = applyDraftToPlateSolve(base, ProfileDraft());
+        // A blank draft (all-null) keeps every base value, including the numerics.
+        expect(out.pathOrEndpoint, '/keep/astap');
+        expect(out.indexDownloadPath, '/keep/db');
+        expect(out.searchRadiusDeg, 12);
+        expect(out.downsampleFactor, 4);
+      },
+    );
 
-    test('an explicitly-reset plate-solve path takes the default, not the clone',
-        () {
-      // §37 clear-field affordance: the new profile clones the active one, so
-      // blank alone keeps the OLD rig's path — a cleared field must shed it.
-      final base = const PlateSolveSettings().copyWith(
-        pathOrEndpoint: '/old-rig/astap',
-        indexDownloadPath: '/old-rig/db',
-      );
-      final d = ProfileDraft();
-      d.clearedFields.add(ClearableField.astapBinaryPath);
-      final out = applyDraftToPlateSolve(base, d);
-      expect(out.pathOrEndpoint, const PlateSolveSettings().pathOrEndpoint,
-          reason: 'the cleared path resets to the section default');
-      expect(out.indexDownloadPath, '/old-rig/db',
-          reason: 'the un-cleared sibling still keeps the cloned value');
-    });
+    test(
+      'an explicitly-reset plate-solve path takes the default, not the clone',
+      () {
+        // §37 clear-field affordance: the new profile clones the active one, so
+        // blank alone keeps the OLD rig's path — a cleared field must shed it.
+        final base = const PlateSolveSettings().copyWith(
+          pathOrEndpoint: '/old-rig/astap',
+          indexDownloadPath: '/old-rig/db',
+        );
+        final d = ProfileDraft();
+        d.clearedFields.add(ClearableField.astapBinaryPath);
+        final out = applyDraftToPlateSolve(base, d);
+        expect(
+          out.pathOrEndpoint,
+          const PlateSolveSettings().pathOrEndpoint,
+          reason: 'the cleared path resets to the section default',
+        );
+        expect(
+          out.indexDownloadPath,
+          '/old-rig/db',
+          reason: 'the un-cleared sibling still keeps the cloned value',
+        );
+      },
+    );
 
     test('a typed value (no cleared mark) lands as-is', () {
       // The mapper gives a cleared mark priority over the draft value, so the
@@ -468,24 +583,33 @@ void main() {
       final d = ProfileDraft();
       d.plateSolve.astapBinaryPath = '/new-rig/astap';
       final out = applyDraftToPlateSolve(
-          const PlateSolveSettings().copyWith(pathOrEndpoint: '/old-rig/astap'), d);
+        const PlateSolveSettings().copyWith(pathOrEndpoint: '/old-rig/astap'),
+        d,
+      );
       expect(out.pathOrEndpoint, '/new-rig/astap');
     });
 
-    test('applyDraftToFilterSet builds planning filters from named draft filters', () {
-      final d = ProfileDraft();
-      d.filterWheel.filters.addAll([
-        FilterDef()..name = 'Ha',
-        FilterDef()..name = '  OIII ',
-        FilterDef()..name = '', // unnamed rows are skipped
-        FilterDef()..name = 'Red',
-      ]);
-      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
-      expect(out.filters.map((f) => f.name), ['Ha', 'OIII', 'Red']);
-      expect(out.filters[0].kind, FilterKind.ha, reason: 'same inference as the Settings seed');
-      expect(out.filters[1].kind, FilterKind.oiii);
-      expect(out.filters[2].kind, FilterKind.r);
-    });
+    test(
+      'applyDraftToFilterSet builds planning filters from named draft filters',
+      () {
+        final d = ProfileDraft();
+        d.filterWheel.filters.addAll([
+          FilterDef()..name = 'Ha',
+          FilterDef()..name = '  OIII ',
+          FilterDef()..name = '', // unnamed rows are skipped
+          FilterDef()..name = 'Red',
+        ]);
+        final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+        expect(out.filters.map((f) => f.name), ['Ha', 'OIII', 'Red']);
+        expect(
+          out.filters[0].kind,
+          FilterKind.ha,
+          reason: 'same inference as the Settings seed',
+        );
+        expect(out.filters[1].kind, FilterKind.oiii);
+        expect(out.filters[2].kind, FilterKind.r);
+      },
+    );
 
     test('applyDraftToFilterSet carries the screen\'s bandwidth into the '
         'planning filter (0 = kind default when blank)', () {
@@ -538,7 +662,8 @@ void main() {
 
     test('applyDraftToFilterSet preserves the base when the draft has no named filters', () {
       const base = FilterSetSettings(
-          filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);
+        filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+      );
       expect(applyDraftToFilterSet(base, ProfileDraft()).filters, base.filters);
       final unnamedOnly = ProfileDraft()..filterWheel.filters.add(FilterDef());
       expect(applyDraftToFilterSet(base, unnamedOnly).filters, base.filters);
@@ -568,18 +693,29 @@ void main() {
     });
 
     test('applyDraftToCameraElectronics preserves base on a blank draft', () {
-      const base = CameraElectronics(readNoiseE: 2.2, quantumEfficiencyPeak: 0.6);
+      const base = CameraElectronics(
+        readNoiseE: 2.2,
+        quantumEfficiencyPeak: 0.6,
+      );
       final out = applyDraftToCameraElectronics(base, ProfileDraft());
       expect(out.readNoiseE, 2.2);
       expect(out.quantumEfficiencyPeak, 0.6);
     });
 
-    test('applyDraftToCameraElectronics rejects an out-of-range QE percent', () {
-      const base = CameraElectronics(quantumEfficiencyPeak: 0.6);
-      final d = ProfileDraft()..camera.qePeakPct = 250; // typo'd fraction-vs-percent
-      final out = applyDraftToCameraElectronics(base, d);
-      expect(out.quantumEfficiencyPeak, 0.6, reason: 'implausible % keeps the stored value');
-    });
+    test(
+      'applyDraftToCameraElectronics rejects an out-of-range QE percent',
+      () {
+        const base = CameraElectronics(quantumEfficiencyPeak: 0.6);
+        final d = ProfileDraft()
+          ..camera.qePeakPct = 250; // typo'd fraction-vs-percent
+        final out = applyDraftToCameraElectronics(base, d);
+        expect(
+          out.quantumEfficiencyPeak,
+          0.6,
+          reason: 'implausible % keeps the stored value',
+        );
+      },
+    );
 
     test('applyDraftToAutofocus maps the wizard subset', () {
       final d = ProfileDraft();
@@ -596,8 +732,11 @@ void main() {
     });
 
     test('applyDraftToAutofocus preserves base on a blank draft', () {
-      final base = const AutofocusSettings()
-          .copyWith(exposureSeconds: 11, steps: 5, runAfterFilterChange: false);
+      final base = const AutofocusSettings().copyWith(
+        exposureSeconds: 11,
+        steps: 5,
+        runAfterFilterChange: false,
+      );
       final out = applyDraftToAutofocus(base, ProfileDraft());
       expect(out.exposureSeconds, 11);
       expect(out.steps, 5);
@@ -618,8 +757,7 @@ void main() {
       expect(out.compression, StorageCompression.off);
     });
 
-    test('applyDraftToStorage maps compress=true to Zstandard and keeps base on blank',
-        () {
+    test('applyDraftToStorage maps compress=true to Zstandard and keeps base on blank', () {
       final yes = ProfileDraft()..fileSaving.compress = true;
       expect(
         applyDraftToStorage(kTestStorage, yes).compression,
@@ -645,10 +783,21 @@ void main() {
           ..add(ClearableField.saveDirectory)
           ..add(ClearableField.filenameTemplate);
         final out = applyDraftToStorage(base, d);
-        expect(out.saveDirectory, kTestStorage.saveDirectory);
-        expect(out.filenameTemplate, kTestStorage.filenameTemplate);
+        expect(out.saveDirectory, wizardStockSaveDirectory);
+        expect(out.filenameTemplate, wizardStockFilenameTemplate);
       },
     );
+
+    test('wizard stock Storage values equal the daemon defaults', () {
+      final src = File(
+        '../../OpenAstroAra.Server/Services/ProfileSnapshotNormalizer.cs',
+      ).readAsStringSync();
+      expect(src, contains('SaveDirectory: "$wizardStockSaveDirectory"'));
+      expect(
+        src,
+        contains('FilenameTemplate: @"$wizardStockFilenameTemplate"'),
+      );
+    });
 
     test('applyDraftToSafety maps the unsafe-conditions subset', () {
       final d = ProfileDraft();
@@ -690,63 +839,91 @@ void main() {
       expect(out.minDewDeltaC, 3.5);
     });
 
-    test('applyDraftToSafety keeps base weather thresholds on a blank draft', () {
-      final base = const SafetyPolicies().copyWith(
-          weatherTriggersEnabled: true, maxWindKmh: 50, minDewDeltaC: 1.0);
-      final out = applyDraftToSafety(base, ProfileDraft());
-      expect(out.weatherTriggersEnabled, isTrue);
-      expect(out.maxWindKmh, 50);
-      expect(out.minDewDeltaC, 1.0);
-    });
+    test(
+      'applyDraftToSafety keeps base weather thresholds on a blank draft',
+      () {
+        final base = const SafetyPolicies().copyWith(
+          weatherTriggersEnabled: true,
+          maxWindKmh: 50,
+          minDewDeltaC: 1.0,
+        );
+        final out = applyDraftToSafety(base, ProfileDraft());
+        expect(out.weatherTriggersEnabled, isTrue);
+        expect(out.maxWindKmh, 50);
+        expect(out.minDewDeltaC, 1.0);
+      },
+    );
 
     test('applyDraftToSafety preserves base on a blank draft', () {
-      final base = const SafetyPolicies()
-          .copyWith(onUnsafe: UnsafeAction.ignore, resumeDelayMin: 20);
+      final base = const SafetyPolicies().copyWith(
+        onUnsafe: UnsafeAction.ignore,
+        resumeDelayMin: 20,
+      );
       final out = applyDraftToSafety(base, ProfileDraft());
       expect(out.onUnsafe, UnsafeAction.ignore);
       expect(out.resumeDelayMin, 20);
     });
 
-    test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {
-      final d = ProfileDraft();
-      d.guider.calibrationCadence = CalibrationCadence.eachSession;
-      final out = applyDraftToPhd2(const Phd2Settings(), d);
-      expect(out.forceCalibrationEachSession, isTrue);
-    });
+    test(
+      'applyDraftToPhd2 sets forceCalibrationEachSession for each-session',
+      () {
+        final d = ProfileDraft();
+        d.guider.calibrationCadence = CalibrationCadence.eachSession;
+        final out = applyDraftToPhd2(const Phd2Settings(), d);
+        expect(out.forceCalibrationEachSession, isTrue);
+      },
+    );
 
-    test('applyDraftToPhd2 keeps a bracketed IPv6 host intact (last-colon split)', () {
-      final d = ProfileDraft();
-      d.guider.hostPort = '[::1]:4401';
-      final out = applyDraftToPhd2(const Phd2Settings(), d);
-      expect(out.host, '[::1]');
-      expect(out.port, 4401);
-    });
+    test(
+      'applyDraftToPhd2 keeps a bracketed IPv6 host intact (last-colon split)',
+      () {
+        final d = ProfileDraft();
+        d.guider.hostPort = '[::1]:4401';
+        final out = applyDraftToPhd2(const Phd2Settings(), d);
+        expect(out.host, '[::1]');
+        expect(out.port, 4401);
+      },
+    );
 
-    test('applyDraftToPhd2 keeps a bracketed IPv6 host with no port intact', () {
-      final d = ProfileDraft();
-      d.guider.hostPort = '[::1]';
-      const base = Phd2Settings(port: 4400);
-      final out = applyDraftToPhd2(base, d);
-      expect(out.host, '[::1]');
-      expect(out.port, 4400, reason: 'no port appended → keep the base port');
-    });
+    test(
+      'applyDraftToPhd2 keeps a bracketed IPv6 host with no port intact',
+      () {
+        final d = ProfileDraft();
+        d.guider.hostPort = '[::1]';
+        const base = Phd2Settings(port: 4400);
+        final out = applyDraftToPhd2(base, d);
+        expect(out.host, '[::1]');
+        expect(out.port, 4400, reason: 'no port appended → keep the base port');
+      },
+    );
 
-    test('applyDraftToPhd2 with a bare host (no colon) keeps the base port', () {
-      final d = ProfileDraft();
-      d.guider.hostPort = 'guidepi';
-      const base = Phd2Settings(port: 4400);
-      final out = applyDraftToPhd2(base, d);
-      expect(out.host, 'guidepi');
-      expect(out.port, 4400);
-    });
+    test(
+      'applyDraftToPhd2 with a bare host (no colon) keeps the base port',
+      () {
+        final d = ProfileDraft();
+        d.guider.hostPort = 'guidepi';
+        const base = Phd2Settings(port: 4400);
+        final out = applyDraftToPhd2(base, d);
+        expect(out.host, 'guidepi');
+        expect(out.port, 4400);
+      },
+    );
 
     test('applyDraftToPhd2 treats a bare (unbracketed) IPv6 as host-only', () {
       final d = ProfileDraft();
       d.guider.hostPort = '::1';
       const base = Phd2Settings(port: 4400);
       final out = applyDraftToPhd2(base, d);
-      expect(out.host, '::1', reason: '2+ colons, no brackets → whole value is the IPv6 host');
-      expect(out.port, 4400, reason: 'IPv6 ports require brackets, so no port to split → base port');
+      expect(
+        out.host,
+        '::1',
+        reason: '2+ colons, no brackets → whole value is the IPv6 host',
+      );
+      expect(
+        out.port,
+        4400,
+        reason: 'IPv6 ports require brackets, so no port to split → base port',
+      );
     });
 
     test('applyDraftToPhd2 keeps a longer bare IPv6 literal intact', () {
