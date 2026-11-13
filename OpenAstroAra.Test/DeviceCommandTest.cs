@@ -82,14 +82,20 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_call_that_never_returns_fails_at_the_hard_timeout_with_one_StallTimeout_and_the_abandoned_call_is_observed() {
+            // The handler is process-wide: count only this call's exception, not a stray task from another test.
+            const string Marker = "late abandoned call (#1808)";
             var unobserved = 0;
-            void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e) => Interlocked.Increment(ref unobserved);
+            void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e) {
+                if (e.Exception.InnerExceptions.Any(x => x.Message.Contains(Marker, StringComparison.Ordinal))) {
+                    Interlocked.Increment(ref unobserved);
+                }
+            }
             TaskScheduler.UnobservedTaskException += OnUnobserved;
             using var release = new ManualResetEventSlim(false);
             try {
                 var sw = Stopwatch.StartNew();
                 var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
-                    Run(Policy(hardMs: 50), () => { release.Wait(TimeSpan.FromSeconds(10)); throw new InvalidOperationException("late"); }));
+                    Run(Policy(hardMs: 50), () => { release.Wait(TimeSpan.FromSeconds(10)); throw new InvalidOperationException(Marker); }));
                 Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(1)));
                 Assert.That(ex!.Message, Does.Contain("did not complete within"));
                 var fault = _faults.Faults.Single();
