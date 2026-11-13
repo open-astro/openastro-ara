@@ -818,6 +818,33 @@ void main() {
     });
   });
 
+  group('planetarium page at rest (PR #1856)', () {
+    test('the page rests while put away: wired on both ends', () {
+      // tool/page_logic/sky_rest.test.js runs the rest logic; this pins the
+      // wiring no harness runs: the frame hook is installed before the engine
+      // asks for its first frame, the page hears 'visibility', a command
+      // wakes it, the first drawn sky lets it rest, and the selection poll
+      // sleeps with it. And the view sends 'visibility'.
+      final page = File('assets/stellarium/index.html')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      final hook = page.indexOf(
+        'window.requestAnimationFrame = function (cb) { return araSkyFrame(araSky, cb); };',
+      );
+      expect(hook, greaterThan(0));
+      expect(hook, lessThan(page.indexOf('stellarium-web-engine.js"></script>')));
+      expect(page, contains("if (c.type === 'visibility') { araSkySetHidden(araSky, !!c.hidden); return; }"));
+      expect(page, contains('if (araSky.hidden) araSkyWake(araSky, 1500);'));
+      expect(page, contains('araSky.ready = true;'));
+      expect(page, contains('if (!araSkyResting(araSky)) syncSelection();'));
+      expect(page, isNot(contains('setInterval(syncSelection, 150)')));
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
+          .readAsStringSync();
+      expect(dart, contains("_pushCmd({'type': 'visibility', 'hidden': !shown})"));
+      expect(dart, contains('PlanetariumShownListener('));
+    });
+  });
+
   group('planetarium page framing target', () {
     test('a goto without a name clears the framing name; the search bar sends one', () {
       // Night of 2026-10-02: select the Moon, type "NGC 7000" (a catalog hit →

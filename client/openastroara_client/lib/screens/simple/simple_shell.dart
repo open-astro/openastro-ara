@@ -1344,7 +1344,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // no longer starts the web view, the engine and
                               // its tiles again, and it shows only once it has
                               // drawn (or after 3 s), so the tiles are never
-                              // seen filling in (user, 2026-11-13).
+                              // seen filling in (user, 2026-11-13). Put away,
+                              // the page rests and draws nothing
+                              // (PlanetariumShownListener).
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [

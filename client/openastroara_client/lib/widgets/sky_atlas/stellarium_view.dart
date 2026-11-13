@@ -37,6 +37,7 @@ import '../../util/search_route.dart';
 import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'planetarium_search_listener.dart';
+import 'planetarium_shown_listener.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
 import '../../state/simple_messages_state.dart';
@@ -641,12 +642,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // A search typed in Simple Mode Plan's sheet runs through this view's
     // own search, as if typed in its search bar; mounted only now the view is
     // ready, so an earlier search waits.
-    Widget searchable(Widget view) => PlanetariumSearchListener(
-      onSearch: (q) {
-        _searchCtrl.text = q;
-        unawaited(_submitSearch());
-      },
-      child: view,
+    // Put away (Simple Mode's frame over it), the page rests and draws
+    // nothing; shown, it draws again from where it was.
+    Widget searchable(Widget view) => PlanetariumShownListener(
+      onChanged: (shown) => _pushCmd({'type': 'visibility', 'hidden': !shown}),
+      child: PlanetariumSearchListener(
+        onSearch: (q) {
+          _searchCtrl.text = q;
+          unawaited(_submitSearch());
+        },
+        child: view,
+      ),
     );
     if (widget.bare) {
       return searchable(
