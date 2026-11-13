@@ -55,7 +55,7 @@ void main() {
   });
 
   testWidgets(
-    'each phone its own picker: the iOS wheel, Android\'s flat number picker',
+    "each phone its own picker: the iOS wheel, Android's flat number picker",
     (tester) async {
       final picks = await _pump(tester, platform: TargetPlatform.android);
       await tester.tap(find.byKey(const Key('tile')));
