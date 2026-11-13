@@ -925,6 +925,22 @@ void main() {
             isNull);
       });
 
+      testWidgets('opening the tab reads the files again, so an old failure does not stay up', (tester) async {
+        final cal = _GuiderCal(built);
+        // The Guider is already connected (its status read) when the tab opens.
+        final (c, _, _, _) = await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => cal),
+        ]);
+        c.listen(guiderStatusProvider, (_, _) {});
+        await c.read(guiderStatusProvider.future);
+        await tester.pump();
+        expect(cal.refreshes, 0, reason: 'precondition: the tab is not open yet');
+        c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.guide);
+        await tester.pumpAndSettle();
+        expect(cal.refreshes, 1);
+      });
+
       testWidgets('the Guider coming back after a restart reads its files again', (tester) async {
         final guider = _RestartingGuider();
         final cal = _GuiderCal(built);
