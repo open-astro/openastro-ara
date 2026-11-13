@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/achievements.dart';
 import '../../state/stats/achievements_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../l10n/l10n.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import '../adaptive_controls.dart';
@@ -16,7 +17,11 @@ import 'stats_pull_refresh.dart';
 /// (`GET /api/v1/stats/achievements`) — cumulative records + imaging-night
 /// streaks + milestone badges. Degrades gracefully when no server is connected.
 class AchievementsSection extends ConsumerStatefulWidget {
-  const AchievementsSection({super.key});
+  const AchievementsSection({super.key, this.dashboard = false});
+
+  /// Simple Mode's dashboard (a records list and medals); else the tiles and
+  /// badge cards.
+  final bool dashboard;
 
   @override
   ConsumerState<AchievementsSection> createState() =>
@@ -122,7 +127,7 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_staleError) const _StaleBanner(),
-        _Achievements(data: data),
+        _Achievements(data: data, dashboard: widget.dashboard),
       ],
     );
   }
@@ -160,61 +165,56 @@ class _StaleBanner extends StatelessWidget {
 }
 
 class _Achievements extends StatelessWidget {
-  const _Achievements({required this.data});
+  const _Achievements({required this.data, required this.dashboard});
 
   final StatsAchievements data;
 
+  /// Simple Mode's dashboard: a records list and medals. Advanced Mode keeps
+  /// its tiles and badge cards.
+  final bool dashboard;
+
   @override
   Widget build(BuildContext context) {
+    // Each record once: (icon, value, label, note, on the dashboard). The
+    // dashboard leaves out the totals Overview already shows, and its target
+    // count names what it counts (named frames only).
+    final records = [
+      (Icons.local_fire_department, '${data.currentStreakNights}', 'Current streak', 'nights in a row', true),
+      (Icons.whatshot, '${data.longestStreakNights}', 'Longest streak', 'nights', true),
+      (Icons.calendar_month, '${data.totalNightsImaged}', 'Nights imaged', null, true),
+      (Icons.nightlight_round, _hours(data.longestNightHours), 'Longest night', null, true),
+      (Icons.timelapse, _hours(data.totalIntegrationHours), 'Total integration', null, false),
+      (
+        Icons.gps_fixed,
+        '${data.uniqueTargetsImaged}',
+        dashboard ? context.l10n.statsNamedTargets : 'Unique targets',
+        null,
+        true,
+      ),
+      (Icons.image_outlined, '${data.totalLightFrames}', 'Light frames', null, false),
+      (Icons.flag_outlined, _firstLight(data.firstLightUtc), 'First light', null, true),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ResponsiveTileGrid(
-          children: [
-            StatTile(
-              icon: Icons.local_fire_department,
-              value: '${data.currentStreakNights}',
-              label: 'Current streak',
-              subtitle: 'nights in a row',
+        if (dashboard)
+          LayoutBuilder(
+            builder: (context, box) => StatKpiGrid(
+              columns: box.maxWidth >= 720 ? 3 : 2,
+              children: [
+                for (final (_, value, label, note, onDashboard) in records)
+                  if (onDashboard)
+                    StatKpi(value: value, label: label, subtitle: note),
+              ],
             ),
-            StatTile(
-              icon: Icons.whatshot,
-              value: '${data.longestStreakNights}',
-              label: 'Longest streak',
-              subtitle: 'nights',
-            ),
-            StatTile(
-              icon: Icons.calendar_month,
-              value: '${data.totalNightsImaged}',
-              label: 'Nights imaged',
-            ),
-            StatTile(
-              icon: Icons.nightlight_round,
-              value: _hours(data.longestNightHours),
-              label: 'Longest night',
-            ),
-            StatTile(
-              icon: Icons.timelapse,
-              value: _hours(data.totalIntegrationHours),
-              label: 'Total integration',
-            ),
-            StatTile(
-              icon: Icons.gps_fixed,
-              value: '${data.uniqueTargetsImaged}',
-              label: 'Unique targets',
-            ),
-            StatTile(
-              icon: Icons.image_outlined,
-              value: '${data.totalLightFrames}',
-              label: 'Light frames',
-            ),
-            StatTile(
-              icon: Icons.flag_outlined,
-              value: _firstLight(data.firstLightUtc),
-              label: 'First light',
-            ),
-          ],
-        ),
+          )
+        else
+          ResponsiveTileGrid(
+            children: [
+              for (final (icon, value, label, note, _) in records)
+                StatTile(icon: icon, value: value, label: label, subtitle: note),
+            ],
+          ),
         if (data.milestones.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text('Badges',
@@ -222,11 +222,29 @@ class _Achievements extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(height: 8),
-          ResponsiveTileGrid(
-            children: [
-              for (final m in data.milestones) _MilestoneBadge(milestone: m),
-            ],
-          ),
+          if (!dashboard)
+            ResponsiveTileGrid(
+              children: [
+                for (final m in data.milestones) _BadgeCard(milestone: m),
+              ],
+            )
+          else
+            // Medals on a shelf that scrolls sideways, earned ones first. The
+            // ring and gaps are fixed; the two title lines and the progress
+            // line grow with the user's text size.
+            SizedBox(
+              height: 64 + MediaQuery.textScalerOf(context).scale(68),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final m in [
+                    ...data.milestones.where((m) => m.achieved),
+                    ...data.milestones.where((m) => !m.achieved),
+                  ])
+                    _MilestoneBadge(milestone: m),
+                ],
+              ),
+            ),
         ],
         const Padding(
           padding: EdgeInsets.only(top: 12),
@@ -264,6 +282,100 @@ class _Achievements extends StatelessWidget {
 
 class _MilestoneBadge extends StatelessWidget {
   const _MilestoneBadge({required this.milestone});
+
+  final StatsMilestone milestone;
+
+  @override
+  Widget build(BuildContext context) {
+    final achieved = milestone.achieved;
+    final accent = achieved ? AraColors.accentConnected : AraColors.accentInfo;
+    // A medal: the progress as a ring round the trophy or the lock, the
+    // title under it and how far, or Earned, under that. One size for all.
+    return Tooltip(
+      message: milestone.description,
+      child: SizedBox(
+        key: Key('stats-medal-${milestone.id}'),
+        width: 104,
+        child: Column(
+          spacing: 4,
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: achieved ? 1 : milestone.progress,
+                    strokeWidth: 4,
+                    backgroundColor: AraColors.bgInput,
+                    valueColor: AlwaysStoppedAnimation(accent),
+                  ),
+                  Icon(
+                    achieved ? Icons.emoji_events : Icons.lock_outline,
+                    size: 24,
+                    color: achieved
+                        ? AraColors.accentConnected
+                        : AraColors.textDisabled,
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              milestone.title,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: achieved
+                        ? AraColors.textPrimary
+                        : AraColors.textSecondary,
+                  ),
+            ),
+            Text(
+              achieved
+                  ? context.l10n.statsBadgeEarned
+                  : '${_trim(milestone.current)} / ${_trim(milestone.threshold)}', // l10n-ok
+              style: TextStyle(
+                  fontSize: 11,
+                  color: achieved
+                      ? AraColors.accentConnected
+                      : AraColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Drop a trailing ".0" so "10.0" reads as "10", but keep a real fraction.
+  // Epsilon compare rather than exact float equality so 10.0000000001 still
+  // reads as "10".
+  static String _trim(double v) => (v - v.roundToDouble()).abs() < 1e-9
+      ? v.round().toString()
+      : v.toStringAsFixed(1);
+}
+
+class _Hint extends StatelessWidget {
+  const _Hint(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        message,
+        style: const TextStyle(color: AraColors.textSecondary),
+      ),
+    );
+  }
+}
+
+
+class _BadgeCard extends StatelessWidget {
+  const _BadgeCard({required this.milestone});
 
   final StatsMilestone milestone;
 
@@ -318,36 +430,12 @@ class _MilestoneBadge extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${_trim(milestone.current)} / ${_trim(milestone.threshold)}',
+              '${_MilestoneBadge._trim(milestone.current)} / ${_MilestoneBadge._trim(milestone.threshold)}',
               style: const TextStyle(
                   fontSize: 11, color: AraColors.textDisabled),
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  // Drop a trailing ".0" so "10.0" reads as "10", but keep a real fraction.
-  // Epsilon compare rather than exact float equality so 10.0000000001 still
-  // reads as "10".
-  static String _trim(double v) => (v - v.roundToDouble()).abs() < 1e-9
-      ? v.round().toString()
-      : v.toStringAsFixed(1);
-}
-
-class _Hint extends StatelessWidget {
-  const _Hint(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        message,
-        style: const TextStyle(color: AraColors.textSecondary),
       ),
     );
   }

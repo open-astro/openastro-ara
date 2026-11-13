@@ -140,7 +140,10 @@ class _LinuxPlanetariumOverlayState
   @override
   Widget build(BuildContext context) {
     final isPlanning = ref.watch(selectedTabIndexProvider) == _planningTabIndex;
-    final visible = isPlanning && !_routeOnTop;
+    // Simple Mode keeps the sky loaded while it shows a frame, offstage with
+    // its tickers off: the native overlay must hide then too.
+    final visible =
+        isPlanning && !_routeOnTop && TickerMode.valuesOf(context).enabled;
     // Geometry and visibility can only be read/applied after this frame lays the
     // slot out. Becoming visible: show first, then push the bounds even when
     // they match the last push — a resize while Planning was hidden reached

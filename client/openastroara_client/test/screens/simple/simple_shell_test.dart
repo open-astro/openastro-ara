@@ -23,6 +23,7 @@ import 'package:openastroara/widgets/stats/charts/calendar_heatmap.dart';
 import 'package:openastroara/widgets/stats/charts/focus_temp_scatter.dart';
 import 'package:openastroara/widgets/stats/charts/frame_quality_chart.dart';
 import 'package:openastroara/widgets/stats/charts/guiding_rms_chart.dart';
+import 'package:openastroara/widgets/stats/overview_section.dart';
 import 'package:openastroara/widgets/stats/pi_performance_section.dart';
 import 'package:openastroara/widgets/stats/stats_pull_refresh.dart';
 import 'package:openastroara/widgets/stats/targets_section.dart';
@@ -209,9 +210,16 @@ final _someSteps = [
     GuideStep(at: DateTime(2026, 11, 1, 22, 0, i), raPx: (i % 5 - 2) * 0.3, decPx: (i % 3 - 1) * 0.2),
 ];
 
+class _SkyReady extends PlanetariumReadyNotifier {
+  _SkyReady(this.initial);
+  final bool initial;
+  @override
+  bool build() => initial;
+}
+
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -234,6 +242,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
           configuredPath: '/var/lib/astap', effectivePath: '/var/lib/astap', fileCount: 9,
           databases: starDatabases, solverPath: '/opt/openastroara/astap_cli', solverFound: true)),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+    // No web view in a test: the sky has drawn unless a test says not.
+    planetariumReadyProvider.overrideWith(() => _SkyReady(skyReady)),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
     // A server would otherwise dial a real event stream.
@@ -809,18 +819,19 @@ class _OpticsApi extends ProfileApi {
 
 /// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
 class _CoolingCamera extends CameraStatusNotifier {
-  _CoolingCamera(this.ccd);
+  _CoolingCamera(this.ccd, {this.on = true});
   double ccd;
-  static Map<String, dynamic> _wire(double t) => {
+  final bool on;
+  static Map<String, dynamic> _wire(double t, bool on) => {
         'device_id': 'c',
         'name': 'ASI2600MM',
         'state': 'connected',
         'capabilities': {'has_cooler': true, 'can_set_temperature': true},
-        'runtime': {'ccd_temperature': t, 'cooler_on': true, 'cooler_setpoint_c': -10},
+        'runtime': {'ccd_temperature': t, 'cooler_on': on, 'cooler_setpoint_c': -10},
       };
   @override
-  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd));
-  void set(double t) => state = AsyncData(CameraStatus.fromJson(_wire(t)));
+  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd, on));
+  void set(double t, {bool on = true}) => state = AsyncData(CameraStatus.fromJson(_wire(t, on)));
 }
 
 class _NightPrefs extends NightModePrefsService {
@@ -1904,6 +1915,32 @@ void main() {
       },
     );
 
+    // Falsified by: stats_dashboard_screen.dart moving CalendarHeatmap back below Achievements.
+    testWidgets('Stats page: the nights calendar follows the Overview, before Best Frames', (tester) async {
+      await _pump(tester, const Size(1024, 768));
+      await tester.tap(find.byKey(const Key('simple-stats')));
+      await tester.pumpAndSettle();
+      final calendar = tester.getRect(find.byType(CalendarHeatmap));
+      expect(calendar.top, greaterThan(tester.getRect(find.byType(OverviewSection)).bottom));
+      expect(calendar.bottom, lessThan(tester.getTopLeft(find.text('Best Frames')).dy));
+    });
+
+    // Falsified by: stats_dashboard_screen.dart placing the calendar after the Overview in the Full UI too.
+    testWidgets('Stats page in the Full UI keeps the nights calendar last, after Best Frames', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1024, 4000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StatsDashboardScreen(),
+        ),
+      ));
+      await tester.pump();
+      expect(tester.getRect(find.byType(CalendarHeatmap)).top,
+          greaterThan(tester.getTopLeft(find.text('Best Frames')).dy));
+    });
+
     // Falsified by: stats_dashboard_screen.dart title back to const Text('Stats').
     testWidgets('Stats page title: the rail button\'s localized name in Simple Mode, Stats in the Full UI',
         (tester) async {
@@ -2040,9 +2077,11 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-exposure')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('10 s').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('10 s').last);
+    final wheel = tester.widget<ListWheelScrollView>(find.byType(ListWheelScrollView));
+    final tile = tester.widget<SimplePresetTile<Duration>>(find.byKey(const Key('simple-exposure')));
+    wheel.onSelectedItemChanged!(tile.options.indexOf(const Duration(seconds: 10)));
+    await tester.ensureVisible(find.text('Done'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
     tester.widget<Slider>(find.byKey(const Key('simple-gain'))).onChangeEnd!(200);
@@ -3094,6 +3133,15 @@ void main() {
     expect(sheet, findsNothing);
   });
 
+  testWidgets('Rig: Versions is the last block, after Storage and Logs', (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    await _openSection(tester, 'Rig');
+    final versions = tester.getRect(find.byKey(const Key('simple-versions')));
+    for (final t in [SimpleStorageBlock, SimpleLogsBlock]) {
+      expect(versions.top, greaterThan(tester.getRect(find.byType(t)).bottom), reason: '$t');
+    }
+  });
+
   testWidgets('Rig: the rig\'s figures, rig and profile and how to change them, Permanent pier, the Simple Mode '
       'switch, version and logs', (tester) async {
     final c = await _pump(tester, const Size(1470, 854),
@@ -3372,6 +3420,42 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-sky')));
     await tester.pump();
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'and back');
+  });
+
+  testWidgets('the Sky Map stays loaded between opens, offstage while a frame shows', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    final sky = find.byKey(const Key('sky'), skipOffstage: false);
+    expect(sky, findsOneWidget, reason: 'loaded with Simple Mode, before it is asked for');
+    final first = tester.element(sky);
+    await _frame(tester, c);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'offstage behind the frame');
+    expect(identical(tester.element(sky), first), isTrue, reason: 'the same web view, not a new one');
+  });
+
+  testWidgets('until the sky has drawn the wallpaper says it is loading; it shows when drawn, or after 3 s',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, skyReady: false);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'not drawn yet: no tiles filling in');
+    expect(find.byKey(const Key('simple-sky-loading')), findsOneWidget);
+    c.read(planetariumReadyProvider.notifier).set(true);
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    expect(find.byKey(const Key('simple-sky-loading')), findsNothing);
+    c.read(planetariumReadyProvider.notifier).set(false);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'a page that never says so still shows');
   });
 
   testWidgets('Sky turned on with no frame gives way to the first frame (#1602)', (tester) async {
@@ -5507,6 +5591,52 @@ void main() {
     await _letPillLeave(tester);
     expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsNothing,
         reason: 'at the target (within half a degree) the pill has nothing to say');
+  });
+
+  testWidgets('a cooler turned off by hand shows Warming in the pill until the sensor stops rising', (tester) async {
+    final camera = _CoolingCamera(-10);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    final warming = find.descendant(of: pill, matching: find.textContaining('Warming'));
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'the cooler is on, at its target');
+    camera.set(-9.5, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('−9.5 °C')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentInfo, true), reason: 'a change between two states: blue');
+    await tester.pump(const Duration(seconds: 50));
+    camera.set(4, on: false);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('4 °C')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 50));
+    camera.set(4.1, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget, reason: 'it rose 50 s ago: the minute counts from the last rise');
+    await tester.pump(const Duration(seconds: 11));
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'a minute with no rise: the sensor is as warm as it gets');
+    camera.set(-10, on: true);
+    await tester.pump();
+    camera.set(-9, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget);
+    camera.set(-9, on: true);
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'the cooler is back on');
+  });
+
+  testWidgets('a camera whose cooler was off when it was first seen shows no Warming', (tester) async {
+    final camera = _CoolingCamera(12, on: false);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    camera.set(13, on: false);
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Warming')), findsNothing,
+        reason: 'nothing here saw the cooler go off');
   });
 
   testWidgets('a filter change shows in the status pill until the wheel lands; a hand swap asks there too', (tester) async {

@@ -1,0 +1,173 @@
+<title>Ara Focuser Zero</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: three Focuser window variants in a wrapping grid, Ara Simple Mode night palette (single dark theme on purpose) */
+:root {
+  --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+  --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --link: #64B5F6; --tile: #383838; --warn: #FFB300; --stop: #D32F2F;
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+h1 { font-size: 22px; margin: 0 0 6px; text-wrap: balance; }
+.lede { color: var(--text2); max-width: 72ch; margin: 0 0 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 20px; align-items: start; }
+.opt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.opt h2 { font-size: 15px; margin: 0; display: flex; gap: 8px; align-items: center; }
+.pick { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--info); border: 1px solid var(--info); border-radius: 10px; padding: 0 7px; }
+.win { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px 18px; }
+.opt.rec .win { border-color: var(--sel); }
+.head { display: flex; gap: 9px; align-items: center; font-weight: 600; }
+.head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+.body { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; align-items: center; }
+.read { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cap { color: var(--text2); font-size: 12px; }
+.big { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.big small { font-size: 14px; color: var(--text2); font-weight: 400; }
+.status { font-size: 12px; min-height: 18px; color: var(--ok); }
+.status.warn { color: var(--warn); }
+.knobs { display: flex; gap: 14px; align-items: center; }
+.knob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.cyl { border-radius: 10px; background: repeating-linear-gradient(180deg, #4a4a4a 0 7px, #2e2e2e 7px 14px); box-shadow: inset 8px 0 10px #0008, inset -8px 0 10px #0008; }
+.cyl.c { width: 60px; height: 150px; } .cyl.f { width: 46px; height: 116px; }
+.af { width: 100%; height: 44px; margin-top: 14px; border: 0; border-radius: 10px; background: var(--ok); color: var(--bg); font: 600 15px var(--sys); }
+button { font: 13px var(--sys); cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.link { background: none; border: 0; color: var(--link); padding: 2px 0; text-align: left; align-self: flex-start; }
+.ask { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ask p { margin: 0; color: var(--text2); font-size: 13px; }
+.ask p b { color: var(--text); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.btn { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; padding: 7px 14px; }
+.btn.go { background: var(--sel); border-color: var(--sel); color: #fff; }
+.btn.red { background: var(--stop); border-color: var(--stop); color: #fff; }
+.btn:disabled { opacity: .38; cursor: default; }
+.sec { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.sec h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.set { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.set .t { flex: 1 1 200px; min-width: 0; }
+.set .t div:first-child { font-size: 14px; }
+.set .t div + div { color: var(--text2); font-size: 12px; }
+.bar { height: 6px; border-radius: 3px; background: var(--tile); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .3s; }
+.ver { color: var(--text2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.note { color: var(--text2); font-size: 13px; margin: 0; }
+.note b { color: var(--text); font-weight: 600; }
+.facts { margin-top: 28px; max-width: 80ch; color: var(--text2); font-size: 13px; }
+.facts h2 { color: var(--text); font-size: 15px; }
+.facts li { margin-bottom: 4px; }
+code { font-size: 12px; background: #262626; padding: 1px 5px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+<h1>Focuser zero and calibration</h1>
+<p class="lede">Three ways to add "set zero" and "calibrate travel" to Simple Mode's Focuser window. The buttons are live: try them. Example rig: a ZWO EAF at 12 480 steps of 60 000.</p>
+
+<div class="grid">
+
+  <section class="opt">
+    <h2>A · In the window, under the reading</h2>
+    <div class="win" id="a"></div>
+    <p class="note"><b>Fastest to reach.</b> One quiet link under the position, with an inline question. It sits on the window used all night, next to the knobs, for an action done once a season.</p>
+  </section>
+
+  <section class="opt rec">
+    <h2>B · Settings › Focuser, a Position section <span class="pick">Pick</span></h2>
+    <div class="win" id="b"></div>
+    <p class="note"><b>Recommended.</b> The night window stays knobs and Autofocus. Zero and travel calibration live with the focuser's other setup (backlash, versions), where a rare action that moves every saved position belongs. Each row shows only when the driver offers it.</p>
+  </section>
+
+  <section class="opt">
+    <h2>C · Calibrate travel, running</h2>
+    <div class="win" id="c"></div>
+    <p class="note"><b>The run itself</b>, for a focuser that finds its own stops (Celestron focus motor today). It shows in place of B's row while it runs; the knobs and Autofocus lock until it ends.</p>
+  </section>
+</div>
+
+<div class="facts">
+  <h2>What zero changes</h2>
+  <ul>
+    <li><b>Moves:</b> the last autofocus position, the focus-vs-temperature model and any plan step "Move focuser to N".</li>
+    <li><b>Keeps:</b> filter offsets and backlash, because they are differences, not positions.</li>
+    <li><b>Can't zero:</b> a relative focuser or a driver without the action. The row is hidden, not greyed out.</li>
+  </ul>
+  <h2>What it needs below the UI</h2>
+  <ul>
+    <li><b>ASCOM has no "set zero".</b> <code>IFocuser</code> has only Move and Halt. It must go through the driver's <code>Action</code>, as the mount spec sheet does.</li>
+    <li><b>AlpacaBridge:</b> the ZWO EAF, ToupTek AAF and iOptron iEAF SDKs can zero, but their drivers list no actions today. The Celestron driver already offers <code>Calibrate</code>, <code>AbortCalibration</code> and <code>CalibrationStatus</code>.</li>
+  </ul>
+</div>
+
+<script>
+const MAX = 60000;
+const fmt = n => n.toLocaleString("en-NZ").replace(/,/g, " ");
+const knobs = `<div class="knobs"><div class="knob"><span class="cap">▲ In</span><div class="cyl c"></div><span class="cap">Coarse</span></div><div class="knob"><span class="cap">&nbsp;</span><div class="cyl f"></div><span class="cap">Fine</span></div></div>`;
+
+function head(t) { return `<div class="head"><i></i>${t}</div>`; }
+function reading(pos, extra = "", status = "", warn = false) {
+  return `<div class="read"><span class="cap">Position</span><span class="big">${fmt(pos)} <small>steps</small></span>
+    <span class="cap">of ${fmt(MAX)}</span>${extra}<span class="status${warn ? " warn" : ""}">${status}</span></div>`;
+}
+const zeroText = pos => `<p><b>Make ${fmt(pos)} the new 0?</b> The focuser doesn't move. The last autofocus position and plan steps that move to a set position will be off by ${fmt(pos)} steps until the next autofocus. Filter offsets stay as they are.</p>`;
+
+// A
+const A = { pos: 12480, asking: false, done: false };
+function renderA() {
+  const el = document.getElementById("a");
+  el.innerHTML = head("Focuser · ZWO EAF") + `<div class="body">${reading(A.pos,
+      A.asking ? "" : `<button class="link" id="a-zero">Set zero here</button>`,
+      A.done ? "Position set to 0" : "")}${knobs}</div>` +
+    (A.asking ? `<div class="ask">${zeroText(A.pos)}<div class="row"><button class="btn" id="a-no">Cancel</button><button class="btn go" id="a-yes">Set zero</button></div></div>`
+              : `<button class="af">Autofocus</button>`);
+  el.querySelector("#a-zero")?.addEventListener("click", () => { A.asking = true; A.done = false; renderA(); el.querySelector("#a-no").focus(); });
+  el.querySelector("#a-no")?.addEventListener("click", () => { A.asking = false; renderA(); });
+  el.querySelector("#a-yes")?.addEventListener("click", () => { A.asking = false; A.done = true; A.pos = 0; renderA(); setTimeout(() => { A.pos = 12480; A.done = false; renderA(); }, 3500); });
+}
+
+// B (+ C states)
+const B = { pos: 12480, asking: false, done: false };
+function renderB() {
+  const el = document.getElementById("b");
+  el.innerHTML = head("Focuser · ZWO EAF") + `<div class="body">${reading(B.pos, "", B.done ? "Position set to 0" : "")}${knobs}</div>
+    <button class="af">Autofocus</button>
+    <div class="sec"><h3>Position</h3>
+      <div class="set"><div class="t"><div>Set zero</div><div>Make where it is now 0. The focuser doesn't move.</div></div>
+        <button class="btn" id="b-zero" ${B.asking ? "disabled" : ""}>Set zero…</button></div>
+      ${B.asking ? `<div class="ask">${zeroText(B.pos)}<div class="row"><button class="btn" id="b-no">Cancel</button><button class="btn go" id="b-yes">Set zero</button></div></div>` : ""}
+      <div class="set"><div class="t"><div>Backlash</div><div>In 40 steps · Out 0 steps</div></div><button class="btn">Change…</button></div>
+    </div>
+    <div class="sec"><h3>Versions</h3><div class="ver">Driver AlpacaBridge 6.1.0 · SDK EAF 1.6 · Firmware 3.0.3 · Serial EAF-0D2F</div></div>`;
+  el.querySelector("#b-zero")?.addEventListener("click", () => { B.asking = true; B.done = false; renderB(); el.querySelector("#b-no").focus(); });
+  el.querySelector("#b-no")?.addEventListener("click", () => { B.asking = false; renderB(); });
+  el.querySelector("#b-yes")?.addEventListener("click", () => { B.asking = false; B.done = true; B.pos = 0; renderB(); setTimeout(() => { B.pos = 12480; B.done = false; renderB(); }, 3500); });
+}
+
+const C = { stage: "idle", pct: 0, timer: null, max: 0 };
+const STAGES = [["in", "Finding the inner stop…", 45], ["out", "Measuring the travel to the outer stop…", 95], ["back", "Returning to 12 480…", 100]];
+function renderC() {
+  const el = document.getElementById("c");
+  const running = C.stage !== "idle" && C.stage !== "done";
+  const label = running ? STAGES.find(s => s[0] === C.stage)[1] : (C.stage === "done" ? `Travel 0 – ${fmt(C.max)} steps` : "");
+  el.innerHTML = head("Focuser · Celestron Focus Motor") + `<div class="body">${reading(running ? Math.round(12480 * (1 - Math.min(C.pct, 45) / 45)) : 12480, "", label, running)}${knobs}</div>
+    <button class="af" ${running ? 'disabled style="opacity:.38"' : ""}>Autofocus</button>
+    <div class="sec"><h3>Position</h3>
+      <div class="set"><div class="t"><div>Calibrate travel</div><div>${running ? label : (C.stage === "done" ? `Done. ${label}.` : "The focuser runs to both stops and sets 0 at the inner one. About 2 minutes. Take off the camera's dew cap first if it can touch.")}</div></div>
+        ${running ? `<button class="btn red" id="c-stop">Stop</button>` : `<button class="btn" id="c-go">Calibrate…</button>`}</div>
+      ${running ? `<div class="bar" role="progressbar" aria-valuenow="${C.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${C.pct}%"></i></div>` : ""}
+    </div>`;
+  el.querySelector("#c-go")?.addEventListener("click", startC);
+  el.querySelector("#c-stop")?.addEventListener("click", () => { clearInterval(C.timer); C.stage = "idle"; C.pct = 0; renderC(); });
+}
+function startC() {
+  C.stage = "in"; C.pct = 0; renderC();
+  C.timer = setInterval(() => {
+    C.pct += 3;
+    const s = STAGES.find(s => C.pct <= s[2]);
+    if (!s) { clearInterval(C.timer); C.stage = "done"; C.max = 60000; renderC(); return; }
+    C.stage = s[0]; renderC();
+  }, 150);
+}
+
+renderA(); renderB(); renderC();
+</script>

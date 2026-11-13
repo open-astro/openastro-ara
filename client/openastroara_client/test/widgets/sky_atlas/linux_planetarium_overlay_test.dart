@@ -57,4 +57,33 @@ void main() {
     await t.pump();
     expect(calls, ['setVisible true', 'setBounds 800.0x600.0']);
   });
+
+  testWidgets('loaded offstage with its tickers off, the native overlay hides', (t) async {
+    final calls = <String>[];
+    t.binding.defaultBinaryMessenger.setMockMethodCallHandler(_channel, (call) async {
+      if (call.method == 'setVisible') calls.add('setVisible ${(call.arguments as Map)['visible']}');
+      return null;
+    });
+    addTearDown(() => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(_channel, null));
+
+    final ticking = ValueNotifier(true);
+    await t.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        navigatorObservers: [planetariumRouteObserver],
+        home: ValueListenableBuilder<bool>(
+          valueListenable: ticking,
+          builder: (context, on, _) =>
+              TickerMode(enabled: on, child: const LinuxPlanetariumOverlay(url: 'http://127.0.0.1:1/')),
+        ),
+      ),
+    ));
+    await t.pump();
+    expect(calls.last, 'setVisible true');
+
+    // Simple Mode shows a frame: the sky stays mounted with its tickers off.
+    ticking.value = false;
+    await t.pump();
+    await t.pump();
+    expect(calls.last, 'setVisible false');
+  });
 }

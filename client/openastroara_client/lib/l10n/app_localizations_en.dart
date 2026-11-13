@@ -856,6 +856,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewCooling => 'Cooling';
 
   @override
+  String get previewWarming => 'Warming';
+
+  @override
   String previewStatusSpoken(String label, String detail) {
     return '$label, $detail';
   }
@@ -5189,4 +5192,58 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faultGroupReleased => 'released — disconnected by hand';
+
+  @override
+  String get focuserPosition => 'Position';
+
+  @override
+  String get focuserSetZero => 'Set zero';
+
+  @override
+  String get focuserSetZeroButton => 'Set zero…';
+
+  @override
+  String get focuserSetZeroHint =>
+      'Make where it is now 0. The focuser doesn\'t move.';
+
+  @override
+  String focuserSetZeroAsk(String position) {
+    return 'Make $position the new 0? The last autofocus position and plan steps that move to a set position will be off by $position steps until the next autofocus. Filter offsets stay as they are.';
+  }
+
+  @override
+  String get focuserCalibrate => 'Calibrate travel';
+
+  @override
+  String get focuserCalibrateButton => 'Calibrate';
+
+  @override
+  String get focuserCalibrateHint =>
+      'The focuser runs to both stops and sets 0 at the inner one. Take off anything that could touch first.';
+
+  @override
+  String get focuserCalibrating => 'Running to both stops…';
+
+  @override
+  String get focuserCalibrated => 'Calibrated';
+
+  @override
+  String get focuserCouldntSetZero => 'Couldn\'t set the focuser\'s zero';
+
+  @override
+  String get focuserCouldntCalibrate => 'Couldn\'t calibrate the focuser';
+
+  @override
+  String get shellLoadingSky => 'Loading the sky…';
+
+  @override
+  String statsIntegrationCaption(int lights, int sessions) {
+    return '$lights light frames in $sessions sessions';
+  }
+
+  @override
+  String get statsNamedTargets => 'Named targets';
+
+  @override
+  String get statsBadgeEarned => 'Earned';
 }

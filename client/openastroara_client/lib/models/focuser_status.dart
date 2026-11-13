@@ -10,12 +10,19 @@ class FocuserCapabilities {
   final bool canTempComp;
   final bool absoluteFocuser;
 
+  /// The driver can make the current position 0 / run to both stops to find
+  /// its travel (its SetZero and Calibrate actions).
+  final bool canSetZero;
+  final bool canCalibrate;
+
   const FocuserCapabilities({
     required this.minPosition,
     required this.maxPosition,
     required this.stepSizeUm,
     required this.canTempComp,
     required this.absoluteFocuser,
+    this.canSetZero = false,
+    this.canCalibrate = false,
   });
 
   factory FocuserCapabilities.fromJson(Map<String, dynamic> json) =>
@@ -25,6 +32,8 @@ class FocuserCapabilities {
         stepSizeUm: (json['step_size_um'] as num?)?.toDouble() ?? 0,
         canTempComp: json['can_temp_comp'] as bool? ?? false,
         absoluteFocuser: json['absolute_focuser'] as bool? ?? true,
+        canSetZero: json['can_set_zero'] as bool? ?? false,
+        canCalibrate: json['can_calibrate'] as bool? ?? false,
       );
 
   @override
@@ -35,11 +44,13 @@ class FocuserCapabilities {
           other.maxPosition == maxPosition &&
           other.stepSizeUm == stepSizeUm &&
           other.canTempComp == canTempComp &&
-          other.absoluteFocuser == absoluteFocuser);
+          other.absoluteFocuser == absoluteFocuser &&
+          other.canSetZero == canSetZero &&
+          other.canCalibrate == canCalibrate);
 
   @override
-  int get hashCode => Object.hash(
-      minPosition, maxPosition, stepSizeUm, canTempComp, absoluteFocuser);
+  int get hashCode => Object.hash(minPosition, maxPosition, stepSizeUm,
+      canTempComp, absoluteFocuser, canSetZero, canCalibrate);
 }
 
 /// Live status of the connected ASCOM Focuser
@@ -59,6 +70,10 @@ class FocuserStatus extends EquipmentDeviceStatus {
   final double? temperature;
   final bool tempCompEnabled;
 
+  /// 'calibrating', 'calibrated' or 'not_calibrated'; null when the focuser
+  /// can't calibrate its travel.
+  final String? calibration;
+
   FocuserStatus({
     required this.deviceId,
     required this.name,
@@ -68,6 +83,7 @@ class FocuserStatus extends EquipmentDeviceStatus {
     required this.position,
     required this.temperature,
     required this.tempCompEnabled,
+    this.calibration,
   });
 
   // A compensated move (#1541) reports backlash_compensating until it settles.
@@ -91,6 +107,7 @@ class FocuserStatus extends EquipmentDeviceStatus {
       position: (r['position'] as num?)?.toInt(),
       temperature: (r['temperature'] as num?)?.toDouble(),
       tempCompEnabled: r['temp_comp_enabled'] as bool? ?? false,
+      calibration: r['calibration'] as String?,
     );
   }
 
@@ -105,9 +122,10 @@ class FocuserStatus extends EquipmentDeviceStatus {
           other.runtimeState == runtimeState &&
           other.position == position &&
           other.temperature == temperature &&
-          other.tempCompEnabled == tempCompEnabled);
+          other.tempCompEnabled == tempCompEnabled &&
+          other.calibration == calibration);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, position, temperature, tempCompEnabled);
+      runtimeState, position, temperature, tempCompEnabled, calibration);
 }
