@@ -47,8 +47,8 @@ namespace OpenAstroAra.Test {
         public async Task A_socket_drop_during_Connecting_ends_in_Error_and_starts_recovery() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            // The event socket dies while the post-connect init is still asking get_profiles.
-            fake.OnRpc("get_profiles", _ => { fake.DropConnections(); return new System.Text.Json.Nodes.JsonArray(); });
+            // The event socket dies while the post-connect init is still asking get_version.
+            fake.OnRpc("get_version", _ => { fake.DropConnections(); return 0; });
 
             var recoveryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var supervisor = new Mock<IGuiderProcessSupervisor>();
@@ -67,9 +67,12 @@ namespace OpenAstroAra.Test {
 
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), null, CancellationToken.None).ConfigureAwait(false);
 
-            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("get_profiles")), Is.True, "init never reached get_profiles");
-            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.State != EquipmentConnectionState.Connecting), Is.True, "attempt never settled");
-            Assert.That(svc.GetAsync(CancellationToken.None).Result?.State, Is.EqualTo(EquipmentConnectionState.Error),
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("get_version")), Is.True, "init never reached get_version");
+            var sw = Stopwatch.StartNew();
+            while ((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connecting && sw.ElapsedMilliseconds < 20000) {
+                await Task.Delay(50).ConfigureAwait(false);
+            }
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State, Is.EqualTo(EquipmentConnectionState.Error),
                 "a drop during Connecting must not leave the service Connected over a dead link");
             Assert.That(await WaitUntilAsync(() => recoveryStarted.Task.IsCompleted), Is.True, "the drop never reached §63.3 recovery");
         }
