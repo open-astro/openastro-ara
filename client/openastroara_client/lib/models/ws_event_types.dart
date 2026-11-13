@@ -95,6 +95,8 @@ abstract final class WsEventTypes {
       'diagnostics.auto_action_taken';
   static const String diagnosticsCleared = 'diagnostics.cleared';
   static const String diagnosticsSnapshot = 'diagnostics.snapshot';
+  static const String profileUpdated = 'profile.updated';
+  static const String clientSettingsUpdated = 'client_settings.updated';
   static const String serverRestartImminent = 'server.restart_imminent';
   static const String storageDevicesChanged = 'storage.devices_changed';
   static const String dataManagerDownloadProgress =
