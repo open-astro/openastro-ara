@@ -31,7 +31,12 @@ WsEvent _started(String frameId, num secs) => WsEvent(
   type: 'camera.exposure_started',
   ts: DateTime.utc(2026, 10, 4),
   seq: 1,
-  payload: {'frame_id': frameId, 'exposure_sec': secs, 'kind': 'light'},
+  payload: {
+    'frame_id': frameId,
+    'exposure_sec': secs,
+    'started_utc': '2026-10-04T21:00:00.000Z',
+    'kind': 'light',
+  },
 );
 
 class _Rig {

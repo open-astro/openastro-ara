@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/ws_event_types.dart';
 import '../../services/ws_event_stream.dart';
 import '../ws/ws_providers.dart';
 
@@ -91,39 +92,46 @@ const Duration kExposureActivityGrace = Duration(minutes: 2);
 class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
   Timer? _watchdog;
 
+  /// frame.complete is the belt to exposure_complete's braces: if the complete
+  /// event was lost the catalogued frame still closes the timer. Only for THIS
+  /// exposure's id, for all three: a stale frame registering late (the §28.8
+  /// orphan scan) or a late failed for an earlier exposure must not kill a
+  /// live timer.
+  void _endIfCurrent(Object? id) {
+    final current = state;
+    if (current != null && id == current.frameId) _end();
+  }
+
   @override
   ExposureActivity? build() {
     ref.onDispose(() => _watchdog?.cancel());
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       if (event == null) return;
-      final payload = event.payload;
-      switch (event.type) {
-        case 'camera.exposure_started':
-          final frameId = payload['frame_id'];
-          final secs = payload['exposure_sec'];
-          if (frameId is! String || frameId.isEmpty || secs is! num) return;
-          final kind = payload['kind'];
-          final filter = payload['filter_name'];
-          _begin(ExposureActivity(
-            frameId: frameId,
-            exposure: Duration(milliseconds: (secs * 1000).round()),
-            startedAt: clock.now(),
-            kind: kind is String && kind.isNotEmpty ? kind : 'light',
-            filterName: filter is String && filter.isNotEmpty ? filter : null,
-          ));
-        case 'camera.exposure_complete':
-        case 'camera.exposure_failed':
-        case 'frame.complete':
-          // frame.complete is the belt to exposure_complete's braces: if the
-          // complete event was lost the catalogued frame still closes the
-          // timer. Only for THIS exposure's id, for all three: a stale frame
-          // registering late (the §28.8 orphan scan) or a late failed for an
-          // earlier exposure must not kill a live timer.
-          final id = payload['frame_id'];
-          final current = state;
-          if (current == null) return;
-          if (id == current.frameId) _end();
+      try {
+        switch (event.type) {
+          case WsEventTypes.cameraExposureStarted:
+            final p = CameraExposureStartedPayload.fromJson(event.payload);
+            if (p.frameId.isEmpty) return;
+            final filter = p.filterName;
+            _begin(ExposureActivity(
+              frameId: p.frameId,
+              exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
+              startedAt: clock.now(),
+              kind: p.kind.isNotEmpty ? p.kind : 'light',
+              filterName: filter != null && filter.isNotEmpty ? filter : null,
+            ));
+          case WsEventTypes.cameraExposureComplete:
+            _endIfCurrent(
+                CameraExposureCompletePayload.fromJson(event.payload).frameId);
+          case WsEventTypes.cameraExposureFailed:
+            _endIfCurrent(
+                CameraExposureFailedPayload.fromJson(event.payload).frameId);
+          case 'frame.complete':
+            _endIfCurrent(event.payload['frame_id']);
+        }
+      } on TypeError {
+        // A payload that does not match the daemon's declared shape is dropped.
       }
     });
     // A dropped link means we may never hear the complete event; a frozen

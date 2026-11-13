@@ -110,3 +110,75 @@ abstract final class WsEventTypes {
   static const String safetyActionTaken = 'safety.action_taken';
   static const String safetyEmergencyStop = 'safety.emergency_stop';
 }
+
+/// Payload of `camera.exposure_started`; a missing or mistyped field throws a [TypeError].
+final class CameraExposureStartedPayload {
+  const CameraExposureStartedPayload({
+    required this.frameId,
+    required this.exposureSec,
+    required this.startedUtc,
+    required this.kind,
+    this.filterName,
+  });
+
+  factory CameraExposureStartedPayload.fromJson(Map<String, dynamic> json) =>
+      CameraExposureStartedPayload(
+        frameId: json['frame_id'] as String,
+        exposureSec: (json['exposure_sec'] as num).toDouble(),
+        startedUtc: json['started_utc'] as String,
+        kind: json['kind'] as String,
+        filterName: json['filter_name'] as String?,
+      );
+
+  final String frameId;
+  final double exposureSec;
+  final String startedUtc;
+  final String kind;
+  final String? filterName;
+}
+
+/// Payload of `camera.exposure_complete`; a missing or mistyped field throws a [TypeError].
+final class CameraExposureCompletePayload {
+  const CameraExposureCompletePayload({
+    required this.frameId,
+    required this.exposureSec,
+    required this.startedUtc,
+    required this.kind,
+    required this.elapsedMs,
+  });
+
+  factory CameraExposureCompletePayload.fromJson(Map<String, dynamic> json) =>
+      CameraExposureCompletePayload(
+        frameId: json['frame_id'] as String,
+        exposureSec: (json['exposure_sec'] as num).toDouble(),
+        startedUtc: json['started_utc'] as String,
+        kind: json['kind'] as String,
+        elapsedMs: json['elapsed_ms'] as int,
+      );
+
+  final String frameId;
+  final double exposureSec;
+  final String startedUtc;
+  final String kind;
+  final int elapsedMs;
+}
+
+/// Payload of `camera.exposure_failed`; a missing or mistyped field throws a [TypeError].
+final class CameraExposureFailedPayload {
+  const CameraExposureFailedPayload({
+    required this.frameId,
+    required this.kind,
+    required this.reason,
+  });
+
+  factory CameraExposureFailedPayload.fromJson(Map<String, dynamic> json) =>
+      CameraExposureFailedPayload(
+        frameId: json['frame_id'] as String,
+        kind: json['kind'] as String,
+        reason: json['reason'] as String,
+      );
+
+  final String frameId;
+  final String kind;
+  final String reason;
+}

@@ -4,6 +4,7 @@ import 'package:clock/clock.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/ws_event_types.dart';
 import '../equipment/camera_state.dart';
 import '../ws/ws_providers.dart';
 
@@ -204,12 +205,20 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
     });
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      if (event == null || event.type != 'camera.exposure_failed') return;
-      final id = event.payload['frame_id'];
-      final reason = event.payload['reason'];
-      if (id is! String || id.isEmpty) return;
+      if (event == null || event.type != WsEventTypes.cameraExposureFailed) {
+        return;
+      }
+      final CameraExposureFailedPayload failed;
+      try {
+        failed = CameraExposureFailedPayload.fromJson(event.payload);
+      } on TypeError {
+        return;
+      }
+      final id = failed.frameId;
+      final reason = failed.reason;
+      if (id.isEmpty) return;
       _failures.remove(id);
-      _failures[id] = reason is String && reason.trim().isNotEmpty
+      _failures[id] = reason.trim().isNotEmpty
           ? reason.trim()
           : 'the exposure failed';
       while (_failures.length > _failuresKept) {

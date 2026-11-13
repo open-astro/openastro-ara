@@ -27,6 +27,7 @@ namespace OpenAstroAra.Server.Contracts.WsEvents;
 // To add a new event:
 //   1. Declare the event here as a WsEvent (kebab/dot-notation token) and add it to All; the broadcaster
 //      accepts only a declared WsEvent (ADR 0014), and an event nothing emits does not belong here.
+//      An event with a typed payload record also lists it in Payloads (and registers it in AraJsonSerializerContext).
 //   2. Document the payload in design/API_CONTRACT.md (WebSocket section); the
 //      generated openapi.yaml cannot carry WebSocket shapes (#1131).
 //   3. Publish it through IWsBroadcaster.
@@ -299,6 +300,16 @@ public static class WsEventCatalog {
     // per-rung outcome rides the follow-up safety.action_taken event with
     // action == "emergency_stop".
     public static readonly WsEvent SafetyEmergencyStop = new("safety.emergency_stop");
+
+    /// <summary>
+    /// The typed payload record of each event that has one (ADR 0014 step 2), by wire token. The snapshot
+    /// (ws-events.json) reads the payload shape from these types; an event not listed here keeps a hand-built payload.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, Type> Payloads = new Dictionary<string, Type> {
+        [CameraExposureStarted.Token] = typeof(ExposureStartedPayload),
+        [CameraExposureComplete.Token] = typeof(ExposureCompletePayload),
+        [CameraExposureFailed.Token] = typeof(ExposureFailedPayload),
+    };
 
     /// <summary>
     /// All registered event tokens. Iteration order is the order declared here.

@@ -1,0 +1,3 @@
+### Changed
+
+- **Camera exposure WebSocket events have typed payloads**: `camera.exposure_started`, `camera.exposure_complete` and `camera.exposure_failed` are now serialized from typed records through the source-generated JSON context, with the same wire JSON as before (#1805, step 2 of ADR 0014; `EquipmentEventPublisherTest` pins the bytes). `OpenAstroAra.Server/ws-events.json` now carries the payload shape (field, JSON type, nullability) of every event with a record, and `WsEventSnapshotTest` fails when a shape changes without a refreshed snapshot. The client's `ws_event_types.dart` gains generated payload classes with `fromJson`, and the exposure timer, capture progress and backup-stream state read them instead of payload maps.

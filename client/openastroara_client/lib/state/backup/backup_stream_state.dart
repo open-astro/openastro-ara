@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../models/backup_stream.dart';
 import '../../models/server.dart';
+import '../../models/ws_event_types.dart';
 import '../../services/backup_stream_api.dart';
 import '../../services/backup_stream_prefs_service.dart';
 import '../saved_server_state.dart';
@@ -142,10 +143,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           if (!state.active) return;
           _wsDebounce?.cancel();
           _wsDebounce = Timer(const Duration(seconds: 2), _tick);
-        case 'camera.exposure_started':
+        case WsEventTypes.cameraExposureStarted:
           markExposureStarted();
-        case 'camera.exposure_complete':
-        case 'camera.exposure_failed':
+        case WsEventTypes.cameraExposureComplete:
+        case WsEventTypes.cameraExposureFailed:
           _exposureInFlight = false;
       }
     });
