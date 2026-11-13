@@ -859,10 +859,13 @@ void main() {
       expect(page.lastIndexOf("fetch('/araevent'", ready), greaterThan(0));
       expect(page.lastIndexOf('araSky.ready = true;', ready), greaterThan(0),
           reason: 'the same timer lets the page rest');
+      // CRLF on a Windows checkout (`* text=auto`), as for the page above.
       final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
-          .readAsStringSync();
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
       expect(dart, contains("if (event['type'] == 'ready') {\n      ref.read(planetariumReadyProvider.notifier).set(true);"));
-      // A new page load (both platform paths) starts not ready.
+      // A new page load starts not ready: one reset per platform path (the
+      // web view and the Linux overlay).
       expect(
         'ref.read(planetariumReadyProvider.notifier).set(false);'.allMatches(dart).length,
         2,
