@@ -32,9 +32,9 @@ class SimplePreflightStrip extends ConsumerWidget {
     final step = ref.watch(simplePreflightProvider);
     if (step == null) return const SizedBox.shrink();
     final pilot = ref.read(simplePreflightProvider.notifier);
-    final focused = ref.watch(setupFocusStateProvider) == SetupStepState.done;
+    final focused = ref.watch(nightFocusStateProvider) == SetupStepState.done;
     final aligned =
-        ref.watch(setupPolarAlignStateProvider) == SetupStepState.done ||
+        ref.watch(nightPolarAlignStateProvider) == SetupStepState.done ||
         (ref.watch(simplePermanentPierProvider).value ?? false);
     // shortcut: on a window narrower than the strip (a one-third Split View) it
     // shrinks to fit rather than overflowing by ~125 px; the phone layout

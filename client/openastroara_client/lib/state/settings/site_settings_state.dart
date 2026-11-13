@@ -45,6 +45,11 @@ class SiteSettings {
   // §29.2 — goes in every frame's OBSERVER header. Empty = header omitted.
   final String observerName;
 
+  // #1565 — the mount stays polar aligned (a permanent pier): Simple Mode's
+  // Night Setup skips polar alignment. Saved in the profile, so every device
+  // agrees.
+  final bool permanentPier;
+
   const SiteSettings({
     this.siteName = 'Backyard',
     this.latitudeDeg = 0,
@@ -60,6 +65,7 @@ class SiteSettings {
     this.maxSequenceRuntimeMin = 0,
     this.softWarningAltitudeDeg = 30,
     this.observerName = '',
+    this.permanentPier = false,
   });
 
   SiteSettings copyWith({
@@ -77,27 +83,26 @@ class SiteSettings {
     int? maxSequenceRuntimeMin,
     double? softWarningAltitudeDeg,
     String? observerName,
-  }) =>
-      SiteSettings(
-        siteName: siteName ?? this.siteName,
-        latitudeDeg: latitudeDeg ?? this.latitudeDeg,
-        longitudeDeg: longitudeDeg ?? this.longitudeDeg,
-        elevationM: elevationM ?? this.elevationM,
-        timeZone: timeZone ?? this.timeZone,
-        useCustomHorizon: useCustomHorizon ?? this.useCustomHorizon,
-        defaultHorizonAltitudeDeg:
-            defaultHorizonAltitudeDeg ?? this.defaultHorizonAltitudeDeg,
-        bortleClass: bortleClass ?? this.bortleClass,
-        sqmMagPerArcsec2: sqmMagPerArcsec2 ?? this.sqmMagPerArcsec2,
-        typicalSeeingArcsec:
-            typicalSeeingArcsec ?? this.typicalSeeingArcsec,
-        twilightDefinition: twilightDefinition ?? this.twilightDefinition,
-        maxSequenceRuntimeMin:
-            maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
-        softWarningAltitudeDeg:
-            softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
-        observerName: observerName ?? this.observerName,
-      );
+    bool? permanentPier,
+  }) => SiteSettings(
+    siteName: siteName ?? this.siteName,
+    latitudeDeg: latitudeDeg ?? this.latitudeDeg,
+    longitudeDeg: longitudeDeg ?? this.longitudeDeg,
+    elevationM: elevationM ?? this.elevationM,
+    timeZone: timeZone ?? this.timeZone,
+    useCustomHorizon: useCustomHorizon ?? this.useCustomHorizon,
+    defaultHorizonAltitudeDeg:
+        defaultHorizonAltitudeDeg ?? this.defaultHorizonAltitudeDeg,
+    bortleClass: bortleClass ?? this.bortleClass,
+    sqmMagPerArcsec2: sqmMagPerArcsec2 ?? this.sqmMagPerArcsec2,
+    typicalSeeingArcsec: typicalSeeingArcsec ?? this.typicalSeeingArcsec,
+    twilightDefinition: twilightDefinition ?? this.twilightDefinition,
+    maxSequenceRuntimeMin: maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
+    softWarningAltitudeDeg:
+        softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
+    observerName: observerName ?? this.observerName,
+    permanentPier: permanentPier ?? this.permanentPier,
+  );
 }
 
 class SiteSettingsNotifier extends Notifier<SiteSettings>
@@ -115,6 +120,8 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
   void setObserverName(String s) {
     state = state.copyWith(observerName: s.trim());
   }
+
+  void setPermanentPier(bool v) => state = state.copyWith(permanentPier: v);
 
   void setLatitudeDeg(double v) {
     if (v < -90 || v > 90) return;

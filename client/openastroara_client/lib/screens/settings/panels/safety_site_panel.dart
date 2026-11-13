@@ -7,6 +7,7 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
@@ -289,6 +290,30 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           hint:
               'IANA name (e.g. America/Los_Angeles) — auto-filled from '
               'the coordinates',
+        ),
+        // Same provider as Simple Mode's switch (#1565): it writes the profile's
+        // site.permanent_pier at once, not through this panel's Save.
+        SettingsSwitchRow(
+          label: context.l10n.shellPermanentPier,
+          helpKey: 'safety.site.permanent_pier',
+          hint: context.l10n.shellPermanentPierHint,
+          value: ref.watch(simplePermanentPierProvider).value ?? false,
+          onChanged: (v) async {
+            final messenger = ScaffoldMessenger.of(context);
+            final l10n = context.l10n;
+            try {
+              await ref.read(simplePermanentPierProvider.notifier).set(v);
+            } catch (e) {
+              // A refused switch-off: the switch shows the rig's value again.
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    friendlyError(l10n, e, action: l10n.actionSave),
+                  ),
+                ),
+              );
+            }
+          },
         ),
         const SettingsSectionHeader('Time sync'),
         const TimeSyncSection(),

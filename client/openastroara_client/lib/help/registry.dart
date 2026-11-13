@@ -1950,6 +1950,14 @@ const Map<String, Help> helpRegistry = {
         'The IANA time zone of the site (e.g. America/Denver). Determines how "tonight" is defined and how local clock '
         'times are shown; using the region name (not a fixed UTC offset) keeps daylight-saving transitions correct.',
   ),
+  'safety.site.permanent_pier': Help(
+    key: 'safety.site.permanent_pier',
+    title: 'Permanent pier',
+    body:
+        'Turn this on when the mount stays on a fixed pier and keeps its polar alignment from night to night. '
+        'Simple Mode\'s Night Setup then skips the polar alignment step. It is saved in the rig\'s site profile, '
+        'so every device connected to the rig agrees, and Simple Mode\'s own switch is the same setting.',
+  ),
   'safety.site.horizon_azimuth': Help(
     key: 'safety.site.horizon_azimuth',
     title: 'Horizon point — azimuth',

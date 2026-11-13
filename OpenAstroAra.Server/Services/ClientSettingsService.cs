@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,6 +33,11 @@ public interface IClientSettingsService {
     /// <summary>Replace the stored preferences wholesale (last-write-wins). Throws <see cref="ArgumentException"/> when
     /// <paramref name="settings"/> isn't a JSON object or exceeds the size cap.</summary>
     Task<ClientSettingsDto> ReplaceAsync(JsonElement settings, CancellationToken ct);
+
+    /// <summary>Replace only the top-level keys of <paramref name="patch"/> in the stored object, leaving every other
+    /// key alone; a key whose value is JSON <c>null</c> is removed. Throws <see cref="ArgumentException"/> when
+    /// <paramref name="patch"/> isn't a JSON object or the merged result exceeds the size cap.</summary>
+    Task<ClientSettingsDto> MergeAsync(JsonElement patch, CancellationToken ct);
 }
 
 /// <summary>
@@ -56,21 +62,32 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
     private readonly string _path;
     private readonly ILogger<ClientSettingsService> _logger;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly IWsBroadcaster? _ws;
 
-    public ClientSettingsService(string profileDir, ILogger<ClientSettingsService> logger) {
+    public ClientSettingsService(string profileDir, ILogger<ClientSettingsService> logger, IWsBroadcaster? ws = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
         _path = Path.Combine(profileDir, FileName);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ws = ws;
     }
 
     public async Task<ClientSettingsDto> GetAsync(CancellationToken ct) {
-        string text;
-        DateTimeOffset updated;
         // Read content + timestamp under the same gate that writes hold, so the pair is a consistent snapshot — a
         // concurrent ReplaceAsync can't slip a new timestamp onto the old content (which would mislead a client's
         // "is my state current?" check). Conscious tradeoff: this also serializes concurrent reads, which is fine for
         // the read-once-on-connect access pattern this store targets (not a hot polling path).
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await ReadLockedAsync(ct).ConfigureAwait(false);
+        } finally {
+            _writeGate.Release();
+        }
+    }
+
+    // Caller holds _writeGate.
+    private async Task<ClientSettingsDto> ReadLockedAsync(CancellationToken ct) {
+        string text;
+        DateTimeOffset updated;
         try {
             text = await File.ReadAllTextAsync(_path, ct).ConfigureAwait(false);
             updated = new DateTimeOffset(File.GetLastWriteTimeUtc(_path), TimeSpan.Zero);
@@ -78,8 +95,6 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
             return new ClientSettingsDto(EmptyObject(), null);
         } catch (DirectoryNotFoundException) {
             return new ClientSettingsDto(EmptyObject(), null);
-        } finally {
-            _writeGate.Release();
         }
 
         try {
@@ -119,30 +134,103 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
         DateTimeOffset updated;
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
-            // Atomic publish: write a sibling temp file then rename over the target, so a reader never sees a
-            // half-written file and a crash mid-write leaves the prior settings intact.
-            var tmp = _path + ".tmp-" + Guid.NewGuid().ToString("N");
-            try {
-                await File.WriteAllTextAsync(tmp, json, ct).ConfigureAwait(false);
-                File.Move(tmp, _path, overwrite: true);
-            } catch {
-                // A cancelled/failed write would otherwise leave the temp file behind — best-effort cleanup.
-                try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-                throw;
-            }
-            // Stamp the mtime explicitly INSIDE the gate: rename() doesn't reliably bump the destination mtime on
-            // Linux (it reflects the temp-file write, not the swap), and reading it inside the gate keeps a concurrent
-            // write from stamping this caller's response with the other write's time. The returned timestamp then
-            // matches exactly what GetAsync reads back.
-            var now = DateTime.UtcNow;
-            File.SetLastWriteTimeUtc(_path, now);
-            updated = new DateTimeOffset(now, TimeSpan.Zero);
+            updated = await WriteLockedAsync(json, ct).ConfigureAwait(false);
         } finally {
             _writeGate.Release();
         }
 
+        await PublishUpdatedAsync(KeysOf(stored), updated).ConfigureAwait(false);
         return new ClientSettingsDto(stored, updated);
     }
+
+    public async Task<ClientSettingsDto> MergeAsync(JsonElement patch, CancellationToken ct) {
+        if (patch.ValueKind != JsonValueKind.Object) {
+            throw new ArgumentException("Client settings must be a JSON object.", nameof(patch));
+        }
+
+        ClientSettingsDto result;
+        // Read-modify-write under the one gate every write holds, so two devices merging different keys at once keep
+        // both; two merging the same key resolve to whichever takes the gate last.
+        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            var current = await ReadLockedAsync(ct).ConfigureAwait(false);
+            var merged = JsonNode.Parse(current.Settings.GetRawText())!.AsObject();
+            foreach (var prop in patch.EnumerateObject()) {
+                if (prop.Value.ValueKind == JsonValueKind.Null) {
+                    merged.Remove(prop.Name);
+                } else {
+                    merged[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
+                }
+            }
+            var json = merged.ToJsonString();
+            if (Encoding.UTF8.GetByteCount(json) > MaxBytes) {
+                throw new ArgumentException($"Client settings exceed the {MaxBytes}-byte limit.", nameof(patch));
+            }
+            var updated = await WriteLockedAsync(json, ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            result = new ClientSettingsDto(doc.RootElement.Clone(), updated);
+        } finally {
+            _writeGate.Release();
+        }
+
+        await PublishUpdatedAsync(KeysOf(patch), result.UpdatedUtc!.Value).ConfigureAwait(false);
+        return result;
+    }
+
+    // Caller holds _writeGate.
+    private async Task<DateTimeOffset> WriteLockedAsync(string json, CancellationToken ct) {
+        // Atomic publish: write a sibling temp file then rename over the target, so a reader never sees a
+        // half-written file and a crash mid-write leaves the prior settings intact.
+        var tmp = _path + ".tmp-" + Guid.NewGuid().ToString("N");
+        try {
+            await File.WriteAllTextAsync(tmp, json, ct).ConfigureAwait(false);
+            File.Move(tmp, _path, overwrite: true);
+        } catch {
+            // A cancelled/failed write would otherwise leave the temp file behind — best-effort cleanup.
+            try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw;
+        }
+        // Stamp the mtime explicitly INSIDE the gate: rename() doesn't reliably bump the destination mtime on
+        // Linux (it reflects the temp-file write, not the swap), and reading it inside the gate keeps a concurrent
+        // write from stamping this caller's response with the other write's time. The returned timestamp then
+        // matches exactly what GetAsync reads back.
+        var now = DateTime.UtcNow;
+        File.SetLastWriteTimeUtc(_path, now);
+        return new DateTimeOffset(now, TimeSpan.Zero);
+    }
+
+    private static List<string> KeysOf(JsonElement obj) {
+        var keys = new List<string>();
+        foreach (var prop in obj.EnumerateObject()) {
+            keys.Add(prop.Name);
+        }
+        return keys;
+    }
+
+    // client_settings.updated: lets the other devices refetch. Best-effort — a failed publish must not fail a write
+    // that already landed on disk. Sent after the gate is released.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort: the settings write already succeeded.")]
+    private async Task PublishUpdatedAsync(List<string> keys, DateTimeOffset updated) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            var arr = new JsonArray();
+            foreach (var k in keys) {
+                arr.Add(k);
+            }
+            var payload = new JsonObject { ["keys"] = arr, ["updated_utc"] = JsonValue.Create(updated) };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(Contracts.WsEvents.WsEventCatalog.ClientSettingsUpdated, doc.RootElement.Clone(),
+                CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogUpdatedPublishFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "client_settings.updated WS event failed to publish")]
+    partial void LogUpdatedPublishFailed(Exception ex);
 
     /// <summary>
     /// Reclaim crash-only orphan temp files under <paramref name="profileDir"/> — <c>client-settings.json.tmp-*</c>
