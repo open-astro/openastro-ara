@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/stats_overview.dart';
 import '../../state/stats/stats_overview_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../l10n/l10n.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import 'stats_format.dart';
@@ -15,7 +16,10 @@ import 'stats_pull_refresh.dart';
 /// §50 Stats Overview section — headline catalog totals from the live daemon
 /// (`GET /api/v1/stats/overview`), replacing the Phase 12g.1 demo-data tiles.
 class OverviewSection extends ConsumerStatefulWidget {
-  const OverviewSection({super.key});
+  const OverviewSection({super.key, this.dashboard = false});
+
+  /// Simple Mode's dashboard (headline and list); else the tile grid.
+  final bool dashboard;
 
   @override
   ConsumerState<OverviewSection> createState() => _OverviewSectionState();
@@ -113,39 +117,99 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
     if (data.isEmpty) {
       return const _Hint('No frames captured yet — your totals appear here once you start imaging.');
     }
-    return ResponsiveTileGrid(
+    // Each total once: (icon, value, label). Advanced Mode keeps its tile
+    // grid; Simple Mode's dashboard (mock `design/preview/stats-layouts-mock.html`
+    // B) makes the total integration the headline and lists the others beside
+    // it, under it on a narrow window.
+    const integration = 3;
+    final totals = [
+      (Icons.list_alt, '${data.totalSessions}', 'Sessions'),
+      (Icons.image_outlined, '${data.totalFrames}', 'Frames'),
+      (Icons.wb_incandescent_outlined, '${data.totalLightFrames}', 'Light frames'),
+      (Icons.timelapse, formatIntegrationHours(data.totalIntegrationHours), 'Total integration'),
+      (Icons.gps_fixed, '${data.uniqueTargetsImaged}', 'Unique targets'),
+      (Icons.event_available, formatStatsDate(data.lastImageUtc), 'Last imaged'),
+    ];
+    if (!widget.dashboard) {
+      return ResponsiveTileGrid(
+        children: [
+          for (final (icon, value, label) in totals)
+            StatTile(icon: icon, value: value, label: label),
+        ],
+      );
+    }
+    final hero = _Hero(data, label: totals[integration].$3, value: totals[integration].$2);
+    final kpis = StatKpiGrid(
       children: [
-        StatTile(
-          icon: Icons.list_alt,
-          value: '${data.totalSessions}',
-          label: 'Sessions',
-        ),
-        StatTile(
-          icon: Icons.image_outlined,
-          value: '${data.totalFrames}',
-          label: 'Frames',
-        ),
-        StatTile(
-          icon: Icons.wb_incandescent_outlined,
-          value: '${data.totalLightFrames}',
-          label: 'Light frames',
-        ),
-        StatTile(
-          icon: Icons.timelapse,
-          value: formatIntegrationHours(data.totalIntegrationHours),
-          label: 'Total integration',
-        ),
-        StatTile(
-          icon: Icons.gps_fixed,
-          value: '${data.uniqueTargetsImaged}',
-          label: 'Unique targets',
-        ),
-        StatTile(
-          icon: Icons.event_available,
-          value: formatStatsDate(data.lastImageUtc),
-          label: 'Last imaged',
-        ),
+        for (final (i, (_, value, label)) in totals.indexed)
+          if (i != integration) StatKpi(value: value, label: label),
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, box) => box.maxWidth >= 720
+          ? IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 12,
+                children: [
+                  Expanded(flex: 6, child: hero),
+                  Expanded(flex: 5, child: kpis),
+                ],
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 12,
+              children: [hero, kpis],
+            ),
+    );
+  }
+}
+
+/// The dashboard's headline: the total integration, big, with what it is
+/// made of under it.
+class _Hero extends StatelessWidget {
+  const _Hero(this.data, {required this.label, required this.value});
+
+  final StatsOverview data;
+  final String label, value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    return Container(
+      key: const Key('stats-hero'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 6,
+        children: [
+          Text(
+            label,
+            style: theme.labelMedium?.copyWith(color: AraColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: theme.displayMedium?.copyWith(
+              color: AraColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            context.l10n.statsIntegrationCaption(
+              data.totalLightFrames,
+              data.totalSessions,
+            ),
+            style: theme.bodySmall?.copyWith(color: AraColors.textSecondary),
+          ),
+        ],
+      ),
     );
   }
 }

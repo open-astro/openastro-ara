@@ -1,0 +1,162 @@
+<title>Ara Stats Layouts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: option switcher on top, then one full Stats page at a time. Ara's dark panel palette (single dark theme on purpose) */
+:root {
+  --page: #1E1E1E; --panel: #262626; --tile: #2C2C2C; --border: #3A3A3A; --text: #E8E8E8; --text2: #A6A6A6; --text3: #6E6E6E;
+  --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --warm: #FFB74D;
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+body { background: var(--page); color: var(--text); font: 14px/1.4 var(--sys);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.lede { color: var(--text2); max-width: 80ch; margin: 0 0 14px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tabs button { border: 1px solid var(--border); background: var(--tile); color: var(--text); border-radius: 8px; padding: 7px 14px; font: 13px var(--sys); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--sel); border-color: var(--sel); color: #fff; }
+.tabs button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.why { color: var(--text2); max-width: 80ch; margin: 0 0 16px; font-size: 13px; }
+.why b { color: var(--text); }
+.page { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.h { font-size: 13px; font-weight: 600; color: var(--text2); letter-spacing: .02em; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.h small { font-weight: 400; color: var(--text3); }
+.num { font-variant-numeric: tabular-nums; }
+.foot { color: var(--text3); font-size: 11px; }
+/* A: strip + list */
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); background: var(--tile); border-radius: 10px; overflow: hidden; }
+.strip > div { padding: 10px 12px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
+.strip .l { color: var(--text2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip .v { font-size: 20px; font-weight: 600; }
+.strip .s { color: var(--text3); font-size: 11px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.blist { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 4px 16px; }
+.brow { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.brow .t { font-size: 13px; } .brow .d { color: var(--text3); font-size: 11px; grid-column: 2; }
+.brow .c { font-size: 12px; color: var(--text2); grid-row: span 2; text-align: right; }
+.brow .bar { grid-column: 2 / 4; height: 3px; background: #ffffff12; border-radius: 2px; overflow: hidden; }
+.brow .bar i { display: block; height: 100%; background: var(--info); }
+.brow.won .bar i { background: var(--ok); } .brow.won .c { color: var(--ok); }
+.ico { width: 16px; height: 16px; display: inline-block; }
+/* heatmap */
+.heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 10px); gap: 2px; overflow-x: auto; padding-bottom: 2px; }
+.heat i { width: 10px; height: 10px; border-radius: 2px; background: #ffffff0d; display: block; }
+.heat i.l1 { background: #1e4f2a; } .heat i.l2 { background: #2e7d43; } .heat i.l3 { background: #4CAF50; }
+/* B: hero dashboard */
+.dash { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 720px) { .dash { grid-template-columns: 1fr; } }
+.hero { background: var(--tile); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hero .big { font-size: 40px; font-weight: 700; line-height: 1; }
+.hero .cap { color: var(--text2); font-size: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--tile); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.kpi .l { color: var(--text2); font-size: 12px; } .kpi .v { font-size: 18px; font-weight: 600; text-align: right; }
+.kpi .s { color: var(--text3); font-size: 11px; grid-column: 1 / 3; }
+.medals { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.medal { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.medal svg { width: 56px; height: 56px; }
+.medal .t { font-size: 12px; line-height: 1.2; } .medal .c { font-size: 11px; color: var(--text3); }
+.medal.won .c { color: var(--ok); }
+/* C: ledger */
+.ledger { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0 24px; }
+.ledger .g { display: flex; flex-direction: column; }
+.ledger .g h3 { margin: 0 0 4px; font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.lrow { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lrow span:first-child { color: var(--text2); } .lrow span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.next { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.nrow { display: grid; grid-template-columns: minmax(0, 160px) 1fr 70px; gap: 10px; align-items: center; font-size: 13px; }
+.nrow .bar { height: 6px; background: #ffffff12; border-radius: 3px; overflow: hidden; } .nrow .bar i { display: block; height: 100%; background: var(--info); }
+.nrow .c { color: var(--text2); text-align: right; font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: #4CAF501f; color: #A5D6A7; border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.empty { color: var(--text3); font-size: 12px; }
+</style>
+
+<h1>Stats, denser</h1>
+<p class="lede">Today's page puts 21 numbers in 21 tall cards, repeats three of them, and gives an empty Best Frames a whole section. Three denser takes on the same data (your rig, 13 Nov).</p>
+
+<div class="tabs" role="tablist" id="tabs"></div>
+<p class="why" id="why"></p>
+<div class="page" id="page"></div>
+
+<script>
+const D = {
+  sessions: 110, frames: 1099, lights: 906, integ: "7h 10m", targets: 17, targetsNamed: 10, last: "12 Nov 2026",
+  streak: 6, longest: 6, nights: 15, longestNight: "3h 24m", first: "Oct 2026",
+  badges: [
+    ["Getting started", "10 hours of integration", 7.2, 10],
+    ["Seasoned imager", "50 hours of integration", 7.2, 50],
+    ["Centurion", "100 hours of integration", 7.2, 100],
+    ["Explorer", "10 unique targets imaged", 10, 10],
+    ["Cartographer", "25 unique targets imaged", 10, 25],
+    ["Night owl", "10 nights under the stars", 15, 10],
+    ["Dark-sky devotee", "50 nights under the stars", 15, 50],
+    ["Light collector", "1000 light frames captured", 906, 1000],
+  ],
+};
+const won = b => b[2] >= b[3];
+const pct = b => Math.min(100, Math.round(b[2] / b[3] * 100));
+const fmt = v => Number.isInteger(v) ? v : v.toFixed(1);
+const trophy = `<svg class="ico" viewBox="0 0 24 24" fill="#4CAF50" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-4 4.9V15h3v3H8v-3h3v-3.1A5 5 0 0 1 7 7z"/><path d="M5 5h2v3a3 3 0 0 1-2-3zm14 0h-2v3a3 3 0 0 0 2-3z"/></svg>`;
+const lock = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#6E6E6E" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+
+function heat() {
+  // 26 weeks; nights from mid-Oct lit (sample)
+  let cells = "";
+  for (let w = 0; w < 26; w++) for (let d = 0; d < 7; d++) {
+    const i = w * 7 + d; const lit = i > 150 && (i * 7 % 5 !== 0);
+    cells += `<i class="${lit ? "l" + (1 + (i % 3)) : ""}"></i>`;
+  }
+  return `<div class="heat" aria-label="Nights imaged, last 26 weeks">${cells}</div>`;
+}
+const badgeRows = (list) => list.map(b => `<div class="brow${won(b) ? " won" : ""}">${won(b) ? trophy : lock}<span class="t">${b[0]}</span><span class="c num">${won(b) ? "Earned" : fmt(b[2]) + " / " + b[3]}</span><span class="d">${b[1]}</span><span class="bar"><i style="width:${pct(b)}%"></i></span></div>`).join("");
+
+const OPTIONS = {
+  a: { name: "A · Strip and list", why: "<b>Recommended.</b> One strip of 12 numbers in the space one row of cards takes today, no repeats; the two target counts are named for what they count. Badges become a two-column list, earned first, with a thin bar. The nights calendar sits beside them. Best Frames shows only once there is something to show.",
+    html: () => `
+      <div class="sec"><div class="h">Totals <small>since Oct 2026</small></div>
+        <div class="strip num">
+          ${[["Integration", D.integ, ""], ["Light frames", D.lights, `of ${D.frames} frames`], ["Sessions", D.sessions, ""], ["Nights", D.nights, ""], ["Targets", D.targets, `${D.targetsNamed} named`], ["Longest night", D.longestNight, ""],
+             ["Current streak", D.streak, "nights in a row"], ["Longest streak", D.longest, "nights"], ["Last imaged", "12 Nov", "2026"], ["First light", "Oct", "2026"]]
+            .map(([l, v, s]) => `<div><div class="l">${l}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`).join("")}
+        </div></div>
+      <div class="two">
+        <div class="sec"><div class="h">Badges <small>2 of 8 earned</small></div><div class="blist" style="grid-template-columns:1fr">${badgeRows([...D.badges].sort((x, y) => won(y) - won(x) || pct(y) - pct(x)))}</div></div>
+        <div class="sec"><div class="h">Nights imaged <small>last 26 weeks</small></div>${heat()}
+          <div class="h" style="margin-top:8px">Best frames</div><p class="empty">Shows here once frames are quality-scored.</p></div>
+      </div>
+      <p class="foot">Nights use the UTC calendar day. Named targets count only frames that recorded a target name.</p>` },
+  b: { name: "B · Dashboard", why: "<b>Most visual.</b> Integration is the hero, with the calendar under it; eight small KPI rows beside it. Badges turn into medals with a progress ring on a scrolling shelf. Best when the page is opened to feel good about the hobby; slower to scan for one number.",
+    html: () => `
+      <div class="dash">
+        <div class="hero"><span class="cap">Total integration</span><span class="big num">${D.integ}</span><span class="cap">${D.lights} light frames over ${D.nights} nights · first light ${D.first}</span>${heat()}</div>
+        <div class="kpis num">
+          ${[["Sessions", D.sessions], ["Frames", D.frames], ["Targets", D.targets, `${D.targetsNamed} named`], ["Longest night", D.longestNight], ["Current streak", D.streak, "nights in a row"], ["Longest streak", D.longest], ["Nights", D.nights], ["Last imaged", "12 Nov"]]
+            .map(([l, v, s]) => `<div class="kpi"><span class="l">${l}</span><span class="v">${v}</span>${s ? `<span class="s">${s}</span>` : ""}</div>`).join("")}
+        </div>
+      </div>
+      <div class="sec"><div class="h">Badges <small>2 of 8 earned</small></div>
+        <div class="medals">${D.badges.map(b => { const p = pct(b), r = 24, c = 2 * Math.PI * r; return `<div class="medal${won(b) ? " won" : ""}"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="${r}" fill="#2C2C2C" stroke="#ffffff14" stroke-width="4"/><circle cx="28" cy="28" r="${r}" fill="none" stroke="${won(b) ? "#4CAF50" : "#42A5F5"}" stroke-width="4" stroke-dasharray="${c * p / 100} ${c}" transform="rotate(-90 28 28)" stroke-linecap="round"/><g transform="translate(16 16)">${won(b) ? trophy.replace('class="ico"', 'width="24" height="24"') : lock.replace('class="ico"', 'width="24" height="24"')}</g></svg><span class="t">${b[0]}</span><span class="c num">${won(b) ? "Earned" : fmt(b[2]) + " / " + b[3]}</span></div>`; }).join("")}</div></div>
+      <p class="foot">Nights use the UTC calendar day. Named targets count only frames that recorded a target name.</p>` },
+  c: { name: "C · Ledger", why: "<b>Densest.</b> The numbers read like a logbook, label left and value right, in three columns. Earned badges collapse to chips; the rest are listed by how close they are, so the page answers \"what's next\". Plain, fast, and the whole page fits one screen.",
+    html: () => `
+      <div class="ledger">
+        <div class="g"><h3>Imaging</h3>${[["Integration", D.integ], ["Light frames", `${D.lights} of ${D.frames}`], ["Sessions", D.sessions], ["Targets", `${D.targets} (${D.targetsNamed} named)`]].map(([l, v]) => `<div class="lrow"><span>${l}</span><span>${v}</span></div>`).join("")}</div>
+        <div class="g"><h3>Nights</h3>${[["Nights imaged", D.nights], ["Longest night", D.longestNight], ["Current streak", `${D.streak} nights`], ["Longest streak", `${D.longest} nights`]].map(([l, v]) => `<div class="lrow"><span>${l}</span><span>${v}</span></div>`).join("")}</div>
+        <div class="g"><h3>Dates</h3>${[["First light", D.first], ["Last imaged", D.last]].map(([l, v]) => `<div class="lrow"><span>${l}</span><span>${v}</span></div>`).join("")}<div style="margin-top:8px">${heat()}</div></div>
+      </div>
+      <div class="sec"><div class="h">Earned</div><div class="chips">${D.badges.filter(won).map(b => `<span class="chip">${trophy}${b[0]}</span>`).join("")}</div></div>
+      <div class="sec"><div class="h">Next badges <small>closest first</small></div><div class="next">${D.badges.filter(b => !won(b)).sort((x, y) => pct(y) - pct(x)).map(b => `<div class="nrow"><span>${b[0]}</span><span class="bar"><i style="width:${pct(b)}%"></i></span><span class="c num">${fmt(b[2])} / ${b[3]}</span></div>`).join("")}</div></div>
+      <p class="foot">Nights use the UTC calendar day. Named targets count only frames that recorded a target name.</p>` },
+};
+
+let cur = "a";
+function render() {
+  document.getElementById("tabs").innerHTML = Object.entries(OPTIONS).map(([k, o]) => `<button role="tab" aria-selected="${k === cur}" data-k="${k}">${o.name}</button>`).join("");
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { cur = b.dataset.k; render(); });
+  document.getElementById("why").innerHTML = OPTIONS[cur].why;
+  document.getElementById("page").innerHTML = OPTIONS[cur].html();
+}
+render();
+</script>

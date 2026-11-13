@@ -29,6 +29,20 @@ class _Focuser extends FocuserNotifier {
     moves.add(targetPosition);
     return true;
   }
+
+  final actions = <String>[];
+
+  @override
+  Future<bool> setZero() async {
+    actions.add('setzero');
+    return true;
+  }
+
+  @override
+  Future<bool> calibrate({bool abort = false}) async {
+    actions.add(abort ? 'calibrate/abort' : 'calibrate');
+    return true;
+  }
 }
 
 Map<String, dynamic> _wire({bool absolute = true, String runtime = 'idle', int? position = 12000, int max = 60000}) => {
@@ -52,7 +66,7 @@ late _Live _live;
 late ProviderContainer _c;
 
 Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {double width = 360, String? font, bool scrolling = false}) async {
+    {double width = 360, String? font, bool scrolling = false, bool inSettings = false}) async {
   final focuser = _Focuser(wire);
   _live = _Live();
   final c = _c = ProviderContainer(overrides: [
@@ -69,7 +83,7 @@ Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire,
             body: scrolling
                 // As in Settings: the window on a page that scrolls.
                 ? SingleChildScrollView(
-                    child: Column(children: [SizedBox(width: width, child: const SimpleFocuserWindow()), const SizedBox(height: 2000)]))
+                    child: Column(children: [SizedBox(width: width, child: SimpleFocuserWindow(inSettings: inSettings)), const SizedBox(height: 2000)]))
                 : Center(child: SizedBox(width: width, child: const SimpleFocuserWindow())))),
   ));
   await tester.pump();
@@ -96,7 +110,52 @@ Future<void> _roll(WidgetTester tester, String which, int clicks, {bool cancel =
   await tester.pump();
 }
 
+Map<String, dynamic> _withActions(Map<String, dynamic> wire, {bool zero = false, bool calibrate = false, String? calibration}) => {
+      ...wire,
+      'capabilities': {...wire['capabilities'] as Map<String, dynamic>, 'can_set_zero': zero, 'can_calibrate': calibrate},
+      'runtime': {...wire['runtime'] as Map<String, dynamic>, 'calibration': ?calibration},
+    };
+
 void main() {
+  testWidgets('Settings: Set zero asks first, then makes the current position 0', (tester) async {
+    final f = await _pump(tester, _withActions(_wire(), zero: true), scrolling: true, inSettings: true);
+    expect(find.byKey(const Key('simple-focuser-position-section')), findsOneWidget);
+    expect(find.byKey(const Key('simple-focuser-calibrate')), findsNothing, reason: 'only what the driver offers');
+    await tester.ensureVisible(find.byKey(const Key('simple-focuser-set-zero')));
+    await tester.tap(find.byKey(const Key('simple-focuser-set-zero')));
+    await tester.pump();
+    expect(f.actions, isEmpty, reason: 'it asks first');
+    expect(find.textContaining('Make 12000 the new 0?'), findsOneWidget);
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Set zero'));
+    await tester.tap(find.widgetWithText(TextButton, 'Set zero'));
+    await tester.pump();
+    expect(f.actions, ['setzero']);
+  });
+
+  testWidgets('Settings: Calibrate travel starts it, and while it runs Stop ends it and Set zero waits', (tester) async {
+    final f = await _pump(tester, _withActions(_wire(), zero: true, calibrate: true, calibration: 'not_calibrated'),
+        scrolling: true, inSettings: true);
+    await tester.ensureVisible(find.byKey(const Key('simple-focuser-calibrate')));
+    await tester.tap(find.byKey(const Key('simple-focuser-calibrate')));
+    await tester.pump();
+    expect(f.actions, ['calibrate']);
+    f.state = AsyncData(FocuserStatus.fromJson(_withActions(_wire(), zero: true, calibrate: true, calibration: 'calibrating')));
+    await tester.pump();
+    expect(find.text('Running to both stops…'), findsOneWidget);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-focuser-set-zero'))).onPressed, isNull);
+    await tester.ensureVisible(find.byKey(const Key('simple-focuser-calibrate-stop')));
+    await tester.tap(find.byKey(const Key('simple-focuser-calibrate-stop')));
+    await tester.pump();
+    expect(f.actions, ['calibrate', 'calibrate/abort']);
+  });
+
+  testWidgets('no Position section when the driver offers neither, nor outside Settings', (tester) async {
+    await _pump(tester, _wire(), scrolling: true, inSettings: true);
+    expect(find.byKey(const Key('simple-focuser-position-section')), findsNothing);
+    await _pump(tester, _withActions(_wire(), zero: true, calibrate: true), scrolling: true);
+    expect(find.byKey(const Key('simple-focuser-set-zero')), findsNothing, reason: 'the night window stays knobs');
+  });
+
   testWidgets('the focuser window: position, temperature, and a coarse and a fine knob', (tester) async {
     await _pump(tester, _wire());
     expect(find.text('Focuser · ZWO EAF'), findsOneWidget);

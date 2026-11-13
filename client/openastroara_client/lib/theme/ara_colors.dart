@@ -183,6 +183,23 @@ class AraColors {
   static const glassDarkLabel = Color(0xFFBBBBBB);
   static const glassGloss = Color(0x61FFFFFF);
 
+  /// Luminance glass: the visible spectrum around the cell.
+  static const glassSpectrum = SweepGradient(
+    startAngle: 0,
+    endAngle: 6.283185307179586,
+    transform: GradientRotation(3.49),
+    colors: [
+      Color(0xFFFF3B3B),
+      Color(0xFFFF9A2E),
+      Color(0xFFFFE23B),
+      Color(0xFF3BD16F),
+      Color(0xFF2FB8E8),
+      Color(0xFF4B5CFF),
+      Color(0xFFA54BFF),
+      Color(0xFFFF3B3B),
+    ],
+  );
+
   /// A sequence instruction's category colour in the sequencer.
   static const instructionCamera = Color(0xFF64B5F6);
   static const instructionFilterWheel = Color(0xFFBA68C8);

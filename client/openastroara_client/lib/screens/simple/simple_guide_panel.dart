@@ -316,13 +316,19 @@ class SimpleGuidePanel extends ConsumerWidget {
               value: phd2.decAggressiveness,
               set: (p, v) => p.setDecAggressiveness(v),
             ),
-            SimplePresetTile<String>(
+            // Four named choices: one row of segments, no list to open.
+            Text(l10n.guideDecMode, style: AraText.caption),
+            SimpleSegments<String>(
               key: const Key('simple-guide-dec-mode'),
-              label: l10n.guideDecMode,
-              value: phd2.decGuideMode,
-              options: const ['auto', 'north', 'south', 'off'],
-              format: (m) => _decModeName(l10n, m) ?? l10n.guideDecAuto,
-              onSelected: (m) => simpleSaveGuider(
+              keyPrefix: 'simple-guide-dec-mode',
+              group: l10n.guideDecMode,
+              shrinkToFit: true,
+              selected: phd2.decGuideMode,
+              options: [
+                for (final m in const ['auto', 'north', 'south', 'off'])
+                  (m, _decModeName(l10n, m) ?? l10n.guideDecAuto, m),
+              ],
+              onPick: (m) => simpleSaveGuider(
                 context,
                 ref,
                 (p) => p.setDecGuideMode(m),

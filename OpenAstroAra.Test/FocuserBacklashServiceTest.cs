@@ -20,6 +20,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -169,6 +170,8 @@ namespace OpenAstroAra.Test {
                 }
             }
             public int Position => Volatile.Read(ref _position);
+            public IList<string> SupportedActions => [];
+            public string Action(string actionName, string actionParameters) => throw new NotImplementedException();
             public double Temperature => 10;
             public bool TempComp { get; set; }
             public int MaxStep => 50_000;

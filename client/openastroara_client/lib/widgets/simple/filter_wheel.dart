@@ -5,13 +5,47 @@ import 'package:flutter/material.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../theme/ara_colors.dart';
 
+/// The usual filter names, lower case, and the short form a glass cell shows
+/// (user, 2026-11-13: Green and Clear read as slot numbers beside the Plan's
+/// names).
+const kFilterShortNames = {
+  'red': 'R',
+  'r': 'R',
+  'green': 'G',
+  'g': 'G',
+  'blue': 'B',
+  'b': 'B',
+  'clear': 'L',
+  'luminance': 'L',
+  'lum': 'L',
+  'l': 'L',
+  'ha': 'Ha',
+  'h-alpha': 'Ha',
+  'halpha': 'Ha',
+  'h alpha': 'Ha',
+  'hα': 'Ha',
+  'oiii': 'OIII',
+  'o3': 'OIII',
+  'o-iii': 'OIII',
+  'sii': 'SII',
+  's2': 'SII',
+  's-ii': 'SII',
+};
+
+/// The name's short form, lower case ('Green' → 'g'), so a tint follows the
+/// letters the cell shows.
+String _filterKey(String name) {
+  final n = name.trim().toLowerCase();
+  return (kFilterShortNames[n] ?? n).toLowerCase();
+}
+
 /// A filter's glass for its cell (#1676): the tint and the label colour on
 /// it. A name Ara doesn't know is plain glass. The tint is content, like the
 /// image behind the panel; the mark and the rings tell the state.
 ({Color glass, Color label}) filterGlass(String name) {
   const light = AraColors.bgPrimary, white = AraColors.selectionFg;
-  return switch (name.trim().toLowerCase()) {
-    'l' || 'lum' || 'luminance' => (glass: AraColors.glassClear, label: light),
+  return switch (_filterKey(name)) {
+    'l' => (glass: AraColors.glassClear, label: white),
     'uv/ir cut' => (glass: AraColors.glassUvIr, label: light),
     'r' => (glass: AraColors.glassRed, label: white),
     'g' => (glass: AraColors.glassGreen, label: white),
@@ -24,6 +58,10 @@ import '../../theme/ara_colors.dart';
     _ => (glass: AraColors.glassPlain, label: AraColors.textPrimary),
   };
 }
+
+/// Luminance passes all visible light, so its cell is a spectrum rather than
+/// a white disc that would be the brightest thing on screen at night.
+bool filterSpectrum(String name) => _filterKey(name) == 'l';
 
 /// What a cell's ring says.
 enum FilterCellRing { none, here, moving, asked, swap }
@@ -425,6 +463,9 @@ class _CellState extends State<_Cell> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: tint.glass,
+                        gradient: filterSpectrum(widget.slot.name)
+                            ? AraColors.glassSpectrum
+                            : null,
                         border: Border.all(
                           color: AraColors.bgPrimary,
                           width: 2,
@@ -456,6 +497,25 @@ class _CellState extends State<_Cell> {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: tint.label,
+                                  // Dark shadows, tight to wide: one alone
+                                  // left the white L on the yellow and
+                                  // green under 2:1.
+                                  shadows: filterSpectrum(widget.slot.name)
+                                      ? const [
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 1,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 1.5,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 4,
+                                          ),
+                                        ]
+                                      : null,
                                 ),
                               ),
                             ),

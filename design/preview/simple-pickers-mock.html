@@ -1,0 +1,177 @@
+<title>Ara Simple Pickers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Plan panel first (the ask), then a table of every Simple Mode picker and its new control. Ara Simple night palette, single dark theme on purpose */
+:root {
+  --page: #0E0E0E; --panel: #1A1A1A; --tile: #2A2A2A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+  --sel: #1976D2; --info: #42A5F5; --ok: #4CAF50; --warn: #FFB300;
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+h1 { font-size: 22px; margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 16px; margin: 32px 0 8px; }
+.lede, .note { color: var(--text2); max-width: 74ch; margin: 0 0 16px; }
+.note b { color: var(--text); font-weight: 600; }
+.row2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: 20px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.panel.rec { border-color: var(--sel); }
+.ph { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.pick { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--info); border: 1px solid var(--info); border-radius: 10px; padding: 0 7px; font-weight: 700; }
+.cap { color: var(--text2); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border-radius: 8px; padding: 5px 12px; background: var(--tile); font-size: 14px; }
+.chip.on { background: var(--sel); color: #fff; }
+.step { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 8px; align-items: start; }
+.step .n { padding-top: 14px; font-weight: 600; }
+.tile { min-height: 48px; background: var(--tile); border-radius: 10px; padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; border: 0; color: var(--text); text-align: left; font: inherit; width: 100%; cursor: pointer; }
+.tile .v { font-size: 15px; }
+.tile:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.wheelbox { display: flex; flex-direction: column; margin-top: 4px; }
+.done { align-self: flex-end; background: none; border: 0; color: var(--info); font: 600 14px var(--sys); min-height: 36px; cursor: pointer; }
+.wheel { position: relative; height: 132px; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none;
+  mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent); -webkit-mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent); }
+.wheel::-webkit-scrollbar { display: none; }
+.wheel div { height: 44px; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; font-size: 15px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.wheel div.mid { color: var(--text); font-weight: 600; }
+.wheel .pad { scroll-snap-align: none; }
+.band { position: relative; }
+.band::after { content: ""; position: absolute; left: 0; right: 0; top: calc(36px + 44px); height: 44px; border-radius: 8px; background: #ffffff10; pointer-events: none; }
+.field { min-height: 48px; background: var(--tile); border-radius: 10px; padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; box-shadow: inset 0 0 0 1px var(--border); }
+.field:focus-within { box-shadow: inset 0 0 0 2px var(--info); }
+.field input { background: none; border: 0; color: var(--text); font: 15px var(--sys); padding: 0; width: 100%; font-variant-numeric: tabular-nums; outline: none; }
+.field input::-webkit-inner-spin-button { display: none; } .field input { -moz-appearance: textfield; }
+.fx { display: flex; align-items: center; gap: 2px; }
+.fx .pre { color: var(--text2); font-size: 15px; }
+.sp { display: grid; grid-template-columns: 44px 1fr 44px; gap: 4px; align-items: stretch; }
+.sp button { background: var(--tile); border: 0; color: var(--text); border-radius: 10px; font-size: 20px; cursor: pointer; min-height: 48px; }
+.err { color: var(--warn); font-size: 12px; min-height: 0; }
+.sum { color: var(--text2); font-size: 13px; }
+.seg { display: flex; border-radius: 10px; background: var(--tile); overflow: hidden; }
+.seg button { flex: 1; min-height: 44px; border: 0; background: none; color: var(--text); font: 14px var(--sys); cursor: pointer; }
+.seg button.on { background: var(--sel); color: #fff; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; min-width: 640px; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text2); font-weight: 600; }
+td.now { color: var(--text2); }
+.tag { display: inline-block; border-radius: 6px; padding: 0 6px; font-size: 12px; font-weight: 600; }
+.t-in { background: #1976D233; color: #90CAF9; } .t-wh { background: #4CAF5033; color: #A5D6A7; } .t-se { background: #FFB30033; color: #FFE082; } .t-li { background: #ffffff14; color: var(--text2); }
+</style>
+
+<h1>Simple Mode pickers</h1>
+<p class="lede">Frames becomes a number you type. Exposure, and the other long ordered lists, move to the wheel Frames uses today. Short lists of named choices stay as they are or become segments. Tap the tiles: the wheels spin and the fields take typing.</p>
+
+<h2>Plan · one row per filter</h2>
+<div class="row2">
+  <section class="panel">
+    <div class="ph">A · Frames as a plain field</div>
+    <div class="chips"><span class="chip on">L</span><span class="chip on">R</span><span class="chip">G</span><span class="chip">B</span><span class="chip">Ha</span></div>
+    <div id="planA"></div>
+    <p class="note"><b>Least chrome.</b> Tap the field, the number pad comes up, type 47. On an iPad at the scope, with gloves, it always takes the keyboard.</p>
+  </section>
+  <section class="panel rec">
+    <div class="ph">B · Frames as a field with − and + <span class="pick">Pick</span></div>
+    <div class="chips"><span class="chip on">L</span><span class="chip on">R</span><span class="chip">G</span><span class="chip">B</span><span class="chip">Ha</span></div>
+    <div id="planB"></div>
+    <p class="note"><b>Recommended.</b> Still a field you type into, plus 44 pt − and + for "a few more" without the keyboard. A step is 1 frame; held, it repeats. Range 1–9999; an empty or 0 field puts back the last good count.</p>
+  </section>
+</div>
+
+<h2>Every picker in Simple Mode</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Where</th><th>Field</th><th>Today</th><th>Proposed</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Plan</td><td>Frames</td><td class="now">Wheel</td><td><span class="tag t-in">Field ± </span></td><td>Any count, not only the 13 presets</td></tr>
+    <tr><td>Plan</td><td>Exposure</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>19 ordered values, the suggestion marked</td></tr>
+    <tr><td>Preview</td><td>Exposure (Main)</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>Same presets as Plan</td></tr>
+    <tr><td>Preview</td><td>Exposure (Guide)</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>Ordered guide exposures</td></tr>
+    <tr><td>Guide</td><td>Exposure</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>Same as Preview's guide exposure</td></tr>
+    <tr><td>Polar align</td><td>Exposure</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>Ordered, 0.1–60 s</td></tr>
+    <tr><td>Preview</td><td>Filter</td><td class="now">List</td><td><span class="tag t-wh">Wheel</span></td><td>Up to 8+ names in slot order; the wheel keeps the order</td></tr>
+    <tr><td>Guide</td><td>Dec mode</td><td class="now">List</td><td><span class="tag t-se">Segments</span></td><td>4 named choices fit on one row: Auto · North · South · Off</td></tr>
+  </tbody>
+</table></div>
+
+<h2>The others, before and after</h2>
+<div class="row2">
+  <section class="panel">
+    <div class="ph">Preview</div>
+    <div class="step" style="grid-template-columns:1fr 1fr"><div id="pvExp"></div><div id="pvFil"></div></div>
+  </section>
+  <section class="panel">
+    <div class="ph">Guide</div>
+    <div id="gdExp"></div>
+    <div class="cap">Dec mode</div>
+    <div class="seg" role="radiogroup" aria-label="Dec mode" id="dec"></div>
+  </section>
+</div>
+
+<script>
+const EXP_MS = [100,200,500,1000,2000,3000,5000,10000,15000,20000,30000,45000,60000,90000,120000,180000,240000,300000,600000];
+const fmtExp = ms => ms < 1000 ? (ms/1000) + " s" : ms < 60000 ? (ms/1000) + " s" : (ms % 60000 ? (ms/60000).toFixed(1) : ms/60000) + " min";
+
+// A wheel tile: tap to fold out a wheel under it, Done commits.
+function wheelTile(host, label, values, value, fmt, mark) {
+  let open = false, spun = value;
+  const show = v => fmt(v) + (mark && v === mark ? " (suggested)" : "");
+  function render() {
+    host.innerHTML = `<button class="tile" aria-expanded="${open}"><span class="cap">${label}</span><span class="v">${show(value)}</span></button>` +
+      (open ? `<div class="wheelbox band"><button class="done">Done</button><div class="wheel" tabindex="0" aria-label="${label}"><div class="pad"></div>${values.map(v => `<div data-v="${v}">${show(v)}</div>`).join("")}<div class="pad"></div></div></div>` : "");
+    host.querySelector(".tile").onclick = () => { open = !open; spun = value; render(); };
+    if (!open) return;
+    const w = host.querySelector(".wheel");
+    const items = [...w.querySelectorAll("[data-v]")];
+    const mid = () => { const i = Math.round(w.scrollTop / 44); items.forEach((d, k) => d.classList.toggle("mid", k === i)); spun = values[Math.max(0, Math.min(values.length - 1, i))]; };
+    w.scrollTop = values.indexOf(value) * 44; mid();
+    w.onscroll = mid;
+    w.onkeydown = e => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); w.scrollBy({ top: e.key === "ArrowDown" ? 44 : -44 }); } if (e.key === "Enter") host.querySelector(".done").click(); };
+    items.forEach((d, k) => d.onclick = () => w.scrollTo({ top: k * 44, behavior: "smooth" }));
+    host.querySelector(".done").onclick = () => { value = spun; open = false; render(); };
+    w.focus({ preventScroll: true });
+  }
+  render();
+}
+
+// A Frames field; stepper adds − and +.
+function framesField(host, value, stepper, onChange) {
+  let last = value;
+  host.innerHTML = (stepper ? `<div class="sp"><button aria-label="One frame fewer">−</button>` : "") +
+    `<label class="field"><span class="cap">Frames</span><span class="fx"><span class="pre">×&nbsp;</span><input type="number" inputmode="numeric" min="1" max="9999" value="${value}" aria-label="Frames"></span></label>` +
+    (stepper ? `<button aria-label="One frame more">+</button></div>` : "");
+  const inp = host.querySelector("input");
+  const set = n => { n = Math.max(1, Math.min(9999, n)); inp.value = n; last = n; onChange(n); };
+  inp.onchange = () => { const n = parseInt(inp.value, 10); n > 0 ? set(n) : set(last); };
+  inp.oninput = () => { const n = parseInt(inp.value, 10); if (n > 0) onChange(Math.min(n, 9999)); };
+  if (stepper) {
+    const [minus, plus] = host.querySelectorAll(".sp > button");
+    const hold = (btn, d) => { let t, r; const go = () => set((parseInt(inp.value, 10) || last) + d);
+      btn.onpointerdown = () => { go(); t = setTimeout(() => r = setInterval(go, 90), 400); };
+      ["pointerup", "pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, () => { clearTimeout(t); clearInterval(r); }));
+      btn.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; };
+    hold(minus, -1); hold(plus, 1);
+  }
+}
+
+function planPanel(id, stepper) {
+  const root = document.getElementById(id);
+  const steps = [{ f: "L", exp: 120000, n: 47, sug: 120000 }, { f: "R", exp: 180000, n: 20, sug: 120000 }];
+  root.innerHTML = steps.map((s, i) => `<div class="step"><span class="n">${s.f}</span><div id="${id}-e${i}"></div><div id="${id}-n${i}"></div></div>`).join("") + `<div class="sum" id="${id}-sum"></div>`;
+  const sum = () => { const t = steps.reduce((a, s) => a + s.exp * s.n, 0) / 60000; document.getElementById(id + "-sum").textContent = `${steps.reduce((a, s) => a + s.n, 0)} frames · ${Math.floor(t / 60)} h ${Math.round(t % 60)} min`; };
+  steps.forEach((s, i) => {
+    wheelTile(document.getElementById(`${id}-e${i}`), "Exposure", EXP_MS.filter(m => m >= 1000), s.exp, fmtExp, s.sug);
+    framesField(document.getElementById(`${id}-n${i}`), s.n, stepper, n => { s.n = n; sum(); });
+  });
+  sum();
+}
+planPanel("planA", false);
+planPanel("planB", true);
+
+wheelTile(document.getElementById("pvExp"), "Exposure", EXP_MS, 5000, fmtExp);
+wheelTile(document.getElementById("pvFil"), "Filter", ["L", "R", "G", "B", "Ha", "OIII", "SII"], "Ha", x => x);
+wheelTile(document.getElementById("gdExp"), "Exposure", [500, 1000, 1500, 2000, 3000, 4000, 5000], 2000, fmtExp);
+const dec = document.getElementById("dec"); let decV = "Auto";
+const renderDec = () => { dec.innerHTML = ["Auto", "North", "South", "Off"].map(v => `<button role="radio" aria-checked="${v === decV}" class="${v === decV ? "on" : ""}">${v}</button>`).join(""); dec.querySelectorAll("button").forEach(b => b.onclick = () => { decV = b.textContent; renderDec(); }); };
+renderDec();
+</script>

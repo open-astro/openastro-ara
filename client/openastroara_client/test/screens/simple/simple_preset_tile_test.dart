@@ -1,19 +1,25 @@
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 
-Future<List<int>> _pump(WidgetTester tester, {bool wheel = false, bool enabled = true}) async {
+Future<List<int>> _pump(
+  WidgetTester tester, {
+  bool enabled = true,
+  TargetPlatform? platform,
+}) async {
   tester.view.physicalSize = const Size(800, 1000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final picks = <int>[];
   await tester.pumpWidget(
     MaterialApp(
+      theme: ThemeData(platform: platform ?? TargetPlatform.iOS),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -24,7 +30,6 @@ Future<List<int>> _pump(WidgetTester tester, {bool wheel = false, bool enabled =
           options: const [5, 10, 20],
           format: (n) => '× $n',
           onSelected: enabled ? picks.add : null,
-          wheel: wheel,
         ),
       ),
     ),
@@ -32,38 +37,92 @@ Future<List<int>> _pump(WidgetTester tester, {bool wheel = false, bool enabled =
   return picks;
 }
 
-bool _popup(WidgetTester tester) => tester.state<NavigatorState>(find.byType(Navigator)).canPop();
+bool _popup(WidgetTester tester) =>
+    tester.state<NavigatorState>(find.byType(Navigator)).canPop();
 
 void main() {
-  testWidgets('a tap folds the list out in place; a pick sets it and folds it away', (tester) async {
-    final picks = await _pump(tester);
-    expect(find.byKey(const Key('simple-preset-2')), findsNothing, reason: 'folded until tapped');
-    await tester.tap(find.byKey(const Key('tile')));
-    await tester.pumpAndSettle();
-    expect(_popup(tester), isFalse, reason: 'no menu route');
-    expect(tester.getSize(find.byKey(const Key('simple-preset-2'))).height, greaterThanOrEqualTo(44));
-    await tester.tap(find.byKey(const Key('simple-preset-2')));
-    await tester.pumpAndSettle();
-    expect(picks, [20]);
-    expect(find.byKey(const Key('simple-preset-2')), findsNothing);
-  });
-
   testWidgets('the wheel opens in place and Done sets it', (tester) async {
-    final picks = await _pump(tester, wheel: true);
+    final picks = await _pump(tester);
     await tester.tap(find.byKey(const Key('tile')));
     await tester.pumpAndSettle();
     expect(_popup(tester), isFalse, reason: 'no modal popup route');
-    tester.widget<CupertinoPicker>(find.byType(CupertinoPicker)).onSelectedItemChanged!(0);
+    tester
+        .widget<CupertinoPicker>(find.byType(CupertinoPicker))
+        .onSelectedItemChanged!(0);
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(picks, [5]);
     expect(find.byType(CupertinoPicker), findsNothing);
   });
 
-  testWidgets('a disabled tile greys out and tells screen readers', (tester) async {
+  testWidgets(
+    "each phone its own picker: the iOS wheel, Android's flat number picker",
+    (tester) async {
+      final picks = await _pump(tester, platform: TargetPlatform.android);
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('simple-wheel-android')), findsOneWidget);
+      expect(find.byType(CupertinoPicker), findsNothing);
+      tester
+          .widget<ListWheelScrollView>(find.byType(ListWheelScrollView))
+          .onSelectedItemChanged!(2);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(picks, [20]);
+      await _pump(tester, platform: TargetPlatform.iOS);
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoPicker), findsOneWidget);
+      expect(find.byKey(const Key('simple-wheel-android')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "Android's wheel steps with a screen reader's swipe, as the iOS wheel does",
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      final picks = await _pump(tester, platform: TargetPlatform.android);
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      final node = tester.getSemantics(
+        find.byKey(const Key('simple-wheel-android')),
+      );
+      expect(node.value, '× 10');
+      expect(node.increasedValue, '× 20');
+      expect(node.decreasedValue, '× 5');
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.increase),
+        isTrue,
+      );
+      tester
+          .widget<Semantics>(find.byKey(const Key('simple-wheel-android')))
+          .properties
+          .onIncrease!();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(picks, [20]);
+      handle.dispose();
+    },
+  );
+
+  testWidgets('a disabled tile greys out and tells screen readers', (
+    tester,
+  ) async {
     final handle = tester.ensureSemantics();
     await _pump(tester, enabled: false);
-    final color = tester.widget<RichText>(find.descendant(of: find.byKey(const Key('tile')), matching: find.byType(RichText)).last).text.style!.color;
+    final color = tester
+        .widget<RichText>(
+          find
+              .descendant(
+                of: find.byKey(const Key('tile')),
+                matching: find.byType(RichText),
+              )
+              .last,
+        )
+        .text
+        .style!
+        .color;
     expect(color, AraColors.textDisabled);
     final node = tester.getSemantics(find.byType(InkWell));
     expect(node.label, 'Frames');
@@ -72,14 +131,216 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('a tile disabled while open folds away and takes no pick', (tester) async {
+  testWidgets('a tile disabled while open folds away and takes no pick', (
+    tester,
+  ) async {
     final picks = await _pump(tester);
     await tester.tap(find.byKey(const Key('tile')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('simple-preset-2')), findsOneWidget);
+    expect(find.byType(CupertinoPicker), findsOneWidget);
     await _pump(tester, enabled: false);
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('simple-preset-2')), findsNothing);
+    expect(find.byType(CupertinoPicker), findsNothing);
     expect(picks, isEmpty);
+  });
+
+  group('SimpleCountField', () {
+    Future<List<int>> pumpCount(
+      WidgetTester tester, {
+      int value = 10,
+      double width = 300,
+    }) async {
+      final sets = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                child: StatefulBuilder(
+                  builder: (context, setState) => SimpleCountField(
+                    id: 'n',
+                    label: 'Frames',
+                    value: value,
+                    onChanged: (n) => setState(() {
+                      value = n;
+                      sets.add(n);
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return sets;
+    }
+
+    testWidgets('a typed count is set as typed, any number, not only presets', (
+      tester,
+    ) async {
+      final sets = await pumpCount(tester);
+      await tester.enterText(find.byKey(const Key('n')), '47');
+      await tester.pump();
+      expect(sets.last, 47);
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('n'))).keyboardType,
+        TextInputType.number,
+        reason: 'the phone\'s own number pad',
+      );
+    });
+
+    testWidgets('after typing a count, + steps from it and the field shows the new count', (
+      tester,
+    ) async {
+      final sets = await pumpCount(tester);
+      await tester.enterText(find.byKey(const Key('n')), '47');
+      await tester.pump();
+      // A touch on + leaves the phone's focus in the field.
+      await tester.tap(find.byKey(const Key('n-up')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('n-up')));
+      await tester.pump();
+      expect(sets, [47, 48, 49]);
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
+        '49',
+      );
+    });
+
+    testWidgets('holding + repeats the step, and letting go stops it', (
+      tester,
+    ) async {
+      final sets = await pumpCount(tester);
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('n-up'))),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+      // Frames come between the 90 ms steps, as on a phone.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(sets.length, greaterThan(2), reason: 'held, it repeats');
+      expect(sets, List.generate(sets.length, (i) => 11 + i));
+      await hold.up();
+      await tester.pump();
+      final held = sets.length;
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(sets.length, held, reason: 'let go, it stops');
+    });
+
+    testWidgets(
+      'holding + then losing the touch (a call, a system swipe) stops it',
+      (tester) async {
+        final sets = await pumpCount(tester);
+        final hold = await tester.startGesture(
+          tester.getCenter(find.byKey(const Key('n-up'))),
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+        await tester.pump(const Duration(milliseconds: 200));
+        await hold.cancel();
+        await tester.pump();
+        final held = sets.length;
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(sets.length, held, reason: 'a cancelled hold stops');
+      },
+    );
+
+    testWidgets('holding + while the row narrows and the buttons go stops it', (
+      tester,
+    ) async {
+      var width = 300.0;
+      var value = 10;
+      late StateSetter resize;
+      final sets = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  resize = setState;
+                  return SizedBox(
+                    width: width,
+                    child: SimpleCountField(
+                      id: 'n',
+                      label: 'Frames',
+                      value: value,
+                      onChanged: (n) => setState(() {
+                        value = n;
+                        sets.add(n);
+                      }),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('n-up'))),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 200));
+      resize(() => width = 93);
+      await tester.pump();
+      expect(find.byKey(const Key('n-up')), findsNothing);
+      final held = sets.length;
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(sets.length, held, reason: 'no button, no repeat');
+    });
+
+    testWidgets('- and + step by one and stop at 1', (tester) async {
+      final sets = await pumpCount(tester, value: 2);
+      await tester.tap(find.byKey(const Key('n-up')));
+      await tester.pump();
+      expect(sets, [3]);
+      await tester.tap(find.byKey(const Key('n-down')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('n-down')));
+      await tester.pump();
+      expect(sets, [3, 2, 1]);
+      expect(
+        tester.widget<IconButton>(find.byKey(const Key('n-down'))).onPressed,
+        isNull,
+        reason: 'nothing under 1',
+      );
+    });
+
+    testWidgets(
+      'an empty or 0 field puts the last count back when it is left',
+      (tester) async {
+        final sets = await pumpCount(tester, value: 12);
+        await tester.enterText(find.byKey(const Key('n')), '0');
+        await tester.pump();
+        expect(sets, isEmpty);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pump();
+        expect(find.text('12'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'too narrow for the buttons, the field alone stays and takes typing',
+      (tester) async {
+        final sets = await pumpCount(tester, width: 93);
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('n-up')), findsNothing);
+        await tester.enterText(find.byKey(const Key('n')), '30');
+        await tester.pump();
+        expect(sets, [30]);
+      },
+    );
   });
 }

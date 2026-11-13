@@ -818,6 +818,61 @@ void main() {
     });
   });
 
+  group('planetarium page at rest (PR #1856)', () {
+    test('the page rests while put away: wired on both ends', () {
+      // tool/page_logic/sky_rest.test.js runs the rest logic; this pins the
+      // wiring no harness runs: the frame hook is installed before the engine
+      // asks for its first frame, the page hears 'visibility', a command
+      // wakes it, the first drawn sky lets it rest, and the selection poll
+      // sleeps with it. And the view sends 'visibility'.
+      final page = File('assets/stellarium/index.html')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      final hook = page.indexOf(
+        'window.requestAnimationFrame = function (cb) { return araSkyFrame(araSky, cb); };',
+      );
+      expect(hook, greaterThan(0));
+      expect(hook, lessThan(page.indexOf('stellarium-web-engine.js"></script>')));
+      expect(page, contains("if (c.type === 'visibility') { araSkySetHidden(araSky, !!c.hidden); return; }"));
+      expect(page, contains('if (araSky.hidden) araSkyWake(araSky, 1500);'));
+      expect(page, contains('araSky.ready = true;'));
+      expect(page, contains('if (!araSkyResting(araSky)) syncSelection();'));
+      expect(page, isNot(contains('setInterval(syncSelection, 150)')));
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
+          .readAsStringSync();
+      expect(dart, contains("_pushCmd({'type': 'visibility', 'hidden': !shown})"));
+      expect(dart, contains('PlanetariumShownListener('));
+    });
+  });
+
+  group('planetarium page ready (PR #1856)', () {
+    test('the page posts ready once its sky has drawn, and the view lets the Sky Map show', () {
+      // Simple Mode shows the sky only once planetariumReadyProvider is true
+      // (or after a 3 s fallback). Without the page's POST or the view's
+      // handler, every open waits the full 3 s behind "Loading the sky…".
+      // No harness runs index.html; this guard keeps the two ends in step.
+      final page = File('assets/stellarium/index.html')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      final ready = page.indexOf("body: JSON.stringify({ type: 'ready' })");
+      expect(ready, greaterThan(0), reason: 'the page posts ready');
+      expect(page.lastIndexOf("fetch('/araevent'", ready), greaterThan(0));
+      expect(page.lastIndexOf('araSky.ready = true;', ready), greaterThan(0),
+          reason: 'the same timer lets the page rest');
+      // CRLF on a Windows checkout (`* text=auto`), as for the page above.
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      expect(dart, contains("if (event['type'] == 'ready') {\n      ref.read(planetariumReadyProvider.notifier).set(true);"));
+      // A new page load starts not ready: one reset per platform path (the
+      // web view and the Linux overlay).
+      expect(
+        'ref.read(planetariumReadyProvider.notifier).set(false);'.allMatches(dart).length,
+        2,
+      );
+    });
+  });
+
   group('planetarium page framing target', () {
     test('a goto without a name clears the framing name; the search bar sends one', () {
       // Night of 2026-10-02: select the Moon, type "NGC 7000" (a catalog hit →

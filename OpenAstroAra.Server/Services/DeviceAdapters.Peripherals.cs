@@ -183,6 +183,9 @@ internal interface IFocuserDevice : IDeviceAdapter {
     bool Absolute { get; }
     void Move(int position);
     void Halt();
+    // The driver's own actions (AlpacaBridge: SetZero, Calibrate …), for what ASCOM's focuser has no member for.
+    IList<string> SupportedActions { get; }
+    string Action(string actionName, string actionParameters);
 }
 
 internal sealed class AlpacaFocuserDevice(AlpacaFocuser client) : IFocuserDevice {
@@ -207,4 +210,6 @@ internal sealed class AlpacaFocuserDevice(AlpacaFocuser client) : IFocuserDevice
     public bool Absolute => client.Absolute;
     public void Move(int position) => client.Move(position);
     public void Halt() => client.Halt();
+    public IList<string> SupportedActions => client.SupportedActions;
+    public string Action(string actionName, string actionParameters) => client.Action(actionName, actionParameters);
 }
