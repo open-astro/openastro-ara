@@ -264,6 +264,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(ServerInfoDto))]
 [JsonSerializable(typeof(ServerStateDto))]
 [JsonSerializable(typeof(ServerInternalStateDto))]
+[JsonSerializable(typeof(UsageHistoryDto))]
 [JsonSerializable(typeof(SessionDto))]
 [JsonSerializable(typeof(SessionRestretchRequestDto))]
 [JsonSerializable(typeof(CustomHorizonDto))]

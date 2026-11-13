@@ -76,6 +76,16 @@ public static class ServerStateEndpoints {
               .WithName("GetServerInternalState")
               .WithSummary("The daemon's live internal state: memory, GC, CPU, thread pool, open WebSocket clients, host load.");
 
+        // #1582 — the rig's 12 h of storage / CPU / memory samples; `since` returns only newer points.
+        server.MapGet("/usage-history",
+                ([FromServices] UsageHistoryService svc, HttpContext http, DateTimeOffset? since) => {
+                    http.Response.Headers.CacheControl = "no-store";
+                    return Results.Ok(svc.Snapshot(since));
+                })
+              .Produces<UsageHistoryDto>(StatusCodes.Status200OK)
+              .WithName("GetServerUsageHistory")
+              .WithSummary("The rig's sampled storage, CPU and memory for the last 12 hours (in memory; empty after a restart).");
+
         server.MapGet("/versions",
                 async (IServerStateService svc, CancellationToken ct) =>
                     Results.Ok(await svc.GetVersionsAsync(ct)))

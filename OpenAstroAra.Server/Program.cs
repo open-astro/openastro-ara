@@ -192,6 +192,9 @@ public partial class Program {
         builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
         // §66.7 / #1175 — the Stats "Pi performance" panel's source; sampled on read, no background work.
         builder.Services.AddSingleton<ServerInternalStateService>();
+        builder.Services.AddSingleton<UsageHistoryService>(sp => new UsageHistoryService(
+            UsageHistoryService.SystemReader(() => sp.GetRequiredService<IProfileStore>().GetStorageSettings().SaveDirectory)));
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageHistoryService>());
         // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
         // (Yellow health + 1 open issue + 3-event history); SetMode stores
         // in-memory. The §51 *operating* mode reported here (Off/Observe/

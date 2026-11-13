@@ -56,6 +56,21 @@ public sealed record HostStateDto(
     string Architecture,
     string RuntimeVersion);
 
+/// <summary>#1582 — GET /api/v1/server/usage-history: what the rig sampled of its own storage, CPU and
+/// memory, oldest first, so the Settings › Rig graphs are full after the client slept. A series a sample
+/// could not read is null (a gap), never 0. <c>cpu_percent</c> is a share of ALL cores (0-100).</summary>
+public sealed record UsageHistoryDto(
+    int IntervalSeconds,
+    int ProcessorCount,
+    System.Collections.Generic.IReadOnlyList<UsageSampleDto> Samples);
+
+public sealed record UsageSampleDto(
+    DateTimeOffset AtUtc,
+    long? StorageFreeBytes,
+    long? StorageTotalBytes,
+    double? CpuPercent,
+    long? MemoryBytes);
+
 /// <summary>Full server state snapshot per §60.4. Returned by /api/v1/server/state.</summary>
 public sealed record ServerStateDto(
     string ServerUuid,
