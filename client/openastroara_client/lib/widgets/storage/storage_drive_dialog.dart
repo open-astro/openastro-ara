@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 import '../../state/simple_messages_state.dart';
@@ -152,10 +155,12 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
         return;
       }
       if (outcome.success) {
-        final dir = outcome.saveDirectory;
-        // setSaveDirectory ignores an unloaded section: no value is invented.
-        if (dir != null && dir.isNotEmpty) {
-          ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
+        // The daemon wrote the Storage section itself (new save directory,
+        // new ETag) and no profile.updated follows this route: reload it, or
+        // the next Save sends the old tag and gets a false 412 (ADR 0015).
+        final profile = ref.read(profileApiProvider);
+        if (profile != null) {
+          unawaited(ref.read(storageSettingsProvider.notifier).load(profile));
         }
         final notify = userNotifier(context);
         final done = context.l10n.storageDiskNowUsed(device.friendlyName);
