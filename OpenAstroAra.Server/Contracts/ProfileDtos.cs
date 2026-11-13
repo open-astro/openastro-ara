@@ -128,7 +128,10 @@ public sealed record SiteSettingsDto(
     // lightpollutionmap value). 0 = not measured — planning derives the sky
     // from BortleClass instead. When set (~16–22.2 for real skies) it
     // overrides the coarse Bortle lookup in the client's exposure math.
-    double SqmMagPerArcsec2 = 0);
+    double SqmMagPerArcsec2 = 0,
+    // #1565 — the mount sits on a permanent pier and stays polar aligned, so Simple Mode's Night Setup skips polar
+    // alignment. Ctor default false keeps an older profile.json deserializing. Read by the client's Simple Mode switch.
+    bool PermanentPier = false);
 
 /// <summary>§36 custom terrain horizon — one skyline vertex: the sky altitude at an
 /// azimuth (compass degrees, 0 = north, clockwise). The profile stores the user's

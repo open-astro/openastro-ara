@@ -36,14 +36,18 @@ class SessionSummaryPrefsService {
     }
   }
 
+  /// The newest [cap] entries, in the order they were dismissed.
+  static List<String> capped(Set<String> ids) {
+    final list = ids.toList();
+    return list.length > cap ? list.sublist(list.length - cap) : list;
+  }
+
   Future<void> saveAcknowledged(Set<String> ids) {
     final task = _chain.then((_) async {
       try {
         final f = await _file();
-        final list = ids.toList();
-        final kept = list.length > cap ? list.sublist(list.length - cap) : list;
         await f.writeAsString(
-          jsonEncode({'acknowledged_run_ids': kept}),
+          jsonEncode({'acknowledged_run_ids': capped(ids)}),
           flush: true,
         );
       } catch (_) {

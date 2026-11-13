@@ -5,6 +5,7 @@ import '../widgets/connection_policy_listener.dart';
 import '../widgets/cooling_fan_prompt_listener.dart';
 import '../widgets/manual_filter_swap_listener.dart';
 import '../widgets/pending_profile_replay_listener.dart';
+import '../widgets/preference_sync_listener.dart';
 import '../widgets/preflight_checklist_listener.dart';
 import '../widgets/safety_alarm_listener.dart';
 import '../widgets/session_ended_summary_listener.dart';
@@ -58,7 +59,8 @@ class ShellListeners extends StatelessWidget {
                       quiet: quiet,
                       child: CoolingFanPromptListener(
                         quiet: quiet,
-                        child: child,
+                        // #1644 — keeps multi-device preference sync alive.
+                        child: PreferenceSyncListener(child: child),
                       ),
                     ),
                   ),

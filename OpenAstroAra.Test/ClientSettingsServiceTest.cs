@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -32,12 +33,25 @@ namespace OpenAstroAra.Test {
 
         private string _dir = null!;
         private ClientSettingsService _svc = null!;
+        private readonly List<(string Type, JsonElement Payload)> _published = new();
+
+        private sealed class RecordingWs : IWsBroadcaster {
+            private readonly List<(string Type, JsonElement Payload)> _sink;
+            public RecordingWs(List<(string Type, JsonElement Payload)> sink) => _sink = sink;
+            public long CurrentSequence { get; private set; }
+            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+                CurrentSequence++;
+                _sink.Add((eventType, payload.Clone()));
+                return Task.CompletedTask;
+            }
+        }
 
         [SetUp]
         public void SetUp() {
             _dir = Path.Combine(Path.GetTempPath(), "ara-cs-" + Path.GetRandomFileName());
             Directory.CreateDirectory(_dir);
-            _svc = new ClientSettingsService(_dir, NullLogger<ClientSettingsService>.Instance);
+            _published.Clear();
+            _svc = new ClientSettingsService(_dir, NullLogger<ClientSettingsService>.Instance, new RecordingWs(_published));
         }
 
         [TearDown]
@@ -69,6 +83,87 @@ namespace OpenAstroAra.Test {
             Assert.That(got.Settings.GetProperty("zoom").GetDouble(), Is.EqualTo(1.5));
             Assert.That(got.Settings.GetProperty("collapsed")[0].GetString(), Is.EqualTo("targets"));
             Assert.That(got.UpdatedUtc, Is.Not.Null);
+        }
+
+        [Test]
+        public async Task Merge_replaces_only_the_given_keys() {
+            await _svc.ReplaceAsync(Obj("""{"a":1,"b":{"x":1}}"""), CancellationToken.None);
+            var merged = await _svc.MergeAsync(Obj("""{"b":{"y":2},"c":true}"""), CancellationToken.None);
+
+            Assert.That(merged.Settings.GetProperty("a").GetInt32(), Is.EqualTo(1), "untouched key stays");
+            Assert.That(merged.Settings.GetProperty("b").TryGetProperty("x", out _), Is.False, "key replaced, not deep-merged");
+            Assert.That(merged.Settings.GetProperty("b").GetProperty("y").GetInt32(), Is.EqualTo(2));
+            Assert.That(merged.Settings.GetProperty("c").GetBoolean(), Is.True);
+            var got = await _svc.GetAsync(CancellationToken.None);
+            Assert.That(got.Settings.GetRawText(), Is.EqualTo(merged.Settings.GetRawText()));
+            Assert.That(got.UpdatedUtc, Is.EqualTo(merged.UpdatedUtc), "returned stamp is the stored one");
+        }
+
+        [Test]
+        public async Task Merge_with_null_removes_the_key() {
+            await _svc.ReplaceAsync(Obj("""{"a":1,"b":2}"""), CancellationToken.None);
+            var merged = await _svc.MergeAsync(Obj("""{"a":null}"""), CancellationToken.None);
+            Assert.That(merged.Settings.TryGetProperty("a", out _), Is.False);
+            Assert.That(merged.Settings.GetProperty("b").GetInt32(), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task Merge_onto_nothing_stored_creates_the_blob() {
+            var merged = await _svc.MergeAsync(Obj("""{"a":1}"""), CancellationToken.None);
+            Assert.That(merged.Settings.GetProperty("a").GetInt32(), Is.EqualTo(1));
+            Assert.That(merged.UpdatedUtc, Is.Not.Null);
+        }
+
+        [Test]
+        public async Task Merge_rejects_a_non_object() {
+            await Assert.ThrowsAsync<ArgumentException>(() => _svc.MergeAsync(Obj("[1]"), CancellationToken.None));
+        }
+
+        [Test]
+        public async Task Merge_rejects_a_result_over_the_cap_and_keeps_the_stored_blob() {
+            await _svc.ReplaceAsync(Obj("{\"big\":\"" + new string('x', ClientSettingsService.MaxBytes - 100) + "\"}"), CancellationToken.None);
+            _published.Clear();
+            // Each patch alone is tiny; the merged result is what goes over.
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                _svc.MergeAsync(Obj("{\"more\":\"" + new string('y', 200) + "\"}"), CancellationToken.None));
+            var got = await _svc.GetAsync(CancellationToken.None);
+            Assert.That(got.Settings.TryGetProperty("more", out _), Is.False);
+            Assert.That(_published, Is.Empty, "a rejected write emits nothing");
+        }
+
+        [Test]
+        public async Task Concurrent_merges_of_different_keys_keep_both() {
+            await Task.WhenAll(Enumerable.Range(0, 20).Select(i =>
+                _svc.MergeAsync(Obj("{\"k" + i + "\":" + i + "}"), CancellationToken.None)));
+            var got = await _svc.GetAsync(CancellationToken.None);
+            for (var i = 0; i < 20; i++) {
+                Assert.That(got.Settings.GetProperty("k" + i).GetInt32(), Is.EqualTo(i));
+            }
+        }
+
+        [Test]
+        public async Task Merge_publishes_client_settings_updated_with_the_patched_keys_and_stamp() {
+            var merged = await _svc.MergeAsync(Obj("""{"a":1,"b":null}"""), CancellationToken.None);
+            Assert.That(_published, Has.Count.EqualTo(1));
+            Assert.That(_published[0].Type, Is.EqualTo("client_settings.updated"));
+            var keys = _published[0].Payload.GetProperty("keys").EnumerateArray().Select(e => e.GetString()).ToArray();
+            Assert.That(keys, Is.EquivalentTo(new List<string> { "a", "b" }));
+            Assert.That(_published[0].Payload.GetProperty("updated_utc").GetDateTimeOffset(), Is.EqualTo(merged.UpdatedUtc));
+        }
+
+        [Test]
+        public async Task Replace_publishes_client_settings_updated() {
+            var put = await _svc.ReplaceAsync(Obj("""{"a":1,"b":2}"""), CancellationToken.None);
+            Assert.That(_published, Has.Count.EqualTo(1));
+            Assert.That(_published[0].Type, Is.EqualTo("client_settings.updated"));
+            Assert.That(_published[0].Payload.GetProperty("keys").GetArrayLength(), Is.EqualTo(2));
+            Assert.That(_published[0].Payload.GetProperty("updated_utc").GetDateTimeOffset(), Is.EqualTo(put.UpdatedUtc));
+        }
+
+        [Test]
+        public async Task Rejected_replace_publishes_nothing() {
+            await Assert.ThrowsAsync<ArgumentException>(() => _svc.ReplaceAsync(Obj("[1]"), CancellationToken.None));
+            Assert.That(_published, Is.Empty);
         }
 
         [Test]
