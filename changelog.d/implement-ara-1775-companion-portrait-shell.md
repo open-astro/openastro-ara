@@ -1,0 +1,3 @@
+### Added (Companion Mode)
+
+- **A phone held upright gets one bottom deck** (#1775): with Companion Mode on and the window taller than wide, both rails fold into one translucent deck. Its top row is the section words (Preview, Focus, P.A., Guider, Plan, Monitor) as a swipeable row with the current one lit; its second row holds Sky Map, Info and Library, the shutter and the settings chip, and a 60 px STOP. Panels open full width above the deck, so the deck and STOP stay visible. STOP is drawn disabled before any rig has been connected. A phone on its side, a tablet and a desktop keep today's layout.

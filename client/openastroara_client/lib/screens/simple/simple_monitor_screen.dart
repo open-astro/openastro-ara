@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../services/monitor_device_service.dart';
 import '../../state/night_mode_state.dart';
+import '../../state/simple_mode_state.dart' show companionModeProvider;
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_monitor_state.dart';
 import '../../theme/ara_colors.dart';
@@ -70,6 +71,7 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
   Widget build(BuildContext context) {
     final s = ref.watch(monitorProvider);
     final clock = ref.watch(monitorClockProvider);
+    final phone = ref.watch(companionModeProvider);
     return Scaffold(
       key: const Key('simple-monitor'),
       backgroundColor: AraColors.bgPrimary,
@@ -88,12 +90,14 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
                   Expanded(child: _Grid(s: s, onOpen: widget.onOpen)),
                 ],
               ),
-              const Positioned(
+              // The iPad's 108 pt Stop; a phone's is the 60 px square of every
+              // phone screen (board pick, 2026-11-12, #1775).
+              Positioned(
                 right: 0,
                 bottom: 0,
-                width: 108,
-                height: 108,
-                child: EmergencyStopButton(large: true),
+                width: phone ? 60 : 108,
+                height: phone ? 60 : 108,
+                child: EmergencyStopButton(large: !phone, compact: phone),
               ),
             ],
           ),

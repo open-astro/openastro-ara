@@ -3,6 +3,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
+import 'companion_portrait_shell.dart';
 import 'simple_search.dart';
 import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
@@ -238,11 +239,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
+  final _deckKey = GlobalKey();
+  // #1775 — the portrait deck's height; 0 until measured.
+  double _deckHeight = 0;
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size;
+    final deckH = _deckKey.currentContext?.size?.height ?? 0;
     final messages = _messagesKey.currentContext?.size;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
@@ -250,6 +255,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         (row != null &&
             (row.height != _simplePreflightRowHeight ||
                 row.width != _simplePreflightRowWidth)) ||
+        deckH != _deckHeight ||
         (messages?.height ?? 0) != _messagesHeight ||
         (messages?.width ?? 0) != _messagesCardWidth) {
       setState(() {
@@ -257,6 +263,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row?.height ?? _simplePreflightRowHeight;
         _simplePreflightRowWidth = row?.width ?? _simplePreflightRowWidth;
+        _deckHeight = deckH;
         _messagesHeight = messages?.height ?? 0;
         _messagesCardWidth = messages?.width ?? 0;
       });
@@ -685,6 +692,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   });
 
+  void _openLibrary() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+    ),
+  );
+
+  /// The deck's settings chip: the right rail's, in Preflight's two-line form.
+  String _deckChipLabel(SimpleModeScreen mode, bool preflight) {
+    final label = SimpleScreen.of(mode).caption(context, ref);
+    return preflight
+        ? '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}'
+        : label;
+  }
+
   /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
   void _openMonitor() => unawaited(
     Navigator.of(context).push(
@@ -1087,10 +1108,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // What sits above the bottom row drops to the inset while it is empty
     // (ALP-4935).
     final statsShown = _statsShown(ref);
-    final aboveRow = statsShown ? kSimpleInset * 2 + bottomRow : kSimpleInset;
+    // #1775 — a phone held upright: one deck along the bottom in place of
+    // both rails and Stop; everything else sits above it.
+    final deck = companionPortrait(context, ref);
+    // Until the deck is measured, a one-line guess keeps the first frame close.
+    final deckTop = kSimpleInset + (_deckHeight == 0 ? 140.0 : _deckHeight);
+    final rowBottom = deck ? deckTop + AraSpace.s8 : kSimpleInset;
+    final aboveRow = statsShown
+        ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
+        : rowBottom;
+    // Beside the rail, the right edge the panels keep: the deck has no rail.
+    final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -1105,7 +1136,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
-    final leftRailTop = _leftRailHeight == 0
+    final leftRailTop = deck
+        ? height - deckTop - kSimpleInset
+        : _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
     // A card too tall for the room above the left rail moves beside it, when
@@ -1140,6 +1173,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : double.infinity;
     final pillsBesideRail = besideRailAt(messagesTop);
     final pillsOverRail =
+        !deck &&
         panels &&
         _messagesHeight > messagesRoom &&
         !pillsBesideRail &&
@@ -1161,8 +1195,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
-    final betweenBottom =
-        (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
+    final betweenBottom = deck
+        ? rowBottom
+        : (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -1171,6 +1206,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Large text or a short window: the right rail reaches down into the
     // plan squares' corner, so they sit beside it, never over its chip.
     final squaresBesideRail =
+        !deck &&
         rightRailTop + _rightRailHeight + AraSpace.s8 >
         height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
     // Beside it they still hold one square (a rail wide): a phone at 2x text.
@@ -1214,8 +1250,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: kSimpleInset * 2 + (railWidth + stopSize) / 2,
-      bottom: kSimpleInset,
+      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
@@ -1415,13 +1451,40 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right:
-                                    kSimpleInset * 2 +
-                                    (railWidth + stopSize) / 2,
-                                bottom: kSimpleInset,
+                                right: deck
+                                    ? kSimpleInset
+                                    : kSimpleInset * 2 +
+                                          (railWidth + stopSize) / 2,
+                                bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
                               ),
+                              // #1775 — the deck: both rails and Stop in one.
+                              if (deck)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset,
+                                  child: KeyedSubtree(
+                                    key: _deckKey,
+                                    child: CompanionDeck(
+                                      mode: shown,
+                                      chipLabel: _deckChipLabel(shown, pilot != null),
+                                      settingsOpen: _popover == _Popover.settings,
+                                      sky: _sky,
+                                      info: ref.watch(simpleInfoShownProvider),
+                                      onSection: _pickFromGrid,
+                                      onMonitor: _openMonitor,
+                                      onSky: () => setState(() => _sky = !_sky),
+                                      onInfo: () => ref
+                                          .read(simpleInfoShownProvider.notifier)
+                                          .toggle(),
+                                      onLibrary: _openLibrary,
+                                      onSettings: () => _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                )
+                              else ...[
                               Positioned(
                                 left: kSimpleInset,
                                 top: railTop,
@@ -1471,13 +1534,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              ],
                               // #1562 — the first-time Rig setup sheet, where Plan's
                               // sheet sits: each window and popover after it here
                               // draws over it, and it stays up under Settings so
                               // its ticks follow the edits.
                               Positioned(
                                 left: kSimpleInset,
-                                right: kSimpleInset * 2 + railWidth,
+                                right: railGap,
                                 top: popoverTop,
                                 bottom: betweenBottom,
                                 child: SimpleRigSetupHost(
@@ -1498,7 +1562,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // with the sheet's height (user, 2026-11-04;
                                   // it was centred over the image).
                                   left: kSimpleInset,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  right: railGap,
                                   // Centred between the status pill and the
                                   // bottom row (user, 2026-11-04).
                                   top: popoverTop,
@@ -1517,7 +1581,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               }.contains(_popover))
                                 Positioned(
                                   left: 0,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  right: railGap,
                                   top: popoverTop,
                                   // Plan's bottom limit; the plan squares,
                                   // which its sheet moves, stay clear.
@@ -1572,7 +1636,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // never slide there.
                               if (!runSheet &&
                                   !preflightPanel &&
-                                  _rightRailHeight > 0)
+                                  (deck || _rightRailHeight > 0))
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: squaresLeft,
@@ -1726,6 +1790,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               ],
                               // Stop on its own at the bottom, under the rail.
+                              if (!deck)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
