@@ -7563,6 +7563,51 @@ void main() {
     );
 
     testWidgets(
+      'Set guide scope in the Rig page header brings the guide scope rows into view',
+      (tester) async {
+        await pumpSetup(
+          tester,
+          const RigSetupFacts(
+            latitudeDeg: -33.856784,
+            longitudeDeg: 151.215297,
+            opticsConfigured: true,
+            hasGuider: true,
+            guiderConnected: true,
+            calibrationHasData: true,
+            calibrationVerdict: 'good',
+          ),
+          dismissed: true,
+          screen: const Size(1024, 420),
+        );
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-rig-setup-header-action')),
+            matching: find.text('Set guide scope'),
+          ),
+          findsOneWidget,
+          reason: 'precondition: the guide scope is the next fix',
+        );
+        final guide = find.byKey(const Key('simple-rig-guidefocal'));
+        final view = tester.getRect(
+          find
+              .ancestor(of: guide, matching: find.byType(Scrollable))
+              .first,
+        );
+        expect(
+          view.contains(tester.getCenter(guide)),
+          isFalse,
+          reason: 'precondition: the guide scope starts below the fold',
+        );
+        await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(guide)), isTrue);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
       'the Rig page header next fix for the optics opens the optics panel',
       (tester) async {
         final c = (await pumpSetup(
