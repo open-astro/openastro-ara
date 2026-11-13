@@ -8,7 +8,10 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 
 import '../../support/storage_fixture.dart';
 
-Future<ProviderContainer> _pump(WidgetTester tester, FakeStorageApi api) async {
+Future<ProviderContainer> _pump(
+  WidgetTester tester,
+  FakeStorageApi? api,
+) async {
   tester.view.physicalSize = const Size(1400, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -44,6 +47,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('section-retry')), findsNothing);
       expect(find.text('Advanced'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'no rig connected: Storage says so, with no Loading and no Retry',
+    (tester) async {
+      await _pump(tester, null);
+      expect(find.text('Rig not connected'), findsOneWidget);
+      expect(find.textContaining('Loading'), findsNothing);
+      expect(find.byKey(const Key('section-retry')), findsNothing);
     },
   );
 
