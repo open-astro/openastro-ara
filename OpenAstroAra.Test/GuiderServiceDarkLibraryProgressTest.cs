@@ -375,7 +375,7 @@ namespace OpenAstroAra.Test {
                 Func<Guid?>? activeProfileIdResolver = null) {
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
+                .Callback((OpenAstroAra.Server.Contracts.WsEvents.WsEvent type, JsonElement _, CancellationToken _) => events.Enqueue(type.Token))
                 .Returns(Task.CompletedTask);
             var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 logger ?? NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object, profileStore,

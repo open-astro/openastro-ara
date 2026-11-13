@@ -153,7 +153,7 @@ namespace OpenAstroAra.Test {
             var events = new ConcurrentQueue<string>();
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
+                .Callback((OpenAstroAra.Server.Contracts.WsEvents.WsEvent type, JsonElement _, CancellationToken _) => events.Enqueue(type.Token))
                 .Returns(Task.CompletedTask);
             using var svc = new BackupService(_profileDir, NullLogger<BackupService>.Instance, ws: ws.Object);
 
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             var events = new ConcurrentQueue<string>();
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
+                .Callback((OpenAstroAra.Server.Contracts.WsEvents.WsEvent type, JsonElement _, CancellationToken _) => events.Enqueue(type.Token))
                 .Returns(Task.CompletedTask);
             using var svc = new BackupService(_profileDir, NullLogger<BackupService>.Instance, ws: ws.Object);
             svc.CreatePackagingTestHook = () => throw new IOException("boom");
