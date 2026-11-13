@@ -47,6 +47,20 @@ void main() {
     },
   );
 
+  testWidgets('a reset after a failed load loads the Storage panel again', (
+    tester,
+  ) async {
+    final api = FakeStorageApi()..failGet = Exception('rig unreachable');
+    final container = await _pump(tester, api);
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+    api.failGet = null;
+    container.read(storageSettingsProvider.notifier).reset();
+    await tester.pumpAndSettle();
+    expect(api.gets, 2);
+    expect(find.textContaining('Loading'), findsNothing);
+    expect(container.read(storageSettingsProvider).value, kTestStorage);
+  });
+
   testWidgets('412 on Save keeps the edits and offers Reload', (tester) async {
     final api = FakeStorageApi();
     final container = await _pump(tester, api);
