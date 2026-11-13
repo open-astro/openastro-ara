@@ -85,6 +85,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task SetZeroAsync_after_a_compensated_reversal_reads_zero_not_the_standing_offset() {
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(new AutofocusSettingsDto("hfr_v_curve", 4, 100, 2, 1, "L", false, 1.0, 10, 0, false, true, StepSizeAuto: false,
+                BacklashInSteps: 30, BacklashOutSteps: 40));
+            using var focuser = new FakeFocuserDevice();
+            focuser.MoveLands = true;
+            focuser.Actions.Add(FocuserService.SetZeroAction);
+            using var svc = new FocuserService(profiles: store) { RefreshPeriod = TimeSpan.FromMilliseconds(50), DeviceFactory = _ => focuser };
+            var device = new DiscoveredDeviceDto("focuser-under-test", "Bench Focuser", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
+            await PollAsync(svc, d => d.Capabilities is not null);
+            await svc.MoveFocuser(800, CancellationToken.None);
+            Assert.That(await svc.MoveFocuser(600, CancellationToken.None), Is.EqualTo(600), "the reversal went 30 further in: hardware 570, offset -30");
+
+            await svc.SetZeroAsync(null, CancellationToken.None);
+
+            Assert.That((await PollAsync(svc, d => d.Runtime.Position == 0))!.Runtime.Position, Is.EqualTo(0), "the zero leaves no standing offset");
+        }
+
+        [Test]
         public async Task The_action_routes_answer_409_when_refused_not_500() {
             // Not connected, then connected without the actions: each refusal is a state conflict.
             using (var idle = new FocuserService()) {

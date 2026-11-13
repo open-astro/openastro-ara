@@ -168,7 +168,9 @@ namespace OpenAstroAra.Test {
         public double StepSize => 5;
         public bool TempCompAvailable => true;
         public bool Absolute => true;
-        public void Move(int position) { }
+        /// <summary>When true a move lands at once; by default it changes nothing.</summary>
+        public bool MoveLands { get; set; }
+        public void Move(int position) { if (MoveLands) { Volatile.Write(ref _position, position); } }
         public void Halt() { }
         public List<string> Actions { get; } = [];
         public System.Collections.Concurrent.ConcurrentQueue<string> ActionCalls { get; } = new();
