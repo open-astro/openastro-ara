@@ -1521,6 +1521,12 @@ abstract class AppLocalizations {
   /// **'Cooling'**
   String get previewCooling;
 
+  /// Simple Mode status pill: the camera's cooler went off and the sensor is warming back up (its temperature follows)
+  ///
+  /// In en, this message translates to:
+  /// **'Warming'**
+  String get previewWarming;
+
   /// Simple Mode status pill, screen-reader text: the status and its detail
   ///
   /// In en, this message translates to:

@@ -237,6 +237,7 @@
   "previewParking": "Estacionando",
   "previewUnparking": "Desestacionando",
   "previewCooling": "Resfriando",
+  "previewWarming": "Aquecendo",
   "previewStatusSpoken": "{label}, {detail}",
   "focusAuto": "Auto",
   "focusManual": "Manual",

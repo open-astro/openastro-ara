@@ -818,18 +818,19 @@ class _OpticsApi extends ProfileApi {
 
 /// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
 class _CoolingCamera extends CameraStatusNotifier {
-  _CoolingCamera(this.ccd);
+  _CoolingCamera(this.ccd, {this.on = true});
   double ccd;
-  static Map<String, dynamic> _wire(double t) => {
+  final bool on;
+  static Map<String, dynamic> _wire(double t, bool on) => {
         'device_id': 'c',
         'name': 'ASI2600MM',
         'state': 'connected',
         'capabilities': {'has_cooler': true, 'can_set_temperature': true},
-        'runtime': {'ccd_temperature': t, 'cooler_on': true, 'cooler_setpoint_c': -10},
+        'runtime': {'ccd_temperature': t, 'cooler_on': on, 'cooler_setpoint_c': -10},
       };
   @override
-  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd));
-  void set(double t) => state = AsyncData(CameraStatus.fromJson(_wire(t)));
+  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd, on));
+  void set(double t, {bool on = true}) => state = AsyncData(CameraStatus.fromJson(_wire(t, on)));
 }
 
 class _NightPrefs extends NightModePrefsService {
@@ -5563,6 +5564,52 @@ void main() {
     await _letPillLeave(tester);
     expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsNothing,
         reason: 'at the target (within half a degree) the pill has nothing to say');
+  });
+
+  testWidgets('a cooler turned off by hand shows Warming in the pill until the sensor stops rising', (tester) async {
+    final camera = _CoolingCamera(-10);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    final warming = find.descendant(of: pill, matching: find.textContaining('Warming'));
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'the cooler is on, at its target');
+    camera.set(-9.5, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('−9.5 °C')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentInfo, true), reason: 'a change between two states: blue');
+    await tester.pump(const Duration(seconds: 50));
+    camera.set(4, on: false);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('4 °C')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 50));
+    camera.set(4.1, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget, reason: 'it rose 50 s ago: the minute counts from the last rise');
+    await tester.pump(const Duration(seconds: 11));
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'a minute with no rise: the sensor is as warm as it gets');
+    camera.set(-10, on: true);
+    await tester.pump();
+    camera.set(-9, on: false);
+    await tester.pump();
+    expect(warming, findsOneWidget);
+    camera.set(-9, on: true);
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(warming, findsNothing, reason: 'the cooler is back on');
+  });
+
+  testWidgets('a camera whose cooler was off when it was first seen shows no Warming', (tester) async {
+    final camera = _CoolingCamera(12, on: false);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    camera.set(13, on: false);
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Warming')), findsNothing,
+        reason: 'nothing here saw the cooler go off');
   });
 
   testWidgets('a filter change shows in the status pill until the wheel lands; a hand swap asks there too', (tester) async {

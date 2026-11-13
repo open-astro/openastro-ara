@@ -856,6 +856,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewCooling => 'Cooling';
 
   @override
+  String get previewWarming => 'Warming';
+
+  @override
   String previewStatusSpoken(String label, String detail) {
     return '$label, $detail';
   }
@@ -6113,6 +6116,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewCooling => 'Resfriando';
+
+  @override
+  String get previewWarming => 'Aquecendo';
 
   @override
   String previewStatusSpoken(String label, String detail) {

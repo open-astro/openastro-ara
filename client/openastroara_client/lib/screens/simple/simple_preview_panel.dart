@@ -1548,6 +1548,35 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// Where the sensor was when the pill first saw it cooling: the bar's 0.
   double? _coolStart;
 
+  /// The cooler went off while this pill watched (#1870): the sensor's highest
+  /// reading since, until [_kWarmQuiet] passes with no rise.
+  double? _warmPeak;
+  bool _coolerWasOn = false;
+  Timer? _warmQuiet;
+
+  /// No ambient reading says where a sensor stops, so a minute without a
+  /// rise of [_kWarmRise] does (noise at rest is under it).
+  static const _kWarmQuiet = Duration(seconds: 60);
+  static const _kWarmRise = 0.2;
+
+  /// Follows the sensor up after the cooler goes off; true while it warms.
+  // shortcut: an unreadable cooler reads as off (#1076), so one failed read
+  // shows this pill until the next; read cooler_state_known if that is seen.
+  bool _syncWarming(bool known, bool coolerOn, double? ccd) {
+    if (!known || coolerOn || ccd == null) {
+      _warmQuiet?.cancel();
+      _warmPeak = null;
+    } else if (_coolerWasOn || (_warmPeak != null && ccd - _warmPeak! >= _kWarmRise)) {
+      _warmPeak = ccd;
+      _warmQuiet?.cancel();
+      _warmQuiet = Timer(_kWarmQuiet, () {
+        if (mounted) setState(() => _warmPeak = null);
+      });
+    }
+    _coolerWasOn = known && coolerOn;
+    return _warmPeak != null;
+  }
+
   /// The rig's own safety limits have loaded: Simple Mode never opens the
   /// policies page that loads them, and the defaults are not the rig's, so
   /// no weather breach is read from them before (#1690 audit).
@@ -1570,6 +1599,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   @override
   void dispose() {
     _ticker.dispose();
+    _warmQuiet?.cancel();
     super.dispose();
   }
 
@@ -1630,6 +1660,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         target != null &&
         ccd - target > 0.5;
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    // A cooler turned off by hand goes off at once, with no ramp: the pill
+    // shows the sensor warming until it stops rising (#1870).
+    final known = cam != null && cam.isConnected;
+    final warming = _syncWarming(known, known && cam.coolerOn, ccd);
     // The main camera's own exposure (#1755): its progress fills a plan
     // frame's bar, and an exposure nothing here explains gets its own pill.
     final camExposing = cam != null && cam.isConnected && cam.runtimeState == 'exposing';
@@ -1993,6 +2027,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               ? 0.0
               : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0),
           spoken: l10n.previewCooling,
+        ),
+      // A cooler turned off by hand (a plan's own warm-up shows as its step).
+      if (warming && !planActive)
+        _PillData(
+          SimpleStatusOrigin.camera,
+          l10n.previewWarming,
+          simpleCelsius(ccd!),
+          AraColors.accentInfo,
+          ring: true,
+          spoken: l10n.previewWarming,
         ),
       // Every mode's routine has a pill while it runs; a failure is a message
       // on the left that fades, posted by the shell (user, 2026-11-04).

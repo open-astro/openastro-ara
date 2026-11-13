@@ -856,6 +856,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewCooling => 'Cooling';
 
   @override
+  String get previewWarming => 'Warming';
+
+  @override
   String previewStatusSpoken(String label, String detail) {
     return '$label, $detail';
   }

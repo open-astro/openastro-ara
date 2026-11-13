@@ -1142,6 +1142,10 @@
   "@previewCooling": {
     "description": "Simple Mode status pill: the camera sensor is cooling to its target (temperatures follow)"
   },
+  "previewWarming": "Warming",
+  "@previewWarming": {
+    "description": "Simple Mode status pill: the camera's cooler went off and the sensor is warming back up (its temperature follows)"
+  },
   "previewStatusSpoken": "{label}, {detail}",
   "@previewStatusSpoken": {
     "description": "Simple Mode status pill, screen-reader text: the status and its detail",

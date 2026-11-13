@@ -1,3 +1,7 @@
+### Added (Simple Mode)
+
+- **Warming pill.** After the Camera window's cooler switch turns the cooler off, the status card shows "Warming" with the sensor's temperature until the sensor stops rising, so you can tell when it is safe to cap the camera and cut its power (#1870).
+
 ### Changed (Simple Mode)
 
 - **Luminance glass is a spectrum.** In the Filter wheel window the L cell (L, Lum, Luminance or Clear) shows the visible spectrum instead of pale clear glass, so it reads as all colours without being the brightest thing on screen at night.
