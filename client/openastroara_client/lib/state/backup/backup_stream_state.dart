@@ -139,7 +139,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       final event = next.asData?.value;
       if (event == null) return;
       switch (event.type) {
-        case 'frame.complete':
+        case WsEventTypes.frameComplete:
           if (!state.active) return;
           _wsDebounce?.cancel();
           _wsDebounce = Timer(const Duration(seconds: 2), _tick);

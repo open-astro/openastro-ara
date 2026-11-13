@@ -108,30 +108,43 @@ class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       if (event == null) return;
-      try {
-        switch (event.type) {
-          case WsEventTypes.cameraExposureStarted:
-            final p = CameraExposureStartedPayload.fromJson(event.payload);
-            if (p.frameId.isEmpty) return;
-            final filter = p.filterName;
-            _begin(ExposureActivity(
-              frameId: p.frameId,
-              exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
-              startedAt: clock.now(),
-              kind: p.kind.isNotEmpty ? p.kind : 'light',
-              filterName: filter != null && filter.isNotEmpty ? filter : null,
-            ));
-          case WsEventTypes.cameraExposureComplete:
-            _endIfCurrent(
-                CameraExposureCompletePayload.fromJson(event.payload).frameId);
-          case WsEventTypes.cameraExposureFailed:
-            _endIfCurrent(
-                CameraExposureFailedPayload.fromJson(event.payload).frameId);
-          case 'frame.complete':
-            _endIfCurrent(event.payload['frame_id']);
-        }
-      } on TypeError {
-        // A payload that does not match the daemon's declared shape is dropped.
+      // Only the fromJson calls sit in a try, so a TypeError raised by _begin
+      // or _end is not swallowed as a malformed payload.
+      switch (event.type) {
+        case WsEventTypes.cameraExposureStarted:
+          final CameraExposureStartedPayload p;
+          try {
+            p = CameraExposureStartedPayload.fromJson(event.payload);
+          } on TypeError {
+            return;
+          }
+          if (p.frameId.isEmpty) return;
+          final filter = p.filterName;
+          _begin(ExposureActivity(
+            frameId: p.frameId,
+            exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
+            startedAt: clock.now(),
+            kind: p.kind.isNotEmpty ? p.kind : 'light',
+            filterName: filter != null && filter.isNotEmpty ? filter : null,
+          ));
+        case WsEventTypes.cameraExposureComplete:
+          final String id;
+          try {
+            id = CameraExposureCompletePayload.fromJson(event.payload).frameId;
+          } on TypeError {
+            return;
+          }
+          _endIfCurrent(id);
+        case WsEventTypes.cameraExposureFailed:
+          final String id;
+          try {
+            id = CameraExposureFailedPayload.fromJson(event.payload).frameId;
+          } on TypeError {
+            return;
+          }
+          _endIfCurrent(id);
+        case WsEventTypes.frameComplete:
+          _endIfCurrent(event.payload['frame_id']);
       }
     });
     // A dropped link means we may never hear the complete event; a frozen
