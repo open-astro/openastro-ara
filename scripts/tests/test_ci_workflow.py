@@ -58,6 +58,13 @@ class CiRunTimeTest(unittest.TestCase):
             with self.subTest(job=job_id):
                 self.assert_every_test_file_runs_once(job(self.text, job_id), job_id)
 
+    def test_the_windows_shards_batch_their_files_under_the_cmd_exe_limit(self):
+        # flutter is flutter.bat on Windows, and cmd.exe refuses a line over
+        # 8191 chars: a 166-file shard did, in the merge queue (#1851).
+        batch = re.search(r'\| xargs -0 -n (\d+) flutter test\n', job(self.text, "client-test-desktop-shard"))
+        self.assertIsNotNone(batch, "the Windows/macOS shards pass the whole file list to one flutter test")
+        self.assertLessEqual(int(batch[1]) * 100, 8191 - 1000, "a batch of 100-char paths would not fit cmd.exe's line")
+
     def assert_every_test_file_runs_once(self, block, job_id):
         shards = re.search(r"\n        shard: \[([0-9, ]+)\]\n", block)
         split = re.search(r"\| (awk -v n=(\d+) -v s=\"\$SHARD\" '[^']+')\)\n", block)
@@ -68,7 +75,11 @@ class CiRunTimeTest(unittest.TestCase):
         self.assertEqual(matrix, list(range(1, n + 1)))
         self.assertIn("SHARD: ${{ matrix.shard }}", block)
         self.assertIn(f"shard ${{{{ matrix.shard }}}}/{n}\n", block)
-        self.assertIn('flutter test "${files[@]}"', block)
+        self.assertRegex(
+            block,
+            r'\n {10}(flutter test "\$\{files\[@\]\}"|printf \'%s\\0\' "\$\{files\[@\]\}" \| xargs -0 -n \d+ flutter test)\n',
+            f"{job_id} does not hand every shard file to flutter test",
+        )
         # Run the workflow's own split over a file list: every file lands in exactly one shard.
         files = [f"test/f{i:02d}_test.dart" for i in range(10)]
         taken = []
