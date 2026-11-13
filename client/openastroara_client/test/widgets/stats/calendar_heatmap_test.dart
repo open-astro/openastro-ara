@@ -8,6 +8,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/calendar_state.dart';
 import 'package:openastroara/widgets/stats/charts/calendar_heatmap.dart';
+import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
@@ -67,7 +68,7 @@ void main() {
     expect(find.text('Stale'), findsNothing);
 
     api.throwOnFetch = true;
-    await tester.tap(find.byIcon(Icons.refresh));
+    pullRefresh(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('Stale'), findsOneWidget);

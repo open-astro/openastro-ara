@@ -84,8 +84,8 @@ namespace OpenAstroAra.Test {
         public async Task Forget_publishes_the_removal_under_the_services_own_type_and_clears_the_retained_record(RetainedDeviceRow row) {
             var ws = new Mock<IWsBroadcaster>();
             var events = new List<(string Type, JsonElement Payload)>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
                 .Returns(Task.CompletedTask);
             using var svc = row.Create(new EquipmentEventPublisher(ws.Object));
             var retained = (IRetainedDeviceSource)svc;

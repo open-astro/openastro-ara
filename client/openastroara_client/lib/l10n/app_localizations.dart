@@ -7899,6 +7899,30 @@ abstract class AppLocalizations {
   /// **'Not built'**
   String get calibrationGuideNotBuilt;
 
+  /// Calibration › Guide Camera: the Guider's file status is being read
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the Guider\'s files…'**
+  String get calibrationGuideChecking;
+
+  /// Calibration › Guide Camera: the rig could not read the Guider's dark library and bad-pixel map status
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read the Guider\'s files'**
+  String get calibrationGuideUnread;
+
+  /// Calibration › Guide Camera: under the unread line, why and what happens next
+  ///
+  /// In en, this message translates to:
+  /// **'The Guider may be restarting. Ara reads them again when it is back.'**
+  String get calibrationGuideUnreadNote;
+
+  /// Calibration › Guide Camera: reads the Guider's file status again
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get calibrationGuideRetry;
+
   /// Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels
   ///
   /// In en, this message translates to:
@@ -8475,6 +8499,12 @@ abstract class AppLocalizations {
   /// **'None yet.'**
   String get calibrationLibraryNone;
 
+  /// Calibration › Darks & bias: how many darks a gain and temperature group holds
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 exposure} other{{count} exposures}}'**
+  String calibrationDarkGroupCount(int count);
+
   /// Calibration library row: how old the set is and how many frames it holds
   ///
   /// In en, this message translates to:
@@ -8577,7 +8607,7 @@ abstract class AppLocalizations {
   /// **'Comma-separated'**
   String get libraryTagsCommaSeparated;
 
-  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  /// Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig
   ///
   /// In en, this message translates to:
   /// **'Rig setup'**
@@ -8678,6 +8708,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not now'**
   String get rigSetupNotNow;
+
+  /// Rig setup sheet footer and Settings › Rig header: how many of the items are done
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} done'**
+  String rigSetupProgress(int done, int total);
+
+  /// Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)
+  ///
+  /// In en, this message translates to:
+  /// **'Next: {item}'**
+  String rigSetupNext(String item);
 
   /// Simple Mode result pill when the last Rig setup item is done
   ///

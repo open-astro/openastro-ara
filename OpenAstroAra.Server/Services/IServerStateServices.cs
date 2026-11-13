@@ -160,7 +160,7 @@ public interface IProfileShareService {
 /// publishes an event. Sequence numbers are server-assigned + monotonic.
 /// </summary>
 public interface IWsBroadcaster {
-    Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct);
+    Task PublishAsync(Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct);
     long CurrentSequence { get; }
 }
 

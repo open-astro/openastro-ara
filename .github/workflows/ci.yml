@@ -1323,7 +1323,10 @@ jobs:
           files=()
           while IFS= read -r f; do files+=("$f"); done < <(find test -name '*_test.dart' | sort | awk -v n=3 -v s="$SHARD" 'NR % n == s - 1')
           echo "shard ${SHARD}: ${#files[@]} test files"
-          flutter test "${files[@]}"
+          # Batches of 60: on Windows flutter is flutter.bat, and cmd.exe
+          # refuses a command line over 8191 chars ("The input line is too
+          # long"), which a whole shard's file list reaches.
+          printf '%s\0' "${files[@]}" | xargs -0 -n 60 flutter test
 
       # #1278 — the planetarium page's pure logic (GoTo outcome polling,
       # coordinate parsing) under node's built-in runner, no browser and

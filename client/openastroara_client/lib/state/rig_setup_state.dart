@@ -140,15 +140,15 @@ final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
   );
 });
 
-/// What the sheet lists and the Settings row watches; empty while the facts
-/// are not trusted.
+/// What is missing, for the sheet's auto-open; empty while the facts are not
+/// trusted. Settings › Rig's header reads the facts itself.
 final rigSetupGapsProvider = Provider.autoDispose<List<RigSetupGap>>((ref) {
   final facts = ref.watch(rigSetupFactsProvider);
   return facts == null ? const [] : rigSetupGaps(facts);
 });
 
-/// Whether the sheet shows. The Settings row sets it, the shell's auto-open
-/// sets it, Not now and the auto-close clear it.
+/// Whether the sheet shows. Only the shell's auto-open sets it; Not now, the
+/// calibration line and the auto-close clear it.
 class RigSetupSheetController extends Notifier<bool> {
   @override
   bool build() => false;

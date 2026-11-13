@@ -275,7 +275,7 @@ public sealed partial class AutofocusSweepService {
             if (shot2.Hfr < shot1.Hfr) {
                 if (shot2.Hfr <= targetHfr) {
                     LogSmartComplete(position2, shot2.Hfr, 2);
-                await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 2).ConfigureAwait(false);
+                    await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 2).ConfigureAwait(false);
                     RecordAutofocusQuietly();
                     return true;
                 }
@@ -291,10 +291,10 @@ public sealed partial class AutofocusSweepService {
                 if (!shot3.Trustworthy || shot3.Hfr > shot2.Hfr) {
                     await LandAsync(position3, position2, landing, token).ConfigureAwait(false);
                     LogSmartComplete(position2, shot2.Hfr, 3);
-                await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 3).ConfigureAwait(false);
+                    await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 3).ConfigureAwait(false);
                 } else {
                     LogSmartComplete(position3, shot3.Hfr, 3);
-                await RecordCompletedAsync("smart", position3, shot3.Hfr, shot3.Features.StarCount, started, 3).ConfigureAwait(false);
+                    await RecordCompletedAsync("smart", position3, shot3.Hfr, shot3.Features.StarCount, started, 3).ConfigureAwait(false);
                 }
                 RecordAutofocusQuietly();
                 return true;
@@ -572,7 +572,7 @@ public sealed partial class AutofocusSweepService {
     // log-and-recover boundary as the §59.10 collimation publish.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must never abort or fail the AF run. Log-and-recover boundary.")]
-    private async Task PublishAutofocusEventAsync(string type, JsonObject payload) {
+    private async Task PublishAutofocusEventAsync(WsEvent type, JsonObject payload) {
         if (_ws is null) {
             return;
         }

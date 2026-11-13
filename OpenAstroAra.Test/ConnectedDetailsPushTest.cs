@@ -44,7 +44,7 @@ namespace OpenAstroAra.Test {
             private readonly List<Published> _events = new();
             public long CurrentSequence => _events.Count;
             public Published[] Snapshot() { lock (_events) { return _events.ToArray(); } }
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 var state = payload.TryGetProperty("state", out var s) ? s.GetString() : null;
                 var id = payload.TryGetProperty("device_id", out var d) ? d.GetString() : null;
                 var ready = payload.TryGetProperty("details_ready", out var r) && r.GetBoolean();

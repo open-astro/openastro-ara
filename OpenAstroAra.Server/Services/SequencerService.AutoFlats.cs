@@ -197,7 +197,7 @@ public sealed partial class SequencerService : IAutoFlatsService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must not fail the prompt/decision flow. Logged.")]
-    private async Task EmitAutoFlatsEventAsync(string eventType, JsonObject payload) {
+    private async Task EmitAutoFlatsEventAsync(WsEvent eventType, JsonObject payload) {
         if (_ws is null) {
             return;
         }

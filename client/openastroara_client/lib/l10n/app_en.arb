@@ -5904,6 +5904,22 @@
   "@calibrationGuideNotBuilt": {
     "description": "Calibration panel, Guide Camera: no dark library or bad-pixel map yet"
   },
+  "calibrationGuideChecking": "Checking the Guider's files…",
+  "@calibrationGuideChecking": {
+    "description": "Calibration › Guide Camera: the Guider's file status is being read"
+  },
+  "calibrationGuideUnread": "Couldn't read the Guider's files",
+  "@calibrationGuideUnread": {
+    "description": "Calibration › Guide Camera: the rig could not read the Guider's dark library and bad-pixel map status"
+  },
+  "calibrationGuideUnreadNote": "The Guider may be restarting. Ara reads them again when it is back.",
+  "@calibrationGuideUnreadNote": {
+    "description": "Calibration › Guide Camera: under the unread line, why and what happens next"
+  },
+  "calibrationGuideRetry": "Try again",
+  "@calibrationGuideRetry": {
+    "description": "Calibration › Guide Camera: reads the Guider's file status again"
+  },
   "calibrationGuideUse": "Use while guiding",
   "@calibrationGuideUse": {
     "description": "Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels"
@@ -6391,6 +6407,13 @@
   "@calibrationLibraryNone": {
     "description": "Calibration panel, Darks & bias: no darks (or no bias) in the library"
   },
+  "calibrationDarkGroupCount": "{count, plural, =1{1 exposure} other{{count} exposures}}",
+  "@calibrationDarkGroupCount": {
+    "description": "Calibration › Darks & bias: how many darks a gain and temperature group holds",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "calibrationLibraryAge": "{age} · {frames, plural, =1{1 frame} other{{frames} frames}}",
   "@calibrationLibraryAge": {
     "description": "Calibration library row: how old the set is and how many frames it holds",
@@ -6487,7 +6510,7 @@
   },
   "rigSetupTitle": "Rig setup",
   "@rigSetupTitle": {
-    "description": "Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row"
+    "description": "Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig"
   },
   "rigSetupIntro": "Before a first night, Ara needs a few facts about this rig.",
   "@rigSetupIntro": {
@@ -6552,6 +6575,21 @@
   "rigSetupNotNow": "Not now",
   "@rigSetupNotNow": {
     "description": "Rig setup: closes the sheet and keeps it closed for this rig on this device"
+  },
+  "rigSetupProgress": "{done} of {total} done",
+  "@rigSetupProgress": {
+    "description": "Rig setup sheet footer and Settings › Rig header: how many of the items are done",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "rigSetupNext": "Next: {item}",
+  "@rigSetupNext": {
+    "description": "Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)",
+    "placeholders": {
+      "item": {"type": "String"}
+    }
   },
   "rigSetupDonePill": "Rig set up",
   "@rigSetupDonePill": {

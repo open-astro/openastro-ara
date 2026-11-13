@@ -8,6 +8,7 @@ import 'package:openastroara/services/stats_overview_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/stats_overview_state.dart';
 import 'package:openastroara/widgets/stats/overview_section.dart';
+import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
@@ -74,9 +75,9 @@ void main() {
     expect(find.text('Frames'), findsOneWidget);
     expect(find.textContaining('Couldn’t refresh'), findsNothing);
 
-    // Next fetch fails; tap refresh. The banner appears and the tiles stay.
+    // Next fetch fails; pull down. The banner appears and the tiles stay.
     api.throwOnFetch = true;
-    await tester.tap(find.byIcon(Icons.refresh));
+    pullRefresh(tester);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Couldn’t refresh'), findsOneWidget);

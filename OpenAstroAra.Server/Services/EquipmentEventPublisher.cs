@@ -99,14 +99,14 @@ public sealed partial class EquipmentEventPublisher {
             var element = doc.RootElement.Clone();
 
             Publish(WsEventCatalog.EquipmentStateChanged, element);
-            var alias = state switch {
+            WsEvent? alias = state switch {
                 EquipmentConnectionState.Connected => WsEventCatalog.EquipmentConnected,
                 EquipmentConnectionState.Disconnected => WsEventCatalog.EquipmentDisconnected,
                 EquipmentConnectionState.Error => WsEventCatalog.EquipmentConnectionFailed,
                 _ => null, // Connecting is visible via state_changed only.
             };
-            if (alias is not null) {
-                Publish(alias, element);
+            if (alias is { } declared) {
+                Publish(declared, element);
             }
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
@@ -278,7 +278,7 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
-    private void Publish(string eventType, JsonElement payload) {
+    private void Publish(WsEvent eventType, JsonElement payload) {
         var task = _broadcaster.PublishAsync(eventType, payload, CancellationToken.None);
         if (!task.IsCompletedSuccessfully) {
             // Observe the asynchronous tail so a channel fault can never become

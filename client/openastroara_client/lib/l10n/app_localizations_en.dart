@@ -4618,6 +4618,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationGuideNotBuilt => 'Not built';
 
   @override
+  String get calibrationGuideChecking => 'Checking the Guider\'s files…';
+
+  @override
+  String get calibrationGuideUnread => 'Couldn\'t read the Guider\'s files';
+
+  @override
+  String get calibrationGuideUnreadNote =>
+      'The Guider may be restarting. Ara reads them again when it is back.';
+
+  @override
+  String get calibrationGuideRetry => 'Try again';
+
+  @override
   String get calibrationGuideUse => 'Use while guiding';
 
   @override
@@ -5008,6 +5021,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationLibraryNone => 'None yet.';
 
   @override
+  String calibrationDarkGroupCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exposures',
+      one: '1 exposure',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String calibrationLibraryAge(String age, int frames) {
     String _temp0 = intl.Intl.pluralLogic(
       frames,
@@ -5131,6 +5155,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rigSetupNotNow => 'Not now';
+
+  @override
+  String rigSetupProgress(int done, int total) {
+    return '$done of $total done';
+  }
+
+  @override
+  String rigSetupNext(String item) {
+    return 'Next: $item';
+  }
 
   @override
   String get rigSetupDonePill => 'Rig set up';

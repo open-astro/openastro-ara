@@ -65,8 +65,8 @@ namespace OpenAstroAra.Test {
             published = new List<(string, JsonElement)>();
             posted = new List<NotificationDto>();
 
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (published) { published.Add((t, p)); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (published) { published.Add((t, p)); } })
                 .Returns(Task.CompletedTask);
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                 .Callback<NotificationDto, CancellationToken>((n, _) => { lock (posted) { posted.Add(n); } })

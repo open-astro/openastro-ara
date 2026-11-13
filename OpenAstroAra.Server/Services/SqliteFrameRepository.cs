@@ -1690,7 +1690,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     {"frame_path":"{{fitsPath.Replace("\\", "\\\\").Replace("\"", "\\\"")}}","stretch_id":"{{stretchId}}","reason":"{{reason}}"}
                     """;
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
-                await _ws.PublishAsync("frame.preview.variant.evicted", doc.RootElement.Clone(), CancellationToken.None);
+                await _ws.PublishAsync(WsEventCatalog.FramePreviewVariantEvicted, doc.RootElement.Clone(), CancellationToken.None);
             } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) { /* swallow */ }
         });
     }

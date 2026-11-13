@@ -9,6 +9,7 @@ import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
 import '../../adaptive_controls.dart';
+import '../stats_pull_refresh.dart';
 
 /// §50.6 GitHub-style calendar heatmap — one cell per day in a rolling
 /// [_daysShown]-day window, shaded by that night's integration minutes, from
@@ -22,7 +23,11 @@ class CalendarHeatmap extends ConsumerStatefulWidget {
   ConsumerState<CalendarHeatmap> createState() => _CalendarHeatmapState();
 }
 
-class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap> {
+class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap>
+    with StatsPullRefresh<CalendarHeatmap> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   static const int _daysShown = 49;
 
   // Local spinner/banner flags so the heatmap stays on screen during and after
@@ -90,22 +95,13 @@ class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap> {
                 tooltip: 'Couldn’t refresh — showing the last loaded calendar.',
               ),
             ),
-          Positioned(
-            top: 0,
-            right: 4,
-            child: IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
+          // The page's pull down refreshes; this shows it running.
+          if (spinning)
+            const Positioned(
+              top: 12,
+              right: 16,
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
-          ),
         ],
       ),
     );

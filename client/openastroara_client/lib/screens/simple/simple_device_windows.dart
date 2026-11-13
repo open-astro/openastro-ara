@@ -2921,6 +2921,7 @@ class SimpleWindowButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.outlined = false,
+    this.accent,
   });
 
   final String label;
@@ -2928,6 +2929,10 @@ class SimpleWindowButton extends StatelessWidget {
 
   /// The second of a pair (Delete beside Rebuild): a Hairline outline, no fill.
   final bool outlined;
+
+  /// A fix for what needs attention (Rig setup): outline and label in this
+  /// colour, no fill.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2938,12 +2943,16 @@ class SimpleWindowButton extends StatelessWidget {
     child: Opacity(
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
-        color: outlined ? Colors.transparent : AraColors.tileFill,
+        color: outlined || accent != null
+            ? Colors.transparent
+            : AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          side: outlined
-              ? const BorderSide(color: AraColors.border)
-              : BorderSide.none,
+          side: switch (accent) {
+            final c? => BorderSide(color: c),
+            null when outlined => const BorderSide(color: AraColors.border),
+            null => BorderSide.none,
+          },
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -2957,7 +2966,7 @@ class SimpleWindowButton extends StatelessWidget {
               textAlign: TextAlign.center,
               style: kSimpleText.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AraColors.textPrimary,
+                color: accent ?? AraColors.textPrimary,
               ),
             ),
           ),
@@ -3018,6 +3027,33 @@ class _RotatorHub extends StatelessWidget {
 /// offset once any slot has one (#1675), and a tap on a filter moves to it. A
 /// manual wheel asks the user to swap it by hand and confirm. Names and labels
 /// stay in the full UI.
+/// The usual filter names, lower case, and the short form a glass cell shows
+/// (user, 2026-11-13: Green and Clear read as slot numbers beside the Plan's
+/// names).
+const _kFilterShortNames = {
+  'red': 'R',
+  'r': 'R',
+  'green': 'G',
+  'g': 'G',
+  'blue': 'B',
+  'b': 'B',
+  'clear': 'L',
+  'luminance': 'L',
+  'lum': 'L',
+  'l': 'L',
+  'ha': 'Ha',
+  'h-alpha': 'Ha',
+  'halpha': 'Ha',
+  'h alpha': 'Ha',
+  'hα': 'Ha',
+  'oiii': 'OIII',
+  'o3': 'OIII',
+  'o-iii': 'OIII',
+  'sii': 'SII',
+  's2': 'SII',
+  's-ii': 'SII',
+};
+
 class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
   const SimpleFilterWheelWindow({super.key, this.inSettings = false});
 
@@ -3040,12 +3076,14 @@ class _SimpleFilterWheelWindowState
       ? context.l10n.deviceSlot(slot.position)
       : context.l10n.deviceSlotFilter(slot.position, slot.name);
 
-  /// A cell's own words: the filter's name when it fits (four letters), else
-  /// its slot number.
+  /// A cell's own words: the letters astronomers use for the usual filters
+  /// (Green G, Clear L), else the filter's name when it fits (four letters),
+  /// else its slot number.
   String _cellLabel(FilterSlot slot) =>
-      slot.name.isNotEmpty && slot.name.characters.length <= 4
-      ? slot.name
-      : '${slot.position}';
+      _kFilterShortNames[slot.name.trim().toLowerCase()] ??
+      (slot.name.isNotEmpty && slot.name.characters.length <= 4
+          ? slot.name
+          : '${slot.position}');
 
   @override
   Widget build(BuildContext context) {
