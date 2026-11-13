@@ -183,9 +183,15 @@ class CompanionDeck extends ConsumerWidget {
                 : Column(
                     spacing: AraSpace.s8,
                     children: [
+                      // Info, a short word, keeps its width; Sky Map and
+                      // Library share the rest, so "Biblioteca" fits at 2x.
                       Row(
                         spacing: AraSpace.s8,
-                        children: [for (final b in left) Expanded(child: b)],
+                        children: [
+                          Expanded(child: left[0]),
+                          left[1],
+                          Expanded(child: left[2]),
+                        ],
                       ),
                       Row(children: [...middle, const Spacer(), stop]),
                     ],
@@ -257,7 +263,8 @@ class _DeckButton extends StatelessWidget {
     this.width,
   });
 
-  /// Null: the width the parent gives (the split row's shares).
+  /// Null: the width the parent gives. An [Expanded] parent's share wins
+  /// either way (Sky Map and Library in the split row).
   final double? width;
 
   final IconData? icon;

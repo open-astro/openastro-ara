@@ -472,14 +472,19 @@ void main() {
     },
   );
 
-  for (final (locale, scale) in _textSizes) {
+  // 360 and 375 px: the narrowest phones, where the split row is tightest.
+  for (final (size, locale, scale) in [
+    for (final size in [const Size(360, 780), const Size(375, 667), _portrait])
+      for (final locale in [const Locale('en'), const Locale('pt', 'BR')])
+        for (final scale in [1.0, 1.25, 1.5, 1.75, 2.0]) (size, locale, scale),
+  ]) {
     testWidgets(
-      'on a phone upright in $locale at text ${scale}x no deck label is cut and every target is 44 px',
+      'on a phone upright at $size in $locale at text ${scale}x no deck label is cut and every target is 44 px',
       skip: !hasFonts,
       (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await _pump(tester, _portrait, locale: locale);
+        await _pump(tester, size, locale: locale);
         expect(tester.takeException(), isNull);
         final deck = find.byKey(const Key('companion-deck'));
         for (final p in tester.renderObjectList<RenderParagraph>(
@@ -515,18 +520,19 @@ void main() {
         }
         expect(
           tester.getRect(stop).right,
-          lessThanOrEqualTo(390),
+          lessThanOrEqualTo(size.width),
           reason: 'STOP is on the screen',
         );
-        expect(tester.getRect(deck).bottom, lessThanOrEqualTo(844));
+        expect(tester.getRect(deck).bottom, lessThanOrEqualTo(size.height));
       },
     );
   }
 
-  // 430 px wide: one row; 412, 390 and 360: two.
+  // 430 px wide: one row; 412, 390, 375 and 360: two.
   for (final size in [
     _portrait,
     const Size(360, 780),
+    const Size(375, 667),
     const Size(412, 915),
     const Size(430, 932),
   ]) {
@@ -551,7 +557,7 @@ void main() {
             ),
             ('the chip to STOP', at('simple-settings'), tester.getRect(stop)),
           ]) {
-            // A third of the split row is not a whole pixel.
+            // A share of the split row need not be a whole pixel.
             expect(
               _gap(a, b),
               greaterThanOrEqualTo(8 - precisionErrorTolerance),
