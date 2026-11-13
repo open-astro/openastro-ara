@@ -10,6 +10,11 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -18,11 +23,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using OpenAstroAra.Server.Contracts;
-using OpenAstroAra.Server.Contracts.WsEvents;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -756,7 +756,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must never abort the safety reaction. Log-and-recover boundary.")]
-    private async Task PublishAsync(string eventType, JsonObject payload) {
+    private async Task PublishAsync(WsEvent eventType, JsonObject payload) {
         if (_ws is null) {
             return;
         }

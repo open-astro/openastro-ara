@@ -201,7 +201,7 @@ namespace OpenAstroAra.Test {
             private readonly List<(string Type, string Payload)> _events = new();
             public long CurrentSequence => 0;
             public (string Type, string Payload)[] Snapshot() { lock (_events) { return _events.ToArray(); } }
-            public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
                 lock (_events) { _events.Add((eventType, payload.GetRawText())); }
                 return Task.CompletedTask;
             }

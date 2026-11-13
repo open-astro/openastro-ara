@@ -14,8 +14,8 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Container;
-using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -70,7 +70,7 @@ namespace OpenAstroAra.Test {
             private readonly System.Collections.Concurrent.ConcurrentQueue<(string Type, JsonElement Payload)> _records = new();
             public System.Collections.Generic.IReadOnlyCollection<(string Type, JsonElement Payload)> Records => _records;
             public long CurrentSequence => _records.Count;
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 _records.Enqueue((eventType, payload));
                 return Task.CompletedTask;
             }
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Test {
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
 
             var frame = ws.Records.LastOrDefault(r => r.Type == WsEventCatalog.SequenceRunItemsChanged);
-            Assert.That(frame.Type, Is.EqualTo(WsEventCatalog.SequenceRunItemsChanged), "the edit published its frame");
+            Assert.That(frame.Type, Is.EqualTo(WsEventCatalog.SequenceRunItemsChanged.Token), "the edit published its frame");
             Assert.That(frame.Payload.GetProperty("estimated_total_seconds").GetDouble(), Is.GreaterThan(0),
                 "the appended block joins the sequencer's total");
             Assert.That(frame.Payload.GetProperty("estimated_remaining_seconds").GetDouble(), Is.GreaterThan(0));
@@ -478,7 +478,7 @@ namespace OpenAstroAra.Test {
             private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
             public IReadOnlyCollection<string> Events => _events;
             public long CurrentSequence => _events.Count;
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 _events.Enqueue(eventType);
                 return Task.CompletedTask;
             }

@@ -90,8 +90,8 @@ namespace OpenAstroAra.Test {
         private static (EquipmentFaultHub Hub, List<(string Type, JsonElement Payload)> Events) Hub() {
             var events = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => {
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => {
                     lock (events) { events.Add((t, p)); }
                 })
                 .Returns(Task.CompletedTask);
@@ -109,7 +109,7 @@ namespace OpenAstroAra.Test {
             hub.Publish(Fault());
 
             Assert.That(events, Has.Count.EqualTo(1));
-            Assert.That(events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentFault));
+            Assert.That(events[0].Type, Is.EqualTo(WsEventCatalog.EquipmentFault.Token));
             Assert.That(events[0].Payload.GetProperty("device_type").GetString(), Is.EqualTo("camera"));
             Assert.That(events[0].Payload.GetProperty("kind").GetString(), Is.EqualTo("disconnected"));
             Assert.That(events[0].Payload.GetProperty("device_name").GetString(), Is.EqualTo("Test Cam"));

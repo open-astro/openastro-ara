@@ -801,8 +801,8 @@ namespace OpenAstroAra.Test {
         private static (Mock<IWsBroadcaster> Ws, List<(string Type, JsonElement Payload)> Events) CapturingWs() {
             var events = new List<(string, JsonElement)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Returns<string, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p.Clone())); return Task.CompletedTask; });
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Returns<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p.Clone())); return Task.CompletedTask; });
             return (ws, events);
         }
 
@@ -1251,7 +1251,7 @@ namespace OpenAstroAra.Test {
                 TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
                 Messages.Add(formatter(state, exception));
         }
-    
+
 
         [Test]
         public async Task Noise_flooded_probes_are_dropped_and_an_all_noise_sweep_fails() {
@@ -1295,7 +1295,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
         }
-    
+
 
         [Test]
         public void DefaultMetric_flags_a_frame_whose_blobs_are_noise_not_stars() {
@@ -1324,7 +1324,7 @@ namespace OpenAstroAra.Test {
             Assert.That(result.DetectedStars, Is.GreaterThan(0));
             Assert.That(result.NoiseFlooded, Is.False);
         }
-    
+
 
         private static readonly double[] ThinWingSurvivors = { 29663, 29513, 29463, 29413, 29363, 29313, 29213 };
 
@@ -1706,7 +1706,9 @@ namespace OpenAstroAra.Test {
             for (int y = 0; y < size; y++) {
                 for (int x = 0; x < size; x++) {
                     var (bg, sd) = ((y & 1) << 1 | (x & 1)) switch {
-                        0 => (2073.0, 7.0), 3 => (3796.0, 12.0), _ => (2004.0, 6.0),
+                        0 => (2073.0, 7.0),
+                        3 => (3796.0, 12.0),
+                        _ => (2004.0, 6.0),
                     };
                     var noise = sd * Math.Sqrt(-2 * Math.Log(1 - Next())) * Math.Cos(2 * Math.PI * Next());
                     var v = bg + noise;

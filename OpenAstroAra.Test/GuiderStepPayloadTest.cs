@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Catalog_lists_the_step_token() {
-            Assert.That(WsEventCatalog.GuiderStep, Is.EqualTo("guider.step"));
+            Assert.That(WsEventCatalog.GuiderStep.Token, Is.EqualTo("guider.step"));
             Assert.That(WsEventCatalog.All, Does.Contain(WsEventCatalog.GuiderStep));
         }
 
@@ -92,7 +92,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Catalog_lists_the_marker_token() {
-            Assert.That(WsEventCatalog.GuiderEvent, Is.EqualTo("guider.event"));
+            Assert.That(WsEventCatalog.GuiderEvent.Token, Is.EqualTo("guider.event"));
             Assert.That(WsEventCatalog.All, Does.Contain(WsEventCatalog.GuiderEvent));
         }
 

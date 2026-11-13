@@ -45,7 +45,7 @@ namespace OpenAstroAra.Test {
             private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
             public System.Collections.Generic.IReadOnlyCollection<string> Events => _events;
             public long CurrentSequence => _events.Count;
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 _events.Enqueue(eventType);
                 return Task.CompletedTask;
             }

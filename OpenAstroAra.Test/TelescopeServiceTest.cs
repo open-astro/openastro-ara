@@ -123,7 +123,7 @@ namespace OpenAstroAra.Test {
             private readonly System.Collections.Generic.List<string> _events = new();
             public long CurrentSequence => _events.Count;
             public string[] Snapshot() { lock (_events) { return _events.ToArray(); } }
-            public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
                 lock (_events) { _events.Add(eventType); }
                 return Task.CompletedTask;
             }

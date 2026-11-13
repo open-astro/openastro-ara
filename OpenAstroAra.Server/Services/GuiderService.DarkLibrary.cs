@@ -35,10 +35,10 @@ namespace OpenAstroAra.Server.Services;
 // the daemon can only run a single calibration capture at a time (one camera, "no active capture" precondition).
 public sealed partial class GuiderService {
 
-    public const string DarkLibraryStartedEvent = WsEventCatalog.GuiderDarkLibraryStarted;
-    public const string DarkLibraryProgressEvent = WsEventCatalog.GuiderDarkLibraryProgress;
-    public const string DarkLibraryCompleteEvent = WsEventCatalog.GuiderDarkLibraryComplete;
-    public const string DarkLibraryFailedEvent = WsEventCatalog.GuiderDarkLibraryFailed;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DarkLibraryStartedEvent = WsEventCatalog.GuiderDarkLibraryStarted;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DarkLibraryProgressEvent = WsEventCatalog.GuiderDarkLibraryProgress;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DarkLibraryCompleteEvent = WsEventCatalog.GuiderDarkLibraryComplete;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DarkLibraryFailedEvent = WsEventCatalog.GuiderDarkLibraryFailed;
 
     // §63.8 progress poll cadence — 1 s is plenty for a multi-minute build's progress bar and keeps the poll
     // load trivial (one short-lived RPC connection per tick).
@@ -269,7 +269,7 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster (e.g. SocketException) must not abort the background build or surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
-    private async Task EmitCalibrationEventAsync(string eventType, JsonObject payload) {
+    private async Task EmitCalibrationEventAsync(WsEvent eventType, JsonObject payload) {
         if (_ws is null) {
             return;
         }
@@ -296,7 +296,7 @@ public sealed partial class GuiderService {
     // faults; the loop never disturbs the build or escapes as an unobserved task exception.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Progress polling is best-effort telemetry running alongside the build: a poll RPC can throw arbitrary socket/IO/protocol exceptions (or the guider can drop mid-build), and none of that must disturb the build or surface as an unobserved task exception. Each fault is contained to its tick so the next tick can recover; cancellation (build done) ends the loop cleanly.")]
-    private async Task PollBuildProgressAsync(PHD2Guider guider, string progressEvent, CancellationToken ct) {
+    private async Task PollBuildProgressAsync(PHD2Guider guider, OpenAstroAra.Server.Contracts.WsEvents.WsEvent progressEvent, CancellationToken ct) {
         // #770 round-2 — per-build failure accounting behind the deliberate per-tick swallow: one Warning when
         // failures run to BuildProgressPollWarnAfterFailures consecutive ticks, and one on exit when the WHOLE
         // build produced no successful read (a build shorter than the streak threshold would otherwise stay
@@ -376,10 +376,10 @@ public sealed partial class GuiderService {
     // ── §63.6 guider-e-4c-b-2: defect-map (bad-pixel) build — mirrors the dark-library build above, sharing the
     // single calibration-build gate + the calibration WS-emit helper. ──
 
-    public const string DefectMapStartedEvent = WsEventCatalog.GuiderDefectMapStarted;
-    public const string DefectMapProgressEvent = WsEventCatalog.GuiderDefectMapProgress;
-    public const string DefectMapCompleteEvent = WsEventCatalog.GuiderDefectMapComplete;
-    public const string DefectMapFailedEvent = WsEventCatalog.GuiderDefectMapFailed;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DefectMapStartedEvent = WsEventCatalog.GuiderDefectMapStarted;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DefectMapProgressEvent = WsEventCatalog.GuiderDefectMapProgress;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DefectMapCompleteEvent = WsEventCatalog.GuiderDefectMapComplete;
+    public static readonly OpenAstroAra.Server.Contracts.WsEvents.WsEvent DefectMapFailedEvent = WsEventCatalog.GuiderDefectMapFailed;
 
     public Task<OperationAcceptedDto> BuildDefectMapDarksAsync(
             BuildDefectMapDarksRequestDto request, string? idempotencyKey, CancellationToken ct) {

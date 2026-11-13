@@ -100,7 +100,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Running) {
             run.State = SequenceRunState.Paused;
-            _ = EmitAsync("sequence.paused", id, run);
+            _ = EmitAsync(WsEventCatalog.SequencePaused, id, run);
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
     }
@@ -113,7 +113,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Paused) {
             run.State = SequenceRunState.Running;
-            _ = EmitAsync("sequence.resumed", id, run);
+            _ = EmitAsync(WsEventCatalog.SequenceResumed, id, run);
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
     }
@@ -213,7 +213,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     private async Task RunWorkerAsync(Guid sequenceId, RunState run) {
         try {
             run.State = SequenceRunState.Running;
-            await EmitAsync("sequence.started", sequenceId, run);
+            await EmitAsync(WsEventCatalog.SequenceStarted, sequenceId, run);
             for (var i = 0; i < run.InstructionCount; i++) {
                 if (run.Cts.IsCancellationRequested) break;
                 while (run.State == SequenceRunState.Paused && !run.Cts.IsCancellationRequested) {
@@ -223,13 +223,13 @@ public sealed class PlaceholderSequencerService : ISequencerService {
 
                 run.CurrentInstructionIndex = i;
                 run.CurrentInstructionDescription = $"capture #{i + 1}";
-                await EmitAsync("sequence.instruction_started", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceInstructionStarted, sequenceId, run);
 
                 try { await Task.Delay(MockInstructionDurationMs, run.Cts.Token); } catch (OperationCanceledException) { break; }
 
                 run.InstructionsCompleted = i + 1;
-                await EmitAsync("sequence.instruction_complete", sequenceId, run);
-                await EmitAsync("sequence.progress", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceInstructionComplete, sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceProgress, sequenceId, run);
                 // §38j-6 — refresh the active/current.json on each progress
                 // step so a daemon crash leaves a recent snapshot for the
                 // §28.2 reconciler.
@@ -240,13 +240,13 @@ public sealed class PlaceholderSequencerService : ISequencerService {
             // whether the transition started in Aborting vs Stopped.
             if (run.State == SequenceRunState.Aborting) {
                 run.State = SequenceRunState.Stopped;
-                await EmitAsync("sequence.aborted", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceAborted, sequenceId, run);
             } else if (run.State == SequenceRunState.Stopped) {
-                await EmitAsync("sequence.stopped", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceStopped, sequenceId, run);
             } else {
                 run.State = SequenceRunState.Completed;
                 run.CompletedUtc = DateTimeOffset.UtcNow;
-                await EmitAsync("sequence.complete", sequenceId, run);
+                await EmitAsync(WsEventCatalog.SequenceComplete, sequenceId, run);
             }
         } catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException or JsonException) {
             run.State = SequenceRunState.Failed;
@@ -259,7 +259,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         }
     }
 
-    private async Task EmitAsync(string eventType, Guid sequenceId, RunState run) {
+    private async Task EmitAsync(WsEvent eventType, Guid sequenceId, RunState run) {
         if (_ws is null) return;
         try {
             var json = $$"""

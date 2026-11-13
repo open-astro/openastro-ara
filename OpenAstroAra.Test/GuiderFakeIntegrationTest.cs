@@ -104,7 +104,7 @@ namespace OpenAstroAra.Test {
         private sealed class RecordingBroadcaster : IWsBroadcaster {
             private readonly List<(string Type, System.Text.Json.JsonElement Payload)> _events = new();
             public long CurrentSequence => Of(null).Count;
-            public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
                 lock (_events) {
                     _events.Add((eventType, payload.Clone()));
                 }
@@ -917,8 +917,8 @@ namespace OpenAstroAra.Test {
             });
             var events = new System.Collections.Concurrent.ConcurrentQueue<(string Type, System.Text.Json.JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
                 .Returns(Task.CompletedTask);
             var profiles = new HeadlessProfileService();
             var settings = profiles.ActiveProfile.GuiderSettings;
@@ -1079,8 +1079,8 @@ namespace OpenAstroAra.Test {
             fake.OnRpc("get_calibration_files_status", _ => new JsonObject { ["profile_id"] = 1, ["dark_library_exists"] = true });
             var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => events.Enqueue(t))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => events.Enqueue(t))
                 .Returns(Task.CompletedTask);
             var profiles = new HeadlessProfileService();
             profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Cam A";
@@ -1114,8 +1114,8 @@ namespace OpenAstroAra.Test {
             fake.OnRpc("get_connected", JsonValue.Create(true));
             var events = new System.Collections.Concurrent.ConcurrentQueue<(string Type, System.Text.Json.JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
                 .Returns(Task.CompletedTask);
             var profiles = new HeadlessProfileService();
             profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Cam A";

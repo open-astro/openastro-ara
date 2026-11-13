@@ -55,7 +55,7 @@ public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
 
     public long CurrentSequence => Interlocked.Read(ref _seq);
 
-    public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+    public Task PublishAsync(Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
         var envelope = new WsEventEnvelopeDto(
             Type: eventType,
             Ts: DateTimeOffset.UtcNow,

@@ -115,11 +115,11 @@ public sealed partial class FileProfileStore : IProfileStore {
     public AutofocusSettingsDto GetAutofocusSettings() { lock (_lock) { return _snapshot.Autofocus; } }
     public void PutAutofocusSettings(AutofocusSettingsDto value) => UpdateAndPersist(s => s with { Autofocus = value });
 
-    public PolarAlignSettingsDto GetPolarAlignSettings() { lock (_lock) { return _snapshot.PolarAlign ?? new PolarAlignSettingsDto(); } }
+    public PolarAlignSettingsDto GetPolarAlignSettings() { lock (_lock) { return _snapshot.PolarAlign ?? ProfileSections.PolarAlign.Default!; } }
 
-    public UnguidedSettingsDto GetUnguidedSettings() { lock (_lock) { return _snapshot.Unguided ?? new UnguidedSettingsDto(); } }
+    public UnguidedSettingsDto GetUnguidedSettings() { lock (_lock) { return _snapshot.Unguided ?? ProfileSections.Unguided.Default!; } }
     public void PutUnguidedSettings(UnguidedSettingsDto value) => UpdateAndPersist(s => s with { Unguided = value });
-    public GuiderAdvancedSettingsDto GetGuiderAdvancedSettings() { lock (_lock) { return _snapshot.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(); } }
+    public GuiderAdvancedSettingsDto GetGuiderAdvancedSettings() { lock (_lock) { return _snapshot.GuiderAdvanced ?? ProfileSections.GuiderAdvanced.Default!; } }
     public void PutGuiderAdvancedSettings(GuiderAdvancedSettingsDto value) => UpdateAndPersist(s => s with { GuiderAdvanced = value });
     public void PutPolarAlignSettings(PolarAlignSettingsDto value) => UpdateAndPersist(s => s with { PolarAlign = value });
 
@@ -207,13 +207,13 @@ public sealed partial class FileProfileStore : IProfileStore {
 
     public FilterWheelLabelsDto GetFilterWheelLabels() { lock (_lock) { return _snapshot.FilterWheelLabels; } }
     public void PutFilterWheelLabels(FilterWheelLabelsDto value) => UpdateAndPersist(s => s with { FilterWheelLabels = value });
-    public FilterWheelPolicyDto GetFilterWheelPolicy() { lock (_lock) { return _snapshot.FilterWheelPolicy ?? FilterWheelPolicyDto.Default; } }
+    public FilterWheelPolicyDto GetFilterWheelPolicy() { lock (_lock) { return _snapshot.FilterWheelPolicy ?? ProfileSections.FilterWheelPolicy.Default!; } }
     public void PutFilterWheelPolicy(FilterWheelPolicyDto value) => UpdateAndPersist(s => s with { FilterWheelPolicy = value });
-    public CoolingFanDto GetCoolingFan() { lock (_lock) { return _snapshot.CoolingFan ?? CoolingFanDto.None; } }
+    public CoolingFanDto GetCoolingFan() { lock (_lock) { return _snapshot.CoolingFan ?? ProfileSections.CoolingFan.Default!; } }
     public void PutCoolingFan(CoolingFanDto value) => UpdateAndPersist(s => s with { CoolingFan = value });
-    public FilterFocusOffsetsDto GetFilterFocusOffsets() { lock (_lock) { return _snapshot.FilterFocusOffsets ?? FilterFocusOffsetsDto.Empty; } }
+    public FilterFocusOffsetsDto GetFilterFocusOffsets() { lock (_lock) { return _snapshot.FilterFocusOffsets ?? ProfileSections.FilterFocusOffsets.Default!; } }
     public void PutFilterFocusOffsets(FilterFocusOffsetsDto value) => UpdateAndPersist(s => s with { FilterFocusOffsets = value });
-    public DomeSettingsDto GetDomeSettings() { lock (_lock) { return _snapshot.Dome ?? DomeSettingsDto.Default; } }
+    public DomeSettingsDto GetDomeSettings() { lock (_lock) { return _snapshot.Dome ?? ProfileSections.Dome.Default!; } }
     public void PutDomeSettings(DomeSettingsDto value) => UpdateAndPersist(s => s with { Dome = value });
 
     public CustomHorizonDto GetCustomHorizon() { lock (_lock) { return _snapshot.CustomHorizon!; } }
