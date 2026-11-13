@@ -120,6 +120,10 @@ class _GuideBuilt extends GuiderCalibrationNotifier {
   Future<CalibrationStatusResponse?> build() async => const CalibrationStatusResponse(
       connected: true,
       status: CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true));
+
+  /// The tab reads again when it opens: the same files.
+  @override
+  Future<void> refresh() async {}
 }
 
 class _Guiding extends GuiderStatusNotifier {
