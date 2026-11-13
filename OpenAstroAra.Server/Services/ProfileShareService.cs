@@ -12,13 +12,13 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -115,111 +115,14 @@ public sealed class ProfileShareService : IProfileShareService {
 
     /// <summary>
     /// §70.1 stripping applied to ARA's actual section DTOs. Keeps tuning
-    /// judgement; drops paths (§decision), secrets, donor location + network,
-    /// and rig geometry (lifted into the rig description instead).
+    /// judgement; drops paths, secrets, donor location, network, identity and gear.
+    /// The section table (<see cref="ProfileSections"/>) is the single ledger: each section states its share
+    /// policy there, every DTO field is listed as kept or stripped, and a test fails on a field that is
+    /// neither, so a new field cannot ship unclassified. <c>ProfileShareServiceTest</c> also scans the
+    /// payload for path, identity and secret sentinels.
     /// </summary>
-    /// <remarks>
-    /// SECURITY — keep/strip ledger for ALL 13 sections. This is an allowlist by
-    /// omission (a section is shared verbatim unless a <c>with</c>-clause below
-    /// strips fields), so adding a field to any section DTO ships it in the share
-    /// file by default. When you add a field, decide here and update
-    /// <c>ProfileShareServiceTest</c> (a sentinel-scan test asserts no path/identity
-    /// value leaks into the payload):
-    /// <list type="bullet">
-    ///   <item>ImagingDefaults — KEEP (exposure/gain/cooler tuning, no PII)</item>
-    ///   <item>Storage — STRIP save_directory + filename_template (paths); keep format/compression/disk-thresholds</item>
-    ///   <item>Notifications — STRIP pushover_token + telegram_bot_token (SECRETS); keep channel/trigger toggles</item>
-    ///   <item>Site — STRIP name/lat/long/elevation/timezone (location); keep bortle/seeing/twilight/horizon/permanent-pier</item>
-    ///   <item>Filenames — KEEP (date-separator enum + compress toggle, not a path)</item>
-    ///   <item>SafetyPolicies — KEEP (tuning judgement)</item>
-    ///   <item>Autofocus — KEEP (method/sweep/trigger judgement; af_filter is a harmless name)</item>
-    ///   <item>PlateSolve — STRIP path_or_endpoint + index_download_path (paths); keep engine/knobs</item>
-    ///   <item>DiagnosticsMode — KEEP (single enum)</item>
-    ///   <item>Phd2 — STRIP host/port/profile (network) + guide geometry (→ rig desc); keep dither/settle/aggressiveness</item>
-    ///   <item>EquipmentConnection — KEEP (auto-connect bools per device type, no PII)</item>
-    ///   <item>StretchDefaults — KEEP (display judgement)</item>
-    ///   <item>Optics — STRIP all (rig geometry → rig description; includes aperture_mm)</item>
-    ///   <item>CameraElectronics — STRIP all (donor's camera hardware, incl. sensor_name; recipient's camera differs and auto-captures on connect)</item>
-    ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
-    ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
-    ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
-    ///   <item>Dome — STRIP all (the donor's dome geometry and follow flag describe the donor's observatory)</item>
-    ///   <item>CoolingFan — STRIP (a UniqueId names the donor's own switch; the recipient designates theirs)</item>
-    ///   <item>FilterFocusOffsets — STRIP all (measured on the donor's filters and focuser)</item>
-    /// </list>
-    /// </remarks>
-    internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {
-        // Strip all host/OS-specific paths — un-remappable across OSes, so the
-        // recipient sets save dir + filename template themselves in the wizard.
-        Storage = s.Storage with { SaveDirectory = "", FilenameTemplate = "" },
-        // Strip ASTAP executable + index paths (host-specific).
-        PlateSolve = s.PlateSolve with { PathOrEndpoint = "", IndexDownloadPath = "" },
-        // Strip secrets — push/telegram credentials must never travel in a share file
-        // (BOTH halves of each channel: token + user key, bot token + chat id).
-        Notifications = s.Notifications with {
-            PushoverToken = "", TelegramBotToken = "",
-            PushoverUserKey = "", TelegramChatId = "",
-        },
-        // §36 custom terrain horizon is location-revealing terrain data (a skyline
-        // fingerprints the site) — strip it entirely, same stance as the coordinates.
-        CustomHorizon = new CustomHorizonDto(Points: []),
-        // Strip donor location (lat/long/elevation/timezone/name); keep sky-quality
-        // judgement (bortle/seeing/twilight/horizon) as informational context.
-        Site = s.Site with {
-            SiteName = "",
-            LatitudeDeg = 0,
-            LongitudeDeg = 0,
-            ElevationM = 0,
-            TimeZone = "",
-        },
-        // Strip donor network + guide-scope geometry (the geometry is lifted into
-        // the rig description); keep the dither/settle/aggressiveness tuning.
-        Phd2 = s.Phd2 with {
-            Host = "",
-            Port = DefaultPhd2Port,
-            Phd2Profile = "",
-            // Guider profile ids are small per-rig integers: the donor's id can name a
-            // different profile on the recipient's guider, so the share falls back to Automatic.
-            Phd2ProfileId = null,
-            GuideFocalLength = 0,
-            GuidePixelSize = 0,
-        },
-        // Strip optics geometry (recipient's optics differ); preserved in the rig
-        // description so the recipient can judge applicability.
-        Optics = s.Optics with {
-            FocalLengthMm = 0,
-            ReducerFactor = 1.0,
-            SensorWidthPx = 0,
-            SensorHeightPx = 0,
-            PixelSizeUm = 0,
-            ApertureMm = 0,
-        },
-        // Strip the donor's camera hardware — the recipient's camera differs and
-        // its ASCOM-sourced fields auto-capture on their first connect anyway.
-        CameraElectronics = new CameraElectronicsDto(),
-        // Strip the donor's physical filter list — the recipient declares their own.
-        FilterSet = new FilterSetDto(Filters: []),
-        // Strip the §59.2 Smart Focus calibration — daemon-derived data fitted to the donor's
-        // focuser + optical train; on the recipient's rig it would feed the one-frame runner a
-        // wrong map (the fallback ladder would catch it, but a share must not plant bad state).
-        FocusCalibration = null,
-        // Strip the #1264 tracking calibration — it was measured on the donor's mount.
-        TrackingCalibration = null,
-        // Strip the #1140 sky-model calibration — fitted to the donor's optics, camera and sky.
-        SkyModelCalibration = null,
-        // Strip the §30.7.4 calibration-state stamps — the donor's dark library / defect map live
-        // on the donor's guider host; "valid" on the recipient's rig would be a lie.
-        CalibrationState = CalibrationStateDto.Empty,
-        // Strip the #1362 equipment identities — the donor's serial numbers; on the recipient's rig
-        // every slot would otherwise read as a gear change on first connect.
-        EquipmentIdentity = EquipmentIdentityDto.Empty,
-        // Strip the #1700 fan designation — it names the donor's switch; the recipient is asked for theirs.
-        CoolingFan = null,
-        // Strip the #1675 focus offsets — measured on the donor's filters and focuser.
-        FilterFocusOffsets = FilterFocusOffsetsDto.Empty,
-        // Strip the #1689 dome block — the geometry measures the donor's dome; the recipient measures theirs.
-        Dome = null,
-    };
+    internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) =>
+        ProfileSections.All.Aggregate(s, (snap, section) => section.Strip(snap));
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>
         new(
@@ -230,10 +133,6 @@ public sealed class ProfileShareService : IProfileShareService {
             SensorHeightPx: s.Optics.SensorHeightPx,
             PixelSizeUm: s.Optics.PixelSizeUm,
             GuideScopeFocalLengthMm: s.Phd2.GuideFocalLength);
-
-    /// <summary>PHD2's default port (§63); used as the neutral value once the
-    /// donor's host/port are stripped.</summary>
-    private const int DefaultPhd2Port = 4400;
 
     /// <summary>The assembly version (the part before any <c>+gitSha</c> suffix in
     /// the informational version), e.g. <c>0.0.1-ara.6</c>; <c>unknown</c> if absent.
@@ -272,6 +171,8 @@ public sealed class ProfileShareService : IProfileShareService {
         "Guider calibration state (dark library / defect map stamps) — rebuild on your rig",
         "Cooling fan — choose your own in the camera settings",
         "Dome geometry and Follow the mount — set your own in the Dome settings",
+        "Recent and saved targets — build your own list",
+        "Observer name, guider camera and mount choices, first-flip confirmation and focuser backlash — set your own",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including

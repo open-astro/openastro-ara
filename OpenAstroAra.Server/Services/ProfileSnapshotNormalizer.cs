@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Server.Contracts;
 using System;
+using System.Linq;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -34,178 +35,19 @@ namespace OpenAstroAra.Server.Services;
 public static class ProfileSnapshotNormalizer {
 
     /// <summary>
-    /// Hard-coded defaults matching <see cref="InMemoryProfileStore"/>
-    /// + the client's notifier constructor defaults. Used on first boot
-    /// (no profile.json), on parse failure (corrupt file), and as the
-    /// per-section back-fill in <see cref="Normalize"/>. Built once: a pure
-    /// constant of immutable records (profile-select pushes 16 back-to-back
-    /// writes through <see cref="Normalize"/> — rebuilding per call is
-    /// deterministic wasted allocation).
+    /// What a fresh profile holds, read from the section table (<see cref="ProfileSections.Defaults"/>).
+    /// Used on first boot (no profile.json), on parse failure (corrupt file), and as the
+    /// per-section back-fill in <see cref="Normalize(ProfileSnapshotDto)"/>.
     /// </summary>
-    public static ProfileSnapshotDto Defaults { get; } = BuildDefaults();
+    public static ProfileSnapshotDto Defaults => ProfileSections.Defaults;
 
-    /// <summary>Back-fills every null section (and the known null inner values —
-    /// a <c>"filter_set": {}</c> yields a DTO with a null list) from
-    /// <see cref="Defaults"/>. The nullable casts sidestep the "left operand is
-    /// never null" NRT warnings — the runtime values genuinely can be null here
-    /// (Json.NET-style holes in older files).</summary>
+    /// <summary>Back-fills every null section (and the known null inner values, such as
+    /// a <c>"filter_set": {}</c> that yields a DTO with a null list) from the section table, and applies
+    /// each section's repair (retired format tokens, stock solver paths). Null calibrations pass through.</summary>
     public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap) => Normalize(snap, System.IO.File.Exists);
 
     /// <param name="fileExists">The file check <see cref="SolverPathMigration"/> uses (#1121);
     /// injected so tests never depend on what this machine has in /usr/bin.</param>
-    public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap, Func<string, bool> fileExists) {
-        var defaults = Defaults;
-        var filterSet = (FilterSetDto?)snap.FilterSet ?? defaults.FilterSet;
-        if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
-            filterSet = defaults.FilterSet;
-        }
-        var wheelLabels = (FilterWheelLabelsDto?)snap.FilterWheelLabels ?? defaults.FilterWheelLabels;
-        if ((IReadOnlyList<string>?)wheelLabels.Labels is null) {
-            wheelLabels = defaults.FilterWheelLabels;
-        }
-        var customHorizon = (CustomHorizonDto?)snap.CustomHorizon ?? defaults.CustomHorizon!;
-        if ((IReadOnlyList<CustomHorizonPointDto>?)customHorizon.Points is null) {
-            customHorizon = defaults.CustomHorizon!;
-        }
-        var stretch = (StretchDefaultsDto?)snap.StretchDefaults ?? defaults.StretchDefaults;
-        if ((StretchManualDefaultsDto?)stretch.ManualDefaultParams is null) {
-            stretch = stretch with { ManualDefaultParams = defaults.StretchDefaults.ManualDefaultParams };
-        }
-        return snap with {
-            ImagingDefaults = (ImagingDefaultsDto?)snap.ImagingDefaults ?? defaults.ImagingDefaults,
-            // #1148 — the retired fits_rice/fits_gzip formats read as fits, rice/gzip compression as zstd.
-            Storage = StorageFormatTokens.Normalize((StorageSettingsDto?)snap.Storage ?? defaults.Storage),
-            Notifications = (NotificationsSettingsDto?)snap.Notifications ?? defaults.Notifications,
-            Site = (SiteSettingsDto?)snap.Site ?? defaults.Site,
-            Filenames = (FilenamesSettingsDto?)snap.Filenames ?? defaults.Filenames,
-            SafetyPolicies = (SafetyPoliciesDto?)snap.SafetyPolicies ?? defaults.SafetyPolicies,
-            Autofocus = (AutofocusSettingsDto?)snap.Autofocus ?? defaults.Autofocus,
-            // #1121/#1136 — a stock solver path (/usr/bin/astap, /usr/bin/astap_cli,
-            // /opt/astap/astap_cli) becomes the bundled /opt/openastroara/astap_cli once it is on disk.
-            PlateSolve = SolverPathMigration.Migrate((PlateSolveSettingsDto?)snap.PlateSolve ?? defaults.PlateSolve, fileExists),
-            DiagnosticsMode = (DiagnosticsModeDto?)snap.DiagnosticsMode ?? defaults.DiagnosticsMode,
-            Phd2 = (Phd2SettingsDto?)snap.Phd2 ?? defaults.Phd2,
-            EquipmentConnection = (EquipmentConnectionDto?)snap.EquipmentConnection ?? defaults.EquipmentConnection,
-            StretchDefaults = stretch,
-            Optics = (OpticsSettingsDto?)snap.Optics ?? defaults.Optics,
-            CameraElectronics = (CameraElectronicsDto?)snap.CameraElectronics ?? defaults.CameraElectronics,
-            FilterSet = filterSet,
-            FilterWheelLabels = wheelLabels,
-            CustomHorizon = customHorizon,
-            // e-4b-2 — back-fill missing entries too (an older file could carry a partial
-            // block); never-calibrated is the safe default for any hole.
-            CalibrationState = NormalizeCalibrationState(snap.CalibrationState),
-            // §45.12 — a pre-§45 file back-fills to the all-defaults section.
-            PolarAlign = (PolarAlignSettingsDto?)snap.PolarAlign ?? new PolarAlignSettingsDto(),
-            Unguided = (UnguidedSettingsDto?)snap.Unguided ?? new UnguidedSettingsDto(),
-            GuiderAdvanced = (GuiderAdvancedSettingsDto?)snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(),
-            FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
-            // #1675 — a pre-#1675 file (or a null list) reads as nothing saved.
-            FilterFocusOffsets = snap.FilterFocusOffsets?.Offsets is null ? FilterFocusOffsetsDto.Empty : snap.FilterFocusOffsets,
-            EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
-            SavedTargets = SavedTargetsValidator.NormalizeLenient(snap.SavedTargets),
-            // #1689 — a pre-#1689 file back-fills to the defaults (not following).
-            Dome = snap.Dome ?? DomeSettingsDto.Default,
-        };
-    }
-
-    // #1362 — a missing block, a null map or a null entry all read as "not observed".
-    private static EquipmentIdentityDto NormalizeEquipmentIdentity(EquipmentIdentityDto? identity) {
-        if (identity is null || (IReadOnlyDictionary<string, DeviceIdentityDto>?)identity.Devices is null) {
-            return EquipmentIdentityDto.Empty;
-        }
-        if (identity.Devices.All(kv => kv.Value is not null && kv.Value.UniqueId is not null && kv.Value.Name is not null)) {
-            return identity;
-        }
-        var clean = new Dictionary<string, DeviceIdentityDto>();
-        foreach (var (slot, entry) in identity.Devices) {
-            if (entry is not null) {
-                clean[slot] = entry with { UniqueId = entry.UniqueId ?? string.Empty, Name = entry.Name ?? string.Empty };
-            }
-        }
-        return new EquipmentIdentityDto(clean);
-    }
-
-    private static CalibrationStateDto NormalizeCalibrationState(CalibrationStateDto? state) {
-        if (state is null) {
-            return CalibrationStateDto.Empty;
-        }
-        return new CalibrationStateDto(
-            DarkLibrary: (GuiderCalibrationEntryDto?)state.DarkLibrary ?? new GuiderCalibrationEntryDto(),
-            DefectMap: (GuiderCalibrationEntryDto?)state.DefectMap ?? new GuiderCalibrationEntryDto());
-    }
-
-    private static ProfileSnapshotDto BuildDefaults() => new(
-        ImagingDefaults: new(
-            ExposureSeconds: 5, Gain: 100, Offset: 50, Bin: 1, FrameKind: "light",
-            CoolerTargetC: -10.0, CoolerRampCPerMin: 1.0, WarmupAtSessionEnd: false),
-        Storage: new(
-            SaveDirectory: "/media/openastroara",
-            FileFormat: StorageFormatTokens.Fits,
-            Compression: StorageFormatTokens.CompressionZstd,
-            FilenameTemplate: @"$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s"),
-        Notifications: new(
-            InAppBanner: true, OsDesktop: true, SoundAlert: true,
-            PushoverToken: "", TelegramBotToken: "",
-            OnSequenceComplete: true, OnSequencePaused: true, OnCriticalDiagnostic: true,
-            OnSafetyEvent: true, OnAutofocusFailed: true, OnPlateSolveFailed: true,
-            OnDiskSpaceLow: true),
-        Site: new(
-            SiteName: "Backyard", LatitudeDeg: 0.0, LongitudeDeg: 0.0, ElevationM: 0.0,
-            TimeZone: "UTC", UseCustomHorizon: false, DefaultHorizonAltitudeDeg: 20.0,
-            BortleClass: 6, TypicalSeeingArcsec: 2.5, TwilightDefinition: "astronomical"),
-        Filenames: new(DateSeparator: "forward_slash", CompressDarksAndBias: true),
-        SafetyPolicies: new(
-            OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
-            MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
-            MeridianRecalGuider: true, OnAltitudeLimit: "skip_target",
-            ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
-            GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true),
-        Autofocus: new(
-            Method: "hfr_v_curve", Steps: 7, StepSize: 50, ExposureSeconds: 5,
-            Binning: 1, AfFilter: "L", RunAfterFilterChange: true,
-            TriggerTempDeltaC: 2.0, TriggerHfrDriftPct: 15.0, EveryNHours: 2,
-            AbortSequenceOnAfFailure: true, RestorePositionOnFailure: true,
-            TelescopeType: "other", StepSizeAuto: true),
-        PlateSolve: new(
-            Engine: "astap", PathOrEndpoint: SolverPathMigration.AstapCliPath, // the multi-core solver bundled with the daemon
-            IndexDownloadPath: SolverPathMigration.DefaultDatabasePath, SearchRadiusDeg: 30.0,
-            DownsampleFactor: 0, // 0 = auto from the pixel scale (#1136)
-            TimeoutSeconds: 60, UseBlindFallback: true,
-            CenterAfterSlew: true, SyncToCoordinates: true, MaxIterations: 5,
-            ConvergenceToleranceArcsec: 60.0),
-        DiagnosticsMode: new(Mode: "notify_only"),
-        Phd2: new(
-            Host: "localhost", Port: 4400, Phd2Profile: "Default",
-            DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
-            SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
-            ForceCalibrationEachSession: false,
-            GuideFocalLength: 0, GuidePixelSize: 0, RaAggressiveness: 0.7,
-            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto", DecMinimumMove: 0.15),
-        EquipmentConnection: new(
-            Camera: true, Mount: true, Focuser: true, FilterWheel: true,
-            Rotator: true, Guider: true, FlatPanel: true, Dome: true,
-            Weather: true, SafetyMonitor: true),
-        // §65.2 stretch defaults. Lights default to auto_stf (matches
-        // PixInsight + NINA UX). Manual sliders seed at the §65.2 example
-        // values (bp=0.02, mp=0.5, wp=0.98). Asinh β = 3.0 (§65.1 default).
-        // Linear clip percentiles per §65.1 (0.5% / 99.5%).
-        StretchDefaults: new(
-            LightDefault: "auto_stf",
-            ManualDefaultParams: new(Blackpoint: 0.02, Midpoint: 0.5, Whitepoint: 0.98),
-            AsinhDefaultBeta: 3.0,
-            LinearClipPercentilesLow: 0.005,
-            LinearClipPercentilesHigh: 0.995),
-        // §36 optics — 0s mean "not yet configured"; ReducerFactor 1.0 so
-        // it's never a zero multiplier in the framing math.
-        Optics: new(
-            FocalLengthMm: 0, ReducerFactor: 1.0,
-            SensorWidthPx: 0, SensorHeightPx: 0, PixelSizeUm: 0),
-        // NEXTGEN §4 — unset until the user enters values / a camera connect
-        // auto-captures; planning falls back to Tier-0 defaults and says so.
-        CameraElectronics: new(),
-        FilterSet: new(Filters: []),
-        FilterWheelLabels: FilterWheelLabelsDto.Default,
-        // §36 custom terrain horizon — empty until the user enters a skyline.
-        CustomHorizon: new(Points: []));
+    public static ProfileSnapshotDto Normalize(ProfileSnapshotDto snap, Func<string, bool> fileExists) =>
+        ProfileSections.All.Aggregate(snap, (acc, section) => section.Normalize(acc, fileExists));
 }

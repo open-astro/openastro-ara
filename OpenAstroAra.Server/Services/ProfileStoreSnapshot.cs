@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using System.Linq;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -21,96 +22,22 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="ProfileSnapshotDto"/>: <see cref="Capture"/> reads every section out,
 /// <see cref="Apply"/> writes a full snapshot back (one Put per section). Used by the
 /// multi-profile repository to clone the live profile and to load a saved profile into
-/// the active working copy.
+/// the active working copy. Both walk the section table (<see cref="ProfileSections"/>), so a
+/// section cannot be left out of one half (#1264 was the unguided block Apply missed).
 /// </summary>
 public static class ProfileStoreSnapshot {
-    public static ProfileSnapshotDto Capture(IProfileStore s) => new(
-        ImagingDefaults: s.GetImagingDefaults(),
-        Storage: s.GetStorageSettings(),
-        Notifications: s.GetNotificationsSettings(),
-        Site: s.GetSiteSettings(),
-        Filenames: s.GetFilenamesSettings(),
-        SafetyPolicies: s.GetSafetyPolicies(),
-        Autofocus: s.GetAutofocusSettings(),
-        PlateSolve: s.GetPlateSolveSettings(),
-        DiagnosticsMode: s.GetDiagnosticsMode(),
-        Phd2: s.GetPhd2Settings(),
-        EquipmentConnection: s.GetEquipmentConnection(),
-        StretchDefaults: s.GetStretchDefaults(),
-        Optics: s.GetOpticsSettings(),
-        CameraElectronics: s.GetCameraElectronics(),
-        FilterSet: s.GetFilterSet(),
-        FilterWheelLabels: s.GetFilterWheelLabels(),
-        CustomHorizon: s.GetCustomHorizon(),
-        FocusCalibration: s.GetFocusCalibration(),
-        CalibrationState: s.GetCalibrationState(),
-        PolarAlign: s.GetPolarAlignSettings(),
-        Unguided: s.GetUnguidedSettings(),
-        GuiderAdvanced: s.GetGuiderAdvancedSettings(),
-        FilterWheelPolicy: s.GetFilterWheelPolicy(),
-        CoolingFan: s.GetCoolingFan(),
-        FilterFocusOffsets: s.GetFilterFocusOffsets(),
-        Dome: s.GetDomeSettings(),
-        TrackingCalibration: s.GetTrackingCalibration(),
-        SkyModelCalibration: s.GetSkyModelCalibration(),
-        EquipmentIdentity: s.GetEquipmentIdentity(),
-        SavedTargets: s.GetSavedTargets());
+    public static ProfileSnapshotDto Capture(IProfileStore s) =>
+        ProfileSections.All.Aggregate(ProfileSections.Defaults, (snap, section) => section.Capture(s, snap));
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
-    /// 15 change notifications (e.g. profile-select) should suppress their own handler
-    /// for the duration.</summary>
+    /// one change notification per section (e.g. profile-select) should suppress their own
+    /// handler for the duration. A section absent from the snapshot takes its table default, so
+    /// selecting a profile never keeps the previous rig's value; a null calibration is meaningful
+    /// ("never measured") and clears the live one.</summary>
     public static void Apply(IProfileStore s, ProfileSnapshotDto snap) {
-        s.PutImagingDefaults(snap.ImagingDefaults);
-        s.PutStorageSettings(snap.Storage);
-        s.PutNotificationsSettings(snap.Notifications);
-        s.PutSiteSettings(snap.Site);
-        s.PutFilenamesSettings(snap.Filenames);
-        s.PutSafetyPolicies(snap.SafetyPolicies);
-        s.PutAutofocusSettings(snap.Autofocus);
-        s.PutPlateSolveSettings(snap.PlateSolve);
-        s.PutDiagnosticsMode(snap.DiagnosticsMode);
-        s.PutPhd2Settings(snap.Phd2);
-        s.PutEquipmentConnection(snap.EquipmentConnection);
-        s.PutStretchDefaults(snap.StretchDefaults);
-        s.PutOpticsSettings(snap.Optics);
-        s.PutCameraElectronics(snap.CameraElectronics);
-        s.PutFilterSet(snap.FilterSet);
-        s.PutFilterWheelLabels(snap.FilterWheelLabels);
-        // Normalized snapshots always carry a non-null horizon; the fallback keeps
-        // Apply safe for a hand-built DTO that skipped the optional param.
-        s.PutCustomHorizon(snap.CustomHorizon ?? new CustomHorizonDto(Points: []));
-        // §59.2 — null is meaningful here ("not calibrated"), so it round-trips as-is: switching to a
-        // never-calibrated profile must CLEAR the live store's calibration, not keep the old rig's.
-        s.PutFocusCalibration(snap.FocusCalibration);
-        // #1264 — same reasoning: a profile whose rig was never probed must read "never measured".
-        s.PutTrackingCalibration(snap.TrackingCalibration);
-        // #1140 P2 — same reasoning: a profile whose library was never fitted reads "never fitted".
-        s.PutSkyModelCalibration(snap.SkyModelCalibration);
-        // §30.7.4 — same reasoning as focus calibration: a profile that never built darks must read
-        // everything-invalid after select, not inherit the previous profile's validity stamps.
-        s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);
-        // #1362 — a profile that never saw a device must read nothing-observed after select, so its
-        // first connect records the gear quietly instead of inheriting the previous profile's identities.
-        s.PutEquipmentIdentity(snap.EquipmentIdentity ?? EquipmentIdentityDto.Empty);
-        // #1267 item 5 — a profile with no saved targets reads an empty list after select.
-        s.PutSavedTargets(snap.SavedTargets ?? SavedTargetsDto.Empty);
-        // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
-        s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
-        // #1264 — the unguided-imaging block was missing here, so selecting a profile kept the previous
-        // rig's probe ladder and guard settings (found with #1364). A pre-#1264 snapshot back-fills the defaults.
-        s.PutUnguidedSettings(snap.Unguided ?? new UnguidedSettingsDto());
-        // #1364 — a profile that never set an advanced guider value must read all-null (keep the guider's
-        // own) after select, never inherit the previous rig's star detection or algorithms.
-        s.PutGuiderAdvancedSettings(snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto());
-        // #1075 — a pre-policy snapshot back-fills the default (home on); a profile that never turned
-        // the home off must turn it back on when selected, never inherit the previous rig's "off".
-        s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);
-        // #1700 — selecting a profile with no designation must not inherit the previous rig's fan.
-        s.PutCoolingFan(snap.CoolingFan ?? CoolingFanDto.None);
-        // #1675 — offsets belong to one rig's filters: a profile with none saved must not inherit them.
-        s.PutFilterFocusOffsets(snap.FilterFocusOffsets ?? FilterFocusOffsetsDto.Empty);
-        // #1689 — selecting a profile with no dome block must not inherit the previous rig's geometry or its follow flag.
-        s.PutDomeSettings(snap.Dome ?? DomeSettingsDto.Default);
+        foreach (var section in ProfileSections.All) {
+            section.Apply(s, snap);
+        }
     }
 }

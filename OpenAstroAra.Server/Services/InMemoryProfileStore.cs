@@ -21,9 +21,9 @@ namespace OpenAstroAra.Server.Services;
 /// v0.0.1 profile store. Pure in-memory — values reset to defaults on
 /// every daemon restart. File-based persistence lands in Phase 13.
 ///
-/// Defaults match the WILMA client's <c>ImagingDefaults</c> constructor
-/// defaults exactly so a fresh daemon + fresh client agree on initial
-/// state without a round-trip.
+/// Every section starts at its default from the section table
+/// (<see cref="ProfileSections"/>), the one place a default is stated, so a fresh
+/// daemon, a fresh <see cref="FileProfileStore"/> and the normalizer agree.
 /// </summary>
 public sealed class InMemoryProfileStore : IProfileStore {
     private readonly object _lock = new();
@@ -34,27 +34,9 @@ public sealed class InMemoryProfileStore : IProfileStore {
     // Get* methods can't deadlock against the store.
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
-    private ImagingDefaultsDto _imagingDefaults = new(
-        ExposureSeconds: 5,
-        Gain: 100,
-        Offset: 50,
-        Bin: 1,
-        FrameKind: "light",
-        CoolerTargetC: -10.0,
-        CoolerRampCPerMin: 1.0,
-        WarmupAtSessionEnd: false);
+    private ImagingDefaultsDto _imagingDefaults = ProfileSections.ImagingDefaults.Default!;
 
-    // Defaults match the WILMA client's StorageSettings() constructor
-    // (lib/state/settings/storage_settings_state.dart) field-for-field,
-    // including the `\\` double-backslash separators in the filename
-    // template — the raw-string literal on the client uses literal
-    // double-backslashes, so the verbatim string here matches with `\\`.
-    // The save directory matches the §13 systemd unit's WorkingDirectory.
-    private StorageSettingsDto _storage = new(
-        SaveDirectory: "/media/openastroara",
-        FileFormat: StorageFormatTokens.Fits,
-        Compression: StorageFormatTokens.CompressionZstd,
-        FilenameTemplate: @"$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s");
+    private StorageSettingsDto _storage = ProfileSections.Storage.Default!;
 
     public ImagingDefaultsDto GetImagingDefaults() {
         lock (_lock) { return _imagingDefaults; }
@@ -76,22 +58,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match NotificationsSettings() — every trigger + channel on,
-    // tokens empty (the user fills them after wiring their pushover/telegram
-    // accounts).
-    private NotificationsSettingsDto _notifications = new(
-        InAppBanner: true,
-        OsDesktop: true,
-        SoundAlert: true,
-        PushoverToken: "",
-        TelegramBotToken: "",
-        OnSequenceComplete: true,
-        OnSequencePaused: true,
-        OnCriticalDiagnostic: true,
-        OnSafetyEvent: true,
-        OnAutofocusFailed: true,
-        OnPlateSolveFailed: true,
-        OnDiskSpaceLow: true);
+    private NotificationsSettingsDto _notifications = ProfileSections.Notifications.Default!;
 
     public NotificationsSettingsDto GetNotificationsSettings() {
         lock (_lock) { return _notifications; }
@@ -102,20 +69,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match SiteSettings() constructor. Lat/lon default to 0,0
-    // (Gulf of Guinea) — astrometry math works there, the user just sees
-    // the wizard prompt to set their real location.
-    private SiteSettingsDto _site = new(
-        SiteName: "Backyard",
-        LatitudeDeg: 0.0,
-        LongitudeDeg: 0.0,
-        ElevationM: 0.0,
-        TimeZone: "UTC",
-        UseCustomHorizon: false,
-        DefaultHorizonAltitudeDeg: 20.0,
-        BortleClass: 6,
-        TypicalSeeingArcsec: 2.5,
-        TwilightDefinition: "astronomical");
+    private SiteSettingsDto _site = ProfileSections.Site.Default!;
 
     public SiteSettingsDto GetSiteSettings() {
         lock (_lock) { return _site; }
@@ -126,11 +80,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match FilenamesSettings() — slash separator + RICE-compress
-    // darks/bias on (highly compressible + lossless).
-    private FilenamesSettingsDto _filenames = new(
-        DateSeparator: "forward_slash",
-        CompressDarksAndBias: true);
+    private FilenamesSettingsDto _filenames = ProfileSections.Filenames.Default!;
 
     public FilenamesSettingsDto GetFilenamesSettings() {
         lock (_lock) { return _filenames; }
@@ -141,20 +91,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match SafetyPolicies() constructor.
-    private SafetyPoliciesDto _safety = new(
-        OnUnsafe: "pause_and_park",
-        AutoResumeWhenSafe: true,
-        ResumeDelayMin: 10,
-        MeridianFlipAuto: true,
-        MeridianPauseMin: 5,
-        MeridianRecenter: true,
-        MeridianRecalGuider: true,
-        OnAltitudeLimit: "skip_target",
-        ParkIfNoMoreTargets: true,
-        OnGuiderLost: "pause_and_retry",
-        GuiderRetryTimeoutSec: 60,
-        SkipTargetIfRecoveryFails: true);
+    private SafetyPoliciesDto _safety = ProfileSections.SafetyPolicies.Default!;
 
     public SafetyPoliciesDto GetSafetyPolicies() {
         lock (_lock) { return _safety; }
@@ -180,20 +117,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         return next;
     }
 
-    // Defaults match AutofocusSettings() constructor.
-    private AutofocusSettingsDto _autofocus = new(
-        Method: "hfr_v_curve",
-        Steps: 7,
-        StepSize: 50,
-        ExposureSeconds: 5,
-        Binning: 1,
-        AfFilter: "L",
-        RunAfterFilterChange: true,
-        TriggerTempDeltaC: 2.0,
-        TriggerHfrDriftPct: 15.0,
-        EveryNHours: 2,
-        AbortSequenceOnAfFailure: true,
-        RestorePositionOnFailure: true);
+    private AutofocusSettingsDto _autofocus = ProfileSections.Autofocus.Default!;
 
     public AutofocusSettingsDto GetAutofocusSettings() {
         lock (_lock) { return _autofocus; }
@@ -204,8 +128,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // §45.12 — ctor defaults ARE the playbook defaults.
-    private PolarAlignSettingsDto _polarAlign = new();
+    private PolarAlignSettingsDto _polarAlign = ProfileSections.PolarAlign.Default!;
 
     public PolarAlignSettingsDto GetPolarAlignSettings() {
         lock (_lock) { return _polarAlign; }
@@ -216,8 +139,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1264 — ctor defaults ARE the shipped behaviour.
-    private UnguidedSettingsDto _unguided = new();
+    private UnguidedSettingsDto _unguided = ProfileSections.Unguided.Default!;
 
     public UnguidedSettingsDto GetUnguidedSettings() {
         lock (_lock) { return _unguided; }
@@ -228,8 +150,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1364 — all-null: the guider keeps its own values.
-    private GuiderAdvancedSettingsDto _guiderAdvanced = new();
+    private GuiderAdvancedSettingsDto _guiderAdvanced = ProfileSections.GuiderAdvanced.Default!;
 
     public GuiderAdvancedSettingsDto GetGuiderAdvancedSettings() {
         lock (_lock) { return _guiderAdvanced; }
@@ -240,19 +161,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match PlateSolveSettings() constructor.
-    private PlateSolveSettingsDto _plateSolve = new(
-        Engine: "astap",
-        PathOrEndpoint: SolverPathMigration.AstapCliPath, // the multi-core solver bundled with the daemon
-        IndexDownloadPath: SolverPathMigration.DefaultDatabasePath,
-        SearchRadiusDeg: 30.0,
-        DownsampleFactor: 0, // 0 = auto from the pixel scale (#1136)
-        TimeoutSeconds: 60,
-        UseBlindFallback: true,
-        CenterAfterSlew: true,
-        SyncToCoordinates: true,
-        MaxIterations: 5,
-        ConvergenceToleranceArcsec: 60.0);
+    private PlateSolveSettingsDto _plateSolve = ProfileSections.PlateSolve.Default!;
 
     public PlateSolveSettingsDto GetPlateSolveSettings() {
         lock (_lock) { return _plateSolve; }
@@ -263,9 +172,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Default matches DiagnosticsModeNotifier's build() — notify_only is
-    // the safe ship-it default per §51 (never auto-pauses a sequence).
-    private DiagnosticsModeDto _diagnosticsMode = new(Mode: "notify_only");
+    private DiagnosticsModeDto _diagnosticsMode = ProfileSections.DiagnosticsMode.Default!;
 
     public DiagnosticsModeDto GetDiagnosticsMode() {
         lock (_lock) { return _diagnosticsMode; }
@@ -276,25 +183,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // Defaults match Phd2Settings() constructor.
-    private Phd2SettingsDto _phd2 = new(
-        Host: "localhost",
-        Port: 4400,
-        Phd2Profile: "Default",
-        DitherEnabled: true,
-        DitherEveryNFrames: 1,
-        DitherPixels: 5.0,
-        SettlePixels: 1.5,
-        SettleTimeSec: 10,
-        SettleTimeoutSec: 60,
-        ForceCalibrationEachSession: false,
-        GuideFocalLength: 0,
-        GuidePixelSize: 0,
-        RaAggressiveness: 0.7,
-        DecAggressiveness: 0.7,
-        MinimumMove: 0.15,
-        DecGuideMode: "auto",
-        DecMinimumMove: 0.15);
+    private Phd2SettingsDto _phd2 = ProfileSections.Phd2.Default!;
 
     public Phd2SettingsDto GetPhd2Settings() {
         lock (_lock) { return _phd2; }
@@ -320,15 +209,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         return next;
     }
 
-    // §36 imaging-train optics. 0s mean "not yet configured — populated by
-    // the wizard, Settings, or first camera connect"; ReducerFactor starts
-    // at 1.0 so it's never a zero multiplier in the framing math.
-    private OpticsSettingsDto _optics = new(
-        FocalLengthMm: 0,
-        ReducerFactor: 1.0,
-        SensorWidthPx: 0,
-        SensorHeightPx: 0,
-        PixelSizeUm: 0);
+    private OpticsSettingsDto _optics = ProfileSections.Optics.Default!;
 
     public OpticsSettingsDto GetOpticsSettings() {
         lock (_lock) { return _optics; }
@@ -368,23 +249,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         _optics = value;
     }
 
-    // Defaults match EquipmentConnectionSettings() constructor: camera +
-    // EVERY type auto-connects by default — auto-connect only attempts
-    // devices the user actually connected before (the remembered store), so
-    // an all-on default is safe for unconfigured types and matches the
-    // expectation that a working rig comes back by itself after a reboot.
-    private EquipmentConnectionDto _equipmentConnection = new(
-        Camera: true,
-        Mount: true,
-        Focuser: true,
-        FilterWheel: true,
-        Rotator: true,
-        Guider: true,
-        FlatPanel: true,
-        Dome: true,
-        Weather: true,
-        SafetyMonitor: true,
-        Switch: true);
+    private EquipmentConnectionDto _equipmentConnection = ProfileSections.EquipmentConnection.Default!;
 
     public EquipmentConnectionDto GetEquipmentConnection() {
         lock (_lock) { return _equipmentConnection; }
@@ -395,8 +260,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // NEXTGEN §4 camera electronics — unset until user entry / auto-capture.
-    private CameraElectronicsDto _cameraElectronics = new();
+    private CameraElectronicsDto _cameraElectronics = ProfileSections.CameraElectronics.Default!;
 
     public CameraElectronicsDto GetCameraElectronics() {
         lock (_lock) { return _cameraElectronics; }
@@ -422,8 +286,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         return next;
     }
 
-    // NEXTGEN §4 planning filter set — empty until the user declares filters.
-    private FilterSetDto _filterSet = new(Filters: []);
+    private FilterSetDto _filterSet = ProfileSections.FilterSet.Default!;
 
     public FilterSetDto GetFilterSet() {
         lock (_lock) { return _filterSet; }
@@ -434,8 +297,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // §37.4 filter-wheel slot labels — the reference-8 default until the user edits.
-    private FilterWheelLabelsDto _filterWheelLabels = FilterWheelLabelsDto.Default;
+    private FilterWheelLabelsDto _filterWheelLabels = ProfileSections.FilterWheelLabels.Default!;
 
     public FilterWheelLabelsDto GetFilterWheelLabels() {
         lock (_lock) { return _filterWheelLabels; }
@@ -446,8 +308,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1075 filter-wheel policy — home on first connect, on by default.
-    private FilterWheelPolicyDto _filterWheelPolicy = FilterWheelPolicyDto.Default;
+    private FilterWheelPolicyDto _filterWheelPolicy = ProfileSections.FilterWheelPolicy.Default!;
 
     public FilterWheelPolicyDto GetFilterWheelPolicy() {
         lock (_lock) { return _filterWheelPolicy; }
@@ -458,8 +319,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1700 — no cooling fan designated until the user chooses one.
-    private CoolingFanDto _coolingFan = CoolingFanDto.None;
+    private CoolingFanDto _coolingFan = ProfileSections.CoolingFan.Default!;
 
     public CoolingFanDto GetCoolingFan() {
         lock (_lock) { return _coolingFan; }
@@ -470,8 +330,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1675 — no saved focus offsets until a calibration is saved.
-    private FilterFocusOffsetsDto _filterFocusOffsets = FilterFocusOffsetsDto.Empty;
+    private FilterFocusOffsetsDto _filterFocusOffsets = ProfileSections.FilterFocusOffsets.Default!;
 
     public FilterFocusOffsetsDto GetFilterFocusOffsets() {
         lock (_lock) { return _filterFocusOffsets; }
@@ -482,8 +341,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1689 — not following, no geometry, until the user sets them.
-    private DomeSettingsDto _dome = DomeSettingsDto.Default;
+    private DomeSettingsDto _dome = ProfileSections.Dome.Default!;
 
     public DomeSettingsDto GetDomeSettings() {
         lock (_lock) { return _dome; }
@@ -494,8 +352,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // §36 custom terrain horizon — empty until entered.
-    private CustomHorizonDto _customHorizon = new(Points: []);
+    private CustomHorizonDto _customHorizon = ProfileSections.CustomHorizon.Default!;
 
     public CustomHorizonDto GetCustomHorizon() {
         lock (_lock) { return _customHorizon; }
@@ -506,8 +363,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // §59.2 Smart Focus calibration — null until a Classic AF sweep records one.
-    private FocusCalibrationDto? _focusCalibration;
+    private FocusCalibrationDto? _focusCalibration = ProfileSections.FocusCalibration.Default;
 
     public FocusCalibrationDto? GetFocusCalibration() {
         lock (_lock) { return _focusCalibration; }
@@ -518,8 +374,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1264 unguided tracking calibration — null until a TrackingProbe records one.
-    private TrackingCalibrationDto? _trackingCalibration;
+    private TrackingCalibrationDto? _trackingCalibration = ProfileSections.TrackingCalibration.Default;
 
     public TrackingCalibrationDto? GetTrackingCalibration() {
         lock (_lock) { return _trackingCalibration; }
@@ -530,8 +385,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1140 P2 sky-model calibration — null until a recalibrate fits one.
-    private SkyModelCalibrationDto? _skyModelCalibration;
+    private SkyModelCalibrationDto? _skyModelCalibration = ProfileSections.SkyModelCalibration.Default;
 
     public SkyModelCalibrationDto? GetSkyModelCalibration() {
         lock (_lock) { return _skyModelCalibration; }
@@ -542,8 +396,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // §30.7.4 calibration state (e-4b-2) — everything-invalid until a build stamps it.
-    private CalibrationStateDto _calibrationState = CalibrationStateDto.Empty;
+    private CalibrationStateDto _calibrationState = ProfileSections.CalibrationState.Default!;
 
     public CalibrationStateDto GetCalibrationState() {
         lock (_lock) { return _calibrationState; }
@@ -554,38 +407,29 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
-    // #1362 equipment identity — nothing observed until a device connects.
-    private EquipmentIdentityDto _equipmentIdentity = EquipmentIdentityDto.Empty;
+    private EquipmentIdentityDto _equipmentIdentity = ProfileSections.EquipmentIdentity.Default!;
 
     public EquipmentIdentityDto GetEquipmentIdentity() {
         lock (_lock) { return _equipmentIdentity; }
     }
 
     public void PutEquipmentIdentity(EquipmentIdentityDto value) {
-        lock (_lock) { _equipmentIdentity = value ?? EquipmentIdentityDto.Empty; }
+        lock (_lock) { _equipmentIdentity = value ?? ProfileSections.EquipmentIdentity.Default!; }
         RaiseChanged();
     }
 
-    // #1267 item 5 — nothing saved until the client writes the list.
-    private SavedTargetsDto _savedTargets = SavedTargetsDto.Empty;
+    private SavedTargetsDto _savedTargets = ProfileSections.SavedTargets.Default!;
 
     public SavedTargetsDto GetSavedTargets() {
         lock (_lock) { return _savedTargets; }
     }
 
     public void PutSavedTargets(SavedTargetsDto value) {
-        lock (_lock) { _savedTargets = value ?? SavedTargetsDto.Empty; }
+        lock (_lock) { _savedTargets = value ?? ProfileSections.SavedTargets.Default!; }
         RaiseChanged();
     }
 
-    // §65.2 stretch defaults — auto_stf for Lights, calibration frames
-    // always render linear via the frame-type auto-override.
-    private StretchDefaultsDto _stretchDefaults = new(
-        LightDefault: "auto_stf",
-        ManualDefaultParams: new(Blackpoint: 0.02, Midpoint: 0.5, Whitepoint: 0.98),
-        AsinhDefaultBeta: 3.0,
-        LinearClipPercentilesLow: 0.005,
-        LinearClipPercentilesHigh: 0.995);
+    private StretchDefaultsDto _stretchDefaults = ProfileSections.StretchDefaults.Default!;
 
     public StretchDefaultsDto GetStretchDefaults() {
         lock (_lock) { return _stretchDefaults; }
