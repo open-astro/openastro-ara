@@ -75,14 +75,18 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeRotatorDevice : FakeDeviceAdapter, IRotatorDevice {
-        public bool IsMoving => false;
+        // Scripts: IsMovingScript answers (or throws) each IsMoving read; OnMove runs inside a move call
+        // (block it, or throw from it).
+        public Func<bool>? IsMovingScript;
+        public Action<float>? OnMove;
+        public bool IsMoving => IsMovingScript?.Invoke() ?? false;
         public float MechanicalPosition => 10f;
         public float Position { get { ThrowIfReadFails(); return 10f; } }
         public bool Reverse { get; set; }
         public bool CanReverse => true;
         public float StepSize => 0.1f;
-        public void MoveAbsolute(float position) { }
-        public void MoveMechanical(float position) { }
+        public void MoveAbsolute(float position) => OnMove?.Invoke(position);
+        public void MoveMechanical(float position) => OnMove?.Invoke(position);
         public void Sync(float position) { }
         public void Halt() { }
     }
