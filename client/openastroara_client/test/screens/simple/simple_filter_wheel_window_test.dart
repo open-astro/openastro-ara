@@ -217,6 +217,31 @@ void main() {
     expect(tester.getCenter(_slot(3)).dy, lessThan(tester.getRect(mark).center.dy), reason: 'under the mark at the top');
   });
 
+  testWidgets('a wheel that gains slots keeps the filter in place under the mark', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire(current: 2));
+    final mark = find.byType(SimpleFilterWheel);
+    Future<void> slot2UnderTheMark(Map<String, dynamic> next, String why) async {
+      wheel.set(next);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(tester.getCenter(_slot(2)).dx, moreOrLessEquals(tester.getRect(mark).center.dx, epsilon: 1), reason: why);
+      expect(tester.getCenter(_slot(2)).dy, lessThan(tester.getRect(mark).center.dy), reason: why);
+    }
+
+    await slot2UnderTheMark(_wire(current: 2, extra: 3), '3 slots to 6: the same filter, the cells closer together');
+    await slot2UnderTheMark(_wire(runtime: 'moving', current: -1, extra: 5), '8 slots while its slot is unknown: held');
+  });
+
+  testWidgets('a wheel that loses slots while its slot is unknown never shows a slot past the end', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire(current: 7, extra: 5));
+    final mark = find.byType(SimpleFilterWheel);
+    wheel.set(_wire(runtime: 'moving', current: -1, extra: 3));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.getCenter(_slot(0)).dx, moreOrLessEquals(tester.getRect(mark).center.dx, epsilon: 1));
+    expect(tester.getCenter(_slot(0)).dy, lessThan(tester.getRect(mark).center.dy), reason: 'slot 0 is under the mark');
+  });
+
   testWidgets('a keyboard user tabs to a cell and picks it with Enter or Space', (tester) async {
     final (_, wheel) = await _pump(tester, _wire());
     // Reading order; the cell in place takes no focus, so slot 2 (lower left) is first.
@@ -439,6 +464,23 @@ void main() {
       final size = tester.getSize(_slot(p));
       expect(size.width, greaterThanOrEqualTo(44), reason: 'slot $p');
       expect(size.height, greaterThanOrEqualTo(44), reason: 'slot $p');
+    }
+  });
+
+  testWidgets("a tap on a cell's edge picks that cell, never its neighbour", (tester) async {
+    // Slot 2 is drawn after slot 1, so where their targets overlapped it took the tap.
+    for (final (wire, width, why) in [
+      (_wire(extra: 5), 280.0, '8 slots on a wheel a narrow window shrinks'),
+      (_wire(extra: 9), 360.0, '12 slots, the cells diagonal to each other'),
+    ]) {
+      final (_, wheel) = await _pump(tester, wire, width: width);
+      final one = tester.getCenter(_slot(1)), two = tester.getCenter(_slot(2));
+      expect(tester.getSize(_slot(1)).width, lessThanOrEqualTo((two - one).distance + 0.01),
+          reason: '$why: never past half-way to the next cell');
+      await tester.tapAt(Offset.lerp(one, two, 0.42)!);
+      await tester.pump();
+      expect(wheel.calls, ['change 1'], reason: why);
+      await tester.pump(const Duration(seconds: 11));
     }
   });
 
