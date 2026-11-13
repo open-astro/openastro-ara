@@ -4504,6 +4504,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServerInternalStateDto'
+  /api/v1/server/usage-history:
+    get:
+      tags:
+        - Server
+      summary: 'The rig''s sampled storage, CPU and memory for the last 12 hours (in memory; empty after a restart).'
+      operationId: GetServerUsageHistory
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageHistoryDto'
   /api/v1/server/versions:
     get:
       tags:
@@ -17087,6 +17106,69 @@ components:
               - number
               - string
             format: double
+    UsageHistoryDto:
+      required:
+        - interval_seconds
+        - processor_count
+        - samples
+      type: object
+      properties:
+        interval_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        processor_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageSampleDto'
+    UsageSampleDto:
+      required:
+        - at_utc
+        - storage_free_bytes
+        - storage_total_bytes
+        - cpu_percent
+        - memory_bytes
+      type: object
+      properties:
+        at_utc:
+          type: string
+          format: date-time
+        storage_free_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int64
+        storage_total_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int64
+        cpu_percent:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        memory_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int64
     VerifyPositionRequestDto:
       type: object
       properties:

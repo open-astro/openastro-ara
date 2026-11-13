@@ -1589,3 +1589,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the client decides "polar aligned tonight" and "focused tonight" from the rig instead of its own memory, so a relaunch or a second device agrees. The observing-night rule (local date minus 12 h) stays in the client, which knows the user's clock. `permanent_pier` follows the profile so every device and a reinstall skip polar alignment on an observatory mount.
 
 **Spec ref:** `Services/PolarAlignService.RecordLastResultLocked`, `Contracts/EquipmentDtos.cs` (`PolarAlignLastResultDto`), `Contracts/ProfileDtos.cs` (`SiteSettingsDto.PermanentPier`)
+
+---
+
+## 2026-11-13 — Rig usage history: `GET /api/v1/server/usage-history` (#1582)
+
+**Endpoint(s) or area:** new `GET /api/v1/server/usage-history?since=<UTC>` → `UsageHistoryDto`.
+
+**Decision:** `{ interval_seconds, processor_count, samples: [{ at_utc, storage_free_bytes?, storage_total_bytes?, cpu_percent?, memory_bytes? }] }`, oldest first, `Cache-Control: no-store`. The daemon samples every 15 s into a fixed ring of 12 h (2880 samples), in memory only, so a restart starts empty. `since` returns only samples strictly newer, so the client appends on its existing poll. A series that could not be read in a sample is null (a gap), never 0; `cpu_percent` is a share of all cores (0-100) and is null on the first tick. REST only; no WebSocket event. A daemon without the route answers 404 and the client keeps the plain figures.
+
+**Reasoning:** the Settings › Rig graphs must be full when the iPad wakes, so the history lives on the rig. The sampler keeps its own CPU baseline, apart from `ServerInternalStateService`, so a Stats panel read does not shorten the sampler's CPU window.
+
+**Spec ref:** `Services/UsageHistoryService.cs`, `Endpoints/ServerStateEndpoints.cs`, `Contracts/ServerStateDtos.cs` (`UsageHistoryDto`, `UsageSampleDto`); client `services/usage_history_api.dart`, `state/stats/usage_history_state.dart`, `screens/simple/simple_usage_graph.dart`.
+
+**Related:** #1582; tests `UsageHistoryTest`, `usage_history_state_test.dart`, `simple_usage_graph_test.dart`.
