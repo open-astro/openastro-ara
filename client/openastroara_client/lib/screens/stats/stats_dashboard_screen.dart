@@ -13,6 +13,8 @@ import '../../widgets/stats/targets_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
 import '../../widgets/stats/pi_performance_section.dart';
+import '../../widgets/stats/stats_pull_refresh.dart';
+import '../../widgets/adaptive_refresh.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 
@@ -33,8 +35,21 @@ class StatsDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        // Simple Mode shows the rail button's own (localized) name.
-        title: Text(simple ? context.l10n.shellStats : 'Stats'),
+        // Simple Mode shows the rail button's own (localized) name. The icon
+        // leads, as on Sky Album's title.
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.bar_chart_outlined),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                simple ? context.l10n.shellStats : 'Stats',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: simple
             ? null
             : [
@@ -73,25 +88,41 @@ class StatsDashboardScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
               ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const OverviewSection(),
-          const SizedBox(height: 24),
-          if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
-          const BestFramesSection(),
-          const SizedBox(height: 24),
-          const AchievementsSection(),
-          const SizedBox(height: 24),
-          if (!simple) ...[
-            const PiPerformanceSection(),
-            const SizedBox(height: 24),
-            _SectionTitle(title: 'Visualizations', context: context),
-            const FocusTempScatterChart(),
-            const GuidingRmsChart(),
-            const FrameQualityChart(),
-          ],
-          const CalendarHeatmap(),
+      // Pull down refreshes every section, as on Sky Album. One Column, not a
+      // lazy list: every section is built, so a pull reaches the ones below
+      // the fold too.
+      body: AdaptiveRefresh(
+        onRefresh: () => Future.wait([
+          for (final refresh in [...ref.read(statsPullRefreshersProvider)])
+            refresh(),
+        ]),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const OverviewSection(),
+                  const SizedBox(height: 24),
+                  if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
+                  const BestFramesSection(),
+                  const SizedBox(height: 24),
+                  const AchievementsSection(),
+                  const SizedBox(height: 24),
+                  if (!simple) ...[
+                    const PiPerformanceSection(),
+                    const SizedBox(height: 24),
+                    _SectionTitle(title: 'Visualizations', context: context),
+                    const FocusTempScatterChart(),
+                    const GuidingRmsChart(),
+                    const FrameQualityChart(),
+                  ],
+                  const CalendarHeatmap(),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

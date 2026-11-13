@@ -297,10 +297,11 @@ if (qp('bare', '0') === '1') document.documentElement.classList.add('bare');
 // Full UI's saved layer toggles back (postDisplayPrefs, the dss goto flag).
 var CHART = document.documentElement.classList.contains('bare');
 
-// The Simple Mode chart: layers only, on the engine's default black sky.
+// The Simple Mode chart: layers only, on the engine's default black sky, over
+// the ground so the horizon shows.
 function applyChartPreset(core) {
   core.atmosphere.visible = false;
-  core.landscapes.visible = false;
+  core.landscapes.visible = true;
   core.milkyway.visible = false;
   core.dss.visible = false;
   core.constellations.images_visible = false;

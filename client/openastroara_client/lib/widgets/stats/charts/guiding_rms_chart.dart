@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
 import '../../adaptive_controls.dart';
+import '../stats_pull_refresh.dart';
 
 /// §50.7 guiding RMS trend — per-frame total guiding RMS (arcsec) over time
 /// from the live daemon (`GET /api/v1/stats/guiding`), with mean + p95 summary
@@ -23,7 +24,11 @@ class GuidingRmsChart extends ConsumerStatefulWidget {
   ConsumerState<GuidingRmsChart> createState() => _GuidingRmsChartState();
 }
 
-class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart> {
+class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart>
+    with StatsPullRefresh<GuidingRmsChart> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Plot at most the most-recent N samples so a very long capture history can't
   // hand fl_chart a huge spot list. Granularity is per captured frame (not per
   // guide pulse), so this is generous headroom; mean/p95 in the subtitle stay
@@ -96,22 +101,13 @@ class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart> {
                 tooltip: 'Couldn’t refresh — showing the last loaded trend.',
               ),
             ),
-          Positioned(
-            top: 0,
-            right: 4,
-            child: IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
+          // The page's pull down refreshes; this shows it running.
+          if (spinning)
+            const Positioned(
+              top: 12,
+              right: 16,
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
-          ),
         ],
       ),
     );

@@ -47,23 +47,28 @@ class StatTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          // One line each, and the subtitle's line kept when there is none,
+          // so every tile in a grid is the same size.
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: AraColors.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          if (subtitle != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                subtitle!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              subtitle ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
             ),
+          ),
         ],
       ),
     );

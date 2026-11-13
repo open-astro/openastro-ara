@@ -16,8 +16,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// change), and [refreshUsing] only writes when the captured generation still
 /// matches. **The counter guards server switches only, NOT concurrent refreshes**
 /// — two overlapping [refreshUsing] calls are last-writer-wins. Callers must gate
-/// concurrency themselves (the widgets disable the refresh button while one is in
-/// flight), so there's no refresh-vs-refresh race in practice.
+/// concurrency themselves (each Stats section's `_refresh` returns early while
+/// one is in flight, so a second pull down starts none), so there's no
+/// refresh-vs-refresh race in practice.
 mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   int _generation = 0;
 

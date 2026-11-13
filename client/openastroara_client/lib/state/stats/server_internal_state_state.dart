@@ -21,7 +21,7 @@ final serverInternalStateApiProvider = Provider<ServerInternalStateClient?>((ref
 });
 
 /// The active server's §66.7 internal state. `null` data means no server is
-/// saved. Read-only; [refresh] re-reads on demand (the panel's refresh button —
+/// saved. Read-only; [refresh] re-reads on demand (the Stats page's pull down —
 /// a second read is also what gives the server a CPU figure to report).
 class ServerInternalStateNotifier extends AsyncNotifier<ServerInternalState?>
     with StatsRefreshMixin<ServerInternalState> {

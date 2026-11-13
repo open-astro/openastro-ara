@@ -8,6 +8,7 @@ import '../../state/stats/best_frames_state.dart';
 import '../../theme/ara_colors.dart';
 import 'stats_format.dart';
 import '../adaptive_controls.dart';
+import 'stats_pull_refresh.dart';
 
 /// §50 Stats dashboard Best Frames section — the catalog's top-ranked frames
 /// (best composite quality first) from the live daemon
@@ -19,7 +20,11 @@ class BestFramesSection extends ConsumerStatefulWidget {
   ConsumerState<BestFramesSection> createState() => _BestFramesSectionState();
 }
 
-class _BestFramesSectionState extends ConsumerState<BestFramesSection> {
+class _BestFramesSectionState extends ConsumerState<BestFramesSection>
+    with StatsPullRefresh<BestFramesSection> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Local spinner/banner flags so the list stays on screen during and after a
   // manual refresh (refresh() holds the old data instead of dropping to
   // loading). See StatsRefreshMixin.
@@ -59,18 +64,12 @@ class _BestFramesSectionState extends ConsumerState<BestFramesSection> {
               child: Text('Best Frames',
                   style: Theme.of(context).textTheme.titleMedium),
             ),
-            IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
-            ),
+            // The page's pull down refreshes; this shows it running.
+            if (spinning)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+              ),
           ],
         ),
         const SizedBox(height: 8),
