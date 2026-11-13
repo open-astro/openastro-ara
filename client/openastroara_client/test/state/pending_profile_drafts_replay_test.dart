@@ -1,3 +1,5 @@
+import '../support/storage_fixture.dart';
+
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -119,7 +121,7 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
   @override
-  Future<StorageSettings> getStorageSettings() async => const StorageSettings();
+  Future<StorageSettings> getStorageSettings() async => kTestStorage;
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
   @override

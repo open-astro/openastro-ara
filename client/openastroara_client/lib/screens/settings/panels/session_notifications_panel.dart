@@ -218,9 +218,15 @@ class _SessionNotificationsPanelState
         SettingsSwitchRow(
           // The threshold itself lives in Storage → "Warn below (GB free)";
           // quoting it live keeps the two panels from contradicting each other.
-          label:
-              'Disk space low (below '
-              '${ref.watch(storageSettingsProvider).minFreeDiskWarnGb} GB free)',
+          label: () {
+            final gb = ref
+                .watch(storageSettingsProvider)
+                .value
+                ?.minFreeDiskWarnGb;
+            return gb == null
+                ? 'Disk space low (threshold in Storage)'
+                : 'Disk space low (below $gb GB free)';
+          }(),
           helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,

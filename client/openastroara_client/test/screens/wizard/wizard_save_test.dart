@@ -1,3 +1,5 @@
+import '../../support/storage_fixture.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state below.
@@ -609,7 +611,7 @@ void main() {
         ..filenameTemplate = r'$$DATETIME$$'
         ..format = ImageFormat.xisf
         ..compress = false;
-      final out = applyDraftToStorage(const StorageSettings(), d);
+      final out = applyDraftToStorage(kTestStorage, d);
       expect(out.saveDirectory, '/media/usb/astro');
       expect(out.filenameTemplate, r'$$DATETIME$$');
       expect(out.fileFormat, StorageFileFormat.xisf);
@@ -619,29 +621,34 @@ void main() {
     test('applyDraftToStorage maps compress=true to Zstandard and keeps base on blank',
         () {
       final yes = ProfileDraft()..fileSaving.compress = true;
-      expect(applyDraftToStorage(const StorageSettings(), yes).compression,
-          StorageCompression.zstd);
+      expect(
+        applyDraftToStorage(kTestStorage, yes).compression,
+        StorageCompression.zstd,
+      );
       // Blank draft preserves base (here: the section default save directory).
-      final base = const StorageSettings().copyWith(saveDirectory: '/keep/dir');
+      final base = kTestStorage.copyWith(saveDirectory: '/keep/dir');
       final out = applyDraftToStorage(base, ProfileDraft());
       expect(out.saveDirectory, '/keep/dir');
       expect(out.fileFormat, base.fileFormat);
       expect(out.compression, base.compression);
     });
 
-    test('explicitly-reset storage fields take the defaults, not the clone', () {
-      final base = const StorageSettings().copyWith(
-        saveDirectory: '/old-rig/frames',
-        filenameTemplate: r'$$OLD$$',
-      );
-      final d = ProfileDraft();
-      d.clearedFields
-        ..add(ClearableField.saveDirectory)
-        ..add(ClearableField.filenameTemplate);
-      final out = applyDraftToStorage(base, d);
-      expect(out.saveDirectory, const StorageSettings().saveDirectory);
-      expect(out.filenameTemplate, const StorageSettings().filenameTemplate);
-    });
+    test(
+      'explicitly-reset storage fields take the defaults, not the clone',
+      () {
+        final base = kTestStorage.copyWith(
+          saveDirectory: '/old-rig/frames',
+          filenameTemplate: r'$$OLD$$',
+        );
+        final d = ProfileDraft();
+        d.clearedFields
+          ..add(ClearableField.saveDirectory)
+          ..add(ClearableField.filenameTemplate);
+        final out = applyDraftToStorage(base, d);
+        expect(out.saveDirectory, kTestStorage.saveDirectory);
+        expect(out.filenameTemplate, kTestStorage.filenameTemplate);
+      },
+    );
 
     test('applyDraftToSafety maps the unsafe-conditions subset', () {
       final d = ProfileDraft();

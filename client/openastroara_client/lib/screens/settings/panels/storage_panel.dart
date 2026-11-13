@@ -20,6 +20,8 @@ import '../../../services/storage_copy_api.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../state/settings/loaded_section.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../services/storage_browse_api.dart';
 import '../../../widgets/storage/sky_photo_cache_row.dart';
 import '../../../widgets/help_icon.dart';
@@ -49,16 +51,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
   Future<void> _hydrate() async {
     final api = _api();
     if (api == null) return;
-    try {
-      await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
+    await ref.read(storageSettingsProvider.notifier).load(api);
   }
 
   @override
@@ -85,12 +78,17 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       return;
     }
     try {
-      await ref.read(storageSettingsProvider.notifier).persistToServer(api);
+      await ref.read(storageSettingsProvider.notifier).save(api);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError =
+            e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -101,11 +99,24 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(storageSettingsProvider);
+    final section = ref.watch(storageSettingsProvider);
+    // A new rig or profile resets the section (migrated_sections.dart): load it again.
+    ref.listen(storageSettingsProvider, (prev, next) {
+      if (next.source == SectionSource.notLoaded &&
+          next.lastFailure == null &&
+          prev?.source != SectionSource.notLoaded) {
+        _hydrate();
+      }
+    });
     final n = ref.read(storageSettingsProvider.notifier);
+    final s = section.value;
+    if (s == null) {
+      return SectionNotLoaded(section: section, onRetry: _hydrate);
+    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: _hydrate),
         // One destination, stated plainly, with the capacity you'd actually
         // ask about — the Time Machine "backup disk" model. Paths, mount
         // points and filesystems are plumbing; they live behind Advanced.
@@ -125,7 +136,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
               helpKey: 'session.storage.save_directory',
               currentValue: s.saveDirectory,
               getCanonical: () =>
-                  ref.read(storageSettingsProvider).saveDirectory,
+                  ref.read(storageSettingsProvider).value!.saveDirectory,
               parse: n.setSaveDirectory,
             ),
             Align(
@@ -208,8 +219,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Warn below (GB free)',
           helpKey: 'session.storage.min_free_disk_warn_gb',
           currentValue: s.minFreeDiskWarnGb.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).minFreeDiskWarnGb.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .minFreeDiskWarnGb
+              .toString(),
           parse: (v) {
             final gb = int.tryParse(v.trim());
             if (gb != null) n.setMinFreeDiskWarnGb(gb);
@@ -221,6 +235,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           currentValue: s.minFreeDiskCriticalGb.toString(),
           getCanonical: () => ref
               .read(storageSettingsProvider)
+              .value!
               .minFreeDiskCriticalGb
               .toString(),
           parse: (v) {
@@ -236,8 +251,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Keep backup snapshots',
           helpKey: 'session.storage.backup_retention_count',
           currentValue: s.backupRetentionCount.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).backupRetentionCount.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .backupRetentionCount
+              .toString(),
           parse: (v) {
             final count = int.tryParse(v.trim());
             if (count != null) n.setBackupRetentionCount(count);
@@ -248,8 +266,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Keep fault history (days)',
           helpKey: 'session.storage.fault_log_retention_days',
           currentValue: s.faultLogRetentionDays.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).faultLogRetentionDays.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .faultLogRetentionDays
+              .toString(),
           parse: (v) {
             final days = int.tryParse(v.trim());
             if (days != null) n.setFaultLogRetentionDays(days);

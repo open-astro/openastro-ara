@@ -1014,7 +1014,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.path(),
-    defaultValue: '/media/openastroara',
+    defaultValue: null,
     profilePath: 'storage.save_directory',
   ),
   Setting(
@@ -1035,7 +1035,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.enumValue(['FITS', 'XISF']),
-    defaultValue: 'FITS',
+    defaultValue: null,
     profilePath: 'storage.file_format',
   ),
   Setting(
@@ -1053,7 +1053,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.enumValue(['Off', 'Lossless (Zstandard)']),
-    defaultValue: 'Lossless (Zstandard)',
+    defaultValue: null,
     profilePath: 'storage.compression',
   ),
   Setting(
@@ -1071,11 +1071,8 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.string(),
-    // Raw string matches `StorageSettings.filenameTemplate` default verbatim.
-    // The doubled-backslash + doubled-dollar syntax is the template engine's
-    // own convention (`\\` as path separator, `$$TOKEN$$` for substitution);
-    // the `r''` prefix means Dart doesn't process either as escapes.
-    defaultValue: r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+    // No client default: the daemon's normalizer owns it (ADR 0012).
+    defaultValue: null,
     profilePath: 'storage.filename_template',
   ),
   Setting(
@@ -1094,7 +1091,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.intRange(min: 1, max: 100000),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'storage.min_free_disk_warn_gb',
   ),
   Setting(
@@ -1113,7 +1110,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.intRange(min: 1, max: 100000),
-    defaultValue: 2,
+    defaultValue: null,
     profilePath: 'storage.min_free_disk_critical_gb',
   ),
   Setting(
@@ -1573,7 +1570,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.intRange(min: 0, max: 1000),
-    defaultValue: 20,
+    defaultValue: null,
     profilePath: 'storage.backup_retention_count',
   ),
   Setting(
@@ -1593,7 +1590,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.intRange(min: 0, max: 3650),
-    defaultValue: 90,
+    defaultValue: null,
     profilePath: 'storage.fault_log_retention_days',
   ),
 

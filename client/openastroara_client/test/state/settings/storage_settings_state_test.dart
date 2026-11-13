@@ -2,14 +2,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 
+import '../../support/storage_fixture.dart';
+
 void main() {
   group('StorageSettingsNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      container = ProviderContainer();
+      await container
+          .read(storageSettingsProvider.notifier)
+          .load(FakeStorageApi());
+    });
     tearDown(() => container.dispose());
 
-    test('defaults match playbook §29', () {
-      final s = container.read(storageSettingsProvider);
+    test('values loaded from the rig are held as given', () {
+      final s = container.read(storageSettingsProvider).value!;
       expect(s.saveDirectory, '/media/openastroara');
       expect(s.fileFormat, StorageFileFormat.fits);
       expect(s.compression, StorageCompression.zstd);
@@ -20,36 +27,52 @@ void main() {
       final n = container.read(storageSettingsProvider.notifier);
       n.setSaveDirectory('');
       n.setSaveDirectory('   ');
-      expect(container.read(storageSettingsProvider).saveDirectory,
-          '/media/openastroara');
+      expect(
+        container.read(storageSettingsProvider).value!.saveDirectory,
+        '/media/openastroara',
+      );
       n.setSaveDirectory('  /mnt/usb  ');
-      expect(container.read(storageSettingsProvider).saveDirectory, '/mnt/usb');
+      expect(
+        container.read(storageSettingsProvider).value!.saveDirectory,
+        '/mnt/usb',
+      );
     });
 
     test('setFileFormat + setCompression assign directly', () {
       final n = container.read(storageSettingsProvider.notifier);
       n.setFileFormat(StorageFileFormat.xisf);
       n.setCompression(StorageCompression.off);
-      expect(container.read(storageSettingsProvider).fileFormat,
-          StorageFileFormat.xisf);
-      expect(container.read(storageSettingsProvider).compression,
-          StorageCompression.off);
+      expect(
+        container.read(storageSettingsProvider).value!.fileFormat,
+        StorageFileFormat.xisf,
+      );
+      expect(
+        container.read(storageSettingsProvider).value!.compression,
+        StorageCompression.off,
+      );
     });
 
     test('setFilenameTemplate trims + rejects empty or whitespace-only', () {
       final n = container.read(storageSettingsProvider.notifier);
-      final original = container.read(storageSettingsProvider).filenameTemplate;
+      final original = container
+          .read(storageSettingsProvider)
+          .value!
+          .filenameTemplate;
       n.setFilenameTemplate('');
       n.setFilenameTemplate('   ');
-      expect(container.read(storageSettingsProvider).filenameTemplate,
-          original);
+      expect(
+        container.read(storageSettingsProvider).value!.filenameTemplate,
+        original,
+      );
       n.setFilenameTemplate(r'  $$TARGET$$/$$FILTER$$  ');
-      expect(container.read(storageSettingsProvider).filenameTemplate,
-          r'$$TARGET$$/$$FILTER$$');
+      expect(
+        container.read(storageSettingsProvider).value!.filenameTemplate,
+        r'$$TARGET$$/$$FILTER$$',
+      );
     });
 
     test('§29 disk-space threshold defaults', () {
-      final s = container.read(storageSettingsProvider);
+      final s = container.read(storageSettingsProvider).value!;
       expect(s.minFreeDiskWarnGb, 10);
       expect(s.minFreeDiskCriticalGb, 2);
     });
@@ -59,40 +82,78 @@ void main() {
       // Non-positive is rejected per-field...
       n.setMinFreeDiskWarnGb(0);
       n.setMinFreeDiskWarnGb(-3);
-      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 10);
+      expect(
+        container.read(storageSettingsProvider).value!.minFreeDiskWarnGb,
+        10,
+      );
       // ...but a value that crosses the other threshold is accepted (validated at save, not on edit).
-      n.setMinFreeDiskWarnGb(1); // below critical default (2) — still accepted as an intermediate edit
-      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 1);
+      n.setMinFreeDiskWarnGb(
+        1,
+      ); // below critical default (2) — still accepted as an intermediate edit
+      expect(
+        container.read(storageSettingsProvider).value!.minFreeDiskWarnGb,
+        1,
+      );
       n.setMinFreeDiskCriticalGb(0);
-      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 2);
+      expect(
+        container.read(storageSettingsProvider).value!.minFreeDiskCriticalGb,
+        2,
+      );
       n.setMinFreeDiskCriticalGb(8);
-      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 8);
+      expect(
+        container.read(storageSettingsProvider).value!.minFreeDiskCriticalGb,
+        8,
+      );
     });
 
     test('§43-2b backup retention defaults to 20 and rejects negatives (0 = keep all)', () {
       final n = container.read(storageSettingsProvider.notifier);
-      expect(container.read(storageSettingsProvider).backupRetentionCount, 20);
+      expect(
+        container.read(storageSettingsProvider).value!.backupRetentionCount,
+        20,
+      );
       n.setBackupRetentionCount(-1);
-      expect(container.read(storageSettingsProvider).backupRetentionCount, 20,
-          reason: 'negative is meaningless — mirrors the server 400');
+      expect(
+        container.read(storageSettingsProvider).value!.backupRetentionCount,
+        20,
+        reason: 'negative is meaningless — mirrors the server 400',
+      );
       n.setBackupRetentionCount(0);
-      expect(container.read(storageSettingsProvider).backupRetentionCount, 0,
-          reason: '0 is the explicit keep-everything value');
+      expect(
+        container.read(storageSettingsProvider).value!.backupRetentionCount,
+        0,
+        reason: '0 is the explicit keep-everything value',
+      );
       n.setBackupRetentionCount(50);
-      expect(container.read(storageSettingsProvider).backupRetentionCount, 50);
+      expect(
+        container.read(storageSettingsProvider).value!.backupRetentionCount,
+        50,
+      );
     });
 
     test('§42.5 fault-log retention defaults to 90 days and rejects negatives (0 = keep all)', () {
       final n = container.read(storageSettingsProvider.notifier);
-      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 90);
+      expect(
+        container.read(storageSettingsProvider).value!.faultLogRetentionDays,
+        90,
+      );
       n.setFaultLogRetentionDays(-1);
-      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 90,
-          reason: 'negative is meaningless — mirrors the server 400');
+      expect(
+        container.read(storageSettingsProvider).value!.faultLogRetentionDays,
+        90,
+        reason: 'negative is meaningless — mirrors the server 400',
+      );
       n.setFaultLogRetentionDays(0);
-      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 0,
-          reason: '0 is the explicit keep-everything value');
+      expect(
+        container.read(storageSettingsProvider).value!.faultLogRetentionDays,
+        0,
+        reason: '0 is the explicit keep-everything value',
+      );
       n.setFaultLogRetentionDays(365);
-      expect(container.read(storageSettingsProvider).faultLogRetentionDays, 365);
+      expect(
+        container.read(storageSettingsProvider).value!.faultLogRetentionDays,
+        365,
+      );
     });
 
     test('§29 thresholdsValid flags an inverted pair (the save-time check)', () {

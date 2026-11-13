@@ -1,3 +1,5 @@
+import '../../support/storage_fixture.dart';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
@@ -92,7 +94,7 @@ class _FakeProfileApi extends ProfileApi {
   Future<FilterSetSettings> putFilterSet(FilterSetSettings v) =>
       _put('filterset', v);
   @override
-  Future<StorageSettings> getStorageSettings() async => const StorageSettings();
+  Future<StorageSettings> getStorageSettings() async => kTestStorage;
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) =>
       _put('storage', v);

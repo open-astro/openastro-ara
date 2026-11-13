@@ -1,0 +1,3 @@
+### Fixed
+
+- **Storage settings no longer show or save made-up defaults** (Settings, #1807): when the rig is unreachable the Storage panel and the File naming panel say "Not loaded" with a Retry button instead of showing default values, and Save no longer writes defaults over the rig's storage settings (it tries the load once more, and if the rig still does not answer it saves nothing and says why). Save also tells the rig which copy it loaded, so another device's newer save is not overwritten: you get "changed on another device" with a Reload button and your edits stay on screen. Switching rig or profile puts Storage back to not loaded.

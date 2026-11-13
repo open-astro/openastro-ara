@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/storage_panel.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/screens/simple/simple_rig_storage.dart';
 import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/services/storage_space_api.dart';
@@ -17,6 +18,8 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/storage/storage_drive_dialog.dart';
+
+import '../../support/storage_fixture.dart';
 
 class _FakeApi extends StorageDevicesApi {
   _FakeApi() : super(_server);
@@ -102,6 +105,7 @@ Future<(ProviderContainer, _FakeApi)> _pump(
     overrides: [
       simpleModeActiveProvider.overrideWithValue(simple),
       activeServerProvider.overrideWithValue(_server),
+      profileApiProvider.overrideWithValue(FakeStorageApi()),
       storageDevicesApiFactoryProvider.overrideWithValue((_) => api),
       storageDevicesProvider.overrideWith(
         (ref) => readDevices?.call() ?? Future.value(devices),

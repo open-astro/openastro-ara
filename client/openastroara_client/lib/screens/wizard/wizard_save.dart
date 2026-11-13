@@ -333,20 +333,25 @@ int? derivedAutofocusStepSize({
   return steps.clamp(5, 500).toInt();
 }
 
+/// The wizard's reset-to-stock values for the two clearable Storage fields.
+const wizardStockSaveDirectory = '/media/openastroara';
+const wizardStockFilenameTemplate =
+    r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s';
+
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's
 /// storage section. The screen stores trimmed-or-null strings (null keeps base);
 /// the format/compression enums translate from the draft's wizard model
 /// (compress true → Zstandard, false → Off; it only affects XISF, #1148).
 StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
   final f = d.fileSaving;
-  // Explicitly-reset fields take the section default (see applyDraftToPlateSolve).
-  const defaults = StorageSettings();
+  // Explicitly-reset fields take the wizard's stock value (see applyDraftToPlateSolve);
+  // the Storage section itself has no client default (ADR 0015).
   return base.copyWith(
     saveDirectory: d.clearedFields.contains(ClearableField.saveDirectory)
-        ? defaults.saveDirectory
+        ? wizardStockSaveDirectory
         : f.saveDirectory,
     filenameTemplate: d.clearedFields.contains(ClearableField.filenameTemplate)
-        ? defaults.filenameTemplate
+        ? wizardStockFilenameTemplate
         : f.filenameTemplate,
     fileFormat: switch (f.format) {
       ImageFormat.fits => StorageFileFormat.fits,

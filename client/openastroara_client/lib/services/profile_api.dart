@@ -433,6 +433,32 @@ class ProfileApi {
     return _storageSettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the storage section with the rig's `ETag` (ADR 0015).
+  Future<({StorageSettings value, String? etag})> getStorageSection() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
+    return (
+      value: _storageSettingsFromJson(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
+  /// PUT the storage section; [ifMatch] is the `ETag` of the copy that was
+  /// loaded, so a newer copy on the rig answers 412 and is left alone.
+  Future<({StorageSettings value, String? etag})> putStorageSection(
+    StorageSettings value, {
+    String? ifMatch,
+  }) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/storage',
+      data: _storageSettingsToJson(value),
+      options: Options(headers: {if (ifMatch != null) 'If-Match': ifMatch}),
+    );
+    return (
+      value: _storageSettingsFromJson(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -846,20 +872,16 @@ class ProfileApi {
   static StorageSettings _storageSettingsFromJson(
     Map<String, dynamic> j,
   ) => StorageSettings(
-    saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
-    fileFormat: StorageFileFormat.fromWire(j['file_format'] as String?),
-    compression: StorageCompression.fromWire(j['compression'] as String?),
-    // Fallback matches the StorageSettings() constructor default
-    // (raw-string literal with `\\` double-backslash separators).
-    filenameTemplate:
-        (j['filename_template'] as String?) ??
-        r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
-    minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num?)?.toInt() ?? 10,
-    minFreeDiskCriticalGb:
-        (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
-    backupRetentionCount: (j['backup_retention_count'] as num?)?.toInt() ?? 20,
-    faultLogRetentionDays:
-        (j['fault_log_retention_days'] as num?)?.toInt() ?? 90,
+    // No client defaults (ADR 0012/0015): the daemon's normalizer owns them, so
+    // a missing key fails the load instead of inventing a value.
+    saveDirectory: j['save_directory'] as String,
+    fileFormat: StorageFileFormat.fromWire(j['file_format'] as String),
+    compression: StorageCompression.fromWire(j['compression'] as String),
+    filenameTemplate: j['filename_template'] as String,
+    minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num).toInt(),
+    minFreeDiskCriticalGb: (j['min_free_disk_critical_gb'] as num).toInt(),
+    backupRetentionCount: (j['backup_retention_count'] as num).toInt(),
+    faultLogRetentionDays: (j['fault_log_retention_days'] as num).toInt(),
   );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {

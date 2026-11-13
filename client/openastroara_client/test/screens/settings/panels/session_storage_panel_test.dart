@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/settings/panels/storage_panel.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+
+import '../../../support/storage_fixture.dart';
 
 void main() {
   // #1148: only XISF compresses (lossless Zstandard); FITS is always written
@@ -19,7 +22,9 @@ void main() {
         if (!d.exceptionAsString().contains('overflowed')) prior?.call(d);
       };
       addTearDown(() => FlutterError.onError = prior);
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [profileApiProvider.overrideWithValue(FakeStorageApi())],
+      );
       addTearDown(container.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: container,

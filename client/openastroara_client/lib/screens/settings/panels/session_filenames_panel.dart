@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -13,6 +15,8 @@ import '../../../util/frame_naming.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../state/settings/loaded_section.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/storage/fits_header_reference.dart';
 
@@ -53,9 +57,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
       // This panel's Save persists every provider it touches, so every one
       // of them must be hydrated first — Save must never push defaults over
-      // values it hasn't seen (the transient-draft lesson). Storage rides
-      // along because the filename template lives there.
-      await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
+      // values it hasn't seen (the transient-draft lesson). Storage (the
+      // filename template lives there) has its own load-before-save rule.
+      unawaited(ref.read(storageSettingsProvider.notifier).load(api));
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       _hydrated = true;
@@ -101,7 +105,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     try {
       // The template rides with storage settings; the separator + compression
       // toggles ride with filenames. Both panels' saves stay independent.
-      await ref.read(storageSettingsProvider.notifier).persistToServer(api);
+      await ref.read(storageSettingsProvider.notifier).save(api);
       await ref.read(filenamesSettingsProvider.notifier).persistToServer(api);
       await ref.read(siteSettingsProvider.notifier).persistToServer(api);
       await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
@@ -109,22 +113,34 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError =
+            e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+  ProfileApi? _api() => ref.read(profileApiProvider);
+
+  void _reloadStorage() {
+    final api = _api();
+    if (api != null)
+      unawaited(ref.read(storageSettingsProvider.notifier).load(api));
   }
 
   @override
   Widget build(BuildContext context) {
     final fs = ref.watch(filenamesSettingsProvider);
     final fn = ref.read(filenamesSettingsProvider.notifier);
-    final ss = ref.watch(storageSettingsProvider);
+    final section = ref.watch(storageSettingsProvider);
     final sn = ref.read(storageSettingsProvider.notifier);
+    final ss = section.value;
+    if (ss == null) {
+      return SectionNotLoaded(section: section, onRetry: _reloadStorage);
+    }
     final site = ref.watch(siteSettingsProvider);
     final optics = ref.watch(opticsSettingsProvider);
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
@@ -132,6 +148,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: _reloadStorage),
         _PreviewCard(
           template: ss.filenameTemplate,
           extension: ss.fileFormat == StorageFileFormat.xisf ? '.xisf' : '.fits',
@@ -194,7 +211,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             helpKey: 'session.storage.filename_template',
             currentValue: ss.filenameTemplate,
             getCanonical: () =>
-                ref.read(storageSettingsProvider).filenameTemplate,
+                ref.read(storageSettingsProvider).value?.filenameTemplate ?? '',
             parse: sn.setFilenameTemplate,
             maxLines: 2,
           ),
@@ -326,7 +343,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
                 helpKey: 'session.storage.filename_template',
                 currentValue: ss.filenameTemplate,
                 getCanonical: () =>
-                    ref.read(storageSettingsProvider).filenameTemplate,
+                    ref.read(storageSettingsProvider).value?.filenameTemplate ??
+                    '',
                 parse: sn.setFilenameTemplate,
                 maxLines: 2,
               ),

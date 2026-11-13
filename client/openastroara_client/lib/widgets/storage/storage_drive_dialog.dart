@@ -153,6 +153,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
       }
       if (outcome.success) {
         final dir = outcome.saveDirectory;
+        // setSaveDirectory ignores an unloaded section: no value is invented.
         if (dir != null && dir.isNotEmpty) {
           ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
         }
