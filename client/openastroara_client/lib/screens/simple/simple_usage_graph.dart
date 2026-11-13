@@ -340,6 +340,8 @@ class _UsageCardState extends State<_UsageCard> {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
+      // No crosshair to clear: let Escape reach the route (close a sheet).
+      if (_cursor == null) return KeyEventResult.ignored;
       setState(() => _cursor = null);
       return KeyEventResult.handled;
     }
@@ -485,6 +487,7 @@ class _UsageCardState extends State<_UsageCard> {
               style: kSimpleText.copyWith(
                 fontSize: AraFontSize.simpleReadingLarge,
                 fontWeight: FontWeight.w300,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
             Row(
@@ -541,7 +544,7 @@ class _UsageCardState extends State<_UsageCard> {
                             border: Border.all(
                               color: _focus.hasFocus
                                   ? AraColors.accentInfo
-                                  : const Color(0x00000000),
+                                  : Colors.transparent,
                               width: 2,
                             ),
                             borderRadius: BorderRadius.circular(
@@ -580,7 +583,14 @@ class _UsageCardState extends State<_UsageCard> {
             if (points.length < 2)
               Text(l10n.usageCollecting, style: AraText.caption),
             if (tip.isNotEmpty)
-              Text(tip, key: Key('usage-tip-${kind.name}'), style: kSimpleText),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  tip,
+                  key: Key('usage-tip-${kind.name}'),
+                  style: kSimpleText,
+                ),
+              ),
             if (_table) _table_(l10n, kind, name),
           ],
         ),
@@ -614,7 +624,9 @@ class _UsageCardState extends State<_UsageCard> {
                 usageValue(kind, r) == null
                     ? l10n.usageNoData
                     : usageFormat(kind, usageValue(kind, r)!),
-                style: kSimpleText,
+                style: kSimpleText.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),

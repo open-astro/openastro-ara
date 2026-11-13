@@ -291,6 +291,7 @@ void main() {
               .onTap,
           isNull,
         );
+        await tester.pumpWidget(const SizedBox()); // a fresh ProviderScope
         await _pump(
           tester,
           history: _history(),
@@ -410,9 +411,19 @@ void main() {
         await tester.tapAt(tester.getTopLeft(graph) + const Offset(2, 2));
         await tester.pump();
         expect(find.byKey(const Key('usage-tip-storage')), findsOneWidget);
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        expect(
+          tester.getSemantics(find.byKey(const Key('usage-tip-storage'))),
+          isSemantics(isLiveRegion: true),
+          reason: 'a screen reader hears the point the crosshair reads',
+        );
+        expect(await tester.sendKeyEvent(LogicalKeyboardKey.escape), isTrue);
         await tester.pump();
         expect(find.byKey(const Key('usage-tip-storage')), findsNothing);
+        expect(
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape),
+          isFalse,
+          reason: 'with no crosshair, Escape goes on to the route',
+        );
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pump();
         expect(find.byKey(const Key('usage-tip-storage')), findsOneWidget);
@@ -423,10 +434,29 @@ void main() {
       },
     );
 
-    testWidgets('Night renders the graphs too', (tester) async {
+    testWidgets('Night draws a 3 px line and rings the latest reading', (
+      tester,
+    ) async {
+      final paint = find.descendant(
+        of: find.byKey(const Key('usage-graph-cpu')),
+        matching: find.byType(CustomPaint),
+      );
       await _pump(tester, history: _history(), night: true);
-      expect(find.byKey(const Key('usage-graph-cpu')), findsOneWidget);
       expect(tester.takeException(), isNull);
+      expect(
+        paint,
+        paints
+          ..path() // the 30 % fill
+          ..path(strokeWidth: 3)
+          ..circle(radius: 5),
+      );
+      await tester.pumpWidget(const SizedBox()); // a fresh ProviderScope
+      await _pump(tester, history: _history());
+      expect(
+        paint,
+        isNot(paints..circle(radius: 5)),
+        reason: 'day has no ring',
+      );
     });
 
     testWidgets('at 200 % text nothing clips and the controls stay 44 px', (
