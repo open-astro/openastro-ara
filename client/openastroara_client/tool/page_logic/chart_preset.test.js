@@ -64,11 +64,11 @@ function livePage(chart) {
 test('a toggle pushed from another device keeps the Simple Mode chart dark', () => {
   const { p, calls } = livePage(true);
   p.applyChartPreset(p.stel.core); // as the page booted
-  p.applyDisplayPrefs({ atmosphere: true, landscape: true, dss: true, constellationArt: true,
+  p.applyDisplayPrefs({ atmosphere: true, landscape: false, dss: true, constellationArt: true,
     azimuthalGrid: true, dsos: false, 'cat:messier': true }, false);
   const c = p.stel.core;
   assert.equal(c.atmosphere.visible, false);
-  assert.equal(c.landscapes.visible, false);
+  assert.equal(c.landscapes.visible, true); // the ground stays for the horizon
   assert.equal(c.dss.visible, false);
   assert.equal(c.constellations.images_visible, false);
   assert.equal(c.lines.azimuthal.visible, false);
