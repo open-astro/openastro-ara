@@ -23,6 +23,7 @@ import 'package:openastroara/widgets/stats/charts/calendar_heatmap.dart';
 import 'package:openastroara/widgets/stats/charts/focus_temp_scatter.dart';
 import 'package:openastroara/widgets/stats/charts/frame_quality_chart.dart';
 import 'package:openastroara/widgets/stats/charts/guiding_rms_chart.dart';
+import 'package:openastroara/widgets/stats/overview_section.dart';
 import 'package:openastroara/widgets/stats/pi_performance_section.dart';
 import 'package:openastroara/widgets/stats/stats_pull_refresh.dart';
 import 'package:openastroara/widgets/stats/targets_section.dart';
@@ -1913,6 +1914,16 @@ void main() {
         expect(find.byKey(const Key('simple-stats')), findsOneWidget);
       },
     );
+
+    // Falsified by: stats_dashboard_screen.dart moving CalendarHeatmap back below Achievements.
+    testWidgets('Stats page: the nights calendar follows the Overview, before Best Frames', (tester) async {
+      await _pump(tester, const Size(1024, 768));
+      await tester.tap(find.byKey(const Key('simple-stats')));
+      await tester.pumpAndSettle();
+      final calendar = tester.getRect(find.byType(CalendarHeatmap));
+      expect(calendar.top, greaterThan(tester.getRect(find.byType(OverviewSection)).bottom));
+      expect(calendar.bottom, lessThan(tester.getTopLeft(find.text('Best Frames')).dy));
+    });
 
     // Falsified by: stats_dashboard_screen.dart title back to const Text('Stats').
     testWidgets('Stats page title: the rail button\'s localized name in Simple Mode, Stats in the Full UI',

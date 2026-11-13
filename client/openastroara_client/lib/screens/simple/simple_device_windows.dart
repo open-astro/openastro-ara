@@ -1458,8 +1458,6 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         : v.clamp(c.minPosition, c.maxPosition);
   }
 
-  /// The knobs move nothing while autofocus runs (a touch would spoil its
-  /// curve) or while the position is unknown (a roll would jump from 0).
   /// Set zero asked, waiting for its confirm.
   bool _askZero = false;
 
@@ -1567,6 +1565,8 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
+  /// The knobs move nothing while autofocus runs (a touch would spoil its
+  /// curve) or while the position is unknown (a roll would jump from 0).
   bool _locked(FocuserStatus s) =>
       s.position == null || ref.read(autofocusLiveProvider).run.isRunning;
 

@@ -1589,3 +1589,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the client decides "polar aligned tonight" and "focused tonight" from the rig instead of its own memory, so a relaunch or a second device agrees. The observing-night rule (local date minus 12 h) stays in the client, which knows the user's clock. `permanent_pier` follows the profile so every device and a reinstall skip polar alignment on an observatory mount.
 
 **Spec ref:** `Services/PolarAlignService.RecordLastResultLocked`, `Contracts/EquipmentDtos.cs` (`PolarAlignLastResultDto`), `Contracts/ProfileDtos.cs` (`SiteSettingsDto.PermanentPier`)
+
+---
+
+## 2026-11-13 — Focuser zero and travel calibration through the driver's actions: `POST /equipment/focuser/setzero`, `…/calibrate`, `…/calibrate/abort`; `can_set_zero`, `can_calibrate`, `calibration` (#1856)
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/focuser/setzero`, `POST …/calibrate` and `POST …/calibrate/abort` (202 + `OperationAcceptedDto`); `FocuserCapabilitiesDto` gains `can_set_zero` and `can_calibrate`; `FocuserStateDto` gains `calibration`.
+
+**Decision:** ASCOM's focuser interface has no zero and no calibration, so each route calls one Alpaca driver action: `SetZero`, `Calibrate` and `AbortCalibration`. The daemon reads the driver's `SupportedActions` on connect, matching names case-insensitively. `can_set_zero` is true when the focuser is absolute and lists `SetZero` (a relative focuser has no position to zero). `can_calibrate` is true when the driver lists both `Calibrate` and `CalibrationStatus`. `calibration` comes from `CalibrationStatus` on each refresh, only on a focuser that can calibrate: `calibrating`, `calibrated` or `not_calibrated`; null when it cannot calibrate or the driver answers something else or fails. A route answers 409 Problem with the reason in `detail` when the focuser is not connected, when the driver does not offer the action, or, for `setzero` and `calibrate` only, while the focuser moves, compensates backlash or calibrates. `calibrate/abort` is never refused for motion. A zero clears the daemon's backlash offset. The full UI's Focuser panel and Simple Mode's Focuser window in Settings both offer the two actions.
+
+**Reasoning:** the actions are named by the drivers that offer them (AlpacaBridge's ZWO EAF, ToupTek AAF and iOptron iEAF for `SetZero`, the Celestron focuser for the calibration set), and ADR 0003 rule 2 says to decide from what the driver lists, not its name. The refusals are state conflicts the client can explain, so they are 409, not 500. A zero or a calibration in the middle of a move would leave the reported position meaningless, so those wait; a stop must always get through.
+
+**Spec ref:** `FocuserService.SetZeroAsync`, `FocuserService.CalibrateAsync`, `FocuserService.AbortCalibrationAsync`, `FocuserService.ReadCalibration`, `EquipmentEndpoints.FocuserActionAsync`, `Contracts/EquipmentDtos.cs` (`FocuserCapabilitiesDto`, `FocuserStateDto`)

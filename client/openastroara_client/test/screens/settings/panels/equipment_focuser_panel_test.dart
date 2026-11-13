@@ -89,19 +89,25 @@ FocuserStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   int? position = 1000,
   String runtimeState = 'idle',
+  bool zero = false,
+  bool calibrate = false,
+  String? calibration,
 }) =>
     FocuserStatus(
       deviceId: 'foc-0',
       name: 'MoonLite',
       connectionState: state,
-      capabilities: const FocuserCapabilities(
+      capabilities: FocuserCapabilities(
         minPosition: 0,
         maxPosition: 50000,
         stepSizeUm: 1.5,
         canTempComp: true,
         absoluteFocuser: true,
+        canSetZero: zero,
+        canCalibrate: calibrate,
       ),
       runtimeState: runtimeState,
+      calibration: calibration,
       position: position,
       temperature: 3.2,
       tempCompEnabled: false,
@@ -144,6 +150,35 @@ void main() {
     expect(find.text('Position'), findsOneWidget);
     expect(find.text('3.2 °C'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Move'), findsOneWidget);
+  });
+
+  // ADR 0009 rule 1: the full UI reaches the same focuser actions as Simple Mode.
+  testWidgets('Set zero asks first, then sends setzero', (tester) async {
+    final api = await _pump(tester, _status(position: 1234, zero: true));
+    expect(find.byKey(const Key('focuser-calibrate')), findsNothing, reason: 'only what the driver offers');
+    await tester.tap(find.byKey(const Key('focuser-set-zero')));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.startsWith('command:setzero')), isEmpty, reason: 'asks first');
+    await tester.tap(find.byKey(const Key('focuser-set-zero-confirm')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:setzero:null'));
+  });
+
+  testWidgets('Calibrate travel starts it; while it runs Stop aborts it', (tester) async {
+    final api = await _pump(tester, _status(calibrate: true, calibration: 'not_calibrated'));
+    expect(find.byKey(const Key('focuser-set-zero')), findsNothing);
+    await tester.tap(find.byKey(const Key('focuser-calibrate')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:calibrate:null'));
+  });
+
+  testWidgets('a calibrating focuser shows Stop, which aborts', (tester) async {
+    final api = await _pump(tester, _status(zero: true, calibrate: true, calibration: 'calibrating'));
+    final zero = tester.widget<OutlinedButton>(find.byKey(const Key('focuser-set-zero')));
+    expect(zero.onPressed, isNull, reason: 'no zero while it calibrates');
+    await tester.tap(find.byKey(const Key('focuser-calibrate-stop')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:calibrate/abort:null'));
   });
 
   testWidgets('Move sends the target position command', (tester) async {

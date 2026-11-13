@@ -13,9 +13,12 @@
 #endregion "copyright"
 
 using Moq;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -80,6 +83,27 @@ namespace OpenAstroAra.Test {
                 Assert.That((await PollAsync(svc, d => d.Runtime.Position == 0))!.Runtime.Position, Is.EqualTo(0));
             }
         }
+
+        [Test]
+        public async Task The_action_routes_answer_409_when_refused_not_500() {
+            // Not connected, then connected without the actions: each refusal is a state conflict.
+            using (var idle = new FocuserService()) {
+                Assert.That(await StatusOfAsync(() => idle.SetZeroAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+            }
+            var (svc, _) = await ConnectFakeAsync();
+            using (svc) {
+                Assert.That(await StatusOfAsync(() => svc.SetZeroAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(await StatusOfAsync(() => svc.CalibrateAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(await StatusOfAsync(() => svc.AbortCalibrationAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+            }
+        }
+
+        private static async Task<int?> StatusOfAsync(Func<Task<OperationAcceptedDto>> action) =>
+            await EquipmentEndpoints.FocuserActionAsync(action) switch {
+                ProblemHttpResult p => p.StatusCode,
+                Accepted<OperationAcceptedDto> => StatusCodes.Status202Accepted,
+                var r => throw new InvalidOperationException(r.GetType().Name),
+            };
 
         [Test]
         public async Task SetZeroAsync_is_refused_when_the_driver_does_not_offer_it() {

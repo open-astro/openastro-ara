@@ -8,6 +8,7 @@ import 'package:openastroara/services/stats_overview_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/stats_overview_state.dart';
 import 'package:openastroara/widgets/stats/overview_section.dart';
+import 'package:openastroara/widgets/stats/stat_tile.dart';
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -83,4 +84,33 @@ void main() {
     expect(find.textContaining('Couldn’t refresh'), findsOneWidget);
     expect(find.text('Frames'), findsOneWidget);
   });
+
+  // Falsified by: overview_section.dart back to the old tile grid (no stats-hero, no StatKpi).
+  for (final (width, sideBySide) in [(1000.0, true), (500.0, false)]) {
+    testWidgets('the dashboard: total integration as the headline, the other totals as a list; '
+        'side by side at ${width.toInt()} px: $sideBySide', (tester) async {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final api = _FakeStatsOverviewClient(const StatsOverview(
+          totalSessions: 3, totalFrames: 120, totalLightFrames: 100, totalIntegrationHours: 12.5));
+      await tester.pumpWidget(_app(const [_server], api));
+      await tester.pumpAndSettle();
+
+      final hero = find.byKey(const Key('stats-hero'));
+      expect(find.descendant(of: hero, matching: find.text('Total integration')), findsOneWidget);
+      expect(find.descendant(of: hero, matching: find.text('12h 30m')), findsOneWidget);
+      expect(find.byType(StatKpi), findsNWidgets(5));
+      for (final label in ['Sessions', 'Frames', 'Light frames', 'Unique targets', 'Last imaged']) {
+        expect(find.widgetWithText(StatKpi, label), findsOneWidget, reason: label);
+      }
+      final h = tester.getRect(hero);
+      final k = tester.getRect(find.byType(StatKpiGrid));
+      if (sideBySide) {
+        expect(k.left, greaterThan(h.right), reason: 'the list beside the headline');
+        expect(k.top, h.top);
+      } else {
+        expect(k.top, greaterThan(h.bottom), reason: 'the list under the headline');
+      }
+    });
+  }
 }

@@ -10,7 +10,7 @@
 - **Exposures and Filter pick on a wheel.** Exposure in Preview, Plan, Guide and Polar align, and Preview's Filter, open a wheel in place instead of a list: the iOS wheel on iPhone, iPad and desktop, and Android's own number picker on Android.
 - **Dec mode is segments.** The Guider panel's Dec mode shows Auto, North, South and Off on one row instead of a list.
 
-- **Focuser zero and travel calibration.** Settings › Focuser has a Position section: Set zero makes where the focuser is now 0, and Calibrate travel runs a focuser that can find its own stops to both ends. Each shows only when the focuser's driver offers it. The daemon adds `POST /api/v1/equipment/focuser/setzero`, `/calibrate` and `/calibrate/abort`, and the focuser's capabilities report `can_set_zero` and `can_calibrate`.
+- **Focuser zero and travel calibration.** Settings › Focuser has a Position section: Set zero makes where the focuser is now 0, and Calibrate travel runs a focuser that can find its own stops to both ends. Each shows only when the focuser's driver offers it. The full UI's Settings › Equipment › Focuser offers the same two actions. The daemon adds `POST /api/v1/equipment/focuser/setzero`, `/calibrate` and `/calibrate/abort`, and the focuser's capabilities report `can_set_zero` and `can_calibrate`; a refused zero or calibration answers 409.
 
 ### Fixed (Simple Mode)
 
