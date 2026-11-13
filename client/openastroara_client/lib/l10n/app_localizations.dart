@@ -8577,7 +8577,7 @@ abstract class AppLocalizations {
   /// **'Comma-separated'**
   String get libraryTagsCommaSeparated;
 
-  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  /// Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig
   ///
   /// In en, this message translates to:
   /// **'Rig setup'**

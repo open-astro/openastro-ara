@@ -6487,7 +6487,7 @@
   },
   "rigSetupTitle": "Rig setup",
   "@rigSetupTitle": {
-    "description": "Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row"
+    "description": "Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig"
   },
   "rigSetupIntro": "Before a first night, Ara needs a few facts about this rig.",
   "@rigSetupIntro": {
