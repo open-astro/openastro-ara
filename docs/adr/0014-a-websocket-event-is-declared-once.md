@@ -4,7 +4,7 @@ Status: proposed
 
 ## Context
 
-`WsEventCatalog` calls itself the single source of truth for the events on `/api/v1/stream`, but it is not on the emit path: the broadcaster's publish takes any string and a hand-built payload. On 2026-11-12 the daemon emitted 12 event types the catalog did not name (`sequence.failed` among them), the list behind `GET /api/v1/ws/catalog` left out 15 that were emitted, and 37 entries had no emitter. Payloads are built by hand at about 111 sites. `openapi.yaml` cannot carry WebSocket shapes, so the client has no machine contract: 22 files match event names as string literals and read payload maps key by key. The REST side has none of this, because its contract is generated and a test fails when it drifts.
+On 2026-11-12 `WsEventCatalog` called itself the single source of truth for the events on `/api/v1/stream`, but it was not on the emit path: the broadcaster's publish took any string and a hand-built payload. The daemon emitted 12 event types the catalog did not name (`sequence.failed` among them), the list behind `GET /api/v1/ws/catalog` left out 15 that were emitted, and 37 entries had no emitter. Payloads are built by hand at about 111 sites. `openapi.yaml` cannot carry WebSocket shapes, so the client has no machine contract: 22 files match event names as string literals and read payload maps key by key. The REST side has none of this, because its contract is generated and a test fails when it drifts.
 
 ## Decision
 
@@ -30,7 +30,7 @@ We decided (2026-11-12, [#1805](https://github.com/open-astro/openastro-ara/issu
 
 - Adding an event is one declaration, and the catalog endpoint, the snapshot and the client types follow from it.
 - About 30 daemon files change in step 1, and every later event family change regenerates two committed files.
-- The 36 entries with no emitter leave the catalog. `calibration.flats_generated` also has no emitter and breaks rule 2 while it stays; [#1814](https://github.com/open-astro/openastro-ara/issues/1814) tracks giving it an emitter or removing it before step 1.
+- The 36 entries with no emitter left the catalog in [#1821](https://github.com/open-astro/openastro-ara/pull/1821). `calibration.flats_generated`, the last entry with no emitter, left it with step 1 in [#1852](https://github.com/open-astro/openastro-ara/pull/1852) ([#1814](https://github.com/open-astro/openastro-ara/issues/1814)).
 - Typed payload records keep a Native AOT publish possible; the claim in about ten comments that hand-built payloads are required by an AOT gate is checked by a build in step 1 before any of them is reworded.
 
 ## How to reverse
@@ -39,7 +39,7 @@ Give the broadcaster its string overload back and stop regenerating the snapshot
 
 ## Links
 
-- [#1814](https://github.com/open-astro/openastro-ara/issues/1814) (the one event kept without an emitter)
+- [#1814](https://github.com/open-astro/openastro-ara/issues/1814) (the last event with no emitter, removed in step 1)
 - [#1805](https://github.com/open-astro/openastro-ara/issues/1805)
 - [#1804](https://github.com/open-astro/openastro-ara/issues/1804) (the catalog drift fix)
 - [`design/API_CONTRACT.md`](../../design/API_CONTRACT.md) (WebSocket wire protocol)

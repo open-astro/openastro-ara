@@ -4,7 +4,7 @@ Status: proposed
 
 ## Context
 
-A Prompt is something the rig's state asks or tells the person: a filter to swap, a device that failed to connect, a Session waiting for the lens cap. On 2026-11-13 the rules for raising one sat in widget lifecycles. The Simple Mode shell registered 8 watchers in `initState` and kept their dedupe in widget fields. Eight listener widgets held the rest, and six of them chose between a dialog and a pill themselves. A pill's action was a closure built in the widget, so Resume called the sequence API from there. One watcher saved the profile: it filled the telescope's aperture and focal length from the mount, only in Simple Mode and only with the app open, while the daemon fills the camera's fields of the same Profile Section. Reaching any of these rules needs a pumped widget tree: `simple_shell_test.dart` is 7,603 lines with 341 widget tests.
+A Prompt is something the rig's state asks or tells the person: a filter to swap, a device that failed to connect, a Session waiting for the lens cap. On 2026-11-13, at commit `047f89e99`, the rules for raising one sat in widget lifecycles. The Simple Mode shell registered 8 watchers in `initState` and kept their dedupe in widget fields. Eight listener widgets held the rest, and six of them chose between a dialog and a pill themselves. A pill's action was a closure built in the widget, so Resume called the sequence API from there. One watcher saved the profile: it filled the telescope's aperture and focal length from the mount, only in Simple Mode and only with the app open, while the daemon fills the camera's fields of the same Profile Section. Reaching any of these rules needs a pumped widget tree: `simple_shell_test.dart` is 7,603 lines with 341 widget tests.
 
 ## Decision
 

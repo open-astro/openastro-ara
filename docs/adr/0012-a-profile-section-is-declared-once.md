@@ -1,20 +1,20 @@
 # A profile section is declared once
 
-Status: proposed
+Status: accepted
 
 ## Context
 
-The daemon lists each profile section separately in `IProfileStore`, both stores, the snapshot's Capture and Apply, the normalizer and the share ledger. A section missing from one list fails silently: selecting a profile kept the previous rig's unguided settings because Apply had no entry for them (#1264). Defaults are written more than once, and nothing ties them together. `ProfileShareService` says that a new field ships in the share file by default, and its ledger says "ALL 13 sections" while the snapshot has more.
+On 2026-11-08 the daemon listed each profile section separately in `IProfileStore`, both stores, the snapshot's Capture and Apply, the normalizer and the share ledger. A section missing from one list failed silently: selecting a profile kept the previous rig's unguided settings because Apply had no entry for them (#1264). Defaults were written more than once, and nothing tied them together. `ProfileShareService` said that a new field ships in the share file by default, and its ledger said "ALL 13 sections" while the snapshot had more.
 
 ## Decision
 
-We decided (2026-11-08, [#1697](https://github.com/open-astro/openastro-ara/issues/1697)) that each profile section is declared once, in a typed C# table: its getter, its setter, its default and its share policy. Capture, Apply, normalization and the share strip walk that table. The work stays inside the daemon and leaves the wire contract unchanged. Where the existing defaults differ, the normalizer's value is kept, because it is what a fresh or healed profile gets; a test lists every difference before the migration, and that PR names each one.
+We decided (2026-11-08, [#1697](https://github.com/open-astro/openastro-ara/issues/1697)) that each profile section is declared once, in a typed C# table: its getter, its setter, its default and its share policy. Capture, Apply, normalization and the share strip walk that table. The work stays inside the daemon and leaves the wire contract unchanged. Where the existing defaults differ, the normalizer's value is kept, because it is what a fresh or healed profile gets; a test lists every difference before the migration, and that PR names each one. The table is `ProfileSections` ([#1855](https://github.com/open-astro/openastro-ara/pull/1855), 2026-11-13).
 
 ## Rules
 
-1. A profile section is added by one entry in the section table; Capture, Apply, normalization and share read that table. Scope: `OpenAstroAra.Server/Services/ProfileStoreSnapshot.cs`, `OpenAstroAra.Server/Services/ProfileSnapshotNormalizer.cs`, `OpenAstroAra.Server/Services/ProfileShareService.cs`. Checked by: review (a section named by hand in Capture, Apply, normalization or the share strip).
-2. A section's default is stated once, in the section table. Scope: `OpenAstroAra.Server/Services/InMemoryProfileStore.cs`, `OpenAstroAra.Server/Services/FileProfileStore.cs`, `OpenAstroAra.Server/Services/ProfileSnapshotNormalizer.cs`. Checked by: review (a section default written outside the table).
-3. Every section states a share policy, and every field of a section's DTO is classified as kept or stripped. Scope: `OpenAstroAra.Server/Services/ProfileShareService.cs`, `OpenAstroAra.Server/Contracts/ProfileDtos.cs`. Checked by: review (a section or DTO field with no classification, or no failing test guarding it).
+1. A profile section is added by one entry in the section table; Capture, Apply, normalization and share read that table. Scope: `OpenAstroAra.Server/Services/ProfileSections.cs`, `OpenAstroAra.Server/Services/ProfileStoreSnapshot.cs`, `OpenAstroAra.Server/Services/ProfileSnapshotNormalizer.cs`, `OpenAstroAra.Server/Services/ProfileShareService.cs`. Checked by: the profile section table test "The_table_declares_every_section_of_the_snapshot_once", and review (a section named by hand in Capture, Apply, normalization or the share strip).
+2. A section's default is stated once, in the section table. Scope: `OpenAstroAra.Server/Services/InMemoryProfileStore.cs`, `OpenAstroAra.Server/Services/FileProfileStore.cs`, `OpenAstroAra.Server/Services/ProfileSnapshotNormalizer.cs`. Checked by: the profile section table test "A_stores_defaults_equal_the_normalizers_for_every_section", and review (a section default written outside the table).
+3. Every section states a share policy, and every field of a section's DTO is classified as kept or stripped. Scope: `OpenAstroAra.Server/Services/ProfileShareService.cs`, `OpenAstroAra.Server/Contracts/ProfileDtos.cs`. Checked by: the profile section table test "Every_field_of_every_section_is_classified_kept_or_stripped_exactly_once".
 4. Declaring sections once does not change the REST contract. Scope: `OpenAstroAra.Server/openapi.yaml`, `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs`. Checked by: the OpenAPI contract snapshot test "The_committed_spec_matches_what_the_daemon_generates".
 
 ## Alternatives rejected
@@ -37,6 +37,6 @@ Write each section back out into the stores, the snapshot, the normalizer and th
 
 ## Links
 
-- [#1697](https://github.com/open-astro/openastro-ara/issues/1697)
+- [#1697](https://github.com/open-astro/openastro-ara/issues/1697), built in [#1855](https://github.com/open-astro/openastro-ara/pull/1855)
 - [#1264](https://github.com/open-astro/openastro-ara/issues/1264) (the section Apply missed)
 - [`design/PORT_PLAYBOOK.md`](../../design/PORT_PLAYBOOK.md) §37 (profile setup)
