@@ -148,12 +148,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _faults = faults;
         _ws = ws;
         _profileService = profileService;
+        // onConnected pushes the profile's site into the mount (one source of truth).
+        // #1246 — a Connected session that is still latched (tripped this episode, no clean read since) is
+        // NOT the idempotent no-op case: the ladder's later rungs connect the same device again
+        // precisely to send the disconnect/connect pair that clears the bridge.
         _lifecycle = new DeviceLifecycle<ITelescopeDevice>(this, DeviceType.Telescope, "telescope",
             d => _createDevice(d), ReadTick, ResetSessionLocked, LatchedReadThreshold, _logger, events, faults,
-            onConnected: () => PushProfileSite(force: true), // the profile's site into the mount (one source of truth)
-            // #1246 — a Connected session that is still latched (tripped this episode, no clean read since) is
-            // NOT the idempotent no-op case: the ladder's later rungs connect the same device again
-            // precisely to send the disconnect/connect pair that clears the bridge.
+            onConnected: () => PushProfileSite(force: true),
             reconnectSameDeviceLocked: StillLatchedLocked);
         _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
@@ -831,35 +832,35 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 watchedDevice = _lifecycle.Device;
             },
             AfterCommit: () => {
-        if (republishedBands is { } republished) {
-            LogPadBandsRepublished(_logger, republished);
-        }
-        if (axisRatesUnknownReason is not null) {
-            LogAxisRatesUnknown(_logger, axisRatesUnknownValues.Primary, axisRatesUnknownValues.Secondary, axisRatesUnknownReason);
-        }
-        if (slewVerdict.Kind == SlewEventWatch.Kind.Started) {
-            PublishSlewEvent(WsEventCatalog.TelescopeSlewStarted, new System.Text.Json.Nodes.JsonObject {
-                ["target_ra_hours"] = slewVerdict.TargetRaHours,
-                ["target_dec_degrees"] = slewVerdict.TargetDecDegrees,
-                ["ra_hours"] = runtime.RightAscensionHours,
-                ["dec_degrees"] = runtime.DeclinationDegrees,
-            });
-        } else if (slewVerdict.Kind == SlewEventWatch.Kind.Completed) {
-            PublishSlewEvent(WsEventCatalog.TelescopeSlewComplete, new System.Text.Json.Nodes.JsonObject {
-                ["final_ra_hours"] = runtime.RightAscensionHours,
-                ["final_dec_degrees"] = runtime.DeclinationDegrees,
-                ["duration_seconds"] = slewVerdict.DurationSeconds,
-            });
-        }
-        if (trackingVerdict == TrackingWatchVerdict.Lost) {
-            LogTrackingLost(watchedDevice?.Name ?? "?");
-            _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope,
-                watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.TrackingLost,
-                $"tracking reported off for {MountTrackingWatch.DefaultDropThreshold} consecutive status ticks with no daemon command",
-                DateTimeOffset.UtcNow));
-        } else if (trackingVerdict == TrackingWatchVerdict.Recovered) {
-            LogTrackingRecovered(watchedDevice?.Name ?? "?");
-        }
+                if (republishedBands is { } republished) {
+                    LogPadBandsRepublished(_logger, republished);
+                }
+                if (axisRatesUnknownReason is not null) {
+                    LogAxisRatesUnknown(_logger, axisRatesUnknownValues.Primary, axisRatesUnknownValues.Secondary, axisRatesUnknownReason);
+                }
+                if (slewVerdict.Kind == SlewEventWatch.Kind.Started) {
+                    PublishSlewEvent(WsEventCatalog.TelescopeSlewStarted, new System.Text.Json.Nodes.JsonObject {
+                        ["target_ra_hours"] = slewVerdict.TargetRaHours,
+                        ["target_dec_degrees"] = slewVerdict.TargetDecDegrees,
+                        ["ra_hours"] = runtime.RightAscensionHours,
+                        ["dec_degrees"] = runtime.DeclinationDegrees,
+                    });
+                } else if (slewVerdict.Kind == SlewEventWatch.Kind.Completed) {
+                    PublishSlewEvent(WsEventCatalog.TelescopeSlewComplete, new System.Text.Json.Nodes.JsonObject {
+                        ["final_ra_hours"] = runtime.RightAscensionHours,
+                        ["final_dec_degrees"] = runtime.DeclinationDegrees,
+                        ["duration_seconds"] = slewVerdict.DurationSeconds,
+                    });
+                }
+                if (trackingVerdict == TrackingWatchVerdict.Lost) {
+                    LogTrackingLost(watchedDevice?.Name ?? "?");
+                    _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope,
+                        watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.TrackingLost,
+                        $"tracking reported off for {MountTrackingWatch.DefaultDropThreshold} consecutive status ticks with no daemon command",
+                        DateTimeOffset.UtcNow));
+                } else if (trackingVerdict == TrackingWatchVerdict.Recovered) {
+                    LogTrackingRecovered(watchedDevice?.Name ?? "?");
+                }
             });
     }
 

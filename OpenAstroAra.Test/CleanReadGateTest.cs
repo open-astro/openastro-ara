@@ -77,29 +77,29 @@ namespace OpenAstroAra.Test {
             Func<Task> connect;
             switch (device) {
                 case "Rotator": {
-                    var s = new RotatorService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeRotatorDevice()) };
-                    services.Setup(p => p.GetService(typeof(IRotatorService))).Returns(s);
-                    (service, type) = (s, DeviceType.Rotator);
-                    state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                    connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                    break;
-                }
+                        var s = new RotatorService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeRotatorDevice()) };
+                        services.Setup(p => p.GetService(typeof(IRotatorService))).Returns(s);
+                        (service, type) = (s, DeviceType.Rotator);
+                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
+                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
+                        break;
+                    }
                 case "Dome": {
-                    var s = new DomeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeDomeDevice()) };
-                    services.Setup(p => p.GetService(typeof(IDomeService))).Returns(s);
-                    (service, type) = (s, DeviceType.Dome);
-                    state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                    connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                    break;
-                }
+                        var s = new DomeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeDomeDevice()) };
+                        services.Setup(p => p.GetService(typeof(IDomeService))).Returns(s);
+                        (service, type) = (s, DeviceType.Dome);
+                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
+                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
+                        break;
+                    }
                 default: {
-                    var s = new TelescopeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeTelescopeDevice()) };
-                    services.Setup(p => p.GetService(typeof(ITelescopeService))).Returns(s);
-                    (service, type) = (s, DeviceType.Telescope);
-                    state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                    connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                    break;
-                }
+                        var s = new TelescopeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeTelescopeDevice()) };
+                        services.Setup(p => p.GetService(typeof(ITelescopeService))).Returns(s);
+                        (service, type) = (s, DeviceType.Telescope);
+                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
+                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
+                        break;
+                    }
             }
             store.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> { Record(type) });
             var reconnector = new EquipmentReconnector(services.Object, store.Object, NullLogger<EquipmentReconnector>.Instance);
