@@ -316,6 +316,12 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       backgroundColor: red,
       // Not onError: the app's dark scheme makes that black (4.2:1 on the red).
       foregroundColor: AraColors.onEmergencyStop,
+      // Drawn disabled (#1775), STOP still reads as STOP: a dim red with the
+      // icon and word in grey, not the theme's near-invisible default.
+      disabledBackgroundColor: widget.enabled
+          ? null
+          : red.withValues(alpha: 0.24),
+      disabledForegroundColor: widget.enabled ? null : AraColors.textSecondary,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : (simple ? 8 : 18),
         vertical: simple ? 0 : 7,

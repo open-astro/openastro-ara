@@ -1627,7 +1627,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 _Popover.queue,
                               }.contains(_popover))
                                 Positioned(
-                                  left: 0,
+                                  left: deck ? kSimpleInset : 0,
                                   right: railGap,
                                   top: popoverTop,
                                   // Plan's bottom limit; the plan squares,
@@ -1637,6 +1637,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
+                                      fitWidth: deck,
                                       centre:
                                           preflightPanel ||
                                           (_popover == _Popover.settings &&
@@ -2068,16 +2069,27 @@ Widget simpleFrost(Widget child) => ClipRRect(
 /// the rail) when it fits below, moved up as much as it needs when it doesn't;
 /// or, with [centre], centred in the room (Preflight's step panels).
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail({required this.preferredTop, this.centre = false});
+  const _BesideRail({
+    required this.preferredTop,
+    this.centre = false,
+    this.fitWidth = false,
+  });
 
   final double preferredTop;
   final bool centre;
 
-  // Height only: a panel wider than a phone-width window runs off its left
-  // edge, as before (phone layout: ALP-4865).
+  /// The portrait deck (#1775): the panel keeps inside the room, both edges
+  /// on screen.
+  final bool fitWidth;
+
+  // Otherwise height only: a panel wider than a landscape phone runs off its
+  // left edge, as before.
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints(maxHeight: constraints.maxHeight);
+      BoxConstraints(
+        maxHeight: constraints.maxHeight,
+        maxWidth: fitWidth ? constraints.maxWidth : double.infinity,
+      );
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -2090,7 +2102,9 @@ class _BesideRail extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_BesideRail old) =>
-      old.preferredTop != preferredTop || old.centre != centre;
+      old.preferredTop != preferredTop ||
+      old.centre != centre ||
+      old.fitWidth != fitWidth;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing

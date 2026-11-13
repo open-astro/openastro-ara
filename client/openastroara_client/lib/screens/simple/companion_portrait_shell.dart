@@ -28,10 +28,15 @@ const _kDeckSections = [
   SimpleModeScreen.plan,
 ];
 
+/// The rail's button width: room for pt-BR "Biblioteca" on one line and
+/// "Mapa do céu" on two. Info, a short word, takes 48.
+const double _kWide = 60;
+const double _kNarrow = 48;
+
 /// The bottom deck. Top row: the section names, swipeable, the current one
 /// lit. Second row: Sky Map, Info and Library; the shutter and the settings
-/// chip; the 60 px STOP. Past 1.1x text the second row splits in two, so no
-/// label is cut short.
+/// chip; the 60 px STOP. Past 1.1x text, or on a screen too narrow for the
+/// one row, the second row splits in two, so no label is cut short.
 class CompanionDeck extends ConsumerWidget {
   const CompanionDeck({
     super.key,
@@ -73,15 +78,16 @@ class CompanionDeck extends ConsumerWidget {
     final left = [
       _DeckButton(
         key: const Key('simple-sky'),
-        width: 48 * scale,
+        width: _kWide * scale,
         glyph: (c) => SkyChartIcon(color: c),
         label: l10n.shellSky,
+        lines: 2,
         selected: sky,
         onTap: onSky,
       ),
       _DeckButton(
         key: const Key('simple-info'),
-        width: 48 * scale,
+        width: _kNarrow * scale,
         icon: Icons.info_outline,
         label: l10n.shellInfo,
         selected: info,
@@ -89,7 +95,7 @@ class CompanionDeck extends ConsumerWidget {
       ),
       _DeckButton(
         key: const Key('simple-library'),
-        width: 48 * scale,
+        width: _kWide * scale,
         icon: Icons.photo_library_outlined,
         label: l10n.shellLibrary,
         onTap: onLibrary,
@@ -104,7 +110,7 @@ class CompanionDeck extends ConsumerWidget {
         selected: settingsOpen,
         onTap: onSettings,
         lines: 2,
-        width: 48 * scale,
+        width: _kWide * scale,
       ),
     ];
     // Disabled only on first run: no link and no rig ever chosen. After a
@@ -120,7 +126,7 @@ class CompanionDeck extends ConsumerWidget {
       ),
     );
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 4),
       child: Column(
         key: const Key('companion-deck'),
         mainAxisSize: MainAxisSize.min,
@@ -148,20 +154,28 @@ class CompanionDeck extends ConsumerWidget {
               ],
             ),
           ),
-          if (scale <= 1)
-            Row(
-              children: [
-                ...left,
-                const Spacer(),
-                ...middle,
-                const Spacer(),
-                stop,
-              ],
-            )
-          else ...[
-            Row(children: [for (final b in left) Expanded(child: b)]),
-            Row(children: [...middle, const Spacer(), stop]),
-          ],
+          LayoutBuilder(
+            builder: (context, box) =>
+                // The shutter is a Stop's size.
+                scale <= 1 &&
+                    box.maxWidth >= 3 * _kWide + _kNarrow + 2 * kSimpleStopSize
+                ? Row(
+                    children: [
+                      ...left,
+                      const Spacer(),
+                      ...middle,
+                      const Spacer(),
+                      stop,
+                    ],
+                  )
+                : Column(
+                    spacing: AraSpace.s8,
+                    children: [
+                      Row(children: [for (final b in left) Expanded(child: b)]),
+                      Row(children: [...middle, const Spacer(), stop]),
+                    ],
+                  ),
+          ),
         ],
       ),
     );
@@ -214,8 +228,8 @@ class _Section extends StatelessWidget {
   );
 }
 
-/// An icon over a short caption, at least 44 px each way. The caption shrinks
-/// to fit its button rather than being cut.
+/// An icon over a short caption, at least 44 px each way. The caption keeps
+/// its size and wraps to [lines] (Sky Map's "Mapa do céu", the chip's two).
 class _DeckButton extends StatelessWidget {
   const _DeckButton({
     super.key,
@@ -264,14 +278,12 @@ class _DeckButton extends StatelessWidget {
                   glyph != null
                       ? glyph!(color)
                       : Icon(icon, size: 24, color: color),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: lines,
-                      textAlign: TextAlign.center,
-                      style: AraText.caption.copyWith(color: color),
-                    ),
+                  Text(
+                    label,
+                    maxLines: lines,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: AraText.caption.copyWith(color: color),
                   ),
                 ],
               ),

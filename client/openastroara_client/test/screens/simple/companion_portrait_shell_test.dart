@@ -248,9 +248,17 @@ void main() {
     await _pump(tester, _portrait);
     await tapSection(tester, 'monitor');
     await tester.pump(const Duration(milliseconds: 500));
-    // The page's own two-column grid is wider than a phone (not this slice).
-    tester.takeException();
+    // No overflow: the tiles lie in one column on a phone, and the verdict
+    // shows whole.
     expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
+    expect(find.byKey(const Key('simple-monitor-column')), findsOneWidget);
+    final verdict = tester.renderObject<RenderParagraph>(
+      find.descendant(
+        of: find.byKey(const Key('simple-monitor-verdict')),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(verdict.didExceedMaxLines, isFalse, reason: 'the verdict is cut');
     final size = tester.getSize(find.byType(EmergencyStopButton));
     expect(
       size.width,
@@ -277,6 +285,33 @@ void main() {
     },
   );
 
+  for (final name in _sections) {
+    testWidgets(
+      'on $name every panel keeps both edges on the screen, closed and with its panel open',
+      (tester) async {
+        await _pump(tester, _portrait);
+        await tapSection(tester, name);
+        Future<void> onScreen(String why) async {
+          await tester.pump(const Duration(milliseconds: 500));
+          expect(tester.takeException(), isNull, reason: why);
+          for (final box
+              in find
+                  .byType(SimplePanel)
+                  .evaluate()
+                  .map((e) => e.renderObject! as RenderBox)) {
+            final r = box.localToGlobal(Offset.zero) & box.size;
+            expect(r.left, greaterThanOrEqualTo(0), reason: '$why: $r');
+            expect(r.right, lessThanOrEqualTo(390), reason: '$why: $r');
+          }
+        }
+
+        await onScreen(name);
+        await tester.tap(find.byKey(const Key('simple-settings')));
+        await onScreen('$name after the chip');
+      },
+    );
+  }
+
   testWidgets(
     'before any rig has been connected STOP is drawn disabled in its place and starts no hold',
     (tester) async {
@@ -290,6 +325,29 @@ void main() {
             .onPressed,
         isNull,
       );
+      // Still reads as STOP: the word is drawn, in a colour of its own.
+      final word = find.descendant(of: stop, matching: find.text('STOP'));
+      expect(word, findsOneWidget);
+      final ink = tester
+          .renderObject<RenderParagraph>(
+            find.descendant(of: word, matching: find.byType(RichText)),
+          )
+          .text
+          .style!
+          .color!;
+      final fill = tester
+          .widget<Material>(
+            find.descendant(
+              of: find.descendant(
+                of: stop,
+                matching: find.byType(FilledButton),
+              ),
+              matching: find.byType(Material),
+            ),
+          )
+          .color!;
+      expect(ink.a, greaterThan(0.5), reason: 'the word is not see-through');
+      expect(ink, isNot(fill), reason: 'the word differs from the fill');
       final g = await tester.startGesture(tester.getCenter(stop));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('HOLD'), findsNothing);
@@ -322,6 +380,16 @@ void main() {
             p.didExceedMaxLines,
             isFalse,
             reason: '"${p.text.toPlainText()}" is cut off',
+          );
+          // Drawn at its size: no label is shrunk to fit its button.
+          final drawn = MatrixUtils.transformRect(
+            p.getTransformTo(null),
+            Offset.zero & p.size,
+          );
+          expect(
+            drawn.height,
+            greaterThanOrEqualTo(p.textScaler.scale(p.text.style!.fontSize!)),
+            reason: '"${p.text.toPlainText()}" is shrunk',
           );
         }
         for (final k in [

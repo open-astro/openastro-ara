@@ -23,7 +23,9 @@ import 'simple_preview_panel.dart' show simpleCountdown;
 /// panel that owns the thing (#1724).
 enum MonitorDestination { queue, sky, mount, safety, weather, guider, frameInfo }
 
-/// Monitor below this width isn't offered: the grid needs the room.
+/// Below this width the grid needs more room than it has: Monitor is offered
+/// only from a phone's portrait deck (#1775), which lays the tiles in one
+/// column.
 const double kMonitorMinWidth = 900;
 
 /// The two right columns keep this width; extra width goes to the left two.
@@ -132,8 +134,12 @@ class _TopLine extends ConsumerWidget {
     };
     final question = v.kind == MonitorVerdictKind.question ? v.question : null;
     final message = v.kind == MonitorVerdictKind.message ? v.message : null;
-    // Shown whole: a question to answer, or a stop's outcome to read.
-    final whole = question != null || message != null;
+    // Shown whole: a question to answer, or a stop's outcome to read; on a
+    // phone every verdict, which two lines cannot hold (#1775).
+    final whole =
+        question != null ||
+        message != null ||
+        MediaQuery.sizeOf(context).width < kMonitorMinWidth;
     // 64 pt, growing with the user's text size up to half the screen; past
     // that it scrolls, so a question's answers stay reachable at 2x text.
     return ConstrainedBox(
@@ -272,6 +278,31 @@ class _Grid extends StatelessWidget {
     final focus = _LastFrameTile(s: s, onTap: () => onOpen(MonitorDestination.frameInfo));
     final night = _NightTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
     const strip = 56.0;
+
+    // A phone (#1775): one column that scrolls, each tile at a fixed height;
+    // the end scrolls clear of the 60 px Stop in the corner.
+    if (MediaQuery.sizeOf(context).width < kMonitorMinWidth) {
+      return ListView(
+        key: const Key('simple-monitor-column'),
+        padding: const EdgeInsets.only(bottom: 60 + _kGap),
+        children: [
+          for (final (tile, height) in [
+            (now, 220.0),
+            (target, 150.0),
+            (flip, 150.0),
+            if (safety != null) (safety, strip),
+            if (weather != null) (weather, 150.0),
+            if (guider != null) (guider, 170.0),
+            (focus, 170.0),
+            (night, 108.0),
+          ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: _kGap),
+              child: SizedBox(height: height, child: tile),
+            ),
+        ],
+      );
+    }
 
     Widget side = LayoutBuilder(builder: (context, box) {
       final h = box.maxHeight;
