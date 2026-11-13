@@ -69,19 +69,19 @@ namespace OpenAstroAra.Test {
         private static ISessionLiveStackControl Control(CameraService c) => c;
 
         private static FrameSaveJob Light(int seed, string target = "M 31", string? filter = "Ha", Guid? session = null,
-                FrameType type = FrameType.Light, int bin = 1, double shiftX = 0, double rotDeg = 0, bool half = false, bool background = true) {
+                FrameType type = FrameType.Light, int bin = 1, double shiftX = 0, double rotDeg = 0, bool centreCrop = false) {
             var req = new ExposureRequestDto(ExposureSec: 1, Gain: 100, BinX: bin, BinY: bin, FilterName: filter);
             var mosaic = OscScene.Mosaic(seed, shiftX: shiftX, rotDeg: rotDeg);
             var size = OscScene.W;
-            if (half) { // top-left quarter: another subframe size, same Bayer phase
+            if (centreCrop) { // centred 256 x 256 at the even offset 128: another subframe size, same Bayer phase, 9 stars
                 size = OscScene.W / 2;
+                const int off = OscScene.W / 4;
                 var crop = new ushort[size * size];
-                for (var y = 0; y < size; y++) { Array.Copy(mosaic, y * OscScene.W, crop, y * size, size); }
+                for (var y = 0; y < size; y++) { Array.Copy(mosaic, (y + off) * OscScene.W + off, crop, y * size, size); }
                 mosaic = crop;
             }
             return new FrameSaveJob {
-                // Background = the sequencer's save path (CaptureCoreAsync saveInBackground); a manual capture is not.
-                Background = background,
+                // Background is left unset on purpose: EnqueueSaveAsync (the sequencer's save path) must set it; SaveFrameAsync does not.
                 FrameId = Guid.NewGuid(), Pixels = mosaic, Width = size, Height = size,
                 Request = req, Applied = req, ImageType = type == FrameType.Light ? "LIGHT" : "DARK", FrameType = type,
                 TargetName = target, CapturedAt = DateTimeOffset.UtcNow, SessionId = session ?? CatalogSession,
@@ -194,10 +194,10 @@ namespace OpenAstroAra.Test {
             Control(cam).StartSessionLiveStack();
             await Save(cam, Light(1), Light(2, shiftX: 1));
             await Stacked(cam, 2);
-            await Save(cam, Light(3, half: true));
+            await Save(cam, Light(3, centreCrop: true));
             await Stacked(cam, 1);
             var s = Control(cam).GetSessionLiveStackStatus();
-            Assert.That((s.Width, s.Height, s.LastOutcome), Is.EqualTo((OscScene.W / 4, OscScene.H / 4, "stacked")));
+            Assert.That((s.Width, s.Height, s.LastOutcome), Is.EqualTo((OscScene.W / 4, OscScene.H / 4, "reference")), "the one light is the new reference");
         }
 
         // Falsified by: clearing the stack when the run ends (FinishPendingSavesAsync, SequencerService.cs, is what the
@@ -216,43 +216,59 @@ namespace OpenAstroAra.Test {
         }
 
         // Falsified by: feeding on the Light frame type alone: the manual capture (CaptureCoreAsync, saveInBackground
-        // false) is LIGHT with another target and catalog Session, so it would wipe the night's stack.
+        // false) is LIGHT with another target and catalog Session, so it would wipe the night's stack. The flag is set by
+        // EnqueueSaveAsync, which every feed test goes through, so a forgotten assignment turns them all red.
         [Test]
         public async Task A_manual_capture_is_not_fed_and_does_not_restart_the_stack() {
             using var cam = NewCamera();
             Control(cam).StartSessionLiveStack();
             await Save(cam, Light(1), Light(2, shiftX: 1));
             await Stacked(cam, 2);
-            await cam.SaveFrameAsync(Light(3, target: "Manual capture", session: Guid.NewGuid(), background: false));
-            await Task.Delay(300);
+            await cam.SaveFrameAsync(Light(3, target: "Manual capture", session: Guid.NewGuid()));
+            // A following background light proves the worker has gone past the manual one (no fixed wait).
+            await Save(cam, Light(4, shiftX: 2));
+            await Stacked(cam, 3);
             var s = Control(cam).GetSessionLiveStackStatus();
-            Assert.That((s.LightsStacked, s.StackSeq, s.TargetName), Is.EqualTo((2, 2L, "M 31")));
+            Assert.That((s.LightsStacked, s.StackSeq, s.TargetName), Is.EqualTo((3, 3L, "M 31")), "the manual capture is not in the stack");
         }
 
-        // Falsified by: calling the engine while holding the service's stack lock: Reset, Stop and a disconnect then wait
-        // for the running AddColour, the save worker blocks in the feed and the capture waits behind the save queue.
-        [Test]
-        public async Task Reset_Stop_and_disconnect_do_not_wait_for_a_running_stack_and_saves_still_finish() {
+        // Falsified by: calling Enable/Disable on the engine while holding the service's stack lock. The hold is inside the
+        // engine's lock (InsideAddForTest), so such a Reset waits for AddColour with the lock held, the feed blocks on it,
+        // the save worker stops and FinishPendingSavesAsync stalls. Reset, Stop and disconnect themselves may wait.
+        [TestCase("reset")]
+        [TestCase("stop")]
+        [TestCase("disconnect")]
+        public async Task Reset_Stop_and_disconnect_do_not_stop_the_saves_while_a_stack_runs(string how) {
             using var cam = NewCamera();
             cam.WithLiveViewTestClientForTest();
-            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            int started = 0;
-            cam.SessionLiveStackBeforeAddForTest = () => { Interlocked.Increment(ref started); return gate.Task; };
             Control(cam).StartSessionLiveStack();
             await Save(cam, Light(1));
-            await Until(() => Volatile.Read(ref started) == 1, "the worker holds the first light");
+            await Stacked(cam, 1);
+            using var inside = new ManualResetEventSlim(false);
+            using var release = new ManualResetEventSlim(false);
+            cam.SessionLiveStack.InsideAddForTest = () => { inside.Set(); release.Wait(); };
+            await Save(cam, Light(2, shiftX: 1));
+            await Until(inside.IsSet, "the worker is inside AddColour, holding the engine lock");
 
-            var calls = Task.Run(async () => {
-                Control(cam).ResetSessionLiveStack();
-                Control(cam).StopSessionLiveStack();
-                Control(cam).StartSessionLiveStack();
-                await cam.DisconnectAsync(null, CancellationToken.None);
+            var call = Task.Run(async () => {
+                if (how == "reset") {
+                    Control(cam).ResetSessionLiveStack();
+                } else if (how == "stop") {
+                    Control(cam).StopSessionLiveStack();
+                } else {
+                    await cam.DisconnectAsync(null, CancellationToken.None);
+                }
             });
-            Assert.That(await Task.WhenAny(calls, Task.Delay(1000)), Is.SameAs(calls), "Reset, Stop and disconnect return within 1 s");
-            await calls;
-            await Save(cam, Light(2, shiftX: 1)); // a light saved meanwhile still lets the saves finish
-            Assert.That(Control(cam).GetSessionLiveStackStatus().LightsStacked, Is.EqualTo(0), "a Reset reads as cleared at once");
-            gate.SetResult();
+            try {
+                await Until(() => Control(cam).GetSessionLiveStackStatus().LightsStacked == 0, "the status reads cleared while AddColour still runs");
+                await cam.EnqueueSaveAsync(Light(3, shiftX: 2));
+                var finish = cam.FinishPendingSavesAsync();
+                Assert.That(await Task.WhenAny(finish, Task.Delay(1000)), Is.SameAs(finish), "the saves finish within 1 s");
+                Assert.That(await finish, Is.EqualTo(0));
+            } finally {
+                release.Set();
+            }
+            await call;
         }
 
         // Falsified by: restarting on a flipped frame (or not folding the 180-degree frame in) loses the first half of the night.
@@ -310,13 +326,13 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_light_arriving_while_one_is_stacking_and_one_waits_is_counted_skipped_busy_and_still_saved() {
             using var cam = NewCamera();
-            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            int started = 0;
-            cam.SessionLiveStackBeforeAddForTest = () => { Interlocked.Increment(ref started); return gate.Task; };
+            using var inside = new ManualResetEventSlim(false);
+            using var release = new ManualResetEventSlim(false);
+            cam.SessionLiveStack.InsideAddForTest = () => { inside.Set(); release.Wait(); };
             Control(cam).StartSessionLiveStack();
             var first = Light(1);
             await Save(cam, first);
-            await Until(() => Volatile.Read(ref started) == 1, "the worker took the first light");
+            await Until(inside.IsSet, "the worker took the first light");
             var rest = new[] { Light(2, shiftX: 1), Light(3, shiftX: 2) };
             await Save(cam, rest);
 
@@ -328,7 +344,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(Directory.GetFiles(_root, "*.fits", SearchOption.AllDirectories), Has.Length.EqualTo(3));
             });
 
-            gate.SetResult();
+            cam.SessionLiveStack.InsideAddForTest = null;
+            release.Set();
             await Stacked(cam, 2);
         }
 
