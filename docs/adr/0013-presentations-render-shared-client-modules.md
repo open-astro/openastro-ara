@@ -4,7 +4,7 @@ Status: proposed
 
 ## Context
 
-ADR 0009 says that behaviour both presentations need lands in the daemon or in shared client state. Three concepts have not followed it. The rules for commanding a device (ask first, in flight, confirmed, refused) live in widget State and are written per device in Simple Mode and again in the Full UI's filter picker. The Polar Align Routine is written twice, and the two copies have drifted: only the Full UI coalesces frame loads. The Guider's equipment choice is held by three surfaces, and the rule that the Guide Camera's UniqueID travels with the pick lives in a review comment. None of these can be tested without pumping a widget.
+ADR 0009 says that behaviour both presentations need lands in the daemon or in shared client state. On 2026-11-08 three concepts had not followed it. The rules for commanding a device (ask first, in flight, confirmed, refused) lived in widget State and were written per device in Simple Mode and again in the Full UI's filter picker. The Polar Align Routine was written twice, and the two copies had drifted: only the Full UI coalesced frame loads. The Guider's equipment choice was held by three surfaces, and the rule that the Guide Camera's UniqueID travels with the pick lived in a review comment. None of these could be tested without pumping a widget. The pilot ([#1760](https://github.com/open-astro/openastro-ara/pull/1760)) moved the filter wheel, the Polar Align Routine and the Guider's discovery and UniqueID lookup; the other four devices and the Guider pick itself have not moved.
 
 ## Decision
 
@@ -13,8 +13,8 @@ We decided (2026-11-08, [#1698](https://github.com/open-astro/openastro-ara/issu
 ## Rules
 
 1. A device window or picker renders the device-command module's phase and holds no timer, pending target or ask-first state of its own. Scope: `client/openastroara_client/lib/screens/simple/simple_device_windows.dart`, `client/openastroara_client/lib/widgets/imaging/exposure_controls_panel.dart`. Checked by: review (a migrated device whose widget State holds a stall timer, a pending target or an asking flag).
-2. In both presentations a park, rotator move, filter change, flat panel change or dome move asks first while a plan runs, and Emergency Stop and halts never ask. Scope: `client/openastroara_client/lib/screens/simple/simple_device_windows.dart`, `client/openastroara_client/lib/widgets/imaging/exposure_controls_panel.dart`, `client/openastroara_client/lib/widgets/emergency_stop_button.dart`. Checked by: review (a listed move on a migrated device with no ask, or a stop or halt that asks).
-3. The Polar Align Routine's hydration, settings, frame loads and busy and error state live in one module, and its frame loads are coalesced in both presentations. Scope: `client/openastroara_client/lib/widgets/imaging/polar_align_panel.dart`, `client/openastroara_client/lib/screens/simple/simple_polar_panel.dart`, `client/openastroara_client/lib/state/polar_align/polar_align_state.dart`. Checked by: review (a presentation that calls the polar align client directly or loads a frame itself).
+2. In both presentations a park, rotator move, filter change, flat panel change or dome move asks first while a plan runs, and Emergency Stop and halts never show that question; the hold and the keyboard confirmation on Emergency Stop guard against an accidental press and stay. Scope: `client/openastroara_client/lib/screens/simple/simple_device_windows.dart`, `client/openastroara_client/lib/widgets/imaging/exposure_controls_panel.dart`, `client/openastroara_client/lib/widgets/emergency_stop_button.dart`. Checked by: review (a listed move on a migrated device with no ask, or a stop or halt that shows the plan-running question).
+3. The Polar Align Routine's hydration, settings, frame loads and busy and error state live in one module, and its frame loads are coalesced in both presentations. Scope: `client/openastroara_client/lib/widgets/imaging/polar_align_panel.dart`, `client/openastroara_client/lib/screens/simple/simple_polar_panel.dart`, `client/openastroara_client/lib/state/polar_align/polar_align_routine_state.dart`. Checked by: review (a presentation that loads a frame or saves the routine's settings itself, or sends a routine command outside the module's busy and error wrapper).
 4. A Guider equipment pick writes the Guide Camera's UniqueID on all three surfaces, through the one module. Scope: `client/openastroara_client/lib/widgets/guider/guider_setup_wizard.dart`, `client/openastroara_client/lib/screens/settings/panels/equipment_guider_panel.dart`, `client/openastroara_client/lib/screens/wizard/screens/screen_guiding.dart`, `client/openastroara_client/lib/screens/wizard/wizard_save.dart`. Checked by: review (a surface that holds its own discovered names or writes a pick by hand).
 
 ## Alternatives rejected
@@ -38,6 +38,6 @@ Move each module's state back into its widgets, one copy per presentation or sur
 
 ## Links
 
-- [#1698](https://github.com/open-astro/openastro-ara/issues/1698)
+- [#1698](https://github.com/open-astro/openastro-ara/issues/1698) (the pilot), [#1860](https://github.com/open-astro/openastro-ara/issues/1860) (the other four devices and the Full UI question), [#1861](https://github.com/open-astro/openastro-ara/issues/1861) (the Guider pick)
 - [#1308](https://github.com/open-astro/openastro-ara/issues/1308) (the Guide Camera pinned by UniqueID)
 - ADR 0009
