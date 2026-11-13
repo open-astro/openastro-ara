@@ -1102,35 +1102,43 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // takes the whole row.
     final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
     final messagesWidth = width - kSimpleInset * 2;
-    // Not measured yet (0): under it, so the first frame never overlaps.
-    final besideSteps =
-        !narrow &&
-        _simplePreflightRowWidth > 0 &&
-        kSimpleInset + _messagesCardWidth + AraSpace.s12 <=
-            (width - _simplePreflightRowWidth) / 2;
-    final messagesTop = simplePreflightRow && !besideSteps
-        ? railTop + _simplePreflightRowHeight + AraSpace.s12
-        : railTop;
-    _measure();
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
+    // A card too tall for the room above the left rail moves beside it, when
+    // the room between the rails leaves it a readable width; otherwise it
+    // paints over the left rail. Either way it stops short of the right rail.
+    final railShift = railWidth + kSimpleInset;
+    final besideRoom = messagesWidth - railShift * 2;
+    bool besideRailAt(double top) =>
+        !narrow &&
+        _messagesHeight > (panels ? leftRailTop - top - kSimpleInset : double.infinity) &&
+        besideRoom >= 240;
+    // Beside the steps only when its real left edge (moved beside the rail
+    // when it is that tall) leaves the gap. Not measured yet (0): under them,
+    // so the first frame never overlaps.
+    final besideSteps =
+        !narrow &&
+        _simplePreflightRowWidth > 0 &&
+        kSimpleInset +
+                (besideRailAt(railTop) ? railShift : 0) +
+                _messagesCardWidth +
+                AraSpace.s12 <=
+            (width - _simplePreflightRowWidth) / 2;
+    final messagesTop = simplePreflightRow && !besideSteps
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
+        : railTop;
+    _measure();
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
-    // A card too tall for the room above the left rail moves beside it, when
-    // the room between the rails leaves it a readable width; otherwise it
-    // paints over the left rail. Either way it stops short of the right rail.
-    final railShift = railWidth + kSimpleInset;
-    final besideRoom = messagesWidth - railShift * 2;
-    final pillsBesideRail =
-        !narrow && _messagesHeight > messagesRoom && besideRoom >= 240;
+    final pillsBesideRail = besideRailAt(messagesTop);
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
