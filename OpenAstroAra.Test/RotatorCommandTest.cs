@@ -49,7 +49,9 @@ namespace OpenAstroAra.Test {
         // are Rotator's own; only the timings shrink to milliseconds.
         private static DeviceCommandPolicy Policy(int maxPolls = 40, double hardTimeoutMs = 100) =>
             RotatorService.MovePolicy with {
-                HardTimeout = TimeSpan.FromMilliseconds(hardTimeoutMs), PollInterval = TimeSpan.FromMilliseconds(1), MaxPolls = maxPolls,
+                HardTimeout = TimeSpan.FromMilliseconds(hardTimeoutMs),
+                PollInterval = TimeSpan.FromMilliseconds(1),
+                MaxPolls = maxPolls,
             };
 
         [Test]
