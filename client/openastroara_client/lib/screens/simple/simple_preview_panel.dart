@@ -1142,10 +1142,12 @@ class _SimpleCountFieldState extends State<SimpleCountField> {
     super.dispose();
   }
 
-  void _set(int n) {
+  // A step always shows its count: a touch on − or + leaves a phone's focus
+  // in the field. Typing keeps its own text.
+  void _set(int n, {bool step = false}) {
     final v = n.clamp(widget.min, widget.max);
     if (v != widget.value) widget.onChanged?.call(v);
-    if (!_focus.hasFocus) _text.text = '$v';
+    if (step || !_focus.hasFocus) _text.text = '$v';
   }
 
   void _typed(String t) {
@@ -1157,7 +1159,7 @@ class _SimpleCountFieldState extends State<SimpleCountField> {
     final enabled =
         widget.onChanged != null &&
         (step < 0 ? widget.value > widget.min : widget.value < widget.max);
-    void go() => _set(widget.value + step);
+    void go() => _set(widget.value + step, step: true);
     return GestureDetector(
       onLongPressStart: enabled
           ? (_) => _repeat = Timer.periodic(
