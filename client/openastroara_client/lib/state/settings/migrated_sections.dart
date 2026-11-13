@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
-import '../../models/server.dart';
 import 'storage_settings_state.dart';
 
 /// ADR 0015 — the one reset point: a different rig or a different active
@@ -15,7 +14,9 @@ void resetMigratedSections(Ref ref) {
 
 /// Root-mounted (main.dart) next to `launchGateRearmProvider`.
 final migratedSectionsResetProvider = Provider<void>((ref) {
-  ref.listen<AraServer?>(activeServerProvider, (previous, next) {
+  // The saved list, not activeServerProvider, whose == hides same-rig updates.
+  ref.listen(savedServersProvider, (before, after) {
+    final previous = activeServerIn(before), next = activeServerIn(after);
     if (previous != null &&
         (previous.hostname != next?.hostname || previous.port != next?.port)) {
       resetMigratedSections(ref);

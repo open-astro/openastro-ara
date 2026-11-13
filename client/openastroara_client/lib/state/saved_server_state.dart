@@ -42,7 +42,8 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
 
 final savedServersProvider =
     AsyncNotifierProvider<SavedServersNotifier, List<AraServer>>(
-        SavedServersNotifier.new);
+      SavedServersNotifier.new,
+    );
 
 /// The canonical **active** server, or null if none is saved yet.
 ///
@@ -51,16 +52,22 @@ final savedServersProvider =
 /// the end, so reconnecting an older rig makes it the active one). Every
 /// per-server API construction routes through here — never reach for
 /// `savedServersProvider…last` at a call site — so an explicit multi-server
-/// switcher (§55.1) only has to change this one definition.
-final activeServerProvider = Provider<AraServer?>((ref) {
+/// switcher (§55.1) only has to change this one definition ([activeServerIn]).
+final activeServerProvider = Provider<AraServer?>(
+  (ref) => activeServerIn(ref.watch(savedServersProvider)),
+);
+
+/// The rule behind [activeServerProvider], for a reader that must see every
+/// update of the list (the provider drops a server equal under `==`).
+AraServer? activeServerIn(AsyncValue<List<AraServer>>? saved) {
   // asData?.value is null while the session's server list is still loading (the
   // first load, which also wipes the legacy stored list) or on error, and the
   // list once it's data — so a null
   // here means "no active server yet", whether not-yet-loaded or genuinely empty.
   // Both collapse to the same safe, retryable outcome at the call site.
-  final servers = ref.watch(savedServersProvider).asData?.value;
+  final servers = saved?.asData?.value;
   return (servers == null || servers.isEmpty) ? null : servers.last;
-});
+}
 
 /// Awaitable variant of [activeServerProvider] for providers that must not
 /// collapse "still loading the session list" into "no server" (e.g. a panel
