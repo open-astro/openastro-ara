@@ -76,8 +76,8 @@ namespace OpenAstroAra.Test {
             // next poll, and the reconnector's retained-device fallback sees nothing afterwards.
             var ws = new Mock<IWsBroadcaster>();
             var events = new List<(string Type, JsonElement Payload)>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
                 .Returns(Task.CompletedTask);
             using var svc = new FocuserService(events: new EquipmentEventPublisher(ws.Object));
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);

@@ -156,8 +156,8 @@ namespace OpenAstroAra.Test {
 
             var events = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p)); onEvent?.Invoke(t); })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p)); onEvent?.Invoke(t); })
                 .Returns(Task.CompletedTask);
 
             var posted = new List<NotificationDto>();
@@ -221,7 +221,7 @@ namespace OpenAstroAra.Test {
             Assert.That(started, Has.Count.EqualTo(1));
             Assert.That(started[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("smart"));
             Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusShotComplete), Is.EqualTo(2));
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, rig.Moves[^1]);
             var record = rig.Tracker.Snapshot();
             Assert.That((record.CompletedSteps, record.TotalSteps), Is.EqualTo((2, AutofocusSweepService.SmartMaxShots)),
@@ -240,7 +240,7 @@ namespace OpenAstroAra.Test {
             var started = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusStarted).ToList();
             Assert.That(started, Has.Count.EqualTo(1));
             Assert.That(started[0].Payload.GetProperty("mode").GetString(), Is.EqualTo("classic"));
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic),
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token),
                 "never-calibrated is not a fallback — Classic IS the calibrator");
         }
 
@@ -565,7 +565,11 @@ namespace OpenAstroAra.Test {
             // reads 1.3 (< 1.5 × 0.97) so the run ends at 10,188 after a confirmation frame — five shots.
             var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
                 skyHfr: (capture, position) => capture switch {
-                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.3, _ => 1.3,
+                    1 => 1.5,
+                    2 => 2.6,
+                    3 => 2.0,
+                    4 => 1.3,
+                    _ => 1.3,
                 });
             using var _ = rig.Service;
 
@@ -588,7 +592,11 @@ namespace OpenAstroAra.Test {
         public async Task A_vertex_shot_that_is_not_sharper_returns_to_the_centre() {
             var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
                 skyHfr: (capture, position) => capture switch {
-                    1 => 1.5, 2 => 2.6, 3 => 2.0, 4 => 1.49, _ => 1.5,
+                    1 => 1.5,
+                    2 => 2.6,
+                    3 => 2.0,
+                    4 => 1.49,
+                    _ => 1.5,
                 });
             using var _ = rig.Service;
 
@@ -663,7 +671,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(3), "shot 1 + wrong-direction shot 2 + reversed shot 3");
             Assert.That(rig.Moves[^1], Is.GreaterThan(StartPosition), "the final position is on the REAL best's side");
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, rig.Moves[^1]);
         }
 
@@ -736,7 +744,7 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.CaptureCount(), Is.EqualTo(3), "three shots is the Smart budget — never a fourth");
             Assert.That(position2, Is.Not.Null);
             Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the trim was worse — keep shot 2's position");
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, position2!.Value);
         }
 
@@ -798,7 +806,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(3));
             Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the starless trim must not win the comparison");
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, position2!.Value);
         }
 
@@ -929,7 +937,7 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.CaptureCount(), Is.EqualTo(3), "heuristic wrong → one reversal shot");
             var shot1 = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
             Assert.That(shot1.Payload.GetProperty("direction_source").GetString(), Is.EqualTo("heuristic"));
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
         }
 
         [Test]
@@ -949,7 +957,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(3));
             Assert.That(rig.Moves[^1], Is.GreaterThan(StartPosition), "the reversal landed on the real best's side");
-            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic.Token));
         }
 
         [Test]

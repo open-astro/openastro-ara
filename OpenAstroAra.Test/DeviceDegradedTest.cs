@@ -49,8 +49,8 @@ namespace OpenAstroAra.Test {
             public readonly List<JsonElement> Actions = new();
             public Rig() {
                 var ws = new Mock<IWsBroadcaster>();
-                ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                    .Callback<string, JsonElement, CancellationToken>((t, e, _) => {
+                ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                    .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, e, _) => {
                         if (t == WsEventCatalog.EquipmentFaultActionTaken) { lock (Actions) { Actions.Add(e); } }
                     })
                     .Returns(Task.CompletedTask);

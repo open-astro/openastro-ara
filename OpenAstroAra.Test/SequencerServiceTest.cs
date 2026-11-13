@@ -17,8 +17,8 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
@@ -546,8 +546,8 @@ namespace OpenAstroAra.Test {
             frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sid);
             var scopeAtEvent = new System.Collections.Concurrent.ConcurrentDictionary<string, Guid?>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(b => b.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-              .Returns<string, JsonElement, CancellationToken>((type, _, _) => {
+            ws.Setup(b => b.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+              .Returns<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((type, _, _) => {
                   scopeAtEvent.TryAdd(type, CaptureSessionScope.Current);
                   return Task.CompletedTask;
               });
@@ -2120,7 +2120,7 @@ namespace OpenAstroAra.Test {
             // Ordered (type, payload) pairs for tests that assert payload fields, not just types.
             public System.Collections.Generic.IReadOnlyCollection<(string Type, JsonElement Payload)> Records => _records;
             public long CurrentSequence => _events.Count;
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 _events.Enqueue(eventType);
                 _records.Enqueue((eventType, payload));
                 return Task.CompletedTask;

@@ -42,7 +42,7 @@ namespace OpenAstroAra.Test {
             private readonly List<(string Type, JsonElement Payload)> _events = new();
             public long CurrentSequence => Snapshot().Count;
 
-            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 lock (_events) {
                     _events.Add((eventType, payload.Clone()));
                 }
@@ -75,7 +75,7 @@ namespace OpenAstroAra.Test {
 
         private static (EquipmentFaultHub Hub, List<EquipmentFaultEvent> Faults) Hub() {
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             var hub = new EquipmentFaultHub(ws.Object);
             var faults = new List<EquipmentFaultEvent>();
@@ -134,7 +134,7 @@ namespace OpenAstroAra.Test {
 
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureComplete.Token }));
             Assert.That(events[1].Payload.GetProperty("frame_id").GetString(),
                 Is.EqualTo(events[0].Payload.GetProperty("frame_id").GetString()), "complete pairs with its own start");
             Assert.That(events[0].Payload.GetProperty("kind").GetString(), Is.EqualTo("analysis"));
@@ -163,7 +163,7 @@ namespace OpenAstroAra.Test {
 
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureFailed.Token }));
             Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.EqualTo("aborted"));
             lock (faults) {
                 Assert.That(faults.Where(f => f.Kind == EquipmentFaultKind.StallTimeout), Is.Empty,
@@ -195,7 +195,7 @@ namespace OpenAstroAra.Test {
             await capture.WaitAsync(TimeSpan.FromSeconds(10));
 
             Assert.That(ws.Exposure().Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureComplete.Token }));
         }
 
         [Test]
@@ -212,7 +212,7 @@ namespace OpenAstroAra.Test {
             await Assert.CatchAsync<OperationCanceledException>(() => capture.WaitAsync(TimeSpan.FromSeconds(10)));
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureFailed.Token }));
             Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.EqualTo("cancelled"));
         }
 
@@ -228,8 +228,8 @@ namespace OpenAstroAra.Test {
             await Assert.CatchAsync<CameraUnavailableException>(() => svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None));
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] {
-                WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed,
-                WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+                WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureFailed.Token,
+                WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureFailed.Token }));
             Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.Not.EqualTo("cancelled").And.Not.EqualTo("aborted"));
             lock (faults) {
                 Assert.That(faults.Select(f => f.Kind), Does.Contain(EquipmentFaultKind.OpError));
@@ -256,7 +256,7 @@ namespace OpenAstroAra.Test {
 
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureFailed.Token }));
             Assert.That(events[1].Payload.GetProperty("frame_id").GetString(),
                 Is.EqualTo(events[0].Payload.GetProperty("frame_id").GetString()));
             lock (faults) {
@@ -313,7 +313,7 @@ namespace OpenAstroAra.Test {
             await svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None);
 
             Assert.That(ws.Exposure().Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
+                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted.Token, WsEventCatalog.CameraExposureComplete.Token }));
         }
 
         /// <summary>#1450 — a REST capture the §29 pre-capture check refuses: [refuse] runs after the
@@ -334,7 +334,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the refused frame was never reported");
 
             var events = ws.Exposure();
-            Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] { WsEventCatalog.CameraExposureFailed }),
+            Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] { WsEventCatalog.CameraExposureFailed.Token }),
                 "failed with no started: the shutter never opened");
             Assert.That(box.Puts.Where(p => p.Path.EndsWith("/startexposure", StringComparison.Ordinal)), Is.Empty);
             Assert.That(events[0].Payload.GetProperty("frame_id").GetString(), Is.EqualTo(accepted.FrameId));
