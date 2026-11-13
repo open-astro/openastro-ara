@@ -15,15 +15,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
 using OpenAstroAra.Server;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
-using System;
-using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 // The service is a BackgroundService that these tests never start; there is nothing to dispose.
 #pragma warning disable CA2000
