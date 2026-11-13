@@ -1,4 +1,4 @@
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/gestures.dart' show kLongPressTimeout;
@@ -74,6 +74,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoPicker), findsOneWidget);
       expect(find.byKey(const Key('simple-wheel-android')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "Android's wheel steps with a screen reader's swipe, as the iOS wheel does",
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      final picks = await _pump(tester, platform: TargetPlatform.android);
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      final node = tester.getSemantics(
+        find.byKey(const Key('simple-wheel-android')),
+      );
+      expect(node.value, '× 10');
+      expect(node.increasedValue, '× 20');
+      expect(node.decreasedValue, '× 5');
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.increase),
+        isTrue,
+      );
+      tester
+          .widget<Semantics>(find.byKey(const Key('simple-wheel-android')))
+          .properties
+          .onIncrease!();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(picks, [20]);
+      handle.dispose();
     },
   );
 
@@ -202,6 +231,74 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(sets.length, held, reason: 'let go, it stops');
+    });
+
+    testWidgets(
+      'holding + then losing the touch (a call, a system swipe) stops it',
+      (tester) async {
+        final sets = await pumpCount(tester);
+        final hold = await tester.startGesture(
+          tester.getCenter(find.byKey(const Key('n-up'))),
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+        await tester.pump(const Duration(milliseconds: 200));
+        await hold.cancel();
+        await tester.pump();
+        final held = sets.length;
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(sets.length, held, reason: 'a cancelled hold stops');
+      },
+    );
+
+    testWidgets('holding + while the row narrows and the buttons go stops it', (
+      tester,
+    ) async {
+      var width = 300.0;
+      var value = 10;
+      late StateSetter resize;
+      final sets = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  resize = setState;
+                  return SizedBox(
+                    width: width,
+                    child: SimpleCountField(
+                      id: 'n',
+                      label: 'Frames',
+                      value: value,
+                      onChanged: (n) => setState(() {
+                        value = n;
+                        sets.add(n);
+                      }),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('n-up'))),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 200));
+      resize(() => width = 93);
+      await tester.pump();
+      expect(find.byKey(const Key('n-up')), findsNothing);
+      final held = sets.length;
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(sets.length, held, reason: 'no button, no repeat');
     });
 
     testWidgets('- and + step by one and stop at 1', (tester) async {

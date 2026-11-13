@@ -7,6 +7,7 @@ import 'package:openastroara/services/achievements_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/achievements_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/stats/achievements_section.dart';
 import 'pull_refresh.dart';
 
@@ -102,6 +103,30 @@ void main() {
     expect(tester.getTopLeft(find.byKey(const Key('stats-medal-targets_10'))).dx,
         lessThan(tester.getTopLeft(find.byKey(const Key('stats-medal-hours_10'))).dx),
         reason: 'earned medals first on the shelf');
+  });
+
+  testWidgets('a medal keeps its title and progress at large text, and the progress reads', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = _FakeAchievementsClient(const StatsAchievements(
+      totalLightFrames: 906,
+      milestones: [
+        StatsMilestone(id: 'hours_100', title: 'A long title on two lines', description: '100 hours',
+            achieved: false, threshold: 100, current: 7),
+      ],
+    ));
+    for (final scale in [1.0, 1.5, 2.0]) {
+      await tester.pumpWidget(MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+        child: _app(const [_server], api),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'no overflow at ${scale}x text');
+    }
+    final progress = tester.widget<Text>(find.text('7 / 100'));
+    expect(progress.style!.color, AraColors.textSecondary,
+        reason: 'information, not a disabled control: 4.5:1 on the panel');
   });
 
   testWidgets('shows the connect hint when no server is saved', (tester) async {

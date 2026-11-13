@@ -211,9 +211,11 @@ class _Achievements extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(height: 8),
-          // Medals on a shelf that scrolls sideways, earned ones first.
+          // Medals on a shelf that scrolls sideways, earned ones first. The
+          // ring and gaps are fixed; the two title lines and the progress
+          // line grow with the user's text size.
           SizedBox(
-            height: 132,
+            height: 64 + MediaQuery.textScalerOf(context).scale(68),
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -320,7 +322,7 @@ class _MilestoneBadge extends StatelessWidget {
                   fontSize: 11,
                   color: achieved
                       ? AraColors.accentConnected
-                      : AraColors.textDisabled),
+                      : AraColors.textSecondary),
             ),
           ],
         ),

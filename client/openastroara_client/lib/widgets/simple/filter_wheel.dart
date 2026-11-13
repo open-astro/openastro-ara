@@ -497,11 +497,22 @@ class _CellState extends State<_Cell> {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: tint.label,
+                                  // Dark shadows, tight to wide: one alone
+                                  // left the white L on the yellow and
+                                  // green under 2:1.
                                   shadows: filterSpectrum(widget.slot.name)
                                       ? const [
                                           Shadow(
                                             color: AraColors.glassDark,
-                                            blurRadius: 3,
+                                            blurRadius: 1,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 1.5,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 4,
                                           ),
                                         ]
                                       : null,

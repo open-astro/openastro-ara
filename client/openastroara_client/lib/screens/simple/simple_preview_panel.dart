@@ -1038,35 +1038,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
                     // wheel, and on Android its flat number picker with
                     // the pick between two accent lines.
                     child: Theme.of(context).platform == TargetPlatform.android
-                        ? Stack(
-                            key: const Key('simple-wheel-android'),
-                            children: [
-                              ListWheelScrollView(
-                                itemExtent: 44,
-                                controller: controller,
-                                physics: const FixedExtentScrollPhysics(),
-                                diameterRatio: 1000,
-                                overAndUnderCenterOpacity: 0.5,
-                                onSelectedItemChanged: (i) => _spun = items[i],
-                                children: [for (final o in items) label(o)],
-                              ),
-                              IgnorePointer(
-                                child: Center(
-                                  child: Container(
-                                    height: 44,
-                                    decoration: const BoxDecoration(
-                                      border: Border.symmetric(
-                                        horizontal: BorderSide(
-                                          color: AraColors.linkText,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
+                        ? _androidWheel(controller, items, label)
                         : CupertinoPicker(
                             itemExtent: 44,
                             scrollController: controller,
@@ -1079,6 +1051,57 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Android's flat number picker. ListWheelScrollView, unlike
+  /// CupertinoPicker, gives a screen reader no value or swipe to step, so
+  /// they are added here.
+  Widget _androidWheel(
+    FixedExtentScrollController controller,
+    List<T> items,
+    Widget Function(T) label,
+  ) {
+    final i = items.indexOf(_spun);
+    final step = SimpleWheelKeys.stepper(controller, items.length);
+    return Semantics(
+      key: const Key('simple-wheel-android'),
+      container: true,
+      value: widget.format(_spun),
+      increasedValue: i < items.length - 1 ? widget.format(items[i + 1]) : null,
+      decreasedValue: i > 0 ? widget.format(items[i - 1]) : null,
+      onIncrease: i < items.length - 1 ? () => step(1) : null,
+      onDecrease: i > 0 ? () => step(-1) : null,
+      child: ExcludeSemantics(
+        child: Stack(
+          children: [
+            ListWheelScrollView(
+              itemExtent: 44,
+              controller: controller,
+              physics: const FixedExtentScrollPhysics(),
+              diameterRatio: 1000,
+              overAndUnderCenterOpacity: 0.5,
+              onSelectedItemChanged: (i) => setState(() => _spun = items[i]),
+              children: [for (final o in items) label(o)],
+            ),
+            IgnorePointer(
+              child: Center(
+                child: Container(
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(
+                        color: AraColors.linkText,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1136,7 +1159,7 @@ class _SimpleCountFieldState extends State<SimpleCountField> {
 
   @override
   void dispose() {
-    _repeat?.cancel();
+    _stopRepeat();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -1160,26 +1183,39 @@ class _SimpleCountFieldState extends State<SimpleCountField> {
         widget.onChanged != null &&
         (step < 0 ? widget.value > widget.min : widget.value < widget.max);
     void go() => _set(widget.value + step, step: true);
-    return GestureDetector(
-      onLongPressStart: enabled
-          ? (_) => _repeat = Timer.periodic(
-              const Duration(milliseconds: 90),
-              (_) => go(),
-            )
-          : null,
-      onLongPressEnd: (_) => _repeat?.cancel(),
-      child: IconButton(
-        key: Key('${widget.id}-$dir'),
-        style: IconButton.styleFrom(
-          backgroundColor: AraColors.tileFill,
-          minimumSize: const Size(44, 48),
-          padding: EdgeInsets.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    // The hold ends on the pointer, not the gesture: a long press already
+    // won reports no end when the touch is cancelled (a call, a system swipe).
+    return Listener(
+      onPointerUp: (_) => _stopRepeat(),
+      onPointerCancel: (_) => _stopRepeat(),
+      child: GestureDetector(
+        onLongPressStart: enabled
+            ? (_) {
+                _stopRepeat();
+                _repeat = Timer.periodic(
+                  const Duration(milliseconds: 90),
+                  (_) => go(),
+                );
+              }
+            : null,
+        child: IconButton(
+          key: Key('${widget.id}-$dir'),
+          style: IconButton.styleFrom(
+            backgroundColor: AraColors.tileFill,
+            minimumSize: const Size(44, 48),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: enabled ? go : null,
+          icon: Icon(icon, semanticLabel: '${widget.label}, $label'),
         ),
-        onPressed: enabled ? go : null,
-        icon: Icon(icon, semanticLabel: '${widget.label}, $label'),
       ),
     );
+  }
+
+  void _stopRepeat() {
+    _repeat?.cancel();
+    _repeat = null;
   }
 
   @override
@@ -1191,6 +1227,8 @@ class _SimpleCountFieldState extends State<SimpleCountField> {
     return LayoutBuilder(
       builder: (context, box) {
         final buttons = box.maxWidth >= 2 * 44 + 2 * AraSpace.s4 + 64;
+        // A button removed mid-hold sends no pointer up to stop it.
+        if (!buttons) _stopRepeat();
         return Row(
           spacing: AraSpace.s4,
           children: [
