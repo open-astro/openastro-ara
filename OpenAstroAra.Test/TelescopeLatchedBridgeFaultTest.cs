@@ -256,7 +256,7 @@ namespace OpenAstroAra.Test {
             using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never connected");
-            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+            await WaitForAsync(() => svc.IsCleanlyConnected, TimeSpan.FromSeconds(15),
                 "a driver that always refuses an unrelated property still counts as clean (not latched): the ladder must be able to recover it");
 
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
@@ -268,7 +268,7 @@ namespace OpenAstroAra.Test {
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.RightAscensionHours is 6.0,
                 TimeSpan.FromSeconds(15), "the position never came back after the reconnect");
-            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15),
+            await WaitForAsync(() => svc.IsCleanlyConnected, TimeSpan.FromSeconds(15),
                 "after the reconnect the mount reads cleanly apart from Slewing: recovered, as before this change");
             await WaitForPositionReadsAsync(box, PositionReads(box), 2);
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
@@ -279,7 +279,7 @@ namespace OpenAstroAra.Test {
         // the mount is Connected but has no clean read; once the bridge answers, it has.
         [Test]
         [Category("bench")]
-        public async Task HasCleanReadSinceConnect_is_false_while_the_bridge_is_still_latched_after_a_reconnect() {
+        public async Task IsCleanlyConnected_is_false_while_the_bridge_is_still_latched_after_a_reconnect() {
             var position = "6.0";
             await using var box = ScriptedAlpacaDevice.Start(Mount(() => Volatile.Read(ref position), () => "false"));
             var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
@@ -287,17 +287,17 @@ namespace OpenAstroAra.Test {
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
             using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
-            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "a healthy mount's first tick is clean");
+            await WaitForAsync(() => svc.IsCleanlyConnected, TimeSpan.FromSeconds(15), "a healthy mount's first tick is clean");
 
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 1, "latched");
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
             await WaitForPositionReadsAsync(box, PositionReads(box), 3);
-            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "Connected, but every read still fails: not recovered");
+            Assert.That(svc.IsCleanlyConnected, Is.False, "Connected, but every read still fails: not recovered");
 
             Volatile.Write(ref position, "6.0");
-            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "the first clean tick after the bridge recovers");
+            await WaitForAsync(() => svc.IsCleanlyConnected, TimeSpan.FromSeconds(15), "the first clean tick after the bridge recovers");
         }
 
         // #1246 — when the Slewing read is latched too, a goto this daemon saw start holds the trip
@@ -343,7 +343,7 @@ namespace OpenAstroAra.Test {
             hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
             using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
-            await WaitForAsync(() => svc.HasCleanReadSinceConnect, TimeSpan.FromSeconds(15), "never connected cleanly");
+            await WaitForAsync(() => svc.IsCleanlyConnected, TimeSpan.FromSeconds(15), "never connected cleanly");
             int ConnectedPuts() => box.Puts.Count(p => p.Path.EndsWith("/connected", StringComparison.Ordinal));
             var before = ConnectedPuts();
 
@@ -357,7 +357,7 @@ namespace OpenAstroAra.Test {
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 1
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "rung 1 never reconnected");
             await WaitForPositionReadsAsync(box, PositionReads(box), 2);
-            Assert.That(svc.HasCleanReadSinceConnect, Is.False, "still latched after rung 1");
+            Assert.That(svc.IsCleanlyConnected, Is.False, "still latched after rung 1");
             var afterRung1 = ConnectedPuts();
 
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 2: same device

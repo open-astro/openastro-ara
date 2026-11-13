@@ -1,0 +1,3 @@
+### Changed (equipment)
+
+- **The mount moves onto the shared device lifecycle, and the fault ladder waits for a clean read before it calls Rotator and Dome recovered** (#1696): the telescope now connects, refreshes, trips on a lost connection and records the user's connect or disconnect through the same lifecycle module as the other eight devices, so a mount you disconnected by hand is left alone by recovery. After a reconnect the fault ladder counts a Rotator, Dome or mount as recovered only once a refresh has read it cleanly, not as soon as it answers Connected; a driver that does not implement its essential read still counts as clean.

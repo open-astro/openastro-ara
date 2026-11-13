@@ -474,9 +474,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             TimeSpan? landedAt = null; // when the state first left Connecting
             while (true) {
                 var state = await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
-                // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
-                // reconnect answers Connected while every read fails. Wait for one clean tick, or let
-                // the confirm window run out and walk the next rung.
+                // #1246 — Connected is not recovered: a bridge still latched after the reconnect answers
+                // Connected while every read fails. Wait for one clean tick, or let the confirm window run
+                // out and walk the next rung.
                 if (state == EquipmentConnectionState.Connected && IsCleanlyConnected(type)) {
                     return true;
                 }
@@ -505,10 +505,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    // #1246 — Connected is "recovered" for every device but the mount, whose bridge can answer
-    // Connected while every read fails after a latch; the mount also needs a clean read since connect.
-    private bool IsCleanlyConnected(DeviceType type) =>
-        type.Canonical() != DeviceType.Telescope || _telescope is null || _telescope.HasCleanReadSinceConnect;
+    // #1246 — Connected is not "recovered": a bridge can answer Connected while every read fails after a
+    // latch. The device's lifecycle says whether a clean read followed the connect (ADR 0011 rule 2); a
+    // device not on the module yet answers true (EquipmentReconnector.IsCleanlyConnected).
+    private bool IsCleanlyConnected(DeviceType type) => _reconnector?.IsCleanlyConnected(type) ?? true;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort recovery attempt: a SetTracking/read fault counts as a failed attempt; it must never abort the episode. CA1031's log-and-recover boundary applies.")]

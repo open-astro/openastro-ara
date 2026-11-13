@@ -93,6 +93,8 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
 
     public DesiredConnection? DesiredConnection => _lifecycle.Desired;
 
+    public bool IsCleanlyConnected => _lifecycle.HasCleanReadSinceConnect;
+
     public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     public Task<DomeDto?> GetAsync(CancellationToken ct) {
