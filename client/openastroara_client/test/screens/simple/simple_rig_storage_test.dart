@@ -15,6 +15,7 @@ import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/storage/storage_drive_dialog.dart';
@@ -24,6 +25,9 @@ import '../../support/storage_fixture.dart';
 class _FakeApi extends StorageDevicesApi {
   _FakeApi() : super(_server);
   final calls = <String>[];
+  // What the daemon does to the Storage section when a disk is configured.
+  void Function()? onConfigure;
+  String? configuredDirectory;
   String checkCode = 'clean';
   bool checkFails = false;
   StorageConfigureOutcome eject_ = const StorageConfigureOutcome(
@@ -53,7 +57,12 @@ class _FakeApi extends StorageDevicesApi {
     calls.add(
       'configure $uuid format=$format label=$confirmLabel fs=$filesystem',
     );
-    return const StorageConfigureOutcome(success: true, code: 'ok');
+    onConfigure?.call();
+    return StorageConfigureOutcome(
+      success: true,
+      code: 'ok',
+      saveDirectory: configuredDirectory,
+    );
   }
 
   Future<StorageContents> Function(String uuid) contents_ = (_) async =>
@@ -96,6 +105,7 @@ Future<(ProviderContainer, _FakeApi)> _pump(
   Future<StorageSpace?> Function()? space,
   List<StorageDevice> devices = const [_store, _ntfs],
   Future<List<StorageDevice>> Function()? readDevices,
+  FakeStorageApi? profile,
 }) async {
   tester.view.physicalSize = const Size(800, 1400);
   tester.view.devicePixelRatio = 1;
@@ -105,7 +115,7 @@ Future<(ProviderContainer, _FakeApi)> _pump(
     overrides: [
       simpleModeActiveProvider.overrideWithValue(simple),
       activeServerProvider.overrideWithValue(_server),
-      profileApiProvider.overrideWithValue(FakeStorageApi()),
+      profileApiProvider.overrideWithValue(profile ?? FakeStorageApi()),
       storageDevicesApiFactoryProvider.overrideWithValue((_) => api),
       storageDevicesProvider.overrideWith(
         (ref) => readDevices?.call() ?? Future.value(devices),
@@ -653,6 +663,31 @@ void main() {
       await tester.pump(kSimpleResultLife); // the pill's timer
     },
   );
+
+  testWidgets('a Save after Use Disk sends the tag the disk change left', (
+    tester,
+  ) async {
+    final profile = FakeStorageApi();
+    final (c, api) = await _pump(tester, profile: profile);
+    expect(profile.gets, 1, reason: 'the Storage block loads the section');
+    // The daemon writes the section itself on configure: a new tag.
+    api.configuredDirectory = '/mnt/store';
+    api.onConfigure = () {
+      profile.serve = profile.serve.copyWith(saveDirectory: '/mnt/store');
+      profile.etag = '"after-configure"';
+    };
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.byIcon(Icons.usb).first);
+    await _tap(tester, find.widgetWithText(FilledButton, 'Use Disk'));
+    final storage = c.read(storageSettingsProvider.notifier);
+    storage.setBackupRetentionCount(5);
+    await storage.save(profile);
+    expect(profile.ifMatches, ['"after-configure"']);
+    expect(profile.puts.single.saveDirectory, '/mnt/store');
+    expect(profile.puts.single.backupRetentionCount, 5);
+    expect(c.read(storageSettingsProvider).conflict, isFalse);
+    await tester.pump(kSimpleResultLife); // the pill's timer
+  });
 
   testWidgets('erasing a disk stays inline and needs its name typed', (
     tester,
