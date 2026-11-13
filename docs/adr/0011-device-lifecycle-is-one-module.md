@@ -4,7 +4,7 @@ Status: proposed
 
 ## Context
 
-The daemon has ten device classes (Camera, Telescope, Focuser, FilterWheel, Rotator, Dome, Switch, FlatDevice, SafetyMonitor, ObservingConditions), and each writes its own connect, disconnect, forget, connect supersede, refresh loop and connection-state publish. A fix reaches only the devices someone remembers: `DeviceHealthWatch` covers four of the ten, and its own comment says the probe alone misses a bridge that answers Connected while every read fails. Telescope has its own "clean read since connect" gate, special-cased by type in `FaultReactionService`. Each class builds its Alpaca client inline, so a lifecycle test has to dial a dead port or run a simulator.
+On 2026-11-08 the daemon had ten device classes (Camera, Telescope, Focuser, FilterWheel, Rotator, Dome, Switch, FlatDevice, SafetyMonitor, ObservingConditions), and each wrote its own connect, disconnect, forget, connect supersede, refresh loop and connection-state publish. A fix reached only the devices someone remembered: `DeviceHealthWatch` covered four of the ten, and its own comment said the probe alone misses a bridge that answers Connected while every read fails. Telescope had its own "clean read since connect" gate, special-cased by type in `FaultReactionService`. Each class built its Alpaca client inline, so a lifecycle test had to dial a dead port or run a simulator. Eight of the ten have since moved to the module ([#1761](https://github.com/open-astro/openastro-ara/pull/1761), [#1818](https://github.com/open-astro/openastro-ara/pull/1818)); Telescope and Camera have not.
 
 ## Decision
 
