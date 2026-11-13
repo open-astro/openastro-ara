@@ -96,10 +96,15 @@ namespace OpenAstroAra.Test {
 
         /// <summary>TripLatchedBridgeFault sets Error under the gate and publishes the fault
         /// after releasing it, so a wait on the state alone can observe Error with the fault
-        /// still in flight (#1255: 0 rows under CI load). Wait for the row, then the state.</summary>
+        /// still in flight (#1255: 0 rows under CI load). Wait for the row, then the state. Counts trips
+        /// (Disconnected) only: the latched RA/Dec reads also feed read health (ADR 0011 rule 2).</summary>
         private static async Task WaitForTripAsync(TelescopeService svc, List<EquipmentFaultEvent> faults, int count, string failure) {
-            await WaitForAsync(() => { lock (faults) { return faults.Count >= count; } }, TimeSpan.FromSeconds(15), failure);
+            await WaitForAsync(() => Trips(faults).Count >= count, TimeSpan.FromSeconds(15), failure);
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Error, TimeSpan.FromSeconds(15), failure);
+        }
+
+        private static List<EquipmentFaultEvent> Trips(List<EquipmentFaultEvent> faults) {
+            lock (faults) { return faults.Where(f => f.Kind == EquipmentFaultKind.Disconnected).ToList(); }
         }
 
         private static async Task<EquipmentConnectionState?> StateOf(TelescopeService svc) =>
@@ -154,9 +159,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "never reconnected");
             await WaitForPositionReadsAsync(box, PositionReads(box), 3); // refresh ticks on the still-latched bridge
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "still latched after the reconnect is the same episode");
-            lock (faults) {
-                Assert.That(faults, Has.Count.EqualTo(1), "no second trip while the episode is open");
-            }
+            Assert.That(Trips(faults), Has.Count.EqualTo(1), "no second trip while the episode is open");
 
             // The bridge recovers (reads answer), then latches again later: a NEW episode trips.
             Volatile.Write(ref position, "6.0");
@@ -164,9 +167,7 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(15), "the position never came back after the bridge recovered");
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 2, "a new episode must trip again");
-            lock (faults) {
-                Assert.That(faults, Has.Count.EqualTo(2));
-            }
+            Assert.That(Trips(faults), Has.Count.EqualTo(2));
         }
 
         [Test]
@@ -322,7 +323,7 @@ namespace OpenAstroAra.Test {
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForPositionReadsAsync(box, PositionReads(box), 5);
             Assert.That(await StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "a goto the daemon saw start holds the trip while Slewing cannot answer");
-            lock (faults) { Assert.That(faults, Is.Empty); }
+            Assert.That(Trips(faults), Is.Empty);
 
             // Slewing answers again (false): the episode closes and the latch trips.
             Volatile.Write(ref slewing, "false");
@@ -354,13 +355,13 @@ namespace OpenAstroAra.Test {
 
             Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Latched));
             await WaitForTripAsync(svc, faults, 1, "latched");
-            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 1
+            Assert.That(svc.TryRecover(Device(box)), Is.True); // rung 1
             await WaitForAsync(() => StateOf(svc).Result == EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15), "rung 1 never reconnected");
             await WaitForPositionReadsAsync(box, PositionReads(box), 2);
             Assert.That(svc.IsCleanlyConnected, Is.False, "still latched after rung 1");
             var afterRung1 = ConnectedPuts();
 
-            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None); // rung 2: same device
+            Assert.That(svc.TryRecover(Device(box)), Is.True); // rung 2: same device
             await WaitForAsync(() => ConnectedPuts() >= afterRung1 + 2, TimeSpan.FromSeconds(15),
                 "rung 2 must send the disconnect/connect pair again instead of the idempotent no-op");
             var pair = box.Puts.Where(p => p.Path.EndsWith("/connected", StringComparison.Ordinal)).Select(p => p.Body).TakeLast(2).ToList();

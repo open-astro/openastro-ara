@@ -59,9 +59,12 @@ namespace OpenAstroAra.Test {
             public required EquipmentReconnector Reconnector { get; init; }
             public Rig(IDisposable service) { _service = service; }
             public FakeDeviceAdapter Current { get { lock (Fakes) { return Fakes[^1]; } } }
+            public int Built { get { lock (Fakes) { return Fakes.Count; } } }
             public void Dispose() => _service.Dispose();
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Wire hands each service to the Rig, which disposes it.")]
         private static Rig Make(string device, Action<FakeDeviceAdapter>? configure = null) {
             var fakes = new List<FakeDeviceAdapter>();
             T Track<T>(T fake) where T : FakeDeviceAdapter {
@@ -69,86 +72,104 @@ namespace OpenAstroAra.Test {
                 lock (fakes) { fakes.Add(fake); }
                 return fake;
             }
+            var ct = CancellationToken.None;
+            var type = Enum.Parse<DeviceType>(device);
+            var request = new ConnectRequestDto(Record(type));
             var services = new Mock<IServiceProvider>();
-            var store = new Mock<IEquipmentSelectionStore>();
-            IDisposable service;
-            DeviceType type;
-            Func<EquipmentConnectionState?> state;
-            Func<Task> connect;
-            switch (device) {
-                case "Rotator": {
-                        var s = new RotatorService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeRotatorDevice()) };
-                        services.Setup(p => p.GetService(typeof(IRotatorService))).Returns(s);
-                        (service, type) = (s, DeviceType.Rotator);
-                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                        break;
-                    }
-                case "Dome": {
-                        var s = new DomeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeDomeDevice()) };
-                        services.Setup(p => p.GetService(typeof(IDomeService))).Returns(s);
-                        (service, type) = (s, DeviceType.Dome);
-                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                        break;
-                    }
-                default: {
-                        var s = new TelescopeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeTelescopeDevice()) };
-                        services.Setup(p => p.GetService(typeof(ITelescopeService))).Returns(s);
-                        (service, type) = (s, DeviceType.Telescope);
-                        state = () => s.GetAsync(CancellationToken.None).Result?.State;
-                        connect = () => s.ConnectAsync(new ConnectRequestDto(Record(type)), null, CancellationToken.None);
-                        break;
-                    }
+            Rig Wire<TService>(TService s, Type contract, Func<TService, EquipmentConnectionState?> state,
+                    Func<TService, Task> connect) where TService : IDisposable {
+                services.Setup(p => p.GetService(contract)).Returns(s);
+                var store = new Mock<IEquipmentSelectionStore>();
+                store.Setup(x => x.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> { Record(type) });
+                var reconnector = new EquipmentReconnector(services.Object, store.Object, NullLogger<EquipmentReconnector>.Instance);
+                return new Rig(s) { Type = type, State = () => state(s), Connect = () => connect(s), Fakes = fakes, Reconnector = reconnector };
             }
-            store.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> { Record(type) });
-            var reconnector = new EquipmentReconnector(services.Object, store.Object, NullLogger<EquipmentReconnector>.Instance);
-            return new Rig(service) { Type = type, State = state, Connect = connect, Fakes = fakes, Reconnector = reconnector };
+            return device switch {
+                "Rotator" => Wire(new RotatorService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeRotatorDevice()) },
+                    typeof(IRotatorService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "Dome" => Wire(new DomeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeDomeDevice()) },
+                    typeof(IDomeService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "Telescope" => Wire(new TelescopeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeTelescopeDevice()) },
+                    typeof(ITelescopeService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "FilterWheel" => Wire(new FilterWheelService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeFilterWheelDevice()) },
+                    typeof(IFilterWheelService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "Focuser" => Wire(new FocuserService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeFocuserDevice()) },
+                    typeof(IFocuserService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "FlatDevice" => Wire(new FlatDeviceService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeFlatDevice()) },
+                    typeof(IFlatDeviceService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "ObservingConditions" => Wire(new ObservingConditionsService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeObservingConditionsDevice()) },
+                    typeof(IObservingConditionsService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "SafetyMonitor" => Wire(new SafetyMonitorService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeSafetyMonitorDevice()) },
+                    typeof(ISafetyMonitorService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "Switch" => Wire(new SwitchService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeSwitchDevice()) },
+                    typeof(ISwitchService), s => s.GetAsync(request.Device.UniqueId, ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                _ => throw new ArgumentOutOfRangeException(nameof(device), device, null),
+            };
         }
 
-        // The failure each device's gate looks at: the mount's gate is the #1193 latch, the others' their essential read.
-        private static void Break(FakeDeviceAdapter f, bool broken) {
-            if (f is FakeTelescopeDevice mount) {
-                mount.Latched = broken;
-            } else {
-                f.ReadFails = broken;
-            }
+        public static readonly string[] OnTheModule =
+            ["Rotator", "Dome", "Telescope", "FilterWheel", "Focuser", "FlatDevice", "ObservingConditions", "SafetyMonitor", "Switch"];
+
+        // SafetyMonitor is not here: a failed read trips it to Error at once (ADR 0011 rule 3), so it is never
+        // Connected-and-unreadable; the held-read case below covers its gate.
+        public static readonly string[] ReadableWhileFailing = [.. OnTheModule.Where(d => d != "SafetyMonitor")];
+
+        // Exactly this many failed reads, then the next one holds its tick: below the Switch's unreadable-ports trip
+        // (grace 2 + streak 10), so the device stays Connected-and-unread however slow the host is.
+        private const int FailedTicks = 3;
+
+        private static void Unreadable(FakeDeviceAdapter f) {
+            f.ReadPermits = new SemaphoreSlim(FailedTicks);
+            f.ReadFails = true;
         }
 
-        public static readonly string[] OnTheModule = ["Rotator", "Dome", "Telescope"];
+        private static void MakeReadable(FakeDeviceAdapter f) {
+            f.ReadFails = false;
+            f.ReadPermits!.Release(100); // the held read fails; the next tick reads cleanly
+        }
 
-        // The mount is not in this case: a latched read on an idle mount trips it to Error at once (#1193), so it
-        // is never Connected-and-unreadable on its first session; the next test covers it on the reconnect.
-        [TestCase("Rotator")]
-        [TestCase("Dome")]
+        [TestCaseSource(nameof(ReadableWhileFailing))]
         public async Task A_connected_device_is_not_cleanly_connected_until_a_tick_reads_it_cleanly(string device) {
-            using var rig = Make(device, f => Break(f, true));
+            using var rig = Make(device, Unreadable);
             await rig.Connect();
-            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected, "the connect");
-            await Task.Delay(200); // ten ticks that all fail
+            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected && rig.Current.FailedReads >= FailedTicks, "failed reads");
             Assert.That(rig.Reconnector.IsCleanlyConnected(rig.Type), Is.False, "Connected, but no clean read since the connect");
 
-            Break(rig.Current, false);
+            MakeReadable(rig.Current);
             await WaitForAsync(() => rig.Reconnector.IsCleanlyConnected(rig.Type), "the first clean read");
         }
 
         [TestCaseSource(nameof(OnTheModule))]
+        public async Task A_connected_device_is_not_cleanly_connected_while_its_first_read_is_in_flight(string device) {
+            using var hold = new ManualResetEventSlim(false);
+            using var rig = Make(device, f => f.HoldReads = hold);
+            await rig.Connect();
+            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected, "the connect");
+            Assert.That(rig.Reconnector.IsCleanlyConnected(rig.Type), Is.False, "Connected, but the first read has not landed");
+
+            hold.Set();
+            await WaitForAsync(() => rig.Reconnector.IsCleanlyConnected(rig.Type), "the first clean read");
+        }
+
+        [TestCaseSource(nameof(ReadableWhileFailing))]
         public async Task The_clean_read_gate_starts_over_on_every_connect(string device) {
             var built = 0;
-            using var rig = Make(device, f => Break(f, Interlocked.Increment(ref built) > 1)); // the second session starts unreadable
+            using var rig = Make(device, f => {
+                if (Interlocked.Increment(ref built) > 1) {
+                    Unreadable(f); // the second session starts unreadable
+                }
+            });
             await rig.Connect();
             await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected && rig.Reconnector.IsCleanlyConnected(rig.Type), "a clean first session");
 
-            // lost: the §42.3 trip. The mount's is the #1193 latch (it sets the episode flag the next session inherits).
-            if (rig.Current is FakeTelescopeDevice mount) { mount.Latched = true; } else { rig.Current.Answers = false; }
+            rig.Current.Answers = false; // lost: the §42.3 trip
             await WaitForAsync(() => rig.State() == EquipmentConnectionState.Error, "the trip");
             var outcome = await rig.Reconnector.RecoverAsync(rig.Type, CancellationToken.None);
             Assert.That(outcome.Dispatched, Is.EqualTo(1));
-            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected, "the reconnect");
-            await Task.Delay(200);
+            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected && rig.Current.FailedReads >= FailedTicks, "the reconnect's failed reads");
             Assert.That(rig.Reconnector.IsCleanlyConnected(rig.Type), Is.False, "the first session's clean read does not carry over");
 
-            Break(rig.Current, false);
+            MakeReadable(rig.Current);
             await WaitForAsync(() => rig.Reconnector.IsCleanlyConnected(rig.Type), "the new session's first clean read");
         }
 
@@ -196,22 +217,42 @@ namespace OpenAstroAra.Test {
         [TestCase("Rotator", DeviceType.Rotator)]
         [TestCase("Dome", DeviceType.Dome)]
         public async Task The_ladder_does_not_call_a_device_recovered_that_reconnects_but_reads_nothing(string device, DeviceType type) {
-            var actions = await RunLadderAsync(device, type, replacementReadsFail: true);
+            var (actions, _) = await RunLadderAsync(device, type, replacementReadsFail: true);
             Assert.That(actions, Does.Not.Contain("recovered"), $"Connected but unreadable is not recovered (actions: {string.Join(",", actions)})");
+        }
+
+        // Rung 2 on finds the device Connected from rung 1 but unread: each later rung must send the
+        // disconnect/connect pair again, not take the idempotent no-op and wait out the confirm window.
+        [TestCase("Rotator", DeviceType.Rotator)]
+        [TestCase("Dome", DeviceType.Dome)]
+        public async Task Each_later_rung_reconnects_a_device_that_is_connected_but_unread(string device, DeviceType type) {
+            var (_, built) = await RunLadderAsync(device, type, replacementReadsFail: true);
+            Assert.That(built, Is.GreaterThan(2), "the first session, rung 1's, and at least one more rung's");
+        }
+
+        [Test]
+        public async Task A_user_connect_to_a_connected_but_unread_device_stays_the_no_op() {
+            using var rig = Make("Rotator", f => f.ReadFails = true);
+            await rig.Connect();
+            await WaitForAsync(() => rig.State() == EquipmentConnectionState.Connected, "the connect");
+            await Task.Delay(100);
+            await rig.Connect();
+            await Task.Delay(100);
+            Assert.That(rig.Built, Is.EqualTo(1), "only the ladder reconnects a device that has not read cleanly");
         }
 
         [TestCase("Rotator", DeviceType.Rotator)]
         [TestCase("Dome", DeviceType.Dome)]
         public async Task The_ladder_calls_a_device_recovered_once_it_reads_cleanly(string device, DeviceType type) {
-            var actions = await RunLadderAsync(device, type, replacementReadsFail: false);
+            var (actions, _) = await RunLadderAsync(device, type, replacementReadsFail: false);
             Assert.That(actions, Does.Contain("recovered"), $"(actions: {string.Join(",", actions)})");
         }
 
-        private static async Task<List<string>> RunLadderAsync(string device, DeviceType type, bool replacementReadsFail) {
+        private static async Task<(List<string> Actions, int Built)> RunLadderAsync(string device, DeviceType type, bool replacementReadsFail) {
             var built = 0;
             using var rig = Make(device, f => {
                 if (Interlocked.Increment(ref built) > 1) {
-                    Break(f, replacementReadsFail);
+                    f.ReadFails = replacementReadsFail;
                 }
             });
             await rig.Connect();
@@ -235,7 +276,7 @@ namespace OpenAstroAra.Test {
             reaction.OnFault(new EquipmentFaultEvent(type, $"{type}-1", $"Bench {type}", EquipmentFaultKind.Disconnected,
                 "3 probes failed", DateTimeOffset.UtcNow));
             await reaction.WhenIdleAsync();
-            lock (actions) { return actions.ToList(); }
+            lock (actions) { return (actions.ToList(), rig.Built); }
         }
     }
 }

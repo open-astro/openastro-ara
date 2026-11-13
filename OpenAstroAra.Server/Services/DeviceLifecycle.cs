@@ -42,13 +42,15 @@ public interface IRecoverableDevice {
 
     /// <summary>The ladder's connect: dispatches like <c>ConnectAsync</c>, but refuses (false) when
     /// the user has disconnected the device. The check and the dispatch are one step under the
-    /// device's gate, so a user disconnect cannot land between them.</summary>
+    /// device's gate, so a user disconnect cannot land between them. Unlike <c>ConnectAsync</c>, a device
+    /// already Connected with no clean read since its connect is reconnected, not left as the no-op.</summary>
     bool TryRecover(DiscoveredDeviceDto device);
 
     /// <summary>#1246 — recovered, not just Connected: true once a refresh tick since the current connect
     /// read the device cleanly (ADR 0011 rule 2). A bridge that stays latched after a reconnect answers
     /// Connected while every read fails, and must walk the next rung rather than resume the run.
-    /// True while nothing is connected: the question is only asked of a device the ladder just connected.</summary>
+    /// False while the device is not Connected (Switch: true while none of its switches is connected);
+    /// both callers ask it only once the state reads Connected.</summary>
     bool IsCleanlyConnected { get; }
 }
 
@@ -84,7 +86,6 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private readonly Func<TDevice, Action>? _prepareSession;
     private readonly Action? _onConnected;
     private readonly bool _failedReadTrips;
-    private readonly Func<bool>? _reconnectSameDeviceLocked;
     private readonly ILogger _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
@@ -115,15 +116,11 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// <param name="failedReadTrips">A failed essential read or a failed connection probe is a lost connection:
     /// the device goes to Error with a Disconnected fault on that read or probe, instead of a degraded episode
     /// or a lost streak after their thresholds (SafetyMonitor, ADR 0011 rule 3: a dead monitor is never read as safe).</param>
-    /// <param name="reconnectSameDeviceLocked">Optional, asked under the gate: true makes a connect to the device already
-    /// connected a real reconnect, not the idempotent no-op (Telescope #1246: a still-latched bridge needs the
-    /// disconnect/connect pair to clear it).</param>
     public DeviceLifecycle(object owner, DeviceType type, string noun,
             Func<DiscoveredDeviceDto, TDevice> createDevice, Func<TDevice, DeviceRead> read,
             Action resetSessionLocked, int failedReadThreshold, ILogger logger,
             EquipmentEventPublisher? events, IEquipmentFaultSink? faults,
-            Func<TDevice, Action>? prepareSession = null, Action? onConnected = null, bool failedReadTrips = false,
-            Func<bool>? reconnectSameDeviceLocked = null) {
+            Func<TDevice, Action>? prepareSession = null, Action? onConnected = null, bool failedReadTrips = false) {
         _owner = owner;
         _type = type;
         _noun = noun;
@@ -133,7 +130,6 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         _prepareSession = prepareSession;
         _onConnected = onConnected;
         _failedReadTrips = failedReadTrips;
-        _reconnectSameDeviceLocked = reconnectSameDeviceLocked;
         _logger = logger;
         _events = events;
         _faults = faults;
@@ -205,7 +201,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         lock (Gate) {
             ObjectDisposedException.ThrowIf(_disposed, _owner);
             _desired = DesiredConnection.ConnectedByUser;
-            Dispatch(device);
+            Dispatch(device, recovering: false);
         }
         return Task.FromResult(Accepted($"{_noun}.connect", idempotencyKey));
     }
@@ -217,15 +213,18 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             if (_disposed || _desired == DesiredConnection.DisconnectedByUser) {
                 return false;
             }
-            Dispatch(device);
+            Dispatch(device, recovering: true);
             return true;
         }
     }
 
-    // Caller holds Gate. A connect to the device already connecting or connected is a no-op.
-    private void Dispatch(DiscoveredDeviceDto device) {
+    // Caller holds Gate. A connect to the device already connecting or connected is a no-op, except the
+    // ladder's dispatch to a device Connected with no clean read since its connect (#1246, ADR 0011 rule 2):
+    // a bridge that answers Connected while its reads fail needs the disconnect/connect pair again.
+    private void Dispatch(DiscoveredDeviceDto device, bool recovering) {
+        var unreadSession = recovering && _state == EquipmentConnectionState.Connected && !_cleanReadSinceConnect;
         if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-            && _device?.UniqueId == device.UniqueId && !(_reconnectSameDeviceLocked?.Invoke() ?? false)) {
+            && _device?.UniqueId == device.UniqueId && !unreadSession) {
             return;
         }
         // #1246 — the old session's Connected=false must reach the device BEFORE the new session's

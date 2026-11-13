@@ -39,6 +39,7 @@ namespace OpenAstroAra.Test {
             private readonly List<EquipmentFaultEvent> _faults = new();
             public void Publish(EquipmentFaultEvent fault) { lock (_faults) { _faults.Add(fault); } }
             public List<EquipmentFaultEvent> Faults { get { lock (_faults) { return _faults.ToList(); } } }
+            public List<EquipmentFaultEvent> Of(EquipmentFaultKind kind) => Faults.Where(f => f.Kind == kind).ToList();
         }
 
         private readonly List<FakeTelescopeDevice> _devices = new();
@@ -201,16 +202,16 @@ namespace OpenAstroAra.Test {
             await Task.Delay(200);
             Assert.That(StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "still the same episode: no second trip");
             Assert.That(svc.IsCleanlyConnected, Is.False, "Connected, but every read still fails: not recovered");
-            Assert.That(_faults.Faults, Has.Count.EqualTo(1));
+            Assert.That(_faults.Of(EquipmentFaultKind.Disconnected), Has.Count.EqualTo(1));
 
-            // The ladder's later rung connects the same device again: not the idempotent no-op.
+            // The ladder's later rung recovers the same device again: not the idempotent no-op.
             _configure = null;
-            await ConnectAsync(svc, Mount);
+            Assert.That(svc.TryRecover(Mount), Is.True);
             await WaitForAsync(() => Built == 3, "the real reconnect");
             Assert.That(Trace.IndexOf("mount-1:disconnect"), Is.LessThan(Trace.LastIndexOf("mount-1:connect")), "disconnect before connect");
             await ConnectedAsync(svc);
             await WaitForAsync(() => svc.IsCleanlyConnected, "the first clean tick after the bridge recovers");
-            Assert.That(_faults.Faults, Has.Count.EqualTo(1));
+            Assert.That(_faults.Of(EquipmentFaultKind.Disconnected), Has.Count.EqualTo(1));
         }
 
         [Test]
@@ -232,22 +233,29 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.State == "slewing", "a slew the watch has seen start");
 
             Current.Latched = true; // every read latches, the Slewing read too
-            await Task.Delay(200);
+            await WaitForAsync(() => _faults.Of(EquipmentFaultKind.Degraded).Count == 1, "read health on the latched RA/Dec reads");
             Assert.That(StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "never during a slew");
-            Assert.That(_faults.Faults, Is.Empty);
+            Assert.That(_faults.Of(EquipmentFaultKind.Disconnected), Is.Empty, "no trip while the goto is open");
 
             await WaitForAsync(() => StateOf(svc) == EquipmentConnectionState.Error, "the trip once the hold ran out");
         }
 
+        // ADR 0011 rule 2 — RA/Dec is the mount's essential read: a failure there counts, latch or not.
         [Test]
-        public async Task A_read_that_fails_without_the_latch_is_still_a_clean_read() {
+        public async Task A_generic_RA_failure_degrades_the_mount_and_holds_the_clean_read_gate_shut() {
             _configure = d => d.ReadFails = true; // RightAscension throws a generic error, not the bridge's phrase
             using var svc = Build();
             await ConnectAsync(svc, Mount);
             await ConnectedAsync(svc);
+            await WaitForAsync(() => _faults.Faults.Count == 1, "the degraded fault after the threshold");
+            Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.Degraded));
+            Assert.That(_faults.Faults.Single().Details, Does.Contain("CAA not responding"));
+            Assert.That(Current.FailedReads, Is.GreaterThanOrEqualTo(DeviceHealthTracker.DefaultThreshold));
+            Assert.That(svc.IsCleanlyConnected, Is.False, "every RA read failed: not recovered");
+            Assert.That(StateOf(svc), Is.EqualTo(EquipmentConnectionState.Connected), "read health, not a trip");
+
+            Current.ReadFails = false;
             await WaitForAsync(() => svc.IsCleanlyConnected, "the first clean read");
-            await Task.Delay(200);
-            Assert.That(_faults.Faults, Is.Empty, "no degraded episode beside the latch's own verdict");
         }
     }
 }

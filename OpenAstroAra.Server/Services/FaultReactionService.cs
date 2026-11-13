@@ -402,8 +402,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
             switch (state) {
                 case EquipmentConnectionState.Connected when !IsCleanlyConnected(fault.DeviceType):
-                    // #1246 — Connected but still latched (every read fails): not back. Re-dispatch
-                    // like the Error branch; the service's connect sends the disconnect/connect pair.
+                    // #1246 — Connected with no clean read since the connect (a latched bridge, failing
+                    // reads): not back. Re-dispatch like the Error branch; the lifecycle's recovery
+                    // dispatch sends the disconnect/connect pair (DeviceLifecycle.Dispatch).
                     if (!await TryReconnectAsync(fault.DeviceType).ConfigureAwait(false)) {
                         continue;
                     }

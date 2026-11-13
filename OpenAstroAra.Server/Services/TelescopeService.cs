@@ -55,11 +55,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // Internal for tests, like SlewWatch.
     internal TargetDisplayLatch TargetLatch { get; } = new();
 
-    // The mount's only failed essential read is the #1193 latch, which has its own verdict: a trip to Error and
-    // the ladder, or (a goto in flight) a hold for LatchedSlewHold. No degraded episode beside them, so the
-    // threshold is out of reach.
-    private const int LatchedReadThreshold = int.MaxValue;
-
     private readonly ILogger<TelescopeService> _logger;
     private readonly IEquipmentFaultSink? _faults;
     private readonly IWsBroadcaster? _ws;
@@ -149,13 +144,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _ws = ws;
         _profileService = profileService;
         // onConnected pushes the profile's site into the mount (one source of truth).
-        // #1246 — a Connected session that is still latched (tripped this episode, no clean read since) is
-        // NOT the idempotent no-op case: the ladder's later rungs connect the same device again
-        // precisely to send the disconnect/connect pair that clears the bridge.
         _lifecycle = new DeviceLifecycle<ITelescopeDevice>(this, DeviceType.Telescope, "telescope",
-            d => _createDevice(d), ReadTick, ResetSessionLocked, LatchedReadThreshold, _logger, events, faults,
-            onConnected: () => PushProfileSite(force: true),
-            reconnectSameDeviceLocked: StillLatchedLocked);
+            d => _createDevice(d), ReadTick, ResetSessionLocked, DeviceHealthTracker.DefaultThreshold, _logger, events, faults,
+            onConnected: () => PushProfileSite(force: true));
         _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -187,10 +178,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Lease.CancelAll(); // a user disconnect ends the leases; a §42.3 trip keeps them (an expiry stops the reconnected mount)
         return _lifecycle.DisconnectAsync(idempotencyKey);
     }
-
-    // Asked by the lifecycle under the gate (#1246): connected, tripped this episode, no clean read since.
-    private bool StillLatchedLocked() =>
-        _lifecycle.State == EquipmentConnectionState.Connected && _bridgeFaultTripped && !_lifecycle.HasCleanReadSinceConnect;
 
     // Caller holds the gate (adopt, disconnect and trip): a fresh, ended or tripped session forgets the last one's reads.
     private void ResetSessionLocked() {
@@ -714,8 +701,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private void RefreshCacheOnce() => _lifecycle.RequestRefresh();
 
     // The mount's runtime read (ADR 0011): the module has probed the mount, this reads it off the gate and
-    // hands back the commit. EssentialReadError is set only for the #1193 latch, so "clean" keeps its #1246
-    // meaning: a driver that always refuses an unrelated property (a not-implemented AtHome) still recovers.
+    // hands back the commit. The essential read is RA/Dec (both mandatory ITelescope members): any failure
+    // there, or the #1193 latch on any read, is a failed read for read health and the clean-read gate. A driver
+    // that always refuses an optional property (a not-implemented AtHome or SideOfPier) still reads clean.
     private DeviceRead ReadTick(ITelescopeDevice client) {
         bool needCaps;
         bool needAxisRates;
@@ -729,7 +717,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             needEquatorialSystem = !_equatorialSystemKnown;
             readPierSide = !_sideOfPierUnsupported;
         }
-        var runtime = ReadRuntime(client, out var readError, out var slewingUnknown);
+        var runtime = ReadRuntime(client, out var readError, out var positionError, out var slewingUnknown);
         // #1732 — asked only while tracking reads off on an unparked mount; the watch ignores a parked one.
         var pulseGuiding = !runtime.Tracking && !runtime.Parked && ReadPulseGuiding(client);
         var (sideOfPier, pierSideUnsupported) = readPierSide ? ReadSideOfPier(client) : (PierSide.pierUnknown, true);
@@ -764,9 +752,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         string? axisRatesUnknownReason = null;
         int? republishedBands = null;
         (double? Primary, double? Secondary) axisRatesUnknownValues = default;
-        // #1246 — the ladder's "recovered" waits for a tick without the latch (the module's clean-read gate).
+        // #1246 — the ladder's "recovered" waits for a tick without the latch and with RA/Dec read (the module's
+        // clean-read gate); the same failure feeds read health (ADR 0011 rule 2).
         var latched = readError is not null && IsLatchedBridgeFault(readError);
-        return new DeviceRead(latched ? LatchedBridgeFaultMessage(readError!) : null,
+        return new DeviceRead(latched ? LatchedBridgeFaultMessage(readError!) : positionError?.Message,
             CommitLocked: () => {
                 // §57.9 — mask the stale post-Park/Home target; the latch self-releases
                 // when the registers change (an external goto/sync wrote a new target).
@@ -936,7 +925,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Telescope '{Device}' tracking recovered — watch re-armed (§42.2)")]
     private partial void LogTrackingRecovered(string device);
 
-    private static TelescopeStateDto ReadRuntime(ITelescopeDevice c) => ReadRuntime(c, out _, out _);
+    private static TelescopeStateDto ReadRuntime(ITelescopeDevice c) => ReadRuntime(c, out _, out _, out _);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a mount that cannot report it counts as not pulsing, so the tracking watch keeps working.")]
@@ -955,8 +944,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // latched fault (#1193) even when an unrelated read (a not-implemented AtHome) threw first
     // (#1246), without changing the per-field fallback semantics. The target registers are left
     // out of it: they legitimately throw before the first target is set. slewingUnknown: the
-    // Slewing read itself threw, so the "slewing" state is a fallback, not an answer.
-    private static TelescopeStateDto ReadRuntime(ITelescopeDevice c, out Exception? readError, out bool slewingUnknown) {
+    // Slewing read itself threw, so the "slewing" state is a fallback, not an answer. positionError: the
+    // first exception the RA/Dec reads threw (the mount's essential read), null when both answered.
+    private static TelescopeStateDto ReadRuntime(ITelescopeDevice c, out Exception? readError, out Exception? positionError,
+            out bool slewingUnknown) {
         List<Exception>? errors = null;
         T Read<T>(Func<T> read, T fallback) {
             try {
@@ -975,8 +966,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             slewing = false;
             slewingUnknown = true; // its own try/catch: not inferred from the error count (#1246)
         }
+        var errorsBeforePosition = errors?.Count ?? 0;
         var ra = Read<double?>(() => c.RightAscension, null);
         var dec = Read<double?>(() => c.Declination, null);
+        positionError = errors is not null && errors.Count > errorsBeforePosition ? errors[errorsBeforePosition] : null;
         // §57.9 — the slew/sync destination, read back from the mount's own target registers.
         // Same per-field best-effort boundary as RA/Dec: a mount that throws
         // PropertyNotImplemented (or InvalidOperationException before the first target is set)
