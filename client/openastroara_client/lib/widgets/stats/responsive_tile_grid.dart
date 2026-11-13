@@ -44,28 +44,11 @@ class ResponsiveTileGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = tileWidthFor(constraints.maxWidth);
-        final columns = math.max(
-            1, ((constraints.maxWidth + spacing) / (width + spacing)).floor());
-        // Row by row, each tile as tall as the tallest beside it: a badge
-        // with no progress bar or a tile with no subtitle no longer sits
-        // short in its row.
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Wrap(
           spacing: spacing,
+          runSpacing: spacing,
           children: [
-            for (var i = 0; i < children.length; i += columns)
-              IntrinsicHeight(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: spacing,
-                  children: [
-                    for (final child
-                        in children.skip(i).take(columns))
-                      SizedBox(width: width, child: child),
-                  ],
-                ),
-              ),
+            for (final child in children) SizedBox(width: width, child: child),
           ],
         );
       },

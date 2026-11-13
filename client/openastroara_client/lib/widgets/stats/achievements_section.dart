@@ -7,6 +7,7 @@ import '../../models/stats/achievements.dart';
 import '../../state/stats/achievements_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../l10n/l10n.dart';
+import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import '../adaptive_controls.dart';
 import 'stats_pull_refresh.dart';
@@ -16,7 +17,11 @@ import 'stats_pull_refresh.dart';
 /// (`GET /api/v1/stats/achievements`) — cumulative records + imaging-night
 /// streaks + milestone badges. Degrades gracefully when no server is connected.
 class AchievementsSection extends ConsumerStatefulWidget {
-  const AchievementsSection({super.key});
+  const AchievementsSection({super.key, this.dashboard = false});
+
+  /// Simple Mode's dashboard (a records list and medals); else the tiles and
+  /// badge cards.
+  final bool dashboard;
 
   @override
   ConsumerState<AchievementsSection> createState() =>
@@ -122,7 +127,7 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_staleError) const _StaleBanner(),
-        _Achievements(data: data),
+        _Achievements(data: data, dashboard: widget.dashboard),
       ],
     );
   }
@@ -160,50 +165,56 @@ class _StaleBanner extends StatelessWidget {
 }
 
 class _Achievements extends StatelessWidget {
-  const _Achievements({required this.data});
+  const _Achievements({required this.data, required this.dashboard});
 
   final StatsAchievements data;
 
+  /// Simple Mode's dashboard: a records list and medals. Advanced Mode keeps
+  /// its tiles and badge cards.
+  final bool dashboard;
+
   @override
   Widget build(BuildContext context) {
+    // Each record once: (icon, value, label, note, on the dashboard). The
+    // dashboard leaves out the totals Overview already shows, and its target
+    // count names what it counts (named frames only).
+    final records = [
+      (Icons.local_fire_department, '${data.currentStreakNights}', 'Current streak', 'nights in a row', true),
+      (Icons.whatshot, '${data.longestStreakNights}', 'Longest streak', 'nights', true),
+      (Icons.calendar_month, '${data.totalNightsImaged}', 'Nights imaged', null, true),
+      (Icons.nightlight_round, _hours(data.longestNightHours), 'Longest night', null, true),
+      (Icons.timelapse, _hours(data.totalIntegrationHours), 'Total integration', null, false),
+      (
+        Icons.gps_fixed,
+        '${data.uniqueTargetsImaged}',
+        dashboard ? context.l10n.statsNamedTargets : 'Unique targets',
+        null,
+        true,
+      ),
+      (Icons.image_outlined, '${data.totalLightFrames}', 'Light frames', null, false),
+      (Icons.flag_outlined, _firstLight(data.firstLightUtc), 'First light', null, true),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // The records as the dashboard's list, without the totals Overview
-        // already shows; Unique targets here counts named frames only.
-        LayoutBuilder(
-          builder: (context, box) => StatKpiGrid(
-            columns: box.maxWidth >= 720 ? 3 : 2,
+        if (dashboard)
+          LayoutBuilder(
+            builder: (context, box) => StatKpiGrid(
+              columns: box.maxWidth >= 720 ? 3 : 2,
+              children: [
+                for (final (_, value, label, note, onDashboard) in records)
+                  if (onDashboard)
+                    StatKpi(value: value, label: label, subtitle: note),
+              ],
+            ),
+          )
+        else
+          ResponsiveTileGrid(
             children: [
-              StatKpi(
-                value: '${data.currentStreakNights}',
-                label: 'Current streak',
-                subtitle: 'nights in a row',
-              ),
-              StatKpi(
-                value: '${data.longestStreakNights}',
-                label: 'Longest streak',
-                subtitle: 'nights',
-              ),
-              StatKpi(
-                value: '${data.totalNightsImaged}',
-                label: 'Nights imaged',
-              ),
-              StatKpi(
-                value: _hours(data.longestNightHours),
-                label: 'Longest night',
-              ),
-              StatKpi(
-                value: '${data.uniqueTargetsImaged}',
-                label: context.l10n.statsNamedTargets,
-              ),
-              StatKpi(
-                value: _firstLight(data.firstLightUtc),
-                label: 'First light',
-              ),
+              for (final (icon, value, label, note, _) in records)
+                StatTile(icon: icon, value: value, label: label, subtitle: note),
             ],
           ),
-        ),
         if (data.milestones.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text('Badges',
@@ -211,22 +222,29 @@ class _Achievements extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(height: 8),
-          // Medals on a shelf that scrolls sideways, earned ones first. The
-          // ring and gaps are fixed; the two title lines and the progress
-          // line grow with the user's text size.
-          SizedBox(
-            height: 64 + MediaQuery.textScalerOf(context).scale(68),
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          if (!dashboard)
+            ResponsiveTileGrid(
               children: [
-                for (final m in [
-                  ...data.milestones.where((m) => m.achieved),
-                  ...data.milestones.where((m) => !m.achieved),
-                ])
-                  _MilestoneBadge(milestone: m),
+                for (final m in data.milestones) _BadgeCard(milestone: m),
               ],
+            )
+          else
+            // Medals on a shelf that scrolls sideways, earned ones first. The
+            // ring and gaps are fixed; the two title lines and the progress
+            // line grow with the user's text size.
+            SizedBox(
+              height: 64 + MediaQuery.textScalerOf(context).scale(68),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final m in [
+                    ...data.milestones.where((m) => m.achieved),
+                    ...data.milestones.where((m) => !m.achieved),
+                  ])
+                    _MilestoneBadge(milestone: m),
+                ],
+              ),
             ),
-          ),
         ],
         const Padding(
           padding: EdgeInsets.only(top: 12),
@@ -350,6 +368,74 @@ class _Hint extends StatelessWidget {
       child: Text(
         message,
         style: const TextStyle(color: AraColors.textSecondary),
+      ),
+    );
+  }
+}
+
+
+class _BadgeCard extends StatelessWidget {
+  const _BadgeCard({required this.milestone});
+
+  final StatsMilestone milestone;
+
+  @override
+  Widget build(BuildContext context) {
+    final achieved = milestone.achieved;
+    final accent = achieved ? AraColors.accentConnected : AraColors.textDisabled;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border.all(color: achieved ? accent : AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(achieved ? Icons.emoji_events : Icons.lock_outline,
+                  size: 16, color: accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  milestone.title,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: achieved
+                            ? AraColors.textPrimary
+                            : AraColors.textSecondary,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            milestone.description,
+            style: const TextStyle(
+                fontSize: 11, color: AraColors.textSecondary),
+          ),
+          if (!achieved) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: milestone.progress,
+                minHeight: 4,
+                backgroundColor: AraColors.bgInput,
+                valueColor:
+                    const AlwaysStoppedAnimation(AraColors.accentInfo),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_MilestoneBadge._trim(milestone.current)} / ${_MilestoneBadge._trim(milestone.threshold)}',
+              style: const TextStyle(
+                  fontSize: 11, color: AraColors.textDisabled),
+            ),
+          ],
+        ],
       ),
     );
   }

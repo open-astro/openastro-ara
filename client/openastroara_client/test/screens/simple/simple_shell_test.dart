@@ -1925,6 +1925,22 @@ void main() {
       expect(calendar.bottom, lessThan(tester.getTopLeft(find.text('Best Frames')).dy));
     });
 
+    // Falsified by: stats_dashboard_screen.dart placing the calendar after the Overview in the Full UI too.
+    testWidgets('Stats page in the Full UI keeps the nights calendar last, after Best Frames', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1024, 4000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StatsDashboardScreen(),
+        ),
+      ));
+      await tester.pump();
+      expect(tester.getRect(find.byType(CalendarHeatmap)).top,
+          greaterThan(tester.getTopLeft(find.text('Best Frames')).dy));
+    });
+
     // Falsified by: stats_dashboard_screen.dart title back to const Text('Stats').
     testWidgets('Stats page title: the rail button\'s localized name in Simple Mode, Stats in the Full UI',
         (tester) async {

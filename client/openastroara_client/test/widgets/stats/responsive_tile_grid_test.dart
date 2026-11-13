@@ -57,7 +57,7 @@ void main() {
 
     final widths = tester
         .widgetList<SizedBox>(find.descendant(
-          of: find.byType(ResponsiveTileGrid),
+          of: find.byType(Wrap),
           matching: find.byType(SizedBox),
         ))
         .map((s) => s.width)

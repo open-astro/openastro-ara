@@ -41,15 +41,15 @@ class _FakeAchievementsClient implements AchievementsClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-Widget _app(List<AraServer> servers, AchievementsClient api) {
+Widget _app(List<AraServer> servers, AchievementsClient api, {bool dashboard = false}) {
   return ProviderScope(
     overrides: [
       savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
       achievementsApiFactoryProvider.overrideWithValue((_) => api),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: AchievementsSection()),
+        body: SingleChildScrollView(child: AchievementsSection(dashboard: dashboard)),
       ),
     ),
   );
@@ -73,7 +73,7 @@ void main() {
             current: 42),
       ],
     ));
-    await tester.pumpWidget(_app(const [_server], api));
+    await tester.pumpWidget(_app(const [_server], api, dashboard: true));
     await tester.pumpAndSettle();
 
     expect(find.text('Achievements'), findsOneWidget);
@@ -95,7 +95,7 @@ void main() {
             achieved: true, threshold: 10, current: 10),
       ],
     ));
-    await tester.pumpWidget(_app(const [_server], api));
+    await tester.pumpWidget(_app(const [_server], api, dashboard: true));
     await tester.pumpAndSettle();
     Size badge(String id) => tester.getSize(find.byKey(Key('stats-medal-$id')));
     expect(badge('targets_10'), badge('hours_10'));
@@ -119,7 +119,7 @@ void main() {
     for (final scale in [1.0, 1.5, 2.0]) {
       await tester.pumpWidget(MediaQuery(
         data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-        child: _app(const [_server], api),
+        child: _app(const [_server], api, dashboard: true),
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'no overflow at ${scale}x text');
@@ -127,6 +127,23 @@ void main() {
     final progress = tester.widget<Text>(find.text('7 / 100'));
     expect(progress.style!.color, AraColors.textSecondary,
         reason: 'information, not a disabled control: 4.5:1 on the panel');
+  });
+
+  // Falsified by: achievements_section.dart building medals without dashboard: true.
+  testWidgets('Advanced Mode keeps its tiles and badge cards: medals are Simple Mode only', (tester) async {
+    final api = _FakeAchievementsClient(const StatsAchievements(
+      totalLightFrames: 906,
+      milestones: [
+        StatsMilestone(id: 'hours_10', title: 'Getting started', description: '10 hours of integration',
+            achieved: false, threshold: 10, current: 7.2),
+      ],
+    ));
+    await tester.pumpWidget(_app(const [_server], api));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('stats-medal-hours_10')), findsNothing);
+    expect(find.text('10 hours of integration'), findsOneWidget, reason: 'the description on the card');
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('Total integration'), findsOneWidget, reason: 'its own totals, as before');
   });
 
   testWidgets('shows the connect hint when no server is saved', (tester) async {

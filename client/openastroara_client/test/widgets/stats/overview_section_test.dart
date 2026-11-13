@@ -41,15 +41,15 @@ class _FakeStatsOverviewClient implements StatsOverviewClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-Widget _app(List<AraServer> servers, StatsOverviewClient api) {
+Widget _app(List<AraServer> servers, StatsOverviewClient api, {bool dashboard = false}) {
   return ProviderScope(
     overrides: [
       savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
       statsOverviewApiFactoryProvider.overrideWithValue((_) => api),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: OverviewSection()),
+        body: SingleChildScrollView(child: OverviewSection(dashboard: dashboard)),
       ),
     ),
   );
@@ -90,7 +90,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final api = _FakeStatsOverviewClient(const StatsOverview(
           totalSessions: 3, totalFrames: 120, totalLightFrames: 100, totalIntegrationHours: 12.5));
-      await tester.pumpWidget(_app(const [_server], api));
+      await tester.pumpWidget(_app(const [_server], api, dashboard: true));
       await tester.pumpAndSettle();
 
       final hero = find.byKey(const Key('stats-hero'));
@@ -109,6 +109,18 @@ void main() {
         expect(k.top, greaterThan(h.bottom), reason: 'the list under the headline');
       }
   }
+
+  // Falsified by: overview_section.dart building the dashboard without dashboard: true.
+  testWidgets('Advanced Mode keeps its tile grid: the dashboard is Simple Mode only', (tester) async {
+    final api = _FakeStatsOverviewClient(const StatsOverview(
+        totalSessions: 3, totalFrames: 120, totalLightFrames: 100, totalIntegrationHours: 12.5));
+    await tester.pumpWidget(_app(const [_server], api));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('stats-hero')), findsNothing);
+    expect(find.byType(StatKpi), findsNothing);
+    expect(find.byType(StatTile), findsNWidgets(6));
+    expect(find.widgetWithText(StatTile, 'Total integration'), findsOneWidget);
+  });
 
   // Falsified by: overview_section.dart back to the old tile grid (no stats-hero, no StatKpi).
   testWidgets('the dashboard: the total integration headline with the totals list beside it on a wide window',

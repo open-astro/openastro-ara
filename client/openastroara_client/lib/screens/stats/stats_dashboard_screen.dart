@@ -103,15 +103,18 @@ class StatsDashboardScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const OverviewSection(),
-                  const SizedBox(height: 12),
-                  // The nights calendar under the headline (mock B).
-                  const CalendarHeatmap(),
+                  OverviewSection(dashboard: simple),
+                  // Simple Mode's dashboard: the nights calendar under the
+                  // headline (mock B). The Full UI keeps it last.
+                  if (simple) ...[
+                    const SizedBox(height: 12),
+                    const CalendarHeatmap(),
+                  ],
                   const SizedBox(height: 24),
                   if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
                   const BestFramesSection(),
                   const SizedBox(height: 24),
-                  const AchievementsSection(),
+                  AchievementsSection(dashboard: simple),
                   const SizedBox(height: 24),
                   if (!simple) ...[
                     const PiPerformanceSection(),
@@ -120,6 +123,7 @@ class StatsDashboardScreen extends ConsumerWidget {
                     const FocusTempScatterChart(),
                     const GuidingRmsChart(),
                     const FrameQualityChart(),
+                    const CalendarHeatmap(),
                   ],
                 ],
               ),
