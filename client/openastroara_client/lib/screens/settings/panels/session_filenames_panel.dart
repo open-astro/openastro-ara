@@ -381,9 +381,12 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
-          Text(
-            _lastError!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _lastError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
           const SizedBox(height: 12),
         ],
