@@ -3094,6 +3094,15 @@ void main() {
     expect(sheet, findsNothing);
   });
 
+  testWidgets('Rig: Versions is the last block, after Storage and Logs', (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    await _openSection(tester, 'Rig');
+    final versions = tester.getRect(find.byKey(const Key('simple-versions')));
+    for (final t in [SimpleStorageBlock, SimpleLogsBlock]) {
+      expect(versions.top, greaterThan(tester.getRect(find.byType(t)).bottom), reason: '$t');
+    }
+  });
+
   testWidgets('Rig: the rig\'s figures, rig and profile and how to change them, Permanent pier, the Simple Mode '
       'switch, version and logs', (tester) async {
     final c = await _pump(tester, const Size(1470, 854),

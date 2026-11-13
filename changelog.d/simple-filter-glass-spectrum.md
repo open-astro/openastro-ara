@@ -5,3 +5,4 @@
 ### Fixed (Simple Mode)
 
 - **Full filter names get their glass colour.** A wheel that names its filters Red, Green, Blue or Clear showed those cells as plain grey glass; they now take the same colour as R, G, B and L.
+- **Versions last in Settings › Rig.** The Versions table now closes the Rig section, after Storage and Logs, as it closes each device's window in Settings.

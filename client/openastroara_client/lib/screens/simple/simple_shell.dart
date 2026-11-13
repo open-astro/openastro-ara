@@ -4260,8 +4260,13 @@ class _ThisRig extends ConsumerWidget {
           ],
         ),
         const Divider(height: AraSpace.s16),
+        SimpleStorageBlock(reveal: revealStorage),
+        const Divider(height: AraSpace.s16),
+        const SimpleLogsBlock(),
+        const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
-        // a part the rig can't read is left out.
+        // a part the rig can't read is left out. Last, as in each device's
+        // window in Settings.
         SimpleVersions(
           key: const Key('simple-versions'),
           rows: [
@@ -4295,10 +4300,6 @@ class _ThisRig extends ConsumerWidget {
               (name, v ?? '—'),
           ],
         ),
-        const Divider(height: AraSpace.s16),
-        SimpleStorageBlock(reveal: revealStorage),
-        const Divider(height: AraSpace.s16),
-        const SimpleLogsBlock(),
       ],
     );
   }
