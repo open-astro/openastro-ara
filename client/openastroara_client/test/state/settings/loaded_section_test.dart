@@ -10,13 +10,14 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 
 import '../../support/storage_fixture.dart';
 
-class _Server extends Notifier<AraServer?> {
+/// The session's rig list; the active rig is its last entry.
+class _Servers extends SavedServersNotifier {
   @override
-  AraServer? build() => const AraServer(hostname: 'a.local', port: 1);
-  void set(AraServer? s) => state = s;
+  Future<List<AraServer>> build() async => const [
+    AraServer(hostname: 'a.local', port: 1),
+  ];
+  void set(AraServer s) => state = AsyncData([s]);
 }
-
-final _serverProvider = NotifierProvider<_Server, AraServer?>(_Server.new);
 
 class _Profiles extends ProfileManagementNotifier {
   @override
@@ -31,12 +32,13 @@ void main() {
   late FakeStorageApi api;
   StorageSettingsNotifier n() => c.read(storageSettingsProvider.notifier);
   LoadedSection<StorageSettings> s() => c.read(storageSettingsProvider);
+  _Servers servers() => c.read(savedServersProvider.notifier) as _Servers;
 
   setUp(() {
     api = FakeStorageApi();
     c = ProviderContainer(
       overrides: [
-        activeServerProvider.overrideWith((ref) => ref.watch(_serverProvider)),
+        savedServersProvider.overrideWith(_Servers.new),
         profileManagementProvider.overrideWith(_Profiles.new),
       ],
     );
@@ -140,18 +142,25 @@ void main() {
     setUp(() async {
       c.listen(migratedSectionsResetProvider, (_, _) {});
       c.listen(profileManagementProvider, (_, _) {});
+      await c.read(savedServersProvider.future);
+      expect(c.read(activeServerProvider)?.hostname, 'a.local');
       await c.read(profileManagementProvider.future);
       await n().load(api);
     });
 
     test('a different rig sends Storage back to not loaded', () async {
       expect(s().canSave, isTrue);
-      c
-          .read(_serverProvider.notifier)
-          .set(const AraServer(hostname: 'b.local', port: 1));
+      servers().set(const AraServer(hostname: 'b.local', port: 1));
       await Future<void>.delayed(Duration.zero);
       expect(s().source, SectionSource.notLoaded);
       expect(s().value, isNull);
+    });
+
+    test('a different port on the same host is a different rig', () async {
+      expect(s().canSave, isTrue);
+      servers().set(const AraServer(hostname: 'a.local', port: 2));
+      await Future<void>.delayed(Duration.zero);
+      expect(s().source, SectionSource.notLoaded);
     });
 
     test('a different active profile sends Storage back to not loaded', () {
@@ -160,10 +169,20 @@ void main() {
       expect(s().source, SectionSource.notLoaded);
     });
 
-    test('the same rig and profile leave it loaded', () {
-      c
-          .read(_serverProvider.notifier)
-          .set(const AraServer(hostname: 'a.local', port: 1));
+    test('the same rig and profile leave it loaded', () async {
+      // A new object for the same rig (new name and version, same host and
+      // port), and the same profile again: both providers update.
+      servers().set(
+        AraServer(
+          hostname: 'a.local',
+          port: 1,
+          mdnsName: 'ara-renamed',
+          serverVersion: '2.0',
+        ),
+      );
+      (c.read(profileManagementProvider.notifier) as _Profiles).activate('p1');
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(activeServerProvider)?.mdnsName, 'ara-renamed');
       expect(s().canSave, isTrue);
     });
   });
