@@ -130,8 +130,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
 
   void _reloadStorage() {
     final api = _api();
-    if (api != null)
+    if (api != null) {
       unawaited(ref.read(storageSettingsProvider.notifier).load(api));
+    }
   }
 
   @override

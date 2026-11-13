@@ -456,7 +456,7 @@ class ProfileApi {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/storage',
       data: _storageSettingsToJson(value),
-      options: Options(headers: {if (ifMatch != null) 'If-Match': ifMatch}),
+      options: Options(headers: {'If-Match': ?ifMatch}),
     );
     return (
       value: _storageSettingsFromJson(res.data ?? const {}),
