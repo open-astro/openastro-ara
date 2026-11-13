@@ -314,8 +314,21 @@ class _UsageCardState extends State<_UsageCard> {
   DateTime? _cursor;
   final _focus = FocusNode();
 
+  // The ring follows the last input: keys show it, a tap or click never draws
+  // it (WCAG 2.4.7; the mount pad's rule).
+  void _onHighlight(FocusHighlightMode _) {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addHighlightModeListener(_onHighlight);
+  }
+
   @override
   void dispose() {
+    FocusManager.instance.removeHighlightModeListener(_onHighlight);
     _focus.dispose();
     super.dispose();
   }
@@ -542,7 +555,10 @@ class _UsageCardState extends State<_UsageCard> {
                           height: 96,
                           decoration: BoxDecoration(
                             border: Border.all(
-                              color: _focus.hasFocus
+                              color:
+                                  _focus.hasFocus &&
+                                      FocusManager.instance.highlightMode ==
+                                          FocusHighlightMode.traditional
                                   ? AraColors.accentInfo
                                   : Colors.transparent,
                               width: 2,

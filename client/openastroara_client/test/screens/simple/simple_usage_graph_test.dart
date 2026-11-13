@@ -16,6 +16,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/state/stats/usage_history_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
 const _gib = 1073741824;
 
@@ -408,9 +409,20 @@ void main() {
       (tester) async {
         await _pump(tester, history: _history());
         final graph = find.byKey(const Key('usage-graph-storage'));
+        Color ring() =>
+            ((tester.widget<Container>(graph).decoration! as BoxDecoration)
+                        .border!
+                    as Border)
+                .top
+                .color;
         await tester.tapAt(tester.getTopLeft(graph) + const Offset(2, 2));
         await tester.pump();
         expect(find.byKey(const Key('usage-tip-storage')), findsOneWidget);
+        expect(
+          ring(),
+          Colors.transparent,
+          reason: 'a tap focuses the graph but draws no ring',
+        );
         expect(
           tester.getSemantics(find.byKey(const Key('usage-tip-storage'))),
           isSemantics(isLiveRegion: true),
@@ -427,6 +439,7 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pump();
         expect(find.byKey(const Key('usage-tip-storage')), findsOneWidget);
+        expect(ring(), AraColors.accentInfo, reason: 'keyboard use shows it');
         expect(
           tester.widget<Text>(find.byKey(const Key('usage-tip-storage'))).data,
           startsWith('1 min ago: '),
