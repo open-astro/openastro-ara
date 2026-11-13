@@ -201,6 +201,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
+
+  // The Sky Map asked for but not drawn yet: shown anyway when this runs out.
+  Timer? _skyWait;
+  bool _skyWaitOver = false;
   bool _hadFrame = false;
   _Popover _popover = _Popover.none;
 
@@ -551,6 +555,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   void dispose() {
+    _skyWait?.cancel();
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
@@ -1054,6 +1059,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final showSky = _sky || !hasFrame;
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
+    final skyAsked = showSky && !wallpaper;
+    if (!skyAsked) {
+      _skyWait?.cancel();
+      _skyWait = null;
+      _skyWaitOver = false;
+    } else if (!_skyWaitOver && _skyWait == null) {
+      _skyWait = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _skyWaitOver = true);
+      });
+    }
+    final skyShown =
+        skyAsked && (ref.watch(planetariumReadyProvider) || _skyWaitOver);
     final linkUp = ref.watch(serverLinkUpProvider);
     // Monitor's trends and link age run from when Simple Mode opens (#1724).
     ref.listen(monitorTrendsProvider, (_, _) {});
@@ -1357,17 +1374,47 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               key: const Key('simple-frame'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
-                              child: !showSky
-                                  ? (screenFrame ?? const FrameViewer())
-                                  : wallpaper
-                                  ? const SimpleWallpaper(
-                                      key: Key('simple-wallpaper'),
-                                    )
-                                  // The sky, asked for.
-                                  : KeyedSubtree(
-                                      key: const Key('simple-planetarium'),
-                                      child: widget.planetarium,
+                              // The sky loads with Simple Mode and stays
+                              // loaded, offstage with its tickers off while
+                              // a frame or the wallpaper shows: opening it
+                              // no longer starts the web view, the engine and
+                              // its tiles again, and it shows only once it has
+                              // drawn (or after 3 s), so the tiles are never
+                              // seen filling in (user, 2026-11-13). Put away,
+                              // the page rests and draws nothing
+                              // (PlanetariumShownListener).
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Offstage(
+                                    offstage: !skyShown,
+                                    child: TickerMode(
+                                      enabled: skyShown,
+                                      child: KeyedSubtree(
+                                        key: const Key('simple-planetarium'),
+                                        child: widget.planetarium,
+                                      ),
                                     ),
+                                  ),
+                                  if (!showSky)
+                                    screenFrame ?? const FrameViewer()
+                                  else if (!skyShown) ...[
+                                    const SimpleWallpaper(
+                                      key: Key('simple-wallpaper'),
+                                    ),
+                                    if (!wallpaper)
+                                      Center(
+                                        child: Text(
+                                          context.l10n.shellLoadingSky,
+                                          key: const Key('simple-sky-loading'),
+                                          style: kSimpleText.copyWith(
+                                            color: AraColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -4325,8 +4372,13 @@ class _ThisRig extends ConsumerWidget {
           ],
         ),
         const Divider(height: AraSpace.s16),
+        SimpleStorageBlock(reveal: revealStorage),
+        const Divider(height: AraSpace.s16),
+        const SimpleLogsBlock(),
+        const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
-        // a part the rig can't read is left out.
+        // a part the rig can't read is left out. Last, as in each device's
+        // window in Settings.
         SimpleVersions(
           key: const Key('simple-versions'),
           rows: [
@@ -4360,10 +4412,6 @@ class _ThisRig extends ConsumerWidget {
               (name, v ?? '—'),
           ],
         ),
-        const Divider(height: AraSpace.s16),
-        SimpleStorageBlock(reveal: revealStorage),
-        const Divider(height: AraSpace.s16),
-        const SimpleLogsBlock(),
       ],
     );
   }

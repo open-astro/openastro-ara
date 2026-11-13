@@ -332,16 +332,20 @@ public sealed record FocuserDto(
     FocuserCapabilitiesDto? Capabilities,
     FocuserStateDto Runtime);
 
+/// <summary><c>CanSetZero</c> / <c>CanCalibrate</c>: the driver lists the SetZero action (an absolute focuser
+/// only), or Calibrate with CalibrationStatus (it runs to both stops to find its travel).</summary>
 public sealed record FocuserCapabilitiesDto(
     int MinPosition, int MaxPosition,
     double StepSizeUm,
-    bool CanTempComp, bool AbsoluteFocuser);
+    bool CanTempComp, bool AbsoluteFocuser,
+    bool CanSetZero = false, bool CanCalibrate = false);
 
 public sealed record FocuserStateDto(
     string State,    // "idle" | "moving" | "settled" | "backlash_compensating" | "error"
     int? Position,
     double? Temperature,
-    bool TempCompEnabled);
+    bool TempCompEnabled,
+    string? Calibration = null); // "calibrating" | "calibrated" | "not_calibrated"; null when the focuser can't calibrate
 
 public sealed record FocuserMoveRequestDto(int TargetPosition, bool? UseTempComp = false);
 

@@ -673,6 +673,48 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/focuser/setzero:
+    post:
+      tags:
+        - Equipment
+      summary: Make where the focuser is now 0 (the driver's SetZero action); it doesn't move.
+      operationId: SetFocuserZero
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/focuser/calibrate:
+    post:
+      tags:
+        - Equipment
+      summary: Start the driver's travel calibration (it runs to both stops).
+      operationId: CalibrateFocuser
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/focuser/calibrate/abort:
+    post:
+      tags:
+        - Equipment
+      summary: Stop a travel calibration.
+      operationId: AbortFocuserCalibration
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/focuser/autofocus:
     post:
       tags:

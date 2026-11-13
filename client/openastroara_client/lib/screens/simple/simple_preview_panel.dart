@@ -4,7 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show
+        FilteringTextInputFormatter,
+        LengthLimitingTextInputFormatter,
+        LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -54,7 +58,6 @@ import '../../state/profile_management_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
-import '../../widgets/inline_choices.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
@@ -885,8 +888,10 @@ class _WheelStep extends Intent {
   final int dir;
 }
 
-/// A value picked from a list that folds out under the tile (Simple Mode has
-/// no popups).
+/// A value picked on an iOS-style wheel that folds out under the tile (spun
+/// with a thumb, the neighbours in view; Simple Mode has no popups). For an
+/// ordered set: exposures, a wheel's filters (user, 2026-11-13: Frames'
+/// wheel for all of them, mock `design/preview/simple-pickers-mock.html`).
 class SimplePresetTile<T> extends StatefulWidget {
   const SimplePresetTile({
     super.key,
@@ -895,7 +900,6 @@ class SimplePresetTile<T> extends StatefulWidget {
     required this.options,
     required this.format,
     required this.onSelected,
-    this.wheel = false,
   });
 
   final String label;
@@ -905,10 +909,6 @@ class SimplePresetTile<T> extends StatefulWidget {
 
   /// Null greys the tile out.
   final ValueChanged<T>? onSelected;
-
-  /// Pick on an iOS-style wheel (spun with a thumb, the neighbours in view)
-  /// instead of a list: for a long ordered set like a frame count.
-  final bool wheel;
 
   @override
   State<SimplePresetTile<T>> createState() => _SimplePresetTileState<T>();
@@ -927,7 +927,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
     _open = !_open;
     _wheel?.dispose();
     _wheel = null;
-    if (_open && widget.wheel) {
+    if (_open) {
       _spun = widget.value;
       _wheel = FixedExtentScrollController(
         initialItem: _items.indexOf(widget.value),
@@ -989,6 +989,8 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
       ),
     );
     final controller = _wheel;
+    Widget label(T o) =>
+        Center(child: Text(widget.format(o), style: kSimpleText));
     // Its own transparent Material: the fill and highlight paint here, over
     // the panel's scrim, not on a Material further down.
     return Column(
@@ -1013,7 +1015,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             ),
           ),
         ),
-        if (_open && controller != null)
+        if (controller != null)
           SizedBox(
             height: 176,
             child: Column(
@@ -1032,38 +1034,239 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
                     debugLabel: 'simple-wheel-${widget.label}',
                     autofocus: true,
                     onStep: SimpleWheelKeys.stepper(controller, items.length),
-                    child: CupertinoPicker(
-                      itemExtent: 44,
-                      scrollController: controller,
-                      onSelectedItemChanged: (i) => _spun = items[i],
-                      children: [
-                        for (final o in items)
-                          Center(
-                            child: Text(widget.format(o), style: kSimpleText),
+                    // Each phone's own picker (user, 2026-11-13): the iOS
+                    // wheel, and on Android its flat number picker with
+                    // the pick between two accent lines.
+                    child: Theme.of(context).platform == TargetPlatform.android
+                        ? _androidWheel(controller, items, label)
+                        : CupertinoPicker(
+                            itemExtent: 44,
+                            scrollController: controller,
+                            onSelectedItemChanged: (i) => _spun = items[i],
+                            children: [for (final o in items) label(o)],
                           ),
-                      ],
-                    ),
                   ),
                 ),
               ],
-            ),
-          )
-        else if (_open)
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 240),
-            child: SingleChildScrollView(
-              child: InlineChoices<T>(
-                id: 'simple-preset',
-                value: widget.value,
-                options: [for (final o in items) (o, widget.format(o))],
-                style: kSimpleText,
-                onChanged: _pick,
-              ),
             ),
           ),
       ],
     );
   }
+
+  /// Android's flat number picker. ListWheelScrollView, unlike
+  /// CupertinoPicker, gives a screen reader no value or swipe to step, so
+  /// they are added here.
+  Widget _androidWheel(
+    FixedExtentScrollController controller,
+    List<T> items,
+    Widget Function(T) label,
+  ) {
+    final i = items.indexOf(_spun);
+    final step = SimpleWheelKeys.stepper(controller, items.length);
+    return Semantics(
+      key: const Key('simple-wheel-android'),
+      container: true,
+      value: widget.format(_spun),
+      increasedValue: i < items.length - 1 ? widget.format(items[i + 1]) : null,
+      decreasedValue: i > 0 ? widget.format(items[i - 1]) : null,
+      onIncrease: i < items.length - 1 ? () => step(1) : null,
+      onDecrease: i > 0 ? () => step(-1) : null,
+      child: ExcludeSemantics(
+        child: Stack(
+          children: [
+            ListWheelScrollView(
+              itemExtent: 44,
+              controller: controller,
+              physics: const FixedExtentScrollPhysics(),
+              diameterRatio: 1000,
+              overAndUnderCenterOpacity: 0.5,
+              onSelectedItemChanged: (i) => setState(() => _spun = items[i]),
+              children: [for (final o in items) label(o)],
+            ),
+            IgnorePointer(
+              child: Center(
+                child: Container(
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(
+                        color: AraColors.linkText,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A count typed in its tile, with − and + beside it for one more or fewer
+/// (held, they repeat): Plan's Frames (user, 2026-11-13, mock
+/// `design/preview/simple-pickers-mock.html` B). Each whole number in
+/// [min]..[max] typed is set at once; leaving the field empty or under [min]
+/// puts the last count back.
+class SimpleCountField extends StatefulWidget {
+  const SimpleCountField({
+    super.key,
+    required this.id,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.min = 1,
+    this.max = 9999,
+  });
+
+  /// Names the Keys: '[id]' the field, '[id]-down' and '[id]-up' the buttons.
+  final String id;
+  final String label;
+  final int value;
+  final int min, max;
+
+  /// Null greys it out.
+  final ValueChanged<int>? onChanged;
+
+  @override
+  State<SimpleCountField> createState() => _SimpleCountFieldState();
+}
+
+class _SimpleCountFieldState extends State<SimpleCountField> {
+  late final _text = TextEditingController(text: '${widget.value}');
+  final _focus = FocusNode();
+  Timer? _repeat;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _text.text = '${widget.value}';
+    });
+  }
+
+  @override
+  void didUpdateWidget(SimpleCountField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Typing keeps its own text ("0" on the way to "05"); a step shows.
+    if (!_focus.hasFocus && _text.text != '${widget.value}') {
+      _text.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopRepeat();
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  // A step always shows its count: a touch on − or + leaves a phone's focus
+  // in the field. Typing keeps its own text.
+  void _set(int n, {bool step = false}) {
+    final v = n.clamp(widget.min, widget.max);
+    if (v != widget.value) widget.onChanged?.call(v);
+    if (step || !_focus.hasFocus) _text.text = '$v';
+  }
+
+  void _typed(String t) {
+    final n = int.tryParse(t);
+    if (n != null && n >= widget.min) _set(n);
+  }
+
+  Widget _button(String dir, IconData icon, String label, int step) {
+    final enabled =
+        widget.onChanged != null &&
+        (step < 0 ? widget.value > widget.min : widget.value < widget.max);
+    void go() => _set(widget.value + step, step: true);
+    // The hold ends on the pointer, not the gesture: a long press already
+    // won reports no end when the touch is cancelled (a call, a system swipe).
+    return Listener(
+      onPointerUp: (_) => _stopRepeat(),
+      onPointerCancel: (_) => _stopRepeat(),
+      child: GestureDetector(
+        onLongPressStart: enabled
+            ? (_) {
+                _stopRepeat();
+                _repeat = Timer.periodic(
+                  const Duration(milliseconds: 90),
+                  (_) => go(),
+                );
+              }
+            : null,
+        child: IconButton(
+          key: Key('${widget.id}-$dir'),
+          style: IconButton.styleFrom(
+            backgroundColor: AraColors.tileFill,
+            minimumSize: const Size(44, 48),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: enabled ? go : null,
+          icon: Icon(icon, semanticLabel: '${widget.label}, $label'),
+        ),
+      ),
+    );
+  }
+
+  void _stopRepeat() {
+    _repeat?.cancel();
+    _repeat = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onChanged != null;
+    final dim = enabled ? null : AraColors.textDisabled;
+    // Too narrow for both buttons and a readable count (a phone's Plan row),
+    // the buttons give way: the field still takes a typed count.
+    return LayoutBuilder(
+      builder: (context, box) {
+        final buttons = box.maxWidth >= 2 * 44 + 2 * AraSpace.s4 + 64;
+        // A button removed mid-hold sends no pointer up to stop it.
+        if (!buttons) _stopRepeat();
+        return Row(
+          spacing: AraSpace.s4,
+          children: [
+            if (buttons)
+              _button('down', Icons.remove, context.l10n.deviceLess, -1),
+            Expanded(child: _field(dim, enabled)),
+            if (buttons) _button('up', Icons.add, context.l10n.deviceMore, 1),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _field(Color? dim, bool enabled) => TextField(
+    key: Key(widget.id),
+    controller: _text,
+    focusNode: _focus,
+    enabled: enabled,
+    keyboardType: TextInputType.number,
+    textInputAction: TextInputAction.done,
+    inputFormatters: [
+      FilteringTextInputFormatter.digitsOnly,
+      LengthLimitingTextInputFormatter('${widget.max}'.length),
+    ],
+    style: kSimpleText.copyWith(
+      color: dim,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    ),
+    decoration: InputDecoration(
+      labelText: widget.label,
+      prefixText: '× ',
+      isDense: true,
+      filled: true,
+      fillColor: AraColors.tileFill,
+    ),
+    onChanged: _typed,
+    onSubmitted: (_) => _text.text = '${widget.value}',
+  );
 }
 
 /// The round capture button: a white disc to start, a red square to stop
@@ -1385,6 +1588,35 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// Where the sensor was when the pill first saw it cooling: the bar's 0.
   double? _coolStart;
 
+  /// The cooler went off while this pill watched (#1870): the sensor's highest
+  /// reading since, until [_kWarmQuiet] passes with no rise.
+  double? _warmPeak;
+  bool _coolerWasOn = false;
+  Timer? _warmQuiet;
+
+  /// No ambient reading says where a sensor stops, so a minute without a
+  /// rise of [_kWarmRise] does (noise at rest is under it).
+  static const _kWarmQuiet = Duration(seconds: 60);
+  static const _kWarmRise = 0.2;
+
+  /// Follows the sensor up after the cooler goes off; true while it warms.
+  // shortcut: an unreadable cooler reads as off (#1076), so one failed read
+  // shows this pill until the next; read cooler_state_known if that is seen.
+  bool _syncWarming(bool known, bool coolerOn, double? ccd) {
+    if (!known || coolerOn || ccd == null) {
+      _warmQuiet?.cancel();
+      _warmPeak = null;
+    } else if (_coolerWasOn || (_warmPeak != null && ccd - _warmPeak! >= _kWarmRise)) {
+      _warmPeak = ccd;
+      _warmQuiet?.cancel();
+      _warmQuiet = Timer(_kWarmQuiet, () {
+        if (mounted) setState(() => _warmPeak = null);
+      });
+    }
+    _coolerWasOn = known && coolerOn;
+    return _warmPeak != null;
+  }
+
   /// The rig's own safety limits have loaded: Simple Mode never opens the
   /// policies page that loads them, and the defaults are not the rig's, so
   /// no weather breach is read from them before (#1690 audit).
@@ -1407,6 +1639,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   @override
   void dispose() {
     _ticker.dispose();
+    _warmQuiet?.cancel();
     super.dispose();
   }
 
@@ -1467,6 +1700,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         target != null &&
         ccd - target > 0.5;
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    // A cooler turned off by hand goes off at once, with no ramp: the pill
+    // shows the sensor warming until it stops rising (#1870).
+    final known = cam != null && cam.isConnected;
+    final warming = _syncWarming(known, known && cam.coolerOn, ccd);
     // The main camera's own exposure (#1755): its progress fills a plan
     // frame's bar, and an exposure nothing here explains gets its own pill.
     final camExposing = cam != null && cam.isConnected && cam.runtimeState == 'exposing';
@@ -1830,6 +2067,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               ? 0.0
               : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0),
           spoken: l10n.previewCooling,
+        ),
+      // A cooler turned off by hand (a plan's own warm-up shows as its step).
+      if (warming && !planActive)
+        _PillData(
+          SimpleStatusOrigin.camera,
+          l10n.previewWarming,
+          simpleCelsius(ccd!),
+          AraColors.accentInfo,
+          ring: true,
+          spoken: l10n.previewWarming,
         ),
       // Every mode's routine has a pill while it runs; a failure is a message
       // on the left that fades, posted by the shell (user, 2026-11-04).

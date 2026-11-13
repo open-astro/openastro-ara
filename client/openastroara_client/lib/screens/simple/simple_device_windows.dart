@@ -1458,6 +1458,113 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         : v.clamp(c.minPosition, c.maxPosition);
   }
 
+  /// Set zero asked, waiting for its confirm.
+  bool _askZero = false;
+
+  /// Settings' Position section (mock `design/preview/simple-focuser-zero-mock.html`
+  /// B): Set zero and Calibrate travel, each only when the driver offers it.
+  /// Rare, and a zero moves every saved position, so neither is on the
+  /// window the night runs on.
+  List<Widget> _position(FocuserStatus s) {
+    final c = s.capabilities;
+    if (c == null || !(c.canSetZero || c.canCalibrate)) return const [];
+    final l10n = context.l10n;
+    final calibrating = s.calibration == 'calibrating';
+    final still = !s.isMoving && !calibrating;
+    final pos = s.position ?? 0;
+    return [
+      const Divider(height: AraSpace.s16),
+      Text(
+        l10n.focuserPosition,
+        key: const Key('simple-focuser-position-section'),
+        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+      ),
+      if (c.canSetZero) ...[
+        simpleWindowRow(
+          l10n.focuserSetZero,
+          id: 'SetZero',
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              key: const Key('simple-focuser-set-zero'),
+              onPressed: still && !_askZero && pos != 0
+                  ? () => setState(() => _askZero = true)
+                  : null,
+              child: Text(l10n.focuserSetZeroButton),
+            ),
+          ),
+        ),
+        Text(l10n.focuserSetZeroHint, style: AraText.caption),
+        if (_askZero)
+          simpleWindowConfirm(
+            question: l10n.focuserSetZeroAsk('$pos'),
+            confirm: l10n.focuserSetZero,
+            onCancel: () => setState(() => _askZero = false),
+            onConfirm: () => _run(
+              () => ref.read(focuserProvider.notifier).setZero(),
+              l10n.focuserCouldntSetZero,
+            ),
+          ),
+      ],
+      if (c.canCalibrate) ...[
+        simpleWindowRow(
+          l10n.focuserCalibrate,
+          id: 'Calibrate',
+          Align(
+            alignment: Alignment.centerRight,
+            child: calibrating
+                ? FilledButton(
+                    key: const Key('simple-focuser-calibrate-stop'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AraColors.emergencyStop,
+                      foregroundColor: AraColors.selectionFg,
+                    ),
+                    onPressed: () => _run(
+                      () => ref
+                          .read(focuserProvider.notifier)
+                          .calibrate(abort: true),
+                      l10n.focuserCouldntCalibrate,
+                    ),
+                    child: Text(l10n.deviceStop),
+                  )
+                : OutlinedButton(
+                    key: const Key('simple-focuser-calibrate'),
+                    onPressed: still
+                        ? () => _run(
+                            () => ref.read(focuserProvider.notifier).calibrate(),
+                            l10n.focuserCouldntCalibrate,
+                          )
+                        : null,
+                    child: Text(l10n.focuserCalibrateButton),
+                  ),
+          ),
+        ),
+        Text(
+          switch (s.calibration) {
+            'calibrating' => l10n.focuserCalibrating,
+            'calibrated' => l10n.focuserCalibrated,
+            _ => l10n.focuserCalibrateHint,
+          },
+          key: const Key('simple-focuser-calibration'),
+          style: AraText.caption,
+        ),
+        if (calibrating) const LinearProgressIndicator(),
+      ],
+    ];
+  }
+
+  /// One Position action; a refusal or a lost rig says why in a pill.
+  Future<void> _run(Future<bool> Function() action, String failed) async {
+    setState(() => _askZero = false);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
+    final l10n = context.l10n;
+    try {
+      if (!await action()) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(failed, detail: failureReason(l10n, e), error: true);
+    }
+  }
+
   /// The knobs move nothing while autofocus runs (a touch would spoil its
   /// curve) or while the position is unknown (a roll would jump from 0).
   bool _locked(FocuserStatus s) =>
@@ -1744,9 +1851,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
       ]);
     }
     if (widget.inSettings) {
-      children.addAll(
-        _versions(context, ref.watch(deviceDriverProvider('focuser')).value),
-      );
+      children.addAll([
+        if (s != null && s.isConnected) ..._position(s),
+        ..._versions(context, ref.watch(deviceDriverProvider('focuser')).value),
+      ]);
     }
     return Column(
       key: const Key('simple-device-focuser'),
@@ -3027,32 +3135,6 @@ class _RotatorHub extends StatelessWidget {
 /// offset once any slot has one (#1675), and a tap on a filter moves to it. A
 /// manual wheel asks the user to swap it by hand and confirm. Names and labels
 /// stay in the full UI.
-/// The usual filter names, lower case, and the short form a glass cell shows
-/// (user, 2026-11-13: Green and Clear read as slot numbers beside the Plan's
-/// names).
-const _kFilterShortNames = {
-  'red': 'R',
-  'r': 'R',
-  'green': 'G',
-  'g': 'G',
-  'blue': 'B',
-  'b': 'B',
-  'clear': 'L',
-  'luminance': 'L',
-  'lum': 'L',
-  'l': 'L',
-  'ha': 'Ha',
-  'h-alpha': 'Ha',
-  'halpha': 'Ha',
-  'h alpha': 'Ha',
-  'hα': 'Ha',
-  'oiii': 'OIII',
-  'o3': 'OIII',
-  'o-iii': 'OIII',
-  'sii': 'SII',
-  's2': 'SII',
-  's-ii': 'SII',
-};
 
 class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
   const SimpleFilterWheelWindow({super.key, this.inSettings = false});
@@ -3080,7 +3162,7 @@ class _SimpleFilterWheelWindowState
   /// (Green G, Clear L), else the filter's name when it fits (four letters),
   /// else its slot number.
   String _cellLabel(FilterSlot slot) =>
-      _kFilterShortNames[slot.name.trim().toLowerCase()] ??
+      kFilterShortNames[slot.name.trim().toLowerCase()] ??
       (slot.name.isNotEmpty && slot.name.characters.length <= 4
           ? slot.name
           : '${slot.position}');

@@ -145,7 +145,7 @@ lib/widgets/sky_atlas/session_plan_dialog.dart 38
 lib/widgets/sky_atlas/stellarium_view.dart 11
 lib/widgets/sky_atlas/target_preview.dart 8
 lib/widgets/sky_atlas/tonight_sky_panel.dart 47
-lib/widgets/stats/achievements_section.dart 16
+lib/widgets/stats/achievements_section.dart 6
 lib/widgets/stats/astrobin_export_dialog.dart 7
 lib/widgets/stats/best_frames_section.dart 4
 lib/widgets/stats/charts/calendar_heatmap.dart 8
@@ -153,7 +153,7 @@ lib/widgets/stats/charts/chart_stale_chip.dart 1
 lib/widgets/stats/charts/focus_temp_scatter.dart 7
 lib/widgets/stats/charts/frame_quality_chart.dart 7
 lib/widgets/stats/charts/guiding_rms_chart.dart 7
-lib/widgets/stats/overview_section.dart 9
+lib/widgets/stats/overview_section.dart 3
 lib/widgets/stats/pi_performance_section.dart 18
 lib/widgets/stats/targets_section.dart 3
 lib/widgets/status_indicator.dart 1

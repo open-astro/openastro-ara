@@ -890,10 +890,11 @@ void main() {
     final eq = _GuiderEquipment();
     final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
     final c = await _pump(tester, _wire(), rig: rig);
-    final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
-    expect(tile.options, ['auto', 'north', 'south', 'off']);
-    expect(tile.options.map(tile.format), ['Auto', 'North', 'South', 'Off']);
-    tile.onSelected!('north');
+    for (final (id, name) in const [('auto', 'Auto'), ('north', 'North'), ('south', 'South'), ('off', 'Off')]) {
+      expect(find.descendant(of: find.byKey(Key('simple-guide-dec-mode-$id')), matching: find.text(name)), findsOneWidget,
+          reason: 'four segments, no list to open');
+    }
+    await tester.tap(find.byKey(const Key('simple-guide-dec-mode-north')));
     await tester.pump();
     await tester.pump();
     expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
@@ -964,7 +965,7 @@ void main() {
       await tester.pump();
     }
     expect(c.read(phd2SettingsProvider).ditherEnabled, isFalse);
-    expect(find.text('Off'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-window-row-Dither')), matching: find.text('Off')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
     await tester.pump();
     expect((c.read(phd2SettingsProvider).ditherEnabled, c.read(phd2SettingsProvider).ditherEveryNFrames), (true, 1));

@@ -86,6 +86,17 @@ public static partial class EquipmentEndpoints {
     internal static async Task<IResult> GetGuiderHistoryAsync([FromQuery(Name = "max_points")] int? maxPoints, IGuiderLiveService live, CancellationToken ct) =>
         Results.Ok(await live.GetHistoryAsync(maxPoints ?? 400, ct));
 
+    /// <summary>POST /equipment/focuser/setzero, /calibrate, /calibrate/abort: not connected, an action
+    /// the driver does not offer, or a focuser that moves or calibrates is a state conflict (409), not a
+    /// 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
+    internal static async Task<IResult> FocuserActionAsync(Func<Task<OperationAcceptedDto>> action) {
+        try {
+            return Results.Accepted(value: await action());
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     /// <summary>POST /equipment/filterwheel/change. Out of range is the caller's mistake (400);
     /// not connected, or a manual wheel with no filters, is a state conflict (409). Both used to
     /// surface as 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
@@ -367,6 +378,15 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
         focuser.MapPost("/halt", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.HaltAsync(key, ct)));
+        focuser.MapPost("/setzero", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            await FocuserActionAsync(() => svc.SetZeroAsync(key, ct)))
+            .WithName("SetFocuserZero").WithSummary("Make where the focuser is now 0 (the driver's SetZero action); it doesn't move.");
+        focuser.MapPost("/calibrate", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            await FocuserActionAsync(() => svc.CalibrateAsync(key, ct)))
+            .WithName("CalibrateFocuser").WithSummary("Start the driver's travel calibration (it runs to both stops).");
+        focuser.MapPost("/calibrate/abort", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            await FocuserActionAsync(() => svc.AbortCalibrationAsync(key, ct)))
+            .WithName("AbortFocuserCalibration").WithSummary("Stop a travel calibration.");
         // §59 — run one autofocus V-curve sweep with the profile's §37.11 settings, as a
         // §65.5 background job (a sweep is minutes of focuser moves + probe exposures — far too
         // long for a request). Returns 202 + the job; poll GET /api/v1/jobs/{id} for state, and
