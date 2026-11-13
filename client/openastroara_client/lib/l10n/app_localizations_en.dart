@@ -5229,4 +5229,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get focuserCouldntCalibrate => 'Couldn\'t calibrate the focuser';
+
+  @override
+  String get shellLoadingSky => 'Loading the sky…';
 }

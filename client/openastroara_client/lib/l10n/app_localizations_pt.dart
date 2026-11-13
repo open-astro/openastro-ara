@@ -5229,6 +5229,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get focuserCouldntCalibrate => 'Couldn\'t calibrate the focuser';
+
+  @override
+  String get shellLoadingSky => 'Loading the sky…';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10497,4 +10500,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get focuserCouldntCalibrate =>
       'Não foi possível calibrar o focalizador';
+
+  @override
+  String get shellLoadingSky => 'Carregando o céu…';
 }

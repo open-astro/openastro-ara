@@ -206,6 +206,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           AsyncData(:final value) => value,
           _ => false,
         });
+        ref.read(planetariumReadyProvider.notifier).set(false);
         setState(() => _linuxOverlayUrl = url);
         return;
       }
@@ -237,6 +238,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // Publish the controller BEFORE the load, fire-and-forget as it always
         // was: on a platform whose loadRequest only completes once the platform
         // view exists, awaiting it here would be a permanent loading screen.
+        ref.read(planetariumReadyProvider.notifier).set(false);
         setState(() => _controller = controller);
         unawaited(controller.loadRequest(Uri.parse(url)));
         // Apply any already-active night mode once the Stellarium page is up.
@@ -289,6 +291,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       final line = '$event';
       if (kDebugMode && line != _lastDebugLine) debugPrint('StellariumView debug: $line');
       _lastDebugLine = line;
+      return;
+    }
+    if (event['type'] == 'ready') {
+      ref.read(planetariumReadyProvider.notifier).set(true);
       return;
     }
     // Simple Mode (bare): the page's selection, for Sky's card and Plan's sheet.

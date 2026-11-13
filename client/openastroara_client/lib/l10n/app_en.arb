@@ -6670,5 +6670,9 @@
   "focuserCouldntCalibrate": "Couldn't calibrate the focuser",
   "@focuserCouldntCalibrate": {
     "description": "Error when the focuser refused to start or stop a calibration"
+  },
+  "shellLoadingSky": "Loading the sky…",
+  "@shellLoadingSky": {
+    "description": "Simple Mode: shown while the Sky Map draws its first sky after it was asked for"
   }
 }

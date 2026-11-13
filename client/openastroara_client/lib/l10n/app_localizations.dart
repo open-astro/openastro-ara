@@ -8828,6 +8828,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t calibrate the focuser'**
   String get focuserCouldntCalibrate;
+
+  /// Simple Mode: shown while the Sky Map draws its first sky after it was asked for
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the sky…'**
+  String get shellLoadingSky;
 }
 
 class _AppLocalizationsDelegate

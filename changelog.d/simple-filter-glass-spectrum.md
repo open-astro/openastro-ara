@@ -10,6 +10,8 @@
 
 ### Fixed (Simple Mode)
 
+- **Sky Map opens without tiles filling in.** The Sky Map now loads when Simple Mode opens and stays loaded, so opening it no longer starts the planetarium again. It shows once it has drawn its first sky, with "Loading the sky…" until then.
+
 - **Full filter names get their glass colour.** A wheel that names its filters Red, Green, Blue or Clear showed those cells as plain grey glass; they now take the same colour as R, G, B and L.
 - **Versions last in Settings › Rig.** The Versions table now closes the Rig section, after Storage and Logs, as it closes each device's window in Settings.
 - **Stats tiles and badges line up.** Tiles in a row of the Stats page are now the same height, and an earned badge keeps its bar (full, green) with "Earned" under it, so it is as tall as a badge still in progress.

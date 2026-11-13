@@ -99,3 +99,16 @@ final planetariumSearchProvider =
     NotifierProvider<PlanetariumSearchNotifier, String?>(
       PlanetariumSearchNotifier.new,
     );
+
+/// The planetarium page has drawn its first sky since it loaded: Simple Mode
+/// shows the Sky Map only then, so the tiles are never seen filling in.
+class PlanetariumReadyNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool ready) => state = ready;
+}
+
+final planetariumReadyProvider =
+    NotifierProvider<PlanetariumReadyNotifier, bool>(
+      PlanetariumReadyNotifier.new,
+    );

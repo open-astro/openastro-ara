@@ -209,9 +209,16 @@ final _someSteps = [
     GuideStep(at: DateTime(2026, 11, 1, 22, 0, i), raPx: (i % 5 - 2) * 0.3, decPx: (i % 3 - 1) * 0.2),
 ];
 
+class _SkyReady extends PlanetariumReadyNotifier {
+  _SkyReady(this.initial);
+  final bool initial;
+  @override
+  bool build() => initial;
+}
+
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -234,6 +241,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
           configuredPath: '/var/lib/astap', effectivePath: '/var/lib/astap', fileCount: 9,
           databases: starDatabases, solverPath: '/opt/openastroara/astap_cli', solverFound: true)),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+    // No web view in a test: the sky has drawn unless a test says not.
+    planetariumReadyProvider.overrideWith(() => _SkyReady(skyReady)),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
     // A server would otherwise dial a real event stream.
@@ -3383,6 +3392,42 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-sky')));
     await tester.pump();
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'and back');
+  });
+
+  testWidgets('the Sky Map stays loaded between opens, offstage while a frame shows', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    final sky = find.byKey(const Key('sky'), skipOffstage: false);
+    expect(sky, findsOneWidget, reason: 'loaded with Simple Mode, before it is asked for');
+    final first = tester.element(sky);
+    await _frame(tester, c);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'offstage behind the frame');
+    expect(identical(tester.element(sky), first), isTrue, reason: 'the same web view, not a new one');
+  });
+
+  testWidgets('until the sky has drawn the wallpaper says it is loading; it shows when drawn, or after 3 s',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, skyReady: false);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'not drawn yet: no tiles filling in');
+    expect(find.byKey(const Key('simple-sky-loading')), findsOneWidget);
+    c.read(planetariumReadyProvider.notifier).set(true);
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    expect(find.byKey(const Key('simple-sky-loading')), findsNothing);
+    c.read(planetariumReadyProvider.notifier).set(false);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'a page that never says so still shows');
   });
 
   testWidgets('Sky turned on with no frame gives way to the first frame (#1602)', (tester) async {

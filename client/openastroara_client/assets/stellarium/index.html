@@ -2131,6 +2131,15 @@ StelWebEngine({
     wireCatalogs();
     loadSite();                              // pull the real site from the daemon
     setInterval(loadSite, 30000);            // slow net for edits made on another client
+    // Tell the app the sky has drawn, so Simple Mode shows it only now and never
+    // the tiles filling in. A timer, not frames: a hidden web view (Simple Mode
+    // loads it offstage) may run no animation frames.
+    // shortcut: a fixed 800 ms settle, not the engine's tile queue; read the
+    // queue if pop-in still shows on a slow device.
+    setTimeout(function () {
+      fetch('/araevent', { method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ type: 'ready' }) }).catch(function () {});
+    }, 800);
   }
 });
 </script>
