@@ -5904,6 +5904,22 @@
   "@calibrationGuideNotBuilt": {
     "description": "Calibration panel, Guide Camera: no dark library or bad-pixel map yet"
   },
+  "calibrationGuideChecking": "Checking the Guider's files…",
+  "@calibrationGuideChecking": {
+    "description": "Calibration › Guide Camera: the Guider's file status is being read"
+  },
+  "calibrationGuideUnread": "Couldn't read the Guider's files",
+  "@calibrationGuideUnread": {
+    "description": "Calibration › Guide Camera: the rig could not read the Guider's dark library and bad-pixel map status"
+  },
+  "calibrationGuideUnreadNote": "The Guider may be restarting. Ara reads them again when it is back.",
+  "@calibrationGuideUnreadNote": {
+    "description": "Calibration › Guide Camera: under the unread line, why and what happens next"
+  },
+  "calibrationGuideRetry": "Try again",
+  "@calibrationGuideRetry": {
+    "description": "Calibration › Guide Camera: reads the Guider's file status again"
+  },
   "calibrationGuideUse": "Use while guiding",
   "@calibrationGuideUse": {
     "description": "Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels"
@@ -6390,6 +6406,13 @@
   "calibrationLibraryNone": "None yet.",
   "@calibrationLibraryNone": {
     "description": "Calibration panel, Darks & bias: no darks (or no bias) in the library"
+  },
+  "calibrationDarkGroupCount": "{count, plural, =1{1 exposure} other{{count} exposures}}",
+  "@calibrationDarkGroupCount": {
+    "description": "Calibration › Darks & bias: how many darks a gain and temperature group holds",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
   },
   "calibrationLibraryAge": "{age} · {frames, plural, =1{1 frame} other{{frames} frames}}",
   "@calibrationLibraryAge": {

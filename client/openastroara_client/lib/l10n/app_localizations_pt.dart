@@ -4618,6 +4618,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get calibrationGuideNotBuilt => 'Not built';
 
   @override
+  String get calibrationGuideChecking => 'Checking the Guider\'s files…';
+
+  @override
+  String get calibrationGuideUnread => 'Couldn\'t read the Guider\'s files';
+
+  @override
+  String get calibrationGuideUnreadNote =>
+      'The Guider may be restarting. Ara reads them again when it is back.';
+
+  @override
+  String get calibrationGuideRetry => 'Try again';
+
+  @override
   String get calibrationGuideUse => 'Use while guiding';
 
   @override
@@ -5006,6 +5019,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationLibraryNone => 'None yet.';
+
+  @override
+  String calibrationDarkGroupCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exposures',
+      one: '1 exposure',
+    );
+    return '$_temp0';
+  }
 
   @override
   String calibrationLibraryAge(String age, int frames) {
@@ -9816,6 +9840,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get calibrationGuideNotBuilt => 'Não montado';
 
   @override
+  String get calibrationGuideChecking => 'Verificando os arquivos do guiador…';
+
+  @override
+  String get calibrationGuideUnread =>
+      'Não foi possível ler os arquivos do guiador';
+
+  @override
+  String get calibrationGuideUnreadNote =>
+      'O guiador pode estar reiniciando. O Ara lê de novo quando ele voltar.';
+
+  @override
+  String get calibrationGuideRetry => 'Tentar de novo';
+
+  @override
   String get calibrationGuideUse => 'Usar ao guiar';
 
   @override
@@ -10205,6 +10243,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationLibraryNone => 'Nenhum ainda.';
+
+  @override
+  String calibrationDarkGroupCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exposições',
+      one: '1 exposição',
+    );
+    return '$_temp0';
+  }
 
   @override
   String calibrationLibraryAge(String age, int frames) {

@@ -66,6 +66,10 @@ _Avoid_: settings group, settings page
 One instruction to a device that the rig waits on until it is done, stalls or fails.
 _Avoid_: operation, action, move (when the wait is meant)
 
+**Refusal**:
+The rig declining a command, with a stable cause that the app puts into words.
+_Avoid_: error (for a declined command), rejection, failure (that is a device fault)
+
 ### Presentations
 
 **Full UI**:
@@ -91,6 +95,10 @@ _Avoid_: mode, panel, page
 **Monitor**:
 Simple Mode's full-screen, read-only view of the Session, opened from the left rail. Not a Screen.
 _Avoid_: Cockpit, Night Watch, Dashboard
+
+**Prompt**:
+Something the rig's state asks or tells the person, shown as a dialog in the Full UI and as a pill in Simple Mode. Feedback for something the person just did is not a Prompt.
+_Avoid_: notification, alert, toast, message (for a rig-raised one)
 
 ### Sky Album
 

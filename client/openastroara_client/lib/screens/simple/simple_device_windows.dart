@@ -3027,6 +3027,33 @@ class _RotatorHub extends StatelessWidget {
 /// offset once any slot has one (#1675), and a tap on a filter moves to it. A
 /// manual wheel asks the user to swap it by hand and confirm. Names and labels
 /// stay in the full UI.
+/// The usual filter names, lower case, and the short form a glass cell shows
+/// (user, 2026-11-13: Green and Clear read as slot numbers beside the Plan's
+/// names).
+const _kFilterShortNames = {
+  'red': 'R',
+  'r': 'R',
+  'green': 'G',
+  'g': 'G',
+  'blue': 'B',
+  'b': 'B',
+  'clear': 'L',
+  'luminance': 'L',
+  'lum': 'L',
+  'l': 'L',
+  'ha': 'Ha',
+  'h-alpha': 'Ha',
+  'halpha': 'Ha',
+  'h alpha': 'Ha',
+  'hα': 'Ha',
+  'oiii': 'OIII',
+  'o3': 'OIII',
+  'o-iii': 'OIII',
+  'sii': 'SII',
+  's2': 'SII',
+  's-ii': 'SII',
+};
+
 class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
   const SimpleFilterWheelWindow({super.key, this.inSettings = false});
 
@@ -3049,12 +3076,14 @@ class _SimpleFilterWheelWindowState
       ? context.l10n.deviceSlot(slot.position)
       : context.l10n.deviceSlotFilter(slot.position, slot.name);
 
-  /// A cell's own words: the filter's name when it fits (four letters), else
-  /// its slot number.
+  /// A cell's own words: the letters astronomers use for the usual filters
+  /// (Green G, Clear L), else the filter's name when it fits (four letters),
+  /// else its slot number.
   String _cellLabel(FilterSlot slot) =>
-      slot.name.isNotEmpty && slot.name.characters.length <= 4
-      ? slot.name
-      : '${slot.position}';
+      _kFilterShortNames[slot.name.trim().toLowerCase()] ??
+      (slot.name.isNotEmpty && slot.name.characters.length <= 4
+          ? slot.name
+          : '${slot.position}');
 
   @override
   Widget build(BuildContext context) {

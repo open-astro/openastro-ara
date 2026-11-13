@@ -230,8 +230,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
+  double _simplePreflightRowWidth = 0;
   double _statusHeight = 0;
   double _messagesHeight = 0;
+  double _messagesCardWidth = 0;
   final _messagesKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
@@ -240,18 +242,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _simplePreflightRowKey.currentContext?.size?.height;
-    final messages = _messagesKey.currentContext?.size?.height ?? 0;
+    final row = _simplePreflightRowKey.currentContext?.size;
+    final messages = _messagesKey.currentContext?.size;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight) {
+        (row != null &&
+            (row.height != _simplePreflightRowHeight ||
+                row.width != _simplePreflightRowWidth)) ||
+        (messages?.height ?? 0) != _messagesHeight ||
+        (messages?.width ?? 0) != _messagesCardWidth) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
-        _messagesHeight = messages;
+        _simplePreflightRowHeight = row?.height ?? _simplePreflightRowHeight;
+        _simplePreflightRowWidth = row?.width ?? _simplePreflightRowWidth;
+        _messagesHeight = messages?.height ?? 0;
+        _messagesCardWidth = messages?.width ?? 0;
       });
     }
   });
@@ -1089,33 +1096,49 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
     // The status card (the status lines, then the messages) sits top left,
-    // starting under the Preflight strip when it shows. On a window narrower
-    // than its widest plus the insets (a phone) it takes the whole row.
+    // under the status strip; under the Preflight strip only when the two
+    // would overlap (the strip is centred, so a wide window has room beside
+    // it). On a window narrower than its widest plus the insets (a phone) it
+    // takes the whole row.
     final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
     final messagesWidth = width - kSimpleInset * 2;
-    final messagesTop = simplePreflightRow
-        ? railTop + _simplePreflightRowHeight + AraSpace.s12
-        : railTop;
-    _measure();
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
+    // A card too tall for the room above the left rail moves beside it, when
+    // the room between the rails leaves it a readable width; otherwise it
+    // paints over the left rail. Either way it stops short of the right rail.
+    final railShift = railWidth + kSimpleInset;
+    final besideRoom = messagesWidth - railShift * 2;
+    bool besideRailAt(double top) =>
+        !narrow &&
+        _messagesHeight > (panels ? leftRailTop - top - kSimpleInset : double.infinity) &&
+        besideRoom >= 240;
+    // Beside the steps only when its real left edge (moved beside the rail
+    // when it is that tall) leaves the gap. Not measured yet (0): under them,
+    // so the first frame never overlaps.
+    final besideSteps =
+        !narrow &&
+        _simplePreflightRowWidth > 0 &&
+        kSimpleInset +
+                (besideRailAt(railTop) ? railShift : 0) +
+                _messagesCardWidth +
+                AraSpace.s12 <=
+            (width - _simplePreflightRowWidth) / 2;
+    final messagesTop = simplePreflightRow && !besideSteps
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
+        : railTop;
+    _measure();
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
-    // A card too tall for the room above the left rail moves beside it, when
-    // the room between the rails leaves it a readable width; otherwise it
-    // paints over the left rail. Either way it stops short of the right rail.
-    final railShift = railWidth + kSimpleInset;
-    final besideRoom = messagesWidth - railShift * 2;
-    final pillsBesideRail =
-        !narrow && _messagesHeight > messagesRoom && besideRoom >= 240;
+    final pillsBesideRail = besideRailAt(messagesTop);
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
