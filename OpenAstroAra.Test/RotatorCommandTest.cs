@@ -31,7 +31,7 @@ namespace OpenAstroAra.Test {
     public class RotatorCommandTest {
 
         private static readonly DiscoveredDeviceDto Device = new(
-            UniqueId: "rot-1", Name: "Bench Rotator", Type: Contracts.DeviceType.Rotator,
+            UniqueId: "rot-1", Name: "Bench Rotator", Type: DeviceType.Rotator,
             HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 11111, AlpacaDeviceNumber: 0, UseHttps: false);
 
         private sealed class FaultSink : IEquipmentFaultSink {
@@ -46,14 +46,14 @@ namespace OpenAstroAra.Test {
         public void SetUp() => _faults = new FaultSink();
 
         private static DeviceCommandPolicy Policy(int maxPolls = 40) =>
-            new(Contracts.DeviceType.Rotator, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(1), maxPolls,
+            new(DeviceType.Rotator, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(1), maxPolls,
                 MotionFlagOptional: true, UnreadableReadsBeforeSettled: 5);
 
         private async Task<RotatorService> ConnectedAsync(FakeRotatorDevice rotator, DeviceCommandPolicy policy) {
             var svc = new RotatorService(faults: _faults) { DeviceFactory = _ => rotator, CommandPolicy = policy };
             await svc.ConnectAsync(new ConnectRequestDto(Device), null, CancellationToken.None);
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-            while (svc.GetAsync(CancellationToken.None).Result?.State != EquipmentConnectionState.Connected) {
+            while ((await svc.GetAsync(CancellationToken.None))?.State != EquipmentConnectionState.Connected) {
                 Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "timed out waiting for the connect");
                 await Task.Delay(5);
             }
@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
             using var rotator = new FakeRotatorDevice { OnMove = _ => release.Wait(TimeSpan.FromSeconds(10)) };
             using var svc = await ConnectedAsync(rotator, Policy());
             try {
-                Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
+                await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
                 Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
             } finally {
                 release.Set();
@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
         public async Task A_rotator_that_keeps_moving_past_the_bound_is_one_StallTimeout() {
             using var rotator = new FakeRotatorDevice { IsMovingScript = () => true };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 10));
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
             Assert.That(ex!.Message, Does.Contain("rotator move to 90° was not confirmed settled within the"));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
         }
@@ -91,7 +91,9 @@ namespace OpenAstroAra.Test {
             using var rotator = new FakeRotatorDevice { IsMovingScript = () => { Interlocked.Increment(ref reads); throw new InvalidOperationException("no IsMoving"); } };
             using var svc = await ConnectedAsync(rotator, Policy());
             var angle = await Move(svc);
-            Assert.That(reads, Is.EqualTo(5));
+            // The exact count of 5 is pinned in DeviceCommandTest; here the lifecycle's own refresh also reads
+            // IsMoving, so only the ceiling is asserted: a required flag would poll all 40 times (and stall).
+            Assert.That(reads, Is.LessThan(40));
             Assert.That(angle, Is.EqualTo(10f));
             Assert.That(_faults.Faults, Is.Empty);
         }
@@ -103,7 +105,7 @@ namespace OpenAstroAra.Test {
                 IsMovingScript = () => Interlocked.Increment(ref reads) % 2 == 1 ? throw new InvalidOperationException("blip") : true,
             };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 14));
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
             Assert.That(reads, Is.GreaterThanOrEqualTo(14));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
         }
@@ -112,7 +114,7 @@ namespace OpenAstroAra.Test {
         public async Task A_move_that_throws_is_one_OpError_with_the_device_text() {
             using var rotator = new FakeRotatorDevice { OnMove = _ => throw new InvalidOperationException("driver says no") };
             using var svc = await ConnectedAsync(rotator, Policy());
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
             Assert.That(ex!.Message, Is.EqualTo("rotator move to 90° failed: driver says no"));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.OpError));
         }
@@ -121,13 +123,12 @@ namespace OpenAstroAra.Test {
         public async Task A_sequencer_cancel_during_the_move_propagates_with_no_fault() {
             using var release = new ManualResetEventSlim(false);
             using var rotator = new FakeRotatorDevice { OnMove = _ => release.Wait(TimeSpan.FromSeconds(10)) };
-            using var svc = await ConnectedAsync(rotator, new DeviceCommandPolicy(Contracts.DeviceType.Rotator, TimeSpan.FromSeconds(30),
+            using var svc = await ConnectedAsync(rotator, new DeviceCommandPolicy(DeviceType.Rotator, TimeSpan.FromSeconds(30),
                 TimeSpan.FromMilliseconds(1), 40, true, 5));
             using var cts = new CancellationTokenSource();
             try {
-                var move = Move(svc, cts.Token);
                 cts.CancelAfter(30);
-                Assert.CatchAsync<OperationCanceledException>(() => move);
+                await Assert.CatchAsync<OperationCanceledException>(() => Move(svc, cts.Token));
                 Assert.That(_faults.Faults, Is.Empty);
             } finally {
                 release.Set();
@@ -138,10 +139,12 @@ namespace OpenAstroAra.Test {
         public async Task A_disconnect_mid_wait_fails_the_move_with_no_stall_fault() {
             using var rotator = new FakeRotatorDevice { IsMovingScript = () => true };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 2000));
-            var move = Move(svc);
-            await Task.Delay(30);
-            await svc.DisconnectAsync(null, CancellationToken.None);
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => move);
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(async () => {
+                var move = Move(svc);
+                await Task.Delay(30);
+                await svc.DisconnectAsync(null, CancellationToken.None);
+                await move;
+            });
             Assert.That(_faults.Faults.Where(f => f.Kind == EquipmentFaultKind.StallTimeout), Is.Empty);
         }
 
@@ -152,7 +155,7 @@ namespace OpenAstroAra.Test {
             using var rotator = new FakeRotatorDevice { IsMovingScript = () => true };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 5));
             var before = rotator.FailedReads;
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
             await Task.Delay(150);
             Assert.That(rotator.FailedReads, Is.EqualTo(before));
             Assert.That((await svc.GetAsync(CancellationToken.None))?.State, Is.EqualTo(EquipmentConnectionState.Connected));

@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
     public class DeviceCommandTest {
 
         private static readonly DiscoveredDeviceDto Device = new(
-            UniqueId: "dev-1", Name: "Bench Rotator", Type: Contracts.DeviceType.Rotator,
+            UniqueId: "dev-1", Name: "Bench Rotator", Type: DeviceType.Rotator,
             HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 11111, AlpacaDeviceNumber: 0, UseHttps: false);
 
         private sealed class FaultSink : IEquipmentFaultSink {
@@ -55,16 +55,16 @@ namespace OpenAstroAra.Test {
         private CapturingLogger _log = null!;
 
         [SetUp]
-        public void SetUp() {
+        public async Task SetUp() {
             _faults = new FaultSink();
             _log = new CapturingLogger();
         }
 
         private static DeviceCommandPolicy Policy(bool optional = false, int unreadable = 0, int maxPolls = 20, int hardMs = 50) =>
-            new(Contracts.DeviceType.Rotator, TimeSpan.FromMilliseconds(hardMs), TimeSpan.FromMilliseconds(1), maxPolls, optional, unreadable);
+            new(DeviceType.Rotator, TimeSpan.FromMilliseconds(hardMs), TimeSpan.FromMilliseconds(1), maxPolls, optional, unreadable);
 
         private Task Run(DeviceCommandPolicy policy, Action call, Func<bool?>? terminal = null, bool live = true, bool current = true,
-                CancellationToken ct = default, Action? dispatched = null) {
+                Action? dispatched = null, CancellationToken ct = default) {
             var command = new DeviceCommand(policy, _faults, _log);
             return command.RunAsync(new DeviceCommandRequest("rotator move to 90°", call, () => live, () => current ? Device : null,
                 terminal, dispatched), ct);
@@ -88,15 +88,15 @@ namespace OpenAstroAra.Test {
             using var release = new ManualResetEventSlim(false);
             try {
                 var sw = Stopwatch.StartNew();
-                var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                     Run(Policy(hardMs: 50), () => { release.Wait(TimeSpan.FromSeconds(10)); throw new InvalidOperationException("late"); }));
                 Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(1)));
                 Assert.That(ex!.Message, Does.Contain("did not complete within"));
                 var fault = _faults.Faults.Single();
-                Assert.That((fault.DeviceType, fault.Kind), Is.EqualTo((Contracts.DeviceType.Rotator, EquipmentFaultKind.StallTimeout)));
+                Assert.That((fault.DeviceType, fault.Kind), Is.EqualTo((DeviceType.Rotator, EquipmentFaultKind.StallTimeout)));
                 // The abandoned call fails later: it is observed (Debug log), never an unobserved task.
                 release.Set();
-                await WaitForAsync(() => _log.Entries.Any(e => e.Level == LogLevel.Debug && e.Text.Contains("abandoned")), "the abandoned call's log");
+                await WaitForAsync(() => _log.Entries.Any(e => e.Level == LogLevel.Debug && e.Text.Contains("abandoned", StringComparison.Ordinal)), "the abandoned call's log");
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 Assert.That(unobserved, Is.Zero);
@@ -107,8 +107,8 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_motion_flag_that_stays_true_past_the_bound_is_one_StallTimeout() {
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() => Run(Policy(maxPolls: 5), () => { }, terminal: () => false));
+        public async Task A_motion_flag_that_stays_true_past_the_bound_is_one_StallTimeout() {
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Run(Policy(maxPolls: 5), () => { }, terminal: () => false));
             Assert.That(ex!.Message, Does.Contain("was not confirmed settled within"));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
         }
@@ -130,9 +130,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_required_flag_never_settles_on_unreadable_reads() {
+        public async Task A_required_flag_never_settles_on_unreadable_reads() {
             var reads = 0;
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 Run(Policy(optional: false, unreadable: 5, maxPolls: 12), () => { }, terminal: () => { reads++; return null; }));
             Assert.That(reads, Is.EqualTo(12), "every poll read, none ended the wait");
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
@@ -146,17 +146,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_flaky_optional_flag_does_not_settle_early() {
+        public async Task A_flaky_optional_flag_does_not_settle_early() {
             var reads = 0;
             // unreadable, moving, unreadable, moving ...: the streak never reaches 5.
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 Run(Policy(optional: true, unreadable: 5, maxPolls: 20), () => { }, terminal: () => ++reads % 2 == 1 ? null : false));
             Assert.That(reads, Is.EqualTo(20));
         }
 
         [Test]
-        public void A_call_that_throws_is_an_OpError_with_the_device_text() {
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+        public async Task A_call_that_throws_is_an_OpError_with_the_device_text() {
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 Run(Policy(), () => throw new InvalidOperationException("driver says no")));
             Assert.That(ex!.Message, Is.EqualTo("rotator move to 90° failed: driver says no"));
             var fault = _faults.Faults.Single();
@@ -164,13 +164,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_sequencer_cancel_propagates_with_no_fault() {
+        public async Task A_sequencer_cancel_propagates_with_no_fault() {
             using var release = new ManualResetEventSlim(false);
             using var cts = new CancellationTokenSource();
             try {
                 var run = Run(Policy(hardMs: 5000), () => release.Wait(TimeSpan.FromSeconds(10)), ct: cts.Token);
                 cts.CancelAfter(30);
-                Assert.CatchAsync<OperationCanceledException>(() => run);
+                await Assert.CatchAsync<OperationCanceledException>(() => run);
                 Assert.That(_faults.Faults, Is.Empty);
             } finally {
                 release.Set();
@@ -178,26 +178,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_cancel_during_the_settle_wait_propagates_with_no_fault() {
+        public async Task A_cancel_during_the_settle_wait_propagates_with_no_fault() {
             using var cts = new CancellationTokenSource();
             var run = Run(Policy(maxPolls: 1000), () => { }, terminal: () => false, ct: cts.Token);
             cts.CancelAfter(30);
-            Assert.CatchAsync<OperationCanceledException>(() => run);
+            await Assert.CatchAsync<OperationCanceledException>(() => run);
             Assert.That(_faults.Faults, Is.Empty);
         }
 
         [Test]
-        public void A_device_that_is_gone_mid_wait_fails_the_command_but_publishes_nothing() {
-            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
-                Run(Policy(), () => { }, terminal: () => false, live: false, current: false));
+        public async Task A_device_that_is_gone_mid_wait_fails_the_command_but_publishes_nothing() {
+            var reads = 0;
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                Run(Policy(), () => { }, terminal: () => { reads++; return false; }, live: false, current: false));
             Assert.That(ex!.Message, Does.Contain("was not confirmed settled"));
+            Assert.That(reads, Is.Zero, "a gone device is not polled");
             Assert.That(_faults.Faults, Is.Empty);
         }
 
         [Test]
-        public void A_policy_that_opts_out_of_publishing_fails_the_command_with_no_fault() {
+        public async Task A_policy_that_opts_out_of_publishing_fails_the_command_with_no_fault() {
             var policy = Policy(maxPolls: 3) with { PublishFaults = false };
-            Assert.ThrowsAsync<SequenceEntityFailedException>(() => Run(policy, () => throw new InvalidOperationException("x")));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Run(policy, () => throw new InvalidOperationException("x")));
             Assert.That(_faults.Faults, Is.Empty);
         }
     }
