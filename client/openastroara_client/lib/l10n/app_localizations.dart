@@ -2487,7 +2487,7 @@ abstract class AppLocalizations {
   /// **'Camera (Guide)'**
   String get shellSectionGuider;
 
-  /// Simple Mode Settings › Devices when the app has no link to the rig
+  /// Simple Mode Settings › Devices, and a full UI settings panel whose values are on the rig (Storage, File naming), when the app has no link to the rig
   ///
   /// In en, this message translates to:
   /// **'Rig not connected'**

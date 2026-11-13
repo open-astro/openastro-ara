@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../util/friendly_error.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/loaded_section.dart';
 
 /// ADR 0015 — shown instead of a section's fields while it holds no value from
-/// the rig: says so, says why when a load failed, and offers a retry. Never
-/// shows defaults.
-class SectionNotLoaded extends StatelessWidget {
+/// the rig: says so, says why when a load failed, and offers a retry. With no
+/// rig connected (planning offline) it says only that: there is nothing to
+/// load or retry. Never shows defaults.
+class SectionNotLoaded extends ConsumerWidget {
   const SectionNotLoaded({
     super.key,
     required this.section,
@@ -18,7 +21,13 @@ class SectionNotLoaded extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(profileApiProvider) == null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(context.l10n.shellRigNotConnected),
+      );
+    }
     final failure = section.lastFailure;
     return Padding(
       padding: const EdgeInsets.all(24),

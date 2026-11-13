@@ -1903,7 +1903,7 @@
   },
   "shellRigNotConnected": "Rig not connected",
   "@shellRigNotConnected": {
-    "description": "Simple Mode Settings › Devices when the app has no link to the rig"
+    "description": "Simple Mode Settings › Devices, and a full UI settings panel whose values are on the rig (Storage, File naming), when the app has no link to the rig"
   },
   "shellFilterWheel": "Filter wheel",
   "@shellFilterWheel": {
