@@ -60,7 +60,7 @@ public static partial class WebSocketEndpoints {
         // §60.9.4 — exposes the catalog without requiring a WS upgrade.
         // Lets the WILMA client validate "the daemon advertises this event type"
         // before subscribing.
-        ws.MapGet("/catalog", () => Results.Ok(new WsCatalogResponse(WsEventCatalog.All)))
+        ws.MapGet("/catalog", () => Results.Ok(new WsCatalogResponse(WsEventCatalog.All.Select(e => e.Token).ToList())))
           .Produces<WsCatalogResponse>(StatusCodes.Status200OK)
           .WithName("GetWebSocketCatalog");
 
@@ -71,54 +71,54 @@ public static partial class WebSocketEndpoints {
         ws.MapGet("",
             async (HttpContext http, IWsEventChannel channel, IWsBroadcaster broadcaster,
                    ClientSessionService sessions, ILoggerFactory loggerFactory) => {
-                if (http.WebSockets.IsWebSocketRequest) {
-                    // §60.9 requires version 1, via the X-Ara-WS-Version header OR the
-                    // ws_version query parameter — browser WebSockets can't set request
-                    // headers, so the query param is the web client's only channel (the
-                    // header wins when both are present). Per API_CONTRACT.md (WebSocket section), a
-                    // mismatched/missing version is rejected pre-upgrade with 426 —
-                    // close-code 4003 only applies if version negotiation fails *after*
-                    // a successful upgrade, which can't happen with a pre-handshake check.
-                    var requested = ResolveRequestedWsVersion(
-                        http.Request.Headers["X-Ara-WS-Version"].ToString(),
-                        http.Request.Query["ws_version"].ToString());
-                    if (!string.Equals(requested, ProtocolVersion, StringComparison.Ordinal)) {
-                        http.Response.Headers.Upgrade = "websocket";
-                        http.Response.Headers.Connection = "Upgrade";
-                        return Results.Problem(
-                            type: "https://openastro.net/errors/ws-version-mismatch",
-                            title: "Unsupported WebSocket protocol version",
-                            statusCode: StatusCodes.Status426UpgradeRequired,
-                            detail: $"X-Ara-WS-Version header (or ws_version query parameter) is required and must equal \"{ProtocolVersion}\". Got: \"{requested}\".");
-                    }
-                    // #1194 — refuse past the concurrent-socket cap BEFORE the upgrade, so the client
-                    // sees a 503 problem (and Retry-After) instead of a dropped handshake.
-                    if (!WsConnectionGate.TryEnter()) {
-                        http.Response.Headers.RetryAfter = "30";
-                        return Results.Problem(
-                            type: "https://openastro.net/errors/ws-too-many-connections",
-                            title: "Too many WebSocket connections",
-                            statusCode: StatusCodes.Status503ServiceUnavailable,
-                            detail: $"The daemon already serves {WsConnectionGate.MaxConcurrentConnections} WebSocket subscribers. Close an idle client (or wait for a stale one to time out) and retry.");
-                    }
-                    var logger = loggerFactory.CreateLogger("OpenAstroAra.Server.Endpoints.WebSocket");
-                    try {
-                        await HandleWebSocketAsync(http, channel, broadcaster, sessions, logger);
-                    } finally {
-                        WsConnectionGate.Exit();
-                    }
-                    return Results.Empty;
-                }
-                // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
-                // + Connection headers so the client knows which protocol to switch to.
-                http.Response.Headers.Upgrade = "websocket";
-                http.Response.Headers.Connection = "Upgrade";
-                return Results.Problem(
-                    type: "https://openastro.net/errors/upgrade-required",
-                    title: "WebSocket upgrade required",
-                    statusCode: StatusCodes.Status426UpgradeRequired,
-                    detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
-            })
+                       if (http.WebSockets.IsWebSocketRequest) {
+                           // §60.9 requires version 1, via the X-Ara-WS-Version header OR the
+                           // ws_version query parameter — browser WebSockets can't set request
+                           // headers, so the query param is the web client's only channel (the
+                           // header wins when both are present). Per API_CONTRACT.md (WebSocket section), a
+                           // mismatched/missing version is rejected pre-upgrade with 426 —
+                           // close-code 4003 only applies if version negotiation fails *after*
+                           // a successful upgrade, which can't happen with a pre-handshake check.
+                           var requested = ResolveRequestedWsVersion(
+                               http.Request.Headers["X-Ara-WS-Version"].ToString(),
+                               http.Request.Query["ws_version"].ToString());
+                           if (!string.Equals(requested, ProtocolVersion, StringComparison.Ordinal)) {
+                               http.Response.Headers.Upgrade = "websocket";
+                               http.Response.Headers.Connection = "Upgrade";
+                               return Results.Problem(
+                                   type: "https://openastro.net/errors/ws-version-mismatch",
+                                   title: "Unsupported WebSocket protocol version",
+                                   statusCode: StatusCodes.Status426UpgradeRequired,
+                                   detail: $"X-Ara-WS-Version header (or ws_version query parameter) is required and must equal \"{ProtocolVersion}\". Got: \"{requested}\".");
+                           }
+                           // #1194 — refuse past the concurrent-socket cap BEFORE the upgrade, so the client
+                           // sees a 503 problem (and Retry-After) instead of a dropped handshake.
+                           if (!WsConnectionGate.TryEnter()) {
+                               http.Response.Headers.RetryAfter = "30";
+                               return Results.Problem(
+                                   type: "https://openastro.net/errors/ws-too-many-connections",
+                                   title: "Too many WebSocket connections",
+                                   statusCode: StatusCodes.Status503ServiceUnavailable,
+                                   detail: $"The daemon already serves {WsConnectionGate.MaxConcurrentConnections} WebSocket subscribers. Close an idle client (or wait for a stale one to time out) and retry.");
+                           }
+                           var logger = loggerFactory.CreateLogger("OpenAstroAra.Server.Endpoints.WebSocket");
+                           try {
+                               await HandleWebSocketAsync(http, channel, broadcaster, sessions, logger);
+                           } finally {
+                               WsConnectionGate.Exit();
+                           }
+                           return Results.Empty;
+                       }
+                       // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
+                       // + Connection headers so the client knows which protocol to switch to.
+                       http.Response.Headers.Upgrade = "websocket";
+                       http.Response.Headers.Connection = "Upgrade";
+                       return Results.Problem(
+                           type: "https://openastro.net/errors/upgrade-required",
+                           title: "WebSocket upgrade required",
+                           statusCode: StatusCodes.Status426UpgradeRequired,
+                           detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
+                   })
             .ProducesProblem(StatusCodes.Status426UpgradeRequired)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .WithName("UpgradeToWebSocket");

@@ -10,6 +10,7 @@ import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import 'stats_format.dart';
 import '../adaptive_controls.dart';
+import 'stats_pull_refresh.dart';
 
 /// §50 Stats Overview section — headline catalog totals from the live daemon
 /// (`GET /api/v1/stats/overview`), replacing the Phase 12g.1 demo-data tiles.
@@ -20,7 +21,11 @@ class OverviewSection extends ConsumerStatefulWidget {
   ConsumerState<OverviewSection> createState() => _OverviewSectionState();
 }
 
-class _OverviewSectionState extends ConsumerState<OverviewSection> {
+class _OverviewSectionState extends ConsumerState<OverviewSection>
+    with StatsPullRefresh<OverviewSection> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Drives the header spinner during a manual refresh. Kept local (not derived
   // from the provider's isLoading) so the tiles stay on screen while it spins —
   // refresh() deliberately holds the old data instead of dropping to loading.
@@ -68,18 +73,12 @@ class _OverviewSectionState extends ConsumerState<OverviewSection> {
               child: Text('Overview',
                   style: Theme.of(context).textTheme.titleMedium),
             ),
-            IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
-            ),
+            // The page's pull down refreshes; this shows it running.
+            if (spinning)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+              ),
           ],
         ),
         const SizedBox(height: 8),

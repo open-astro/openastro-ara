@@ -9,6 +9,7 @@ import '../../theme/ara_colors.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import '../adaptive_controls.dart';
+import 'stats_pull_refresh.dart';
 
 /// §50.19 Achievements section on the Stats dashboard. Unlike the demo-data
 /// Overview/Targets sections, this is wired to the live daemon
@@ -22,7 +23,11 @@ class AchievementsSection extends ConsumerStatefulWidget {
       _AchievementsSectionState();
 }
 
-class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
+class _AchievementsSectionState extends ConsumerState<AchievementsSection>
+    with StatsPullRefresh<AchievementsSection> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Drives the header spinner during a manual refresh. Kept local (not derived
   // from the provider's isLoading) so the records stay on screen while it spins
   // — refresh() deliberately holds the old data instead of dropping to loading.
@@ -70,18 +75,12 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
               child: Text('Achievements',
                   style: Theme.of(context).textTheme.titleMedium),
             ),
-            IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
-            ),
+            // The page's pull down refreshes; this shows it running.
+            if (spinning)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+              ),
           ],
         ),
         const SizedBox(height: 8),

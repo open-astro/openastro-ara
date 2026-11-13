@@ -66,8 +66,8 @@ namespace OpenAstroAra.Test {
             };
             published = [];
             ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-              .Callback<string, JsonElement, CancellationToken>((t, p, _) => published.Add((t, p.Clone())))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+              .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => published.Add((t, p.Clone())))
               .Returns(Task.CompletedTask);
         }
 
@@ -182,7 +182,7 @@ namespace OpenAstroAra.Test {
             Assert.That(start.Args, Is.EqualTo(new[] { "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
                 "--no-block: the helper restarts this process before a blocking start could return");
             var evt = published.Single();
-            Assert.That(evt.Type, Is.EqualTo(WsEventCatalog.ServerRestartImminent));
+            Assert.That(evt.Type, Is.EqualTo(WsEventCatalog.ServerRestartImminent.Token));
             Assert.That(evt.Payload.GetProperty("reason").GetString(), Is.EqualTo("update"));
             Assert.That(evt.Payload.GetProperty("version").GetString(), Is.EqualTo("0.0.2-ara.1"));
             Assert.That(evt.Payload.GetProperty("update_id").GetString(), Is.EqualTo(staged.Id));

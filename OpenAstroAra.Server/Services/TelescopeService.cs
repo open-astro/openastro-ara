@@ -21,12 +21,12 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
-using PierSide = OpenAstroAra.Core.Enums.PierSide;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -332,7 +332,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             var stop = guider.StopGuiding(cts.Token);
             var finished = await Task.WhenAny(stop, Task.Delay(StopGuidingBeforeMoveTimeout, cts.Token)).ConfigureAwait(false);
             if (!ReferenceEquals(finished, stop)) {
-                LogGuidingStopBeforeMoveTimedOut(op, (int) StopGuidingBeforeMoveTimeout.TotalSeconds);
+                LogGuidingStopBeforeMoveTimedOut(op, (int)StopGuidingBeforeMoveTimeout.TotalSeconds);
                 _ = stop.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default); // observe a late fault
                 return;
             }
@@ -961,7 +961,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a status-poll or abort path. CA1031's log-and-recover boundary applies.")]
-    private void PublishSlewEvent(string eventType, System.Text.Json.Nodes.JsonObject payload) {
+    private void PublishSlewEvent(WsEvent eventType, System.Text.Json.Nodes.JsonObject payload) {
         if (_ws is null) {
             return;
         }

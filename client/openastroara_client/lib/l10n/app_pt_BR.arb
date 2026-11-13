@@ -1435,6 +1435,8 @@
   "rigSetupCalibrationAction": "Abrir modo Guiagem",
   "rigSetupItemDone": "Pronto",
   "rigSetupNotNow": "Agora não",
+  "rigSetupProgress": "{done} de {total} prontos",
+  "rigSetupNext": "Próximo: {item}",
   "rigSetupDonePill": "Setup configurado",
   "faultGroupCount": "{count} vezes",
   "faultGroupSpan": "Primeira {first} · última {last}",

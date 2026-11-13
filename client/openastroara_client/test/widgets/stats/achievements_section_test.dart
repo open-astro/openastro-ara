@@ -8,6 +8,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/achievements_state.dart';
 import 'package:openastroara/widgets/stats/achievements_section.dart';
+import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
@@ -107,9 +108,9 @@ void main() {
     expect(find.text('Light frames'), findsOneWidget);
     expect(find.textContaining('Couldn’t refresh'), findsNothing);
 
-    // Next fetch fails; tap the refresh icon.
+    // Next fetch fails; pull down to refresh.
     api.throwOnFetch = true;
-    await tester.tap(find.byIcon(Icons.refresh));
+    pullRefresh(tester);
     await tester.pumpAndSettle();
 
     // Banner shown AND records still on screen (not blanked).

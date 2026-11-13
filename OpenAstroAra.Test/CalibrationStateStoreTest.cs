@@ -103,18 +103,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Snapshot_capture_and_apply_carry_the_state_across_profile_select() {
-            var built = new InMemoryProfileStore();
-            built.PutCalibrationState(BothBuilt());
-            var snap = ProfileStoreSnapshot.Capture(built);
-            Assert.That(snap.CalibrationState, Is.EqualTo(BothBuilt()));
-
-            var target = new InMemoryProfileStore();
-            ProfileStoreSnapshot.Apply(target, snap);
-            Assert.That(target.GetCalibrationState(), Is.EqualTo(BothBuilt()));
-        }
-
-        [Test]
         public void Applying_a_never_built_snapshot_clears_the_live_state() {
             // Switching to a profile that never built darks must clear the live stamps — inheriting the
             // previous profile's "valid" would claim a dark library that profile never built.

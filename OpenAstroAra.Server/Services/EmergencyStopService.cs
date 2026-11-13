@@ -2,6 +2,10 @@
 // Derived from N.I.N.A. — Nighttime Imaging 'N' Astronomy (MPL-2.0).
 // SPDX-License-Identifier: MPL-2.0
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -9,10 +13,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using OpenAstroAra.Server.Contracts;
-using OpenAstroAra.Server.Contracts.WsEvents;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -311,7 +311,7 @@ public sealed partial class EmergencyStopService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The event is advisory; a WS fault must not fail the stop itself. Logged, never rethrown.")]
-    private async Task PublishAsync(string eventType, JsonObject payload) {
+    private async Task PublishAsync(WsEvent eventType, JsonObject payload) {
         if (_ws is null) {
             return;
         }

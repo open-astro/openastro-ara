@@ -74,7 +74,7 @@ namespace OpenAstroAra.Test {
                     .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ids.Count);
                 // Until the user acts, the star-lost pause is still the daemon's.
                 Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => (IReadOnlyList<Guid>) ids.ToList());
+                    .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => (IReadOnlyList<Guid>)ids.ToList());
                 Sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(RunId, It.IsAny<CancellationToken>()))
                     .ReturnsAsync(Target);
                 Centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
@@ -88,8 +88,8 @@ namespace OpenAstroAra.Test {
                     .Callback<NotificationDto, CancellationToken>((n, _) => { lock (Notifications) { Notifications.Add(n); } })
                     .Returns(Task.CompletedTask);
                 var ws = new Mock<IWsBroadcaster>();
-                ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                    .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => { lock (WsTopics) { WsTopics.Add(t); } })
+                ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                    .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => { lock (WsTopics) { WsTopics.Add(t); } })
                     .Returns(Task.CompletedTask);
                 Service = new GuiderService(
                     new HeadlessProfileService(),
@@ -211,7 +211,7 @@ namespace OpenAstroAra.Test {
             rig.Sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Once, "a star-lost pause is adoptable by a later daemon pause");
             Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 1).ConfigureAwait(false), Is.True);
             Assert.That(rig.Notifications[0].Title, Is.EqualTo("Guide star lost — sequence paused"));
-            Assert.That(rig.WsTopics, Does.Contain(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.GuiderFaultActionTaken));
+            Assert.That(rig.WsTopics, Does.Contain(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.GuiderFaultActionTaken.Token));
 
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the first guide step must resume the paused run");
@@ -403,7 +403,7 @@ namespace OpenAstroAra.Test {
             using var rig = new Rig(runActive: true);
             var asked = 0;
             rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ++asked == 1 ? (IReadOnlyList<Guid>) ids.ToList() : Array.Empty<Guid>());
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ++asked == 1 ? (IReadOnlyList<Guid>)ids.ToList() : Array.Empty<Guid>());
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 

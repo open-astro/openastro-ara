@@ -24,19 +24,13 @@ namespace OpenAstroAra.Test {
     /// every declared constant must be in <c>All</c>, and every catalog entry must have an emitter.
     /// The emit scan is a SOURCE scan of OpenAstroAra.Server (outside the catalog file): it sees a token written as
     /// a string literal that is the first argument of a Publish/PublishAsync/EmitAsync call, or the value of a
-    /// <c>public const string XxxEvent</c> (the emitter-owned WS form, e.g. BackupService.CreateStartedEvent; a private *Event const such as a diagnostics type is not one); and it sees a use of
+    /// <c>public static readonly WsEvent XxxEvent</c> (the emitter-owned WS form, e.g. BackupService.CreateStartedEvent; a private *Event const such as a diagnostics type is not one); and it sees a use of
     /// a <c>WsEventCatalog.X</c> constant. For the "has an emitter" direction any token-shaped literal counts. It cannot
     /// see a token assembled at run time (concatenation or interpolation), nor a literal that reaches the broadcaster
     /// through a variable or ternary without being a <c>*Event</c> const.
     /// </summary>
     [TestFixture]
     public class WsEventCatalogCoverageTest {
-
-        // Planned entries with no emitter yet. Keep this list to the entries the design still intends to emit;
-        // a dead entry belongs out of the catalog, not here.
-        private static readonly HashSet<string> PlannedNoEmitter = new(StringComparer.Ordinal) {
-            WsEventCatalog.CalibrationFlatsGenerated, // planned: flats generated from a calibration run (no emitter yet)
-        };
 
         private static readonly Regex EventConst = new("public\\s+const\\s+string\\s+\\w*Event\\s*=\\s*\"([^\"]+)\"", RegexOptions.Compiled);
         private static readonly Regex TokenLiteral = new("\"([a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+)\"", RegexOptions.Compiled);
@@ -67,9 +61,13 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        private static string Token(FieldInfo f) => ((WsEvent)f.GetValue(null)!).Token;
+
+        private static readonly HashSet<string> AllTokens = new(WsEventCatalog.All.Select(e => e.Token), StringComparer.Ordinal);
+
         private static Dictionary<string, FieldInfo> DeclaredConstants() =>
             typeof(WsEventCatalog).GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+                .Where(f => f.FieldType == typeof(WsEvent))
                 .ToDictionary(f => f.Name);
 
         [Test]
@@ -78,7 +76,7 @@ namespace OpenAstroAra.Test {
             foreach (var (file, line, text) in CodeLines()) {
                 foreach (Match m in EventConst.Matches(text).Concat(EmitCallLiteral.Matches(text))) {
                     var token = m.Groups[1].Value;
-                    if (!WsEventCatalog.All.Contains(token)) { missing.TryAdd(token, $"{Path.GetFileName(file)}:{line}"); }
+                    if (!AllTokens.Contains(token)) { missing.TryAdd(token, $"{Path.GetFileName(file)}:{line}"); }
                 }
             }
             Assert.That(missing, Is.Empty,
@@ -88,7 +86,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void EveryDeclaredConstantIsInAll() {
             var notInAll = DeclaredConstants().Values
-                .Where(f => !WsEventCatalog.All.Contains((string)f.GetRawConstantValue()!))
+                .Where(f => !AllTokens.Contains(Token(f)))
                 .Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
             Assert.That(notInAll, Is.Empty, "declared in WsEventCatalog but missing from All: " + string.Join(", ", notInAll));
         }
@@ -100,10 +98,10 @@ namespace OpenAstroAra.Test {
             foreach (var (_, _, text) in CodeLines()) {
                 foreach (Match m in TokenLiteral.Matches(text)) { emitted.Add(m.Groups[1].Value); }
                 foreach (Match m in ConstantUse.Matches(text)) {
-                    if (constants.TryGetValue(m.Groups[1].Value, out var f)) { emitted.Add((string)f.GetRawConstantValue()!); }
+                    if (constants.TryGetValue(m.Groups[1].Value, out var f)) { emitted.Add(Token(f)); }
                 }
             }
-            var dead = WsEventCatalog.All.Where(t => !emitted.Contains(t) && !PlannedNoEmitter.Contains(t)).OrderBy(t => t, StringComparer.Ordinal).ToList();
+            var dead = AllTokens.Where(t => !emitted.Contains(t)).OrderBy(t => t, StringComparer.Ordinal).ToList();
             Assert.That(dead, Is.Empty, "in the catalog but nothing emits it: " + string.Join(", ", dead));
         }
     }

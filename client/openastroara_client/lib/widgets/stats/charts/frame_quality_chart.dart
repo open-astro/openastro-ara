@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
 import '../../adaptive_controls.dart';
+import '../stats_pull_refresh.dart';
 
 /// §50.10 frame-quality composite — a histogram of composite quality scores
 /// (0–1, higher = better) over the catalog's scored frames, from the live
@@ -22,7 +23,11 @@ class FrameQualityChart extends ConsumerStatefulWidget {
   ConsumerState<FrameQualityChart> createState() => _FrameQualityChartState();
 }
 
-class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
+class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
+    with StatsPullRefresh<FrameQualityChart> {
+  @override
+  Future<void> pullRefresh() => _refresh();
+
   // Local spinner/banner flags so the histogram stays on screen during and
   // after a manual refresh (refresh() holds the old data). See StatsRefreshMixin.
   bool _refreshing = false;
@@ -71,22 +76,13 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
                 tooltip: 'Couldn’t refresh — showing the last loaded distribution.',
               ),
             ),
-          Positioned(
-            top: 0,
-            right: 4,
-            child: IconButton(
-              tooltip: 'Refresh',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: spinning ? null : () => unawaited(_refresh()),
-              icon: spinning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
+          // The page's pull down refreshes; this shows it running.
+          if (spinning)
+            const Positioned(
+              top: 12,
+              right: 16,
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
-          ),
         ],
       ),
     );

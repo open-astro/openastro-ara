@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
                     : null,
                 path => path.EndsWith("/slewtocoordinatesasync", StringComparison.Ordinal) ? "!error:Invalid Dec" : null);
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             var hub = new EquipmentFaultHub(ws.Object);
             var faults = new List<EquipmentFaultEvent>();

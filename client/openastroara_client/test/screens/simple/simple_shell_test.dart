@@ -24,6 +24,7 @@ import 'package:openastroara/widgets/stats/charts/focus_temp_scatter.dart';
 import 'package:openastroara/widgets/stats/charts/frame_quality_chart.dart';
 import 'package:openastroara/widgets/stats/charts/guiding_rms_chart.dart';
 import 'package:openastroara/widgets/stats/pi_performance_section.dart';
+import 'package:openastroara/widgets/stats/stats_pull_refresh.dart';
 import 'package:openastroara/widgets/stats/targets_section.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -1707,6 +1708,10 @@ void main() {
       await tester.pump(); // the manifest and the catalog resolve
     }
 
+    String? credit(WidgetTester tester) => tester
+        .widget<Tooltip>(find.byKey(const Key('simple-sky-art-credit')))
+        .message;
+
     testWidgets(
       'the rail button reads Sky Map with the drawn chart icon, 60 x 56, not the globe',
       (tester) async {
@@ -1751,7 +1756,7 @@ void main() {
             'assets/album/art/m042.webp',
           ),
         );
-        expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsOneWidget);
+        expect(credit(tester), 'Art (cropped): ESO · CC BY 4.0');
         expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
         expect(
           tester
@@ -1778,11 +1783,32 @@ void main() {
           ),
         );
         expect(
-          find.text('Art (cropped): NOIRLab · CC0'),
-          findsOneWidget,
+          credit(tester),
+          'Art (cropped): NOIRLab · CC0',
           reason: 'a Caldwell object by its NGC number',
         );
+      },
+    );
+
+    testWidgets(
+      'the Art credit sits behind an info mark on the thumbnail, not on a line of its own',
+      (tester) async {
+        final c = await openSky(tester);
+        await select(
+          tester,
+          c,
+          pick('Orion Nebula', ['NAME Orion Nebula', 'M 42', 'NGC 1976']),
+        );
+        final mark = find.byKey(const Key('simple-sky-art-credit'));
+        expect(
+          find.descendant(of: mark, matching: find.byIcon(Icons.info_outline)),
+          findsOneWidget,
+        );
         expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsNothing);
+        await tester.tap(mark);
+        await tester.pump();
+        expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 2));
       },
     );
 
@@ -1802,7 +1828,7 @@ void main() {
             reason: s.name,
           );
           expect(
-            find.textContaining('Art (cropped)'),
+            find.byKey(const Key('simple-sky-art-credit')),
             findsNothing,
             reason: s.name,
           );
@@ -1897,6 +1923,35 @@ void main() {
       await tester.pump();
       expect(find.descendant(of: find.byType(AppBar), matching: find.text('Stats')), findsOneWidget);
       expect(find.text('Números'), findsNothing);
+    });
+
+    testWidgets('Stats page title leads with the chart icon of the rail button, as the Sky Album title leads with its own',
+        (tester) async {
+      await _pump(tester, const Size(1024, 768));
+      await tester.tap(find.byKey(const Key('simple-stats')));
+      await tester.pumpAndSettle();
+      final title = find.descendant(of: find.byType(AppBar), matching: find.byIcon(Icons.bar_chart_outlined));
+      expect(title, findsOneWidget);
+      expect(tester.getCenter(title).dx,
+          lessThan(tester.getCenter(find.descendant(of: find.byType(AppBar), matching: find.text('Stats'))).dx));
+    });
+
+    testWidgets('Stats page: one pull down refreshes every section, and no section has a refresh icon of its own',
+        (tester) async {
+      await _pump(tester, const Size(1024, 768));
+      await tester.tap(find.byKey(const Key('simple-stats')));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.refresh), findsNothing);
+      final refreshers = ProviderScope.containerOf(tester.element(find.byType(StatsDashboardScreen)))
+          .read(statsPullRefreshersProvider);
+      expect(refreshers, hasLength(4), reason: 'Overview, Best frames, Achievements and the Calendar heatmap');
+      var pulled = 0;
+      Future<void> probe() async => pulled++;
+      refreshers.add(probe);
+      await tester.fling(find.text('Overview'), const Offset(0, 400), 1000);
+      await tester.pumpAndSettle();
+      expect(pulled, 1);
+      refreshers.remove(probe);
     });
   });
 
@@ -4363,6 +4418,23 @@ void main() {
     expect(find.descendant(of: nav, matching: find.byType(EquipmentGlyph)), findsOneWidget, reason: 'the mount chip\'s telescope');
     expect(find.descendant(of: find.byKey(const Key('simple-menu-nav-Camera')), matching: find.byIcon(Icons.camera_alt)),
         findsOneWidget);
+  });
+
+  testWidgets('Settings lists the devices under Devices in alphabetical order', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.connected)),
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+      domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected)),
+      filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected)),
+    ]);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    double top(String id) => tester.getTopLeft(find.byKey(Key('simple-menu-nav-$id'))).dy;
+    final ids = ['Camera', 'Dome', 'Filter wheel', 'Focuser', 'Mount'];
+    final tops = [for (final id in ids) top(id)];
+    expect(tops, orderedEquals([...tops]..sort()));
+    expect(top('Devices'), lessThan(tops.first), reason: 'Rig and Devices stay first');
   });
 
   testWidgets('the focuser\'s dot opens the Focuser window; Settings lists it under Devices', (tester) async {
@@ -7427,14 +7499,14 @@ void main() {
       },
     );
 
-    testWidgets('a set-up rig never shows the sheet or the row', (
+    testWidgets('a set-up rig never shows the sheet or the Rig page header', (
       tester,
     ) async {
       await pumpSetup(tester, done);
       expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
       await tester.tap(find.byTooltip('Settings'));
       await tester.pump();
-      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+      expect(find.byKey(const Key('simple-rig-setup-header')), findsNothing);
       await end(tester);
     });
 
@@ -7446,26 +7518,205 @@ void main() {
       expect(c.read(rigSetupSheetProvider), isFalse, reason: 'no auto-open');
       await tester.tap(find.byTooltip('Settings'));
       await tester.pump();
-      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+      expect(find.byKey(const Key('simple-rig-setup-header')), findsNothing);
       await end(tester);
     });
 
     testWidgets(
-      'dismissed on this rig: no sheet, and Settings has the Rig setup row that opens it',
+      'dismissed on this rig: no sheet; Settings › Rig heads with the count and the next fix, and the menu has no Rig setup row',
       (tester) async {
-        final (c, _, _) = await pumpSetup(tester, noSite, dismissed: true);
+        await pumpSetup(tester, noSite, dismissed: true);
         expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
         await tester.tap(find.byTooltip('Settings'));
         await tester.pump();
-        await tester.tap(find.byKey(const Key('simple-menu-nav-RigSetup')));
-        await tester.pump();
-        expect(find.byKey(const Key('simple-rig-setup')), findsOneWidget);
+        final header = find.byKey(const Key('simple-rig-setup-header'));
+        expect(header, findsOneWidget);
         expect(
-          find.byKey(const Key('simple-menu')),
-          findsNothing,
-          reason: 'the row closes Settings',
+          find.descendant(of: header, matching: find.text('1 of 2 done')),
+          findsOneWidget,
         );
-        expect(c.read(rigSetupSheetProvider), isTrue);
+        expect(
+          find.descendant(of: header, matching: find.text('Next: Site')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-rig-setup-header-action')),
+            matching: find.text('Set site'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.descendant(
+                  of: header,
+                  matching: find.byType(LinearProgressIndicator),
+                ),
+              )
+              .value,
+          0.5,
+        );
+        expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'Set site in the Rig page header brings the site rows into view',
+      (tester) async {
+        await pumpSetup(
+          tester,
+          noSite,
+          dismissed: true,
+          screen: const Size(1024, 420),
+        );
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        final site = find.byKey(const Key('simple-rig-use-location'));
+        final view = tester.getRect(
+          find
+              .ancestor(of: site, matching: find.byType(Scrollable))
+              .first,
+        );
+        expect(
+          view.contains(tester.getCenter(site)),
+          isFalse,
+          reason: 'precondition: the site rows start below the fold',
+        );
+        await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(site)), isTrue);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'Set guide scope in the Rig page header brings the guide scope rows into view',
+      (tester) async {
+        await pumpSetup(
+          tester,
+          const RigSetupFacts(
+            latitudeDeg: -33.856784,
+            longitudeDeg: 151.215297,
+            opticsConfigured: true,
+            hasGuider: true,
+            guiderConnected: true,
+            calibrationHasData: true,
+            calibrationVerdict: 'good',
+          ),
+          dismissed: true,
+          screen: const Size(1024, 420),
+        );
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-rig-setup-header-action')),
+            matching: find.text('Set guide scope'),
+          ),
+          findsOneWidget,
+          reason: 'precondition: the guide scope is the next fix',
+        );
+        final guide = find.byKey(const Key('simple-rig-guidefocal'));
+        final view = tester.getRect(
+          find
+              .ancestor(of: guide, matching: find.byType(Scrollable))
+              .first,
+        );
+        expect(
+          view.contains(tester.getCenter(guide)),
+          isFalse,
+          reason: 'precondition: the guide scope starts below the fold',
+        );
+        await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(guide)), isTrue);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the Rig page header next fix for the optics opens the optics panel',
+      (tester) async {
+        final c = (await pumpSetup(
+          tester,
+          const RigSetupFacts(
+            latitudeDeg: -33.856784,
+            longitudeDeg: 151.215297,
+            opticsConfigured: false,
+          ),
+          dismissed: true,
+        )).$1;
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
+        await tester.pump();
+        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the Rig page header next fix for the calibration closes Settings and shows Guider mode',
+      (tester) async {
+        const facts = RigSetupFacts(
+          latitudeDeg: -33.856784,
+          longitudeDeg: 151.215297,
+          opticsConfigured: true,
+          hasGuider: true,
+          guideFocalLengthMm: 240,
+          guidePixelSizeUm: 3.75,
+          guiderConnected: true,
+        );
+        final (c, _, _) = await pumpSetup(tester, facts, dismissed: true);
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        expect(find.text('3 of 4 done'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const Key('simple-menu')), findsNothing);
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.guide);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the sheet boxes each missing line in amber with its fix inside, and puts Not now in a footer beside the count',
+      (tester) async {
+        await pumpSetup(tester, noSite);
+        BoxDecoration? box(String id) {
+          final boxes = find.ancestor(
+            of: find.byKey(Key('simple-rig-setup-$id')),
+            matching: find.byKey(Key('simple-rig-setup-$id-box')),
+          );
+          if (boxes.evaluate().isEmpty) return null;
+          return tester.widget<DecoratedBox>(boxes).decoration as BoxDecoration;
+        }
+
+        final site = box('site');
+        expect(site, isNotNull, reason: 'a missing line is boxed');
+        expect(
+          (site!.border! as Border).top.color.withAlpha(255),
+          AraColors.accentWarning,
+        );
+        expect(box('optics'), isNull, reason: 'a done line is not');
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-rig-setup-site-box')),
+            matching: find.byKey(const Key('simple-rig-setup-site-action')),
+          ),
+          findsOneWidget,
+        );
+        final count = find.descendant(
+          of: find.byKey(const Key('simple-rig-setup')),
+          matching: find.text('1 of 2 done'),
+        );
+        expect(count, findsOneWidget);
+        final notNow = find.byKey(const Key('simple-rig-setup-not-now'));
+        expect(tester.getCenter(notNow).dy, closeTo(tester.getCenter(count).dy, 1));
+        expect(tester.widget(notNow), isA<TextButton>());
         await end(tester);
       },
     );
@@ -7485,11 +7736,11 @@ void main() {
           reason: 'keyed by the selected rig',
         );
         expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
-        // Still missing, so the row stays to come back to.
+        // Still missing, so the Rig page header stays to come back to.
         await tester.tap(find.byTooltip('Settings'));
         await tester.pump();
         expect(
-          find.byKey(const Key('simple-menu-nav-RigSetup')),
+          find.byKey(const Key('simple-rig-setup-header')),
           findsOneWidget,
         );
         await end(tester);

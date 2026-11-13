@@ -1,0 +1,184 @@
+<title>Ara Rig Setup Mock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: two stacked studies (Settings › Rig header variants, then the Rig setup sheet before/after), each a row of device frames. Single dark look = Ara's own palette. */
+:root{
+  color-scheme:dark;
+  --bg:#141414; --app:#1A1A1A; --panel:#262626; --panel2:#2E2E2E; --input:#333;
+  --border:#404040; --fg:#E0E0E0; --fg2:#A0A0A0; --fg3:#606060;
+  --ok:#4CAF50; --warn:#FFB300; --info:#42A5F5; --sel:#1976D2;
+  --warn-tint:rgba(255,179,0,.10); --ok-tint:rgba(76,175,80,.10);
+  --sans:"Roboto",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance}
+h2{font-size:17px;font-weight:600;margin:0 0 4px}
+.lede{color:var(--fg2);max-width:70ch;margin:6px 0 0;line-height:1.5}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px}
+.tab{background:var(--panel);color:var(--fg2);border:1px solid var(--border);border-radius:999px;padding:7px 14px;font:inherit;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--sel);border-color:var(--sel);color:#fff}
+.tab:focus-visible,.btn:focus-visible,.chip:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.note{color:var(--fg2);line-height:1.5;max-width:70ch;margin:0 0 14px}
+.note b{color:var(--fg)}
+.frames{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.frame{display:grid;gap:6px;min-width:0}
+.cap{font-size:12px;color:var(--fg2);letter-spacing:.04em;text-transform:uppercase}
+.device{background:var(--app);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.tablet{width:560px;max-width:100%}
+.phone{width:360px;max-width:100%}
+
+/* Settings sheet chrome */
+.settings{display:grid;grid-template-columns:150px 1fr;min-height:330px}
+.phone .settings{grid-template-columns:1fr}
+.phone .side{display:none}
+.side{background:var(--panel);border-right:1px solid var(--border);padding:10px 6px;display:grid;gap:2px;align-content:start}
+.side div{padding:8px 10px;border-radius:8px;color:var(--fg2);display:flex;gap:8px;align-items:center}
+.side .on{background:var(--panel2);color:var(--fg)}
+.side .sub{padding-left:28px;font-size:13px}
+.pane{padding:16px;display:grid;gap:14px;align-content:start;min-width:0}
+.pane h3{margin:0;font-size:16px;font-weight:600}
+.field{display:grid;gap:4px}
+.field label{font-size:12px;color:var(--fg2)}
+.field .in{background:var(--input);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--fg)}
+.field .in.empty{color:var(--fg3)}
+.field.flag .in{border-color:var(--warn)}
+
+/* buttons */
+.btn{font:inherit;border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap;border:1px solid var(--border);background:var(--panel2);color:var(--fg)}
+.btn.fix{background:transparent;border-color:var(--warn);color:var(--warn)}
+.btn.primary{background:var(--sel);border-color:var(--sel);color:#fff}
+.btn.text{background:none;border-color:transparent;color:var(--fg2);padding-inline:8px}
+.chip{font:inherit;font-size:12px;border-radius:999px;padding:3px 10px;border:1px solid var(--warn);color:var(--warn);background:var(--warn-tint);cursor:pointer}
+
+/* header variants */
+.hdr{border:1px solid var(--border);border-radius:10px;background:var(--panel);padding:12px;display:grid;gap:10px}
+.hdr .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hdr .title{font-weight:600;display:flex;gap:8px;align-items:center}
+.count{font-size:12px;color:var(--fg2);font-variant-numeric:tabular-nums}
+.bar{height:4px;border-radius:2px;background:var(--input);overflow:hidden}
+.bar i{display:block;height:100%;width:50%;background:var(--ok)}
+.row{display:flex;align-items:center;gap:10px;min-width:0}
+.row .t{flex:1;min-width:0}
+.row .t small{display:block;color:var(--fg2);font-size:12px;line-height:1.35}
+.ico{width:18px;height:18px;flex:none;border-radius:50%;border:2px solid var(--fg3)}
+.ico.ok{border:none;background:var(--ok);position:relative}
+.ico.ok::after{content:"";position:absolute;left:6px;top:3px;width:4px;height:8px;border:solid #1A1A1A;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ico.warn{border-color:var(--warn)}
+.done{color:var(--fg2)}
+.banner{border:1px solid var(--warn);background:var(--warn-tint);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.banner .t{flex:1;min-width:160px}
+.banner small{display:block;color:var(--fg2);font-size:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+
+/* sheet */
+.scrim{background:#0d0d0d;padding:22px 14px;display:flex;justify-content:center}
+.sheet{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:grid;gap:12px;width:100%;max-width:440px}
+.sheet h4{margin:0;font-size:17px;font-weight:600}
+.sheet p{margin:0;color:var(--fg2);line-height:1.4}
+.old-line{display:flex;gap:12px;align-items:center}
+.old-line.under{align-items:flex-start}
+.old-line .t{flex:1;min-width:0}
+.old-line .t small{display:block;color:var(--fg2);font-size:13px;line-height:1.35}
+.old-line .stack{display:grid;gap:8px;flex:1}
+.old-line .stack .btn{justify-self:start}
+.new-line{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel2)}
+.new-line.miss{border-color:rgba(255,179,0,.45);background:var(--warn-tint)}
+.new-line .t{flex:1;min-width:0}
+.new-line .t small{display:block;color:var(--fg2);font-size:13px;line-height:1.35}
+.phone .new-line.miss{flex-wrap:wrap}
+.phone .new-line.miss .btn{margin-left:30px}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:10px}
+.foot .count{font-size:13px}
+.verdict{display:grid;gap:4px;margin-top:6px;color:var(--fg2);font-size:13px;line-height:1.45;max-width:560px}
+@media (prefers-reduced-motion:no-preference){.tab,.btn{transition:background .15s,border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Rig setup: where it lives, and how its fixes read</h1>
+    <p class="lede">Mock for feedback items 1 and 2. Same example rig everywhere: Site and Main camera &amp; telescope are missing, Guide scope and Guider calibration are done. Colours are Ara's own tokens (amber = needs attention, green = done, blue = primary).</p>
+  </header>
+
+  <section>
+    <h2>1 · Settings › Rig header</h2>
+    <p class="note">Rig setup leaves the Settings menu list. Settings › Rig gets a header while something is missing, and the header goes away once all four are done. Pick one:</p>
+    <div class="tabs" role="tablist" aria-label="Header variant">
+      <button class="tab" role="tab" aria-selected="true" data-v="a">A · Checklist card</button>
+      <button class="tab" role="tab" aria-selected="false" data-v="b">B · Progress bar + next step</button>
+      <button class="tab" role="tab" aria-selected="false" data-v="c">C · One-line banner</button>
+    </div>
+    <p class="note" id="vnote"></p>
+    <div class="frames" id="hdrFrames"></div>
+  </section>
+
+  <section>
+    <h2>2 · The Rig setup sheet: what each button fixes</h2>
+    <p class="note">Today the fix button and <b>Not now</b> use the same grey style. Whether the fix sits beside or under its text depends on the window width, so a button can look like it belongs to the line below it. In the proposal, each missing fact is its own amber box with its button inside. Done rows are flat with a tick. <b>Not now</b> becomes a quiet text button in a footer, next to a count.</p>
+    <div class="frames">
+      <div class="frame"><span class="cap">Today · tablet</span><div class="device tablet"><div class="scrim">
+        <div class="sheet">
+          <h4>Rig setup</h4><p>Before a first night, Ara needs a few facts about this rig.</p>
+          <div class="old-line"><span class="ico"></span><div class="t">Site<small>Latitude and longitude are not set.</small></div><button class="btn">Set site</button></div>
+          <div class="old-line"><span class="ico"></span><div class="t">Main camera and telescope<small>The sensor or the focal length is not set.</small></div><button class="btn">Set up optics</button></div>
+          <div class="old-line"><span class="ico ok"></span><div class="t">Guide scope</div></div>
+          <div class="old-line"><span class="ico ok"></span><div class="t">Guider calibration</div></div>
+          <div style="justify-self:end"><button class="btn">Not now</button></div>
+        </div></div></div></div>
+      <div class="frame"><span class="cap">Proposed · tablet</span><div class="device tablet"><div class="scrim">
+        <div class="sheet">
+          <h4>Rig setup</h4><p>Before a first night, Ara needs a few facts about this rig.</p>
+          <div class="new-line miss"><span class="ico warn"></span><div class="t">Site<small>Latitude and longitude are not set.</small></div><button class="btn fix">Set site</button></div>
+          <div class="new-line miss"><span class="ico warn"></span><div class="t">Main camera and telescope<small>The sensor or the focal length is not set.</small></div><button class="btn fix">Set up optics</button></div>
+          <div class="row done" style="padding:2px 12px"><span class="ico ok"></span><div class="t">Guide scope</div></div>
+          <div class="row done" style="padding:2px 12px"><span class="ico ok"></span><div class="t">Guider calibration</div></div>
+          <div class="foot"><span class="count">2 of 4 done</span><button class="btn text">Not now</button></div>
+        </div></div></div></div>
+      <div class="frame"><span class="cap">Proposed · phone</span><div class="device phone"><div class="scrim">
+        <div class="sheet">
+          <h4>Rig setup</h4><p>Before a first night, Ara needs a few facts about this rig.</p>
+          <div class="new-line miss"><span class="ico warn"></span><div class="t">Site<small>Latitude and longitude are not set.</small></div><button class="btn fix">Set site</button></div>
+          <div class="new-line miss"><span class="ico warn"></span><div class="t">Main camera and telescope<small>The sensor or the focal length is not set.</small></div><button class="btn fix">Set up optics</button></div>
+          <div class="row done" style="padding:2px 12px"><span class="ico ok"></span><div class="t">Guide scope</div></div>
+          <div class="row done" style="padding:2px 12px"><span class="ico ok"></span><div class="t">Guider calibration</div></div>
+          <div class="foot"><span class="count">2 of 4 done</span><button class="btn text">Not now</button></div>
+        </div></div></div></div>
+    </div>
+    <div class="verdict">On a phone the button wraps under the text, but it stays inside the same amber box, so it's clear which fact it fixes.</div>
+  </section>
+</div>
+
+<script>
+const side = `<div class="side"><div class="on">Rig</div><div>Devices</div><div class="sub">Camera</div><div class="sub">Dome</div><div class="sub">Filter wheel</div><div class="sub">Focuser</div><div class="sub">Mount</div><div>Storage</div><div>About</div></div>`;
+const fields = `<div class="field flag"><label>Latitude</label><div class="in empty">Not set</div></div>
+  <div class="field flag"><label>Longitude</label><div class="in empty">Not set</div></div>
+  <div class="field"><label>Elevation</label><div class="in">120 m</div></div>`;
+const headers = {
+  a: `<div class="hdr"><div class="top"><span class="title">Rig setup</span><span class="count">2 of 4 done</span></div>
+      <div class="row"><span class="ico warn"></span><div class="t">Site<small>Latitude and longitude are not set.</small></div><button class="btn fix">Set site</button></div>
+      <div class="row"><span class="ico warn"></span><div class="t">Main camera and telescope<small>Sensor or focal length not set.</small></div><button class="btn fix">Set up optics</button></div>
+      <div class="row done"><span class="ico ok"></span><div class="t">Guide scope</div></div>
+      <div class="row done"><span class="ico ok"></span><div class="t">Guider calibration</div></div></div>`,
+  b: `<div class="hdr"><div class="top"><span class="title">Rig setup</span><span class="count">2 of 4 done</span></div>
+      <div class="bar"><i></i></div>
+      <div class="row"><div class="t">Next: Site<small>Latitude and longitude are not set. Then: Main camera and telescope.</small></div><button class="btn fix">Set site</button></div></div>`,
+  c: `<div class="banner"><span class="ico warn"></span><div class="t">Rig setup: 2 left<small>Needed before a first night</small></div>
+      <div class="chips"><button class="chip">Site</button><button class="chip">Optics</button></div></div>`
+};
+const notes = {
+  a: "<b>A</b> shows everything at once and needs no tap to see what's missing. Each fix has its own amber button, like the proposed sheet. It takes the most room.",
+  b: "<b>B</b> shows one step at a time: a progress bar and the next fix. It stays compact at any width. The other missing items are named but not clickable until it's their turn.",
+  c: "<b>C</b> is one line with a chip per missing item, so it takes the least room. The chips are small tap targets, and the reason for each gap only shows after you open it."
+};
+function render(v){
+  const pane = (w) => `<div class="pane"><h3>Rig</h3>${headers[v]}${fields}</div>`;
+  document.getElementById('hdrFrames').innerHTML =
+    `<div class="frame"><span class="cap">Tablet / Mac</span><div class="device tablet"><div class="settings">${side}${pane()}</div></div></div>
+     <div class="frame"><span class="cap">Phone</span><div class="device phone"><div class="settings">${pane()}</div></div></div>`;
+  document.getElementById('vnote').innerHTML = notes[v];
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.v === v));
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => render(t.dataset.v)));
+render('a');
+</script>
