@@ -81,6 +81,26 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
+  testWidgets('an earned badge is as tall as one still in progress', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = _FakeAchievementsClient(const StatsAchievements(
+      totalLightFrames: 906,
+      milestones: [
+        StatsMilestone(id: 'hours_10', title: 'Getting started', description: '10 hours of integration',
+            achieved: false, threshold: 10, current: 7.2),
+        StatsMilestone(id: 'targets_10', title: 'Explorer', description: '10 unique targets imaged',
+            achieved: true, threshold: 10, current: 10),
+      ],
+    ));
+    await tester.pumpWidget(_app(const [_server], api));
+    await tester.pumpAndSettle();
+    Size badge(String title) => tester.getSize(
+        find.ancestor(of: find.text(title), matching: find.byType(Container)).first);
+    expect(badge('Explorer').height, badge('Getting started').height);
+  });
+
   testWidgets('shows the connect hint when no server is saved', (tester) async {
     final api = _FakeAchievementsClient(const StatsAchievements());
     await tester.pumpWidget(_app(const [], api));

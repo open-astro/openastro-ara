@@ -304,25 +304,28 @@ class _MilestoneBadge extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 11, color: AraColors.textSecondary),
           ),
-          if (!achieved) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: milestone.progress,
-                minHeight: 4,
-                backgroundColor: AraColors.bgInput,
-                valueColor:
-                    const AlwaysStoppedAnimation(AraColors.accentInfo),
-              ),
+          // An earned badge keeps the bar (full, green) and a caption, so
+          // every badge in a row is the same height.
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: achieved ? 1 : milestone.progress,
+              minHeight: 4,
+              backgroundColor: AraColors.bgInput,
+              valueColor: AlwaysStoppedAnimation(
+                  achieved ? AraColors.accentConnected : AraColors.accentInfo),
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${_trim(milestone.current)} / ${_trim(milestone.threshold)}',
-              style: const TextStyle(
-                  fontSize: 11, color: AraColors.textDisabled),
-            ),
-          ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            achieved
+                ? 'Earned'
+                : '${_trim(milestone.current)} / ${_trim(milestone.threshold)}',
+            style: TextStyle(
+                fontSize: 11,
+                color: achieved ? AraColors.accentConnected : AraColors.textDisabled),
+          ),
         ],
       ),
     );
