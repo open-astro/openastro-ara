@@ -282,6 +282,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-filter')));
     await tester.pumpAndSettle();
     expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
-    expect(find.byKey(const Key('simple-preset-0')), findsOneWidget, reason: 'the choices are on screen');
+    expect(find.byType(ListWheelScrollView), findsOneWidget, reason: 'the choices are on a wheel in place');
   });
 }
