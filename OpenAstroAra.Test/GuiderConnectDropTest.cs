@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(GuiderProcessStatus.Active);
             var recovery = new GuiderRecoveryCoordinator(supervisor.Object, Mock.Of<INotificationService>(),
                 Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance,
-                new[] { TimeSpan.Zero }, (_, ct) => Task.Delay(Timeout.Infinite, ct), TimeSpan.FromSeconds(1));
+                new[] { TimeSpan.Zero }, (_, _) => Task.CompletedTask, TimeSpan.FromSeconds(1));
             using var svc = new GuiderService(new HeadlessProfileService(), recovery, NullLogger<GuiderService>.Instance,
                 supervisor.Object, ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
                 notifications: Mock.Of<INotificationService>(), faultLog: null, activeProfileIdResolver: null) {
