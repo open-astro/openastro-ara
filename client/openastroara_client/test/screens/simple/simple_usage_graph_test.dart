@@ -266,7 +266,7 @@ void main() {
       },
     );
 
-    testWidgets('a rig without the route (404) keeps today\'s four figures', (
+    testWidgets("a rig without the route (404) keeps today's four figures", (
       tester,
     ) async {
       await _pump(tester, history: null);
