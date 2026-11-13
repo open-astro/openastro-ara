@@ -161,6 +161,7 @@ void main() {
   });
 
   test('the history is capped to what the rig keeps', () {
+    expect(UsageHistory.keepSamples, 2880); // 12 h at 15 s, as the rig's ring
     final many = _h([for (var i = 0; i < UsageHistory.keepSamples; i++) _s(i)]);
     final grown = many.append(
       _h([_s(UsageHistory.keepSamples), _s(UsageHistory.keepSamples + 1)]),
