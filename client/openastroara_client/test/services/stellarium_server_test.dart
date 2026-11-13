@@ -845,6 +845,31 @@ void main() {
     });
   });
 
+  group('planetarium page ready (PR #1856)', () {
+    test('the page posts ready once its sky has drawn, and the view lets the Sky Map show', () {
+      // Simple Mode shows the sky only once planetariumReadyProvider is true
+      // (or after a 3 s fallback). Without the page's POST or the view's
+      // handler, every open waits the full 3 s behind "Loading the sky…".
+      // No harness runs index.html; this guard keeps the two ends in step.
+      final page = File('assets/stellarium/index.html')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      final ready = page.indexOf("body: JSON.stringify({ type: 'ready' })");
+      expect(ready, greaterThan(0), reason: 'the page posts ready');
+      expect(page.lastIndexOf("fetch('/araevent'", ready), greaterThan(0));
+      expect(page.lastIndexOf('araSky.ready = true;', ready), greaterThan(0),
+          reason: 'the same timer lets the page rest');
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
+          .readAsStringSync();
+      expect(dart, contains("if (event['type'] == 'ready') {\n      ref.read(planetariumReadyProvider.notifier).set(true);"));
+      // A new page load (both platform paths) starts not ready.
+      expect(
+        'ref.read(planetariumReadyProvider.notifier).set(false);'.allMatches(dart).length,
+        2,
+      );
+    });
+  });
+
   group('planetarium page framing target', () {
     test('a goto without a name clears the framing name; the search bar sends one', () {
       // Night of 2026-10-02: select the Moon, type "NGC 7000" (a catalog hit →
