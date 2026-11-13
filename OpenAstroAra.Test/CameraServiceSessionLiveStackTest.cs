@@ -69,10 +69,20 @@ namespace OpenAstroAra.Test {
         private static ISessionLiveStackControl Control(CameraService c) => c;
 
         private static FrameSaveJob Light(int seed, string target = "M 31", string? filter = "Ha", Guid? session = null,
-                FrameType type = FrameType.Light, int bin = 1, double shiftX = 0, double rotDeg = 0) {
+                FrameType type = FrameType.Light, int bin = 1, double shiftX = 0, double rotDeg = 0, bool half = false, bool background = true) {
             var req = new ExposureRequestDto(ExposureSec: 1, Gain: 100, BinX: bin, BinY: bin, FilterName: filter);
+            var mosaic = OscScene.Mosaic(seed, shiftX: shiftX, rotDeg: rotDeg);
+            var size = OscScene.W;
+            if (half) { // top-left quarter: another subframe size, same Bayer phase
+                size = OscScene.W / 2;
+                var crop = new ushort[size * size];
+                for (var y = 0; y < size; y++) { Array.Copy(mosaic, y * OscScene.W, crop, y * size, size); }
+                mosaic = crop;
+            }
             return new FrameSaveJob {
-                FrameId = Guid.NewGuid(), Pixels = OscScene.Mosaic(seed, shiftX: shiftX, rotDeg: rotDeg), Width = OscScene.W, Height = OscScene.H,
+                // Background = the sequencer's save path (CaptureCoreAsync saveInBackground); a manual capture is not.
+                Background = background,
+                FrameId = Guid.NewGuid(), Pixels = mosaic, Width = size, Height = size,
                 Request = req, Applied = req, ImageType = type == FrameType.Light ? "LIGHT" : "DARK", FrameType = type,
                 TargetName = target, CapturedAt = DateTimeOffset.UtcNow, SessionId = session ?? CatalogSession,
             };
@@ -130,9 +140,12 @@ namespace OpenAstroAra.Test {
         public async Task A_dark_is_never_stacked() {
             using var cam = NewCamera();
             Control(cam).StartSessionLiveStack();
-            await Save(cam, Light(1, type: FrameType.Dark), Light(2));
+            // The dark has another target: were it fed it would become the stack, so wait for the light's name
+            // (a dark fed first would otherwise satisfy a bare count) and then read the sequence.
+            await Save(cam, Light(1, target: "Dark frames", type: FrameType.Dark), Light(2));
+            await Until(() => Control(cam).GetSessionLiveStackStatus().TargetName == "M 31", "the light is the stack");
             await Stacked(cam, 1);
-            Assert.That(Control(cam).GetSessionLiveStackStatus().StackSeq, Is.EqualTo(1));
+            Assert.That(Control(cam).GetSessionLiveStackStatus().StackSeq, Is.EqualTo(1), "a fed dark would make it 2");
         }
 
         // Falsified by: dropping the Target comparison leaves two objects in one picture; stack_seq must not go back.
@@ -170,7 +183,76 @@ namespace OpenAstroAra.Test {
             var next = Guid.NewGuid();
             await Save(cam, Light(3, session: next));
             await Stacked(cam, 1);
-            Assert.That(Control(cam).GetSessionLiveStackStatus().SessionId, Is.EqualTo(next));
+            var s = Control(cam).GetSessionLiveStackStatus();
+            Assert.That((s.SessionId, s.Enabled), Is.EqualTo(((Guid?)next, true)), "the switch survives across Sessions");
+        }
+
+        // Falsified by: a grid size left out of the restart key leaves WrongSize refusing every later light until a Reset.
+        [Test]
+        public async Task A_light_of_another_size_restarts_the_stack() {
+            using var cam = NewCamera();
+            Control(cam).StartSessionLiveStack();
+            await Save(cam, Light(1), Light(2, shiftX: 1));
+            await Stacked(cam, 2);
+            await Save(cam, Light(3, half: true));
+            await Stacked(cam, 1);
+            var s = Control(cam).GetSessionLiveStackStatus();
+            Assert.That((s.Width, s.Height, s.LastOutcome), Is.EqualTo((OscScene.W / 4, OscScene.H / 4, "stacked")));
+        }
+
+        // Falsified by: clearing the stack when the run ends (FinishPendingSavesAsync, SequencerService.cs, is what the
+        // sequencer calls on the camera at the end; the catalog Session closes in the frame store, not here).
+        [Test]
+        public async Task The_end_of_a_run_keeps_the_stack_and_the_switch() {
+            using var cam = NewCamera();
+            Control(cam).StartSessionLiveStack();
+            await Save(cam, Light(1), Light(2, shiftX: 1));
+            await Stacked(cam, 2);
+            Assert.That(await cam.FinishPendingSavesAsync(), Is.EqualTo(0));
+            await Task.Delay(100);
+            var s = Control(cam).GetSessionLiveStackStatus();
+            Assert.That((s.Enabled, s.LightsStacked), Is.EqualTo((true, 2)));
+            Assert.That(Control(cam).GetSessionLiveStackFrame(), Is.Not.Null);
+        }
+
+        // Falsified by: feeding on the Light frame type alone: the manual capture (CaptureCoreAsync, saveInBackground
+        // false) is LIGHT with another target and catalog Session, so it would wipe the night's stack.
+        [Test]
+        public async Task A_manual_capture_is_not_fed_and_does_not_restart_the_stack() {
+            using var cam = NewCamera();
+            Control(cam).StartSessionLiveStack();
+            await Save(cam, Light(1), Light(2, shiftX: 1));
+            await Stacked(cam, 2);
+            await cam.SaveFrameAsync(Light(3, target: "Manual capture", session: Guid.NewGuid(), background: false));
+            await Task.Delay(300);
+            var s = Control(cam).GetSessionLiveStackStatus();
+            Assert.That((s.LightsStacked, s.StackSeq, s.TargetName), Is.EqualTo((2, 2L, "M 31")));
+        }
+
+        // Falsified by: calling the engine while holding the service's stack lock: Reset, Stop and a disconnect then wait
+        // for the running AddColour, the save worker blocks in the feed and the capture waits behind the save queue.
+        [Test]
+        public async Task Reset_Stop_and_disconnect_do_not_wait_for_a_running_stack_and_saves_still_finish() {
+            using var cam = NewCamera();
+            cam.WithLiveViewTestClientForTest();
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            int started = 0;
+            cam.SessionLiveStackBeforeAddForTest = () => { Interlocked.Increment(ref started); return gate.Task; };
+            Control(cam).StartSessionLiveStack();
+            await Save(cam, Light(1));
+            await Until(() => Volatile.Read(ref started) == 1, "the worker holds the first light");
+
+            var calls = Task.Run(async () => {
+                Control(cam).ResetSessionLiveStack();
+                Control(cam).StopSessionLiveStack();
+                Control(cam).StartSessionLiveStack();
+                await cam.DisconnectAsync(null, CancellationToken.None);
+            });
+            Assert.That(await Task.WhenAny(calls, Task.Delay(1000)), Is.SameAs(calls), "Reset, Stop and disconnect return within 1 s");
+            await calls;
+            await Save(cam, Light(2, shiftX: 1)); // a light saved meanwhile still lets the saves finish
+            Assert.That(Control(cam).GetSessionLiveStackStatus().LightsStacked, Is.EqualTo(0), "a Reset reads as cleared at once");
+            gate.SetResult();
         }
 
         // Falsified by: restarting on a flipped frame (or not folding the 180-degree frame in) loses the first half of the night.
@@ -178,7 +260,10 @@ namespace OpenAstroAra.Test {
         public async Task A_meridian_flip_carries_on_the_same_stack() {
             using var cam = NewCamera();
             Control(cam).StartSessionLiveStack();
-            await Save(cam, Light(1), Light(2, shiftX: 1), Light(3, shiftX: 2, rotDeg: 180));
+            // Two at a time at most: one stacking plus one waiting; a third in the same batch is skipped_busy by design.
+            await Save(cam, Light(1), Light(2, shiftX: 1));
+            await Stacked(cam, 2);
+            await Save(cam, Light(3, shiftX: 2, rotDeg: 180));
             await Stacked(cam, 3);
             Assert.That(Control(cam).GetSessionLiveStackStatus().LastOutcome, Is.EqualTo("flipped"));
         }
