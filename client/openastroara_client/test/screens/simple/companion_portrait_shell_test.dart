@@ -22,7 +22,12 @@ import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
     show clockProvider;
 import 'package:openastroara/state/simple_preflight_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart'
+    show SimpleStatusPill;
+import 'package:openastroara/screens/simple/simple_status_card.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 
@@ -378,6 +383,41 @@ void main() {
       expect(find.byKey(const Key('companion-deck')), findsNothing);
       expect(find.byKey(const Key('simple-mode')), findsOneWidget);
       expect(find.byKey(const Key('simple-stats')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'on a phone the camera pill is a line of the status card, with the messages, not a pill of its own',
+    (tester) async {
+      final c = await _pump(tester, _portrait);
+      c
+          .read(captureProgressProvider.notifier)
+          .beginExposing(const Duration(seconds: 5));
+      c
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.warning, 'Check the cable');
+      await tester.pump();
+      final card = find.byType(SimpleStatusCard);
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.byType(SimpleStatusPill)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.textContaining('Taking a frame'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Check the cable')),
+        findsOneWidget,
+        reason: 'the message is in the same card',
+      );
+      expect(find.byType(SimpleStatusPill), findsOneWidget);
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
     },
   );
 }
