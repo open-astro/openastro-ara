@@ -114,6 +114,17 @@ void main() {
     expect(container.read(storageSettingsProvider).value, kTestStorage);
   });
 
+  testWidgets('the File naming load error is announced to screen readers', (
+    tester,
+  ) async {
+    final api = _FakeRig()..failSite = StateError('Site did not answer.');
+    await _pump(tester, api);
+    expect(
+      tester.getSemantics(find.text('Site did not answer.')),
+      isSemantics(isLiveRegion: true),
+    );
+  });
+
   testWidgets('Save that retries the other loads keeps the Storage edits', (
     tester,
   ) async {
