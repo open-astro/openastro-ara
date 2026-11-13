@@ -40,14 +40,20 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     with PanelSaveRegistration {
   String? _lastError;
 
-  /// Save persists four providers; until every one has been hydrated, saving
-  /// would push defaults over server values a failed hydrate never loaded.
+  /// Save also persists filenames, site and optics; until all three have been
+  /// hydrated, saving would push defaults over server values a failed hydrate
+  /// never loaded. Storage guards its own save (ADR 0015).
   bool _hydrated = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Storage loads on its own, never from [_hydrate]: a failed hydrate must
+      // not stop it, and Save's retry of [_hydrate] must not drop its edits.
+      _reloadStorage();
+      _hydrate();
+    });
   }
 
   Future<void> _hydrate() async {
@@ -55,11 +61,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     if (api == null) return;
     try {
       await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
-      // This panel's Save persists every provider it touches, so every one
-      // of them must be hydrated first — Save must never push defaults over
-      // values it hasn't seen (the transient-draft lesson). Storage (the
-      // filename template lives there) has its own load-before-save rule.
-      unawaited(ref.read(storageSettingsProvider.notifier).load(api));
+      // This panel's Save persists these three as well, so each must be
+      // hydrated first — Save must never push defaults over values it hasn't
+      // seen (the transient-draft lesson).
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       _hydrated = true;
@@ -140,6 +144,13 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final fs = ref.watch(filenamesSettingsProvider);
     final fn = ref.read(filenamesSettingsProvider.notifier);
     final section = ref.watch(storageSettingsProvider);
+    // A new rig or profile resets the section (migrated_sections.dart), also
+    // after a failed load: load it again.
+    ref.listen(storageSettingsProvider, (_, next) {
+      if (next.source == SectionSource.notLoaded && next.lastFailure == null) {
+        _reloadStorage();
+      }
+    });
     final sn = ref.read(storageSettingsProvider.notifier);
     final ss = section.value;
     if (ss == null) {
