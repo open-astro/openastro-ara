@@ -50,6 +50,7 @@ void main() {
     ws.add(_ev('camera.exposure_started', {
       'frame_id': 'f1',
       'exposure_sec': 120,
+      'started_utc': '2026-10-04T21:00:00.000Z',
       'kind': 'light',
       'filter_name': 'OIII',
     }));
@@ -66,6 +67,7 @@ void main() {
     ws.add(_ev('camera.exposure_started', {
       'frame_id': 'f2',
       'exposure_sec': 0,
+      'started_utc': '2026-10-04T21:00:00.000Z',
       'kind': 'plate-solve',
     }, 2));
     await tester.pump();
@@ -80,7 +82,13 @@ void main() {
         isNull,
         reason: 'indeterminate while the daemon reads out');
 
-    ws.add(_ev('camera.exposure_complete', {'frame_id': 'f2'}, 3));
+    ws.add(_ev('camera.exposure_complete', {
+      'frame_id': 'f2',
+      'exposure_sec': 0,
+      'started_utc': '2026-10-04T21:00:00.000Z',
+      'kind': 'plate-solve',
+      'elapsed_ms': 900,
+    }, 3));
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('Downloading'), findsNothing);

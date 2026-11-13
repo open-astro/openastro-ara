@@ -376,6 +376,26 @@ void main() {
     expect(n.failureFor('a'), isNull, reason: 'only the last few are kept');
     expect(n.failureFor('x7'), 'Aborted.');
   });
+
+  test('a camera.exposure_failed missing kind records no failure and does '
+      'not throw', () async {
+    final ws = StreamController<WsEvent>();
+    addTearDown(ws.close);
+    final container = ProviderContainer(overrides: [
+      wsEventsProvider.overrideWith((ref) => ws.stream),
+    ]);
+    addTearDown(container.dispose);
+    final sub = container.listen(captureProgressProvider, (_, _) {});
+    addTearDown(sub.close);
+    ws.add(WsEvent(
+        type: 'camera.exposure_failed',
+        ts: DateTime.utc(2026, 10, 27),
+        seq: 1,
+        payload: {'frame_id': 'a', 'reason': 'boom'}));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(captureProgressProvider.notifier).failureFor('a'),
+        isNull);
+  });
 }
 
 // Test helper to set a deterministic rolling estimate.
