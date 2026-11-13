@@ -230,8 +230,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
+  double _simplePreflightRowWidth = 0;
   double _statusHeight = 0;
   double _messagesHeight = 0;
+  double _messagesCardWidth = 0;
   final _messagesKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
@@ -240,18 +242,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _simplePreflightRowKey.currentContext?.size?.height;
-    final messages = _messagesKey.currentContext?.size?.height ?? 0;
+    final row = _simplePreflightRowKey.currentContext?.size;
+    final messages = _messagesKey.currentContext?.size;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight) {
+        (row != null &&
+            (row.height != _simplePreflightRowHeight ||
+                row.width != _simplePreflightRowWidth)) ||
+        (messages?.height ?? 0) != _messagesHeight ||
+        (messages?.width ?? 0) != _messagesCardWidth) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
-        _messagesHeight = messages;
+        _simplePreflightRowHeight = row?.height ?? _simplePreflightRowHeight;
+        _simplePreflightRowWidth = row?.width ?? _simplePreflightRowWidth;
+        _messagesHeight = messages?.height ?? 0;
+        _messagesCardWidth = messages?.width ?? 0;
       });
     }
   });
@@ -1089,11 +1096,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
     // The status card (the status lines, then the messages) sits top left,
-    // starting under the Preflight strip when it shows. On a window narrower
-    // than its widest plus the insets (a phone) it takes the whole row.
+    // under the status strip; under the Preflight strip only when the two
+    // would overlap (the strip is centred, so a wide window has room beside
+    // it). On a window narrower than its widest plus the insets (a phone) it
+    // takes the whole row.
     final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
     final messagesWidth = width - kSimpleInset * 2;
-    final messagesTop = simplePreflightRow
+    // Not measured yet (0): under it, so the first frame never overlaps.
+    final besideSteps =
+        !narrow &&
+        _simplePreflightRowWidth > 0 &&
+        kSimpleInset + _messagesCardWidth + AraSpace.s12 <=
+            (width - _simplePreflightRowWidth) / 2;
+    final messagesTop = simplePreflightRow && !besideSteps
         ? railTop + _simplePreflightRowHeight + AraSpace.s12
         : railTop;
     _measure();

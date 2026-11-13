@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -222,12 +224,27 @@ class _Guider extends GuiderStatusNotifier {
       {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': runtime}});
 }
 
+/// A Guider whose connection the test moves (a restart).
+class _RestartingGuider extends _Guider {
+  _RestartingGuider() : super('stopped');
+  void report(String state) => this.state = AsyncData(GuiderStatus.fromJson(
+      {'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': 'stopped'}}));
+}
+
 class _GuiderCal extends GuiderCalibrationNotifier {
-  _GuiderCal([this.status]);
+  _GuiderCal([this.status, this.read]);
   final CalibrationStatus? status;
+
+  /// What the read returns instead, when set (a read that never ends, or the
+  /// rig reporting the Guider unreachable).
+  final Future<CalibrationStatusResponse?> Function()? read;
   final calls = <String>[];
+  var refreshes = 0;
   @override
-  Future<CalibrationStatusResponse?> build() async => CalibrationStatusResponse(connected: true, status: status);
+  Future<CalibrationStatusResponse?> build() =>
+      read?.call() ?? Future.value(CalibrationStatusResponse(connected: true, status: status));
+  @override
+  Future<void> refresh() async => refreshes++;
   @override
   Future<void> buildDefectMap({int exposureMs = 3000, int frameCount = 10, String? notes, bool loadAfter = true}) async =>
       calls.add('build defects');
@@ -527,6 +544,33 @@ void main() {
         expect(find.textContaining('ASI2600MM'), findsOneWidget, reason: 'the library belongs to the camera');
       });
 
+      testWidgets('darks fold into one row per gain and temperature with the count, the range and the worst tag; a tap opens one', (tester) async {
+        await library(tester, [
+          _dark(300),
+          _dark(60),
+          _dark(300, gain: 0, ageDays: 220),
+          _dark(120, gain: 0),
+        ]);
+        final other = find.byKey(const Key('simple-calibration-darks-group-0--10'));
+        expect(other, findsOneWidget);
+        expect(find.descendant(of: other, matching: find.text('gain 0 · -10 °C')), findsOneWidget);
+        expect(find.descendant(of: other, matching: find.text('2 exposures · 2 min–5 min · 3 weeks old')), findsOneWidget);
+        expect(find.descendant(of: other, matching: find.text('Old')), findsOneWidget, reason: 'its worst set');
+        expect(find.byKey(const Key('simple-calibration-dark-0--10-120')), findsNothing, reason: 'folded');
+        await tester.ensureVisible(other);
+        await tester.tap(other);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-calibration-dark-0--10-120')), findsOneWidget);
+      });
+
+      testWidgets("the pair the queued plan needs opens by itself, and a pair with one dark stays a plain row", (tester) async {
+        await library(tester, [_dark(300), _dark(60), _dark(300, gain: 0)]);
+        expect(find.byKey(const Key('simple-calibration-dark-100--10-60')), findsOneWidget,
+            reason: 'gain 100 at -10 °C is what the plan needs');
+        expect(find.byKey(const Key('simple-calibration-darks-group-0--10')), findsNothing);
+        expect(find.byKey(const Key('simple-calibration-dark-0--10-300')), findsOneWidget);
+      });
+
       testWidgets('a set built today reads "taken today", and one frame is not "1 frames"', (tester) async {
         await library(tester, [
           DarkLibraryEntry(id: 'n', exposureSeconds: 300, gain: 100, temperatureC: -10, frameCount: 1,
@@ -801,9 +845,10 @@ void main() {
     });
     group('Guide Camera', () {
       const built = CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true);
+      const none = CalibrationStatus(darkLibraryExists: false, defectMapExists: false, darkLibraryLoaded: false, defectMapLoaded: false);
 
       testWidgets('building asks for the guide scope cover first', (tester) async {
-        final cal = _GuiderCal();
+        final cal = _GuiderCal(none);
         final (c, _, _, _) = await _pump(tester, [], child: panel(), overrides: [
           guiderStatusProvider.overrideWith(() => _Guider('stopped')),
           guiderCalibrationProvider.overrideWith(() => cal),
@@ -822,7 +867,7 @@ void main() {
       testWidgets('no build while guiding, and it says why', (tester) async {
         await _pump(tester, [], child: panel(), overrides: [
           guiderStatusProvider.overrideWith(() => _Guider('guiding')),
-          guiderCalibrationProvider.overrideWith(_GuiderCal.new),
+          guiderCalibrationProvider.overrideWith(() => _GuiderCal(none)),
           simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
         ]);
         expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-calibration-guide-build-darks'))).onTap, isNull);
@@ -845,6 +890,56 @@ void main() {
           await tester.pump();
         }
         expect(cal.calls, ['delete darks=false defectmap=true', 'delete darks=true defectmap=false']);
+      });
+
+      testWidgets('files the rig could not read (a Guider restart) are unknown: no Not built, no Build, and Try again reads them', (tester) async {
+        final cal = _GuiderCal(null, () async => const CalibrationStatusResponse(connected: false));
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => cal),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        expect(find.text("Couldn't read the Guider's files"), findsOneWidget);
+        expect(find.text('Not built'), findsNothing);
+        for (final id in ['darks', 'defects']) {
+          expect(tester.widget<SimpleWindowButton>(find.byKey(Key('simple-calibration-guide-build-$id'))).onTap, isNull,
+              reason: id);
+        }
+        final before = cal.refreshes;
+        await tester.ensureVisible(find.byKey(const Key('simple-calibration-guide-retry')));
+        await tester.tap(find.byKey(const Key('simple-calibration-guide-retry')));
+        await tester.pump();
+        expect(cal.refreshes, before + 1);
+      });
+
+      testWidgets('while the files are first read it says Checking, with nothing to build', (tester) async {
+        final never = Completer<CalibrationStatusResponse?>();
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => _GuiderCal(null, () => never.future)),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        expect(find.text("Checking the Guider's files…"), findsOneWidget);
+        expect(find.text('Not built'), findsNothing);
+        expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-calibration-guide-build-defects'))).onTap,
+            isNull);
+      });
+
+      testWidgets('the Guider coming back after a restart reads its files again', (tester) async {
+        final guider = _RestartingGuider();
+        final cal = _GuiderCal(built);
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => guider),
+          guiderCalibrationProvider.overrideWith(() => cal),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        final before = cal.refreshes;
+        guider.report('disconnected');
+        await tester.pump();
+        expect(cal.refreshes, before, reason: 'nothing to read while it is down');
+        guider.report('connected');
+        await tester.pump();
+        expect(cal.refreshes, before + 1);
       });
 
       testWidgets('Delete asks in the block first, and Cancel keeps the file', (tester) async {

@@ -2318,6 +2318,18 @@ void main() {
     expect(card.top, greaterThanOrEqualTo(strip.bottom), reason: 'strip $strip, card $card');
   });
 
+  testWidgets('with Preflight showing on a window wide enough for both, the status card stays under the top strip, beside the steps', (tester) async {
+    final c = await _pump(tester, const Size(1920, 1080));
+    await _startPreflight(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final strip = tester.getRect(find.byKey(const Key('preflight-strip')));
+    final card = tester.getRect(find.byType(SimpleStatusCard));
+    expect(card.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight), reason: 'strip $strip, card $card');
+    expect(card.right, lessThan(strip.left), reason: 'beside the steps, never over them');
+  });
+
   testWidgets('in the immersive view the status card stays, in the top-left corner', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true);
     await _frame(tester, c);
