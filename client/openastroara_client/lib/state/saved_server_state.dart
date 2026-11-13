@@ -75,5 +75,5 @@ AraServer? activeServerIn(AsyncValue<List<AraServer>>? saved) {
 /// Resolves to null only once the list is KNOWN empty.
 final activeServerFutureProvider = FutureProvider<AraServer?>((ref) async {
   final servers = await ref.watch(savedServersProvider.future);
-  return servers.isEmpty ? null : servers.last;
+  return activeServerIn(AsyncData(servers));
 });
