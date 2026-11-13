@@ -414,7 +414,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     public void PutEquipmentIdentity(EquipmentIdentityDto value) {
-        lock (_lock) { _equipmentIdentity = value ?? EquipmentIdentityDto.Empty; }
+        lock (_lock) { _equipmentIdentity = value ?? ProfileSections.EquipmentIdentity.Default!; }
         RaiseChanged();
     }
 
@@ -425,7 +425,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     public void PutSavedTargets(SavedTargetsDto value) {
-        lock (_lock) { _savedTargets = value ?? SavedTargetsDto.Empty; }
+        lock (_lock) { _savedTargets = value ?? ProfileSections.SavedTargets.Default!; }
         RaiseChanged();
     }
 
