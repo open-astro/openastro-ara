@@ -85,10 +85,7 @@ void main() {
     expect(find.text('Frames'), findsOneWidget);
   });
 
-  // Falsified by: overview_section.dart back to the old tile grid (no stats-hero, no StatKpi).
-  for (final (width, sideBySide) in [(1000.0, true), (500.0, false)]) {
-    testWidgets('the dashboard: total integration as the headline, the other totals as a list; '
-        'side by side at ${width.toInt()} px: $sideBySide', (tester) async {
+  Future<void> dashboard(WidgetTester tester, double width, {required bool sideBySide}) async {
       await tester.binding.setSurfaceSize(Size(width, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final api = _FakeStatsOverviewClient(const StatsOverview(
@@ -111,6 +108,13 @@ void main() {
       } else {
         expect(k.top, greaterThan(h.bottom), reason: 'the list under the headline');
       }
-    });
   }
+
+  // Falsified by: overview_section.dart back to the old tile grid (no stats-hero, no StatKpi).
+  testWidgets('the dashboard: the total integration headline with the totals list beside it on a wide window',
+      (tester) => dashboard(tester, 1000, sideBySide: true));
+
+  // Falsified by: overview_section.dart showing the list beside the headline at every width.
+  testWidgets('the dashboard: on a narrow window the totals list goes under the headline',
+      (tester) => dashboard(tester, 500, sideBySide: false));
 }
