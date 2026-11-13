@@ -66,7 +66,9 @@ namespace OpenAstroAra.Test {
             return cam;
         }
 
+#pragma warning disable CA1859 // typed as the interface on purpose: the tests then fail to compile if CameraService stops implementing it
         private static ISessionLiveStackControl Control(CameraService c) => c;
+#pragma warning restore CA1859
 
         private static FrameSaveJob Light(int seed, string target = "M 31", string? filter = "Ha", Guid? session = null,
                 FrameType type = FrameType.Light, int bin = 1, double shiftX = 0, double rotDeg = 0, bool centreCrop = false) {
@@ -248,7 +250,7 @@ namespace OpenAstroAra.Test {
             using var release = new ManualResetEventSlim(false);
             cam.SessionLiveStack.InsideAddForTest = () => { inside.Set(); release.Wait(); };
             await Save(cam, Light(2, shiftX: 1));
-            await Until(inside.IsSet, "the worker is inside AddColour, holding the engine lock");
+            await Until(() => inside.IsSet, "the worker is inside AddColour, holding the engine lock");
 
             var call = Task.Run(async () => {
                 if (how == "reset") {
@@ -260,12 +262,16 @@ namespace OpenAstroAra.Test {
                 }
             });
             try {
-                await Until(() => Control(cam).GetSessionLiveStackStatus().LightsStacked == 0, "the status reads cleared while AddColour still runs");
+                // Off the test thread and bounded: under the mutant this read blocks, and the finally below must still run.
+                var cleared = Task.Run(() => Until(() => Control(cam).GetSessionLiveStackStatus().LightsStacked == 0, "the status reads cleared while AddColour still runs"));
+                Assert.That(await Task.WhenAny(cleared, Task.Delay(2000)), Is.SameAs(cleared), "the status read does not wait for the stack");
+                await cleared;
                 await cam.EnqueueSaveAsync(Light(3, shiftX: 2));
                 var finish = cam.FinishPendingSavesAsync();
                 Assert.That(await Task.WhenAny(finish, Task.Delay(1000)), Is.SameAs(finish), "the saves finish within 1 s");
                 Assert.That(await finish, Is.EqualTo(0));
             } finally {
+                cam.SessionLiveStack.InsideAddForTest = null;
                 release.Set();
             }
             await call;
@@ -332,7 +338,7 @@ namespace OpenAstroAra.Test {
             Control(cam).StartSessionLiveStack();
             var first = Light(1);
             await Save(cam, first);
-            await Until(inside.IsSet, "the worker took the first light");
+            await Until(() => inside.IsSet, "the worker took the first light");
             var rest = new[] { Light(2, shiftX: 1), Light(3, shiftX: 2) };
             await Save(cam, rest);
 
