@@ -5155,6 +5155,115 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get faultGroupReleased => 'released — disconnected by hand';
+
+  @override
+  String get usageWindowHour => 'Last hour';
+
+  @override
+  String get usageWindowRun => 'Run so far';
+
+  @override
+  String get usageRunUnavailable => 'No run started in the last 12 hours.';
+
+  @override
+  String get usageShowTable => 'Show table';
+
+  @override
+  String get usageHideTable => 'Hide table';
+
+  @override
+  String usageStorageBig(String n, String total) {
+    return '$n GB free of $total GB';
+  }
+
+  @override
+  String usageCpuBig(String n, String cores) {
+    return '$n % of all $cores cores';
+  }
+
+  @override
+  String usageMemoryBig(String n) {
+    return '$n GB in use of 4 GB';
+  }
+
+  @override
+  String get usageSteady => 'Steady';
+
+  @override
+  String usageFalling(String n) {
+    return 'Falling about $n GB per hour';
+  }
+
+  @override
+  String usageRising(String n) {
+    return 'Rising about $n GB per hour';
+  }
+
+  @override
+  String usageCpuFalling(String n) {
+    return 'Falling $n points over the window';
+  }
+
+  @override
+  String usageCpuRising(String n) {
+    return 'Rising $n points over the window';
+  }
+
+  @override
+  String get usageCollecting => 'Collecting…';
+
+  @override
+  String get usageEmpty =>
+      'The rig keeps 12 hours of readings. After a restart it starts empty.';
+
+  @override
+  String get usageWarnStorage =>
+      'Under 10 % free. Free some space or choose another disk.';
+
+  @override
+  String get usageWarnCpu =>
+      'Busy for a while. Guiding and downloads may slow.';
+
+  @override
+  String get usageWarnMemory => 'Nearly all memory in use.';
+
+  @override
+  String get usageWarnLine => 'dashed: warning level';
+
+  @override
+  String get usageNow => 'Now';
+
+  @override
+  String usageMinAgo(String n) {
+    return '$n min ago';
+  }
+
+  @override
+  String usageHoursAgo(String n) {
+    return '$n h ago';
+  }
+
+  @override
+  String get usageNoData => 'no data';
+
+  @override
+  String get usageTableWhen => 'When';
+
+  @override
+  String usageScale(String lo, String hi) {
+    return 'scale $lo–$hi GB';
+  }
+
+  @override
+  String get usageWindowHourPhrase => 'the last hour';
+
+  @override
+  String get usageWindowRunPhrase => 'the run so far';
+
+  @override
+  String usageAltText(String name, String value, String window, String trend) {
+    return '$name: $value. Trend over $window: $trend.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10346,4 +10455,114 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get faultGroupReleased => 'liberado — desconectado à mão';
+
+  @override
+  String get usageWindowHour => 'Última hora';
+
+  @override
+  String get usageWindowRun => 'Desde o início da sessão';
+
+  @override
+  String get usageRunUnavailable =>
+      'Nenhuma sessão começou nas últimas 12 horas.';
+
+  @override
+  String get usageShowTable => 'Mostrar tabela';
+
+  @override
+  String get usageHideTable => 'Ocultar tabela';
+
+  @override
+  String usageStorageBig(String n, String total) {
+    return '$n GB livres de $total GB';
+  }
+
+  @override
+  String usageCpuBig(String n, String cores) {
+    return '$n % de todos os $cores núcleos';
+  }
+
+  @override
+  String usageMemoryBig(String n) {
+    return '$n GB em uso de 4 GB';
+  }
+
+  @override
+  String get usageSteady => 'Estável';
+
+  @override
+  String usageFalling(String n) {
+    return 'Caindo cerca de $n GB por hora';
+  }
+
+  @override
+  String usageRising(String n) {
+    return 'Subindo cerca de $n GB por hora';
+  }
+
+  @override
+  String usageCpuFalling(String n) {
+    return 'Caindo $n pontos na janela';
+  }
+
+  @override
+  String usageCpuRising(String n) {
+    return 'Subindo $n pontos na janela';
+  }
+
+  @override
+  String get usageCollecting => 'Coletando…';
+
+  @override
+  String get usageEmpty =>
+      'O rig guarda 12 horas de leituras. Depois de reiniciar, começa vazio.';
+
+  @override
+  String get usageWarnStorage =>
+      'Menos de 10 % livre. Libere espaço ou escolha outro disco.';
+
+  @override
+  String get usageWarnCpu =>
+      'Ocupada há um tempo. A guiagem e os downloads podem ficar lentos.';
+
+  @override
+  String get usageWarnMemory => 'Quase toda a memória em uso.';
+
+  @override
+  String get usageWarnLine => 'tracejado: nível de alerta';
+
+  @override
+  String get usageNow => 'Agora';
+
+  @override
+  String usageMinAgo(String n) {
+    return 'há $n min';
+  }
+
+  @override
+  String usageHoursAgo(String n) {
+    return 'há $n h';
+  }
+
+  @override
+  String get usageNoData => 'sem dados';
+
+  @override
+  String get usageTableWhen => 'Quando';
+
+  @override
+  String usageScale(String lo, String hi) {
+    return 'escala $lo–$hi GB';
+  }
+
+  @override
+  String get usageWindowHourPhrase => 'a última hora';
+
+  @override
+  String get usageWindowRunPhrase => 'a sessão até agora';
+
+  @override
+  String usageAltText(String name, String value, String window, String trend) {
+    return '$name: $value. Tendência em $window: $trend.';
+  }
 }

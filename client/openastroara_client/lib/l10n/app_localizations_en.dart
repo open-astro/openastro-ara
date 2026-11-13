@@ -5155,4 +5155,113 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faultGroupReleased => 'released — disconnected by hand';
+
+  @override
+  String get usageWindowHour => 'Last hour';
+
+  @override
+  String get usageWindowRun => 'Run so far';
+
+  @override
+  String get usageRunUnavailable => 'No run started in the last 12 hours.';
+
+  @override
+  String get usageShowTable => 'Show table';
+
+  @override
+  String get usageHideTable => 'Hide table';
+
+  @override
+  String usageStorageBig(String n, String total) {
+    return '$n GB free of $total GB';
+  }
+
+  @override
+  String usageCpuBig(String n, String cores) {
+    return '$n % of all $cores cores';
+  }
+
+  @override
+  String usageMemoryBig(String n) {
+    return '$n GB in use of 4 GB';
+  }
+
+  @override
+  String get usageSteady => 'Steady';
+
+  @override
+  String usageFalling(String n) {
+    return 'Falling about $n GB per hour';
+  }
+
+  @override
+  String usageRising(String n) {
+    return 'Rising about $n GB per hour';
+  }
+
+  @override
+  String usageCpuFalling(String n) {
+    return 'Falling $n points over the window';
+  }
+
+  @override
+  String usageCpuRising(String n) {
+    return 'Rising $n points over the window';
+  }
+
+  @override
+  String get usageCollecting => 'Collecting…';
+
+  @override
+  String get usageEmpty =>
+      'The rig keeps 12 hours of readings. After a restart it starts empty.';
+
+  @override
+  String get usageWarnStorage =>
+      'Under 10 % free. Free some space or choose another disk.';
+
+  @override
+  String get usageWarnCpu =>
+      'Busy for a while. Guiding and downloads may slow.';
+
+  @override
+  String get usageWarnMemory => 'Nearly all memory in use.';
+
+  @override
+  String get usageWarnLine => 'dashed: warning level';
+
+  @override
+  String get usageNow => 'Now';
+
+  @override
+  String usageMinAgo(String n) {
+    return '$n min ago';
+  }
+
+  @override
+  String usageHoursAgo(String n) {
+    return '$n h ago';
+  }
+
+  @override
+  String get usageNoData => 'no data';
+
+  @override
+  String get usageTableWhen => 'When';
+
+  @override
+  String usageScale(String lo, String hi) {
+    return 'scale $lo–$hi GB';
+  }
+
+  @override
+  String get usageWindowHourPhrase => 'the last hour';
+
+  @override
+  String get usageWindowRunPhrase => 'the run so far';
+
+  @override
+  String usageAltText(String name, String value, String window, String trend) {
+    return '$name: $value. Trend over $window: $trend.';
+  }
 }

@@ -24,9 +24,16 @@ import '../../state/simple_messages_state.dart';
 import '../../state/guider/guider_build_activity_state.dart';
 import 'simple_calibration.dart' show simpleCalibrationProgress;
 import '../../state/simple_preflight_state.dart'
-    show SimpleModeScreen, SimplePreflightStep, SimplePreflightStepLabel, simplePreflightProvider, simpleShowingProvider;
+    show
+        SimpleModeScreen,
+        SimplePreflightStep,
+        SimplePreflightStepLabel,
+        simplePreflightProvider,
+        simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
+import '../../state/stats/usage_history_state.dart';
+import 'simple_usage_graph.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../state/focus/autofocus_live_state.dart';
@@ -189,7 +196,10 @@ String simpleMemory(int bytes) {
 /// The server's figures as tiles above Info's, turned on from the left
 /// rail's System: storage free, CPU, memory and uptime. CPU and memory
 /// are Ara's own process until the server reports the whole Pi. Re-read
-/// every 5 s while it shows.
+/// every 5 s while it shows. Spread across Settings › This rig
+/// ([expand]) Storage, CPU and Memory are graphs of the rig's last 12 h
+/// (#1582) and Uptime stays a figure; a rig without that history (an
+/// older daemon, or still loading) keeps the four figures.
 class SimpleSystemPanel extends ConsumerStatefulWidget {
   const SimpleSystemPanel({super.key, this.expand = false});
 
@@ -204,6 +214,9 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
   late final Timer _poll = Timer.periodic(const Duration(seconds: 5), (_) {
     unawaited(ref.read(serverInternalStateProvider.notifier).refresh());
     ref.invalidate(storageSpaceProvider);
+    if (widget.expand) {
+      unawaited(ref.read(usageHistoryProvider.notifier).refresh());
+    }
   });
 
   @override
@@ -224,6 +237,30 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
     final l10n = context.l10n;
+    final history = widget.expand
+        ? ref.watch(usageHistoryProvider).value
+        : null;
+    final uptime = (
+      l10n.previewUp,
+      state == null ? '—' : simpleUptime(state.uptimeSeconds),
+    );
+    if (history != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s8,
+        children: [
+          SimpleUsageGraphs(
+            history: history,
+            runStart: ref.watch(sequenceRunStateProvider).value?.startedUtc,
+          ),
+          SimpleFactTiles(
+            key: const Key('simple-system-line'),
+            facts: [uptime],
+            expand: true,
+          ),
+        ],
+      );
+    }
     final facts = [
       (
         l10n.previewStorage,
@@ -234,7 +271,7 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
         l10n.previewMemory,
         state == null ? '—' : simpleMemory(state.workingSetBytes),
       ),
-      (l10n.previewUp, state == null ? '—' : simpleUptime(state.uptimeSeconds)),
+      uptime,
     ];
     return SimpleFactTiles(
       key: const Key('simple-system-line'),
@@ -255,7 +292,9 @@ class SimpleInfoShown extends Notifier<bool> {
   void toggle() => state = !state;
 }
 
-final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(SimpleInfoShown.new);
+final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(
+  SimpleInfoShown.new,
+);
 
 /// Info On / Off, a row in Preview's and Focus's panels.
 class SimpleInfoToggle extends ConsumerWidget {
@@ -276,8 +315,18 @@ class SimpleInfoToggle extends ConsumerWidget {
       onPick: ref.read(simpleInfoShownProvider.notifier).set,
     );
     return stack
-        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s4, children: [label, segments])
-        : Row(spacing: AraSpace.s8, children: [Expanded(child: label), segments]);
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s4,
+            children: [label, segments],
+          )
+        : Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(child: label),
+              segments,
+            ],
+          );
   }
 }
 
@@ -1469,9 +1518,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
     // The main camera's own exposure (#1755): its progress fills a plan
     // frame's bar, and an exposure nothing here explains gets its own pill.
-    final camExposing = cam != null && cam.isConnected && cam.runtimeState == 'exposing';
+    final camExposing =
+        cam != null && cam.isConnected && cam.runtimeState == 'exposing';
     final camPct = cam?.exposureProgressPct;
-    final camUnexplained = cam != null &&
+    final camUnexplained =
+        cam != null &&
         cam.isConnected &&
         cam.isExposing &&
         !ref.watch(mainCameraExplainedProvider);
@@ -1546,7 +1597,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final builds = ref.watch(guiderBuildActivityProvider);
     final building = [
       for (final a in CalibrationArtifact.values)
-        if (builds[a] case final b? when b.phase == CalibrationBuildPhase.building)
+        if (builds[a] case final b?
+            when b.phase == CalibrationBuildPhase.building)
           (a, b),
     ].firstOrNull;
     // One pill per thing happening, stacked in this order (user, 2026-11-04:
@@ -1615,7 +1667,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                 l10n.deviceExposing,
                 AraColors.accentConnected,
                 working: true,
-                shotProgress: camPct == null ? null : (camPct / 100).clamp(0.0, 1.0),
+                shotProgress: camPct == null
+                    ? null
+                    : (camPct / 100).clamp(0.0, 1.0),
                 spoken: l10n.deviceCamera,
               )
             : _PillData(

@@ -6579,5 +6579,190 @@
   "faultGroupReleased": "released — disconnected by hand",
   "@faultGroupReleased": {
     "description": "Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered"
+  },
+  "usageWindowHour": "Last hour",
+  "@usageWindowHour": {
+    "description": "Settings › Rig usage graphs: window choice, the last 60 minutes"
+  },
+  "usageWindowRun": "Run so far",
+  "@usageWindowRun": {
+    "description": "Settings › Rig usage graphs: window choice, from the start of the current or latest run"
+  },
+  "usageRunUnavailable": "No run started in the last 12 hours.",
+  "@usageRunUnavailable": {
+    "description": "Shown under the disabled Run so far choice; the rig keeps 12 hours"
+  },
+  "usageShowTable": "Show table",
+  "@usageShowTable": {
+    "description": "Usage graph: button that shows the graph's values as a table"
+  },
+  "usageHideTable": "Hide table",
+  "@usageHideTable": {
+    "description": "Usage graph: button that hides the table again"
+  },
+  "usageStorageBig": "{n} GB free of {total} GB",
+  "@usageStorageBig": {
+    "description": "Storage graph: current figure; n is free GB, total is the volume size in GB",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "usageCpuBig": "{n} % of all {cores} cores",
+  "@usageCpuBig": {
+    "description": "CPU graph: current figure as a share of every core",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "cores": {
+        "type": "String"
+      }
+    }
+  },
+  "usageMemoryBig": "{n} GB in use of 4 GB",
+  "@usageMemoryBig": {
+    "description": "Memory graph: current figure; the scale ends at 4 GB",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageSteady": "Steady",
+  "@usageSteady": {
+    "description": "Usage graph trend: no meaningful change over the window"
+  },
+  "usageFalling": "Falling about {n} GB per hour",
+  "@usageFalling": {
+    "description": "Storage or memory trend, falling",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageRising": "Rising about {n} GB per hour",
+  "@usageRising": {
+    "description": "Storage or memory trend, rising",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageCpuFalling": "Falling {n} points over the window",
+  "@usageCpuFalling": {
+    "description": "CPU trend, falling; n percentage points",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageCpuRising": "Rising {n} points over the window",
+  "@usageCpuRising": {
+    "description": "CPU trend, rising; n percentage points",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageCollecting": "Collecting…",
+  "@usageCollecting": {
+    "description": "Usage graph: not enough samples yet for a trend or a line"
+  },
+  "usageEmpty": "The rig keeps 12 hours of readings. After a restart it starts empty.",
+  "@usageEmpty": {
+    "description": "Usage graph empty state: says why the graph may be short"
+  },
+  "usageWarnStorage": "Under 10 % free. Free some space or choose another disk.",
+  "@usageWarnStorage": {
+    "description": "Storage graph warning"
+  },
+  "usageWarnCpu": "Busy for a while. Guiding and downloads may slow.",
+  "@usageWarnCpu": {
+    "description": "CPU graph warning"
+  },
+  "usageWarnMemory": "Nearly all memory in use.",
+  "@usageWarnMemory": {
+    "description": "Memory graph warning"
+  },
+  "usageWarnLine": "dashed: warning level",
+  "@usageWarnLine": {
+    "description": "Usage graph: label for the dashed warning line"
+  },
+  "usageNow": "Now",
+  "@usageNow": {
+    "description": "Usage graph: the newest point"
+  },
+  "usageMinAgo": "{n} min ago",
+  "@usageMinAgo": {
+    "description": "Usage graph: a point n minutes back",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageHoursAgo": "{n} h ago",
+  "@usageHoursAgo": {
+    "description": "Usage graph: a point n hours back",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "usageNoData": "no data",
+  "@usageNoData": {
+    "description": "Usage graph: a sample that could not be read"
+  },
+  "usageTableWhen": "When",
+  "@usageTableWhen": {
+    "description": "Usage graph table: first column heading"
+  },
+  "usageScale": "scale {lo}–{hi} GB",
+  "@usageScale": {
+    "description": "Storage graph: the axis range, free GB",
+    "placeholders": {
+      "lo": {
+        "type": "String"
+      },
+      "hi": {
+        "type": "String"
+      }
+    }
+  },
+  "usageWindowHourPhrase": "the last hour",
+  "@usageWindowHourPhrase": {
+    "description": "Used inside the graph's spoken text"
+  },
+  "usageWindowRunPhrase": "the run so far",
+  "@usageWindowRunPhrase": {
+    "description": "Used inside the graph's spoken text"
+  },
+  "usageAltText": "{name}: {value}. Trend over {window}: {trend}.",
+  "@usageAltText": {
+    "description": "Spoken text of a usage graph: name, current value, window, trend",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      },
+      "trend": {
+        "type": "String"
+      }
+    }
   }
 }

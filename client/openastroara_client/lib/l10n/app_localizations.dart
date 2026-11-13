@@ -8714,6 +8714,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'released — disconnected by hand'**
   String get faultGroupReleased;
+
+  /// Settings › Rig usage graphs: window choice, the last 60 minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Last hour'**
+  String get usageWindowHour;
+
+  /// Settings › Rig usage graphs: window choice, from the start of the current or latest run
+  ///
+  /// In en, this message translates to:
+  /// **'Run so far'**
+  String get usageWindowRun;
+
+  /// Shown under the disabled Run so far choice; the rig keeps 12 hours
+  ///
+  /// In en, this message translates to:
+  /// **'No run started in the last 12 hours.'**
+  String get usageRunUnavailable;
+
+  /// Usage graph: button that shows the graph's values as a table
+  ///
+  /// In en, this message translates to:
+  /// **'Show table'**
+  String get usageShowTable;
+
+  /// Usage graph: button that hides the table again
+  ///
+  /// In en, this message translates to:
+  /// **'Hide table'**
+  String get usageHideTable;
+
+  /// Storage graph: current figure; n is free GB, total is the volume size in GB
+  ///
+  /// In en, this message translates to:
+  /// **'{n} GB free of {total} GB'**
+  String usageStorageBig(String n, String total);
+
+  /// CPU graph: current figure as a share of every core
+  ///
+  /// In en, this message translates to:
+  /// **'{n} % of all {cores} cores'**
+  String usageCpuBig(String n, String cores);
+
+  /// Memory graph: current figure; the scale ends at 4 GB
+  ///
+  /// In en, this message translates to:
+  /// **'{n} GB in use of 4 GB'**
+  String usageMemoryBig(String n);
+
+  /// Usage graph trend: no meaningful change over the window
+  ///
+  /// In en, this message translates to:
+  /// **'Steady'**
+  String get usageSteady;
+
+  /// Storage or memory trend, falling
+  ///
+  /// In en, this message translates to:
+  /// **'Falling about {n} GB per hour'**
+  String usageFalling(String n);
+
+  /// Storage or memory trend, rising
+  ///
+  /// In en, this message translates to:
+  /// **'Rising about {n} GB per hour'**
+  String usageRising(String n);
+
+  /// CPU trend, falling; n percentage points
+  ///
+  /// In en, this message translates to:
+  /// **'Falling {n} points over the window'**
+  String usageCpuFalling(String n);
+
+  /// CPU trend, rising; n percentage points
+  ///
+  /// In en, this message translates to:
+  /// **'Rising {n} points over the window'**
+  String usageCpuRising(String n);
+
+  /// Usage graph: not enough samples yet for a trend or a line
+  ///
+  /// In en, this message translates to:
+  /// **'Collecting…'**
+  String get usageCollecting;
+
+  /// Usage graph empty state: says why the graph may be short
+  ///
+  /// In en, this message translates to:
+  /// **'The rig keeps 12 hours of readings. After a restart it starts empty.'**
+  String get usageEmpty;
+
+  /// Storage graph warning
+  ///
+  /// In en, this message translates to:
+  /// **'Under 10 % free. Free some space or choose another disk.'**
+  String get usageWarnStorage;
+
+  /// CPU graph warning
+  ///
+  /// In en, this message translates to:
+  /// **'Busy for a while. Guiding and downloads may slow.'**
+  String get usageWarnCpu;
+
+  /// Memory graph warning
+  ///
+  /// In en, this message translates to:
+  /// **'Nearly all memory in use.'**
+  String get usageWarnMemory;
+
+  /// Usage graph: label for the dashed warning line
+  ///
+  /// In en, this message translates to:
+  /// **'dashed: warning level'**
+  String get usageWarnLine;
+
+  /// Usage graph: the newest point
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get usageNow;
+
+  /// Usage graph: a point n minutes back
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min ago'**
+  String usageMinAgo(String n);
+
+  /// Usage graph: a point n hours back
+  ///
+  /// In en, this message translates to:
+  /// **'{n} h ago'**
+  String usageHoursAgo(String n);
+
+  /// Usage graph: a sample that could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'no data'**
+  String get usageNoData;
+
+  /// Usage graph table: first column heading
+  ///
+  /// In en, this message translates to:
+  /// **'When'**
+  String get usageTableWhen;
+
+  /// Storage graph: the axis range, free GB
+  ///
+  /// In en, this message translates to:
+  /// **'scale {lo}–{hi} GB'**
+  String usageScale(String lo, String hi);
+
+  /// Used inside the graph's spoken text
+  ///
+  /// In en, this message translates to:
+  /// **'the last hour'**
+  String get usageWindowHourPhrase;
+
+  /// Used inside the graph's spoken text
+  ///
+  /// In en, this message translates to:
+  /// **'the run so far'**
+  String get usageWindowRunPhrase;
+
+  /// Spoken text of a usage graph: name, current value, window, trend
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {value}. Trend over {window}: {trend}.'**
+  String usageAltText(String name, String value, String window, String trend);
 }
 
 class _AppLocalizationsDelegate
