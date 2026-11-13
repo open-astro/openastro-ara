@@ -404,6 +404,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the usual filter names show the letters astronomers use in their cells; others keep their name or slot number', (tester) async {
+    const names = ['Red', 'Green', 'Blue', 'Clear', 'Luminance', 'H-alpha', 'OIII', 'S2', 'Dual', 'L-eXtreme'];
+    await _pump(tester, {
+      ..._wire(),
+      'slots': [for (var i = 0; i < names.length; i++) {'position': i, 'name': names[i]}],
+    });
+    const cells = ['R', 'G', 'B', 'L', 'L', 'Ha', 'OIII', 'SII', 'Dual', '9'];
+    for (var i = 0; i < names.length; i++) {
+      expect(find.descendant(of: _slot(i), matching: find.text(cells[i])), findsOneWidget, reason: names[i]);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the cells cannot be tapped while a plan asks or a swap waits', (tester) async {
     final (_, wheel) = await _pump(tester, _wire(), planRunning: true);
     await tester.pump();
