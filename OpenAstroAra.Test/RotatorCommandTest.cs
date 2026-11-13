@@ -111,8 +111,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_flaky_IsMoving_does_not_settle_the_move_early() {
             var reads = 0;
+            // Four unreadable reads, then four moving, over and over. The lifecycle refresh also reads IsMoving
+            // (once per poll, plus the timer tick), so fewer than four reads land between two settle polls and
+            // the settle read never sees five unreadable in a row, but sees five or more in total.
             using var rotator = new FakeRotatorDevice {
-                IsMovingScript = () => Interlocked.Increment(ref reads) % 2 == 1 ? throw new InvalidOperationException("blip") : true,
+                IsMovingScript = () => Interlocked.Increment(ref reads) % 8 < 4 ? throw new InvalidOperationException("blip") : true,
             };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 14));
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Move(svc));
