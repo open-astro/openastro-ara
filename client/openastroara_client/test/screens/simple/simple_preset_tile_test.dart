@@ -1,6 +1,7 @@
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
@@ -178,6 +179,29 @@ void main() {
         tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
         '49',
       );
+    });
+
+    testWidgets('holding + repeats the step, and letting go stops it', (
+      tester,
+    ) async {
+      final sets = await pumpCount(tester);
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('n-up'))),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+      // Frames come between the 90 ms steps, as on a phone.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(sets.length, greaterThan(2), reason: 'held, it repeats');
+      expect(sets, List.generate(sets.length, (i) => 11 + i));
+      await hold.up();
+      await tester.pump();
+      final held = sets.length;
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(sets.length, held, reason: 'let go, it stops');
     });
 
     testWidgets('- and + step by one and stop at 1', (tester) async {
