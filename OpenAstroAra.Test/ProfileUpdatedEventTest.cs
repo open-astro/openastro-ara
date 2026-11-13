@@ -37,7 +37,7 @@ namespace OpenAstroAra.Test {
                 if (Throw) {
                     throw new InvalidOperationException("broadcaster is down");
                 }
-                Published.Add((eventType, payload.Clone()));
+                Published.Add((eventType.Token, payload.Clone()));
                 return Task.CompletedTask;
             }
         }

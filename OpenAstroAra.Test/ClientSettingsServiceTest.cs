@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
             public long CurrentSequence { get; private set; }
             public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
                 CurrentSequence++;
-                _sink.Add((eventType, payload.Clone()));
+                _sink.Add((eventType.Token, payload.Clone()));
                 return Task.CompletedTask;
             }
         }
