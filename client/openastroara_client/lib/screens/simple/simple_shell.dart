@@ -1128,8 +1128,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // #1775 — a phone held upright: one deck along the bottom in place of
     // both rails and Stop; everything else sits above it.
     final deck = companionPortrait(context, ref);
-    // Until the deck is measured, a one-line guess keeps the first frame close.
-    final deckTop = kSimpleInset + (_deckHeight == 0 ? 140.0 : _deckHeight);
+    // Until the deck is measured, a guess keeps the first frame close: its
+    // height in two rows at 1x, as on a 390 px phone.
+    final deckTop = kSimpleInset + (_deckHeight == 0 ? 192.0 : _deckHeight);
     final rowBottom = deck ? deckTop + AraSpace.s8 : kSimpleInset;
     final aboveRow = statsShown
         ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)

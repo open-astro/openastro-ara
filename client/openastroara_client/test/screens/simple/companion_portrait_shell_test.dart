@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -98,6 +100,25 @@ Future<ProviderContainer> _pump(
 const _sections = ['preview', 'focus', 'polarAlign', 'guide', 'plan'];
 const _portrait = Size(390, 844);
 const _landscape = Size(844, 390);
+
+/// Text from 1x to 2x, in English and Brazilian Portuguese.
+const _textSizes = [
+  (Locale('en'), 1.0),
+  (Locale('en'), 1.5),
+  (Locale('en'), 2.0),
+  (Locale('pt', 'BR'), 1.0),
+  (Locale('pt', 'BR'), 1.5),
+  (Locale('pt', 'BR'), 2.0),
+];
+
+/// How far apart two targets are, side by side or a row apart: the gap along
+/// the axis that parts them (negative where they overlap).
+double _gap(Rect a, Rect b) => [
+  b.left - a.right,
+  a.left - b.right,
+  b.top - a.bottom,
+  a.top - b.bottom,
+].reduce(math.max);
 
 // The test font draws every glyph as a square, far wider than a real face,
 // so fit is measured with the Roboto the Flutter SDK ships.
@@ -268,6 +289,81 @@ void main() {
     expect(size.width, greaterThanOrEqualTo(60));
   });
 
+  for (final size in [_portrait, const Size(360, 780)]) {
+    for (final (locale, scale) in _textSizes) {
+      testWidgets(
+        'opened from the deck at $size in $locale at text ${scale}x, Monitor gives the verdict a line of its own and fits the Stop label',
+        skip: !hasFonts,
+        (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await _pump(tester, size, locale: locale);
+          await tapSection(tester, 'monitor');
+          await tester.pump(const Duration(milliseconds: 500));
+          // No takeException(): an overflow anywhere fails the case.
+          expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
+          final verdict = tester.renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byKey(const Key('simple-monitor-verdict')),
+              matching: find.byType(RichText),
+            ),
+          );
+          expect(
+            verdict.didExceedMaxLines,
+            isFalse,
+            reason: 'the verdict is cut',
+          );
+          expect(
+            verdict.size.width,
+            greaterThanOrEqualTo(size.width / 2),
+            reason: 'the verdict is squeezed beside the clock',
+          );
+          final button = tester.getRect(
+            find.descendant(of: stop, matching: find.byType(FilledButton)),
+          );
+          final label = tester.renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.descendant(
+                of: stop,
+                matching: find.text(
+                  lookupAppLocalizations(locale).estopCompactStop,
+                ),
+              ),
+              matching: find.byType(RichText),
+            ),
+          );
+          final drawn = MatrixUtils.transformRect(
+            label.getTransformTo(null),
+            Offset.zero & label.size,
+          );
+          expect(
+            label.didExceedMaxLines,
+            isFalse,
+            reason: 'the Stop label is cut',
+          );
+          expect(
+            drawn.left >= button.left &&
+                drawn.top >= button.top &&
+                drawn.right <= button.right &&
+                drawn.bottom <= button.bottom,
+            isTrue,
+            reason: 'the Stop label $drawn lies inside its button $button',
+          );
+          final end = tester
+              .widget<ListView>(find.byKey(const Key('simple-monitor-column')))
+              .padding!
+              .resolve(TextDirection.ltr)
+              .bottom;
+          expect(
+            end,
+            greaterThan(tester.getSize(stop).height),
+            reason: 'the column\'s end scrolls clear of Stop',
+          );
+        },
+      );
+    }
+  }
+
   testWidgets(
     'an open panel stays above the deck, so the deck and STOP stay clear of it',
     (tester) async {
@@ -356,14 +452,7 @@ void main() {
     },
   );
 
-  for (final (locale, scale) in [
-    (const Locale('en'), 1.0),
-    (const Locale('en'), 1.5),
-    (const Locale('en'), 2.0),
-    (const Locale('pt', 'BR'), 1.0),
-    (const Locale('pt', 'BR'), 1.5),
-    (const Locale('pt', 'BR'), 2.0),
-  ]) {
+  for (final (locale, scale) in _textSizes) {
     testWidgets(
       'on a phone upright in $locale at text ${scale}x no deck label is cut and every target is 44 px',
       skip: !hasFonts,
@@ -412,6 +501,46 @@ void main() {
         expect(tester.getRect(deck).bottom, lessThanOrEqualTo(844));
       },
     );
+  }
+
+  // 430 px wide: one row; 412, 390 and 360: two.
+  for (final size in [
+    _portrait,
+    const Size(360, 780),
+    const Size(412, 915),
+    const Size(430, 932),
+  ]) {
+    for (final locale in [const Locale('en'), const Locale('pt', 'BR')]) {
+      testWidgets(
+        'at $size in $locale the deck keeps 8 px between Sky Map, Info, Library, the shutter, the chip and STOP',
+        (tester) async {
+          await _pump(tester, size, locale: locale);
+          Rect at(String key) => tester.getRect(find.byKey(Key(key)));
+          for (final (what, a, b) in [
+            ('Sky Map to Info', at('simple-sky'), at('simple-info')),
+            ('Info to Library', at('simple-info'), at('simple-library')),
+            (
+              'Library to the shutter',
+              at('simple-library'),
+              at('simple-shutter'),
+            ),
+            (
+              'the shutter to the chip',
+              at('simple-shutter'),
+              at('simple-settings'),
+            ),
+            ('the chip to STOP', at('simple-settings'), tester.getRect(stop)),
+          ]) {
+            // A third of the split row is not a whole pixel.
+            expect(
+              _gap(a, b),
+              greaterThanOrEqualTo(8 - precisionErrorTolerance),
+              reason: '$what: $a, $b',
+            );
+          }
+        },
+      );
+    }
   }
 
   testWidgets(

@@ -18,14 +18,15 @@ import '../../widgets/status_indicator.dart';
 import 'simple_device_windows.dart' show simpleClockTime, simpleWeatherBreachText;
 import 'simple_plan_panel.dart' show simpleRunDuration;
 import 'simple_preview_panel.dart' show simpleCountdown;
+import 'simple_shell.dart' show kSimpleStopSize, simpleRailScale;
 
 /// Where a tile tap goes: Monitor closes and the shell opens the window or
 /// panel that owns the thing (#1724).
 enum MonitorDestination { queue, sky, mount, safety, weather, guider, frameInfo }
 
 /// Below this width the grid needs more room than it has: Monitor is offered
-/// only from a phone's portrait deck (#1775), which lays the tiles in one
-/// column.
+/// only from a phone's portrait deck (#1775), and lays its tiles in one
+/// column under a verdict on a line of its own.
 const double kMonitorMinWidth = 900;
 
 /// The two right columns keep this width; extra width goes to the left two.
@@ -74,6 +75,10 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
     final s = ref.watch(monitorProvider);
     final clock = ref.watch(monitorClockProvider);
     final phone = ref.watch(companionModeProvider);
+    // The iPad's 108 pt Stop; a phone's is the 60 px square of every phone
+    // screen (board pick, 2026-11-12, #1775), growing with the text as the
+    // deck's does.
+    final stop = phone ? kSimpleStopSize * simpleRailScale(context) : 108.0;
     return Scaffold(
       key: const Key('simple-monitor'),
       backgroundColor: AraColors.bgPrimary,
@@ -89,16 +94,14 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
                   const SizedBox(height: _kGap),
                   // Frozen, the tiles say Last known with grey dots; no dimming,
                   // which took the last known values under 3:1.
-                  Expanded(child: _Grid(s: s, onOpen: widget.onOpen)),
+                  Expanded(child: _Grid(s: s, onOpen: widget.onOpen, stop: stop)),
                 ],
               ),
-              // The iPad's 108 pt Stop; a phone's is the 60 px square of every
-              // phone screen (board pick, 2026-11-12, #1775).
               Positioned(
                 right: 0,
                 bottom: 0,
-                width: phone ? 60 : 108,
-                height: phone ? 60 : 108,
+                width: stop,
+                height: stop,
                 child: EmergencyStopButton(large: !phone, compact: phone),
               ),
             ],
@@ -110,7 +113,7 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
 }
 
 /// The top line: the verdict, the clock, this device's battery, Night mode
-/// and close.
+/// and close; on a phone the verdict goes under the rest.
 class _TopLine extends ConsumerWidget {
   const _TopLine({required this.s, required this.clock});
 
@@ -134,102 +137,117 @@ class _TopLine extends ConsumerWidget {
     };
     final question = v.kind == MonitorVerdictKind.question ? v.question : null;
     final message = v.kind == MonitorVerdictKind.message ? v.message : null;
+    final narrow = MediaQuery.sizeOf(context).width < kMonitorMinWidth;
     // Shown whole: a question to answer, or a stop's outcome to read; on a
     // phone every verdict, which two lines cannot hold (#1775).
-    final whole =
-        question != null ||
-        message != null ||
-        MediaQuery.sizeOf(context).width < kMonitorMinWidth;
+    final whole = question != null || message != null || narrow;
+    // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
+    // Mode's full-screen pages).
+    const back = BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary);
+    final words = [
+      if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
+      Expanded(
+        // The words scroll past the cap; the answers (or Dismiss) stay
+        // fixed under them, always on screen (re-audit 3).
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Announced once per state: the visible line carries a
+                    // countdown or an age that would re-announce every second.
+                    Semantics(liveRegion: true, label: monitorVerdictAnnouncement(l10n, s, head), child: const SizedBox.shrink()),
+                    Text(head,
+                        key: const Key('simple-monitor-verdict'),
+                        // A question or a stop's outcome shows whole.
+                        maxLines: whole ? null : 2,
+                        overflow: whole ? null : TextOverflow.ellipsis,
+                        style: kSimpleText.copyWith(
+                            fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
+                    if (reason != null)
+                      Text(reason,
+                          maxLines: whole ? null : 2,
+                          overflow: whole ? null : TextOverflow.ellipsis,
+                          style: _dim),
+                  ],
+                ),
+              ),
+            ),
+            if (message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
+                child: TextButton(
+                  key: const Key('simple-monitor-dismiss'),
+                  onPressed: () => ref.read(simpleMessagesProvider.notifier).dismiss(message.id),
+                  child: Text(l10n.pillsDismiss),
+                ),
+              ),
+            // A question's answers: the only controls besides Stop, Night
+            // mode and Back. The same actions as its pill, which Monitor
+            // doesn't draw.
+            if (question != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
+                child: Wrap(spacing: AraSpace.s8, runSpacing: AraSpace.s8, children: [
+                  for (var i = 0; i < question.actions.length; i++)
+                    (i == question.actions.length - 1 ? FilledButton.new : TextButton.new)(
+                      onPressed: () {
+                        ref.read(simpleMessagesProvider.notifier).dismiss(question.id);
+                        question.actions[i].onPressed();
+                      },
+                      child: Text(question.actions[i].label),
+                    ),
+                ]),
+              ),
+          ],
+        ),
+      ),
+    ];
+    final readings = [
+      if (battery != null) ...[
+        _Battery(level: battery.level, charging: battery.charging),
+        const SizedBox(width: AraSpace.s12),
+      ],
+      Text(simpleClockTime(clock),
+          style: kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w300)),
+      const SizedBox(width: AraSpace.s8),
+      IconButton(
+        tooltip: l10n.shellNightMode,
+        isSelected: night,
+        color: AraColors.textSecondary,
+        selectedIcon: const Icon(Icons.dark_mode, color: AraColors.accentInfo),
+        icon: const Icon(Icons.dark_mode_outlined),
+        onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
+      ),
+    ];
     // 64 pt, growing with the user's text size up to half the screen; past
     // that it scrolls, so a question's answers stay reachable at 2x text.
     return ConstrainedBox(
       constraints: BoxConstraints(minHeight: 64, maxHeight: math.max(64, MediaQuery.sizeOf(context).height / 2)),
-      child: Row(
-        children: [
-          // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
-          // Mode's full-screen pages).
-          const BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary),
-          const SizedBox(width: AraSpace.s4),
-          if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
-          Expanded(
-            // The words scroll past the cap; the answers (or Dismiss) stay
-            // fixed under them, always on screen (re-audit 3).
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Announced once per state: the visible line carries a
-                        // countdown or an age that would re-announce every second.
-                        Semantics(liveRegion: true, label: monitorVerdictAnnouncement(l10n, s, head), child: const SizedBox.shrink()),
-                        Text(head,
-                            key: const Key('simple-monitor-verdict'),
-                            // A question or a stop's outcome shows whole.
-                            maxLines: whole ? null : 2,
-                            overflow: whole ? null : TextOverflow.ellipsis,
-                            style: kSimpleText.copyWith(
-                                fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
-                        if (reason != null)
-                          Text(reason,
-                              maxLines: whole ? null : 2,
-                              overflow: whole ? null : TextOverflow.ellipsis,
-                              style: _dim),
-                      ],
-                    ),
-                  ),
-                ),
-                if (message != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
-                    child: TextButton(
-                      key: const Key('simple-monitor-dismiss'),
-                      onPressed: () => ref.read(simpleMessagesProvider.notifier).dismiss(message.id),
-                      child: Text(l10n.pillsDismiss),
-                    ),
-                  ),
-                // A question's answers: the only controls besides Stop, Night
-                // mode and Back. The same actions as its pill, which Monitor
-                // doesn't draw.
-                if (question != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
-                    child: Wrap(spacing: AraSpace.s8, runSpacing: AraSpace.s8, children: [
-                      for (var i = 0; i < question.actions.length; i++)
-                        (i == question.actions.length - 1 ? FilledButton.new : TextButton.new)(
-                          onPressed: () {
-                            ref.read(simpleMessagesProvider.notifier).dismiss(question.id);
-                            question.actions[i].onPressed();
-                          },
-                          child: Text(question.actions[i].label),
-                        ),
-                    ]),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AraSpace.s16),
-          if (battery != null) ...[
-            _Battery(level: battery.level, charging: battery.charging),
-            const SizedBox(width: AraSpace.s12),
-          ],
-          Text(simpleClockTime(clock),
-              style: kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w300)),
-          const SizedBox(width: AraSpace.s8),
-          IconButton(
-            tooltip: l10n.shellNightMode,
-            isSelected: night,
-            color: AraColors.textSecondary,
-            selectedIcon: const Icon(Icons.dark_mode, color: AraColors.accentInfo),
-            icon: const Icon(Icons.dark_mode_outlined),
-            onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
-          ),
-        ],
-      ),
+      // On a phone (#1775) the verdict has a line of its own under Back and
+      // the readings, which fill a phone's width at 2x text; where they do
+      // not fit beside Back (a 360 px phone at 2x), they go under it.
+      child: narrow
+          ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [back, Row(mainAxisSize: MainAxisSize.min, children: readings)],
+              ),
+              Flexible(child: Row(children: words)),
+            ])
+          : Row(children: [
+              back,
+              const SizedBox(width: AraSpace.s4),
+              ...words,
+              const SizedBox(width: AraSpace.s16),
+              ...readings,
+            ]),
     );
   }
 }
@@ -262,10 +280,13 @@ class _Battery extends StatelessWidget {
 /// The tiles: two fixed right columns, the left two sharing the rest; on a
 /// phone, one column. Which areas show comes from the rig's profile.
 class _Grid extends StatelessWidget {
-  const _Grid({required this.s, required this.onOpen});
+  const _Grid({required this.s, required this.onOpen, required this.stop});
 
   final MonitorSnapshot s;
   final ValueChanged<MonitorDestination> onOpen;
+
+  /// Stop's side: the phone column's end scrolls clear of it.
+  final double stop;
 
   @override
   Widget build(BuildContext context) {
@@ -280,11 +301,11 @@ class _Grid extends StatelessWidget {
     const strip = 56.0;
 
     // A phone (#1775): one column that scrolls, each tile at a fixed height;
-    // the end scrolls clear of the 60 px Stop in the corner.
+    // the end scrolls clear of Stop in the corner.
     if (MediaQuery.sizeOf(context).width < kMonitorMinWidth) {
       return ListView(
         key: const Key('simple-monitor-column'),
-        padding: const EdgeInsets.only(bottom: 60 + _kGap),
+        padding: EdgeInsets.only(bottom: stop + _kGap),
         children: [
           for (final (tile, height) in [
             (now, 220.0),

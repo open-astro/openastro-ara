@@ -36,7 +36,8 @@ const double _kNarrow = 48;
 /// The bottom deck. Top row: the section names, swipeable, the current one
 /// lit. Second row: Sky Map, Info and Library; the shutter and the settings
 /// chip; the 60 px STOP. Past 1.1x text, or on a screen too narrow for the
-/// one row, the second row splits in two, so no label is cut short.
+/// one row with 8 px between its targets (a 390 px phone), the second row
+/// splits in two, so no label is cut short and no target touches the next.
 class CompanionDeck extends ConsumerWidget {
   const CompanionDeck({
     super.key,
@@ -103,6 +104,8 @@ class CompanionDeck extends ConsumerWidget {
     ];
     final middle = [
       SimpleScreen.of(mode).shutter,
+      // As on the rail: the shutter, which takes a frame, clear of the chip.
+      const SizedBox(width: AraSpace.s8),
       _DeckButton(
         key: const Key('simple-settings'),
         icon: Icons.tune,
@@ -156,12 +159,21 @@ class CompanionDeck extends ConsumerWidget {
           ),
           LayoutBuilder(
             builder: (context, box) =>
-                // The shutter is a Stop's size.
+                // The shutter is a Stop's size. Each target keeps 8 px from the
+                // next, each spacer too, so a slip lands on no other target.
                 scale <= 1 &&
-                    box.maxWidth >= 3 * _kWide + _kNarrow + 2 * kSimpleStopSize
+                    box.maxWidth >=
+                        3 * _kWide +
+                            _kNarrow +
+                            2 * kSimpleStopSize +
+                            5 * AraSpace.s8
                 ? Row(
                     children: [
-                      ...left,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: AraSpace.s8,
+                        children: left,
+                      ),
                       const Spacer(),
                       ...middle,
                       const Spacer(),
@@ -171,7 +183,10 @@ class CompanionDeck extends ConsumerWidget {
                 : Column(
                     spacing: AraSpace.s8,
                     children: [
-                      Row(children: [for (final b in left) Expanded(child: b)]),
+                      Row(
+                        spacing: AraSpace.s8,
+                        children: [for (final b in left) Expanded(child: b)],
+                      ),
                       Row(children: [...middle, const Spacer(), stop]),
                     ],
                   ),
