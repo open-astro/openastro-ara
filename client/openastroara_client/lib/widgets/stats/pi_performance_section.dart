@@ -13,7 +13,7 @@ import 'stats_pull_refresh.dart';
 
 /// §66.7 — the Stats "Pi performance" section: what the server process is
 /// doing right now (memory, CPU, GC, threads, connected clients, host load).
-/// Read on open and on the refresh button; nothing polls in the background.
+/// Read on open and on the page's pull down; nothing polls in the background.
 class PiPerformanceSection extends ConsumerStatefulWidget {
   const PiPerformanceSection({super.key});
 
