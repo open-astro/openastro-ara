@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/achievements.dart';
 import '../../state/stats/achievements_state.dart';
 import '../../theme/ara_colors.dart';
-import 'responsive_tile_grid.dart';
+import '../../l10n/l10n.dart';
 import 'stat_tile.dart';
 import '../adaptive_controls.dart';
 import 'stats_pull_refresh.dart';
@@ -169,51 +169,40 @@ class _Achievements extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ResponsiveTileGrid(
-          children: [
-            StatTile(
-              icon: Icons.local_fire_department,
-              value: '${data.currentStreakNights}',
-              label: 'Current streak',
-              subtitle: 'nights in a row',
-            ),
-            StatTile(
-              icon: Icons.whatshot,
-              value: '${data.longestStreakNights}',
-              label: 'Longest streak',
-              subtitle: 'nights',
-            ),
-            StatTile(
-              icon: Icons.calendar_month,
-              value: '${data.totalNightsImaged}',
-              label: 'Nights imaged',
-            ),
-            StatTile(
-              icon: Icons.nightlight_round,
-              value: _hours(data.longestNightHours),
-              label: 'Longest night',
-            ),
-            StatTile(
-              icon: Icons.timelapse,
-              value: _hours(data.totalIntegrationHours),
-              label: 'Total integration',
-            ),
-            StatTile(
-              icon: Icons.gps_fixed,
-              value: '${data.uniqueTargetsImaged}',
-              label: 'Unique targets',
-            ),
-            StatTile(
-              icon: Icons.image_outlined,
-              value: '${data.totalLightFrames}',
-              label: 'Light frames',
-            ),
-            StatTile(
-              icon: Icons.flag_outlined,
-              value: _firstLight(data.firstLightUtc),
-              label: 'First light',
-            ),
-          ],
+        // The records as the dashboard's list, without the totals Overview
+        // already shows; Unique targets here counts named frames only.
+        LayoutBuilder(
+          builder: (context, box) => StatKpiGrid(
+            columns: box.maxWidth >= 720 ? 3 : 2,
+            children: [
+              StatKpi(
+                value: '${data.currentStreakNights}',
+                label: 'Current streak',
+                subtitle: 'nights in a row',
+              ),
+              StatKpi(
+                value: '${data.longestStreakNights}',
+                label: 'Longest streak',
+                subtitle: 'nights',
+              ),
+              StatKpi(
+                value: '${data.totalNightsImaged}',
+                label: 'Nights imaged',
+              ),
+              StatKpi(
+                value: _hours(data.longestNightHours),
+                label: 'Longest night',
+              ),
+              StatKpi(
+                value: '${data.uniqueTargetsImaged}',
+                label: context.l10n.statsNamedTargets,
+              ),
+              StatKpi(
+                value: _firstLight(data.firstLightUtc),
+                label: 'First light',
+              ),
+            ],
+          ),
         ),
         if (data.milestones.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -222,10 +211,19 @@ class _Achievements extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(height: 8),
-          ResponsiveTileGrid(
-            children: [
-              for (final m in data.milestones) _MilestoneBadge(milestone: m),
-            ],
+          // Medals on a shelf that scrolls sideways, earned ones first.
+          SizedBox(
+            height: 132,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final m in [
+                  ...data.milestones.where((m) => m.achieved),
+                  ...data.milestones.where((m) => !m.achieved),
+                ])
+                  _MilestoneBadge(milestone: m),
+              ],
+            ),
           ),
         ],
         const Padding(
@@ -270,63 +268,62 @@ class _MilestoneBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final achieved = milestone.achieved;
-    final accent = achieved ? AraColors.accentConnected : AraColors.textDisabled;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AraColors.bgPanel,
-        border: Border.all(color: achieved ? accent : AraColors.border),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(achieved ? Icons.emoji_events : Icons.lock_outline,
-                  size: 16, color: accent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  milestone.title,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: achieved
-                            ? AraColors.textPrimary
-                            : AraColors.textSecondary,
-                      ),
-                ),
+    final accent = achieved ? AraColors.accentConnected : AraColors.accentInfo;
+    // A medal: the progress as a ring round the trophy or the lock, the
+    // title under it and how far, or Earned, under that. One size for all.
+    return Tooltip(
+      message: milestone.description,
+      child: SizedBox(
+        key: Key('stats-medal-${milestone.id}'),
+        width: 104,
+        child: Column(
+          spacing: 4,
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: achieved ? 1 : milestone.progress,
+                    strokeWidth: 4,
+                    backgroundColor: AraColors.bgInput,
+                    valueColor: AlwaysStoppedAnimation(accent),
+                  ),
+                  Icon(
+                    achieved ? Icons.emoji_events : Icons.lock_outline,
+                    size: 24,
+                    color: achieved
+                        ? AraColors.accentConnected
+                        : AraColors.textDisabled,
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            milestone.description,
-            style: const TextStyle(
-                fontSize: 11, color: AraColors.textSecondary),
-          ),
-          // An earned badge keeps the bar (full, green) and a caption, so
-          // every badge in a row is the same height.
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: achieved ? 1 : milestone.progress,
-              minHeight: 4,
-              backgroundColor: AraColors.bgInput,
-              valueColor: AlwaysStoppedAnimation(
-                  achieved ? AraColors.accentConnected : AraColors.accentInfo),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            achieved
-                ? 'Earned'
-                : '${_trim(milestone.current)} / ${_trim(milestone.threshold)}',
-            style: TextStyle(
-                fontSize: 11,
-                color: achieved ? AraColors.accentConnected : AraColors.textDisabled),
-          ),
-        ],
+            Text(
+              milestone.title,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: achieved
+                        ? AraColors.textPrimary
+                        : AraColors.textSecondary,
+                  ),
+            ),
+            Text(
+              achieved
+                  ? context.l10n.statsBadgeEarned
+                  : '${_trim(milestone.current)} / ${_trim(milestone.threshold)}', // l10n-ok
+              style: TextStyle(
+                  fontSize: 11,
+                  color: achieved
+                      ? AraColors.accentConnected
+                      : AraColors.textDisabled),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -145,7 +145,7 @@ lib/widgets/sky_atlas/session_plan_dialog.dart 38
 lib/widgets/sky_atlas/stellarium_view.dart 11
 lib/widgets/sky_atlas/target_preview.dart 8
 lib/widgets/sky_atlas/tonight_sky_panel.dart 47
-lib/widgets/stats/achievements_section.dart 16
+lib/widgets/stats/achievements_section.dart 13
 lib/widgets/stats/astrobin_export_dialog.dart 7
 lib/widgets/stats/best_frames_section.dart 4
 lib/widgets/stats/charts/calendar_heatmap.dart 8

@@ -6674,5 +6674,25 @@
   "shellLoadingSky": "Loading the sky…",
   "@shellLoadingSky": {
     "description": "Simple Mode: shown while the Sky Map draws its first sky after it was asked for"
+  },
+  "statsIntegrationCaption": "{lights} light frames in {sessions} sessions",
+  "@statsIntegrationCaption": {
+    "description": "Stats dashboard: under the total integration",
+    "placeholders": {
+      "lights": {
+        "type": "int"
+      },
+      "sessions": {
+        "type": "int"
+      }
+    }
+  },
+  "statsNamedTargets": "Named targets",
+  "@statsNamedTargets": {
+    "description": "Stats: targets counted from frames that recorded a target name"
+  },
+  "statsBadgeEarned": "Earned",
+  "@statsBadgeEarned": {
+    "description": "Stats: caption under a badge the user has earned"
   }
 }

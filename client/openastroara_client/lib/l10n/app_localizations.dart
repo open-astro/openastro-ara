@@ -8834,6 +8834,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading the sky…'**
   String get shellLoadingSky;
+
+  /// Stats dashboard: under the total integration
+  ///
+  /// In en, this message translates to:
+  /// **'{lights} light frames in {sessions} sessions'**
+  String statsIntegrationCaption(int lights, int sessions);
+
+  /// Stats: targets counted from frames that recorded a target name
+  ///
+  /// In en, this message translates to:
+  /// **'Named targets'**
+  String get statsNamedTargets;
+
+  /// Stats: caption under a badge the user has earned
+  ///
+  /// In en, this message translates to:
+  /// **'Earned'**
+  String get statsBadgeEarned;
 }
 
 class _AppLocalizationsDelegate

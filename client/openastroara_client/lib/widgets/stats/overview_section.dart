@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/stats_overview.dart';
 import '../../state/stats/stats_overview_state.dart';
 import '../../theme/ara_colors.dart';
-import 'responsive_tile_grid.dart';
+import '../../l10n/l10n.dart';
 import 'stat_tile.dart';
 import 'stats_format.dart';
 import '../adaptive_controls.dart';
@@ -113,39 +113,86 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
     if (data.isEmpty) {
       return const _Hint('No frames captured yet — your totals appear here once you start imaging.');
     }
-    return ResponsiveTileGrid(
+    // The dashboard (mock `design/preview/stats-layouts-mock.html` B): the
+    // total integration as the headline, the other totals as a list beside
+    // it, under it on a narrow window.
+    final hero = _Hero(data);
+    final kpis = StatKpiGrid(
       children: [
-        StatTile(
-          icon: Icons.list_alt,
-          value: '${data.totalSessions}',
-          label: 'Sessions',
-        ),
-        StatTile(
-          icon: Icons.image_outlined,
-          value: '${data.totalFrames}',
-          label: 'Frames',
-        ),
-        StatTile(
-          icon: Icons.wb_incandescent_outlined,
-          value: '${data.totalLightFrames}',
-          label: 'Light frames',
-        ),
-        StatTile(
-          icon: Icons.timelapse,
-          value: formatIntegrationHours(data.totalIntegrationHours),
-          label: 'Total integration',
-        ),
-        StatTile(
-          icon: Icons.gps_fixed,
-          value: '${data.uniqueTargetsImaged}',
-          label: 'Unique targets',
-        ),
-        StatTile(
-          icon: Icons.event_available,
+        StatKpi(value: '${data.totalSessions}', label: 'Sessions'),
+        StatKpi(value: '${data.totalFrames}', label: 'Frames'),
+        StatKpi(value: '${data.totalLightFrames}', label: 'Light frames'),
+        StatKpi(value: '${data.uniqueTargetsImaged}', label: 'Unique targets'),
+        StatKpi(
           value: formatStatsDate(data.lastImageUtc),
           label: 'Last imaged',
         ),
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, box) => box.maxWidth >= 720
+          ? IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 12,
+                children: [
+                  Expanded(flex: 6, child: hero),
+                  Expanded(flex: 5, child: kpis),
+                ],
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 12,
+              children: [hero, kpis],
+            ),
+    );
+  }
+}
+
+/// The dashboard's headline: the total integration, big, with what it is
+/// made of under it.
+class _Hero extends StatelessWidget {
+  const _Hero(this.data);
+
+  final StatsOverview data;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    return Container(
+      key: const Key('stats-hero'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 6,
+        children: [
+          Text(
+            'Total integration',
+            style: theme.labelMedium?.copyWith(color: AraColors.textSecondary),
+          ),
+          Text(
+            formatIntegrationHours(data.totalIntegrationHours),
+            style: theme.displayMedium?.copyWith(
+              color: AraColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            context.l10n.statsIntegrationCaption(
+              data.totalLightFrames,
+              data.totalSessions,
+            ),
+            style: theme.bodySmall?.copyWith(color: AraColors.textSecondary),
+          ),
+        ],
+      ),
     );
   }
 }

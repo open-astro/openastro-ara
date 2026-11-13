@@ -1455,5 +1455,8 @@
   "focuserCalibrated": "Calibrado",
   "focuserCouldntSetZero": "Não foi possível definir o zero do focalizador",
   "focuserCouldntCalibrate": "Não foi possível calibrar o focalizador",
-  "shellLoadingSky": "Carregando o céu…"
+  "shellLoadingSky": "Carregando o céu…",
+  "statsIntegrationCaption": "{lights} quadros de luz em {sessions} sessões",
+  "statsNamedTargets": "Alvos com nome",
+  "statsBadgeEarned": "Conquistado"
 }

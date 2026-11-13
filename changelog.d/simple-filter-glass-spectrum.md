@@ -14,4 +14,4 @@
 
 - **Full filter names get their glass colour.** A wheel that names its filters Red, Green, Blue or Clear showed those cells as plain grey glass; they now take the same colour as R, G, B and L.
 - **Versions last in Settings › Rig.** The Versions table now closes the Rig section, after Storage and Logs, as it closes each device's window in Settings.
-- **Stats tiles and badges line up.** Tiles in a row of the Stats page are now the same height, and an earned badge keeps its bar (full, green) with "Earned" under it, so it is as tall as a badge still in progress.
+- **Stats is a denser dashboard.** The total integration leads as a headline with the other totals listed beside it, the nights calendar follows, Achievements no longer repeats Overview's totals, and badges are medals with a progress ring on a shelf, earned first and all one size.

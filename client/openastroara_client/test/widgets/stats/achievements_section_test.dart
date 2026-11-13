@@ -78,10 +78,10 @@ void main() {
     expect(find.text('Achievements'), findsOneWidget);
     expect(find.text('Nights imaged'), findsOneWidget);
     expect(find.text('10 Hours'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget, reason: 'the medal ring only, no loading spinner');
   });
 
-  testWidgets('an earned badge is as tall as one still in progress', (tester) async {
+  testWidgets('an earned badge is a medal the size of one in progress, first on the shelf', (tester) async {
     tester.view.physicalSize = const Size(1600, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -96,9 +96,12 @@ void main() {
     ));
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();
-    Size badge(String title) => tester.getSize(
-        find.ancestor(of: find.text(title), matching: find.byType(Container)).first);
-    expect(badge('Explorer').height, badge('Getting started').height);
+    Size badge(String id) => tester.getSize(find.byKey(Key('stats-medal-$id')));
+    expect(badge('targets_10'), badge('hours_10'));
+    expect(find.text('Earned'), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(const Key('stats-medal-targets_10'))).dx,
+        lessThan(tester.getTopLeft(find.byKey(const Key('stats-medal-hours_10'))).dx),
+        reason: 'earned medals first on the shelf');
   });
 
   testWidgets('shows the connect hint when no server is saved', (tester) async {
@@ -125,7 +128,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Records visible, no banner yet.
-    expect(find.text('Light frames'), findsOneWidget);
+    expect(find.text('Nights imaged'), findsOneWidget);
     expect(find.textContaining('Couldn’t refresh'), findsNothing);
 
     // Next fetch fails; pull down to refresh.
@@ -135,6 +138,6 @@ void main() {
 
     // Banner shown AND records still on screen (not blanked).
     expect(find.textContaining('Couldn’t refresh'), findsOneWidget);
-    expect(find.text('Light frames'), findsOneWidget);
+    expect(find.text('Nights imaged'), findsOneWidget);
   });
 }

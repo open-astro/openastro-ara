@@ -5232,6 +5232,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellLoadingSky => 'Loading the sky…';
+
+  @override
+  String statsIntegrationCaption(int lights, int sessions) {
+    return '$lights light frames in $sessions sessions';
+  }
+
+  @override
+  String get statsNamedTargets => 'Named targets';
+
+  @override
+  String get statsBadgeEarned => 'Earned';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10503,4 +10514,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellLoadingSky => 'Carregando o céu…';
+
+  @override
+  String statsIntegrationCaption(int lights, int sessions) {
+    return '$lights quadros de luz em $sessions sessões';
+  }
+
+  @override
+  String get statsNamedTargets => 'Alvos com nome';
+
+  @override
+  String get statsBadgeEarned => 'Conquistado';
 }

@@ -104,6 +104,9 @@ class StatsDashboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const OverviewSection(),
+                  const SizedBox(height: 12),
+                  // The nights calendar under the headline (mock B).
+                  const CalendarHeatmap(),
                   const SizedBox(height: 24),
                   if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
                   const BestFramesSection(),
@@ -118,7 +121,6 @@ class StatsDashboardScreen extends ConsumerWidget {
                     const GuidingRmsChart(),
                     const FrameQualityChart(),
                   ],
-                  const CalendarHeatmap(),
                 ],
               ),
             ),
