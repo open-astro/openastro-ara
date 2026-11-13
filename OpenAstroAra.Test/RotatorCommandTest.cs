@@ -45,9 +45,19 @@ namespace OpenAstroAra.Test {
         [SetUp]
         public void SetUp() => _faults = new FaultSink();
 
-        private static DeviceCommandPolicy Policy(int maxPolls = 40) =>
-            new(DeviceType.Rotator, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(1), maxPolls,
-                MotionFlagOptional: true, UnreadableReadsBeforeSettled: 5);
+        // Built from the production declaration, so the device type and the optional-flag rule under test
+        // are Rotator's own; only the timings shrink to milliseconds.
+        private static DeviceCommandPolicy Policy(int maxPolls = 40, double hardTimeoutMs = 100) =>
+            RotatorService.MovePolicy with {
+                HardTimeout = TimeSpan.FromMilliseconds(hardTimeoutMs), PollInterval = TimeSpan.FromMilliseconds(1), MaxPolls = maxPolls,
+            };
+
+        [Test]
+        public void The_rotator_move_policy_keeps_todays_timeouts_and_optional_IsMoving() {
+            Assert.That(RotatorService.MovePolicy, Is.EqualTo(new DeviceCommandPolicy(DeviceType.Rotator,
+                TimeSpan.FromMinutes(5), TimeSpan.FromMilliseconds(100), 600,
+                MotionFlagOptional: true, UnreadableReadsBeforeSettled: 5, PublishFaults: true)));
+        }
 
         private async Task<RotatorService> ConnectedAsync(FakeRotatorDevice rotator, DeviceCommandPolicy policy) {
             var svc = new RotatorService(faults: _faults) { DeviceFactory = _ => rotator, CommandPolicy = policy };
@@ -123,8 +133,7 @@ namespace OpenAstroAra.Test {
         public async Task A_sequencer_cancel_during_the_move_propagates_with_no_fault() {
             using var release = new ManualResetEventSlim(false);
             using var rotator = new FakeRotatorDevice { OnMove = _ => release.Wait(TimeSpan.FromSeconds(10)) };
-            using var svc = await ConnectedAsync(rotator, new DeviceCommandPolicy(DeviceType.Rotator, TimeSpan.FromSeconds(30),
-                TimeSpan.FromMilliseconds(1), 40, true, 5));
+            using var svc = await ConnectedAsync(rotator, Policy(hardTimeoutMs: 30_000));
             using var cts = new CancellationTokenSource();
             try {
                 cts.CancelAfter(30);
@@ -137,7 +146,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_disconnect_mid_wait_fails_the_move_with_no_stall_fault() {
-            using var rotator = new FakeRotatorDevice { IsMovingScript = () => true };
+            var reads = 0;
+            using var rotator = new FakeRotatorDevice { IsMovingScript = () => { Interlocked.Increment(ref reads); return true; } };
             using var svc = await ConnectedAsync(rotator, Policy(maxPolls: 2000));
             await Assert.ThrowsAsync<SequenceEntityFailedException>(async () => {
                 var move = Move(svc);
@@ -145,6 +155,9 @@ namespace OpenAstroAra.Test {
                 await svc.DisconnectAsync(null, CancellationToken.None);
                 await move;
             });
+            // The liveness check ends the wait at the next poll after the disconnect. Without it the
+            // module would keep reading the disposed rotator's IsMoving until the 2000-poll bound.
+            Assert.That(Volatile.Read(ref reads), Is.LessThan(1000));
             Assert.That(_faults.Faults.Where(f => f.Kind == EquipmentFaultKind.StallTimeout), Is.Empty);
         }
 
