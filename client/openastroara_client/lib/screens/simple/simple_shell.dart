@@ -1437,7 +1437,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // #1559 — no rig link: the card offers one, over the wallpaper.
                         if (!linkUp) ...[
                           if (!cardNarrow) rigCard,
-                        ] else if (!hasFrame)
+                        ] else if (!hasFrame &&
+                            // #1775 — upright, a panel opens across the middle:
+                            // the hint waits for it rather than show half under it.
+                            !(deck &&
+                                (_popover != _Popover.none ||
+                                    _device != null ||
+                                    _adding)))
                           Positioned.fill(
                             child: IgnorePointer(
                               child: Center(

@@ -409,6 +409,26 @@ void main() {
   }
 
   testWidgets(
+    'on a phone upright an open panel hides the shutter hint rather than cut through it',
+    (tester) async {
+      await _pump(tester, _portrait);
+      final hint = find.text('Tap the shutter to take a frame');
+      expect(hint, findsOneWidget, reason: 'nothing open: the hint shows');
+      // P.A.'s short panel opens across the middle of the screen.
+      await tapSection(tester, 'polarAlign');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(hint, findsNothing, reason: 'the hint shows half under the panel');
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        hint,
+        findsOneWidget,
+        reason: 'the panel closed: the hint is back',
+      );
+    },
+  );
+
+  testWidgets(
     'before any rig has been connected STOP is drawn disabled in its place and starts no hold',
     (tester) async {
       await _pump(tester, _portrait, linkUp: false);
