@@ -4653,28 +4653,16 @@ abstract class AppLocalizations {
   /// **'stop guiding'**
   String get guideActionStop;
 
-  /// Guide panel headline while the guider is connected and not running (not "Not guiding": it read as a failure)
-  ///
-  /// In en, this message translates to:
-  /// **'Idle'**
-  String get guideIdle;
-
-  /// Guide panel headline with no guider
-  ///
-  /// In en, this message translates to:
-  /// **'Guider not connected'**
-  String get guideNoGuider;
-
   /// Guide panel hint while idle
   ///
   /// In en, this message translates to:
   /// **'Tap the shutter to start guiding. It calibrates first when needed.'**
   String get guideTapShutter;
 
-  /// Guide panel hint with no guider
+  /// Guide panel hint with no guider: the Camera (Guide) row connects it
   ///
   /// In en, this message translates to:
-  /// **'Connect the guider in Settings › Devices.'**
+  /// **'Connect Camera (Guide) in Settings › Devices.'**
   String get guideConnectFirst;
 
   /// The guide camera's device window title
@@ -7938,7 +7926,7 @@ abstract class AppLocalizations {
   /// Calibration panel, Guide Camera: the Guider isn't connected
   ///
   /// In en, this message translates to:
-  /// **'Connect the Guider to build its dark library and bad-pixel map.'**
+  /// **'Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.'**
   String get calibrationGuideNoGuider;
 
   /// Calibration panel, Guide Camera: the Guider's dark library
@@ -8748,7 +8736,7 @@ abstract class AppLocalizations {
   /// Rig setup line: the Guider is not connected, so its calibration cannot be checked
   ///
   /// In en, this message translates to:
-  /// **'Connect the Guider to check its calibration.'**
+  /// **'Connect Camera (Guide) in Settings › Devices to check the guider calibration.'**
   String get rigSetupCalibrationConnect;
 
   /// Rig setup: button that closes the sheet and shows Guider mode

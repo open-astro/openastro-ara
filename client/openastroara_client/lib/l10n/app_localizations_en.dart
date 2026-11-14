@@ -2680,17 +2680,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideActionStop => 'stop guiding';
 
   @override
-  String get guideIdle => 'Idle';
-
-  @override
-  String get guideNoGuider => 'Guider not connected';
-
-  @override
   String get guideTapShutter =>
       'Tap the shutter to start guiding. It calibrates first when needed.';
 
   @override
-  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+  String get guideConnectFirst =>
+      'Connect Camera (Guide) in Settings › Devices.';
 
   @override
   String get deviceGuiderCamera => 'Camera (Guide)';
@@ -4647,7 +4642,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationGuideNoGuider =>
-      'Connect the Guider to build its dark library and bad-pixel map.';
+      'Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.';
 
   @override
   String get calibrationGuideDarks => 'Dark library';
@@ -5188,7 +5183,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rigSetupCalibrationConnect =>
-      'Connect the Guider to check its calibration.';
+      'Connect Camera (Guide) in Settings › Devices to check the guider calibration.';
 
   @override
   String get rigSetupCalibrationAction => 'Open Guider mode';

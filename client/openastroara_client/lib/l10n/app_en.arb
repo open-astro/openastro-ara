@@ -3742,21 +3742,13 @@
   "@guideActionStop": {
     "description": "Action named in an error: the guider refused to stop"
   },
-  "guideIdle": "Idle",
-  "@guideIdle": {
-    "description": "Guide panel headline while the guider is connected and not running (not \"Not guiding\": it read as a failure)"
-  },
-  "guideNoGuider": "Guider not connected",
-  "@guideNoGuider": {
-    "description": "Guide panel headline with no guider"
-  },
   "guideTapShutter": "Tap the shutter to start guiding. It calibrates first when needed.",
   "@guideTapShutter": {
     "description": "Guide panel hint while idle"
   },
-  "guideConnectFirst": "Connect the guider in Settings › Devices.",
+  "guideConnectFirst": "Connect Camera (Guide) in Settings › Devices.",
   "@guideConnectFirst": {
-    "description": "Guide panel hint with no guider"
+    "description": "Guide panel hint with no guider: the Camera (Guide) row connects it"
   },
   "deviceGuiderCamera": "Camera (Guide)",
   "@deviceGuiderCamera": {
@@ -5939,7 +5931,7 @@
   "@calibrationNothingMissing": {
     "description": "Calibration shutter: why it is off when every set is covered"
   },
-  "calibrationGuideNoGuider": "Connect the Guider to build its dark library and bad-pixel map.",
+  "calibrationGuideNoGuider": "Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.",
   "@calibrationGuideNoGuider": {
     "description": "Calibration panel, Guide Camera: the Guider isn't connected"
   },
@@ -6615,7 +6607,7 @@
   "@rigSetupCalibrationMissing": {
     "description": "Rig setup line: what is missing for the Guider calibration"
   },
-  "rigSetupCalibrationConnect": "Connect the Guider to check its calibration.",
+  "rigSetupCalibrationConnect": "Connect Camera (Guide) in Settings › Devices to check the guider calibration.",
   "@rigSetupCalibrationConnect": {
     "description": "Rig setup line: the Guider is not connected, so its calibration cannot be checked"
   },

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:fl_chart/fl_chart.dart' show LineChart;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -257,6 +258,25 @@ void main() {
       live.state = AutofocusLive(run: run);
       await tester.pump();
       expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
+    }
+  });
+
+  // #1898: the plot resized between steps (axes appearing, the banner and the error taking its room).
+  testWidgets('the HFR plot keeps one size and place from before the first probe to the end, warning and error included (#1898)',
+      (tester) async {
+    final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
+    Rect plot() => tester.getRect(find.byType(LineChart)).shift(-tester.getTopLeft(find.byType(SimpleFocusPanel)));
+    final start = plot();
+    for (final (name, l) in [
+      ('probes', AutofocusLive(run: AutofocusRun(
+          state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
+          probes: [_probe(0, 3.1), _probe(1, 2.4)]))),
+      ('weak fit', AutofocusLive(run: weak)),
+      ('error', AutofocusLive(run: weak, error: StateError(List.filled(60, 'the star field drifted').join(' ')))),
+    ]) {
+      live.state = l;
+      await tester.pump();
+      expect(plot(), start, reason: name);
     }
   });
 

@@ -2680,17 +2680,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideActionStop => 'stop guiding';
 
   @override
-  String get guideIdle => 'Idle';
-
-  @override
-  String get guideNoGuider => 'Guider not connected';
-
-  @override
   String get guideTapShutter =>
       'Tap the shutter to start guiding. It calibrates first when needed.';
 
   @override
-  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+  String get guideConnectFirst =>
+      'Connect Camera (Guide) in Settings › Devices.';
 
   @override
   String get deviceGuiderCamera => 'Camera (Guide)';
@@ -4647,7 +4642,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationGuideNoGuider =>
-      'Connect the Guider to build its dark library and bad-pixel map.';
+      'Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.';
 
   @override
   String get calibrationGuideDarks => 'Dark library';
@@ -5188,7 +5183,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get rigSetupCalibrationConnect =>
-      'Connect the Guider to check its calibration.';
+      'Connect Camera (Guide) in Settings › Devices to check the guider calibration.';
 
   @override
   String get rigSetupCalibrationAction => 'Open Guider mode';
@@ -8009,18 +8004,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get guideActionStop => 'parar a guiagem';
 
   @override
-  String get guideIdle => 'Parado';
-
-  @override
-  String get guideNoGuider => 'Guia não conectado';
-
-  @override
   String get guideTapShutter =>
       'Toque no obturador para iniciar a guiagem. Ele calibra antes, quando preciso.';
 
   @override
   String get guideConnectFirst =>
-      'Conecte o guia em Configurações › Dispositivos.';
+      'Conecte a Câmera (guiagem) em Ajustes › Dispositivos.';
 
   @override
   String get deviceGuiderCamera => 'Câmera (guiagem)';
@@ -9983,7 +9972,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationGuideNoGuider =>
-      'Conecte o guia para montar a biblioteca de darks e o mapa de pixels ruins.';
+      'Conecte a Câmera (guiagem) em Ajustes › Dispositivos para montar a biblioteca de darks e o mapa de pixels ruins.';
 
   @override
   String get calibrationGuideDarks => 'Biblioteca de darks';
@@ -10528,7 +10517,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get rigSetupCalibrationConnect =>
-      'Conecte o guiador para verificar a calibração.';
+      'Conecte a Câmera (guiagem) em Ajustes › Dispositivos para verificar a calibração da guiagem.';
 
   @override
   String get rigSetupCalibrationAction => 'Abrir modo Guiagem';
