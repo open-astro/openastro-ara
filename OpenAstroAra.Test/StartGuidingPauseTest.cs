@@ -129,7 +129,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task The_pause_reason_for_unconnected_equipment_is_plain() {
-            // #1875 — a guider that throws: its "all equipment must be connected first" is not a sentence for a person at the rig.
+            // #1875 — a guider that throws (a refused start's LastStartError takes the same path): its "all equipment must be connected first" is not a sentence for a person at the rig.
             var guider = Guider();
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Throws(new InvalidOperationException("all equipment must be connected first"));

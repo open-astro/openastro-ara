@@ -89,6 +89,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     started = false;
                     reason = ex.Message;
                 }
+                // A refused start returns false without throwing; the guider's own reason is kept for the pause.
+                if (!started) {
+                    reason ??= guiderMediator.LastStartError;
+                }
                 // #1875: one quiet retry before the run pauses; the first refusal is often equipment still connecting.
                 if (!started && attempt % 2 == 1) {
                     Logger.Warning($"Start guiding: {reason ?? "the guider did not start guiding"} — retrying once before pausing");
@@ -115,7 +119,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
         }
 
         /// <summary>The guider's own refusal text for unconnected equipment is not a sentence for a person at the rig.
-        /// Sees only a refusal that arrives as an exception; the guider's returned refusal text is follow-up work for #1875.</summary>
+        /// The reason is the text of a thrown error, or the guider's LastStartError after a refused start.</summary>
         internal static string PlainReason(string? reason) {
             if (string.IsNullOrWhiteSpace(reason)) {
                 return "the guider did not start guiding";
