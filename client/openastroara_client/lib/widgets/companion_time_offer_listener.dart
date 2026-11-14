@@ -7,12 +7,10 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import '../l10n/l10n.dart';
 import '../services/profile_api.dart';
 import '../state/profile_management_state.dart' show profileApiProvider;
-import '../services/ws_event_stream.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
 import '../state/time_sync_state.dart';
-import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
 import '../util/gps_site_fill.dart';
 
@@ -30,8 +28,9 @@ class _DeclinedNotifier extends Notifier<bool> {
 /// §41.1 / #1780 — on a phone (Companion Mode), when the rig reports no recent
 /// time sync, a question pill (Not now, Send) offers this phone's location and
 /// time. Send uses the same lookup as Simple Mode's site fill (fillSiteFromGps)
-/// and the existing time push; no new server call. Asked on a transition into
-/// connected, once per session unless answered Not now.
+/// and the existing time push; no new server call. Asked after each
+/// connect (the on-connect check says the rig was not synced), once per
+/// session unless answered Not now.
 class CompanionTimeOfferListener extends ConsumerStatefulWidget {
   const CompanionTimeOfferListener({super.key, required this.child});
 
@@ -49,33 +48,15 @@ class _CompanionTimeOfferListenerState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(wsConnectionStateProvider, (previous, next) {
-      final now = next.asData?.value;
-      final was = previous?.asData?.value;
-      if (now == WsConnectionState.connected &&
-          was != WsConnectionState.connected) {
-        unawaited(_maybeOffer());
-      }
+    // The on-connect check's reading, taken before its own clock push.
+    ref.listen(timeSyncCheckProvider, (previous, next) {
+      if (next != null && !next.synced) _maybeOffer();
     });
     return widget.child;
   }
 
-  Future<void> _maybeOffer() async {
+  void _maybeOffer() {
     if (_pillUp ||
-        !ref.read(companionModeProvider) ||
-        ref.read(companionTimeOfferDeclinedProvider)) {
-      return;
-    }
-    final api = ref.read(timeSyncApiProvider);
-    if (api == null) return;
-    try {
-      if ((await api.getState()).synced) return;
-    } catch (_) {
-      return; // can't ask the rig: no offer now, the next connect asks again
-    }
-    // Re-checked after the await: the mode or the answer may have changed.
-    if (!mounted ||
-        _pillUp ||
         !ref.read(companionModeProvider) ||
         ref.read(companionTimeOfferDeclinedProvider)) {
       return;

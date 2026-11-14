@@ -36,10 +36,7 @@ void main() {
     final br = arb('app_pt_BR.arb');
     final other = [
       for (final e in arb('app_en.arb').entries)
-        // companionTimeOfferQuestion is the accepted phone mock's wording (#1780),
-        // which says "equipamento"; the ticket binds it word for word.
         if (!e.key.startsWith('@') &&
-            e.key != 'companionTimeOfferQuestion' &&
             RegExp(r'\brigs?\b', caseSensitive: false).hasMatch(e.value as String) &&
             (br[e.key] as String).contains('equipamento'))
           e.key,

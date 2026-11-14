@@ -10672,7 +10672,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get companionTimeOfferQuestion =>
-      'O equipamento ainda não tem hora nem local. Enviar a localização e a hora deste celular?';
+      'O setup ainda não tem hora nem local. Enviar a localização e a hora deste celular?';
 
   @override
   String get companionTimeOfferNotNow => 'Agora não';

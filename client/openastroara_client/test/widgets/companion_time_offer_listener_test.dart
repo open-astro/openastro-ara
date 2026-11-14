@@ -12,6 +12,7 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/companion_time_offer_listener.dart';
+import 'package:openastroara/widgets/time_sync_on_connect.dart';
 
 class _Rig implements TimeSyncClient {
   _Rig({required this.synced});
@@ -19,11 +20,16 @@ class _Rig implements TimeSyncClient {
   final pushed = <DateTime>[];
 
   @override
-  Future<TimeSyncState> getState() async => TimeSyncState(
-    synced: synced,
-    // Greenwich: the position the rig "holds", what the site fill reads back.
-    location: const TimeSyncLocation(lat: 51.477833, lng: -0.0015, alt: 42),
-  );
+  Future<TimeSyncState> getState() async {
+    // A real request takes a turn: a read started now sees a push made meanwhile.
+    await Future<void>.value();
+    return TimeSyncState(
+      // Like the real rig: once a clock is pushed it reads as synced.
+      synced: synced || pushed.isNotEmpty,
+      // Greenwich: the position the rig "holds", what the site fill reads back.
+      location: const TimeSyncLocation(lat: 51.477833, lng: -0.0015, alt: 42),
+    );
+  }
 
   @override
   Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
@@ -62,7 +68,9 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const Scaffold(
-            body: CompanionTimeOfferListener(child: SizedBox.shrink()),
+            body: TimeSyncOnConnectListener(
+              child: CompanionTimeOfferListener(child: SizedBox.shrink()),
+            ),
           ),
         ),
       ),
@@ -94,6 +102,18 @@ void main() {
     expect(pills.single.actions.map((a) => a.label), ['Not now', 'Send']);
   });
 
+  testWidgets('still offers when the on-connect push lands first', (
+    tester,
+  ) async {
+    final (c, link, rig) = await pump(tester);
+    await connect(tester, link);
+    // The on-connect push already set the phone clock, so a fresh read of the
+    // rig says synced; the offer uses the reading taken before that push.
+    expect(rig.pushed, hasLength(1));
+    expect((await rig.getState()).synced, isTrue);
+    expect(titles(c), [question]);
+  });
+
   testWidgets('says nothing off a phone', (tester) async {
     final (c, link, _) = await pump(tester, companion: false);
     await connect(tester, link);
@@ -115,7 +135,8 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
 
-    expect(rig.pushed, hasLength(1));
+    // The on-connect push, then Send's own.
+    expect(rig.pushed, hasLength(2));
     final site = c.read(siteSettingsProvider);
     expect(site.latitudeDeg, closeTo(51.477833, 1e-6));
     expect(site.longitudeDeg, closeTo(-0.0015, 1e-6));
@@ -152,7 +173,7 @@ void main() {
     final pill = c.read(simpleMessagesProvider).single;
     expect(
       pill.title,
-      'O equipamento ainda não tem hora nem local. Enviar a localização e a hora deste celular?',
+      'O setup ainda não tem hora nem local. Enviar a localização e a hora deste celular?',
     );
     expect(pill.actions.map((a) => a.label), ['Agora não', 'Enviar']);
   });

@@ -1474,7 +1474,7 @@
   "settingsSectionRetry": "Tentar de novo",
   "settingsSectionConflict": "Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).",
   "settingsSectionReload": "Recarregar",
-  "companionTimeOfferQuestion": "O equipamento ainda não tem hora nem local. Enviar a localização e a hora deste celular?",
+  "companionTimeOfferQuestion": "O setup ainda não tem hora nem local. Enviar a localização e a hora deste celular?",
   "companionTimeOfferNotNow": "Agora não",
   "companionTimeOfferSend": "Enviar",
   "companionTimeOfferSent": "Localização e hora deste celular enviadas",
