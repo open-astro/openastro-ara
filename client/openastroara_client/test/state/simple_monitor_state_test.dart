@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
@@ -9,8 +13,10 @@ import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show monitorVerdictText;
+import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -185,6 +191,9 @@ Future<_Rig> _rig({
   FocuserStatus? focuser,
   int? freeBytes,
   List<TonightSkyObject> sky = const [],
+  // The daemon to read the plan from, in place of [plan] (a device that did
+  // not queue it).
+  SequenceClient? api,
 }) async {
   late _Rig rig;
   final camN = _Cam(camera ? cam ?? _cam() : null);
@@ -197,7 +206,7 @@ Future<_Rig> _rig({
     skyClockProvider.overrideWith((ref) => const Stream<int>.empty()),
     wsEventsProvider.overrideWith((ref) => const Stream.empty()),
     sequenceRunStateProvider.overrideWith(() => runN),
-    simpleRunProvider.overrideWith(() => _Plan(plan)),
+    if (api == null) simpleRunProvider.overrideWith(() => _Plan(plan)) else sequenceApiProvider.overrideWith((ref) => api),
     cameraStatusProvider.overrideWith(() => camN),
     mountProvider.overrideWith(() => _Mount(mount ?? MountStatus.fromJson(_wire('connected', {'tracking': true})))),
     focuserProvider.overrideWith(() => _Focuser(focuser)),
@@ -227,8 +236,28 @@ Future<_Rig> _rig({
   ]) {
     await c.read(p);
   }
+  for (var i = 0; api != null && i < 50 && c.read(simpleRunProvider).targets.isEmpty; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
   return rig;
 }
+
+/// The daemon over HTTP: only the plan route of seq-1, as [plan].
+class _PlanRoute implements HttpClientAdapter {
+  _PlanRoute(this.plan);
+  final Map<String, dynamic> plan;
+  @override
+  void close({bool force = false}) {}
+  @override
+  Future<ResponseBody> fetch(RequestOptions o, Stream<Uint8List>? body, Future<void>? cancel) async {
+    final found = o.method == 'GET' && o.path == '/api/v1/sequences/seq-1/plan';
+    return ResponseBody.fromString(found ? jsonEncode(plan) : '{"title":"Not Found","status":404}', found ? 200 : 404,
+        headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
+  }
+}
+
+Map<String, dynamic> _row(String filter, int done, int total) =>
+    {'filter_name': filter, 'exposure_seconds': 300, 'frames_total': total, 'frames_done': done};
 
 void main() {
   group('the top line', () {
@@ -431,6 +460,56 @@ void main() {
     final back = r.read();
     expect(back.frozen, isFalse);
     expect(back.now.frame, 4);
+  });
+
+  // #1875 slice 1: the Target is the block the daemon is running. A block
+  // ends early when its horizon or the dawn ends it, so its rows stay partial
+  // while the rig images the next one: "the first target not full" is wrong.
+  group('the Target and Up next follow the block the rig is running', () {
+    // IC 5148's horizon ended its block at 2 of 240; NGC 253 is imaging; M 33 is next.
+    final onNgc253 = SequenceRunStateInfo.fromJson({
+      'sequence_id': 'seq-1',
+      'run_id': 'r1',
+      'state': 'running',
+      'current_target_name': 'NGC 253',
+      'current_block_name': 'NGC 253',
+      'frames_captured': 16,
+      'estimated_remaining_seconds': 3600,
+    });
+
+    test('an earlier target left partial is not the Target; the block the daemon runs is', () async {
+      const ic5148 = SimpleTarget(name: 'IC 5148', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 240)]);
+      const ngc253 = SimpleTarget(name: 'NGC 253', steps: [FilterPlanStep(filterName: 'R', exposureSeconds: 300, frameCount: 10)]);
+      const m33 = SimpleTarget(name: 'M 33', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 20)]);
+      final r = await _rig(
+        run: onNgc253,
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [ic5148, ngc253, m33]),
+      );
+      final s = r.read();
+      expect(s.target?.name, 'NGC 253', reason: "the rig's current block, not IC 5148's unfinished rows");
+      expect([for (final u in s.upNext) if (u.kind == MonitorUpKind.nextTarget) u.name], ['M 33']);
+    });
+
+    test('on a device that did not queue the plan, both tiles fill from the rig', () async {
+      final api = SequenceApi(
+        const AraServer(hostname: '192.0.2.10', port: 1888),
+        dio: Dio(BaseOptions(baseUrl: 'http://192.0.2.10:1888'))
+          ..httpClientAdapter = _PlanRoute({
+            'sequence_id': 'seq-1',
+            'run_id': 'r1',
+            'targets': [
+              {'name': 'IC 5148', 'rows': [_row('L', 2, 240)]},
+              {'name': 'NGC 253', 'rows': [_row('R', 3, 10)]},
+              {'name': 'M 33', 'rows': [_row('L', 0, 20)]},
+            ],
+          }),
+      );
+      final r = await _rig(run: onNgc253, api: api);
+      final s = r.read();
+      expect(s.target?.name, 'NGC 253', reason: 'the Target tile fills on every device');
+      expect([for (final u in s.upNext) if (u.kind == MonitorUpKind.nextTarget) u.name], ['M 33'],
+          reason: 'Up next names the block after it');
+    });
   });
 
   group('Up next', () {
