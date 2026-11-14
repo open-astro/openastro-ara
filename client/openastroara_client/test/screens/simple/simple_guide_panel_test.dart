@@ -245,8 +245,29 @@ void main() {
     expect(find.text('Dec (N/S)'), findsOneWidget);
     expect(find.bySemanticsLabel('Calibration plot, 2 steps'), findsOneWidget);
     // Tall enough to read each leg's steps on an iPad (#1884 re-audit).
-    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-plot'))).height,
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height,
         greaterThanOrEqualTo(160));
+  });
+
+  testWidgets('the calibration plot keeps 160 pt above its key at 2x text (#1884 third audit)', (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
+        ],
+      }),
+    );
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height, greaterThanOrEqualTo(160));
+    expect(tester.takeException(), isNull, reason: 'no overflow with the larger key');
   });
 
   testWidgets('before the first calibration step the plot says it waits (#1884 audit)', (tester) async {

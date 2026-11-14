@@ -261,12 +261,10 @@ class SimpleGuidePanel extends ConsumerWidget {
                   children: [
             // While the guider calibrates, its steps take the place of the
             // RMS and Exposure figures, as the guider's own plot, in the same
-            // room, so nothing moves (#1875 slice 3, #1884 audit), at least
-            // 160 pt of plot over its key: the panel grows down from its held
-            // top (#1884 re-audit).
-            ConstrainedBox(
-              constraints: BoxConstraints(minHeight: calibrating ? 184 : 0),
-              child: Stack(
+            // room (#1875 slice 3, #1884 audit); the plot keeps 160 pt over
+            // its key, so the panel grows down from its held top
+            // (#1884 re-audit).
+            Stack(
               children: [
                 Visibility(
                   visible: !calibrating,
@@ -321,13 +319,10 @@ class SimpleGuidePanel extends ConsumerWidget {
                   ),
                 ),
                 if (calibrating)
-                  const Positioned.fill(
-                    child: _SimpleCalibrationPlot(
-                      key: Key('simple-guider-calibration-plot'),
-                    ),
+                  const _SimpleCalibrationPlot(
+                    key: Key('simple-guider-calibration-plot'),
                   ),
               ],
-              ),
             ),
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
@@ -420,11 +415,14 @@ class _SimpleCalibrationPlot extends ConsumerWidget {
       ],
     );
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 4,
       children: [
-        Expanded(
+        SizedBox(
+          height: 160,
           child: Semantics(
+            key: const Key('simple-guider-calibration-steps'),
             label: l10n.guideCalibrationPlot(steps.length),
             image: true,
             child: ClipRRect(
