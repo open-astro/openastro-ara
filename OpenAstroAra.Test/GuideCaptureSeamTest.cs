@@ -330,9 +330,10 @@ namespace OpenAstroAra.Test {
             return File.ReadAllText(Path.Combine(root, relative));
         }
 
-        // The PolarAlignServiceTest.cs row joins when that file leaves the TCP fake (#1809 slice 2, second PR).
-        [TestCase("OpenAstroAra.Test/GuideFocusServiceTest.cs")]
-        public void FakeGuider_and_fixed_delays_are_kept_out_of_polar_align_and_guide_focus_tests(string file) {
+        // The PolarAlignServiceTest.cs row (2 named exceptions) joins when that file leaves the TCP fake
+        // (#1809 slice 2, second PR). maxExceptions caps the marked waits, so a new one needs a reviewed row change.
+        [TestCase("OpenAstroAra.Test/GuideFocusServiceTest.cs", 0)]
+        public void FakeGuider_and_fixed_delays_are_kept_out_of_polar_align_and_guide_focus_tests(string file, int maxExceptions) {
             var lines = RepoFile(file).Split('\n');
 
             Assert.That(SocketTokens.Where(t => lines.Any(l => l.Contains(t, StringComparison.Ordinal))), Is.Empty,
@@ -340,6 +341,8 @@ namespace OpenAstroAra.Test {
             Assert.That(lines.Where(l => TimingTokens.Any(t => l.Contains(t, StringComparison.Ordinal)) && !l.Contains(Rule5Exception, StringComparison.Ordinal))
                     .Select(l => l.Trim()), Is.Empty,
                 $"ADR 0016 rule 5: {file} waits on a signal from the fake, the solver or an event, not on a delay");
+            Assert.That(lines.Count(l => l.Contains(Rule5Exception, StringComparison.Ordinal)), Is.LessThanOrEqualTo(maxExceptions),
+                $"ADR 0016 rule 5: {file} has more marked waits than the plan names");
         }
 
         [Test]
