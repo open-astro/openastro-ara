@@ -51,12 +51,12 @@ public interface IEquipmentReconnector {
     Task<ReconnectOutcome> RecoverAsync(DeviceType type, CancellationToken ct) => ReconnectAsync(type, ct);
 
     /// <summary>#1539 — the desired connection state the type's service records, or null when it
-    /// records none (no device selected, or a service without the lifecycle module yet).</summary>
+    /// records none (no device selected, or the guider, which is PHD2 and not on the lifecycle module).</summary>
     DesiredConnection? GetDesiredConnection(DeviceType type) => null;
 
     /// <summary>#1246 / ADR 0011 rule 2 — whether a Connected device of <paramref name="type"/> is recovered:
     /// its lifecycle has read it cleanly since the connect. A type whose service is not on the lifecycle
-    /// module (no <see cref="IRecoverableDevice"/>: Camera until its slice, the guider) has no such gate, so
+    /// module (no <see cref="IRecoverableDevice"/>: only the guider, which is PHD2 and not Alpaca) has no such gate, so
     /// Connected is recovered.</summary>
     bool IsCleanlyConnected(DeviceType type) => true;
 

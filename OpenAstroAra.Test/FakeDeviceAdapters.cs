@@ -199,6 +199,70 @@ namespace OpenAstroAra.Test {
             return actionName == FocuserService.CalibrationStatusAction ? CalibrationStatus : string.Empty;
         }
     }
+    /// <summary>ADR 0011 rule 4 — a camera for the lifecycle tests. The essential read is <c>CameraState</c>
+    /// (<see cref="FakeDeviceAdapter.ReadFails"/> and <see cref="FakeDeviceAdapter.ReadThrows"/> fail it);
+    /// <see cref="Aborts"/> counts <c>AbortExposure</c> calls, which a teardown makes only on request.
+    /// <see cref="ExposureFails"/> makes <c>StartExposure</c> throw, so a Live View frame fails fast.</summary>
+    internal sealed class FakeCameraDevice : FakeDeviceAdapter, ICameraDevice {
+        public volatile bool ExposureFails;
+        public volatile bool Cooling;
+        private int _aborts;
+        public int Aborts => Volatile.Read(ref _aborts);
+        public CameraState CameraState { get { ThrowIfReadFails(); return CameraState.Idle; } }
+        public double CCDTemperature => -10;
+        public bool CoolerOn { get => Cooling; set => Cooling = value; }
+        public double CoolerPower => 30;
+        public double SetCCDTemperature { get; set; } = -10;
+        public double HeatSinkTemperature => throw new ASCOM.NotImplementedException(nameof(HeatSinkTemperature));
+        public short PercentCompleted => 0;
+        public IList<string> ReadoutModes => ["Normal"];
+        public short ReadoutMode { get; set; }
+        public IList<string> Gains => [];
+        public IList<string> Offsets => [];
+        public short Gain { get; set; }
+        public int Offset { get; set; }
+        public short BinX { get; set; } = 1;
+        public short BinY { get; set; } = 1;
+        public int NumX { get; set; } = 100;
+        public int NumY { get; set; } = 100;
+        public int StartX { get; set; }
+        public int StartY { get; set; }
+        public bool ImageReady => false;
+        public object ImageArray => throw new InvalidOperationException("the fake camera holds no image");
+        public SensorType SensorType => SensorType.Monochrome;
+        public int CameraXSize => 100;
+        public int CameraYSize => 100;
+        public double PixelSizeX => 3.76;
+        public double PixelSizeY => 3.76;
+        public bool CanSetCCDTemperature => true;
+        public bool CanAbortExposure => true;
+        public int GainMin => 0;
+        public int GainMax => 100;
+        public int OffsetMin => 0;
+        public int OffsetMax => 50;
+        public int MaxBinX => 4;
+        public int MaxBinY => 4;
+        public double ExposureMin => 0.001;
+        public double ExposureMax => 600;
+        public double ExposureResolution => 0.001;
+        public int MaxADU => 65535;
+        public double ElectronsPerADU => 1;
+        public double FullWellCapacity => 50000;
+        public bool HasShutter => true;
+        public string SensorName => "Fake sensor";
+        public int BayerOffsetX => 0;
+        public int BayerOffsetY => 0;
+        public void StartExposure(double durationSec, bool light) {
+            if (ExposureFails) {
+                throw new InvalidOperationException("the fake camera cannot expose");
+            }
+        }
+        public void AbortExposure() => Interlocked.Increment(ref _aborts);
+        public override void Stop() => AbortExposure();
+        public System.Threading.Tasks.Task<(ushort[] Pixels, int Width, int Height)?> DownloadImageBytesAsync(CancellationToken ct) =>
+            System.Threading.Tasks.Task.FromResult<(ushort[] Pixels, int Width, int Height)?>(null);
+    }
+
     /// <summary>ADR 0011 rule 4 — a mount for the lifecycle tests. <see cref="Latched"/> is AlpacaBridge's
     /// "Mount communications compromised": it keeps answering <c>Connected</c> while every read fails.
     /// <see cref="ReadFails"/> fails the position read the generic way.</summary>
