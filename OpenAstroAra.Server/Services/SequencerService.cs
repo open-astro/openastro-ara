@@ -132,14 +132,17 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
     public async Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct) {
-        // The tree while a run holds one (live edits change it); the counts a finished run left, only while
-        // the stored body is unchanged since it ended (a queue edited after the run is served from the body);
-        // else the stored body (queued, never started, or evicted).
+        // The tree while a run holds one (live edits change it); the counts an ended run (completed, stopped
+        // or failed) left, only while the stored body is unchanged since its tree was released (a queue edited
+        // after the run is served from the body); else the stored body (queued, never started, or evicted).
         _runs.TryGetValue(id, out var run);
+        var (snap, releasedUtc) = run?.PlanRead() ?? default;
+        if (snap is not null && releasedUtc is null) {
+            return new SequencePlanDto(id, run!.RunId, snap.Targets);
+        }
         var dto = await (_sequencesResolver?.Invoke()?.GetAsync(id, ct) ?? Task.FromResult<SequenceDto?>(null)).ConfigureAwait(false);
-        if (run is not null && run.PlanSnapshot() is { } snap
-            && (run.BodyTop is not null || (dto is not null && run.CompletedUtc is { } done && dto.ModifiedUtc <= done))) {
-            return new SequencePlanDto(id, run.RunId, snap.Targets);
+        if (snap is not null && dto is not null && dto.ModifiedUtc <= releasedUtc) {
+            return new SequencePlanDto(id, run!.RunId, snap.Targets);
         }
         // A stored body that does not deserialize is served as 404, like an unknown id: there is no plan to read.
         if (dto is null || !_deserializer.TryDeserialize(dto.Body, out var top, out _) || top is null) {
@@ -1559,6 +1562,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     if (_bodyTop is not null) {
                         var last = SequencePlanBuilder.Build(_bodyTop);
                         _finalPlan = last with { CurrentBlockName = null };
+                        _finalPlanUtc = DateTimeOffset.UtcNow;
                     }
                 }
                 _root = root;
@@ -1567,17 +1571,22 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
 
         private SequencePlanBuilder.Plan? _finalPlan;
+        private DateTimeOffset? _finalPlanUtc;
 
         /// <summary>#1875 — the plan read off the live tree; after release, the last one read (counts as the run left them).</summary>
-        public SequencePlanBuilder.Plan? PlanSnapshot() {
+        public SequencePlanBuilder.Plan? PlanSnapshot() => PlanRead().Plan;
+
+        /// <summary><see cref="PlanSnapshot"/> with the time the tree was released (null while it is live),
+        /// read together: every terminal path releases it, whatever the run's end state.</summary>
+        public (SequencePlanBuilder.Plan? Plan, DateTimeOffset? ReleasedUtc) PlanRead() {
             ISequenceContainer? top;
             lock (_gate) {
                 top = _bodyTop;
                 if (top is null) {
-                    return _finalPlan;
+                    return (_finalPlan, _finalPlanUtc);
                 }
             }
-            return SequencePlanBuilder.Build(top);
+            return (SequencePlanBuilder.Build(top), null);
         }
 
         private (double? Total, double? Remaining) _finalEstimate;

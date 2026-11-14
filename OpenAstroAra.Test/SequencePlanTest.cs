@@ -365,6 +365,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stopped_run_serves_the_counts_it_left_like_its_run_state() {
+            // Stopped for clouds after the first block: a second device must still read its done frames.
+            var id = Guid.NewGuid();
+            var root = new SequentialContainer { Name = "IC 5148" };
+            root.Add(RunnableTarget("IC 5148", ("L Imaging", 1, 0)));
+            var flats = new SequentialContainer { Name = "Flats" };
+            flats.Add(new LoopCondition { Iterations = 1 });
+            flats.Add(new WaitForTimeSpan { Time = 30 });
+            root.Add(flats);
+            var svc = Service(id, Serialize(root));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            SequenceRunStateDto? state = null;
+            for (var i = 0; i < 250 && state?.CurrentBlockName != "Flats"; i++) {
+                await Task.Delay(20);
+                state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            }
+            Assert.That(state?.CurrentBlockName, Is.EqualTo("Flats"));
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            for (var i = 0; i < 250 && state?.State != SequenceRunState.Stopped; i++) {
+                await Task.Delay(20);
+                state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            }
+            Assert.That(state?.State, Is.EqualTo(SequenceRunState.Stopped));
+            await Task.Delay(300); // the tree is released just after the terminal state
+
+            var plan = await svc.GetPlanAsync(id, CancellationToken.None);
+            state = await svc.GetRunStateAsync(id, CancellationToken.None);
+
+            Assert.That(plan!.Targets[0].Rows.Single().FramesDone, Is.EqualTo(1), "the row's count as the run left it");
+            Assert.That(state!.PlanFramesDone, Is.EqualTo(1), "the run state reads the same counts");
+        }
+
+        [Test]
         public async Task An_unknown_sequence_has_no_plan() {
             var svc = Service(Guid.NewGuid(), Serialize(new SequentialContainer()));
             Assert.That(await svc.GetPlanAsync(Guid.NewGuid(), CancellationToken.None), Is.Null, "the route answers 404");
