@@ -120,6 +120,14 @@ class MergeGateTest(unittest.TestCase):
         self.assertFails(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "pending"}]),
                          "did not finish")
 
+    def test_a_run_with_a_conclusion_is_finished_even_if_its_status_still_reads_in_progress(self):
+        # 2026-11-14: GitHub served "Changed paths" on #1886's head as status in_progress with
+        # conclusion success and a completed_at; the gate waited its 50 minutes twice and failed.
+        stuck = {**run("Changed paths"), "status": "in_progress", "completed_at": "2026-11-14T09:52:06Z"}
+        self.assertPasses(self.gate([stuck, review()], [APPROVED]))
+        red = {**run("Changed paths", "failure"), "status": "in_progress", "completed_at": "2026-11-14T09:52:06Z"}
+        self.assertFails(self.gate([red, review()], [APPROVED]), "Changed paths: failure")
+
     def test_a_failed_commit_status_fails(self):
         self.assertPasses(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "success"}]))
         self.assertFails(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "failure"}]),
