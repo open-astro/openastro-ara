@@ -668,6 +668,15 @@ class _GuiderAt extends GuiderStatusNotifier {
   }
 }
 
+/// No guider configured: the rig answers no status at all.
+class _NoGuider extends GuiderStatusNotifier {
+  int refreshes = 0;
+  @override
+  Future<GuiderStatus?> build() async => null;
+  @override
+  Future<void> refresh([GuiderClient? client]) async => refreshes++;
+}
+
 class _GuiderCalls extends _GuiderUp {
   final calls = <String>[];
   @override
@@ -2589,6 +2598,58 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await _letPillLeave(tester);
     expect(text(), isNot(contains('Guiding Assistant')), reason: 'gone after 10 s');
+  });
+
+  testWidgets("a paused plan keeps its pill while an autofocus runs (#1884 audit)", (tester) async {
+    final live = _LiveSweeping();
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.pausedAwaitingUser, currentInstructionDescription: 'Flip the mount'),
+        gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    await tester.pump();
+    live.sweep();
+    await tester.pump();
+    await _letPillLeave(tester);
+    final text = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text, contains('Plan paused'), reason: 'a paused plan waits for the person: its pill stays');
+  });
+
+  testWidgets('with no guider at all, Simple Mode does not keep asking for one (#1884 audit)', (tester) async {
+    final guider = _NoGuider();
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    for (var i = 0; i < 25; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(guider.refreshes, 0);
+  });
+
+  testWidgets("the Guider panel stays put when its tab or the guider's routine changes (#1884 audit)", (tester) async {
+    final guider = _GuiderAt('stopped');
+    await _pump(tester, const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(_AssistantDoneAll.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = find.byKey(const Key('simple-guide-panel'));
+    final top = tester.getRect(panel).top;
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tuning')));
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'Tuning');
+    await tester.tap(find.byKey(const Key('simple-guider-tab-guide')));
+    await tester.pump();
+    guider
+      ..rig = 'calibrating'
+      ..at('calibrating');
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'calibration started');
   });
 
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {

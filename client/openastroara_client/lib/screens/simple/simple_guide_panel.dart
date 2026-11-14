@@ -248,9 +248,9 @@ class SimpleGuidePanel extends ConsumerWidget {
                 child: Text(l10n.preflightDoneStartImaging),
               ),
             _SimpleGuiderTabs(selected: tab),
-            // The panel takes the height of the tab it shows; the shell
-            // scrolls it past the room between the strip and the bottom row
-            // (#1875 slice 3).
+            // The panel takes the height of the tab it shows; the shell keeps
+            // its top where Guide put it and scrolls a taller tab past the
+            // room above the bottom row (#1875 slice 3, #1884 audit).
             switch (tab) {
               1 => const _SimpleGuiderTuning(),
               2 => const _SimpleGuiderTools(),
@@ -260,24 +260,19 @@ class SimpleGuidePanel extends ConsumerWidget {
                   spacing: 4,
                   children: [
             // While the guider calibrates, its steps take the place of the
-            // RMS and Exposure figures, as the guider's own plot (#1875 slice 3).
-            if (calibrating)
-              SizedBox(
-                key: const Key('simple-guider-calibration-plot'),
-                height: 200,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: ColoredBox(
-                    color: AraColors.frameBackdrop,
-                    child: CustomPaint(
-                      painter: CalibrationStepsPainter(
-                        ref.watch(guiderLiveProvider.select((s) => s.calibration.steps)),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            else ...[
+            // RMS and Exposure figures, as the guider's own plot, in the same
+            // room, so nothing moves (#1875 slice 3, #1884 audit).
+            Stack(
+              children: [
+                Visibility(
+                  visible: !calibrating,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 4,
+                    children: [
             simpleWindowRow(
               l10n.deviceRms,
               id: 'RMS',
@@ -318,7 +313,17 @@ class SimpleGuidePanel extends ConsumerWidget {
                 live: true,
               ),
             ),
-            ],
+                    ],
+                  ),
+                ),
+                if (calibrating)
+                  const Positioned.fill(
+                    child: _SimpleCalibrationPlot(
+                      key: Key('simple-guider-calibration-plot'),
+                    ),
+                  ),
+              ],
+            ),
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
             _SimpleAggressiveness(
@@ -390,6 +395,60 @@ class SimpleGuidePanel extends ConsumerWidget {
     WidgetRef ref,
     void Function(Phd2SettingsNotifier) change,
   ) => simpleSaveGuider(context, ref, change);
+}
+
+/// The guider's calibration steps as it reports them: Advanced Mode's plot,
+/// its colour key, and a wait line before the first step (#1884 audit).
+class _SimpleCalibrationPlot extends ConsumerWidget {
+  const _SimpleCalibrationPlot({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final steps = ref.watch(guiderLiveProvider.select((s) => s.calibration.steps));
+    Widget key(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Text(label, style: AraText.caption),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 4,
+      children: [
+        Expanded(
+          child: Semantics(
+            label: l10n.guideCalibrationPlot(steps.length),
+            image: true,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AraRadius.container),
+              child: ColoredBox(
+                color: AraColors.frameBackdrop,
+                child: steps.isEmpty
+                    ? Center(
+                        child: Text(
+                          l10n.guideCalibrationWaiting,
+                          style: AraText.caption,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : CustomPaint(painter: CalibrationStepsPainter(steps)),
+              ),
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: AraSpace.s12,
+          children: [
+            key(AraColors.accentInfo, l10n.guideCalibrationKeyRa),
+            key(AraColors.accentError, l10n.guideCalibrationKeyDec),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _SimpleGuiderTabs extends ConsumerWidget {

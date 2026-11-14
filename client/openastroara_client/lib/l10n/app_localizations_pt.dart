@@ -2855,6 +2855,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideToolMeasuring => 'Measuring drift…';
 
   @override
+  String get guideCalibrationWaiting => 'Waiting for the first step…';
+
+  @override
+  String guideCalibrationPlot(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Calibration plot, $count steps',
+      one: 'Calibration plot, 1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideCalibrationKeyRa => 'RA (W/E)';
+
+  @override
+  String get guideCalibrationKeyDec => 'Dec (N/S)';
+
+  @override
   String guideAssistantLeft(String time) {
     return '$time left';
   }
@@ -8146,6 +8166,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideToolMeasuring => 'Medindo a deriva…';
+
+  @override
+  String get guideCalibrationWaiting => 'Aguardando o primeiro passo…';
+
+  @override
+  String guideCalibrationPlot(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Gráfico de calibração, $count passos',
+      one: 'Gráfico de calibração, 1 passo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideCalibrationKeyRa => 'AR (O/L)';
+
+  @override
+  String get guideCalibrationKeyDec => 'Dec (N/S)';
 
   @override
   String guideAssistantLeft(String time) {

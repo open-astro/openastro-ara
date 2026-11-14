@@ -4959,6 +4959,30 @@ abstract class AppLocalizations {
   /// **'Measuring drift…'**
   String get guideToolMeasuring;
 
+  /// Simple Mode Guider panel, the calibration plot before the guider reports its first step
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first step…'**
+  String get guideCalibrationWaiting;
+
+  /// Screen reader label of the Simple Mode Guider panel's calibration plot
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Calibration plot, 1 step} other{Calibration plot, {count} steps}}'**
+  String guideCalibrationPlot(int count);
+
+  /// Colour key of the calibration plot: the RA legs, West and East
+  ///
+  /// In en, this message translates to:
+  /// **'RA (W/E)'**
+  String get guideCalibrationKeyRa;
+
+  /// Colour key of the calibration plot: the Dec legs, North and South
+  ///
+  /// In en, this message translates to:
+  /// **'Dec (N/S)'**
+  String get guideCalibrationKeyDec;
+
   /// Simple Mode status pill, the Guiding Assistant measuring; time is a countdown such as 01:30
   ///
   /// In en, this message translates to:

@@ -238,8 +238,21 @@ void main() {
       guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
     ]);
     expect(find.byKey(const Key('simple-guider-calibration-plot')), findsOneWidget);
-    expect(find.byKey(const Key('simple-guide-exposure')), findsNothing);
-    expect(find.text('RMS'), findsNothing);
+    expect(find.byKey(const Key('simple-guide-exposure')).hitTestable(), findsNothing);
+    expect(find.text('RMS').hitTestable(), findsNothing);
+    // The key to its colours and a screen reader label (#1884 audit).
+    expect(find.text('RA (W/E)'), findsOneWidget);
+    expect(find.text('Dec (N/S)'), findsOneWidget);
+    expect(find.bySemanticsLabel('Calibration plot, 2 steps'), findsOneWidget);
+  });
+
+  testWidgets('before the first calibration step the plot says it waits (#1884 audit)', (tester) async {
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(const GuiderLiveState())),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.text('Waiting for the first step…'), findsOneWidget);
   });
 
   group('the Guider tabs (#1722)', () {
