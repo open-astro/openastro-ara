@@ -62,19 +62,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            // A frame is never started on a star that is still swinging. The night of 2026-10-16: two
-            // dithers failed to settle (a rotated calibration spiralled every correction) and the next
-            // exposure started anyway — both frames trailed. A settle failure gets ONE more dither (the
-            // guider settles again from wherever it is); a second failure parks the run awaiting the user,
-            // and Resume dithers again. A dither the guider refused because it is not guiding restarts
-            // guiding once and parks only when that fails (2026-10-18); Resume restarts it again. A rig
-            // whose guider is not connected keeps the old behaviour: nothing to wait for.
+            // A settle timeout or settle failure is never a reason to pause (repo owner, 2026-11-15, #1894):
+            // it logs a warning and the next frame starts; a lost star or runaway is the star-lost watch's
+            // job. A dither the guider refused because it is not guiding restarts guiding once and parks
+            // only when that fails (2026-10-18); Resume restarts it again. A rig whose guider is not
+            // connected keeps the old behaviour: nothing to wait for.
             if (!guiderMediator.GetInfo().Connected) {
                 await guiderMediator.Dither(token);
                 return;
             }
             var gate = ItemUtility.GetPauseGate(this.Parent);
-            var settleRetried = false;
             var restartTried = false;
             while (true) {
                 var sent = await guiderMediator.Dither(token);
@@ -87,11 +84,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 if (error is null) {
                     return;
                 }
-                if (sent && !settleRetried) {
-                    settleRetried = true;
-                    Logger.Warning($"Dither: the guider did not settle ({error}) — dithering once more before pausing");
-                    progress?.Report(new ApplicationStatus { Status = $"Guider did not settle ({error}) — trying once more" });
-                    continue;
+                if (sent) {
+                    Logger.Warning($"Dither: the guider did not settle ({error}) — carrying on with the next frame");
+                    progress?.Report(new ApplicationStatus { Status = $"Guider did not settle ({error}) — carrying on" });
+                    return;
                 }
                 if (notGuiding && !restartTried) {
                     // A guider that is merely not guiding (it stopped on a slew, or lost its star for longer
@@ -117,18 +113,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                         ? "the guider is not guiding and restarting it did not help"
                         : $"the guider is not guiding and restarting it failed: {fault}";
                 }
-                var why = sent ? $"the guider did not settle twice ({error})" : error;
                 if (gate is null) {
-                    throw new SequenceEntityFailedException($"Dither failed: {why}");
+                    throw new SequenceEntityFailedException($"Dither failed: {error}");
                 }
-                Logger.Warning($"Dither: {why} — pausing the run awaiting the user");
+                Logger.Warning($"Dither: {error} — pausing the run awaiting the user");
                 progress?.Report(new ApplicationStatus {
-                    Status = $"Dither failed ({why}) — check the guider, then press Resume to dither again"
+                    Status = $"Dither failed ({error}) — check the guider, then press Resume to dither again"
                 });
                 gate.RequestPause(PauseKind.AwaitingUser);
                 await gate.WaitWhilePausedAsync(token);
                 Logger.Info("Dither: resumed — dithering again");
-                settleRetried = false;
                 restartTried = false; // Resume restarts guiding itself if the guider is still stopped
             }
         }
