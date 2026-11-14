@@ -18,6 +18,7 @@ import '../../services/equipment_driver_api.dart' show deviceDriverProvider;
 import '../../services/storage_space_api.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/guiding_assistant_state.dart';
+import '../../state/guider/guider_live_state.dart';
 import '../../models/guiding_assistant.dart' show GuidingAssistantStatus;
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
@@ -65,10 +66,7 @@ import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
     show simpleGuiderColour, simpleGuiderPendingProvider;
 import 'simple_focus_panel.dart'
-    show
-        SimpleGuideLiveShutter,
-        kSimpleGuideExposures,
-        simpleGuideExposureProvider;
+    show kSimpleGuideExposures, simpleGuideExposureProvider;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
@@ -124,7 +122,50 @@ bool simplePreviewGuide(WidgetRef ref) {
   // A running loop keeps its Stop even while the guider status is briefly gone.
   if (ref.watch(guideFocusProvider.select((g) => g.status.active))) return true;
   final guider = ref.watch(guiderStatusProvider).value;
-  return guider != null && guider.isConnected && !guideFocusBusy(guider);
+  // The guider's own loop is Preview's (#1875 slice 3): only a guiding
+  // phase takes the camera back.
+  return guider != null &&
+      guider.isConnected &&
+      (simpleGuideLooping(guider) || !guideFocusBusy(guider));
+}
+
+/// The guider loops plain frames, a star picked or not: Preview › Guide's
+/// loop (#1875 slice 3).
+bool simpleGuideLooping(GuiderStatus? guider) =>
+    guider != null &&
+    guider.isConnected &&
+    const {
+      GuiderRuntimeState.looping,
+      GuiderRuntimeState.starSelected,
+      GuiderRuntimeState.starLost,
+    }.contains(guider.runtimeState);
+
+/// Preview › Guide's shutter: loops the guider's plain frames, and its square
+/// stops them. A guide-camera focus loop found running gets its stop here
+/// too; focusing the guide camera stays in Focus › Guide (#1875 slice 3).
+class SimplePreviewGuideShutter extends ConsumerWidget {
+  const SimplePreviewGuideShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final focusLoop = ref.watch(guideFocusProvider.select((g) => g.status.active));
+    final looping = simpleGuideLooping(ref.watch(guiderStatusProvider).value);
+    final busy = ref.watch(guiderLiveProvider.select((s) => s.busy));
+    final live = ref.read(guiderLiveProvider.notifier);
+    return SimpleShutterButton(
+      start: true,
+      running: focusLoop || looping,
+      label: focusLoop || looping ? l10n.previewGuideLoopStop : l10n.previewGuideLoopStart,
+      onPressed: busy
+          ? null
+          : focusLoop
+          ? ref.read(guideFocusProvider.notifier).stop
+          : looping
+          ? live.stop
+          : live.loop,
+    );
+  }
 }
 
 /// Preview is the screen on show and it is on the guide camera, so what is
@@ -711,7 +752,7 @@ class SimpleShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (simplePreviewGuide(ref)) return const SimpleGuideLiveShutter();
+    if (simplePreviewGuide(ref)) return const SimplePreviewGuideShutter();
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;

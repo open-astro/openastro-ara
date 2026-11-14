@@ -3669,7 +3669,15 @@
   "focusStopGuide": "Stop the guide camera's live focus",
   "@focusStopGuide": {
     "description": "Screen reader label of Focus's shutter, guide camera, while it reads"
+  },  "previewGuideLoopStart": "Loop the guide camera's frames",
+  "@previewGuideLoopStart": {
+    "description": "Screen reader label of Preview's shutter on the guide camera: starts the guider's plain looping frames"
   },
+  "previewGuideLoopStop": "Stop the guide camera's frames",
+  "@previewGuideLoopStop": {
+    "description": "Screen reader label of Preview's shutter on the guide camera while its frames loop"
+  },
+
   "focusScopeMain": "Main",
   "@focusScopeMain": {
     "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"

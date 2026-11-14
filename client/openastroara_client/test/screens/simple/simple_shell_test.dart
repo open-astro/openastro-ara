@@ -58,6 +58,7 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -783,9 +784,12 @@ class _BahtinovReading extends BahtinovFocusNotifier {
   }
 }
 
-class _GuideFrame extends GuideFocusNotifier {
+/// The guider's live view with a looping frame.
+class _GuiderLiveFrame extends GuiderLiveNotifier {
   @override
-  GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
+  GuiderLiveState build() => GuiderLiveState(frame: Uint8List.fromList(_png));
+  @override
+  Future<void> refresh() async {}
 }
 
 class _ManualPick extends MainFocusMethodNotifier {
@@ -1242,10 +1246,11 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
-  testWidgets("Preview with Guide picked fills the screen with the guide camera's frames", (tester) async {
+  testWidgets("Preview with Guide picked fills the screen with the guider's looping frames (#1875 slice 3)",
+      (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
-      guideFocusProvider.overrideWith(_GuideFrame.new),
-      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+      guiderLiveProvider.overrideWith(_GuiderLiveFrame.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('looping')),
     ]);
     await tester.pump();
     expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main camera to start');

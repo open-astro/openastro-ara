@@ -234,6 +234,8 @@
   "previewPlanGuiderCalibrating": "Iniciar guiagem · Guia calibrando",
   "previewPlanGuiderCalibratingLeg": "Iniciar guiagem · Guia calibrando · {leg}",
   "guideAssistantLeft": "faltam {time}",
+  "previewGuideLoopStart": "Repetir os quadros da câmera de guia",
+  "previewGuideLoopStop": "Parar os quadros da câmera de guia",
   "previewPlan": "Plano",
   "previewPlanSkipped": "Pulado: fora das condições",
   "previewWaitingForFlip": "Aguardando a virada de meridiano · {countdown}",

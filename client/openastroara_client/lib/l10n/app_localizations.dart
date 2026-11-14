@@ -4545,6 +4545,18 @@ abstract class AppLocalizations {
   /// **'Stop the guide camera\'s live focus'**
   String get focusStopGuide;
 
+  /// Screen reader label of Preview's shutter on the guide camera: starts the guider's plain looping frames
+  ///
+  /// In en, this message translates to:
+  /// **'Loop the guide camera\'s frames'**
+  String get previewGuideLoopStart;
+
+  /// Screen reader label of Preview's shutter on the guide camera while its frames loop
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s frames'**
+  String get previewGuideLoopStop;
+
   /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
   ///
   /// In en, this message translates to:

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,13 +8,14 @@ import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
-import 'package:openastroara/screens/simple/simple_focus_panel.dart' show SimpleGuideLiveShutter;
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
+import 'package:openastroara/screens/simple/simple_preview_screen.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -75,8 +78,31 @@ class _GuideFocus extends GuideFocusNotifier {
   Future<void> stop() async => calls.add('stop');
 }
 
+/// The guider's live view: records loop and stop.
+class _GuiderLive extends GuiderLiveNotifier {
+  final calls = <String>[];
+  @override
+  GuiderLiveState build() => GuiderLiveState(frame: _png);
+  @override
+  Future<void> refresh() async {}
+  @override
+  Future<void> loop() async => calls.add('loop');
+  @override
+  Future<void> stop() async => calls.add('stop');
+}
+
+/// A 1×1 PNG: the guider's latest picture.
+final _png = Uint8List.fromList(const [
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, //
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, //
+  0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, //
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, //
+  0x42, 0x60, 0x82,
+]);
+
 late ProviderContainer _c;
 late _GuideFocus _g;
+late _GuiderLive _live;
 
 Future<void> _pump(WidgetTester tester, Widget child,
     {String guider = 'connected',
@@ -95,7 +121,9 @@ Future<void> _pump(WidgetTester tester, Widget child,
               seq: 1,
               latest: guideSample ? const GuideFocusSample(seq: 1, hfr: 2.34, stars: 12, peakAdu: 900, fwhm: 3) : null))
       : GuideFocusLive.idle);
+  _live = _GuiderLive();
   _c = ProviderContainer(overrides: [
+    guiderLiveProvider.overrideWith(() => _live),
     cameraStatusProvider.overrideWith(_Camera.new),
     guiderStatusProvider.overrideWith(() => _Guider(guider, runtime)),
     filterWheelProvider.overrideWith(() => _Wheel(wheel)),
@@ -240,14 +268,36 @@ void main() {
     expect(find.text('2 s'), findsOneWidget, reason: 'the guide exposure, 2 s to start');
   });
 
-  testWidgets("with Guide picked the shutter starts the guide camera's frames", (tester) async {
+  testWidgets("with Guide picked the shutter loops the guider's plain frames, not the focus loop "
+      '(rig 2026-11-13, #1875 slice 3)', (tester) async {
     await _pump(tester, const SimpleShutter());
     _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
     await tester.pump();
     await tester.pump(); // the guider's status loads once the pick first asks for it
     await tester.tap(find.byType(SimpleShutter));
     await tester.pump();
-    expect(_g.calls, ['start 2.0']);
+    expect(_live.calls, ['loop']);
+    expect(_g.calls, isEmpty, reason: 'focusing the guide camera stays in Focus › Guide');
+  });
+
+  testWidgets("Preview on Guide shows the guider's looping frames (#1875 slice 3)", (tester) async {
+    await _pump(tester, Consumer(builder: (context, ref, _) =>
+        const SimplePreviewScreen().frame(ref) ?? const SizedBox(key: Key('no-frame'))), runtime: 'looping');
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('no-frame')), findsNothing);
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('a looping guider keeps Preview on Guide, and its square stops the loop (#1875 slice 3)', (tester) async {
+    await _pump(tester, const SimpleShutter(), runtime: 'looping');
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byType(SimpleShutter));
+    await tester.pump();
+    expect(_live.calls, ['stop']);
   });
 
   testWidgets('a Guide pick falls back to Main once guiding takes the camera', (tester) async {
@@ -255,7 +305,7 @@ void main() {
     _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
     await tester.pump();
     await tester.pump(); // the guider's status loads once the pick first asks for it
-    expect(find.byType(SimpleGuideLiveShutter), findsNothing, reason: 'the shutter is the main camera again');
+    expect(find.byType(SimplePreviewGuideShutter), findsNothing, reason: 'the shutter is the main camera again');
   });
 
   testWidgets('a guide loop found running: the Guide row can still be picked, to reach its stop', (tester) async {

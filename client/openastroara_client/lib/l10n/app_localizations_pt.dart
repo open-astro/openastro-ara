@@ -2624,6 +2624,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusStopGuide => 'Stop the guide camera\'s live focus';
 
   @override
+  String get previewGuideLoopStart => 'Loop the guide camera\'s frames';
+
+  @override
+  String get previewGuideLoopStop => 'Stop the guide camera\'s frames';
+
+  @override
   String get focusScopeMain => 'Main';
 
   @override
@@ -7908,6 +7914,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusStopGuide => 'Parar o foco ao vivo da câmera de guia';
+
+  @override
+  String get previewGuideLoopStart => 'Repetir os quadros da câmera de guia';
+
+  @override
+  String get previewGuideLoopStop => 'Parar os quadros da câmera de guia';
 
   @override
   String get focusScopeMain => 'Principal';

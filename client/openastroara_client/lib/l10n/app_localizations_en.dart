@@ -2624,6 +2624,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusStopGuide => 'Stop the guide camera\'s live focus';
 
   @override
+  String get previewGuideLoopStart => 'Loop the guide camera\'s frames';
+
+  @override
+  String get previewGuideLoopStop => 'Stop the guide camera\'s frames';
+
+  @override
   String get focusScopeMain => 'Main';
 
   @override
