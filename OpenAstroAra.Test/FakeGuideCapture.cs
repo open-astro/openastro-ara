@@ -48,6 +48,9 @@ namespace OpenAstroAra.Test {
         private readonly List<(int Count, TaskCompletionSource Done)> _captureWaiters = new();
         private readonly TaskCompletionSource _leaseReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Port _port;
+        private string? _host = "192.0.2.10";
+        private int _idleWaits;
+        private int _loopStopCalls;
 
         public FakeGuideCapture() {
             _port = new Port(this);
@@ -63,7 +66,12 @@ namespace OpenAstroAra.Test {
         /// <summary>Why the Guider does not hold the active profile's settings; null when it does.</summary>
         public string? OutOfStep { get; set; }
 
-        public string? Host { get; set; } = "192.0.2.10";
+        /// <summary>The host the Guider is connected to; null once <see cref="Connected"/> is false, as the
+        /// PHD2 client's own host is after a disconnect.</summary>
+        public string? Host {
+            get => Connected ? _host : null;
+            set => _host = value;
+        }
 
         public int RpcPort { get; set; } = 4400;
 
@@ -106,9 +114,9 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        public int IdleWaits { get; private set; }
+        public int IdleWaits => Volatile.Read(ref _idleWaits);
 
-        public int LoopStopCalls { get; private set; }
+        public int LoopStopCalls => Volatile.Read(ref _loopStopCalls);
 
         /// <summary>Completes once <paramref name="count"/> captures have been recorded (and their completions raised).</summary>
         public Task WhenCapturedAsync(int count) {
@@ -136,7 +144,7 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        IGuideCaptureLink IGuideCapture.Connect() =>
+        IGuideCaptureLink IGuideCapture.ConnectedLink() =>
             Connected ? this : throw new InvalidOperationException("guider is not connected");
 
         string? IGuideCapture.OutOfStepReason => OutOfStep;
@@ -151,12 +159,12 @@ namespace OpenAstroAra.Test {
             Custody.TakeAsync(use, _port, stop, ct);
 
         public Task WaitForCaptureIdleAsync(CancellationToken ct) {
-            IdleWaits++;
+            Interlocked.Increment(ref _idleWaits);
             return CaptureBusy is { } message ? Task.FromException(new InvalidOperationException(message)) : Task.CompletedTask;
         }
 
         public Task<bool> StopLoopForCaptureAsync(TimeSpan timeout, CancellationToken ct) {
-            LoopStopCalls++;
+            Interlocked.Increment(ref _loopStopCalls);
             return Task.FromResult(LoopStops);
         }
 

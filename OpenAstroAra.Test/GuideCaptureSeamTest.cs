@@ -318,6 +318,9 @@ namespace OpenAstroAra.Test {
         private static readonly string[] SocketTokens = { "FakeGuider.", "FakeGuider ", "TcpClient", "TcpListener", "Socket" };
         private static readonly string[] TimingTokens = { "Task.Delay(", "Thread.Sleep(" };
 
+        // A wait the plan names as unavoidable carries this comment on the same line, so each one can be grepped.
+        private const string Rule5Exception = "ADR 0016 rule 5 exception:";
+
         private static string RepoFile(string relative) {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "OpenAstroAra.sln"))) {
@@ -327,18 +330,22 @@ namespace OpenAstroAra.Test {
             return File.ReadAllText(Path.Combine(root, relative));
         }
 
-        [TestCase("OpenAstroAra.Test/PolarAlignServiceTest.cs")]
+        // The PolarAlignServiceTest.cs row joins when that file leaves the TCP fake (#1809 slice 2, second PR).
         [TestCase("OpenAstroAra.Test/GuideFocusServiceTest.cs")]
-        public void A_polar_align_or_guide_focus_test_file_opens_no_socket(string file) {
-            var text = RepoFile(file);
-            Assert.That(SocketTokens.Where(text.Contains), Is.Empty,
+        public void FakeGuider_and_fixed_delays_are_kept_out_of_polar_align_and_guide_focus_tests(string file) {
+            var lines = RepoFile(file).Split('\n');
+
+            Assert.That(SocketTokens.Where(t => lines.Any(l => l.Contains(t, StringComparison.Ordinal))), Is.Empty,
                 $"ADR 0016 rule 5: {file} runs on the in-process fake, the TCP fake is for PHD2 adapter tests");
+            Assert.That(lines.Where(l => TimingTokens.Any(t => l.Contains(t, StringComparison.Ordinal)) && !l.Contains(Rule5Exception, StringComparison.Ordinal))
+                    .Select(l => l.Trim()), Is.Empty,
+                $"ADR 0016 rule 5: {file} waits on a signal from the fake, the solver or an event, not on a delay");
         }
 
         [Test]
-        public void The_in_process_fake_has_no_socket_and_no_timing() {
+        public void FakeGuideCapture_has_no_socket_and_no_timing() {
             var text = RepoFile("OpenAstroAra.Test/FakeGuideCapture.cs");
-            Assert.That(SocketTokens.Concat(TimingTokens).Where(text.Contains), Is.Empty);
+            Assert.That(SocketTokens.Concat(TimingTokens).Where(t => text.Contains(t, StringComparison.Ordinal)), Is.Empty);
         }
     }
 }

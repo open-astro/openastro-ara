@@ -57,14 +57,14 @@ namespace OpenAstroAra.Test {
         protected abstract IReadOnlyList<bool> LeaseCalls { get; }
 
         [Test]
-        public void Connect_on_a_disconnected_guider_is_refused_as_not_connected() {
-            var ex = Assert.Throws<InvalidOperationException>(() => Disconnected().Connect());
+        public void ConnectedLink_on_a_disconnected_guider_is_refused_as_not_connected() {
+            var ex = Assert.Throws<InvalidOperationException>(() => Disconnected().ConnectedLink());
             Assert.That(ex!.Message, Is.EqualTo("guider is not connected"));
         }
 
         [Test]
         public async Task A_capture_carries_its_exposure_and_binning() {
-            var link = (await ConnectedAsync().ConfigureAwait(false)).Connect();
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
 
             await link.CaptureFrameAsync(50, 2, CancellationToken.None).ConfigureAwait(false);
 
@@ -73,7 +73,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_frame_complete_handler_hears_the_completion_and_nothing_once_disposed() {
-            var link = (await ConnectedAsync().ConfigureAwait(false)).Connect();
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
             var heard = 0;
             var first = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
             var subscription = link.OnFrameComplete(e => {
@@ -99,7 +99,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_refused_capture_throws_GuiderRpcException_with_the_guiders_message() {
-            var link = (await ConnectedAsync().ConfigureAwait(false)).Connect();
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
             RefuseCaptures("path must be in an existing directory");
 
             var ex = await Assert.ThrowsAsync<GuiderRpcException>(() => link.CaptureFrameAsync(50, null, CancellationToken.None)).ConfigureAwait(false);
@@ -212,10 +212,22 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        private static FakeGuider StartTcp() {
+            var tcp = FakeGuider.Start();
+            tcp.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            tcp.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            return tcp;
+        }
+
+        private async Task ConnectToAsync(FakeGuider tcp) {
+            await _guider!.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", tcp.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => _guider.ConnectedGuiderOrNull() is { Connected: true } c && c.ConnectedRpcPort == tcp.Port)
+                .ConfigureAwait(false), Is.True, "the guider never reached Connected against the TCP fake");
+        }
+
         private protected override async Task<IGuideCapture> ConnectedAsync(string appState = "Stopped") {
-            _tcp = FakeGuider.Start();
-            _tcp.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            _tcp.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            _tcp = StartTcp();
             _tcp.OnRpc("set_pa_session", req => {
                 var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
                 _leaseCalls.Enqueue(active);
@@ -231,10 +243,7 @@ namespace OpenAstroAra.Test {
                 return JsonValue.Create(0);
             });
             _guider = NewGuider();
-            await _guider.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", _tcp.Port), idempotencyKey: null, CancellationToken.None)
-                .ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => _guider.ConnectedGuiderOrNull() is not null).ConfigureAwait(false), Is.True,
-                "the guider never reached Connected against the TCP fake");
+            await ConnectToAsync(_tcp).ConfigureAwait(false);
             if (appState != "Stopped") {
                 await _tcp.BroadcastAsync(PhdEvents.AppState(appState)).ConfigureAwait(false);
                 Assert.That(await WaitUntilAsync(() => _guider.ConnectedGuiderOrNull()?.State == appState).ConfigureAwait(false), Is.True);
@@ -258,7 +267,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_phd2_link_asks_for_a_daemon_side_save_with_no_path_gain_or_subframe() {
             // §45 capture-fetch: the daemon saves inside its own sandbox and names the file on the completion.
-            var link = (await ConnectedAsync().ConfigureAwait(false)).Connect();
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
 
             await link.CaptureFrameAsync(50, null, CancellationToken.None).ConfigureAwait(false);
 
@@ -270,10 +279,31 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task The_phd2_link_reports_the_host_and_rpc_port_it_is_connected_to() {
-            var link = (await ConnectedAsync().ConfigureAwait(false)).Connect();
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
 
             Assert.That(link.Host, Is.EqualTo("127.0.0.1"));
             Assert.That(link.RpcPort, Is.EqualTo(_tcp!.Port));
+        }
+
+        [Test]
+        public async Task The_phd2_link_stays_on_the_client_it_was_taken_from_and_never_reaches_a_reconnected_one() {
+            // A run keeps the client it started on: the guider it reconnects to holds no lease for that run.
+            var link = (await ConnectedAsync().ConfigureAwait(false)).ConnectedLink();
+            await _guider!.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await using var second = StartTcp();
+            var secondCaptures = 0;
+            second.OnRpc("capture_single_frame", _ => {
+                Interlocked.Increment(ref secondCaptures);
+                return JsonValue.Create(0);
+            });
+            await ConnectToAsync(second).ConfigureAwait(false);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => link.CaptureFrameAsync(50, null, CancellationToken.None))
+                .ConfigureAwait(false);
+
+            Assert.That(ex!.Message, Is.EqualTo("guider is not connected"));
+            Assert.That(Volatile.Read(ref secondCaptures), Is.Zero, "the capture never reached the reconnected guider");
+            Assert.That(Captures, Is.Empty);
         }
     }
 }
