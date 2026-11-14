@@ -46,11 +46,12 @@ class UnguidedOptions {
 /// ├─ Unpark Scope
 /// ├─ Set Tracking       (sidereal)
 /// ├─ Target SequentialContainer  (named after the target — see [buildTargetBlock])
-/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates; blind when autofocus follows)
+/// │   ├─ Slew to RA/Dec     (J2000 coordinates; blind when autofocus is first)
 /// │   ├─ Switch Filter      (when a filter is chosen — matched by name)
-/// │   ├─ Run Autofocus      (when enabled)
-/// │   ├─ Slew to RA/Dec     (after autofocus only: the centring go-to)
 /// │   ├─ Cool Camera        (when a cooler target is configured; waits for the sensor)
+/// │   ├─ Start Guiding      (when guiding; then Run Autofocus, when enabled)
+/// │   ├─ Run Autofocus      (without guiding: here, before the centring go-to)
+/// │   ├─ Slew to RA/Dec     (without guiding: the centring go-to)
 /// │   └─ "Imaging" SequentialContainer
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
@@ -71,8 +72,9 @@ class UnguidedOptions {
 /// autofocus triggers. Guided plans run: go-to (centring) → switch to the
 /// FIRST plan filter → cool → Start Guiding → autofocus (through that filter).
 /// Unguided plans run: blind slew → switch to the first filter → cool →
-/// autofocus → go-to → probe. §63 made the guider mediator real (GuiderService
-/// drives OpenAstro Guider), so guiding steps execute for real now.
+/// autofocus → go-to → probe (probe only when the rig has no guider). §63 made
+/// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding
+/// steps execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
 /// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now).
@@ -200,9 +202,10 @@ class FilterPlanStep {
 }
 
 /// One target's worth of session — a SequentialContainer named after the
-/// target holding slew → optional filter switch → optional autofocus →
-/// go-to (with autofocus, the first slew is blind and this one centres) →
-/// optional Start Guiding → optional waiting Cool Camera → the Take-Exposure
+/// target holding, guided: go-to (centring) → optional filter switch →
+/// optional waiting Cool Camera → Start Guiding → optional autofocus; and
+/// unguided: blind slew when autofocus follows → filter switch → Cool Camera
+/// → optional autofocus → go-to → the Take-Exposure
 /// loop(s). With a [filterPlan],
 /// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
 /// exposure and count); without one, the single default loop as before.
