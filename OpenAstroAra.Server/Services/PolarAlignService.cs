@@ -307,8 +307,8 @@ namespace OpenAstroAra.Server.Services {
         /// latitude), acquire the guide-camera PA-session lease, then run the seed + live-adjust
         /// state machine on a background task. Idempotent — Start on an already-running routine is a
         /// no-op accept. Throws <see cref="InvalidOperationException"/> on a failed preflight
-        /// (mapped to 409 by the endpoint) — the lease is only acquired after every check passes, so
-        /// a failed Start leaves nothing to roll back.
+        /// (mapped to 409 by the endpoint). The lease is taken through the custody module before the
+        /// guider's capture idles and its loop stops; when either fails, the lease is given back.
         /// </summary>
         public Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) =>
             StartAsync(stage: null, idempotencyKey, ct);
