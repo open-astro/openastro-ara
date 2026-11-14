@@ -244,6 +244,9 @@ void main() {
     expect(find.text('RA (W/E)'), findsOneWidget);
     expect(find.text('Dec (N/S)'), findsOneWidget);
     expect(find.bySemanticsLabel('Calibration plot, 2 steps'), findsOneWidget);
+    // Tall enough to read each leg's steps on an iPad (#1884 re-audit).
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-plot'))).height,
+        greaterThanOrEqualTo(160));
   });
 
   testWidgets('before the first calibration step the plot says it waits (#1884 audit)', (tester) async {

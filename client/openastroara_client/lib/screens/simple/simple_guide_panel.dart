@@ -261,8 +261,12 @@ class SimpleGuidePanel extends ConsumerWidget {
                   children: [
             // While the guider calibrates, its steps take the place of the
             // RMS and Exposure figures, as the guider's own plot, in the same
-            // room, so nothing moves (#1875 slice 3, #1884 audit).
-            Stack(
+            // room, so nothing moves (#1875 slice 3, #1884 audit), at least
+            // 160 pt of plot over its key: the panel grows down from its held
+            // top (#1884 re-audit).
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: calibrating ? 184 : 0),
+              child: Stack(
               children: [
                 Visibility(
                   visible: !calibrating,
@@ -323,6 +327,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                     ),
                   ),
               ],
+              ),
             ),
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),

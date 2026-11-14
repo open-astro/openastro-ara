@@ -2643,6 +2643,9 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-guider-tab-tuning')));
     await tester.pump();
     expect(tester.getRect(panel).top, top, reason: 'Tuning');
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'Tools, every suggestion listed: the tallest tab');
     await tester.tap(find.byKey(const Key('simple-guider-tab-guide')));
     await tester.pump();
     guider
