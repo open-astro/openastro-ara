@@ -29,6 +29,8 @@ internal abstract class ProfileSection {
     /// <summary>The DTO fields a share file replaces with a neutral value.</summary>
     public abstract IReadOnlyList<string> Stripped { get; }
     public abstract object? DefaultValue { get; }
+    /// <summary>The stored section, whatever its DTO type.</summary>
+    public abstract object? Read(IProfileStore store);
     public abstract object? ValueIn(ProfileSnapshotDto snap);
     public abstract ProfileSnapshotDto Capture(IProfileStore store, ProfileSnapshotDto into);
     public abstract void Apply(IProfileStore store, ProfileSnapshotDto snap);
@@ -65,6 +67,7 @@ internal sealed class ProfileSection<T>(
     public override IReadOnlyList<string> Kept => kept;
     public override IReadOnlyList<string> Stripped => stripped;
     public override object? DefaultValue => Default;
+    public override object? Read(IProfileStore store) => get(store);
     public override object? ValueIn(ProfileSnapshotDto snap) => read(snap);
 
     public override ProfileSnapshotDto Capture(IProfileStore store, ProfileSnapshotDto into) => write(into, get(store));
