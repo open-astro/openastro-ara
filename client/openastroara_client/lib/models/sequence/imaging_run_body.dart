@@ -455,8 +455,9 @@ Map<String, dynamic> buildTargetBlock({
   // instead of the default ContinueOnError: filter, focus, guiding and every
   // frame after it would run on the wrong patch of sky.
   //
-  // With autofocus, the block slews blind, focuses near the target, and only
-  // then centres: a solve on an out-of-focus field fails (user, 2026-11-02).
+  // Without a guider and with autofocus, the block slews blind, focuses near
+  // the target, and only then centres: a solve on an out-of-focus field fails
+  // (user, 2026-11-02).
   //
   // #1875 — one autofocus per plan, on a cooled sensor: slew, cool, start
   // guiding, autofocus, first light. With a guider the autofocus follows
