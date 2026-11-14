@@ -66,12 +66,13 @@ class UnguidedOptions {
 /// tracking / warm) stay at the root and are emitted once.
 ///
 /// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
-/// block becomes filter-aware: slew → switch to the FIRST plan filter →
-/// autofocus (through that filter) → go-to → optional Start Guiding → one
-/// `<Filter> Imaging` loop per plan step (each preceded by its Switch
-/// Filter), every loop carrying the dither / autofocus triggers. §63 made
-/// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding steps
-/// execute for real now.
+/// block becomes filter-aware, then runs one `<Filter> Imaging` loop per plan
+/// step (each preceded by its Switch Filter), every loop carrying the dither /
+/// autofocus triggers. Guided plans run: go-to (centring) → switch to the
+/// FIRST plan filter → cool → Start Guiding → autofocus (through that filter).
+/// Unguided plans run: blind slew → switch to the first filter → cool →
+/// autofocus → go-to → probe. §63 made the guider mediator real (GuiderService
+/// drives OpenAstro Guider), so guiding steps execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
 /// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now).
