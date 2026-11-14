@@ -579,6 +579,22 @@ class _AssistantFailed extends GuidingAssistantNotifier {
       loaded: true);
 }
 
+/// A run measuring 30 s into 120 s, then done with one suggestion.
+class _AssistantRunning extends GuidingAssistantNotifier {
+  @override
+  GuidingAssistantState build() => GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson(
+          {'connected': true, 'state': 'measuring', 'duration_sec': 120, 'elapsed_sec': 30}),
+      loaded: true);
+  void finish() => state = GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson({
+        'connected': true,
+        'state': 'done',
+        'recommendations': {'exposure_sec': 2},
+      }),
+      loaded: true);
+}
+
 /// A finished run with all six suggestions waiting: the Tools tab's longest list.
 class _AssistantDoneAll extends GuidingAssistantNotifier {
   @override
@@ -2539,6 +2555,37 @@ void main() {
         .join('|');
     expect(text, contains('Start guiding · Guider calibrating · West step 3'));
     expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
+  });
+
+  testWidgets('the Guiding Assistant has its own pill with time left on its bar; the Done pill fades after 10 s '
+      '(#1875 slice 3)', (tester) async {
+    final guider = _GuiderAt('assistant');
+    final ga = _AssistantRunning();
+    await _pump(tester, const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(() => ga)]);
+    await tester.pump();
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    String text() => tester
+        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text(), contains('Guiding Assistant'));
+    expect(text(), contains('01:30 left'));
+    expect(text(), isNot(contains('Guider')), reason: 'not the generic Guider pill');
+    final bar = tester.widget<LinearProgressIndicator>(find.descendant(of: pills, matching: find.byType(LinearProgressIndicator)));
+    expect(bar.value, closeTo(0.25, 0.01));
+    guider
+      ..rig = 'stopped'
+      ..at('stopped');
+    ga.finish();
+    await tester.pump();
+    expect(text(), contains('Done. 1 suggestion to apply.'));
+    await tester.pump(const Duration(seconds: 5));
+    expect(text(), contains('Done. 1 suggestion to apply.'), reason: 'still there at 5 s');
+    await tester.pump(const Duration(seconds: 6));
+    await _letPillLeave(tester);
+    expect(text(), isNot(contains('Guiding Assistant')), reason: 'gone after 10 s');
   });
 
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {

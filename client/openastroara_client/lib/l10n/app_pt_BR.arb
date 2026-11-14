@@ -233,6 +233,7 @@
   "previewPlanPaused": "Plano pausado",
   "previewPlanGuiderCalibrating": "Iniciar guiagem · Guia calibrando",
   "previewPlanGuiderCalibratingLeg": "Iniciar guiagem · Guia calibrando · {leg}",
+  "guideAssistantLeft": "faltam {time}",
   "previewPlan": "Plano",
   "previewPlanSkipped": "Pulado: fora das condições",
   "previewWaitingForFlip": "Aguardando a virada de meridiano · {countdown}",

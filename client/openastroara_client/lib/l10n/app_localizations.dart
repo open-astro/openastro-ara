@@ -4947,6 +4947,12 @@ abstract class AppLocalizations {
   /// **'Measuring drift…'**
   String get guideToolMeasuring;
 
+  /// Simple Mode status pill, the Guiding Assistant measuring; time is a countdown such as 01:30
+  ///
+  /// In en, this message translates to:
+  /// **'{time} left'**
+  String guideAssistantLeft(String time);
+
   /// No description provided for @guideToolDone.
   ///
   /// In en, this message translates to:

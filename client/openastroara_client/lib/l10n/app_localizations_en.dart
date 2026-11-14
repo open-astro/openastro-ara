@@ -2849,6 +2849,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideToolMeasuring => 'Measuring drift…';
 
   @override
+  String guideAssistantLeft(String time) {
+    return '$time left';
+  }
+
+  @override
   String guideToolDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

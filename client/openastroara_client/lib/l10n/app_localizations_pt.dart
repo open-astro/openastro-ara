@@ -2849,6 +2849,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideToolMeasuring => 'Measuring drift…';
 
   @override
+  String guideAssistantLeft(String time) {
+    return '$time left';
+  }
+
+  @override
   String guideToolDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -8129,6 +8134,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideToolMeasuring => 'Medindo a deriva…';
+
+  @override
+  String guideAssistantLeft(String time) {
+    return 'faltam $time';
+  }
 
   @override
   String guideToolDone(int count) {

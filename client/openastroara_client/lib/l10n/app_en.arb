@@ -3840,6 +3840,15 @@
   "guideToolStop": "Stop",
   "guideToolNotRun": "Not run yet",
   "guideToolMeasuring": "Measuring drift…",
+  "guideAssistantLeft": "{time} left",
+  "@guideAssistantLeft": {
+    "description": "Simple Mode status pill, the Guiding Assistant measuring; time is a countdown such as 01:30",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "guideToolDone": "{count, plural, =0{Done. Nothing to apply.} =1{Done. 1 suggestion to apply.} other{Done. {count} suggestions to apply.}}",
   "@guideToolDone": {
     "placeholders": {

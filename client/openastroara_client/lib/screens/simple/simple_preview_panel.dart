@@ -17,6 +17,8 @@ import '../../models/guider_status.dart';
 import '../../services/equipment_driver_api.dart' show deviceDriverProvider;
 import '../../services/storage_space_api.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/guider/guiding_assistant_state.dart';
+import '../../models/guiding_assistant.dart' show GuidingAssistantStatus;
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -1636,10 +1638,36 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     }
   }
 
+  /// The Guiding Assistant's run, followed from the guider's word that it
+  /// measures until its Done pill has shown [_kAssistantDone] (#1875 slice 3).
+  bool _assistantWatch = false;
+  Timer? _assistantDone;
+  static const _kAssistantDone = Duration(seconds: 10);
+
+  /// The assistant's state while it is followed: null once it is not.
+  GuidingAssistantStatus? _syncAssistant(bool guiderSaysAssistant) {
+    if (guiderSaysAssistant) _assistantWatch = true;
+    if (!_assistantWatch) return null;
+    final status = ref.watch(guidingAssistantProvider).status;
+    if (guiderSaysAssistant || status.isRunning) {
+      _assistantDone?.cancel();
+      _assistantDone = null;
+    } else if (status.isDone) {
+      _assistantDone ??= Timer(_kAssistantDone, () {
+        if (mounted) setState(() => _assistantWatch = false);
+      });
+    } else {
+      _assistantWatch = false;
+      return null;
+    }
+    return status;
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
     _warmQuiet?.cancel();
+    _assistantDone?.cancel();
     super.dispose();
   }
 
@@ -1765,6 +1793,12 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final guiding = guider?.isCorrecting ?? false;
     final guiderOn = guider?.isBusy ?? false;
     final guiderAsk = ref.watch(simpleGuiderPendingProvider);
+    final assistant = _syncAssistant(
+      guider?.runtimeState == GuiderRuntimeState.assistant,
+    );
+    final assistantRunning = assistant != null &&
+        (assistant.isRunning ||
+            guider?.runtimeState == GuiderRuntimeState.assistant);
     final planActive = run?.state?.isActive ?? false;
     final planCalibrating = planActive &&
         guider != null &&
@@ -2189,6 +2223,32 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
         )
+      // The Guiding Assistant measuring, time left on its bar; its Done pill
+      // stays 10 s (#1875 slice 3).
+      else if (assistant != null)
+        assistantRunning
+            ? _PillData(
+                SimpleStatusOrigin.guide,
+                l10n.guideToolAssistant,
+                switch ((assistant.durationSec, assistant.elapsedSec)) {
+                  (final d?, final e?) when assistant.state == 'measuring' =>
+                    l10n.guideAssistantLeft(simpleCountdown((d - e).ceil())),
+                  _ => l10n.guideToolMeasuring,
+                },
+                AraColors.accentConnected,
+                working: true,
+                spoken: l10n.guideToolAssistant,
+                footProgress: assistant.progress,
+              )
+            : _PillData(
+                SimpleStatusOrigin.guide,
+                l10n.guideToolAssistant,
+                l10n.guideToolDone(
+                  assistant.recommendations?.suggestions.length ?? 0,
+                ),
+                AraColors.accentConnected,
+                spoken: l10n.guideToolAssistant,
+              )
       else if (guiding)
         _PillData(
           SimpleStatusOrigin.guide,
