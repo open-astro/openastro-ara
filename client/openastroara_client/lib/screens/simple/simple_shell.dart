@@ -3,6 +3,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
+import 'companion_portrait_shell.dart';
 import 'simple_search.dart';
 import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
@@ -242,11 +243,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
+  final _deckKey = GlobalKey();
+  // #1775 — the portrait deck's height; 0 until measured.
+  double _deckHeight = 0;
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size;
+    final deckH = _deckKey.currentContext?.size?.height ?? 0;
     final messages = _messagesKey.currentContext?.size;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
@@ -254,6 +259,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         (row != null &&
             (row.height != _simplePreflightRowHeight ||
                 row.width != _simplePreflightRowWidth)) ||
+        deckH != _deckHeight ||
         (messages?.height ?? 0) != _messagesHeight ||
         (messages?.width ?? 0) != _messagesCardWidth) {
       setState(() {
@@ -261,6 +267,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row?.height ?? _simplePreflightRowHeight;
         _simplePreflightRowWidth = row?.width ?? _simplePreflightRowWidth;
+        _deckHeight = deckH;
         _messagesHeight = messages?.height ?? 0;
         _messagesCardWidth = messages?.width ?? 0;
       });
@@ -690,6 +697,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   });
 
+  void _openLibrary() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+    ),
+  );
+
+  /// The deck's settings chip: the right rail's, in Preflight's two-line form.
+  String _deckChipLabel(SimpleModeScreen mode, bool preflight) {
+    final label = SimpleScreen.of(mode).caption(context, ref);
+    return preflight
+        ? '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}'
+        : label;
+  }
+
   /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
   void _openMonitor() => unawaited(
     Navigator.of(context).push(
@@ -1094,7 +1115,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           sequenceRunStateProvider.select((s) => simpleRunPhase(run, s.value)),
         ) !=
         SimpleRunPhase.none;
-    const railTop = kSimpleInset * 2 + kSimpleBarHeight;
+    // #1777 — upright, the strip stays one row while devices show (the icons
+    // swipe); with none, the note takes a row of its own so it shows whole at
+    // any text size.
+    final deck = companionPortrait(context, ref);
+    final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
+    final railTop = kSimpleInset * 2 + barHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
@@ -1104,10 +1130,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // What sits above the bottom row drops to the inset while it is empty
     // (ALP-4935).
     final statsShown = _statsShown(ref);
-    final aboveRow = statsShown ? kSimpleInset * 2 + bottomRow : kSimpleInset;
+    // #1775 — a phone held upright: one deck along the bottom in place of
+    // both rails and Stop; everything else sits above it.
+    // Until the deck is measured, a guess keeps the first frame close: its
+    // height in two rows at 1x, as on a 390 px phone.
+    final deckTop = kSimpleInset + (_deckHeight == 0 ? 192.0 : _deckHeight);
+    final rowBottom = deck ? deckTop + AraSpace.s8 : kSimpleInset;
+    final aboveRow = statsShown
+        ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
+        : rowBottom;
+    // Beside the rail, the right edge the panels keep: the deck has no rail.
+    final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -1122,7 +1158,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
-    final leftRailTop = _leftRailHeight == 0
+    final leftRailTop = deck
+        ? height - deckTop - kSimpleInset
+        : _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
     // A card too tall for the room above the left rail moves beside it, when
@@ -1157,6 +1195,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : double.infinity;
     final pillsBesideRail = besideRailAt(messagesTop);
     final pillsOverRail =
+        !deck &&
         panels &&
         _messagesHeight > messagesRoom &&
         !pillsBesideRail &&
@@ -1178,8 +1217,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
-    final betweenBottom =
-        (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
+    final betweenBottom = deck
+        ? rowBottom
+        : (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -1188,6 +1228,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Large text or a short window: the right rail reaches down into the
     // plan squares' corner, so they sit beside it, never over its chip.
     final squaresBesideRail =
+        !deck &&
         rightRailTop + _rightRailHeight + AraSpace.s8 >
         height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
     // Beside it they still hold one square (a rail wide): a phone at 2x text.
@@ -1231,8 +1272,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: kSimpleInset * 2 + (railWidth + stopSize) / 2,
-      bottom: kSimpleInset,
+      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
@@ -1400,8 +1441,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // #1559 — no rig link: the card offers one, over the wallpaper.
                         if (!linkUp) ...[
                           if (!cardNarrow) rigCard,
-                        ] else if (!hasFrame)
+                        ] else if (!hasFrame &&
+                            // #1775 — upright, a panel opens across the middle:
+                            // the hint waits for it rather than show half under it.
+                            !(deck &&
+                                (_popover != _Popover.none ||
+                                    _device != null ||
+                                    _adding)))
                           Positioned.fill(
+                            // #1775 — upright, centred in the panels' room
+                            // between the strip and the deck, not under it.
+                            left: deck ? kSimpleInset : 0,
+                            top: deck ? kSimpleInset + barHeight : 0,
+                            right: deck ? railGap : 0,
+                            bottom: deck ? betweenBottom : 0,
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
@@ -1436,8 +1489,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 left: kSimpleInset,
                                 right: kSimpleInset,
                                 top: kSimpleInset,
-                                height: kSimpleBarHeight,
+                                height: barHeight,
                                 child: _StatusStrip(
+                                  stacked: deck,
                                   onAra: () => _toggle(_Popover.ara),
                                   onSearch: () => _toggle(_Popover.search),
                                   onSettings: () => _openMenu(),
@@ -1462,13 +1516,40 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right:
-                                    kSimpleInset * 2 +
-                                    (railWidth + stopSize) / 2,
-                                bottom: kSimpleInset,
+                                right: deck
+                                    ? kSimpleInset
+                                    : kSimpleInset * 2 +
+                                          (railWidth + stopSize) / 2,
+                                bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
                               ),
+                              // #1775 — the deck: both rails and Stop in one.
+                              if (deck)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset,
+                                  child: KeyedSubtree(
+                                    key: _deckKey,
+                                    child: CompanionDeck(
+                                      mode: shown,
+                                      chipLabel: _deckChipLabel(shown, pilot != null),
+                                      settingsOpen: _popover == _Popover.settings,
+                                      sky: _sky,
+                                      info: ref.watch(simpleInfoShownProvider),
+                                      onSection: _pickFromGrid,
+                                      onMonitor: _openMonitor,
+                                      onSky: () => setState(() => _sky = !_sky),
+                                      onInfo: () => ref
+                                          .read(simpleInfoShownProvider.notifier)
+                                          .toggle(),
+                                      onLibrary: _openLibrary,
+                                      onSettings: () => _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                )
+                              else ...[
                               Positioned(
                                 left: kSimpleInset,
                                 top: railTop,
@@ -1518,13 +1599,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              ],
                               // #1562 — the first-time Rig setup sheet, where Plan's
                               // sheet sits: each window and popover after it here
                               // draws over it, and it stays up under Settings so
                               // its ticks follow the edits.
                               Positioned(
                                 left: kSimpleInset,
-                                right: kSimpleInset * 2 + railWidth,
+                                right: railGap,
                                 top: popoverTop,
                                 bottom: betweenBottom,
                                 child: SimpleRigSetupHost(
@@ -1545,7 +1627,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // with the sheet's height (user, 2026-11-04;
                                   // it was centred over the image).
                                   left: kSimpleInset,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  right: railGap,
                                   // Centred between the status pill and the
                                   // bottom row (user, 2026-11-04).
                                   top: popoverTop,
@@ -1563,8 +1645,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 _Popover.queue,
                               }.contains(_popover))
                                 Positioned(
-                                  left: 0,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  left: deck ? kSimpleInset : 0,
+                                  right: railGap,
                                   top: popoverTop,
                                   // Plan's bottom limit; the plan squares,
                                   // which its sheet moves, stay clear.
@@ -1573,6 +1655,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
+                                      fitWidth: deck,
                                       centre:
                                           preflightPanel ||
                                           (_popover == _Popover.settings &&
@@ -1619,7 +1702,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // never slide there.
                               if (!runSheet &&
                                   !preflightPanel &&
-                                  _rightRailHeight > 0)
+                                  (deck || _rightRailHeight > 0))
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: squaresLeft,
@@ -1710,7 +1793,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               if (_popover == _Popover.ara)
                                 Positioned(
-                                  top: kSimpleInset * 2 + kSimpleBarHeight,
+                                  top: kSimpleInset * 2 + barHeight,
                                   left: _topLeftOverlayLeft(context),
                                   child: _AraSheet(
                                     onClose: () => setState(
@@ -1725,7 +1808,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
-                                  top: kSimpleInset + kSimpleBarHeight,
+                                  top: kSimpleInset + barHeight,
                                   child: GestureDetector(
                                     key: const Key('simple-menu-veil'),
                                     behavior: HitTestBehavior.opaque,
@@ -1773,6 +1856,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               ],
                               // Stop on its own at the bottom, under the rail.
+                              if (!deck)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
@@ -2003,16 +2087,27 @@ Widget simpleFrost(Widget child) => ClipRRect(
 /// the rail) when it fits below, moved up as much as it needs when it doesn't;
 /// or, with [centre], centred in the room (Preflight's step panels).
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail({required this.preferredTop, this.centre = false});
+  const _BesideRail({
+    required this.preferredTop,
+    this.centre = false,
+    this.fitWidth = false,
+  });
 
   final double preferredTop;
   final bool centre;
 
-  // Height only: a panel wider than a phone-width window runs off its left
-  // edge, as before (phone layout: ALP-4865).
+  /// The portrait deck (#1775): the panel keeps inside the room, both edges
+  /// on screen.
+  final bool fitWidth;
+
+  // Otherwise height only: a panel wider than a landscape phone runs off its
+  // left edge, as before.
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints(maxHeight: constraints.maxHeight);
+      BoxConstraints(
+        maxHeight: constraints.maxHeight,
+        maxWidth: fitWidth ? constraints.maxWidth : double.infinity,
+      );
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -2025,7 +2120,9 @@ class _BesideRail extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_BesideRail old) =>
-      old.preferredTop != preferredTop || old.centre != centre;
+      old.preferredTop != preferredTop ||
+      old.centre != centre ||
+      old.fitWidth != fitWidth;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing
@@ -2051,14 +2148,55 @@ bool _anyDeviceShown(WidgetRef ref) {
   ].any((l) => l != StatusLevel.disconnected);
 }
 
+/// The note that stands in for the device icons: link up, no gear shown, or
+/// no rig at all.
+TextStyle get _kStripNote => kSimpleText.copyWith(fontWeight: FontWeight.w600);
+
+/// The note's vertical padding and horizontal padding as a button.
+const _kNotePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
+/// #1777 — the height the strip adds on an upright phone: none with devices
+/// (the icons swipe in the one row), else the note at the user's text size, as
+/// many lines as it takes at the width the strip leaves it (never shrunk).
+double _companionStripRow(BuildContext context, WidgetRef ref) {
+  if (_anyDeviceShown(ref)) return 0;
+  final l10n = context.l10n;
+  final painter = TextPainter(
+    text: TextSpan(
+      text: ref.watch(serverLinkUpProvider)
+          ? l10n.shellNoDevices
+          : l10n.shellRigNotConnected,
+      style: _kStripNote,
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout(maxWidth: _noteWidth(context));
+  final height = painter.height + _kNotePadding.vertical;
+  painter.dispose();
+  return math.max(44, height);
+}
+
+/// What the strip's second row leaves the note's words: the screen less the
+/// insets (16 each side), the strip's 8 and 4 px, and the button's padding.
+double _noteWidth(BuildContext context) =>
+    MediaQuery.sizeOf(context).width -
+    kSimpleInset * 2 -
+    12 -
+    _kNotePadding.horizontal;
+
 class _StatusStrip extends ConsumerWidget {
   const _StatusStrip({
+    required this.stacked,
     required this.onAra,
     required this.onSearch,
     required this.onSettings,
     required this.onDevices,
     required this.onFullUi,
   });
+
+  /// #1777 — an upright phone: the device icons are 44 px targets, and the
+  /// "no devices" note takes a second row of its own.
+  final bool stacked;
 
   /// Opens Settings › Devices (the no-devices note).
   final VoidCallback onDevices;
@@ -2078,96 +2216,123 @@ class _StatusStrip extends ConsumerWidget {
       AsyncData(:final value) => value,
       _ => false,
     };
+    final linkUp = ref.watch(serverLinkUpProvider);
+    final anyDevice = _anyDeviceShown(ref);
+    // Only gear that's connected; a fault still shows. With none of it
+    // showing, a note says so and opens Devices.
+    final devices = anyDevice
+        ? EquipmentChipCompact(
+            compact: true,
+            touch: stacked,
+            child: SingleChildScrollView(
+              key: stacked ? const Key('simple-strip-devices') : null,
+              scrollDirection: Axis.horizontal,
+              child: const EquipmentChipHideDisconnected(
+                child: TopEquipmentChips(),
+              ),
+            ),
+          )
+        : TextButton(
+            key: const Key('simple-no-devices'),
+            onPressed: onDevices,
+            // No rig is amber (needs a look), not the link blue, which reads
+            // as connecting.
+            style: stacked
+                ? TextButton.styleFrom(
+                    foregroundColor: linkUp ? null : AraColors.accentWarning,
+                    textStyle: _kStripNote,
+                    padding: _kNotePadding,
+                    alignment: Alignment.centerLeft,
+                  )
+                : linkUp
+                ? null
+                : TextButton.styleFrom(
+                    foregroundColor: AraColors.accentWarning,
+                  ),
+            child: Text(
+              linkUp
+                  ? context.l10n.shellNoDevices
+                  : context.l10n.shellRigNotConnected,
+            ),
+          );
+    final mark = [
+      // The brand is a control: it opens the OpenAstro Ara sheet (#1602).
+      IconButton(
+        key: const Key('simple-ara-mark'),
+        icon: const AraMark(size: 30),
+        tooltip: kAppName,
+        onPressed: onAra,
+      ),
+      // A hairline sets the brand apart from the device dots, which
+      // otherwise read as one more device (user, 2026-11-06).
+      Container(
+        key: const Key('simple-ara-divider'),
+        width: 1,
+        height: 28,
+        margin: const EdgeInsets.only(left: AraSpace.s4, right: AraSpace.s12),
+        color: AraColors.border,
+      ),
+    ];
+    final buttons = [
+      // Simple Mode's own search: the sky, its settings, its modes and
+      // the Image Library; nothing it finds leads out.
+      IconButton(
+        key: const Key('simple-search-button'),
+        icon: const Icon(Icons.search, size: 22),
+        tooltip: context.l10n.shellSearch,
+        onPressed: onSearch,
+      ),
+      IconButton(
+        icon: Icon(
+          night ? Icons.nights_stay : Icons.nights_stay_outlined,
+          size: 22,
+          color: night ? AraColors.accentInfo : null,
+        ),
+        tooltip: night
+            ? context.l10n.shellNightModeOn
+            : context.l10n.shellNightMode,
+        onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
+      ),
+      if (!ref.watch(companionModeProvider))
+        IconButton(
+          key: const Key('simple-full-ui-button'),
+          icon: const Icon(
+            Icons.fit_screen,
+            size: 22,
+            color: AraColors.accentInfo,
+          ),
+          tooltip: context.l10n.shellFullUi,
+          onPressed: onFullUi,
+        ),
+      IconButton(
+        icon: const Icon(Icons.settings_outlined, size: 22),
+        tooltip: context.l10n.shellSettings,
+        onPressed: onSettings,
+      ),
+    ];
     return SimplePanel(
       padding: const EdgeInsets.only(left: 8, right: 4),
-      child: Row(
-        children: [
-          // The brand is a control: it opens the OpenAstro Ara sheet (#1602).
-          IconButton(
-            key: const Key('simple-ara-mark'),
-            icon: const AraMark(size: 30),
-            tooltip: kAppName,
-            onPressed: onAra,
-          ),
-          // A hairline sets the brand apart from the device dots, which
-          // otherwise read as one more device (user, 2026-11-06).
-          Container(
-            key: const Key('simple-ara-divider'),
-            width: 1,
-            height: 28,
-            margin: const EdgeInsets.only(left: AraSpace.s4, right: AraSpace.s12),
-            color: AraColors.border,
-          ),
-          // Only gear that's connected; a fault still shows. With none of it
-          // showing, a note says so and opens Devices.
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _anyDeviceShown(ref)
-                  ? const EquipmentChipCompact(
-                      compact: true,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: EquipmentChipHideDisconnected(
-                          child: TopEquipmentChips(),
-                        ),
-                      ),
-                    )
-                  : TextButton(
-                      key: const Key('simple-no-devices'),
-                      onPressed: onDevices,
-                      // No rig is amber (needs a look), not the link blue,
-                      // which reads as connecting.
-                      style: ref.watch(serverLinkUpProvider)
-                          ? null
-                          : TextButton.styleFrom(
-                              foregroundColor: AraColors.accentWarning,
-                            ),
-                      child: Text(
-                        ref.watch(serverLinkUpProvider)
-                            ? context.l10n.shellNoDevices
-                            : context.l10n.shellRigNotConnected,
-                      ),
-                    ),
+      child: stacked && !anyDevice
+          ? Column(
+              children: [
+                SizedBox(
+                  height: kSimpleBarHeight,
+                  child: Row(children: [...mark, const Spacer(), ...buttons]),
+                ),
+                Expanded(
+                  child: Align(alignment: Alignment.centerLeft, child: devices),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                ...mark,
+                Expanded(
+                  child: Align(alignment: Alignment.centerLeft, child: devices),
+                ),
+                ...buttons,
+              ],
             ),
-          ),
-          // Simple Mode's own search: the sky, its settings, its modes and
-          // the Image Library; nothing it finds leads out.
-          IconButton(
-            key: const Key('simple-search-button'),
-            icon: const Icon(Icons.search, size: 22),
-            tooltip: context.l10n.shellSearch,
-            onPressed: onSearch,
-          ),
-          IconButton(
-            icon: Icon(
-              night ? Icons.nights_stay : Icons.nights_stay_outlined,
-              size: 22,
-              color: night ? AraColors.accentInfo : null,
-            ),
-            tooltip: night
-                ? context.l10n.shellNightModeOn
-                : context.l10n.shellNightMode,
-            onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
-          ),
-          if (!ref.watch(companionModeProvider))
-            IconButton(
-              key: const Key('simple-full-ui-button'),
-              icon: const Icon(
-                Icons.fit_screen,
-                size: 22,
-                color: AraColors.accentInfo,
-              ),
-              tooltip: context.l10n.shellFullUi,
-              onPressed: onFullUi,
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 22),
-            tooltip: context.l10n.shellSettings,
-            onPressed: onSettings,
-          ),
-        ],
-      ),
     );
   }
 }

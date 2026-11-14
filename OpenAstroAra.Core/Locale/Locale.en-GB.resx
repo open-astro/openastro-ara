@@ -5453,19 +5453,19 @@ Only relevant when using an ASCOM camera driver!</value>
     <value>Filters</value>
   </data>
   <data name="LblPHD2Calibrating" xml:space="preserve">
-    <value>PHD2 - Calibrating</value>
+    <value>Guider - Calibrating</value>
   </data>
   <data name="LblPHD2SelectingStar" xml:space="preserve">
-    <value>PHD2 - Selecting guide star</value>
+    <value>Guider - Selecting guide star</value>
   </data>
   <data name="LblPHD2Settling" xml:space="preserve">
-    <value>PHD2 - Settling</value>
+    <value>Guider - Settling</value>
   </data>
   <data name="LblPHD2StartGuiding" xml:space="preserve">
-    <value>PHD2 - Waiting for guiding to start</value>
+    <value>Guider - Waiting for guiding to start</value>
   </data>
   <data name="LblPHD2StartGuidingTimeoutRetry" xml:space="preserve">
-    <value>PHD2 - Start guiding has timed out. Retrying...</value>
+    <value>Guider - Start guiding has timed out. Retrying...</value>
   </data>
   <data name="LblFont" xml:space="preserve">
     <value>Font</value>

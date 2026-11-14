@@ -72,7 +72,7 @@ namespace OpenAstroAra.Test {
             var guider = Guider();
             var calls = 0;
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ++calls >= 2);
+                .ReturnsAsync(() => ++calls >= 3);
             var (item, gate) = Rig(guider.Object);
             string? status = null;
             var progress = new SyncProgress(s => status = s.Status);
@@ -82,12 +82,12 @@ namespace OpenAstroAra.Test {
             Assert.That(execute.IsCompleted, Is.False, "parked inside the pause, not failed");
             Assert.That(gate.IsPauseRequested, Is.True);
             Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
-            Assert.That(calls, Is.EqualTo(1));
+            Assert.That(calls, Is.EqualTo(2), "one retry before the pause");
 
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.That(calls, Is.EqualTo(2), "Resume retried and the second attempt guided");
+            Assert.That(calls, Is.EqualTo(3), "Resume retried and the third attempt guided");
             Assert.That(gate.IsPauseRequested, Is.False);
             Assert.That(status, Does.Contain("Guiding did not start"));
         }
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             var guider = Guider();
             var calls = 0;
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Returns(() => ++calls == 1 ? throw new InvalidOperationException("polar-alignment session in progress") : Task.FromResult(true));
+                .Returns(() => ++calls <= 2 ? throw new InvalidOperationException("polar-alignment session in progress") : Task.FromResult(true));
             var (item, gate) = Rig(guider.Object);
             string? status = null;
             var progress = new SyncProgress(s => status = s.Status);
@@ -109,7 +109,43 @@ namespace OpenAstroAra.Test {
 
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(calls, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task A_first_refusal_is_retried_once_before_the_run_pauses() {
+            // #1875 — a start the guider refuses once (equipment still connecting) must not pause the run.
+            var guider = Guider();
+            var calls = 0;
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++calls >= 2);
+            var (item, gate) = Rig(guider.Object);
+
+            await item.Execute(NoProgress, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
             Assert.That(calls, Is.EqualTo(2));
+            Assert.That(gate.IsPauseRequested, Is.False, "the retry guided, so no pause");
+        }
+
+        [Test]
+        public async Task The_pause_reason_for_unconnected_equipment_is_plain() {
+            // #1875 — a guider that throws (a refused start's LastStartError takes the same path): its "all equipment must be connected first" is not a sentence for a person at the rig.
+            var guider = Guider();
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Throws(new InvalidOperationException("all equipment must be connected first"));
+            var (item, gate) = Rig(guider.Object);
+            string? status = null;
+            var progress = new SyncProgress(s => status = s.Status);
+
+            var execute = item.Execute(progress, CancellationToken.None);
+            await Task.Delay(50);
+
+            Assert.That(gate.IsPauseRequested, Is.True);
+            Assert.That(status, Does.Contain("the guider's camera or mount is not connected"));
+            Assert.That(status, Does.Not.Contain("all equipment must be connected first"));
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            gate.Resume();
+            await execute.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         [Test]

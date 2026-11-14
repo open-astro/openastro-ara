@@ -5246,6 +5246,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get statsBadgeEarned => 'Earned';
+
+  @override
+  String get settingsSectionLoading => 'Loading these settings from your rig…';
+
+  @override
+  String get settingsSectionNotLoaded =>
+      'Not loaded — these settings are on your rig and it did not answer.';
+
+  @override
+  String get settingsSectionRetry => 'Retry';
+
+  @override
+  String get settingsSectionConflict =>
+      'These settings were changed on another device. Nothing was saved. Reload to see the new values (your edits here will be replaced).';
+
+  @override
+  String get settingsSectionReload => 'Reload';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10531,4 +10548,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get statsBadgeEarned => 'Conquistado';
+
+  @override
+  String get settingsSectionLoading =>
+      'Carregando estas configurações do seu setup…';
+
+  @override
+  String get settingsSectionNotLoaded =>
+      'Não carregado — estas configurações estão no seu setup e ele não respondeu.';
+
+  @override
+  String get settingsSectionRetry => 'Tentar de novo';
+
+  @override
+  String get settingsSectionConflict =>
+      'Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).';
+
+  @override
+  String get settingsSectionReload => 'Recarregar';
 }

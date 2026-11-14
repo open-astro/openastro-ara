@@ -1139,6 +1139,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// (already queued, run ending) set [SimpleRun.error] instead.
   void _fail(String why, {SimpleRun? undo, bool noStorage = false}) {
     state = (undo ?? state).copyWith(busy: false, noStorage: noStorage);
+    // The same failure again (Pause tapped on every long step) is the pill
+    // already showing, not another one (#1875).
+    final shown = ref
+        .read(simpleMessagesProvider)
+        .any(
+          (m) =>
+              m.kind == SimpleMessageKind.error &&
+              m.title == why &&
+              m.origin == SimpleStatusOrigin.plan,
+        );
+    if (shown) return;
     // From Plan: a tap on the pill opens it (#1490).
     ref
         .read(simpleMessagesProvider.notifier)

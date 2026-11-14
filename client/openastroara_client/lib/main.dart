@@ -26,6 +26,7 @@ import 'state/client_gps_state.dart';
 import 'state/album/album_art.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
+import 'state/settings/migrated_sections.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
 import 'state/pending_profile_drafts_state.dart';
@@ -114,7 +115,9 @@ class OpenAstroAraApp extends StatelessWidget {
               // Simple Mode's alarm (the one popup kept) and its message
               // pills, over every screen; every snackbar there is a pill.
               child: SimpleScaffoldMessenger(
-                child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+                child: SimpleSafetyAlarmLayer(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
@@ -163,6 +166,7 @@ class _RootRouter extends ConsumerWidget {
     // #1137 — a different server mid-session re-arms the launch gate: the
     // profile box, the cache seed and the gear hydration belong to the old rig.
     ref.listen(launchGateRearmProvider, (previous, next) {});
+    ref.listen(migratedSectionsResetProvider, (previous, next) {});
     // ALP-4890 — a relaunch enters on the rig's active profile.
     ref.listen(launchAutoEnterProvider, (previous, next) {});
     // #1570 — the full UI goes back to the profile screen after 15 s without the rig.
@@ -206,7 +210,9 @@ class _RootRouter extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Something went wrong starting up. Please try again.'),
+                  const Text(
+                    'Something went wrong starting up. Please try again.',
+                  ),
                   const SizedBox(height: 12),
                   // Self-gated on a cached profile existing.
                   const PlanOfflineButton(),

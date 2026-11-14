@@ -89,13 +89,22 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     started = false;
                     reason = ex.Message;
                 }
+                // A refused start returns false without throwing; the guider's own reason is kept for the pause.
+                if (!started) {
+                    reason ??= guiderMediator.LastStartError;
+                }
+                // #1875: one quiet retry before the run pauses; the first refusal is often equipment still connecting.
+                if (!started && attempt % 2 == 1) {
+                    Logger.Warning($"Start guiding: {reason ?? "the guider did not start guiding"} — retrying once before pausing");
+                    continue;
+                }
                 if (started) {
                     if (attempt > 1) {
                         Logger.Info($"Start guiding: guiding started on attempt {attempt}");
                     }
                     return;
                 }
-                var why = string.IsNullOrWhiteSpace(reason) ? "the guider did not start guiding" : reason;
+                var why = PlainReason(reason);
                 if (gate is null) {
                     throw new SequenceEntityFailedException($"Failed to start guiding: {why}");
                 }
@@ -107,6 +116,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 await gate.WaitWhilePausedAsync(token);
                 Logger.Info("Start guiding: resumed — trying to start guiding again");
             }
+        }
+
+        /// <summary>The guider's own refusal text for unconnected equipment is not a sentence for a person at the rig.
+        /// The reason is the text of a thrown error, or the guider's LastStartError after a refused start.</summary>
+        internal static string PlainReason(string? reason) {
+            if (string.IsNullOrWhiteSpace(reason)) {
+                return "the guider did not start guiding";
+            }
+            return reason.Contains("equipment must be connected", StringComparison.OrdinalIgnoreCase)
+                ? "the guider's camera or mount is not connected"
+                : reason;
         }
 
         public bool Validate() {

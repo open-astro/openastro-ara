@@ -195,6 +195,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-13 — Storage settings carry an `ETag`; `PUT` honours `If-Match` (#1807)
+
+**Endpoint(s) or area:** `GET /api/v1/profile/storage` and `PUT /api/v1/profile/storage` (`storage` profile section).
+
+**Decision:** `GET` and a successful `PUT` answer with an `ETag` header: a strong tag, the SHA-256 of the stored (normalized) section's JSON, in quotes. Nothing is stored for it; equal content gives an equal tag. `PUT` takes an optional `If-Match` header. When it is sent and is neither `*` nor the current tag, the answer is `412` Problem and nothing is written; a `412` is a rejected write, so no `profile.updated` is published. When `If-Match` is absent the write is accepted as before (refusing a write without it is a later slice of #1807). The tag check runs before the existing `400` validation. `POST /api/v1/storage/configure` also writes this section (the new save directory) and publishes no `profile.updated`, so a client that holds the section loads it again after a successful configure. The tag compare and the store write are two steps, not one atomic step (`ProfileEndpoints.PutStorageSettings`): two saves that arrive together with the same tag can both pass. That is accepted because one client controls the rig at a time (ADR 0005), so two writes of the same section racing within that window is not a case the daemon has to arbitrate; the tag is there for the common case of a stale copy on a second device.
+
+**Reasoning:** the client saved the Storage section from its own defaults when the load had failed, and saved over a newer copy another device had written. ADR 0015 makes a client load a section from the rig before it saves it and send back the tag of the copy it loaded. A derived hash needs no version column and no migration; a stored version counter was the alternative, and is left for when every section moves.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1storage`; `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs` (`GetStorageSettings`, `PutStorageSettings`, `StorageETag`); client `lib/state/settings/loaded_section.dart`, `lib/services/profile_api.dart`.
+
+**Related:** #1807, ADR 0015, ADR 0012, ADR 0005; tests `ProfileStorageEndpointTest`, client `loaded_section_test`, `storage_load_before_save_test`.
+
+---
+
 ### 2026-11-13 — Live guide-camera loop: refused while the Guider is busy, and it takes the camera from setup activities (#1809)
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/guider/live/loop` (amends the 2026-10-16 live-view entry).

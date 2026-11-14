@@ -24,7 +24,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// ↑ara#1169: the stack follows the Live View session. The real Live View loop runs against an unreachable client
+    /// ↑ara#1169: the stack follows the Live View session. The real Live View loop runs against a fake camera whose exposures fail
     /// (every frame fails fast, the loop self-stops after 10), so no simulator is needed; except the frame-feed tests,
     /// which swap in a synthetic frame source for the loop.
     /// </summary>
@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
 
         private static CameraService NewService() {
             var svc = new CameraService();
-            svc.WithLiveViewTestClientForTest();
+            svc.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
             return svc;
         }
 

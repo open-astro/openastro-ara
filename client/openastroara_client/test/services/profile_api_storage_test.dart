@@ -7,6 +7,21 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 
+import '../support/storage_fixture.dart';
+
+/// A complete section body; the client reader has no defaults (ADR 0015).
+Map<String, dynamic> _full([Map<String, dynamic> over = const {}]) => {
+  'save_directory': '/media/x',
+  'file_format': 'fits',
+  'compression': 'zstd',
+  'filename_template': 't',
+  'min_free_disk_warn_gb': 10,
+  'min_free_disk_critical_gb': 2,
+  'backup_retention_count': 20,
+  'fault_log_retention_days': 90,
+  ...over,
+};
+
 /// Records the request and replies with a canned body, so the storage-settings
 /// JSON mapping can be exercised without a live daemon.
 class _RecordingAdapter implements HttpClientAdapter {
@@ -68,15 +83,20 @@ void main() {
       },
     );
 
-    test('a missing key falls back to the 90-day default', () async {
-      final a = _RecordingAdapter(body: {'save_directory': '/media/x'});
-      final s = await _api(a).getStorageSettings();
-      expect(s.faultLogRetentionDays, 90);
-    });
+    test(
+      'a missing key fails the read instead of inventing a default',
+      () async {
+        final a = _RecordingAdapter(body: {'save_directory': '/media/x'});
+        await expectLater(
+          _api(a).getStorageSettings(),
+          throwsA(isA<TypeError>()),
+        );
+      },
+    );
 
     test('putStorageSettings writes the wire key and reads it back', () async {
-      const sent = StorageSettings(faultLogRetentionDays: 0);
-      final a = _RecordingAdapter(body: {'fault_log_retention_days': 0});
+      final sent = kTestStorage.copyWith(faultLogRetentionDays: 0);
+      final a = _RecordingAdapter(body: _full({'fault_log_retention_days': 0}));
       final echoed = await _api(a).putStorageSettings(sent);
       expect(a.method, 'PUT');
       expect(a.path, '/api/v1/profile/storage');
@@ -89,12 +109,14 @@ void main() {
   // the retired fits_rice/fits_gzip formats read as FITS and the legacy
   // rice/gzip compression values (which meant "compress") as Zstandard.
   group('storage file format + compression wire tokens (#1148)', () {
-    Future<StorageSettings> read(Object? format, Object? compression) =>
-        _api(_RecordingAdapter(body: {
-          'save_directory': '/media/x',
-          'file_format': ?format,
-          'compression': ?compression,
-        })).getStorageSettings();
+    Future<StorageSettings> read(Object? format, Object? compression) => _api(
+      _RecordingAdapter(
+        body: _full({
+          'file_format': format ?? 'fits',
+          'compression': compression ?? 'zstd',
+        }),
+      ),
+    ).getStorageSettings();
 
     test('current tokens parse', () async {
       final s = await read('xisf', 'off');
@@ -106,36 +128,57 @@ void main() {
     });
 
     test('legacy formats read as plain FITS', () async {
-      expect((await read('fits_rice', 'rice')).fileFormat, StorageFileFormat.fits);
-      expect((await read('fits_gzip', 'gzip')).fileFormat, StorageFileFormat.fits);
+      expect(
+        (await read('fits_rice', 'rice')).fileFormat,
+        StorageFileFormat.fits,
+      );
+      expect(
+        (await read('fits_gzip', 'gzip')).fileFormat,
+        StorageFileFormat.fits,
+      );
       expect((await read('XISF', null)).fileFormat, StorageFileFormat.xisf);
-      expect((await read(null, null)).fileFormat, StorageFileFormat.fits);
     });
 
-    test('legacy compression values read as Zstandard; only off is off', () async {
-      expect((await read('xisf', 'rice')).compression, StorageCompression.zstd);
-      expect((await read('xisf', 'gzip')).compression, StorageCompression.zstd);
-      expect((await read('xisf', null)).compression, StorageCompression.zstd);
-      expect((await read('xisf', 'OFF')).compression, StorageCompression.off);
-    });
+    test(
+      'legacy compression values read as Zstandard; only off is off',
+      () async {
+        expect(
+          (await read('xisf', 'rice')).compression,
+          StorageCompression.zstd,
+        );
+        expect(
+          (await read('xisf', 'gzip')).compression,
+          StorageCompression.zstd,
+        );
+        expect((await read('xisf', 'OFF')).compression, StorageCompression.off);
+      },
+    );
 
     for (final format in StorageFileFormat.values) {
       for (final compression in StorageCompression.values) {
         test('${format.name}/${compression.name} round-trips', () async {
-          final sent = StorageSettings(
-              fileFormat: format, compression: compression);
-          final a = _RecordingAdapter(body: {
-            'file_format': format.wire,
-            'compression': compression.wire,
-          });
+          final sent = kTestStorage.copyWith(
+            fileFormat: format,
+            compression: compression,
+          );
+          final a = _RecordingAdapter(
+            body: _full({
+              'file_format': format.wire,
+              'compression': compression.wire,
+            }),
+          );
           final echoed = await _api(a).putStorageSettings(sent);
           final body = a.requestData as Map;
           expect(body['file_format'], anyOf('fits', 'xisf'));
           expect(body['compression'], anyOf('off', 'zstd'));
-          expect(StorageFileFormat.fromWire(body['file_format'] as String),
-              format);
-          expect(StorageCompression.fromWire(body['compression'] as String),
-              compression);
+          expect(
+            StorageFileFormat.fromWire(body['file_format'] as String),
+            format,
+          );
+          expect(
+            StorageCompression.fromWire(body['compression'] as String),
+            compression,
+          );
           expect(echoed.fileFormat, format);
           expect(echoed.compression, compression);
         });

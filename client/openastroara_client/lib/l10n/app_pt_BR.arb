@@ -1459,5 +1459,10 @@
   "shellLoadingSky": "Carregando o céu…",
   "statsIntegrationCaption": "{lights} quadros de luz em {sessions} sessões",
   "statsNamedTargets": "Alvos com nome",
-  "statsBadgeEarned": "Conquistado"
+  "statsBadgeEarned": "Conquistado",
+  "settingsSectionLoading": "Carregando estas configurações do seu setup…",
+  "settingsSectionNotLoaded": "Não carregado — estas configurações estão no seu setup e ele não respondeu.",
+  "settingsSectionRetry": "Tentar de novo",
+  "settingsSectionConflict": "Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).",
+  "settingsSectionReload": "Recarregar"
 }

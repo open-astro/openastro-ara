@@ -6286,6 +6286,11 @@ paths:
         - Profile
       summary: Replace the active profile's storage settings.
       operationId: PutStorageSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6301,6 +6306,12 @@ paths:
                 $ref: '#/components/schemas/StorageSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:

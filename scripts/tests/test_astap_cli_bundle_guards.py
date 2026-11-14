@@ -27,7 +27,7 @@ CLIENT_DEFAULTS = (
     (CLIENT / "settings" / "registry.dart",
      r"id: 'img\.platesolve\.path_or_endpoint',.*?defaultValue: '([^']+)'"),
     (CLIENT / "services" / "profile_api.dart",
-     r"pathOrEndpoint: \(j\['path_or_endpoint'\] as String\?\) \?\? '([^']+)'"),
+     r"pathOrEndpoint:\s*\(j\['path_or_endpoint'\] as String\?\) \?\? '([^']+)'"),
     (CLIENT / "state" / "settings" / "plate_solve_settings_state.dart",
      r"this\.pathOrEndpoint = '([^']+)'"),
 )
