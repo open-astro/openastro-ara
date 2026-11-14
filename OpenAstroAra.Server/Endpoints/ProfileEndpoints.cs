@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Profile;
@@ -73,7 +74,17 @@ public static class ProfileEndpoints {
     /// <summary>Marks a route as one profile section: its GET and PUT answer an <c>ETag</c> of the stored
     /// section, and its PUT refuses an <c>If-Match</c> naming another copy (<see cref="CheckSectionVersion"/>).</summary>
     internal static TBuilder WithSection<TBuilder>(this TBuilder builder, ProfileSection section)
-        where TBuilder : IEndpointConventionBuilder => builder.WithMetadata(section);
+        where TBuilder : IEndpointConventionBuilder {
+        builder.WithMetadata(section);
+        // The PUT's 412 is declared here, with the section, so a route cannot carry one without the other.
+        builder.Add(b => {
+            if (b.Metadata.OfType<IHttpMethodMetadata>().Any(m => m.HttpMethods.Contains("PUT"))) {
+                b.Metadata.Add(new ProducesResponseTypeMetadata(
+                    StatusCodes.Status412PreconditionFailed, typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), ["application/problem+json"]));
+            }
+        });
+        return builder;
+    }
 
     /// <summary>Strong ETag: SHA-256 of the stored section's JSON (AOT-safe, through the source-generated
     /// context). Equal content gives an equal tag, whoever wrote it.</summary>
@@ -145,7 +156,6 @@ public static class ProfileEndpoints {
             .Accepts<StorageSettingsDto>("application/json")
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status412PreconditionFailed)
             .WithSection(ProfileSections.Storage)
             .WithName("PutStorageSettings")
             .WithSummary("Replace the active profile's storage settings.");

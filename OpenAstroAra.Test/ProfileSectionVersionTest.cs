@@ -174,6 +174,13 @@ namespace OpenAstroAra.Test {
             Assert.That(neither, Is.Empty, "a section with no PUT route must be listed as daemon-only, or the walk below skips it");
             Assert.That(routed.Intersect(DaemonOnly), Is.Empty, "a daemon-only section gained a PUT route: drop it from DaemonOnly");
             Assert.That(_routes, Has.Count.GreaterThanOrEqualTo(24));
+            var no412 = ((IEndpointRouteBuilder)_app).DataSources
+                .SelectMany(d => d.Endpoints).OfType<RouteEndpoint>()
+                .Where(e => e.Metadata.GetMetadata<ProfileSection>() is not null
+                    && e.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Contains("PUT") == true
+                    && !e.Metadata.OfType<IProducesResponseTypeMetadata>().Any(m => m.StatusCode == StatusCodes.Status412PreconditionFailed))
+                .Select(e => e.RoutePattern.RawText).ToList();
+            Assert.That(no412, Is.Empty, "a section PUT can answer 412, so its metadata must declare it");
             Assert.That(Changes.Keys, Is.EquivalentTo(routed), "every routed section needs one edit in Changes, and only those");
         }
 

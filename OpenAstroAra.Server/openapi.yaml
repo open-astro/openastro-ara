@@ -6273,6 +6273,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImagingDefaultsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/storage:
     get:
       tags:
@@ -6357,6 +6363,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationsSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/site:
     get:
       tags:
@@ -6393,6 +6405,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SiteSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/custom-horizon:
     get:
       tags:
@@ -6431,6 +6449,12 @@ paths:
                 $ref: '#/components/schemas/CustomHorizonDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6490,6 +6514,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-identity:
     get:
       tags:
@@ -6539,6 +6569,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilenamesSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/safety:
     get:
       tags:
@@ -6575,6 +6611,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/safety/first-flip/rearm:
     post:
       tags:
@@ -6624,6 +6666,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AutofocusSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/polar-align:
     get:
       tags:
@@ -6662,6 +6710,12 @@ paths:
                 $ref: '#/components/schemas/PolarAlignSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6708,6 +6762,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/guider-advanced:
     get:
       tags:
@@ -6750,6 +6810,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -6786,6 +6852,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlateSolveSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/diagnostics-mode:
     get:
       tags:
@@ -6822,6 +6894,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DiagnosticsModeDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/phd2:
     get:
       tags:
@@ -6858,6 +6936,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Phd2SettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/optics:
     get:
       tags:
@@ -6896,6 +6980,12 @@ paths:
                 $ref: '#/components/schemas/OpticsSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6942,6 +7032,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/filter-set:
     get:
       tags:
@@ -6980,6 +7076,12 @@ paths:
                 $ref: '#/components/schemas/FilterSetDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -7026,6 +7128,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/filter-wheel/policy:
     get:
       tags:
@@ -7062,6 +7170,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterWheelPolicyDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/cooling-fan:
     get:
       tags:
@@ -7100,6 +7214,12 @@ paths:
                 $ref: '#/components/schemas/CoolingFanDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -7146,6 +7266,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -7182,6 +7308,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EquipmentConnectionDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/stretch-defaults:
     get:
       tags:
@@ -7218,6 +7350,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StretchDefaultsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profiles:
     get:
       tags:
