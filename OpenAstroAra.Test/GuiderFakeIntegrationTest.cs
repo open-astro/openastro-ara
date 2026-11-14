@@ -2523,6 +2523,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_run_paused_on_the_guiders_unconnected_equipment_says_so_plainly() {
+            // #1875 review — the guider refuses "guide" with an RPC error: the start returns false and nothing
+            // throws, so the plain reason has to come from the guider's last start error, not an exception.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRawRpc("guide", id => RpcError(id, 1, "all equipment must be connected first"));
+            using var svc = CalibratedTonightService(Mock.Of<IDiagnosticsService>());
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+            var gate = new OpenAstroAra.Sequencer.Utility.PauseGate();
+            var item = new OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding(svc);
+            item.AttachNewParent(new OpenAstroAra.Sequencer.Container.SequenceRootContainer { PauseGate = gate });
+            string? status = null;
+            using var cts = new CancellationTokenSource();
+
+            var execute = item.Execute(new SyncProgress(s => status = s.Status), cts.Token);
+
+            Assert.That(await WaitUntilAsync(() => gate.IsPauseRequested).ConfigureAwait(false), Is.True, "the run paused");
+            Assert.That(status, Does.Contain("the guider's camera or mount is not connected"));
+            await cts.CancelAsync().ConfigureAwait(false);
+            await Assert.CatchAsync<OperationCanceledException>(() => execute.WaitAsync(TimeSpan.FromSeconds(10))).ConfigureAwait(false);
+        }
+
+        /// <summary>Reports on the caller's thread, so the status is set before the pause is requested.</summary>
+        private sealed class SyncProgress(Action<OpenAstroAra.Core.Model.ApplicationStatus> report) : IProgress<OpenAstroAra.Core.Model.ApplicationStatus> {
+            public void Report(OpenAstroAra.Core.Model.ApplicationStatus value) => report(value);
+        }
+
+        [Test]
         public async Task A_rest_start_that_began_guiding_succeeds_when_its_settle_times_out() {
             // #1664 review — once guiding has begun, a settle-timeout SettleDone (the guider still guiding) is
             // the settle verdict, not a failed start; only errors before guiding began end the start.

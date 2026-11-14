@@ -89,6 +89,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     started = false;
                     reason = ex.Message;
                 }
+                // A refused start returns false without throwing; the guider's own reason is kept for the pause.
+                if (!started) {
+                    reason ??= guiderMediator.LastStartError;
+                }
                 // #1875: one quiet retry before the run pauses; the first refusal is often equipment still connecting.
                 if (!started && attempt % 2 == 1) {
                     Logger.Warning($"Start guiding: {reason ?? "the guider did not start guiding"} — retrying once before pausing");

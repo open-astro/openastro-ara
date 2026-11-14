@@ -299,6 +299,8 @@ public sealed partial class GuiderService : IGuiderMediator {
 
     public string? LastDitherError { get; private set; }
 
+    public string? LastStartError => MediatorGuider()?.LastStartError;
+
     public Task<bool> AutoSelectGuideStar(CancellationToken token) =>
         MediatorGuider()?.AutoSelectGuideStar() ?? Task.FromResult(false);
 
