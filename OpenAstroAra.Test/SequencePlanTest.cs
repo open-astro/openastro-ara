@@ -13,13 +13,16 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -97,6 +100,57 @@ namespace OpenAstroAra.Test {
                 dso.Add(loop);
             }
             return dso;
+        }
+
+        /// <summary>The text of the Annotation the client puts in a target block set to End of night:
+        /// the rig holds that choice nowhere else, and the Flats block must keep the filters of every
+        /// such target (ADR 0010, amended 2026-11-11).</summary>
+        private const string EndOfNightMarker = "Flats: end of night";
+
+        /// <summary>The NINA <c>$type</c> of the dawn the client stops target blocks at.</summary>
+        private static readonly string DawnType = $"{typeof(DawnProvider).FullName}, {typeof(DawnProvider).Assembly.GetName().Name}";
+
+        /// <summary><see cref="SimpleBlock"/> as the client writes it in full: the target's J2000
+        /// position on its horizon condition, the dawn stop, the plan's gain on every exposure, and its
+        /// flats choice (After target: a flats item after the rows; End of night: the marker).</summary>
+        private static SequentialContainer FullBlock(string name, double raDeg, double decDeg, int gain, string flats, bool dawn,
+            params (string Filter, double Seconds, int Count)[] rows) {
+            var factory = Factory();
+            var block = SimpleBlock(name, rows);
+            block.Conditions.OfType<AboveHorizonCondition>().Single().Data.Coordinates =
+                new InputCoordinates(new Coordinates(Angle.ByDegree(raDeg), Angle.ByDegree(decDeg), Epoch.J2000));
+            if (dawn) {
+                // One block only: two equal providers in one tree share a serializer reference id here.
+                var stop = (TimeCondition)factory.GetCondition<TimeCondition>().Clone();
+                stop.SelectedProvider = stop.DateTimeProviders.OfType<DawnProvider>().First();
+                block.Add(stop);
+            }
+            foreach (var exposure in block.Items.OfType<SequentialContainer>().SelectMany(l => l.Items.OfType<TakeExposure>())) {
+                exposure.Gain = gain;
+            }
+            if (flats == "end_of_night") {
+                var marker = (Annotation)factory.GetItem<Annotation>().Clone();
+                marker.Text = EndOfNightMarker;
+                block.Items.Insert(0, marker);
+            } else if (flats == "after_target") {
+                block.Add((FlatPanelFlats)factory.GetItem<FlatPanelFlats>().Clone());
+            }
+            return block;
+        }
+
+        /// <summary>The queue's end-of-night Flats block: one flat set per filter, after the targets.</summary>
+        private static SequentialContainer FlatsBlock(params string[] filters) {
+            var factory = Factory();
+            var block = new SequentialContainer { Name = "Flats" };
+            foreach (var filter in filters) {
+                var sw = (SwitchFilter)factory.Items.OfType<SwitchFilter>().First().Clone();
+                sw.Filter = new FilterInfo(filter, 0, 0);
+                block.Add(sw);
+                var set = (FlatPanelFlats)factory.GetItem<FlatPanelFlats>().Clone();
+                set.FrameCount = 25;
+                block.Add(set);
+            }
+            return block;
         }
 
         private sealed class FakeStore : ISequenceService {
@@ -201,6 +255,65 @@ namespace OpenAstroAra.Test {
                 Assert.That(plan!.Targets.Select(t => t.Name), Is.EqualTo(TwoTargets));
                 Assert.That(plan.Targets[1].Rows.Single().FramesTotal, Is.EqualTo(7));
                 Assert.That(plan.Targets[1].Rows.Single().FramesDone, Is.EqualTo(0));
+            } finally {
+                await svc.AbortAsync(id, null, CancellationToken.None);
+            }
+        }
+
+        [Test]
+        public async Task A_block_serves_what_a_write_sends_again() {
+            // A second device's Add, Edit and Undo re-send the block: none of this may read back as
+            // "none" or the profile's default because that device did not make it.
+            var id = Guid.NewGuid();
+            var root = new SequentialContainer { Name = "M31" };
+            root.Add(FullBlock("M31", 10.65, 41.27, 200, "end_of_night", dawn: true, ("L", 120, 10), ("R", 120, 10)));
+            root.Add(FullBlock("M42", 83.85, -5.39, 150, "after_target", dawn: false, ("L", 300, 6)));
+            root.Add(FlatsBlock("L", "R"));
+            var svc = Service(id, Serialize(root));
+
+            var plan = await svc.GetPlanAsync(id, CancellationToken.None);
+
+            Assert.That(plan, Is.Not.Null);
+            Assert.That(plan!.Targets.Select(t => (t.Name, t.Calibration)),
+                Is.EqualTo(new[] { ("M31", false), ("M42", false), ("Flats", true) }), "the Flats block keeps its square");
+            var (m31, m42, flats) = (plan.Targets[0], plan.Targets[1], plan.Targets[2]);
+            Assert.Multiple(() => {
+                Assert.That(m31.RaDeg, Is.EqualTo(10.65).Within(1e-6), "J2000, from the horizon condition");
+                Assert.That(m31.DecDeg, Is.EqualTo(41.27).Within(1e-6));
+                Assert.That(m31.Gain, Is.EqualTo(200), "the plan's gain, from its exposures");
+                Assert.That(m31.Flats, Is.EqualTo(SequencePlanFlats.EndOfNight), "from the marker");
+                Assert.That(m31.DawnProvider, Is.EqualTo(DawnType), "the TimeCondition's provider");
+                Assert.That(m42.Gain, Is.EqualTo(150));
+                Assert.That(m42.Flats, Is.EqualTo(SequencePlanFlats.AfterTarget), "a flats item in the block");
+                Assert.That(flats.RaDeg, Is.Null, "no sky");
+                Assert.That(flats.Rows.Select(r => (r.FilterName, r.FramesTotal)), Is.EqualTo(new[] { ("L", 25), ("R", 25) }),
+                    "one row per flat set, its filter from the SwitchFilter before it");
+            });
+        }
+
+        [Test]
+        public async Task The_run_state_names_the_block_the_daemon_runs_even_one_with_no_target() {
+            // A block the horizon or the dawn ends early keeps its rows partial, so the client cannot
+            // tell the current block from the counts; and current_target_name names no target-less
+            // block (it keeps the last target it saw).
+            var id = Guid.NewGuid();
+            var root = new SequentialContainer { Name = "IC 5148" };
+            root.Add(RunnableTarget("IC 5148", ("L Imaging", 1, 0)));
+            var flats = new SequentialContainer { Name = "Flats" };
+            flats.Add(new LoopCondition { Iterations = 1 });
+            flats.Add(new WaitForTimeSpan { Time = 30 });
+            root.Add(flats);
+            var svc = Service(id, Serialize(root));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            try {
+                SequenceRunStateDto? state = null;
+                for (var i = 0; i < 250 && state?.CurrentBlockName != "Flats"; i++) {
+                    await Task.Delay(20);
+                    state = await svc.GetRunStateAsync(id, CancellationToken.None);
+                }
+
+                Assert.That(state!.CurrentBlockName, Is.EqualTo("Flats"), "the block holding the running leaf");
+                Assert.That(state.PlanFramesDone, Is.EqualTo(1), "the plan's loop counts summed: IC 5148's one L frame");
             } finally {
                 await svc.AbortAsync(id, null, CancellationToken.None);
             }
