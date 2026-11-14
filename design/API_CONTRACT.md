@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-14 — A version on every profile section: `ETag` and `If-Match` on the 24 section routes (#1807)
+
+**Endpoint(s) or area:** the GET and PUT of the 24 client-writable profile sections under `/api/v1/profile/` (imaging-defaults, storage, notifications, site, custom-horizon, saved-targets, filenames, safety, autofocus, polar-align, unguided, guider-advanced, plate-solve, diagnostics-mode, phd2, optics, camera-electronics, filter-set, filter-wheel/labels, filter-wheel/policy, cooling-fan, dome, equipment-connection, stretch-defaults). Not the six sections only the daemon writes.
+
+**Decision:** a 2xx GET or PUT answers a strong `ETag`, the SHA-256 of the stored section's JSON. A PUT may send `If-Match`: `*` or the tag it loaded passes; any other tag is a 412 problem, nothing is written and no `profile.updated` goes out. A PUT with no `If-Match` is still accepted until slice 4 makes it required. `PUT /profile/storage` moves onto the same check, so its tags change once (the hash now comes from the serializer context, not the reflection one) and its 400 rules are unchanged.
+
+**Reasoning:** two clients or panels saving a whole section over each other silently drop the other's edit (ADR 0015). A tag of the stored content, not a write counter, gives equal content an equal tag. A write by the daemon itself moves the tag too, so an open panel's next save is a 412 and the client reloads. A live-sync load (#1644) throws away open edits, so a 412 comes only when the event was missed or the daemon wrote the section.
+
+**Spec ref:** `Endpoints/ProfileEndpoints.cs` (`WithSection`, `CheckSectionVersion`), `Services/ProfileSections.cs` (`ProfileSection.Read`), `Program.cs` (the `If-Match` parameter).
+
+**Related:** #1807; ADR 0015; test `ProfileSectionVersionTest`.
+
+---
+
 ## 2026-11-12 — #1757 the dark and bias library belongs to one camera
 
 **Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.

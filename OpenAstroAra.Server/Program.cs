@@ -18,9 +18,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
-using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Services;
 using Scalar.AspNetCore;
 using Serilog;
@@ -109,6 +109,17 @@ public partial class Program {
         builder.Services.AddOpenApi(o => o.AddDocumentTransformer((doc, _, _) => {
             doc.Info.Title = "OpenAstro Ara REST API";
             doc.Info.Version = "v1";
+            return Task.CompletedTask;
+        }).AddOperationTransformer((op, ctx, _) => {
+            // ADR 0015 — a section PUT takes the tag of the copy the client loaded (WithSection).
+            if (ctx.Description.HttpMethod == "PUT"
+                && ctx.Description.ActionDescriptor.EndpointMetadata.OfType<ProfileSection>().Any()) {
+                (op.Parameters ??= []).Add(new Microsoft.OpenApi.OpenApiParameter {
+                    Name = "If-Match",
+                    In = Microsoft.OpenApi.ParameterLocation.Header,
+                    Schema = new Microsoft.OpenApi.OpenApiSchema { Type = Microsoft.OpenApi.JsonSchemaType.String },
+                });
+            }
             return Task.CompletedTask;
         }));
 

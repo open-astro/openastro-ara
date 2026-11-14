@@ -70,6 +70,41 @@ public static class ProfileEndpoints {
         return result;
     }
 
+    /// <summary>Marks a route as one profile section: its GET and PUT answer an <c>ETag</c> of the stored
+    /// section, and its PUT refuses an <c>If-Match</c> naming another copy (<see cref="CheckSectionVersion"/>).</summary>
+    internal static TBuilder WithSection<TBuilder>(this TBuilder builder, ProfileSection section)
+        where TBuilder : IEndpointConventionBuilder => builder.WithMetadata(section);
+
+    /// <summary>Strong ETag: SHA-256 of the stored section's JSON (AOT-safe, through the source-generated
+    /// context). Equal content gives an equal tag, whoever wrote it.</summary>
+    internal static string SectionETag(ProfileSection section, IProfileStore store) =>
+        "\"" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            System.Text.Json.JsonSerializer.Serialize(section.Read(store), section.DtoType, AraJsonSerializerContext.Default)))) + "\"";
+
+    /// <summary>ADR 0015 — before a write: a sent <c>If-Match</c> other than <c>*</c> that is not the stored
+    /// section's tag is a 412 and nothing runs (no store write, no <c>profile.updated</c>). No <c>If-Match</c>
+    /// still passes (refusing it is a later slice). After a 2xx the response carries the stored section's tag.</summary>
+    internal static async ValueTask<object?> CheckSectionVersion(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next) {
+        var http = ctx.HttpContext;
+        if (http.GetEndpoint()?.Metadata.GetMetadata<ProfileSection>() is not { } section) {
+            return await next(ctx);
+        }
+        var store = http.RequestServices.GetRequiredService<IProfileStore>();
+        if (HttpMethods.IsPut(http.Request.Method)
+            && http.Request.Headers.IfMatch.ToString().Trim() is { Length: > 0 } sent
+            && sent != "*" && sent != SectionETag(section, store)) {
+            return Results.Problem(
+                detail: $"The {section.Name} settings changed since they were loaded; reload before saving.",
+                statusCode: StatusCodes.Status412PreconditionFailed);
+        }
+        var result = await next(ctx);
+        var status = (result as IStatusCodeHttpResult)?.StatusCode ?? StatusCodes.Status200OK;
+        if (status is >= 200 and < 300) {
+            http.Response.Headers.ETag = SectionETag(section, store);
+        }
+        return result;
+    }
+
     public static IEndpointRouteBuilder MapProfileEndpoints(this IEndpointRouteBuilder app) {
         var profile = app.MapGroup("/api/v1/profile").WithTags("Profile");
 
@@ -79,9 +114,13 @@ public static class ProfileEndpoints {
             return await PublishUpdatedAfterWrite(ctx.HttpContext, () => next(ctx), ws);
         });
 
+        // ADR 0015 — one version check for every route that carries a section (WithSection).
+        profile.AddEndpointFilter(CheckSectionVersion);
+
         profile.MapGet("/imaging-defaults", (IProfileStore store) =>
                 Results.Ok(store.GetImagingDefaults()))
             .Produces<ImagingDefaultsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.ImagingDefaults)
             .WithName("GetImagingDefaults")
             .WithSummary("Get the active profile's imaging defaults.");
 
@@ -91,11 +130,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<ImagingDefaultsDto>("application/json")
             .Produces<ImagingDefaultsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.ImagingDefaults)
             .WithName("PutImagingDefaults")
             .WithSummary("Replace the active profile's imaging defaults.");
 
-        profile.MapGet("/storage", GetStorageSettings)
+        profile.MapGet("/storage", (IProfileStore store) =>
+                Results.Ok(store.GetStorageSettings()))
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Storage)
             .WithName("GetStorageSettings")
             .WithSummary("Get the active profile's storage settings.");
 
@@ -104,12 +146,14 @@ public static class ProfileEndpoints {
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status412PreconditionFailed)
+            .WithSection(ProfileSections.Storage)
             .WithName("PutStorageSettings")
             .WithSummary("Replace the active profile's storage settings.");
 
         profile.MapGet("/notifications", (IProfileStore store) =>
                 Results.Ok(store.GetNotificationsSettings()))
             .Produces<NotificationsSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Notifications)
             .WithName("GetNotificationsSettings")
             .WithSummary("Get the active profile's notifications settings.");
 
@@ -119,12 +163,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<NotificationsSettingsDto>("application/json")
             .Produces<NotificationsSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Notifications)
             .WithName("PutNotificationsSettings")
             .WithSummary("Replace the active profile's notifications settings.");
 
         profile.MapGet("/site", (IProfileStore store) =>
                 Results.Ok(store.GetSiteSettings()))
             .Produces<SiteSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Site)
             .WithName("GetSiteSettings")
             .WithSummary("Get the active profile's site preferences.");
 
@@ -134,12 +180,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<SiteSettingsDto>("application/json")
             .Produces<SiteSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Site)
             .WithName("PutSiteSettings")
             .WithSummary("Replace the active profile's site preferences.");
 
         profile.MapGet("/custom-horizon", (IProfileStore store) =>
                 Results.Ok(store.GetCustomHorizon()))
             .Produces<CustomHorizonDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.CustomHorizon)
             .WithName("GetCustomHorizon")
             .WithSummary("Get the active profile's custom terrain horizon (empty points = none entered).");
 
@@ -158,6 +206,7 @@ public static class ProfileEndpoints {
             .Accepts<CustomHorizonDto>("application/json")
             .Produces<CustomHorizonDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithSection(ProfileSections.CustomHorizon)
             .WithName("PutCustomHorizon")
             .WithSummary("Replace the active profile's custom terrain horizon (points are sorted by azimuth; azimuth 0-360, altitude -10..90, max 361 points).");
 
@@ -173,6 +222,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/saved-targets", (IProfileStore store) =>
                 Results.Ok(store.GetSavedTargets()))
             .Produces<SavedTargetsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.SavedTargets)
             .WithName("GetSavedTargets")
             .WithSummary("Get the active profile's recent and saved targets (name, aliases, J2000 position, source), newest first.");
 
@@ -191,6 +241,7 @@ public static class ProfileEndpoints {
             .Accepts<SavedTargetsDto>("application/json")
             .Produces<SavedTargetsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithSection(ProfileSections.SavedTargets)
             .WithName("PutSavedTargets")
             .WithSummary("Replace the active profile's recent and saved targets (newest first; one entry per name; at most 200; finite J2000 positions).");
 
@@ -204,6 +255,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/filenames", (IProfileStore store) =>
                 Results.Ok(store.GetFilenamesSettings()))
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Filenames)
             .WithName("GetFilenamesSettings")
             .WithSummary("Get the active profile's filenames settings.");
 
@@ -213,12 +265,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<FilenamesSettingsDto>("application/json")
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Filenames)
             .WithName("PutFilenamesSettings")
             .WithSummary("Replace the active profile's filenames settings.");
 
         profile.MapGet("/safety", (IProfileStore store) =>
                 Results.Ok(store.GetSafetyPolicies()))
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.SafetyPolicies)
             .WithName("GetSafetyPolicies")
             .WithSummary("Get the active profile's safety policies.");
 
@@ -237,6 +291,7 @@ public static class ProfileEndpoints {
         })
             .Accepts<SafetyPoliciesDto>("application/json")
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.SafetyPolicies)
             .WithName("PutSafetyPolicies")
             .WithSummary("Replace the active profile's safety policies. first_flip_confirmed is " +
                 "daemon-owned and ignored on PUT (the stored value is preserved and echoed) — " +
@@ -255,6 +310,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/autofocus", (IProfileStore store) =>
                 Results.Ok(store.GetAutofocusSettings()))
             .Produces<AutofocusSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Autofocus)
             .WithName("GetAutofocusSettings")
             .WithSummary("Get the active profile's autofocus settings.");
 
@@ -264,12 +320,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<AutofocusSettingsDto>("application/json")
             .Produces<AutofocusSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Autofocus)
             .WithName("PutAutofocusSettings")
             .WithSummary("Replace the active profile's autofocus settings.");
 
         // One view of the knobs: what the daemon will use, not what an older build stored.
         profile.MapGet("/polar-align", GetPolarAlignSettings)
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.PolarAlign)
             .WithName("GetPolarAlignSettings")
             .WithSummary("Get the active profile's §45 polar-alignment settings.");
 
@@ -277,6 +335,7 @@ public static class ProfileEndpoints {
             .Accepts<PolarAlignSettingsDto>("application/json")
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.PolarAlign)
             .WithName("PutPolarAlignSettings")
             .WithSummary("Replace the active profile's §45 polar-alignment settings.");
 
@@ -284,6 +343,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/unguided", (IProfileStore store) =>
                 Results.Ok(store.GetUnguidedSettings()))
             .Produces<UnguidedSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Unguided)
             .WithName("GetUnguidedSettings")
             .WithSummary("Get the active profile's unguided-imaging settings.");
 
@@ -291,6 +351,7 @@ public static class ProfileEndpoints {
             .Accepts<UnguidedSettingsDto>("application/json")
             .Produces<UnguidedSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.Unguided)
             .WithName("PutUnguidedSettings")
             .WithSummary("Replace the active profile's unguided-imaging settings.");
 
@@ -299,6 +360,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/guider-advanced", (IProfileStore store) =>
                 Results.Ok(store.GetGuiderAdvancedSettings()))
             .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.GuiderAdvanced)
             .WithName("GetGuiderAdvancedSettings")
             .WithSummary("Get the active profile's guider-advanced settings (null fields keep the guider's own).");
 
@@ -316,24 +378,28 @@ public static class ProfileEndpoints {
             .Accepts<GuiderAdvancedSettingsDto>("application/json")
             .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.GuiderAdvanced)
             .WithName("PutGuiderAdvancedSettings")
             .WithSummary("Replace the active profile's guider-advanced settings.");
 
         profile.MapGet("/plate-solve", (IProfileStore store) =>
                 Results.Ok(store.GetPlateSolveSettings()))
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.PlateSolve)
             .WithName("GetPlateSolveSettings")
             .WithSummary("Get the active profile's plate-solve settings.");
 
         profile.MapPut("/plate-solve", PutPlateSolveSettings)
             .Accepts<PlateSolveSettingsDto>("application/json")
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.PlateSolve)
             .WithName("PutPlateSolveSettings")
             .WithSummary("Replace the active profile's plate-solve settings.");
 
         profile.MapGet("/diagnostics-mode", (IProfileStore store) =>
                 Results.Ok(store.GetDiagnosticsMode()))
             .Produces<DiagnosticsModeDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.DiagnosticsMode)
             .WithName("GetDiagnosticsMode")
             .WithSummary("Get the active profile's diagnostics mode.");
 
@@ -343,6 +409,7 @@ public static class ProfileEndpoints {
         })
             .Accepts<DiagnosticsModeDto>("application/json")
             .Produces<DiagnosticsModeDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.DiagnosticsMode)
             .WithName("PutDiagnosticsMode")
             .WithSummary("Replace the active profile's diagnostics mode.");
 
@@ -351,6 +418,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/phd2", (IProfileStore store) =>
                 Results.Ok(NormalizeGuideTrain(store.GetPhd2Settings())))
             .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Phd2)
             .WithName("GetPhd2Settings")
             .WithSummary("Get the active profile's PHD2 settings.");
 
@@ -368,12 +436,14 @@ public static class ProfileEndpoints {
         })
             .Accepts<Phd2SettingsDto>("application/json")
             .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Phd2)
             .WithName("PutPhd2Settings")
             .WithSummary("Replace the active profile's PHD2 settings.");
 
         profile.MapGet("/optics", (IProfileStore store) =>
                 Results.Ok(store.GetOpticsSettings()))
             .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Optics)
             .WithName("GetOpticsSettings")
             .WithSummary("Get the active profile's optics settings.");
 
@@ -400,6 +470,7 @@ public static class ProfileEndpoints {
             .Accepts<OpticsSettingsDto>("application/json")
             .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.Optics)
             .WithName("PutOpticsSettings")
             .WithSummary("Replace the active profile's optics settings.");
 
@@ -409,6 +480,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/camera-electronics", (IProfileStore store) =>
                 Results.Ok(store.GetCameraElectronics()))
             .Produces<CameraElectronicsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.CameraElectronics)
             .WithName("GetCameraElectronics")
             .WithSummary("Get the active profile's camera electronics (exposure-planning inputs).");
 
@@ -439,6 +511,7 @@ public static class ProfileEndpoints {
             .Accepts<CameraElectronicsDto>("application/json")
             .Produces<CameraElectronicsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.CameraElectronics)
             .WithName("PutCameraElectronics")
             .WithSummary("Replace the active profile's camera electronics.");
 
@@ -448,6 +521,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/filter-set", (IProfileStore store) =>
                 Results.Ok(store.GetFilterSet()))
             .Produces<FilterSetDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.FilterSet)
             .WithName("GetFilterSet")
             .WithSummary("Get the active profile's planning filter set.");
 
@@ -481,6 +555,7 @@ public static class ProfileEndpoints {
             .Accepts<FilterSetDto>("application/json")
             .Produces<FilterSetDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.FilterSet)
             .WithName("PutFilterSet")
             .WithSummary("Replace the active profile's planning filter set.");
 
@@ -491,6 +566,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/filter-wheel/labels", (IProfileStore store) =>
                 Results.Ok(store.GetFilterWheelLabels()))
             .Produces<FilterWheelLabelsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.FilterWheelLabels)
             .WithName("GetFilterWheelLabels")
             .WithSummary("Get the active profile's filter-wheel slot labels.");
 
@@ -522,6 +598,7 @@ public static class ProfileEndpoints {
             .Accepts<FilterWheelLabelsDto>("application/json")
             .Produces<FilterWheelLabelsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithSection(ProfileSections.FilterWheelLabels)
             .WithName("PutFilterWheelLabels")
             .WithSummary("Replace the active profile's filter-wheel slot labels.");
 
@@ -530,6 +607,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/filter-wheel/policy", (IProfileStore store) =>
                 Results.Ok(store.GetFilterWheelPolicy()))
             .Produces<FilterWheelPolicyDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.FilterWheelPolicy)
             .WithName("GetFilterWheelPolicy")
             .WithSummary("Get the active profile's filter-wheel policy (home on first connect).");
 
@@ -539,6 +617,7 @@ public static class ProfileEndpoints {
         })
             .Accepts<FilterWheelPolicyDto>("application/json")
             .Produces<FilterWheelPolicyDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.FilterWheelPolicy)
             .WithName("PutFilterWheelPolicy")
             .WithSummary("Replace the active profile's filter-wheel policy.");
 
@@ -546,6 +625,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/cooling-fan", (IProfileStore store) =>
                 Results.Ok(store.GetCoolingFan()))
             .Produces<CoolingFanDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.CoolingFan)
             .WithName("GetCoolingFan")
             .WithSummary("Get the switch port designated as the active profile's cooling fan.");
 
@@ -563,6 +643,7 @@ public static class ProfileEndpoints {
             .Accepts<CoolingFanDto>("application/json")
             .Produces<CoolingFanDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithSection(ProfileSections.CoolingFan)
             .WithName("PutCoolingFan")
             .WithSummary("Designate the active profile's cooling fan: a switch's device_id and port_id, or both null for none.");
 
@@ -570,6 +651,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/dome", (IProfileStore store) =>
                 Results.Ok(store.GetDomeSettings()))
             .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.Dome)
             .WithName("GetDomeSettings")
             .WithSummary("Get the active profile's dome geometry and follow-the-mount setting.");
 
@@ -577,12 +659,14 @@ public static class ProfileEndpoints {
             .Accepts<DomeSettingsDto>("application/json")
             .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithSection(ProfileSections.Dome)
             .WithName("PutDomeSettings")
             .WithSummary("Replace the active profile's dome geometry and tolerances (follow_mount is kept; POST /equipment/dome/follow changes it); a scope outside the dome radius is refused with a reason.");
 
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.EquipmentConnection)
             .WithName("GetEquipmentConnection")
             .WithSummary("Get the active profile's equipment auto-connect bools.");
 
@@ -592,6 +676,7 @@ public static class ProfileEndpoints {
         })
             .Accepts<EquipmentConnectionDto>("application/json")
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.EquipmentConnection)
             .WithName("PutEquipmentConnection")
             .WithSummary("Replace the active profile's equipment auto-connect bools.");
 
@@ -602,6 +687,7 @@ public static class ProfileEndpoints {
         profile.MapGet("/stretch-defaults", (IProfileStore store) =>
                 Results.Ok(store.GetStretchDefaults()))
             .Produces<StretchDefaultsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.StretchDefaults)
             .WithName("GetStretchDefaults")
             .WithSummary("Get the active profile's stretch defaults (§65.2).");
 
@@ -611,6 +697,7 @@ public static class ProfileEndpoints {
         })
             .Accepts<StretchDefaultsDto>("application/json")
             .Produces<StretchDefaultsDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.StretchDefaults)
             .WithName("PutStretchDefaults")
             .WithSummary("Replace the active profile's stretch defaults.");
 
@@ -673,18 +760,7 @@ public static class ProfileEndpoints {
     /// <summary>§29 / §43-2b / §42.5 — <c>PUT /profile/storage</c> write-boundary validation: an invalid
     /// disk-space pair or a negative retention value is a 400 and never reaches the store. Extracted so
     /// the 400s are unit-testable without a host (#1145).</summary>
-    internal static IResult PutStorageSettings(StorageSettingsDto body, IProfileStore store,
-        [Microsoft.AspNetCore.Mvc.FromHeader(Name = "If-Match")] string? ifMatch = null, HttpContext? http = null) {
-        // ADR 0015 — a client that sent If-Match saves only over the copy it loaded: a mismatch is a 412 and
-        // nothing is written. No If-Match is accepted as before (refusing it is a later slice).
-        if (ifMatch is not null) {
-            var current = StorageETag(store.GetStorageSettings());
-            if (ifMatch.Trim() != "*" && ifMatch.Trim() != current) {
-                return Results.Problem(
-                    detail: "The storage settings changed since they were loaded; reload before saving.",
-                    statusCode: StatusCodes.Status412PreconditionFailed);
-            }
-        }
+    internal static IResult PutStorageSettings(StorageSettingsDto body, IProfileStore store) {
         // §29 — reject an invalid disk-space threshold pair at write so the stored profile always matches
         // what the monitor enforces (no silent fallback to defaults while the UI shows the bad numbers).
         if (body.MinFreeDiskCriticalGb < 1 || body.MinFreeDiskWarnGb <= body.MinFreeDiskCriticalGb) {
@@ -709,22 +785,8 @@ public static class ProfileEndpoints {
         // current meaning; the echo carries what was stored so the client adopts it.
         body = StorageFormatTokens.Normalize(body);
         store.PutStorageSettings(body);
-        if (http is not null) http.Response.Headers.ETag = StorageETag(body);
         return Results.Ok(body);
     }
-
-    /// <summary><c>GET /profile/storage</c> with an <c>ETag</c> derived from the section (nothing stored).</summary>
-    internal static IResult GetStorageSettings(IProfileStore store, HttpContext? http = null) {
-        var value = store.GetStorageSettings();
-        if (http is not null) http.Response.Headers.ETag = StorageETag(value);
-        return Results.Ok(value);
-    }
-
-    /// <summary>Strong ETag: SHA-256 of the section's JSON. The store holds the normalized section, so equal
-    /// content gives an equal tag.</summary>
-    internal static string StorageETag(StorageSettingsDto? value) =>
-        "\"" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(value)))) + "\"";
 
     /// <summary>#1264 — write-boundary validation: the guard's two eccentricity bars must be ordered and
     /// in (0, 1], its counts positive, the ladder ascending and positive, the re-centre figures positive,
