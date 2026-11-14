@@ -40,6 +40,8 @@ import 'planetarium_search_listener.dart';
 import 'planetarium_shown_listener.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
+import '../../screens/simple/companion_portrait_shell.dart'
+    show companionPortrait;
 import '../../state/simple_messages_state.dart';
 import '../adaptive_controls.dart';
 
@@ -619,6 +621,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
     final mode = ref.watch(skyAtlasModeProvider);
     final tonightOpen = mode == SkyAtlasMode.tonightsSky;
+    final upright = companionPortrait(context, ref);
     final rotateOpen = mode == SkyAtlasMode.rotateCamera;
 
     final planetarium = Expanded(
@@ -686,10 +689,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           // shrink and the native overlay recomputes) and the panel docks at a
           // fixed width on the right — its own rect, occlusion-safe.
           Expanded(
-            child: Row(
+            child: Stack(
+              children: [
+                Row(
               children: [
                 planetarium,
-                if (tonightOpen)
+                if (tonightOpen && !upright)
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       border: Border(left: BorderSide(color: AraColors.border)),
@@ -705,6 +710,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                       border: Border(left: BorderSide(color: AraColors.border)),
                     ),
                     child: RotationAssistPanel(),
+                  ),
+              ],
+            ),
+                // #1778: a phone held upright has no room beside the sky, so
+                // the panel covers it, full width; the sky stays mounted.
+                if (tonightOpen && upright)
+                  const Positioned.fill(
+                    child: TonightSkyPanel(width: double.infinity),
                   ),
               ],
             ),

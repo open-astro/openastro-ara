@@ -106,14 +106,17 @@ String? _nextOpening(List<TonightSkyObject> all, DateTime nowUtc) {
 }
 
 class TonightSkyPanel extends ConsumerWidget {
-  const TonightSkyPanel({super.key});
+  const TonightSkyPanel({super.key, this.width = defaultWidth});
 
   // Wider than the old 300 px: the equipment-aware row carries a score badge, a
   // framing chip and a timing line, and the design explicitly allows a bigger
   // panel ("It's ok if the screen is bigger").
   // S2 (planning redesign): 360 gives the cards' chips, window strips and
   // budget rings room to breathe; the sky keeps the rest.
-  static const double width = 360;
+  static const double defaultWidth = 360;
+
+  /// #1778: an upright phone gives the panel the screen's width.
+  final double width;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
