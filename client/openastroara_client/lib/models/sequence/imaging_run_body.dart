@@ -46,12 +46,16 @@ class UnguidedOptions {
 /// ├─ Unpark Scope
 /// ├─ Set Tracking       (sidereal)
 /// ├─ Target SequentialContainer  (named after the target — see [buildTargetBlock])
-/// │   ├─ Slew to RA/Dec     (J2000 coordinates; blind when autofocus is first)
+/// │   ├─ Slew to RA/Dec     (J2000 coordinates; blind when autofocus runs
+/// │   │                      first, i.e. without guiding)
 /// │   ├─ Switch Filter      (when a filter is chosen — matched by name)
 /// │   ├─ Cool Camera        (when a cooler target is configured; waits for the sensor)
 /// │   ├─ Start Guiding      (when guiding; then Run Autofocus, when enabled)
-/// │   ├─ Run Autofocus      (without guiding: here, before the centring go-to)
-/// │   ├─ Slew to RA/Dec     (without guiding: the centring go-to)
+/// │   ├─ Run Autofocus      (without guiding, when enabled: here, before the
+/// │   │                      centring go-to)
+/// │   ├─ Slew to RA/Dec     (without guiding, after autofocus: the centring
+/// │   │                      go-to)
+/// │   ├─ Tracking Probe     (no guider on the rig; before the first loop)
 /// │   └─ "Imaging" SequentialContainer
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
@@ -69,10 +73,11 @@ class UnguidedOptions {
 /// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
 /// block becomes filter-aware, then runs one `<Filter> Imaging` loop per plan
 /// step (each preceded by its Switch Filter), every loop carrying the dither /
-/// autofocus triggers. Guided plans run: go-to (centring) → switch to the
+/// autofocus triggers. Guiding plans run: go-to (centring) → switch to the
 /// FIRST plan filter → cool → Start Guiding → autofocus (through that filter).
-/// Unguided plans run: blind slew → switch to the first filter → cool →
-/// autofocus → go-to → probe (probe only when the rig has no guider). §63 made
+/// Plans without guiding and with autofocus run: blind slew → switch to the
+/// first filter → cool → autofocus → go-to; with autofocus off, go-to first.
+/// The probe follows only when the rig has no guider. §63 made
 /// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding
 /// steps execute for real now.
 ///
@@ -202,11 +207,13 @@ class FilterPlanStep {
 }
 
 /// One target's worth of session — a SequentialContainer named after the
-/// target holding, guided: go-to (centring) → optional filter switch →
-/// optional waiting Cool Camera → Start Guiding → optional autofocus; and
-/// unguided: blind slew when autofocus follows → filter switch → Cool Camera
-/// → optional autofocus → go-to → the Take-Exposure
-/// loop(s). With a [filterPlan],
+/// target holding, guiding: go-to (centring) → optional filter switch →
+/// optional waiting Cool Camera → Start Guiding → optional autofocus → the
+/// Take-Exposure loop(s); without guiding: with autofocus, blind slew →
+/// optional filter switch → optional Cool Camera → autofocus → go-to; without
+/// autofocus, go-to → optional filter switch → optional Cool Camera; then,
+/// with no guider on the rig, the Tracking Probe, then the loop(s). With a
+/// [filterPlan],
 /// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
 /// exposure and count); without one, the single default loop as before.
 /// This is the unit [buildImagingRunBody] wraps once and
@@ -459,14 +466,14 @@ Map<String, dynamic> buildTargetBlock({
   // instead of the default ContinueOnError: filter, focus, guiding and every
   // frame after it would run on the wrong patch of sky.
   //
-  // Without a guider and with autofocus, the block slews blind, focuses near
+  // Without guiding and with autofocus, the block slews blind, focuses near
   // the target, and only then centres: a solve on an out-of-focus field fails
   // (user, 2026-11-02).
   //
   // #1875 — one autofocus per plan, on a cooled sensor: slew, cool, start
-  // guiding, autofocus, first light. With a guider the autofocus follows
+  // guiding, autofocus, first light. When guiding, the autofocus follows
   // Start Guiding, so the go-to centres before it (a centre after the focus
-  // would pull the field off the guide star); without one it still waits for
+  // would pull the field off the guide star); without guiding it waits for
   // the cool and keeps the blind slew and the late centre.
   final focusFirst = afAtStart && !guide;
   final goToTarget = (positionAngleDeg != null
