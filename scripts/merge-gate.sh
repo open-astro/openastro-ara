@@ -28,14 +28,17 @@ echo "Pull request #${pr} by ${author}, head ${sha}."
 # check suite, and a PR-body edit or a label starts a new suite, so the newest
 # run of each name decides (by id: a queued run may have no started_at yet).
 # Skipped runs are dropped first, on purpose: a skipped run did not run, so an
-# older run of the same name still decides.
+# older run of the same name still decides. A run with a conclusion is finished
+# whatever its status says: GitHub has served a done run as status in_progress
+# with a conclusion and a completed_at (#1886's head, 2026-11-14), and waiting
+# on the status alone held the queue for the whole wait, twice.
 deadline=$(( $(date +%s) + wait_minutes * 60 ))
 while :; do
   runs="$(gh api --paginate "repos/${repo}/commits/${sha}/check-runs?filter=latest&per_page=100" \
     | jq -s '[.[].check_runs[] | select(.conclusion != "skipped")] | group_by(.name) | map(max_by(.id))')"
   statuses="$(gh api "repos/${repo}/commits/${sha}/status" | jq '.statuses')"
   pending="$(jq -n --argjson r "$runs" --argjson s "$statuses" \
-    '[($r[] | select(.status != "completed") | .name), ($s[] | select(.state == "pending") | .context)]')"
+    '[($r[] | select(.status != "completed" and .conclusion == null) | .name), ($s[] | select(.state == "pending") | .context)]')"
   if [ "$(jq length <<<"$pending")" = 0 ]; then
     break
   fi

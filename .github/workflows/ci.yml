@@ -1130,10 +1130,12 @@ jobs:
   #                      every shard passed.
   #   client-test-desktop-shard
   #                      the suite on macOS and Windows, each split over three
-  #                      runners. Unsplit it takes 13 minutes on Windows and 22
-  #                      on macOS, so these shards run in the merge queue and
-  #                      on master, not on a pull request: a failure on one of
-  #                      those systems only stops the PR in the queue.
+  #                      runners (unsplit: 13 minutes on Windows, 22 on macOS).
+  #                      They run on the pull request and on master, not in the
+  #                      merge queue: merge-gate.sh requires every check green
+  #                      on the PR head, so they still gate the merge, and in
+  #                      the queue they held the few macOS runners and set the
+  #                      length of every queue run (2026-11-15).
   #   client-test        the required `macos-latest` and `windows-latest`
   #                      contexts: passes only when every desktop shard passed.
   client-test-shard:
@@ -1257,10 +1259,11 @@ jobs:
     # `flutter test` alone (merge queue and master runs, 2026-11-12) and set
     # the length of every merge-queue run.
     # Matrix + job-level gate, safe because these are not required contexts:
-    # client-test below reports them. A pull request does not run them at all.
+    # client-test below reports them. The merge queue does not run them at
+    # all; merge-gate.sh holds the queue to their result on the PR head.
     name: Client (analyze + test) — ${{ matrix.os }}, shard ${{ matrix.shard }}/3
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && github.event_name != 'merge_group' }}
     # Every shard runs to the end, so a flake on one OS or shard doesn't mask a
     # real regression on another.
     strategy:
@@ -1306,10 +1309,8 @@ jobs:
         working-directory: client/openastroara_client
         run: flutter pub get
 
-      - name: flutter analyze
-        if: matrix.shard == 1
-        working-directory: client/openastroara_client
-        run: flutter analyze
+      # No `flutter analyze` here: the analysis is the same on every host, and
+      # client-test-shard 1 runs it on Linux.
 
       # Every third test file, the same split as client-test-shard (see the
       # comment there for why not `flutter test --total-shards`).
@@ -1369,9 +1370,10 @@ jobs:
           if [ "$SHARDS" = success ]; then
             exit 0
           fi
-          # The shards skip a docs-only change and every pull request at job level;
-          # those are the skips that pass. A pull request never ran this work here.
-          if [ "$SHARDS" = skipped ] && { [ "$DOCS_ONLY" = true ] || [ "$EVENT_NAME" = pull_request ]; }; then
+          # The shards skip a docs-only change and every merge group at job level;
+          # those are the skips that pass. A merge group never runs this work:
+          # merge-gate.sh requires the shards green on the PR head instead.
+          if [ "$SHARDS" = skipped ] && { [ "$DOCS_ONLY" = true ] || [ "$EVENT_NAME" = merge_group ]; }; then
             if [ "$DOCS_ONLY" = true ]; then
               echo "::notice title=Path gate::docs_only=true -- the test shards were skipped, context reported green by design"
             fi

@@ -156,15 +156,22 @@ class CiRunTimeTest(unittest.TestCase):
                 )
                 self.assertEqual(run.returncode == 0, passes, run.stdout.decode())
 
-    def test_the_macos_and_windows_shards_take_no_runner_on_a_pull_request(self):
+    def test_the_macos_and_windows_shards_run_on_the_pull_request_not_in_the_merge_queue(self):
+        # merge-gate.sh requires every check green on the PR head, so they still gate the merge; in the
+        # queue they held the scarce macOS runners and set the length of every queue run (2026-11-15).
         block = job(self.text, "client-test-desktop-shard")
         self.assertIn("        os: [macos-latest, windows-latest]\n", block)
         self.assertIn("    runs-on: ${{ matrix.os }}\n", block)
         self.assertIn(
             "    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true'"
-            " && github.event_name != 'pull_request' }}\n",
+            " && github.event_name != 'merge_group' }}\n",
             block,
         )
+
+    def test_only_the_linux_shard_runs_flutter_analyze(self):
+        # The analysis is the same on every host; the desktop shard 1 ran it again for ~40 s.
+        self.assertIn("flutter analyze", steps(job(self.text, "client-test-shard")))
+        self.assertNotIn("flutter analyze", steps(job(self.text, "client-test-desktop-shard")))
 
     def test_the_macos_and_windows_contexts_pass_only_when_every_shard_passed(self):
         block = job(self.text, "client-test")
@@ -183,9 +190,10 @@ class CiRunTimeTest(unittest.TestCase):
         for shards, docs_only, event, passes in (
             ("success", "false", "merge_group", True),
             ("success", "", "push", True),
-            ("skipped", "true", "merge_group", True),
-            ("skipped", "false", "pull_request", True),
-            ("skipped", "false", "merge_group", False),
+            ("success", "false", "pull_request", True),
+            ("skipped", "true", "pull_request", True),
+            ("skipped", "false", "merge_group", True),
+            ("skipped", "false", "pull_request", False),
             ("skipped", "", "push", False),
             ("failure", "false", "merge_group", False),
             ("failure", "true", "pull_request", False),
