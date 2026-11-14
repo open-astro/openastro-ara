@@ -231,6 +231,8 @@
   "previewCaptureFailed": "Falha na captura",
   "previewLooping": "Em contínuo",
   "previewPlanPaused": "Plano pausado",
+  "previewPlanGuiderCalibrating": "Iniciar guiagem · Guia calibrando",
+  "previewPlanGuiderCalibratingLeg": "Iniciar guiagem · Guia calibrando · {leg}",
   "previewPlan": "Plano",
   "previewPlanSkipped": "Pulado: fora das condições",
   "previewWaitingForFlip": "Aguardando a virada de meridiano · {countdown}",

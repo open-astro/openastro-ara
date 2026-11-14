@@ -1485,6 +1485,18 @@ abstract class AppLocalizations {
   /// **'Plan paused'**
   String get previewPlanPaused;
 
+  /// Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating and no leg reported yet
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding · Guider calibrating'**
+  String get previewPlanGuiderCalibrating;
+
+  /// Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating; leg is the calibration leg, e.g. 'West step 3 · 11.9 px'
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding · Guider calibrating · {leg}'**
+  String previewPlanGuiderCalibratingLeg(String leg);
+
   /// Simple Mode status pill: the imaging plan is running (its step follows)
   ///
   /// In en, this message translates to:

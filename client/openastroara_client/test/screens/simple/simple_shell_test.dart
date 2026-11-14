@@ -2521,6 +2521,26 @@ void main() {
     expect(pill(), contains('Run autofocus'), reason: 'the Plan pill returns');
   });
 
+  testWidgets("a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
+      (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running,
+            currentInstructionDescription: 'Start guiding · Guider - Calibrating'),
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    final text = tester
+        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text, contains('Start guiding · Guider calibrating · West step 3'));
+    expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
+  });
+
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
     final container = await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [

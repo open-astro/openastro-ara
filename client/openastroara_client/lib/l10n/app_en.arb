@@ -1110,6 +1110,19 @@
     "description": "Simple Mode status pill: live view is running"
   },
   "previewPlanPaused": "Plan paused",
+  "previewPlanGuiderCalibrating": "Start guiding · Guider calibrating",
+  "@previewPlanGuiderCalibrating": {
+    "description": "Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating and no leg reported yet"
+  },
+  "previewPlanGuiderCalibratingLeg": "Start guiding · Guider calibrating · {leg}",
+  "@previewPlanGuiderCalibratingLeg": {
+    "description": "Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating; leg is the calibration leg, e.g. 'West step 3 · 11.9 px'",
+    "placeholders": {
+      "leg": {
+        "type": "String"
+      }
+    }
+  },
   "@previewPlanPaused": {
     "description": "Simple Mode status pill: the imaging plan is paused (its step follows)"
   },

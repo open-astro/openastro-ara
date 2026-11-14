@@ -836,6 +836,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewPlanPaused => 'Plan paused';
 
   @override
+  String get previewPlanGuiderCalibrating =>
+      'Start guiding · Guider calibrating';
+
+  @override
+  String previewPlanGuiderCalibratingLeg(String leg) {
+    return 'Start guiding · Guider calibrating · $leg';
+  }
+
+  @override
   String get previewPlan => 'Plan';
 
   @override
@@ -6096,6 +6105,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewPlanPaused => 'Plano pausado';
+
+  @override
+  String get previewPlanGuiderCalibrating =>
+      'Iniciar guiagem · Guia calibrando';
+
+  @override
+  String previewPlanGuiderCalibratingLeg(String leg) {
+    return 'Iniciar guiagem · Guia calibrando · $leg';
+  }
 
   @override
   String get previewPlan => 'Plano';

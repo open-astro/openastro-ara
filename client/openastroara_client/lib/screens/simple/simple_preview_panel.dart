@@ -1766,6 +1766,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final guiderOn = guider?.isBusy ?? false;
     final guiderAsk = ref.watch(simpleGuiderPendingProvider);
     final planActive = run?.state?.isActive ?? false;
+    final planCalibrating = planActive &&
+        guider != null &&
+        guider.runtimeState == GuiderRuntimeState.calibrating;
     final polar = ref.watch(polarAlignLiveProvider);
     final af = ref.watch(autofocusLiveProvider).run;
     final bahtinov = ref.watch(
@@ -1875,7 +1878,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
-          pausing ? l10n.planPausingAfterFrame : step,
+          pausing
+              ? l10n.planPausingAfterFrame
+              // The Guider's calibration inside a plan: its leg on this pill,
+              // and no Guider pill of its own (#1875 slice 3).
+              : planCalibrating
+              ? switch (guider.calibrationText(l10n)) {
+                  final leg? => l10n.previewPlanGuiderCalibratingLeg(leg),
+                  null => l10n.previewPlanGuiderCalibrating,
+                }
+              : step,
           // DESIGN.md status rule: running is working (green); paused by Ara
           // is on its way back (blue); paused waiting for the user needs a
           // look (amber).
@@ -2190,7 +2202,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           working: guiderStatusLevel(guider) == StatusLevel.active,
           spoken: l10n.shellGuiding,
         )
-      else if (guiderOn)
+      else if (guiderOn && !planCalibrating)
         _PillData(
           SimpleStatusOrigin.guide,
           l10n.deviceGuider,
