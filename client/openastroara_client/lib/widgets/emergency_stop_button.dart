@@ -42,8 +42,9 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
     this.label,
   });
 
-  /// Replaces the idle "STOP" word (the safety alarm's "Emergency Abort");
-  /// the hold, its fill and the stop itself are unchanged.
+  /// Replaces the idle "STOP" word (the safety alarm's "Emergency Abort")
+  /// and lets the label wrap to two lines; the hold, its fill and the stop
+  /// itself are unchanged.
   final String? label;
 
   final bool simple;
@@ -314,7 +315,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           : _armed
           ? l10n.estopPressAgain
           : (widget.label ?? l10n.estopLabel),
-      maxLines: _armed && compact ? 2 : 1,
+      // A caller's own label (the alarm's longer words) may wrap to two lines.
+      maxLines: _armed && compact || widget.label != null ? 2 : 1,
       textAlign: TextAlign.center,
     );
     final style = FilledButton.styleFrom(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../state/simple_monitor_state.dart' show monitorShowingProvider;
 import '../../state/alarm/safety_alarm_state.dart';
+import '../../state/settings/notifications_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
@@ -181,18 +182,24 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                             color: AraColors.textSecondary,
                           ),
                         ),
-                        // §41.1 — a phone: the sound and vibration note, and
-                        // Emergency Abort as the STOP hold (2 s), never a tap.
+                        // §41.1 — a phone: the sound and vibration note (only
+                        // with Sound alert on: muted, it neither rings nor
+                        // vibrates), and Emergency Abort as the STOP hold
+                        // (2 s), never a tap.
                         if (ref.watch(companionModeProvider)) ...[
-                          Text(
-                            context.l10n.safetyAlarmPhoneNote,
-                            textAlign: TextAlign.center,
-                            style: kSimpleText.copyWith(
-                              color: AraColors.textSecondary,
+                          if (ref
+                              .watch(notificationsSettingsProvider)
+                              .soundAlert)
+                            Text(
+                              context.l10n.safetyAlarmPhoneNote,
+                              textAlign: TextAlign.center,
+                              style: kSimpleText.copyWith(
+                                color: AraColors.textSecondary,
+                              ),
                             ),
-                          ),
-                          SizedBox(
-                            width: 220,
+                          // At least Silence's width; grows with larger text.
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 220),
                             child: EmergencyStopButton(
                               key: const Key('simple-safety-abort'),
                               simple: true,

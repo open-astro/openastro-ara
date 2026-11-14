@@ -70,8 +70,9 @@ final rigSnapshotRefreshProvider = Provider<Future<void> Function()>((ref) {
   };
 });
 
-/// True from the app's return to the foreground until the snapshot read lands:
-/// live values wait on it ("nothing stale is shown").
+/// True from the app's return to the foreground until the snapshot read lands.
+/// No widget reads it yet: the Simple Mode status card is to hold its live
+/// values on it in a later change ("nothing stale is shown").
 final rigResumingProvider = NotifierProvider<_ResumingNotifier, bool>(
   _ResumingNotifier.new,
 );

@@ -34,6 +34,7 @@ void main() {
 
   Future<(ProviderContainer, _Player, _Haptics)> ring({
     required bool companion,
+    bool soundAlert = true,
   }) async {
     final player = _Player();
     final haptics = _Haptics();
@@ -47,7 +48,7 @@ void main() {
       ],
     );
     addTearDown(c.dispose);
-    c.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    c.read(notificationsSettingsProvider.notifier).setSoundAlert(soundAlert);
     c.listen(safetyAlarmProvider, (_, _) {});
     final alarm = c.read(safetyAlarmProvider.notifier);
     alarm.playerFactory = () => player;
@@ -71,6 +72,13 @@ void main() {
   test('off a phone the alarm rings and never vibrates', () async {
     final (_, player, haptics) = await ring(companion: false);
     expect(player.played, isNotEmpty);
+    expect(haptics.starts, 0);
+  });
+
+  test('with Sound alert off a phone neither rings nor vibrates', () async {
+    final (c, player, haptics) = await ring(companion: true, soundAlert: false);
+    expect(c.read(safetyAlarmProvider).pending, isTrue);
+    expect(player.played, isEmpty);
     expect(haptics.starts, 0);
   });
 }

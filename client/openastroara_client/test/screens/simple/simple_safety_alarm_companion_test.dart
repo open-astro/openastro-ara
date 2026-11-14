@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
+import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 
@@ -19,6 +21,7 @@ void main() {
     required bool companion,
     Locale? locale,
     double textScale = 1,
+    bool soundAlert = true,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -42,8 +45,15 @@ void main() {
         ),
       ),
     );
+    ProviderScope.containerOf(tester.element(find.byType(SimpleSafetyAlarm)))
+        .read(notificationsSettingsProvider.notifier)
+        .setSoundAlert(soundAlert);
     await tester.pump();
   }
+
+  // The label's own paragraph: find.text matches a cut-off line too.
+  bool cut(WidgetTester tester, String text) =>
+      tester.renderObject<RenderParagraph>(find.text(text)).didExceedMaxLines;
 
   testWidgets(
     'on a phone the alarm says sound and vibration and offers a held Emergency Abort',
@@ -97,4 +107,39 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final (name, locale, abort, hold) in [
+    ('English', null, 'Emergency Abort', 'Hold to confirm'),
+    (
+      'Brazilian Portuguese',
+      const Locale('pt', 'BR'),
+      'Abortar em emergência',
+      'Segure para confirmar',
+    ),
+  ]) {
+    testWidgets('the Emergency Abort label is not cut at 2x text in $name', (
+      tester,
+    ) async {
+      await pump(tester, companion: true, locale: locale, textScale: 2);
+      expect(cut(tester, abort), isFalse);
+      // At 2x the alarm scrolls: bring the button on screen to hold it.
+      await tester.ensureVisible(find.byKey(const Key('simple-safety-abort')));
+      final g = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('simple-safety-abort'))),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(cut(tester, hold), isFalse);
+      await g.up();
+      await tester.pump();
+    });
+  }
+
+  testWidgets('with Sound alert off the phone alarm has no sound note', (
+    tester,
+  ) async {
+    await pump(tester, companion: true, soundAlert: false);
+    expect(find.textContaining('vibrates'), findsNothing);
+    // Emergency Abort stays: it is not part of the sound.
+    expect(find.byKey(const Key('simple-safety-abort')), findsOneWidget);
+  });
 }
