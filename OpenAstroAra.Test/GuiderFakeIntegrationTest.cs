@@ -2125,6 +2125,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_delete_while_guide_focus_holds_the_camera_is_queued_and_the_preview_says_so() {
+            // ADR 0016: custody, not only a polar alignment, keeps the twin. The guider reads Stopped
+            // between focus frames, but the camera is still the focus loop's.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = true });
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            await svc.Custody.TakeAsync(CameraUse.GuideFocus, svc, _ => Task.CompletedTask, CancellationToken.None).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var preview = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(preview.CanDeleteNow, Is.False);
+            Assert.That(preview.Reason, Does.Contain("focus loop"));
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("focus loop"));
+            Assert.That(daemon.SetConnected, Is.Empty, "the focus loop's equipment is never released");
+            Assert.That(daemon.Deleted, Is.Empty);
+        }
+
+        [Test]
         public async Task A_queued_delete_of_a_shared_twin_still_deletes_it_on_the_next_connect() {
             // Two ARA profiles named "Rig" share one twin; the user deleted one with the box ticked
             // while no guider was connected. The immediate path would have deleted the twin, so the
