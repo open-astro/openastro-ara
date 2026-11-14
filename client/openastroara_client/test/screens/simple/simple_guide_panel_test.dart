@@ -220,6 +220,28 @@ Future<void> _tab(WidgetTester tester, String name) async {
 }
 
 void main() {
+  testWidgets('while the guider calibrates, its steps are drawn where RMS and Exposure were (#1875 slice 3)',
+      (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
+          {'direction': 'West', 'step': 2, 'dx': 4.0, 'dy': 1.8, 'dist': 4.4},
+        ],
+      }),
+    );
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.byKey(const Key('simple-guider-calibration-plot')), findsOneWidget);
+    expect(find.byKey(const Key('simple-guide-exposure')), findsNothing);
+    expect(find.text('RMS'), findsNothing);
+  });
+
   group('the Guider tabs (#1722)', () {
     List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run, GuiderLiveState? live}) => [
           simpleModeActiveProvider.overrideWithValue(true),

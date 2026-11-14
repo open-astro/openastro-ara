@@ -37,6 +37,7 @@ import 'simple_preview_panel.dart'
         kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
 import '../../widgets/adaptive_controls.dart';
+import '../../widgets/imaging/guide_calibration_panel.dart' show CalibrationStepsPainter;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -179,6 +180,7 @@ class SimpleGuidePanel extends ConsumerWidget {
     final connected = g != null && g.isConnected;
     final active = g?.isBusy ?? false;
     final guiding = g?.isCorrecting ?? false;
+    final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
     final colour = pending != null
         ? AraColors.accentInfo
@@ -260,6 +262,25 @@ class SimpleGuidePanel extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 4,
                   children: [
+            // While the guider calibrates, its steps take the place of the
+            // RMS and Exposure figures, as the guider's own plot (#1875 slice 3).
+            if (calibrating)
+              SizedBox(
+                key: const Key('simple-guider-calibration-plot'),
+                height: 200,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ColoredBox(
+                    color: AraColors.frameBackdrop,
+                    child: CustomPaint(
+                      painter: CalibrationStepsPainter(
+                        ref.watch(guiderLiveProvider.select((s) => s.calibration.steps)),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else ...[
             simpleWindowRow(
               l10n.deviceRms,
               id: 'RMS',
@@ -300,6 +321,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                 live: true,
               ),
             ),
+            ],
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
             _SimpleAggressiveness(
