@@ -625,21 +625,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   SimpleModeScreen? _lastShown;
 
-  // Simple Mode re-reads the guider every 2 s while it is doing anything:
-  // nothing else polls it here, and some changes (a stop that lands seconds
-  // after the ask) push nothing (rig, 2026-11-04).
+  // Simple Mode re-reads the guider every 2 s while it is doing anything and
+  // every 10 s while it is idle: nothing else polls it here, and some changes
+  // push nothing (a stop that lands seconds after the ask, rig 2026-11-04; a
+  // plan's Start guiding on the rig, rig 2026-11-13). With no guider at all
+  // (no status) it asks nothing.
   Timer? _guiderPoll;
+  bool? _guiderPollBusy;
 
-  void _syncGuiderPoll(bool active) {
-    if (active) {
-      _guiderPoll ??= Timer.periodic(
-        const Duration(seconds: 2),
-        (_) => ref.read(guiderStatusProvider.notifier).refresh(),
-      );
-    } else {
-      _guiderPoll?.cancel();
-      _guiderPoll = null;
-    }
+  /// Where the Guider panel opened, so a tab or a routine never moves it.
+  final _guiderTop = _HeldTop();
+
+  void _syncGuiderPoll(bool? busy) {
+    if (_guiderPollBusy == busy) return;
+    _guiderPollBusy = busy;
+    _guiderPoll?.cancel();
+    _guiderPoll = busy == null
+        ? null
+        : Timer.periodic(
+            Duration(seconds: busy ? 2 : 10),
+            (_) => ref.read(guiderStatusProvider.notifier).refresh(),
+          );
   }
 
   /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
@@ -1033,7 +1039,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
       ref.watch(
-        guiderStatusProvider.select((s) => s.value?.isBusy ?? false),
+        guiderStatusProvider.select((s) => s.value?.isBusy),
       ),
     );
     // The Screen that stopped showing tidies up (Focus: a pill asks for the mask).
@@ -1214,6 +1220,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         math.max(kSimpleStatusHeight, _statusHeight) +
         AraSpace.s8;
     final preflightPanel = pilot != null && _popover == _Popover.settings;
+    final guiderPanel = !preflightPanel &&
+        _popover == _Popover.settings &&
+        shown == SimpleModeScreen.guide;
+    // A closed Guider panel opens centred again.
+    if (!guiderPanel) _guiderTop.clear();
     // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
@@ -1660,6 +1671,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           preflightPanel ||
                                           (_popover == _Popover.settings &&
                                               shown == SimpleModeScreen.guide),
+                                      // The Guider panel keeps the top it
+                                      // opened at, whatever its tab or the
+                                      // guider's routine (#1884 audit).
+                                      held: guiderPanel ? _guiderTop : null,
                                       preferredTop: math.max(
                                         0,
                                         rightRailTop - popoverTop,
@@ -2086,15 +2101,32 @@ Widget simpleFrost(Widget child) => ClipRRect(
 /// A rail popover in its room: right-aligned, at [preferredTop] (level with
 /// the rail) when it fits below, moved up as much as it needs when it doesn't;
 /// or, with [centre], centred in the room (Preflight's step panels).
+/// A panel's top as first placed.
+class _HeldTop {
+  double? top;
+
+  void clear() => top = null;
+}
+
 class _BesideRail extends SingleChildLayoutDelegate {
   const _BesideRail({
     required this.preferredTop,
     this.centre = false,
     this.fitWidth = false,
+    this.held,
   });
 
   final double preferredTop;
   final bool centre;
+
+  /// The panel's first top in a room is kept here; after it, the panel keeps
+  /// it and grows down, scrolling past the room's bottom (#1884 audit: the
+  /// Guider's tabs moved by half of each change in its height).
+  final _HeldTop? held;
+
+  // A room that changes under it (a pill above, the guiding bar below) keeps
+  // the top too, inside the room.
+  double? _heldTop(double room) => held?.top?.clamp(0.0, room);
 
   /// The portrait deck (#1775): the panel keeps inside the room, both edges
   /// on screen.
@@ -2105,24 +2137,29 @@ class _BesideRail extends SingleChildLayoutDelegate {
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
       BoxConstraints(
-        maxHeight: constraints.maxHeight,
+        maxHeight:
+            constraints.maxHeight - (_heldTop(constraints.maxHeight) ?? 0),
         maxWidth: fitWidth ? constraints.maxWidth : double.infinity,
       );
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     final room = math.max(0.0, size.height - childSize.height);
-    return Offset(
-      size.width - childSize.width,
-      centre ? room / 2 : preferredTop.clamp(0, room),
-    );
+    final top =
+        _heldTop(size.height) ??
+        (centre ? room / 2 : preferredTop.clamp(0, room).toDouble());
+    if (held != null && held!.top == null) {
+      held!.top = top;
+    }
+    return Offset(size.width - childSize.width, top);
   }
 
   @override
   bool shouldRelayout(_BesideRail old) =>
       old.preferredTop != preferredTop ||
       old.centre != centre ||
-      old.fitWidth != fitWidth;
+      old.fitWidth != fitWidth ||
+      old.held != held;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing

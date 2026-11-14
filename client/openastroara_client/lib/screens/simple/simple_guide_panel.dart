@@ -37,6 +37,7 @@ import 'simple_preview_panel.dart'
         kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
 import '../../widgets/adaptive_controls.dart';
+import '../../widgets/imaging/guide_calibration_panel.dart' show CalibrationStepsPainter;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -179,6 +180,7 @@ class SimpleGuidePanel extends ConsumerWidget {
     final connected = g != null && g.isConnected;
     final active = g?.isBusy ?? false;
     final guiding = g?.isCorrecting ?? false;
+    final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
     final colour = pending != null
         ? AraColors.accentInfo
@@ -246,20 +248,33 @@ class SimpleGuidePanel extends ConsumerWidget {
                 child: Text(l10n.preflightDoneStartImaging),
               ),
             _SimpleGuiderTabs(selected: tab),
-            // Guide stays laid out, so the panel keeps one height across tabs;
-            // Tools lies over it and scrolls inside when its suggestion list runs longer.
-            Stack(
-              fit: StackFit.passthrough,
-              children: [
-            IndexedStack(
-              index: tab == 2 ? null : tab,
-              sizing: StackFit.loose,
-              children: [
-                Column(
+            // The panel takes the height of the tab it shows; the shell keeps
+            // its top where Guide put it and scrolls a taller tab past the
+            // room above the bottom row (#1875 slice 3, #1884 audit).
+            switch (tab) {
+              1 => const _SimpleGuiderTuning(),
+              2 => const _SimpleGuiderTools(),
+              _ => Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 4,
                   children: [
+            // While the guider calibrates, its steps take the place of the
+            // RMS and Exposure figures, as the guider's own plot, in the same
+            // room (#1875 slice 3, #1884 audit); the plot keeps 160 pt over
+            // its key, so the panel grows down from its held top
+            // (#1884 re-audit).
+            Stack(
+              children: [
+                Visibility(
+                  visible: !calibrating,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 4,
+                    children: [
             simpleWindowRow(
               l10n.deviceRms,
               id: 'RMS',
@@ -281,24 +296,15 @@ class SimpleGuidePanel extends ConsumerWidget {
                 ],
               ),
             ),
-            // The guide camera's exposure, picked as Preview's; set live.
-            SimplePresetTile<int>(
-              key: const Key('simple-guide-exposure'),
-              label: l10n.previewExposure,
-              value: phd2.guideExposureMs,
-              options: [
-                for (final ms in guideExposureChoicesMs)
-                  if (ms >= 200 && ms <= 15000) ms,
+            const SimpleGuiderExposureTile(),
+                    ],
+                  ),
+                ),
+                if (calibrating)
+                  const _SimpleCalibrationPlot(
+                    key: Key('simple-guider-calibration-plot'),
+                  ),
               ],
-              format: (ms) => ms <= 0
-                  ? l10n.guideExposureOwn
-                  : formatExposure(Duration(milliseconds: ms)),
-              onSelected: (ms) => simpleSaveGuider(
-                context,
-                ref,
-                (p) => p.setGuideExposureMs(ms),
-                live: true,
-              ),
             ),
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
@@ -350,15 +356,7 @@ class SimpleGuidePanel extends ConsumerWidget {
             ),
                   ],
                 ),
-                tab == 1 ? const _SimpleGuiderTuning() : const SizedBox.shrink(),
-              ],
-            ),
-                if (tab == 2)
-                  const Positioned.fill(
-                    child: SingleChildScrollView(child: _SimpleGuiderTools()),
-                  ),
-              ],
-            ),
+            },
           ],
         ),
       ),
@@ -379,6 +377,63 @@ class SimpleGuidePanel extends ConsumerWidget {
     WidgetRef ref,
     void Function(Phd2SettingsNotifier) change,
   ) => simpleSaveGuider(context, ref, change);
+}
+
+/// The guider's calibration steps as it reports them: Advanced Mode's plot,
+/// its colour key, and a wait line before the first step (#1884 audit).
+class _SimpleCalibrationPlot extends ConsumerWidget {
+  const _SimpleCalibrationPlot({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final steps = ref.watch(guiderLiveProvider.select((s) => s.calibration.steps));
+    Widget key(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Text(label, style: AraText.caption),
+      ],
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 4,
+      children: [
+        SizedBox(
+          height: 160,
+          child: Semantics(
+            key: const Key('simple-guider-calibration-steps'),
+            label: l10n.guideCalibrationPlot(steps.length),
+            image: true,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AraRadius.container),
+              child: ColoredBox(
+                color: AraColors.frameBackdrop,
+                child: steps.isEmpty
+                    ? Center(
+                        child: Text(
+                          l10n.guideCalibrationWaiting,
+                          style: AraText.caption,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : CustomPaint(painter: CalibrationStepsPainter(steps)),
+              ),
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: AraSpace.s12,
+          children: [
+            key(AraColors.accentInfo, l10n.guideCalibrationKeyRa),
+            key(AraColors.accentError, l10n.guideCalibrationKeyDec),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _SimpleGuiderTabs extends ConsumerWidget {
@@ -1021,6 +1076,39 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
         ),
       ),
       percent,
+    );
+  }
+}
+
+/// "2 s", or "The guider's own" while none is set: the guider's exposure as
+/// Simple Mode writes it.
+String simpleGuiderExposureText(AppLocalizations l10n, int ms) =>
+    ms <= 0 ? l10n.guideExposureOwn : formatExposure(Duration(milliseconds: ms));
+
+/// The guider's exposure, set live: what its loop and its guiding run at.
+/// Shared by Guide and Preview › Guide, whose shutter loops the guider
+/// (#1884 review).
+class SimpleGuiderExposureTile extends ConsumerWidget {
+  const SimpleGuiderExposureTile({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return SimplePresetTile<int>(
+      key: const Key('simple-guide-exposure'),
+      label: l10n.previewExposure,
+      value: ref.watch(phd2SettingsProvider.select((p) => p.guideExposureMs)),
+      options: [
+        for (final ms in guideExposureChoicesMs)
+          if (ms >= 200 && ms <= 15000) ms,
+      ],
+      format: (ms) => simpleGuiderExposureText(l10n, ms),
+      onSelected: (ms) => simpleSaveGuider(
+        context,
+        ref,
+        (p) => p.setGuideExposureMs(ms),
+        live: true,
+      ),
     );
   }
 }

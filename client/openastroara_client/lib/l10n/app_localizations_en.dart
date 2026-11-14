@@ -836,6 +836,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewPlanPaused => 'Plan paused';
 
   @override
+  String get previewPlanGuiderCalibrating =>
+      'Start guiding · Guider calibrating';
+
+  @override
+  String previewPlanGuiderCalibratingLeg(String leg) {
+    return 'Start guiding · Guider calibrating · $leg';
+  }
+
+  @override
   String get previewPlan => 'Plan';
 
   @override
@@ -2615,6 +2624,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusStopGuide => 'Stop the guide camera\'s live focus';
 
   @override
+  String get previewGuideLoopStart => 'Loop the guide camera\'s frames';
+
+  @override
+  String get previewGuideLoopStop => 'Stop the guide camera\'s frames';
+
+  @override
   String get focusScopeMain => 'Main';
 
   @override
@@ -2838,6 +2853,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideToolMeasuring => 'Measuring drift…';
+
+  @override
+  String get guideCalibrationWaiting => 'Waiting for the first step…';
+
+  @override
+  String guideCalibrationPlot(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Calibration plot, $count steps',
+      one: 'Calibration plot, 1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideCalibrationKeyRa => 'RA (W/E)';
+
+  @override
+  String get guideCalibrationKeyDec => 'Dec (N/S)';
+
+  @override
+  String guideAssistantLeft(String time) {
+    return '$time left';
+  }
 
   @override
   String guideToolDone(int count) {
