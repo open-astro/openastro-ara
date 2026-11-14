@@ -156,13 +156,15 @@ namespace OpenAstroAra.Test {
         private sealed class FakeStore : ISequenceService {
             private readonly Guid _id;
             private JsonElement _body;
+            private DateTimeOffset _modified = DateTimeOffset.UnixEpoch;
             public FakeStore(Guid id, JsonElement body) { _id = id; _body = body; }
             public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) =>
                 Task.FromResult<SequenceDto?>(id == _id
-                    ? new SequenceDto(id, "Queue", null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, _body, null)
+                    ? new SequenceDto(id, "Queue", null, DateTimeOffset.UnixEpoch, _modified, _body, null)
                     : null);
             public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) {
                 _body = body;
+                _modified = DateTimeOffset.UtcNow;
                 return GetAsync(id, ct);
             }
             public Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) => throw new NotSupportedException();
@@ -172,9 +174,9 @@ namespace OpenAstroAra.Test {
             public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
         }
 
-        private static SequencerService Service(Guid id, JsonElement body) =>
+        private static SequencerService Service(Guid id, JsonElement body, FakeStore? store = null) =>
             new(new SequenceBodyDeserializer(Factory()), ws: null,
-                sequencesResolver: () => new FakeStore(id, body), checkpoint: null);
+                sequencesResolver: () => store ?? new FakeStore(id, body), checkpoint: null);
 
         /// <summary>Polls the served plan until <paramref name="reached"/> holds (at most ~5 s).</summary>
         private static async Task<SequencePlanDto?> PlanWhenAsync(SequencerService svc, Guid id, Func<SequencePlanDto, bool> reached) {
@@ -317,6 +319,49 @@ namespace OpenAstroAra.Test {
             } finally {
                 await svc.AbortAsync(id, null, CancellationToken.None);
             }
+        }
+
+        [Test]
+        public async Task A_loop_with_a_negative_count_still_serves_a_plan_and_a_run_state() {
+            var id = Guid.NewGuid();
+            var root = new SequentialContainer { Name = "IC 5148" };
+            root.Add(RunnableTarget("IC 5148", ("L Imaging", -1, 30)));
+            var svc = Service(id, Serialize(root));
+            Assert.That((await svc.GetPlanAsync(id, CancellationToken.None))!.Targets.Single().Rows.Single().FramesTotal, Is.EqualTo(0));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            try {
+                await Task.Delay(300);
+                var plan = await svc.GetPlanAsync(id, CancellationToken.None);
+                var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+                Assert.That(plan, Is.Not.Null);
+                Assert.That(state, Is.Not.Null, "the run state must not throw on a negative loop count");
+            } finally {
+                await svc.AbortAsync(id, null, CancellationToken.None);
+            }
+        }
+
+        [Test]
+        public async Task A_queue_edited_after_its_run_ended_serves_the_edited_body() {
+            var id = Guid.NewGuid();
+            var root = new SequentialContainer { Name = "IC 5148" };
+            root.Add(RunnableTarget("IC 5148", ("L Imaging", 1, 0)));
+            var store = new FakeStore(id, Serialize(root));
+            var svc = Service(id, Serialize(root), store);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            SequenceRunStateDto? state = null;
+            for (var i = 0; i < 250 && !(state?.State is SequenceRunState.Completed); i++) {
+                await Task.Delay(20);
+                state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            }
+            Assert.That(state?.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That((await svc.GetPlanAsync(id, CancellationToken.None))!.Targets, Has.Count.EqualTo(1));
+
+            await Task.Delay(20);
+            root.Add(RunnableTarget("NGC 253", ("R Imaging", 7, 0)));
+            await store.ReplaceRunBodyAsync(id, Serialize(root), CancellationToken.None);
+
+            var plan = await svc.GetPlanAsync(id, CancellationToken.None);
+            Assert.That(plan!.Targets.Select(t => t.Name), Is.EqualTo(TwoTargets), "a second device's edit shows");
         }
 
         [Test]

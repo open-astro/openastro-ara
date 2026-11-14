@@ -64,8 +64,10 @@ internal static class SequencePlanBuilder {
                 filter = sw.Filter?.Name;
             } else if (item is ISequenceContainer loopBox && item.Status != SequenceEntityStatus.DISABLED && LoopOf(loopBox) is { } loop) {
                 var exposure = loopBox.GetItemsSnapshot().OfType<TakeExposure>().FirstOrDefault();
-                rows.Add(new SequencePlanRowDto(filter, exposure?.ExposureTime, loop.Iterations,
-                    Math.Clamp(loop.CompletedIterations, 0, loop.Iterations)));
+                // An unbounded stored count (NINA import, direct write) may be negative: Clamp throws when max < min.
+                var total = Math.Max(loop.Iterations, 0);
+                rows.Add(new SequencePlanRowDto(filter, exposure?.ExposureTime, total,
+                    Math.Clamp(loop.CompletedIterations, 0, total)));
             } else if (calibration && item is FlatPanelFlats flat) {
                 rows.Add(new SequencePlanRowDto(filter, null, flat.FrameCount,
                     flat.Status == SequenceEntityStatus.FINISHED ? flat.FrameCount : 0));

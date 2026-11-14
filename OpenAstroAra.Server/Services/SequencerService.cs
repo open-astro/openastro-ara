@@ -132,12 +132,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
     public async Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct) {
-        // The tree while a run holds one (live edits change it), the last counts it kept at release for a
-        // finished run still retained, else the stored body (queued, never started, or evicted).
-        if (_runs.TryGetValue(id, out var run) && run.PlanSnapshot() is { } snap) {
+        // The tree while a run holds one (live edits change it); the counts a finished run left, only while
+        // the stored body is unchanged since it ended (a queue edited after the run is served from the body);
+        // else the stored body (queued, never started, or evicted).
+        _runs.TryGetValue(id, out var run);
+        var dto = await (_sequencesResolver?.Invoke()?.GetAsync(id, ct) ?? Task.FromResult<SequenceDto?>(null)).ConfigureAwait(false);
+        if (run is not null && run.PlanSnapshot() is { } snap
+            && (run.BodyTop is not null || (dto is not null && run.CompletedUtc is { } done && dto.ModifiedUtc <= done))) {
             return new SequencePlanDto(id, run.RunId, snap.Targets);
         }
-        var dto = await (_sequencesResolver?.Invoke()?.GetAsync(id, ct) ?? Task.FromResult<SequenceDto?>(null)).ConfigureAwait(false);
+        // A stored body that does not deserialize is served as 404, like an unknown id: there is no plan to read.
         if (dto is null || !_deserializer.TryDeserialize(dto.Body, out var top, out _) || top is null) {
             return null;
         }
