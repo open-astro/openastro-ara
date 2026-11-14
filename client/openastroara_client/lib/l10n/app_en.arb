@@ -1113,6 +1113,19 @@
   "@previewPlanPaused": {
     "description": "Simple Mode status pill: the imaging plan is paused (its step follows)"
   },
+  "previewPlanGuiderCalibrating": "Start guiding · Guider calibrating",
+  "@previewPlanGuiderCalibrating": {
+    "description": "Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating and no leg reported yet"
+  },
+  "previewPlanGuiderCalibratingLeg": "Start guiding · Guider calibrating · {leg}",
+  "@previewPlanGuiderCalibratingLeg": {
+    "description": "Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating; leg is the calibration leg, e.g. 'West step 3 · 11.9 px'",
+    "placeholders": {
+      "leg": {
+        "type": "String"
+      }
+    }
+  },
   "previewPlan": "Plan",
   "previewPlanSkipped": "Skipped: conditions not met",
   "@previewPlanSkipped": {
@@ -3657,6 +3670,14 @@
   "@focusStopGuide": {
     "description": "Screen reader label of Focus's shutter, guide camera, while it reads"
   },
+  "previewGuideLoopStart": "Loop the guide camera's frames",
+  "@previewGuideLoopStart": {
+    "description": "Screen reader label of Preview's shutter on the guide camera: starts the guider's plain looping frames"
+  },
+  "previewGuideLoopStop": "Stop the guide camera's frames",
+  "@previewGuideLoopStop": {
+    "description": "Screen reader label of Preview's shutter on the guide camera while its frames loop"
+  },
   "focusScopeMain": "Main",
   "@focusScopeMain": {
     "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"
@@ -3827,6 +3848,36 @@
   "guideToolStop": "Stop",
   "guideToolNotRun": "Not run yet",
   "guideToolMeasuring": "Measuring drift…",
+  "guideCalibrationWaiting": "Waiting for the first step…",
+  "@guideCalibrationWaiting": {
+    "description": "Simple Mode Guider panel, the calibration plot before the guider reports its first step"
+  },
+  "guideCalibrationPlot": "{count, plural, =1{Calibration plot, 1 step} other{Calibration plot, {count} steps}}",
+  "@guideCalibrationPlot": {
+    "description": "Screen reader label of the Simple Mode Guider panel's calibration plot",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "guideCalibrationKeyRa": "RA (W/E)",
+  "@guideCalibrationKeyRa": {
+    "description": "Colour key of the calibration plot: the RA legs, West and East"
+  },
+  "guideCalibrationKeyDec": "Dec (N/S)",
+  "@guideCalibrationKeyDec": {
+    "description": "Colour key of the calibration plot: the Dec legs, North and South"
+  },
+  "guideAssistantLeft": "{time} left",
+  "@guideAssistantLeft": {
+    "description": "Simple Mode status pill, the Guiding Assistant measuring; time is a countdown such as 01:30",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "guideToolDone": "{count, plural, =0{Done. Nothing to apply.} =1{Done. 1 suggestion to apply.} other{Done. {count} suggestions to apply.}}",
   "@guideToolDone": {
     "placeholders": {

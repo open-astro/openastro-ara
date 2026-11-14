@@ -1485,6 +1485,18 @@ abstract class AppLocalizations {
   /// **'Plan paused'**
   String get previewPlanPaused;
 
+  /// Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating and no leg reported yet
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding · Guider calibrating'**
+  String get previewPlanGuiderCalibrating;
+
+  /// Simple Mode status pill, a running plan whose Start guiding step has the Guider calibrating; leg is the calibration leg, e.g. 'West step 3 · 11.9 px'
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding · Guider calibrating · {leg}'**
+  String previewPlanGuiderCalibratingLeg(String leg);
+
   /// Simple Mode status pill: the imaging plan is running (its step follows)
   ///
   /// In en, this message translates to:
@@ -4533,6 +4545,18 @@ abstract class AppLocalizations {
   /// **'Stop the guide camera\'s live focus'**
   String get focusStopGuide;
 
+  /// Screen reader label of Preview's shutter on the guide camera: starts the guider's plain looping frames
+  ///
+  /// In en, this message translates to:
+  /// **'Loop the guide camera\'s frames'**
+  String get previewGuideLoopStart;
+
+  /// Screen reader label of Preview's shutter on the guide camera while its frames loop
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s frames'**
+  String get previewGuideLoopStop;
+
   /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
   ///
   /// In en, this message translates to:
@@ -4934,6 +4958,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Measuring drift…'**
   String get guideToolMeasuring;
+
+  /// Simple Mode Guider panel, the calibration plot before the guider reports its first step
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first step…'**
+  String get guideCalibrationWaiting;
+
+  /// Screen reader label of the Simple Mode Guider panel's calibration plot
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Calibration plot, 1 step} other{Calibration plot, {count} steps}}'**
+  String guideCalibrationPlot(int count);
+
+  /// Colour key of the calibration plot: the RA legs, West and East
+  ///
+  /// In en, this message translates to:
+  /// **'RA (W/E)'**
+  String get guideCalibrationKeyRa;
+
+  /// Colour key of the calibration plot: the Dec legs, North and South
+  ///
+  /// In en, this message translates to:
+  /// **'Dec (N/S)'**
+  String get guideCalibrationKeyDec;
+
+  /// Simple Mode status pill, the Guiding Assistant measuring; time is a countdown such as 01:30
+  ///
+  /// In en, this message translates to:
+  /// **'{time} left'**
+  String guideAssistantLeft(String time);
 
   /// No description provided for @guideToolDone.
   ///

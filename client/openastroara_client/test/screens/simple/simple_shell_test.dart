@@ -59,6 +59,7 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -580,6 +581,22 @@ class _AssistantFailed extends GuidingAssistantNotifier {
       loaded: true);
 }
 
+/// A run measuring 30 s into 120 s, then done with one suggestion.
+class _AssistantRunning extends GuidingAssistantNotifier {
+  @override
+  GuidingAssistantState build() => GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson(
+          {'connected': true, 'state': 'measuring', 'duration_sec': 120, 'elapsed_sec': 30}),
+      loaded: true);
+  void finish() => state = GuidingAssistantState(
+      status: GuidingAssistantStatus.fromJson({
+        'connected': true,
+        'state': 'done',
+        'recommendations': {'exposure_sec': 2},
+      }),
+      loaded: true);
+}
+
 /// A finished run with all six suggestions waiting: the Tools tab's longest list.
 class _AssistantDoneAll extends GuidingAssistantNotifier {
   @override
@@ -650,6 +667,15 @@ class _GuiderAt extends GuiderStatusNotifier {
     refreshes++;
     state = AsyncData(_wire(rig));
   }
+}
+
+/// No guider configured: the rig answers no status at all.
+class _NoGuider extends GuiderStatusNotifier {
+  int refreshes = 0;
+  @override
+  Future<GuiderStatus?> build() async => null;
+  @override
+  Future<void> refresh([GuiderClient? client]) async => refreshes++;
 }
 
 class _GuiderCalls extends _GuiderUp {
@@ -776,9 +802,12 @@ class _BahtinovReading extends BahtinovFocusNotifier {
   }
 }
 
-class _GuideFrame extends GuideFocusNotifier {
+/// The guider's live view with a looping frame.
+class _GuiderLiveFrame extends GuiderLiveNotifier {
   @override
-  GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
+  GuiderLiveState build() => GuiderLiveState(frame: Uint8List.fromList(_png));
+  @override
+  Future<void> refresh() async {}
 }
 
 class _ManualPick extends MainFocusMethodNotifier {
@@ -1235,10 +1264,11 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
-  testWidgets("Preview with Guide picked fills the screen with the guide camera's frames", (tester) async {
+  testWidgets("Preview with Guide picked fills the screen with the guider's looping frames (#1875 slice 3)",
+      (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
-      guideFocusProvider.overrideWith(_GuideFrame.new),
-      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+      guiderLiveProvider.overrideWith(_GuiderLiveFrame.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('looping')),
     ]);
     await tester.pump();
     expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main camera to start');
@@ -1442,8 +1472,8 @@ void main() {
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
   });
 
-  testWidgets("with the histogram showing, Tools with every suggestion listed keeps Guide's height and scrolls inside (#1759)",
-      (tester) async {
+  testWidgets("with the histogram showing, Tools with every suggestion listed grows past Guide's height and scrolls "
+      'only past the room above the bottom row (#1759, #1875 slice 3)', (tester) async {
     // 1.0x for the reason the Tools step above gives: the test font wraps the prose far more than the iPad's.
     final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
         gear: [guiderStatusProvider.overrideWith(_GuiderUp.new), guidingAssistantProvider.overrideWith(_AssistantDoneAll.new)]);
@@ -1458,17 +1488,15 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
     await tester.pump();
     expect(find.byType(CheckboxListTile), findsNWidgets(6), reason: 'precondition: the whole list shows');
-    final scroll = tester.state<ScrollableState>(
-        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
-    expect(scroll.position.maxScrollExtent, 0, reason: 'the panel fits: no scrolling outside it');
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
-    expect(panel.height, guideHeight, reason: "the panel keeps the Guide tab's height");
-    expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
-    // A list longer than the room scrolls inside the panel, down to Apply.
+    expect(panel.height, greaterThan(guideHeight), reason: 'the panel takes the height its content needs');
+    final room = tester.getRect(
+        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
+    expect(room.bottom, lessThanOrEqualTo(768 - kSimpleInset), reason: 'the room ends above the bottom row');
+    // A list longer than the room scrolls, down to Apply.
     await tester.ensureVisible(find.text('Apply 6 suggestions'));
     await tester.pump();
     expect(find.text('Apply 6 suggestions').hitTestable(), findsOneWidget);
-    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))), panel, reason: 'the panel did not move or grow');
   });
 
   testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",
@@ -2501,6 +2529,140 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
   }
+
+  testWidgets("a plan's autofocus shows one Focus pill; the Plan pill returns once it ends (rig 2026-11-13, #1875 slice 3)",
+      (tester) async {
+    final live = _LiveSweeping();
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Run autofocus'),
+        gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    await tester.pump();
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join('|');
+    expect(pill(), contains('Run autofocus'));
+    live.sweep();
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(pill(), contains('Focus'));
+    expect(pill(), isNot(contains('Run autofocus')), reason: 'one pill for one routine');
+    live.state = const AutofocusLive();
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(pill(), contains('Run autofocus'), reason: 'the Plan pill returns');
+  });
+
+  testWidgets("a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
+      (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running,
+            currentInstructionDescription: 'Start guiding · Guider - Calibrating'),
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    final text = tester
+        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text, contains('Start guiding · Guider calibrating · West step 3'));
+    expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
+  });
+
+  testWidgets('the Guiding Assistant has its own pill with time left on its bar; the Done pill fades after 10 s '
+      '(#1875 slice 3)', (tester) async {
+    final guider = _GuiderAt('assistant');
+    final ga = _AssistantRunning();
+    await _pump(tester, const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(() => ga)]);
+    await tester.pump();
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    String text() => tester
+        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text(), contains('Guiding Assistant'));
+    expect(text(), contains('01:30 left'));
+    expect(text(), isNot(contains('Guider')), reason: 'not the generic Guider pill');
+    final bar = tester.widget<LinearProgressIndicator>(find.descendant(of: pills, matching: find.byType(LinearProgressIndicator)));
+    expect(bar.value, closeTo(0.25, 0.01));
+    guider
+      ..rig = 'stopped'
+      ..at('stopped');
+    ga.finish();
+    await tester.pump();
+    expect(text(), contains('Done. 1 suggestion to apply.'));
+    await tester.pump(const Duration(seconds: 5));
+    expect(text(), contains('Done. 1 suggestion to apply.'), reason: 'still there at 5 s');
+    await tester.pump(const Duration(seconds: 6));
+    await _letPillLeave(tester);
+    expect(text(), isNot(contains('Guiding Assistant')), reason: 'gone after 10 s');
+  });
+
+  testWidgets("a paused plan keeps its pill while an autofocus runs (#1884 audit)", (tester) async {
+    final live = _LiveSweeping();
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.pausedAwaitingUser, currentInstructionDescription: 'Flip the mount'),
+        gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    await tester.pump();
+    live.sweep();
+    await tester.pump();
+    await _letPillLeave(tester);
+    final text = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join('|');
+    expect(text, contains('Plan paused'), reason: 'a paused plan waits for the person: its pill stays');
+  });
+
+  testWidgets('with no guider at all, Simple Mode does not keep asking for one (#1884 audit)', (tester) async {
+    final guider = _NoGuider();
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    for (var i = 0; i < 25; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(guider.refreshes, 0);
+  });
+
+  testWidgets("the Guider panel stays put when its tab or the guider's routine changes (#1884 audit)", (tester) async {
+    final guider = _GuiderAt('stopped');
+    await _pump(tester, const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(_AssistantDoneAll.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = find.byKey(const Key('simple-guide-panel'));
+    final top = tester.getRect(panel).top;
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tuning')));
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'Tuning');
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'Tools, every suggestion listed: the tallest tab');
+    await tester.tap(find.byKey(const Key('simple-guider-tab-guide')));
+    await tester.pump();
+    guider
+      ..rig = 'calibrating'
+      ..at('calibrating');
+    await tester.pump();
+    expect(tester.getRect(panel).top, top, reason: 'calibration started');
+  });
 
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
     final container = await _pump(tester, const Size(1024, 768),
@@ -5181,7 +5343,22 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     final idle = guider.refreshes;
     await tester.pump(const Duration(seconds: 5));
-    expect(guider.refreshes, idle, reason: 'idle: no more polling');
+    expect(guider.refreshes, lessThanOrEqualTo(idle + 1), reason: 'idle: a slow read, not every 2 s');
+  });
+
+  testWidgets('a guider that starts while the last read said stopped shows without a visit to Advanced Mode '
+      '(rig 2026-11-13, #1875 slice 3)', (tester) async {
+    // A plan's Start guiding runs on the rig: nothing pushes the guider's new state to the app.
+    final guider = _GuiderAt('stopped');
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    expect(find.ancestor(of: find.textContaining('Guiding'), matching: pills), findsNothing);
+    guider.rig = 'guiding';
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(find.ancestor(of: find.textContaining('Guiding'), matching: pills), findsOneWidget);
   });
 
   testWidgets('concurrent things each get a pill, stacked: a frame and the guider both show (user, 2026-11-04)',

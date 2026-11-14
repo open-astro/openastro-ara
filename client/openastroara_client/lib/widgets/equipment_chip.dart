@@ -22,18 +22,29 @@ class EquipmentChipCompact extends InheritedWidget {
   const EquipmentChipCompact({
     super.key,
     required this.compact,
+    this.touch = false,
     required super.child,
   });
 
   final bool compact;
 
+  /// #1777 — an upright phone's strip: each icon a 44 px square target with
+  /// 4 px either side, so 8 px lie between neighbours.
+  final bool touch;
+
   static bool? maybeOf(BuildContext context) => context
       .dependOnInheritedWidgetOfExactType<EquipmentChipCompact>()
       ?.compact;
 
+  static bool touchOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<EquipmentChipCompact>()
+          ?.touch ??
+      false;
+
   @override
   bool updateShouldNotify(EquipmentChipCompact oldWidget) =>
-      compact != oldWidget.compact;
+      compact != oldWidget.compact || touch != oldWidget.touch;
 }
 
 /// Under it, chips for devices that aren't connected draw nothing: Simple
@@ -83,7 +94,8 @@ class EquipmentChip extends StatelessWidget {
     final compact =
         EquipmentChipCompact.maybeOf(context) ??
         MediaQuery.sizeOf(context).shortestSide < kEquipmentChipCompactWidth;
-    return Semantics(
+    final touch = compact && EquipmentChipCompact.touchOf(context);
+    final chip = Semantics(
       label: '$label (${status.name})',
       // Either tap or long-press makes this chip interactive.
       button: onTap != null || onLongPress != null,
@@ -94,8 +106,14 @@ class EquipmentChip extends StatelessWidget {
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(6),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            width: compact
+            padding: touch
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            alignment: touch ? Alignment.center : null,
+            height: touch ? 44 : null,
+            width: touch
+                ? 44
+                : compact
                 ? kEquipmentChipCompactChipWidth
                 : kEquipmentChipWidth,
             child: Column(
@@ -132,6 +150,12 @@ class EquipmentChip extends StatelessWidget {
         ),
       ),
     );
+    return touch
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: chip,
+          )
+        : chip;
   }
 }
 

@@ -17,6 +17,9 @@ import '../../models/guider_status.dart';
 import '../../services/equipment_driver_api.dart' show deviceDriverProvider;
 import '../../services/storage_space_api.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/guider/guiding_assistant_state.dart';
+import '../../state/guider/guider_live_state.dart';
+import '../../models/guiding_assistant.dart' show GuidingAssistantStatus;
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -61,12 +64,11 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
-    show simpleGuiderColour, simpleGuiderPendingProvider;
-import 'simple_focus_panel.dart'
     show
-        SimpleGuideLiveShutter,
-        kSimpleGuideExposures,
-        simpleGuideExposureProvider;
+        SimpleGuiderExposureTile,
+        simpleGuiderColour,
+        simpleGuiderExposureText,
+        simpleGuiderPendingProvider;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
@@ -122,7 +124,50 @@ bool simplePreviewGuide(WidgetRef ref) {
   // A running loop keeps its Stop even while the guider status is briefly gone.
   if (ref.watch(guideFocusProvider.select((g) => g.status.active))) return true;
   final guider = ref.watch(guiderStatusProvider).value;
-  return guider != null && guider.isConnected && !guideFocusBusy(guider);
+  // The guider's own loop is Preview's (#1875 slice 3): only a guiding
+  // phase takes the camera back.
+  return guider != null &&
+      guider.isConnected &&
+      (simpleGuideLooping(guider) || !guideFocusBusy(guider));
+}
+
+/// The guider loops plain frames, a star picked or not: Preview › Guide's
+/// loop (#1875 slice 3).
+bool simpleGuideLooping(GuiderStatus? guider) =>
+    guider != null &&
+    guider.isConnected &&
+    const {
+      GuiderRuntimeState.looping,
+      GuiderRuntimeState.starSelected,
+      GuiderRuntimeState.starLost,
+    }.contains(guider.runtimeState);
+
+/// Preview › Guide's shutter: loops the guider's plain frames, and its square
+/// stops them. A guide-camera focus loop found running gets its stop here
+/// too; focusing the guide camera stays in Focus › Guide (#1875 slice 3).
+class SimplePreviewGuideShutter extends ConsumerWidget {
+  const SimplePreviewGuideShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final focusLoop = ref.watch(guideFocusProvider.select((g) => g.status.active));
+    final looping = simpleGuideLooping(ref.watch(guiderStatusProvider).value);
+    final busy = ref.watch(guiderLiveProvider.select((s) => s.busy));
+    final live = ref.read(guiderLiveProvider.notifier);
+    return SimpleShutterButton(
+      start: true,
+      running: focusLoop || looping,
+      label: focusLoop || looping ? l10n.previewGuideLoopStop : l10n.previewGuideLoopStart,
+      onPressed: busy
+          ? null
+          : focusLoop
+          ? ref.read(guideFocusProvider.notifier).stop
+          : looping
+          ? live.stop
+          : live.loop,
+    );
+  }
 }
 
 /// Preview is the screen on show and it is on the guide camera, so what is
@@ -145,9 +190,10 @@ class _PreviewShot extends Notifier<PreviewShot> {
 /// "Guide" over its own exposure and gain.
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
-    final seconds = ref.watch(simpleGuideExposureProvider).round();
-    final gain = ref.watch(phd2SettingsProvider).guideCameraGain;
-    return '${context.l10n.focusScopeGuide}\n$seconds s · $gain';
+    // The guider's own exposure: the one Preview › Guide's loop runs at.
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
+    return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
@@ -332,9 +378,11 @@ class _GuideInfoTiles extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final status = ref.watch(guideFocusProvider.select((g) => g.status));
-    final seconds = status.active
-        ? status.exposureSec
-        : ref.watch(simpleGuideExposureProvider);
+    // A focus loop found running reports its own exposure; otherwise the
+    // frames are the guider's loop, at the guider's exposure.
+    final guiderMs = ref.watch(
+      phd2SettingsProvider.select((p) => p.guideExposureMs),
+    );
     final gain = ref.watch(
       phd2SettingsProvider.select((p) => p.guideCameraGain),
     );
@@ -344,7 +392,11 @@ class _GuideInfoTiles extends ConsumerWidget {
         (l10n.previewStars, status.latest?.stars.toString() ?? '—'),
         (
           l10n.previewExposure,
-          formatExposure(Duration(milliseconds: (seconds * 1000).round())),
+          status.active
+              ? formatExposure(
+                  Duration(milliseconds: (status.exposureSec * 1000).round()),
+                )
+              : simpleGuiderExposureText(l10n, guiderMs),
         ),
         (l10n.deviceGain, '$gain %'),
       ],
@@ -493,14 +545,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[
-            SimplePresetTile<double>(
-              key: const Key('simple-exposure'),
-              label: context.l10n.previewExposure,
-              value: ref.watch(simpleGuideExposureProvider),
-              options: kSimpleGuideExposures,
-              format: (s) => '${s.round()} s',
-              onSelected: ref.read(simpleGuideExposureProvider.notifier).set,
-            ),
+            // The shutter beside it loops the guider, at the guider's
+            // exposure (#1884 review).
+            const SimpleGuiderExposureTile(),
             const SimpleGuideGainSlider(),
           ] else ...[
             SimplePresetTile<Duration>(
@@ -575,14 +622,16 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final guideActive = ref.watch(
       guideFocusProvider.select((g) => g.status.active),
     );
+    // The guider's plain loop is Preview › Guide's own (#1875 slice 3).
+    final running = guideActive || simpleGuideLooping(guider);
     // A guide loop already running keeps its row: its stop is reached there.
     final blocked =
-        guideFocusBlocker(l10n, guider, active: guideActive) ??
-        (ref.watch(mainCameraBusyProvider) && !guideActive
+        guideFocusBlocker(l10n, guider, active: running) ??
+        (ref.watch(mainCameraBusyProvider) && !running
             ? l10n.shellMainCameraBusy
             : null);
     // Leaving Guide while its loop runs would strand it with no stop.
-    final lockedMain = guideActive ? l10n.previewStopGuideFrames : null;
+    final lockedMain = running ? l10n.previewStopGuideFrames : null;
     Widget row(
       PreviewCamera value,
       String id,
@@ -709,7 +758,7 @@ class SimpleShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (simplePreviewGuide(ref)) return const SimpleGuideLiveShutter();
+    if (simplePreviewGuide(ref)) return const SimplePreviewGuideShutter();
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
@@ -1636,10 +1685,36 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     }
   }
 
+  /// The Guiding Assistant's run, followed from the guider's word that it
+  /// measures until its Done pill has shown [_kAssistantDone] (#1875 slice 3).
+  bool _assistantWatch = false;
+  Timer? _assistantDone;
+  static const _kAssistantDone = Duration(seconds: 10);
+
+  /// The assistant's state while it is followed: null once it is not.
+  GuidingAssistantStatus? _syncAssistant(bool guiderSaysAssistant) {
+    if (guiderSaysAssistant) _assistantWatch = true;
+    if (!_assistantWatch) return null;
+    final status = ref.watch(guidingAssistantProvider).status;
+    if (guiderSaysAssistant || status.isRunning) {
+      _assistantDone?.cancel();
+      _assistantDone = null;
+    } else if (status.isDone) {
+      _assistantDone ??= Timer(_kAssistantDone, () {
+        if (mounted) setState(() => _assistantWatch = false);
+      });
+    } else {
+      _assistantWatch = false;
+      return null;
+    }
+    return status;
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
     _warmQuiet?.cancel();
+    _assistantDone?.cancel();
     super.dispose();
   }
 
@@ -1765,7 +1840,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final guiding = guider?.isCorrecting ?? false;
     final guiderOn = guider?.isBusy ?? false;
     final guiderAsk = ref.watch(simpleGuiderPendingProvider);
+    final assistant = _syncAssistant(
+      guider?.runtimeState == GuiderRuntimeState.assistant,
+    );
+    final assistantRunning = assistant != null &&
+        (assistant.isRunning ||
+            guider?.runtimeState == GuiderRuntimeState.assistant);
     final planActive = run?.state?.isActive ?? false;
+    final planCalibrating = planActive &&
+        guider != null &&
+        guider.runtimeState == GuiderRuntimeState.calibrating;
     final polar = ref.watch(polarAlignLiveProvider);
     final af = ref.watch(autofocusLiveProvider).run;
     final bahtinov = ref.watch(
@@ -1866,13 +1950,26 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       // A running plan says what it's doing (cooling, slewing, centring,
       // focusing), with how far the step has got along the pill's foot.
       // #1596: a finished run that imaged nothing keeps its reason on the pill.
+      // A running plan's autofocus has the Focus pill alone; this one returns
+      // after it (#1875 slice 3). Paused or pausing, it stays: it answers the
+      // person.
       if ((planActive || run?.reasonText != null) &&
+          !(af.isRunning && planActive && !paused && !pausing) &&
           step != null &&
           step.isNotEmpty)
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
-          pausing ? l10n.planPausingAfterFrame : step,
+          pausing
+              ? l10n.planPausingAfterFrame
+              // The Guider's calibration inside a plan: its leg on this pill,
+              // and no Guider pill of its own (#1875 slice 3).
+              : planCalibrating
+              ? switch (guider.calibrationText(l10n)) {
+                  final leg? => l10n.previewPlanGuiderCalibratingLeg(leg),
+                  null => l10n.previewPlanGuiderCalibrating,
+                }
+              : step,
           // DESIGN.md status rule: running is working (green); paused by Ara
           // is on its way back (blue); paused waiting for the user needs a
           // look (amber).
@@ -2174,6 +2271,32 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
         )
+      // The Guiding Assistant measuring, time left on its bar; its Done pill
+      // stays 10 s (#1875 slice 3).
+      else if (assistant != null)
+        assistantRunning
+            ? _PillData(
+                SimpleStatusOrigin.guide,
+                l10n.guideToolAssistant,
+                switch ((assistant.durationSec, assistant.elapsedSec)) {
+                  (final d?, final e?) when assistant.state == 'measuring' =>
+                    l10n.guideAssistantLeft(simpleCountdown((d - e).ceil())),
+                  _ => l10n.guideToolMeasuring,
+                },
+                AraColors.accentConnected,
+                working: true,
+                spoken: l10n.guideToolAssistant,
+                footProgress: assistant.progress,
+              )
+            : _PillData(
+                SimpleStatusOrigin.guide,
+                l10n.guideToolAssistant,
+                l10n.guideToolDone(
+                  assistant.recommendations?.suggestions.length ?? 0,
+                ),
+                AraColors.accentConnected,
+                spoken: l10n.guideToolAssistant,
+              )
       else if (guiding)
         _PillData(
           SimpleStatusOrigin.guide,
@@ -2187,7 +2310,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           working: guiderStatusLevel(guider) == StatusLevel.active,
           spoken: l10n.shellGuiding,
         )
-      else if (guiderOn)
+      else if (guiderOn && !planCalibrating)
         _PillData(
           SimpleStatusOrigin.guide,
           l10n.deviceGuider,

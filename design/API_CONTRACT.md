@@ -40,6 +40,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-14 — #1875 the daemon serves the queued plan: `GET /sequences/{id}/plan`
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/plan` (`SequencePlanDto`, `SequencePlanTargetDto`, `SequencePlanRowDto`); `SequenceRunStateDto.plan_frames_done` and `.current_block_name`; the same two keys on the `sequence.progress` WebSocket payload.
+
+**Decision:** the queued plan is read off the rig, so any client rebuilds Simple Mode's queue instead of relying on the client that queued it. The route returns `{sequence_id, run_id?, targets[]}`; each target is `{name, calibration, ra_deg?, dec_deg?, gain?, flats, dawn_provider?, rows[]}` and each row `{filter_name?, exposure_seconds?, frames_total, frames_done}`. Entries are the child containers of the body's top, in queue order; the root children named `Flats` and `Calibration` are entries with `calibration: true` and no position. A row is a loop container (its `LoopCondition.Iterations` is `frames_total`, its `CompletedIterations` clamped to that is `frames_done`; a negative count reads 0) or, in a calibration entry, a flat set (`FrameCount`, done once finished); its filter is the last `SwitchFilter` before it. `ra_deg`/`dec_deg` are J2000 degrees from the block's horizon condition (else a DSO container's target); an unset position is null. `gain` is the first light exposure's gain, null for the profile default (-1). `flats` is `none`, `after_target` (a flat set in the block) or `end_of_night`: the block holds an `Annotation` whose text is exactly `Flats: end of night`, the one place the rig records that choice. `dawn_provider` is the NINA `$type` of the block's `TimeCondition` provider. While a run holds a tree the route reads it (live edits show); an ended run still retained (completed, stopped or failed) serves the counts it left only while the stored body is unchanged since the run released its tree; else it reads the stored body (an edit after the run shows), so a queue that has not started is served too. An unknown sequence is a 404 problem. `plan_frames_done` is the sum of every served row's `frames_done`; `current_block_name` is the entry whose block holds the running leaf, null when none does (the run's own start and end steps), and unlike `current_target_name` it names a target-less block. A client re-reads the plan when either changes.
+
+**Reasoning:** the session's frame count (`frames_captured`) says nothing about one loop's count (rig night 2026-11-13: a loop read 0/240 while the session had filed 16). The plan is a read-only view like `SequenceRunStateDto`, never a sequence format (ADR 0018): NINA's JSON stays the only one, and the marker is an ordinary NINA item. Two scalars on the existing progress frame need no new event.
+
+**Spec ref:** `Services/SequencePlanBuilder.cs`, `Services/SequencerService.cs` (`GetPlanAsync`, `RunState.PlanSnapshot`), `Endpoints/SequenceEndpoints.cs`.
+
+**Related:** #1875 slice 1; tests `SequencePlanTest`, `SequencerServiceTest.Progress_frames_carry_the_plans_own_count_and_the_block_it_runs`.
+
+---
+
 ## 2026-11-12 — #1757 the dark and bias library belongs to one camera
 
 **Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.
@@ -220,6 +234,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1storage`; `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs` (`GetStorageSettings`, `PutStorageSettings`, `StorageETag`); client `lib/state/settings/loaded_section.dart`, `lib/services/profile_api.dart`.
 
 **Related:** #1807, ADR 0015, ADR 0012, ADR 0005; tests `ProfileStorageEndpointTest`, client `loaded_section_test`, `storage_load_before_save_test`.
+
+---
+
+### 2026-11-13 — Live guide-camera loop: refused while the Guider is busy, and it takes the camera from setup activities (#1809)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/guider/live/loop` (amends the 2026-10-16 live-view entry).
+
+**Decision:** besides 409 when no guider is connected, `live/loop` answers a plain 409 (the reason in `detail`, e.g. "the guider is guiding — stop guiding before …") while the guider is guiding, calibrating, paused or has lost its star. When polar alignment or guide focus holds the Guide Camera, `live/loop` stops that activity first and then loops; the later request wins. Guiding later takes the camera from the loop without stopping it. `stop`, `select` and `deselect` are unchanged.
+
+**Reasoning:** ADR 0016 puts every hand-over of the Guide Camera in one custody module (`GuideCameraCustody`). Looping under an active guide would break guiding, so it is a state conflict the client can explain (409), not a 500. Stopping the older setup holder matches how polar alignment and guide focus already take the camera from each other.
+
+**Spec ref:** `Services/GuideCameraCustody.cs` (`TakeAsync`), `Services/GuiderLiveService.cs` (`LoopAsync`), `Endpoints/EquipmentEndpoints.cs` (`GuiderLiveResultAsync`).
+
+**Related:** ADR 0016, PR #1879.
 
 ---
 

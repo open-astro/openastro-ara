@@ -202,6 +202,15 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("GetSequenceState");
 
+        seq.MapGet("/{id:guid}/plan",
+                async (Guid id, ISequencerService svc, CancellationToken ct) => {
+                    var plan = await svc.GetPlanAsync(id, ct);
+                    return plan is null ? Results.NotFound() : Results.Ok(plan);
+                })
+           .Produces<SequencePlanDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .WithName("GetSequencePlan");
+
         seq.MapPost("/{id:guid}/start",
                 (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, IEquipmentIdentityReconciler identity, CancellationToken ct) =>
                     StartSequenceAsync(id, request, key, svc, bahtinov, camera, ct, identity))

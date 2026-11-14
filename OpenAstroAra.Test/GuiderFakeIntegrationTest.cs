@@ -291,31 +291,44 @@ namespace OpenAstroAra.Test {
             fake.OnRpc("get_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 300 });
             fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = false });
             var order = new List<string>();
-            svc.PolarAlignActive = () => true;
-            svc.EndPolarAlignAsync = _ => {
+            // The open alignment: a holder of the camera whose stop is "end the alignment".
+            Task OpenAlignmentAsync() => svc.Custody.TakeAsync(CameraUse.PolarAlign, svc, _ => {
                 lock (order) {
                     order.Add("end-polar-align");
                 }
                 return Task.CompletedTask;
-            };
+            }, CancellationToken.None);
+            await OpenAlignmentAsync().ConfigureAwait(false);
+            var releasesBefore = fake.ReceivedMethods.Count(m => m == "set_pa_session");
 
-            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+            await svc.Custody.TakeForGuidingAsync(svc, CancellationToken.None).ConfigureAwait(false);
 
-            Assert.That(order, Has.Count.EqualTo(1).And.Contains("end-polar-align"), "the alignment is ended first");
-            Assert.That(fake.ReceivedMethods, Does.Contain("set_pa_session"), "then the guider's lease is released");
+            Assert.That(order, Is.EqualTo(new List<string> { "end-polar-align" }), "the alignment is ended first");
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_pa_session"), Is.GreaterThan(releasesBefore), "then the guider's lease is released");
 
             // Guide pressed by hand (the REST start) takes the same path: end, then release, then guide.
-            var releasesBefore = fake.ReceivedMethods.Count(m => m == "set_pa_session");
+            await OpenAlignmentAsync().ConfigureAwait(false);
+            releasesBefore = fake.ReceivedMethods.Count(m => m == "set_pa_session");
             await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => order.Count == 2
                     && fake.ReceivedMethods.Count(m => m == "set_pa_session") > releasesBefore).ConfigureAwait(false), Is.True,
                 "the manual Guide ended the alignment and released the lease");
+        }
 
-            // Without the hook a running alignment keeps its lease: no release is sent.
-            svc.EndPolarAlignAsync = null;
-            var before = fake.ReceivedMethods.Count(m => m == "set_pa_session");
-            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
-            Assert.That(fake.ReceivedMethods.Count(m => m == "set_pa_session"), Is.EqualTo(before));
+        [Test]
+        public async Task A_stale_lease_is_released_before_guiding_and_never_stops_the_start() {
+            // 2026-10-03: a live-focus loop that died with a daemon restart left the guider's lease standing
+            // with nothing holding it, and every guide request after that was refused.
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("get_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 300 });
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = false });
+
+            await svc.Custody.TakeForGuidingAsync(svc, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods, Does.Contain("get_pa_session"));
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_pa_session"), "no holder here: the reported lease is stale and released");
         }
 
         private sealed class RecordingPaResidualLog : IPaResidualLog {
@@ -2112,6 +2125,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_delete_while_guide_focus_holds_the_camera_is_queued_and_the_preview_says_so() {
+            // ADR 0016: custody, not only a polar alignment, keeps the twin. The guider reads Stopped
+            // between focus frames, but the camera is still the focus loop's.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = true });
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            await svc.Custody.TakeAsync(CameraUse.GuideFocus, svc, _ => Task.CompletedTask, CancellationToken.None).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var preview = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(preview.CanDeleteNow, Is.False);
+            Assert.That(preview.Reason, Does.Contain("focus loop"));
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("focus loop"));
+            Assert.That(daemon.SetConnected, Is.Empty, "the focus loop's equipment is never released");
+            Assert.That(daemon.Deleted, Is.Empty);
+        }
+
+        [Test]
         public async Task A_queued_delete_of_a_shared_twin_still_deletes_it_on_the_next_connect() {
             // Two ARA profiles named "Rig" share one twin; the user deleted one with the box ticked
             // while no guider was connected. The immediate path would have deleted the twin, so the
@@ -2954,6 +2992,27 @@ namespace OpenAstroAra.Test {
                 await Assert.ThatAsync(() => focus.StartAsync(new GuideFocusStartRequestDto(), CancellationToken.None),
                     Throws.InstanceOf<InvalidOperationException>().With.Message.Contain(RefusedSlot)).ConfigureAwait(false);
             }
+        }
+
+        [Test]
+        public async Task A_guide_camera_focus_start_takes_the_camera_from_a_polar_alignment_that_holds_it() {
+            // ADR 0016: the newer setup activity takes the camera (guide focus used to refuse while polar
+            // alignment held it); the alignment is stopped through its hand-over callback, then the focus loop leases.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 600 });
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            var alignmentStopped = 0;
+            await svc.Custody.TakeAsync(CameraUse.PolarAlign, svc, by => { alignmentStopped++; return Task.CompletedTask; }, CancellationToken.None).ConfigureAwait(false);
+            using var focus = new GuideFocusService(svc, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+
+            await focus.StartAsync(new GuideFocusStartRequestDto(0.1), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(alignmentStopped, Is.EqualTo(1));
+            Assert.That(svc.Custody.Holder, Is.EqualTo(CameraUse.GuideFocus));
+            await focus.StopAsync().ConfigureAwait(false);
+            Assert.That(svc.Custody.Holder, Is.Null, "Stop gives the camera back");
         }
 
         [Test]

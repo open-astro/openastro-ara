@@ -1,0 +1,454 @@
+<title>Ara Guider and Settings</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart, copied from design/preview/simple-guider-tools-mock.html.
+     Layout: a section switcher on top; each section is one iPad scene (panel left of the right rail) plus a note. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --panel: rgba(30,30,30,.94); --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --go: #2E7D32; --tile: #2C2C2C; --primary: #1565C0;
+    --red: #E53935; --dec: #EF5350; --ra: #42A5F5;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: var(--sel); color: #fff; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0; padding-block: 28px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; min-height: 40px; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .tabsTop { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--page); padding: 8px 0; }
+
+  .scenes { display: flex; flex-wrap: wrap; gap: 20px; }
+  .scene { flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .scene h2 { font-size: 13px; font-weight: 600; color: var(--text2); margin: 0; }
+  .ipad { min-height: 600px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: var(--panel); border: 1px solid #3a3a3a; border-radius: 12px; }
+  .rail { right: 12px; top: 150px; width: 72px; padding: 10px 6px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .rail .name { font-weight: 600; font-size: 13px; text-align: center; }
+  .shutter { width: 56px; height: 56px; border-radius: 50%; border: 3px solid #e8e8e8; display: grid; place-items: center; background: none; cursor: pointer; padding: 0; }
+  .shutter svg { width: 22px; height: 22px; fill: #e8e8e8; }
+  .shutter.stop svg { fill: var(--red); }
+  .chip { width: 60px; min-height: 56px; border-radius: 8px; background: #22324a; display: grid; place-items: center; font-size: 12px; text-align: center; padding: 4px; }
+  .panel { right: 96px; top: 16px; width: min(340px, calc(100% - 108px)); padding: 14px 16px; display: flex; flex-direction: column; max-height: calc(100% - 32px); overflow: auto; }
+  .panel.fixed { bottom: auto; height: 400px; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 8px; font: 600 17px var(--sys); }
+  .head span { min-width: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ok); }
+  .dot.amber { background: var(--busy); } .dot.red { background: var(--red); } .dot.grey { background: #777; }
+  .dot.blink { animation: blink 1.4s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .dot.blink { animation: none; } }
+  .cap { color: var(--text2); font-size: 13px; margin: 4px 0 10px; }
+  .tabs { display: flex; background: var(--tile); border-radius: 8px; overflow: hidden; flex: none; }
+  .tabs span { flex: 1; text-align: center; min-height: 44px; display: grid; place-items: center; color: var(--text2); font-size: 15px; }
+  .tabs span.on { background: var(--sel); color: #fff; border-radius: 8px; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 6px; }
+  body:not(.marks) .new { outline: none; }
+
+  /* Calibration plot */
+  .calbox { margin-top: 12px; }
+  .calbox svg { width: 100%; height: auto; display: block; background: #151515; border-radius: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  .figs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .fig { background: var(--tile); border-radius: 8px; padding: 8px 10px; }
+  .fig .k { color: var(--text2); font-size: 12px; } .fig .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Tools rows (from simple-guider-tools-mock.html) */
+  .tools { margin-top: 6px; display: flex; flex-direction: column; }
+  .tool { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 12px 0; }
+  .tool + .tool { border-top: 1px solid var(--border); }
+  .tool h3 { margin: 0; font: 600 15px/1.3 var(--sys); align-self: center; }
+  .tool .what { grid-column: 1 / -1; color: var(--text2); font-size: 13px; }
+  .tool .state { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; font-size: 13px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tool .state .dot { transform: translateY(1px); }
+  .clip2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .btn { min-height: 44px; min-width: 104px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+         color: var(--text); font: 600 14px var(--sys); cursor: pointer; }
+  .btn[disabled] { color: #6c6c6c; border-color: #333; cursor: default; }
+  .bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: #333; overflow: hidden; margin-top: 6px; }
+  .bar b { display: block; height: 100%; background: var(--ok); width: 0; transition: width .9s linear; }
+  @media (prefers-reduced-motion: reduce) { .bar b { transition: none; } }
+  .sugg { grid-column: 1 / -1; margin: 6px 0 0; padding: 0; list-style: none; }
+  .sugg label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+  .sugg input { width: 18px; height: 18px; margin: 0; accent-color: var(--ok); }
+  .sugg .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text2); }
+  .go { grid-column: 1 / -1; margin-top: 8px; min-height: 44px; border: 0; border-radius: 8px; background: var(--go); color: #fff; font: 600 14px var(--sys); cursor: pointer; }
+
+  /* Status card (top-left pills) */
+  .card { left: 16px; top: 16px; width: 270px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .pill { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pill b { font-weight: 600; }
+  .pill .foot { height: 3px; background: #333; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .pill .foot b { display: block; height: 100%; background: var(--ok); }
+
+  /* Preview popover + frame */
+  .frame { position: absolute; inset: 0; display: grid; place-items: center; }
+  .frame canvas { width: 100%; height: 100%; }
+  .pop { right: 96px; top: 150px; width: 260px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px; }
+  .row .k { color: var(--text2); font-size: 13px; }
+  .tile { background: var(--tile); border-radius: 8px; padding: 8px 10px; min-height: 52px; display: flex; flex-direction: column; justify-content: center; }
+  .tile .k { color: var(--text2); font-size: 12px; } .tile .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .slider { width: 100%; accent-color: var(--sel); }
+  .gone { text-decoration: line-through; color: #8a5a5a; font-size: 12px; }
+
+  /* Settings sheet */
+  .sheet { left: 16px; right: 96px; top: 16px; bottom: 16px; display: grid; grid-template-columns: 170px 1fr; overflow: hidden; }
+  .nav { border-right: 1px solid var(--border); padding: 12px 0; display: flex; flex-direction: column; }
+  .nav span { padding: 0 16px; min-height: 44px; display: flex; align-items: center; color: var(--text2); }
+  .nav span.on { color: #fff; background: #22324a; }
+  .body { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .body h3 { margin: 0; font: 600 13px var(--sys); color: var(--text2); letter-spacing: .04em; text-transform: uppercase; }
+  .stat { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+  .srow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+  .srow .t { font-weight: 600; } .srow .d { grid-column: 1 / -1; color: var(--text2); font-size: 13px; }
+  .btn.red { border-color: #7a2b2b; color: #FF8A80; }
+  .confirm { background: var(--tile); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .confirm .acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .fill { min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--red); color: #fff; font: 600 14px var(--sys); cursor: pointer; }
+  .ok { color: var(--ok); font-size: 13px; }
+
+  /* Exposure table */
+  .tblwrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text2); font-weight: 600; }
+  td.before { color: #FFAB91; } td.after { color: #A5D6A7; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .rule { background: var(--tile); border-radius: 10px; padding: 12px; }
+  .rule b { display: block; margin-bottom: 4px; }
+  .tilesrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tilesrow .tile { min-width: 110px; }
+</style>
+
+<div class="page">
+  <h1>Guider, Preview › Guide and Settings: second-night fixes</h1>
+  <p class="note">Mock for the smaller decisions from the 2026-11-13 Simple Mode night. Pick a section. Dashed amber marks what is new against master ff50b3571. Values come from tonight's guide log where there is one, otherwise they are examples.</p>
+  <div class="tabsTop controls">
+    <span class="seg" id="sec">
+      <button data-v="cal" aria-pressed="true">Calibrating</button>
+      <button data-v="grow" aria-pressed="false">Panel fits content</button>
+      <button data-v="ga" aria-pressed="false">Guiding Assistant</button>
+      <button data-v="pg" aria-pressed="false">Preview › Guide</button>
+      <button data-v="stats" aria-pressed="false">Settings › Rig › Reset Stats</button>
+      <button data-v="exp" aria-pressed="false">Exposure fields</button>
+    </span>
+    <span><span class="lbl">Marks</span><span class="seg" id="marks"><button data-v="on" aria-pressed="true">Show new</button><button data-v="off" aria-pressed="false">Hide</button></span></span>
+  </div>
+
+  <!-- 1. Calibrating -->
+  <section data-sec="cal">
+    <p class="note">While the guider calibrates, inside a Plan or from the Guider shutter, the Guider panel draws each step as the guider reports it, like the guider's own calibration plot. The Plan pill says the leg and step instead of "Start guiding · PHD2 - Calibrating". Rates and angles are tonight's: West 1.041 px/s at 66.2°, North 1.195 px/s at 158.1°, 1700 ms steps, 25 px distance.</p>
+    <div class="controls" style="margin-top:10px"><span class="lbl">Play</span><span class="seg" id="calPlay"><button data-v="run" aria-pressed="true">Running</button><button data-v="pause" aria-pressed="false">Hold</button><button data-v="reset" aria-pressed="false">Restart</button></span></div>
+    <div class="scenes" style="margin-top:10px">
+      <div class="scene">
+        <h2>Today</h2>
+        <div class="ipad">
+          <div class="p card"><div class="pill"><i class="dot amber"></i><b>Plan</b><span>Start guiding · PHD2 - Calibrating</span></div></div>
+          <div class="p panel">
+            <div class="head"><i class="dot"></i><span id="calOldHead">Calibrating · West step 3 · 11.9 px</span></div>
+            <div class="cap">Tap the shutter to stop.</div>
+            <div class="tabs"><span class="on">Guide</span><span>Tuning</span><span>Tools</span></div>
+            <div class="figs"><div class="fig"><div class="k">RMS</div><div class="v">–</div></div><div class="fig"><div class="k">Exposure</div><div class="v">2 s</div></div></div>
+            <p class="cap" style="margin-top:12px">No plot in Simple Mode. It is only in Advanced Mode's guide camera dialog.</p>
+          </div>
+          <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter stop"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span class="chip">Calib.</span></div>
+        </div>
+      </div>
+      <div class="scene">
+        <h2>Proposed</h2>
+        <div class="ipad">
+          <div class="p card new"><div class="pill"><i class="dot amber"></i><b>Plan</b><span id="calPill">Start guiding · Calibrating · West step 3</span></div></div>
+          <div class="p panel">
+            <div class="head"><i class="dot blink"></i><span id="calHead">Calibrating · West step 3 · 11.9 px</span></div>
+            <div class="cap">The plan starts imaging when calibration is done. Tap the shutter to stop.</div>
+            <div class="tabs"><span class="on">Guide</span><span>Tuning</span><span>Tools</span></div>
+            <div class="calbox new">
+              <svg id="calSvg" viewBox="0 0 300 220" role="img" aria-label="Calibration plot"></svg>
+              <div class="legend"><span><i style="background:var(--ra)"></i>West / East (RA)</span><span><i style="background:var(--dec)"></i>North / South (Dec)</span><span id="calLeg">West step 3 of ~15</span></div>
+            </div>
+            <div class="figs new">
+              <div class="fig"><div class="k">West rate</div><div class="v" id="wRate">–</div></div>
+              <div class="fig"><div class="k">North rate</div><div class="v" id="nRate">–</div></div>
+            </div>
+          </div>
+          <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter stop"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span class="chip">Calib.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Growing -->
+  <section data-sec="grow" hidden>
+    <p class="note">Today the panel is held to the Guide tab's height, so a long reason or the Tools list scrolls inside a box with empty screen below it. Proposed: the panel takes the height its content needs, up to the space between the status strip and the bottom row (chosen 14 Nov), and scrolls only past that. While calibrating, the plot takes the place of the RMS and Exposure figures.</p>
+    <div class="controls" style="margin-top:10px"><span class="lbl">State</span><span class="seg" id="growState"><button data-v="fail" aria-pressed="true">Long failure reason</button><button data-v="tools" aria-pressed="false">Tools, three rows</button></span></div>
+    <div class="scenes" style="margin-top:10px">
+      <div class="scene"><h2>Today: Guide tab's height, scrolls inside</h2><div class="ipad"><div class="p panel fixed" id="growOld"></div>
+        <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">Off</span></div></div></div>
+      <div class="scene"><h2>Proposed: grows to fit</h2><div class="ipad"><div class="p panel new" id="growNew"></div>
+        <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">Off</span></div></div></div>
+    </div>
+  </section>
+
+  <!-- 3. Guiding Assistant -->
+  <section data-sec="ga" hidden>
+    <p class="note">The Assistant row shows how far the measurement is, and the status card gets a Guiding Assistant pill with the same progress, so it can be followed from any screen. Today it only shows "Guider · Guiding Assistant", with no progress. Done keeps the result on the row; the Done pill fades after 10 s, like other result pills (chosen 14 Nov).</p>
+    <div class="controls" style="margin-top:10px"><span class="lbl">State</span><span class="seg" id="gaState"><button data-v="idle" aria-pressed="false">Not run yet</button><button data-v="meas" aria-pressed="true">Measuring</button><button data-v="done" aria-pressed="false">Done</button></span></div>
+    <div class="scenes" style="margin-top:10px">
+      <div class="scene"><h2>Proposed</h2><div class="ipad">
+        <div class="p card new" id="gaCard"></div>
+        <div class="p panel" style="top:150px">
+          <div class="head"><i class="dot" id="gaHeadDot"></i><span id="gaHead">Guiding Assistant</span></div>
+          <div class="cap" id="gaCap">Measuring how the mount drifts with guiding off.</div>
+          <div class="tabs"><span>Guide</span><span>Tuning</span><span class="on">Tools</span></div>
+          <div class="tools">
+            <div class="tool" id="gaRow"></div>
+            <div class="tool"><h3>Recalibrate</h3><button class="btn" disabled>Recalibrate</button><div class="what">Measures how the guide scope moves for each nudge.</div><div class="state"><i class="dot"></i>Calibrated at Dec −39°</div></div>
+          </div>
+        </div>
+        <div class="p rail" aria-hidden="true" style="top:16px"><span class="name">Guider</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">Off</span></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 4. Preview › Guide -->
+  <section data-sec="pg" hidden>
+    <p class="note">Tonight, Start on Preview › Guide ran the guide-camera focus loop (daemon log 20:42:06, 20:56:54, 21:02:52: "Guide-camera focus loop started"). Proposed: Start loops plain live frames from the guide camera. No focus routine, no Focus pill, no turn advice; focusing the guide camera stays in Focus › Guide. The Info toggle is gone from the popover, as decided.</p>
+    <div class="controls" style="margin-top:10px"><span class="lbl">Shutter</span><span class="seg" id="pgState"><button data-v="idle" aria-pressed="true">Idle</button><button data-v="live" aria-pressed="false">Live</button></span></div>
+    <div class="scenes" style="margin-top:10px">
+      <div class="scene"><h2>Today: the focus loop</h2><div class="ipad">
+        <div class="frame"><canvas id="pgOldCanvas" width="600" height="600"></canvas></div>
+        <div class="p card"><div class="pill"><i class="dot blink"></i><b>Focus</b><span>Guide camera · HFR 2.41 · turn back</span></div></div>
+        <div class="p pop">
+          <div class="row"><span class="k">Camera</span><span class="seg"><button aria-pressed="false">Main</button><button aria-pressed="true">Guide</button></span></div>
+          <div class="tile"><span class="k">Exposure</span><span class="v">2 s</span></div>
+          <div><span class="k" style="color:var(--text2);font-size:13px">Gain</span><input class="slider" type="range" value="60" aria-label="Gain (today)"></div>
+          <div class="row"><span class="k">Info</span><span class="seg"><button aria-pressed="true">On</button><button aria-pressed="false">Off</button></span></div>
+        </div>
+        <div class="p rail" aria-hidden="true"><span class="name">Preview</span><span class="shutter stop"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span class="chip">Guide<br>2 s</span></div>
+      </div></div>
+      <div class="scene"><h2>Proposed: plain live frames</h2><div class="ipad">
+        <div class="frame"><canvas id="pgCanvas" width="600" height="600"></canvas></div>
+        <div class="p card new" id="pgCard"></div>
+        <div class="p pop">
+          <div class="row"><span class="k">Camera</span><span class="seg"><button aria-pressed="false">Main</button><button aria-pressed="true">Guide</button></span></div>
+          <div class="tile"><span class="k">Exposure</span><span class="v">2 s</span></div>
+          <div><span class="k" style="color:var(--text2);font-size:13px">Gain</span><input class="slider" type="range" value="60" aria-label="Gain"></div>
+          <div class="cap new" style="margin:0">To focus the guide camera, use Focus › Guide.</div>
+        </div>
+        <div class="p rail"><span class="name">Preview</span><button class="shutter" id="pgShutter" aria-label="Start live frames"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button><span class="chip">Guide<br>2 s</span></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 5. Settings › Stats -->
+  <section data-sec="stats" hidden>
+    <p class="note">No Stats section in Settings (Diego, 14 Nov): a "Reset Stats" button row sits under Settings › Rig. Reset stops counting what is on file today: the frames stay on the disk, the album keeps them, but Stats count only what is taken from now on. Confirmation sits in the row that owns the control (DESIGN.md: no dialogs in Simple Mode). Rebuild from files is the second row, for when the numbers look wrong, and it is the way back from a reset.</p>
+    <div class="scenes" style="margin-top:10px">
+      <div class="scene"><div class="ipad">
+        <div class="p sheet">
+          <div class="nav"><span class="on">Rig</span><span>Devices</span><span>Camera (Main)</span><span>Mount</span><span>Focuser</span></div>
+          <div class="body" id="statsBody">
+            <h3>Rig</h3>
+            <div class="stat">
+              <div class="tile"><span class="k">Storage free</span><span class="v">212 GB</span></div>
+              <div class="tile"><span class="k">CPU</span><span class="v">18 %</span></div>
+              <div class="tile"><span class="k">Uptime</span><span class="v">2 d 4 h</span></div>
+            </div>
+            <div class="srow new" id="zeroRow">
+              <span class="t">Reset Stats</span>
+              <button class="btn red" id="zeroBtn">Reset Stats</button>
+              <span class="d">Stats count only frames taken from now on (<span id="sFrames">1,109</span> frames, <span id="sHours">14.2 h</span>, counting since <span id="sSince">3 Oct 2026</span>). Your frames stay on the disk and in the album.</span>
+            </div>
+            <div class="confirm" id="zeroConfirm" hidden role="group" aria-labelledby="zeroTitle">
+              <b id="zeroTitle">Reset Stats?</b>
+              <span>1,109 frames and 14.2 h stop counting. Nothing is deleted. Rebuild from files brings them back.</span>
+              <div class="acts"><button class="btn" id="zeroCancel">Cancel</button><button class="fill" id="zeroGo">Reset Stats</button></div>
+            </div>
+            <div class="ok" id="zeroDone" hidden role="status">Stats reset. Counting since today, 21:58.</div>
+            <div class="srow">
+              <span class="t">Rebuild Stats from files</span>
+              <button class="btn">Rebuild</button>
+              <span class="d">Clears Stats and reads every frame on the save disk again. Use it when the numbers look wrong. Not while a plan runs.</span>
+            </div>
+          </div>
+        </div>
+        <div class="p rail" aria-hidden="true"><span class="name">Preview</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">5 s</span></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- 6. Exposure fields -->
+  <section data-sec="exp" hidden>
+    <p class="note">One rule for exposure, gain and offset in Simple Mode only (chosen 14 Nov): the label is the plain word, the unit lives in the value, and the value uses one format. Advanced Mode keeps its own labels ("Exposure (s)", "Default exposure (s)" and so on).</p>
+    <div class="rules" style="margin-top:10px">
+      <div class="rule"><b>Label</b>"Exposure", "Gain", "Offset". No unit and no "time" or "Default" in the label; the section title says it is a default.</div>
+      <div class="rule"><b>Value</b>"0.5 s", "5 s", "90 s", "2 min". Unit always in the value, with a space. No "1.0", no bare "5".</div>
+      <div class="rule"><b>Typed field</b>Placeholder is the current or default value in the same format, greyed ("5 s"). The suffix shows the unit while typing.</div>
+      <div class="rule"><b>Gain and offset</b>Bare numbers ("100", "50"): they have no unit. The guider's own exposure reads "Auto".</div>
+    </div>
+    <div class="tilesrow" style="margin-top:12px">
+      <div class="tile new"><span class="k">Exposure</span><span class="v">5 s</span></div>
+      <div class="tile new"><span class="k">Exposure</span><span class="v">2 min</span></div>
+      <div class="tile new"><span class="k">Exposure</span><span class="v">0.5 s</span></div>
+      <div class="tile new"><span class="k">Gain</span><span class="v">100</span></div>
+      <div class="tile new"><span class="k">Offset</span><span class="v">50</span></div>
+    </div>
+    <div class="tblwrap" style="margin-top:12px">
+      <table>
+        <thead><tr><th>Where</th><th>Today: label</th><th>Today: value</th><th>Proposed</th></tr></thead>
+        <tbody>
+          <tr><td>Simple Preview, Plan, Polar, Guider</td><td class="before">Exposure</td><td class="before">5 s / 2 min (formatExposure)</td><td class="after">unchanged: this is the rule</td></tr>
+          <tr><td>Simple Bahtinov, Preview › Guide</td><td class="before">Exposure</td><td class="before">'${s.round()} s' (0.5 s shows as "1 s")</td><td class="after">formatExposure: "0.5 s"</td></tr>
+          <tr><td>Simple Guider</td><td class="before">Exposure</td><td class="before">The guider's own</td><td class="after">Auto</td></tr>
+          <tr><td>Simple Focus › Auto (new)</td><td class="before">not in Simple Mode</td><td class="before">–</td><td class="after">Exposure · 2 / 5 / 10 / 15 s</td></tr>
+          <tr><td colspan="4" style="color:var(--text2)">Advanced Mode (Imaging tab, Polar align, Settings, Calibration screen) keeps its labels.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+function seg(id, fn) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    fn(b.dataset.v);
+  });
+}
+seg('sec', v => document.querySelectorAll('section[data-sec]').forEach(s => s.hidden = s.dataset.sec !== v));
+seg('marks', v => document.body.classList.toggle('marks', v === 'on'));
+document.body.classList.add('marks');
+
+/* 1. Calibration plot: steps along each axis at the measured angle. */
+const W = { angle: 66.2, rate: 1.041 }, N = { angle: 158.1, rate: 1.195 }, STEP = 1.7, DIST = 25;
+const wSteps = Math.ceil(DIST / (W.rate * STEP)) + 1, nSteps = Math.ceil(DIST / (N.rate * STEP)) + 1;
+const seq = [];
+for (let i = 1; i <= wSteps; i++) seq.push({ leg: 'West', i, n: wSteps, a: W.angle, r: W.rate, c: 'var(--ra)' });
+for (let i = 1; i <= wSteps; i++) seq.push({ leg: 'East', i, n: wSteps, a: W.angle + 180, r: W.rate, c: 'var(--ra)', back: true });
+for (let i = 1; i <= nSteps; i++) seq.push({ leg: 'North', i, n: nSteps, a: N.angle, r: N.rate, c: 'var(--dec)' });
+for (let i = 1; i <= nSteps; i++) seq.push({ leg: 'South', i, n: nSteps, a: N.angle + 180, r: N.rate, c: 'var(--dec)', back: true });
+let calI = 2, calRun = true;
+function drawCal() {
+  const svg = $('#calSvg'), cx = 150, cy = 110, k = 3; // 3 svg units per px
+  let h = `<line x1="0" y1="${cy}" x2="300" y2="${cy}" stroke="#333"/><line x1="${cx}" y1="0" x2="${cx}" y2="220" stroke="#333"/>
+    <circle cx="${cx}" cy="${cy}" r="${DIST*k}" fill="none" stroke="#333" stroke-dasharray="3 4"/>
+    <text x="${cx + DIST*k + 4}" y="${cy - 4}" fill="#888" font-size="10">${DIST} px</text>`;
+  const pos = { x: 0, y: 0 };
+  let legStart = { West: null, North: null };
+  for (let j = 0; j <= calI && j < seq.length; j++) {
+    const s = seq[j], d = s.r * STEP, rad = s.a * Math.PI / 180;
+    if (s.leg === 'North' && s.i === 1) { pos.x = 0; pos.y = 0; } // the guider re-centres before the Dec leg
+    pos.x += d * Math.cos(rad); pos.y += d * Math.sin(rad);
+    const r = j === calI ? 4.5 : 3;
+    h += `<circle cx="${(cx + pos.x * k).toFixed(1)}" cy="${(cy - pos.y * k).toFixed(1)}" r="${r}" fill="${s.back ? 'none' : s.c}" stroke="${s.c}" stroke-width="1.5"/>`;
+  }
+  svg.innerHTML = h;
+  const s = seq[Math.min(calI, seq.length - 1)], px = (s.i * s.r * STEP).toFixed(1);
+  const txt = `Calibrating · ${s.leg} step ${s.i} · ${px} px`;
+  $('#calHead').textContent = txt; $('#calOldHead').textContent = txt;
+  $('#calPill').textContent = `Start guiding · Calibrating · ${s.leg} step ${s.i}`;
+  $('#calLeg').textContent = `${s.leg} step ${s.i} of ${s.n}`;
+  $('#wRate').textContent = calI >= wSteps ? `${W.rate} px/s · ${W.angle}°` : '–';
+  $('#nRate').textContent = calI >= 2 * wSteps + nSteps ? `${N.rate} px/s · ${N.angle}°` : '–';
+}
+seg('calPlay', v => { if (v === 'reset') { calI = 0; calRun = true; } else calRun = v === 'run'; drawCal(); });
+setInterval(() => { if (calRun && !$('section[data-sec="cal"]').hidden) { calI = (calI + 1) % seq.length; drawCal(); } }, 900);
+drawCal();
+
+/* 2. Panel fits content */
+const longFail = `<div class="head"><i class="dot red"></i><span>Guiding did not start</span></div>
+  <div class="cap">The guider could not reach its equipment: the guide camera stopped answering after the USB drop at 20:41. Connect the guide camera in Settings › Devices, then tap the shutter. If it keeps failing, unplug the guide camera's cable for 5 seconds and plug it back in.</div>
+  <div class="tabs"><span class="on">Guide</span><span>Tuning</span><span>Tools</span></div>
+  <div class="figs"><div class="fig"><div class="k">RMS</div><div class="v">–</div></div><div class="fig"><div class="k">Exposure</div><div class="v">2 s</div></div>
+  <div class="fig"><div class="k">Gain</div><div class="v">60</div></div><div class="fig"><div class="k">Aggressiveness</div><div class="v">70 %</div></div>
+  <div class="fig"><div class="k">Dec guide mode</div><div class="v">Auto</div></div><div class="fig"><div class="k">Dither</div><div class="v">3 px</div></div></div>`;
+const toolsRows = `<div class="head"><i class="dot grey"></i><span>Idle</span></div>
+  <div class="cap">Tap the shutter to start guiding. It calibrates first when needed.</div>
+  <div class="tabs"><span>Guide</span><span>Tuning</span><span class="on">Tools</span></div>
+  <div class="tools">
+    <div class="tool"><h3>Guiding Assistant</h3><button class="btn">Run again</button><div class="what">Measures drift, noise and backlash for two minutes with guiding off, then suggests settings.</div><div class="state"><i class="dot"></i>Done. 3 suggestions to apply.</div>
+      <ul class="sugg"><li><label><input type="checkbox" checked>Minimum move RA<span class="v">0.18 → 0.24 px</span></label></li><li><label><input type="checkbox" checked>Minimum move Dec<span class="v">0.18 → 0.31 px</span></label></li><li><label><input type="checkbox">Backlash compensation<span class="v">off → 420 ms</span></label></li></ul>
+      <button class="go">Apply 2</button></div>
+    <div class="tool"><h3>Recalibrate</h3><button class="btn">Recalibrate</button><div class="what">Measures how the guide scope moves for each nudge. Needed after moving the guide camera.</div><div class="state"><i class="dot"></i>Calibrated at Dec −39° tonight at 21:43</div></div>
+    <div class="tool"><h3>Dark library</h3><button class="btn">Open</button><div class="what">Guide camera darks for the exposures you guide with.</div><div class="state"><i class="dot amber"></i>Missing for 2 s. Build it in Calibration › Guide Camera.</div></div>
+  </div>`;
+seg('growState', v => { const h = v === 'fail' ? longFail : toolsRows; $('#growOld').innerHTML = h; $('#growNew').innerHTML = h; });
+$('#growOld').innerHTML = longFail; $('#growNew').innerHTML = longFail;
+
+/* 3. Guiding Assistant */
+let gaT = 0, gaState = 'meas';
+const GA_LEN = 120;
+function drawGa() {
+  const row = $('#gaRow'), card = $('#gaCard');
+  const left = GA_LEN - gaT, mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+  if (gaState === 'idle') {
+    row.innerHTML = `<h3>Guiding Assistant</h3><button class="btn">Run</button><div class="what">Measures drift, noise and backlash for two minutes with guiding off, then suggests settings.</div><div class="state"><i class="dot grey"></i>Not run yet</div>`;
+    card.innerHTML = `<div class="pill"><i class="dot grey"></i><b>Ready</b><span>Profile: EQM-35 · 533MC</span></div>`;
+    $('#gaHead').textContent = 'Idle'; $('#gaHeadDot').className = 'dot grey'; $('#gaCap').textContent = 'Tap the shutter to start guiding.';
+  } else if (gaState === 'meas') {
+    const pct = Math.round(gaT / GA_LEN * 100);
+    row.innerHTML = `<h3>Guiding Assistant</h3><button class="btn">Stop</button><div class="what">Measures drift, noise and backlash for two minutes with guiding off, then suggests settings.</div>
+      <div class="state"><i class="dot blink"></i>${gaT < 90 ? 'Measuring drift' : 'Measuring backlash'} · ${mm}:${ss} left</div><div class="bar new"><b style="width:${pct}%"></b></div>`;
+    card.innerHTML = `<div class="pill"><i class="dot blink"></i><b>Guiding Assistant</b><span>${gaT < 90 ? 'Drift' : 'Backlash'} · ${mm}:${ss} left</span></div><div class="pill" style="display:block"><div class="foot"><b style="width:${pct}%"></b></div></div>`;
+    $('#gaHead').textContent = 'Guiding Assistant'; $('#gaHeadDot').className = 'dot blink'; $('#gaCap').textContent = 'Measuring how the mount drifts with guiding off. Tap Stop to end early.';
+  } else {
+    row.innerHTML = `<h3>Guiding Assistant</h3><button class="btn">Run again</button><div class="what">Measures drift, noise and backlash for two minutes with guiding off, then suggests settings.</div><div class="state"><i class="dot"></i>Done. 3 suggestions to apply.</div>
+      <ul class="sugg"><li><label><input type="checkbox" checked>Minimum move RA<span class="v">0.18 → 0.24 px</span></label></li><li><label><input type="checkbox" checked>Minimum move Dec<span class="v">0.18 → 0.31 px</span></label></li><li><label><input type="checkbox" checked>Backlash compensation<span class="v">off → 420 ms</span></label></li></ul><button class="go">Apply 3</button>`;
+    card.innerHTML = `<div class="pill"><i class="dot"></i><b>Guiding Assistant</b><span>Done. 3 suggestions in Guider › Tools</span></div>`;
+    $('#gaHead').textContent = 'Idle'; $('#gaHeadDot').className = 'dot grey'; $('#gaCap').textContent = 'Tap the shutter to start guiding.';
+  }
+}
+seg('gaState', v => { gaState = v; gaT = v === 'meas' ? 24 : 0; drawGa(); });
+setInterval(() => { if (gaState === 'meas' && !$('section[data-sec="ga"]').hidden) { gaT = (gaT + 1) % GA_LEN; drawGa(); } }, 1000);
+gaT = 24; drawGa();
+
+/* 4. Preview › Guide: star field canvas */
+function stars(cv, seed, label) {
+  const g = cv.getContext('2d'); let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  g.fillStyle = '#0b0c10'; g.fillRect(0, 0, 600, 600);
+  for (let i = 0; i < 160; i++) { const x = rnd() * 600, y = rnd() * 600, r = rnd() * 1.6 + .3; g.fillStyle = `rgba(230,230,240,${.35 + rnd() * .6})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  if (label) { g.fillStyle = '#8a8a8a'; g.font = '16px system-ui'; g.fillText(label, 20, 580); }
+}
+stars($('#pgOldCanvas'), 7, 'Focus loop: HFR rings, turn advice');
+let pgLive = false, pgN = 0;
+function drawPg() {
+  const cv = $('#pgCanvas');
+  if (!pgLive) { const g = cv.getContext('2d'); g.fillStyle = '#0b0c10'; g.fillRect(0, 0, 600, 600); g.fillStyle = '#8a8a8a'; g.font = '18px system-ui'; g.textAlign = 'center'; g.fillText('Tap the shutter for live guide frames', 300, 300); g.textAlign = 'left'; }
+  else stars(cv, 7 + (pgN % 3), `Guide camera · frame ${pgN}`);
+  $('#pgCard').innerHTML = pgLive ? `<div class="pill"><i class="dot blink"></i><b>Preview</b><span>Guide camera · live · 2 s</span></div>` : `<div class="pill"><i class="dot grey"></i><b>Ready</b><span>Guide camera</span></div>`;
+  const sh = $('#pgShutter');
+  sh.classList.toggle('stop', pgLive);
+  sh.innerHTML = pgLive ? '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>';
+  sh.setAttribute('aria-label', pgLive ? 'Stop live frames' : 'Start live frames');
+}
+function setPg(v) { pgLive = v; document.querySelectorAll('#pgState button').forEach(b => b.setAttribute('aria-pressed', (b.dataset.v === 'live') === v ? 'true' : 'false')); drawPg(); }
+seg('pgState', v => setPg(v === 'live'));
+$('#pgShutter').addEventListener('click', () => setPg(!pgLive));
+setInterval(() => { if (pgLive) { pgN++; drawPg(); } }, 2000);
+drawPg();
+
+/* 5. Stats from zero, confirm inline */
+$('#zeroBtn').addEventListener('click', () => { $('#zeroConfirm').hidden = false; $('#zeroDone').hidden = true; $('#zeroCancel').focus(); });
+$('#zeroCancel').addEventListener('click', () => { $('#zeroConfirm').hidden = true; $('#zeroBtn').focus(); });
+$('#zeroGo').addEventListener('click', () => {
+  $('#zeroConfirm').hidden = true; $('#zeroDone').hidden = false;
+  $('#sFrames').textContent = '0'; $('#sHours').textContent = '0 h'; $('#sSince').textContent = 'Today 21:58';
+  $('#zeroBtn').focus();
+});
+</script>
+

@@ -85,6 +85,8 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
 
     public DesiredConnection? DesiredConnection => _lifecycle.Desired;
 
+    public bool IsCleanlyConnected => _lifecycle.HasCleanReadSinceConnect;
+
     // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
     internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
 

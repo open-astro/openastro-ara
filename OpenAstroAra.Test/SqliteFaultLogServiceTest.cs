@@ -522,6 +522,8 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Connected);
+            // The mock reconnector reports the camera cleanly connected, as its lifecycle does after a clean read.
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Camera)).Returns(true);
             using var reaction = new FaultReactionService(
                 hub: null, reconnector.Object, faultLog: log.Object) {
                 DelayShaper = _ => TimeSpan.Zero,

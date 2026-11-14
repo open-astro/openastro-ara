@@ -53,17 +53,27 @@ public sealed partial class CameraService : ILiveStackControl {
     internal void FeedLiveStackForTest(ushort[] pixels, int width, int height, long session, BayerPattern? bayerPattern) =>
         FeedLiveStack(pixels, width, height, session, bayerPattern);
 
-    /// <summary>Test seam (↑ara#1169): adopts an unreachable client as the connected camera so the real Live View loop
-    /// runs (every frame fails fast) without a simulator, and skips the start-time SensorType read, which would
-    /// need the device. The service owns the client and disposes it.</summary>
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership passes to _client, which Dispose releases.")]
-    internal void WithLiveViewTestClientForTest() {
-        var client = new AlpacaCamera(ServiceType.Http, "127.0.0.1", 1, 0, strictCasing: false, logger: null);
+    /// <summary>Test seam (↑ara#1169): connects the device <paramref name="makeDevice"/> builds through the lifecycle so the real Live View loop
+    /// runs against the fake adapter (a fake whose exposures fail makes every frame fail fast) without a simulator,
+    /// and skips the start-time SensorType read. Blocks until the camera reads Connected and its capabilities are read (a connect forgets seated ones).</summary>
+    internal void WithLiveViewTestClientForTest(Func<ICameraDevice> makeDevice) {
+        _createDevice = _ => makeDevice();
+        _liveViewSkipSensorProbe = true;
+        _lifecycle.ConnectAsync(new DiscoveredDeviceDto("live-view-test", "Live View test camera", DeviceType.Camera,
+            "localhost", "127.0.0.1", 1, 0, false), null).GetAwaiter().GetResult();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        // Connected and the seed read's capabilities in: a test seats its own capabilities after this returns.
+        while (_lifecycle.State != EquipmentConnectionState.Connected || !CapabilitiesRead()) {
+            if (DateTime.UtcNow > deadline) {
+                throw new TimeoutException("the test camera did not connect");
+            }
+            Thread.Sleep(10);
+        }
+    }
+
+    private bool CapabilitiesRead() {
         lock (_gate) {
-            _client = client;
-            _state = EquipmentConnectionState.Connected;
-            _liveViewSkipSensorProbe = true;
+            return _capabilities is not null;
         }
     }
 

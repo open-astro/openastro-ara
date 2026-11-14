@@ -27,6 +27,8 @@ namespace OpenAstroAra.Test {
         private int _connects;
         public volatile bool Answers = true;
         public volatile bool ReadFails;
+        // When set, the essential read throws this instead of the generic failure (ASCOM.NotImplementedException: the driver lacks the read).
+        public volatile Exception? ReadThrows;
         // When set, the essential read waits for it: a refresh tick stays in flight.
         public ManualResetEventSlim? HoldReads;
         // When set, each failed essential read first waits for a permit, so a test lets exactly N of them through.
@@ -42,7 +44,10 @@ namespace OpenAstroAra.Test {
         public int Disconnects => Volatile.Read(ref _disconnects);
         public bool Disposed { get; private set; }
 
-        public void Connect() => Interlocked.Increment(ref _connects);
+        // When set, records "connect" / "disconnect" in call order, so a test can assert which came first.
+        public Action<string>? Trace;
+
+        public void Connect() { Trace?.Invoke("connect"); Interlocked.Increment(ref _connects); }
         public bool Connected {
             get {
                 if (Answers) {
@@ -53,12 +58,16 @@ namespace OpenAstroAra.Test {
                 return false;
             }
         }
-        public void Stop() { }
-        public void Disconnect() => Interlocked.Increment(ref _disconnects);
+        public virtual void Stop() { }
+        public void Disconnect() { Trace?.Invoke("disconnect"); Interlocked.Increment(ref _disconnects); }
         public void Dispose() => Disposed = true;
 
         protected void ThrowIfReadFails() {
             HoldReads?.Wait(TimeSpan.FromSeconds(10));
+            if (ReadThrows is { } thrown) {
+                Interlocked.Increment(ref _failedReads);
+                throw thrown;
+            }
             if (ReadFails) {
                 ReadPermits?.Wait(TimeSpan.FromSeconds(10));
                 Interlocked.Increment(ref _failedReads);
@@ -188,6 +197,158 @@ namespace OpenAstroAra.Test {
                 Volatile.Write(ref _position, 0);
             }
             return actionName == FocuserService.CalibrationStatusAction ? CalibrationStatus : string.Empty;
+        }
+    }
+    /// <summary>ADR 0011 rule 4 — a camera for the lifecycle tests. The essential read is <c>CameraState</c>
+    /// (<see cref="FakeDeviceAdapter.ReadFails"/> and <see cref="FakeDeviceAdapter.ReadThrows"/> fail it);
+    /// <see cref="Aborts"/> counts <c>AbortExposure</c> calls, which a teardown makes only on request.
+    /// <see cref="ExposureFails"/> makes <c>StartExposure</c> throw, so a Live View frame fails fast.</summary>
+    internal sealed class FakeCameraDevice : FakeDeviceAdapter, ICameraDevice {
+        public volatile bool ExposureFails;
+        public volatile bool Cooling;
+        private int _aborts;
+        public int Aborts => Volatile.Read(ref _aborts);
+        public CameraState CameraState { get { ThrowIfReadFails(); return CameraState.Idle; } }
+        public double CCDTemperature => -10;
+        public bool CoolerOn { get => Cooling; set => Cooling = value; }
+        public double CoolerPower => 30;
+        public double SetCCDTemperature { get; set; } = -10;
+        public double HeatSinkTemperature => throw new ASCOM.NotImplementedException(nameof(HeatSinkTemperature));
+        public short PercentCompleted => 0;
+        public IList<string> ReadoutModes => ["Normal"];
+        public short ReadoutMode { get; set; }
+        public IList<string> Gains => [];
+        public IList<string> Offsets => [];
+        public short Gain { get; set; }
+        public int Offset { get; set; }
+        public short BinX { get; set; } = 1;
+        public short BinY { get; set; } = 1;
+        public int NumX { get; set; } = 100;
+        public int NumY { get; set; } = 100;
+        public int StartX { get; set; }
+        public int StartY { get; set; }
+        public bool ImageReady => false;
+        public object ImageArray => throw new InvalidOperationException("the fake camera holds no image");
+        public SensorType SensorType => SensorType.Monochrome;
+        public int CameraXSize => 100;
+        public int CameraYSize => 100;
+        public double PixelSizeX => 3.76;
+        public double PixelSizeY => 3.76;
+        public bool CanSetCCDTemperature => true;
+        public bool CanAbortExposure => true;
+        public int GainMin => 0;
+        public int GainMax => 100;
+        public int OffsetMin => 0;
+        public int OffsetMax => 50;
+        public int MaxBinX => 4;
+        public int MaxBinY => 4;
+        public double ExposureMin => 0.001;
+        public double ExposureMax => 600;
+        public double ExposureResolution => 0.001;
+        public int MaxADU => 65535;
+        public double ElectronsPerADU => 1;
+        public double FullWellCapacity => 50000;
+        public bool HasShutter => true;
+        public string SensorName => "Fake sensor";
+        public int BayerOffsetX => 0;
+        public int BayerOffsetY => 0;
+        public void StartExposure(double durationSec, bool light) {
+            if (ExposureFails) {
+                throw new InvalidOperationException("the fake camera cannot expose");
+            }
+        }
+        public void AbortExposure() => Interlocked.Increment(ref _aborts);
+        public override void Stop() => AbortExposure();
+        public System.Threading.Tasks.Task<(ushort[] Pixels, int Width, int Height)?> DownloadImageBytesAsync(CancellationToken ct) =>
+            System.Threading.Tasks.Task.FromResult<(ushort[] Pixels, int Width, int Height)?>(null);
+    }
+
+    /// <summary>ADR 0011 rule 4 — a mount for the lifecycle tests. <see cref="Latched"/> is AlpacaBridge's
+    /// "Mount communications compromised": it keeps answering <c>Connected</c> while every read fails.
+    /// <see cref="ReadFails"/> fails the position read the generic way.</summary>
+    internal sealed class FakeTelescopeDevice : FakeDeviceAdapter, ITelescopeDevice {
+        public const string LatchMessage = "Mount communications compromised";
+
+        public volatile bool Latched;
+        public volatile bool IsSlewing;
+        private int _aborts;
+        public int Aborts => Volatile.Read(ref _aborts);
+        private int _moveAxisStops;
+        public int MoveAxisStops => Volatile.Read(ref _moveAxisStops);
+        public bool TrackingOn { get; set; } = true;
+
+        private void ThrowIfLatched() {
+            if (Latched) {
+                throw new InvalidOperationException(LatchMessage);
+            }
+        }
+
+        public bool Slewing {
+            get {
+                ThrowIfLatched();
+                return IsSlewing;
+            }
+        }
+        public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return 5.0; } }
+        public double Declination { get { ThrowIfLatched(); return 30.0; } }
+        public double TargetRightAscension => throw new InvalidOperationException("no target set");
+        public double TargetDeclination => throw new InvalidOperationException("no target set");
+        public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
+        public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
+        public bool AtPark { get { ThrowIfLatched(); return false; } }
+        public bool AtHome { get { ThrowIfLatched(); return false; } }
+        public bool IsPulseGuiding => false;
+        public PointingState SideOfPier { get => PointingState.Normal; set { } }
+        public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
+        public bool CanSlewAsync => true;
+        public bool CanSlew => true;
+        public bool CanSync => true;
+        public bool CanPark => true;
+        public bool CanUnpark => true;
+        public bool CanSetTracking => true;
+        public bool CanPulseGuide => true;
+        public bool CanFindHome => true;
+        public bool CanSetPierSide => false;
+        public double FocalLength => 0.5;
+        public double ApertureDiameter => 0.1;
+        public ITrackingRates TrackingRates => new FakeTrackingRates();
+        public IList<string> SupportedActions => new List<string>();
+        public double SiteLatitude { get; set; }
+        public double SiteLongitude { get; set; }
+        public double SiteElevation { get; set; }
+        public bool CanMoveAxis(TelescopeAxis axis) => true;
+        public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
+        public string Action(string name, string parameters) => throw new ASCOM.NotImplementedException(name);
+        public PointingState DestinationSideOfPier(double raHours, double decDegrees) => PointingState.Normal;
+        public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } }
+        public override void Stop() => AbortSlew();
+        public void AbortSlew() => Interlocked.Increment(ref _aborts);
+        public void Park() { }
+        public void Unpark() { }
+        public void FindHome() { }
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { }
+        public void SyncToCoordinates(double raHours, double decDegrees) { }
+
+        private sealed class FakeTrackingRates : ITrackingRates {
+            private readonly DriveRate[] _rates = [DriveRate.Sidereal];
+            public int Count => _rates.Length;
+            public DriveRate this[int index] => _rates[index];
+            public System.Collections.IEnumerator GetEnumerator() => _rates.GetEnumerator();
+            public void Dispose() { }
+        }
+
+        private sealed class FakeAxisRates : IAxisRates {
+            private readonly IRate[] _rates = [new FakeRate(0.1, 4.0)];
+            public int Count => _rates.Length;
+            public IRate this[int index] => _rates[index];
+            public System.Collections.IEnumerator GetEnumerator() => _rates.GetEnumerator();
+            public void Dispose() { }
+        }
+
+        private sealed class FakeRate(double min, double max) : IRate {
+            public double Minimum { get; set; } = min;
+            public double Maximum { get; set; } = max;
+            public void Dispose() { }
         }
     }
 }

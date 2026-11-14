@@ -188,17 +188,13 @@ namespace OpenAstroAra.Test {
         [Test] public void Guider_mediator_is_the_live_service() => AssertLive<IGuiderMediator, GuiderService>();
 
         [Test]
-        public void Guiding_can_end_an_open_polar_alignment() {
-            // 2026-10-16 — Program.cs wires the guider to the polar-align service both ways: whether an
-            // alignment holds the guider's lease, and how to end it before guiding. Drop either line and
-            // a run with an abandoned Polar Align step pauses at "Guiding did not start" again.
+        public void The_guider_hands_the_camera_over_through_the_one_custody_module() {
+            // 2026-10-16 — a run with an abandoned Polar Align step paused at "Guiding did not start". The
+            // hand-over is no longer wired by functions set in Program.cs: the guider takes the one
+            // registered custody module, which Polar Align, guide focus and the live view reach through it.
             var guider = app.Services.GetRequiredService<GuiderService>();
-            var paActive = guider.PolarAlignActive;
-            Assert.That(paActive is not null, Is.True, "PolarAlignActive is wired");
-            Assert.That(guider.EndPolarAlignAsync is not null, Is.True, "EndPolarAlignAsync is wired");
-            Assert.That(paActive!.Invoke(), Is.False, "no alignment runs in a fresh daemon");
-            Assert.That(guider.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Release),
-                "a lease the guider reports with no alignment running is stale");
+            Assert.That(guider.Custody, Is.SameAs(app.Services.GetRequiredService<GuideCameraCustody>()));
+            Assert.That(guider.Custody.Holder, Is.Null, "nothing holds the camera in a fresh daemon");
         }
         [Test] public void Focuser_mediator_is_the_live_service() => AssertLive<IFocuserMediator, FocuserService>();
         [Test] public void Camera_mediator_is_the_live_service() => AssertLive<ICameraMediator, CameraService>();

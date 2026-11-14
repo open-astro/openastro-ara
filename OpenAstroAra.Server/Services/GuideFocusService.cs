@@ -66,8 +66,9 @@ public interface IGuideFocusService {
 /// scope's or OAG's helical focuser by hand while the HFR readout and trend fall; there is no motorised
 /// guide focuser to sweep, so this is a readout, not an autofocus.
 ///
-/// One loop at a time; refuses while the guider is guiding/calibrating (the daemon owns the camera then) and
-/// while polar alignment runs (same lease). Repeated capture failures end the loop in <c>error</c> rather
+/// One loop at a time; refused while the guider is guiding, calibrating, paused or has lost the star (the daemon
+/// owns the camera then). A newer polar alignment or live view takes the camera from it, and it takes the camera
+/// from them (ADR 0016: <see cref="GuideCameraCustody"/>). Repeated capture failures end the loop in <c>error</c> rather
 /// than spinning forever against a dropped camera.
 /// </summary>
 public sealed partial class GuideFocusService : IGuideFocusService, IDisposable {
@@ -76,13 +77,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     internal const double MaxExposureSec = 30.0;
     internal const int MaxConsecutiveFailures = 5;
     internal const int RecentWindow = 240;
-    private const int LeaseTimeoutSeconds = 600;
-    private static readonly TimeSpan LeaseRenewInterval = TimeSpan.FromSeconds(240);
 
     private readonly GuiderService _guider;
     private readonly IPolarAlignFrameFetcher _fetcher;
     private readonly IGuideFrameDecoder _decoder;
-    private readonly Func<bool>? _polarAlignActive;
     private readonly ILogger<GuideFocusService> _logger;
     // Development only (SyntheticSky): frames rendered locally instead of borrowed through the guider.
     private readonly Func<(ushort[] Pixels, int Width, int Height)>? _syntheticFrames;
@@ -113,14 +111,12 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             GuiderService guider,
             IPolarAlignFrameFetcher fetcher,
             IGuideFrameDecoder? decoder = null,
-            Func<bool>? polarAlignActive = null,
             ILogger<GuideFocusService>? logger = null,
             Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null,
             Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null) {
         _guider = guider ?? throw new ArgumentNullException(nameof(guider));
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
         _decoder = decoder ?? new CfitsioGuideFrameDecoder();
-        _polarAlignActive = polarAlignActive;
         _logger = logger ?? NullLogger<GuideFocusService>.Instance;
         _syntheticFrames = syntheticFrames;
         _optics = optics;
@@ -197,13 +193,6 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 + "cable and power, or pick the guide camera in Settings → Guider and Apply"
             : $"gave up after {failures} failed frames — last: {last.Message}";
 
-    /// <summary>The daemon owns its camera while it guides or calibrates; the focus loop must not pull frames
-    /// out from under it. Pure — unit-tested against the PHD2 app-state tokens.</summary>
-    internal static bool GuiderBusy(string? appState) => appState switch {
-        "Guiding" or "Calibrating" or "LostLock" or "Paused" => true,
-        _ => false,
-    };
-
     public async Task StartAsync(GuideFocusStartRequestDto request, CancellationToken ct) {
         Validate(request);
         await _opLock.WaitAsync(ct).ConfigureAwait(false);
@@ -212,20 +201,24 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             if (IsActive) {
                 throw new InvalidOperationException("the guide-camera focus loop is already running");
             }
-            if (_polarAlignActive?.Invoke() == true) {
-                throw new InvalidOperationException("polar alignment is using the guide camera — stop it first");
-            }
             PHD2Guider? guider = null;
+            GuideCameraCustody.Claim? claim = null;
             if (_syntheticFrames is null) {
                 guider = _guider.RequireConnectedGuider(); // "guider is not connected" → 409
                 _guider.ThrowIfOutOfStep("The guide-camera focus loop"); // → 409, with the reason
-                if (GuiderBusy(guider.State)) {
-                    throw new InvalidOperationException($"the guider is {guider.State.ToLowerInvariant()} — stop guiding before focusing the guide camera");
+                // ADR 0016: refused while the Guider is busy, takes the camera (and stops a running polar
+                // alignment or live view) and takes the daemon's single-client lease.
+                claim = await _guider.Custody.TakeAsync(CameraUse.GuideFocus, _guider, _ => StopAsync(), ct).ConfigureAwait(false);
+                try {
+                    // #1711: a capture an earlier polar-align run abandoned may still be exposing.
+                    await guider.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
+                } catch {
+                    await claim.ReleaseAsync().ConfigureAwait(false);
+                    throw;
                 }
-                // #1711: a capture an earlier polar-align run abandoned may still be exposing.
-                await guider.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
-                // The daemon's single-client lease: refused by the daemon too when it is guiding/calibrating.
-                await guider.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
+            }
+            lock (_gate) {
+                _claim = claim;
             }
             lock (_gate) {
                 _state = "running";
@@ -250,7 +243,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();
             var token = _loopCts.Token;
-            _loop = Task.Run(() => RunLoopAsync(guider, request, token), CancellationToken.None);
+            _loop = Task.Run(() => RunLoopAsync(guider, claim, request, token), CancellationToken.None);
             LogStarted(request.ExposureSec);
         } finally {
             _opLock.Release();
@@ -284,7 +277,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 }
             }
             if (wasRunning) {
-                await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                await ReleaseLeaseQuietlyAsync(TakeClaim()).ConfigureAwait(false);
                 LogStopped();
             }
         } finally {
@@ -324,21 +317,13 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Loop boundary: a capture, download, decode or detector fault is one failed frame (counted; the loop ends in `error` after MaxConsecutiveFailures), never a faulted background task.")]
-    private async Task RunLoopAsync(PHD2Guider? guider, GuideFocusStartRequestDto request, CancellationToken ct) {
+    private async Task RunLoopAsync(PHD2Guider? guider, GuideCameraCustody.Claim? claim, GuideFocusStartRequestDto request, CancellationToken ct) {
         var workDir = Path.Combine(Path.GetTempPath(), "ara-guide-focus", Guid.NewGuid().ToString("N"));
-        var lastRenew = DateTimeOffset.UtcNow;
         try {
             Directory.CreateDirectory(workDir);
             while (!ct.IsCancellationRequested) {
-                if (guider is not null && DateTimeOffset.UtcNow - lastRenew > LeaseRenewInterval) {
-                    try {
-                        await guider.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
-                        lastRenew = DateTimeOffset.UtcNow;
-                    } catch (OperationCanceledException) {
-                        throw;
-                    } catch (Exception ex) {
-                        LogLeaseRenewFailed(ex);
-                    }
+                if (claim is not null) {
+                    await claim.RenewIfDueAsync(ct).ConfigureAwait(false);
                 }
                 try {
                     var sample = guider is null
@@ -353,7 +338,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                             median = MedianRecentHfr(InFocusHoldFrames);
                         }
                         LogInFocusStopped(InFocusHoldFrames, median);
-                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                        await ReleaseLeaseQuietlyAsync(claim).ConfigureAwait(false);
                         return;
                     }
                 } catch (OperationCanceledException) {
@@ -366,7 +351,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                             _error = GaveUpError(MaxConsecutiveFailures, ex);
                         }
                         LogGaveUp(MaxConsecutiveFailures, ex.Message);
-                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                        await ReleaseLeaseQuietlyAsync(claim).ConfigureAwait(false);
                         return;
                     }
                     // Back off a little so a dropped camera isn't hammered at the RPC rate.
@@ -383,7 +368,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 _error = ex.Message;
             }
             LogLoopFaulted(ex);
-            await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+            await ReleaseLeaseQuietlyAsync(claim).ConfigureAwait(false);
         } finally {
             try { Directory.Delete(workDir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
@@ -549,19 +534,20 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort lease release: it auto-expires on the daemon regardless; a dropped guider must not fault the stop.")]
-    private async Task ReleaseLeaseQuietlyAsync() {
-        if (_syntheticFrames is not null) {
-            return;
-        }
-        try {
-            var guider = _guider.RequireConnectedGuider();
-            await guider.SetPaSessionAsync(active: false, timeoutS: null, CancellationToken.None).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogLeaseReleaseFailed(ex);
+    // The camera's custody claim for the running loop; null for none (and for the development synthetic frames).
+    private GuideCameraCustody.Claim? _claim; // guarded by _gate
+
+    private GuideCameraCustody.Claim? TakeClaim() {
+        lock (_gate) {
+            var claim = _claim;
+            _claim = null;
+            return claim;
         }
     }
+
+    // Best-effort: the custody module logs a release fault, and the lease expires on its own. A claim a newer
+    // request already replaced releases nothing.
+    private static Task ReleaseLeaseQuietlyAsync(GuideCameraCustody.Claim? claim) => claim?.ReleaseAsync() ?? Task.CompletedTask;
 
     public void Dispose() {
         if (_disposed) {
@@ -594,9 +580,5 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     [LoggerMessage(Level = LogLevel.Error, Message = "Guide-camera focus loop stopped on an unexpected fault")]
     private partial void LogLoopFaulted(Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Guide-camera focus loop: lease renew failed (captures will fail if it expires).")]
-    private partial void LogLeaseRenewFailed(Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Guide-camera focus loop: lease release failed (it expires on its own).")]
-    private partial void LogLeaseReleaseFailed(Exception ex);
 }
