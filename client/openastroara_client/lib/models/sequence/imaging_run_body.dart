@@ -457,7 +457,13 @@ Map<String, dynamic> buildTargetBlock({
   //
   // With autofocus, the block slews blind, focuses near the target, and only
   // then centres: a solve on an out-of-focus field fails (user, 2026-11-02).
-  final focusFirst = afAtStart;
+  //
+  // #1875 — one autofocus per plan, on a cooled sensor: slew, cool, start
+  // guiding, autofocus, first light. With a guider the autofocus follows
+  // Start Guiding, so the go-to centres before it (a centre after the focus
+  // would pull the field off the guide star); without one it still waits for
+  // the cool and keeps the blind slew and the late centre.
+  final focusFirst = afAtStart && !guide;
   final goToTarget = (positionAngleDeg != null
       ? (_item(centerAndRotateType)
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
@@ -487,21 +493,21 @@ Map<String, dynamic> buildTargetBlock({
         filterName.trim().isNotEmpty &&
         rig.filterWheel)
       ?switchTo(filterName),
-    if (afAtStart) _item(runAutofocusType),
-    if (focusFirst) goToTarget,
-    if (guide)
-      recalibrateGuider
-          ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
-          : _item(startGuidingType),
-    // After focus (the probe judges FWHM growth against its first rung, so it
-    // must see focused stars) and before the first imaging loop.
-    if (unguided) trackingProbe(),
     // Waits for the sensor: the session switched the cooler on without waiting,
-    // so the go-to, focus and guiding ran while it cooled.
+    // so the go-to ran while it cooled; focus and guiding need it cold.
     if (coolToC != null)
       _item(coolCameraType)
         ..['Temperature'] = coolToC
         ..['Duration'] = 0.0,
+    if (focusFirst) ...[_item(runAutofocusType), goToTarget],
+    if (guide)
+      recalibrateGuider
+          ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
+          : _item(startGuidingType),
+    if (afAtStart && guide) _item(runAutofocusType),
+    // After focus (the probe judges FWHM growth against its first rung, so it
+    // must see focused stars) and before the first imaging loop.
+    if (unguided) trackingProbe(),
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),

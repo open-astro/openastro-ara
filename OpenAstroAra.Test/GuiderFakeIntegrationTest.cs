@@ -2497,6 +2497,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_start_connects_the_guiders_equipment_first_instead_of_being_refused() {
+            // #1875 — the 2026-11-13 night: three pauses on the guider's own "all equipment must be connected
+            // first", started on the fourth Resume. The start now connects the equipment itself.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake) { EquipmentConnected = false };
+            var guiding = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guiding) == 0 ? "Stopped" : "Guiding"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRawRpc("guide", id => {
+                if (!daemon.EquipmentConnected) { return RpcError(id, 1, "all equipment must be connected first"); }
+                Volatile.Write(ref guiding, 1);
+                return RpcOk(id);
+            });
+            using var svc = CalibratedTonightService(Mock.Of<IDiagnosticsService>());
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+            daemon.EquipmentConnected = false; // the connect handshake may have connected it; the guider drops it again
+            daemon.SetConnected.Clear();
+
+            var ok = await SettlingAsync(fake, svc.StartGuiding(false, new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None)).ConfigureAwait(false);
+
+            Assert.That(ok, Is.True, "guiding started on the first attempt");
+            Assert.That(daemon.SetConnected, Is.EqualTo(new List<bool> { true }), "the start asked the guider to connect its equipment");
+        }
+
+        [Test]
         public async Task A_rest_start_that_began_guiding_succeeds_when_its_settle_times_out() {
             // #1664 review — once guiding has begun, a settle-timeout SettleDone (the guider still guiding) is
             // the settle verdict, not a failed start; only errors before guiding began end the start.
