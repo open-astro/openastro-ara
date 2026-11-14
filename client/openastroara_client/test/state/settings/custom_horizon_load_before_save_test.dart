@@ -43,6 +43,8 @@ class _Profiles extends ProfileManagementNotifier {
   @override
   Future<ProfileList> build() async =>
       const ProfileList(activeId: 'p1', profiles: []);
+  void activate(String id) =>
+      state = AsyncData(ProfileList(activeId: id, profiles: const []));
 }
 
 /// An offline cache holding profile p1's horizon, as `profile_cache.json` does.
@@ -141,5 +143,21 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await _trySave(() => n().persistToServer(rigB.api(hostname: 'b.local')));
     expect(rigB.puts, isEmpty);
+  });
+
+  test('Custom horizon: an active-profile change resets it, so Save never '
+      "writes profile p1's skyline to p2", () async {
+    c.listen(migratedSectionsResetProvider, (_, _) {});
+    c.listen(profileManagementProvider, (_, _) {});
+    await c.read(savedServersProvider.future);
+    await c.read(profileManagementProvider.future);
+    final api = rig.api(hostname: 'a.local');
+    await n().hydrateFromServer(api);
+
+    (c.read(profileManagementProvider.notifier) as _Profiles).activate('p2');
+    await Future<void>.delayed(Duration.zero);
+    rig.failGet.add(_section);
+    await _trySave(() => n().persistToServer(api));
+    expect(rig.puts, isEmpty);
   });
 }
