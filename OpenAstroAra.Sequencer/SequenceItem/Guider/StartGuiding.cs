@@ -114,7 +114,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             }
         }
 
-        /// <summary>The guider's own refusal text for unconnected equipment is not a sentence for a person at the rig.</summary>
+        /// <summary>The guider's own refusal text for unconnected equipment is not a sentence for a person at the rig.
+        /// Sees only a refusal that arrives as an exception; the guider's returned refusal text is follow-up work for #1875.</summary>
         internal static string PlainReason(string? reason) {
             if (string.IsNullOrWhiteSpace(reason)) {
                 return "the guider did not start guiding";
