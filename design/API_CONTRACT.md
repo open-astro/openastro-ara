@@ -26,6 +26,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-14 — A version on every profile section: `ETag` and `If-Match` on the 24 section routes (#1807)
+
+**Endpoint(s) or area:** the GET and PUT of the 24 client-writable profile sections under `/api/v1/profile/` (imaging-defaults, storage, notifications, site, custom-horizon, saved-targets, filenames, safety, autofocus, polar-align, unguided, guider-advanced, plate-solve, diagnostics-mode, phd2, optics, camera-electronics, filter-set, filter-wheel/labels, filter-wheel/policy, cooling-fan, dome, equipment-connection, stretch-defaults). Not the six sections only the daemon writes.
+
+**Decision:** a 2xx GET or PUT answers a strong `ETag`, the SHA-256 of the stored section's JSON. A PUT may send `If-Match`: `*` or the tag it loaded passes; any other tag is a 412 problem, nothing is written and no `profile.updated` goes out. A PUT with no `If-Match` is still accepted until slice 4 makes it required. `PUT /profile/storage` moves onto the same check, so its tags change once (the hash now comes from the serializer context, not the reflection one) and its 400 rules are unchanged.
+
+**Reasoning:** two clients or panels saving a whole section over each other silently drop the other's edit (ADR 0015). A tag of the stored content, not a write counter, gives equal content an equal tag. A write by the daemon itself moves the tag too, so an open panel's next save is a 412 and the client reloads. A live-sync load (#1644) throws away open edits, so a 412 comes only when the event was missed or the daemon wrote the section.
+
+**Spec ref:** `Endpoints/ProfileEndpoints.cs` (`WithSection`, `CheckSectionVersion`), `Services/ProfileSections.cs` (`ProfileSection.Read`), `Program.cs` (the `If-Match` parameter).
+
+**Related:** #1807; ADR 0015; test `ProfileSectionVersionTest`.
+
+---
+
+## 2026-11-14 — #1875 the daemon serves the queued plan: `GET /sequences/{id}/plan`
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/plan` (`SequencePlanDto`, `SequencePlanTargetDto`, `SequencePlanRowDto`); `SequenceRunStateDto.plan_frames_done` and `.current_block_name`; the same two keys on the `sequence.progress` WebSocket payload.
+
+**Decision:** the queued plan is read off the rig, so any client rebuilds Simple Mode's queue instead of relying on the client that queued it. The route returns `{sequence_id, run_id?, targets[]}`; each target is `{name, calibration, ra_deg?, dec_deg?, gain?, flats, dawn_provider?, rows[]}` and each row `{filter_name?, exposure_seconds?, frames_total, frames_done}`. Entries are the child containers of the body's top, in queue order; the root children named `Flats` and `Calibration` are entries with `calibration: true` and no position. A row is a loop container (its `LoopCondition.Iterations` is `frames_total`, its `CompletedIterations` clamped to that is `frames_done`; a negative count reads 0) or, in a calibration entry, a flat set (`FrameCount`, done once finished); its filter is the last `SwitchFilter` before it. `ra_deg`/`dec_deg` are J2000 degrees from the block's horizon condition (else a DSO container's target); an unset position is null. `gain` is the first light exposure's gain, null for the profile default (-1). `flats` is `none`, `after_target` (a flat set in the block) or `end_of_night`: the block holds an `Annotation` whose text is exactly `Flats: end of night`, the one place the rig records that choice. `dawn_provider` is the NINA `$type` of the block's `TimeCondition` provider. While a run holds a tree the route reads it (live edits show); an ended run still retained (completed, stopped or failed) serves the counts it left only while the stored body is unchanged since the run released its tree; else it reads the stored body (an edit after the run shows), so a queue that has not started is served too. An unknown sequence is a 404 problem. `plan_frames_done` is the sum of every served row's `frames_done`; `current_block_name` is the entry whose block holds the running leaf, null when none does (the run's own start and end steps), and unlike `current_target_name` it names a target-less block. A client re-reads the plan when either changes.
+
+**Reasoning:** the session's frame count (`frames_captured`) says nothing about one loop's count (rig night 2026-11-13: a loop read 0/240 while the session had filed 16). The plan is a read-only view like `SequenceRunStateDto`, never a sequence format (ADR 0018): NINA's JSON stays the only one, and the marker is an ordinary NINA item. Two scalars on the existing progress frame need no new event.
+
+**Spec ref:** `Services/SequencePlanBuilder.cs`, `Services/SequencerService.cs` (`GetPlanAsync`, `RunState.PlanSnapshot`), `Endpoints/SequenceEndpoints.cs`.
+
+**Related:** #1875 slice 1; tests `SequencePlanTest`, `SequencerServiceTest.Progress_frames_carry_the_plans_own_count_and_the_block_it_runs`.
+
+---
+
 ## 2026-11-12 — #1757 the dark and bias library belongs to one camera
 
 **Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.
@@ -194,6 +222,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
+
+### 2026-11-13 — Storage settings carry an `ETag`; `PUT` honours `If-Match` (#1807)
+
+**Endpoint(s) or area:** `GET /api/v1/profile/storage` and `PUT /api/v1/profile/storage` (`storage` profile section).
+
+**Decision:** `GET` and a successful `PUT` answer with an `ETag` header: a strong tag, the SHA-256 of the stored (normalized) section's JSON, in quotes. Nothing is stored for it; equal content gives an equal tag. `PUT` takes an optional `If-Match` header. When it is sent and is neither `*` nor the current tag, the answer is `412` Problem and nothing is written; a `412` is a rejected write, so no `profile.updated` is published. When `If-Match` is absent the write is accepted as before (refusing a write without it is a later slice of #1807). The tag check runs before the existing `400` validation. `POST /api/v1/storage/configure` also writes this section (the new save directory) and publishes no `profile.updated`, so a client that holds the section loads it again after a successful configure. The tag compare and the store write are two steps, not one atomic step (`ProfileEndpoints.PutStorageSettings`): two saves that arrive together with the same tag can both pass. That is accepted because one client controls the rig at a time (ADR 0005), so two writes of the same section racing within that window is not a case the daemon has to arbitrate; the tag is there for the common case of a stale copy on a second device.
+
+**Reasoning:** the client saved the Storage section from its own defaults when the load had failed, and saved over a newer copy another device had written. ADR 0015 makes a client load a section from the rig before it saves it and send back the tag of the copy it loaded. A derived hash needs no version column and no migration; a stored version counter was the alternative, and is left for when every section moves.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1storage`; `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs` (`GetStorageSettings`, `PutStorageSettings`, `StorageETag`); client `lib/state/settings/loaded_section.dart`, `lib/services/profile_api.dart`.
+
+**Related:** #1807, ADR 0015, ADR 0012, ADR 0005; tests `ProfileStorageEndpointTest`, client `loaded_section_test`, `storage_load_before_save_test`.
+
+---
+
+### 2026-11-13 — Live guide-camera loop: refused while the Guider is busy, and it takes the camera from setup activities (#1809)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/guider/live/loop` (amends the 2026-10-16 live-view entry).
+
+**Decision:** besides 409 when no guider is connected, `live/loop` answers a plain 409 (the reason in `detail`, e.g. "the guider is guiding — stop guiding before …") while the guider is guiding, calibrating, paused or has lost its star. When polar alignment or guide focus holds the Guide Camera, `live/loop` stops that activity first and then loops; the later request wins. Guiding later takes the camera from the loop without stopping it. `stop`, `select` and `deselect` are unchanged.
+
+**Reasoning:** ADR 0016 puts every hand-over of the Guide Camera in one custody module (`GuideCameraCustody`). Looping under an active guide would break guiding, so it is a state conflict the client can explain (409), not a 500. Stopping the older setup holder matches how polar alignment and guide focus already take the camera from each other.
+
+**Spec ref:** `Services/GuideCameraCustody.cs` (`TakeAsync`), `Services/GuiderLiveService.cs` (`LoopAsync`), `Endpoints/EquipmentEndpoints.cs` (`GuiderLiveResultAsync`).
+
+**Related:** ADR 0016, PR #1879.
+
+---
 
 ### 2026-11-11 — The dome follows the mount: `POST /equipment/dome/follow`, `GET/PUT /profile/dome`, and `following` on the dome status (#1689)
 

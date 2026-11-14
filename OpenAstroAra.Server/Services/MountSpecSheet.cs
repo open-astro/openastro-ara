@@ -46,7 +46,7 @@ public static class MountSpecSheet {
     /// action, the call fails, or the JSON does not parse. Never throws.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A driver may NotImplement SupportedActions/Action or return junk; no sheet is the correct answer.")]
-    public static MountSpecSheetDto? TryRead(AlpacaTelescope telescope) {
+    internal static MountSpecSheetDto? TryRead(ITelescopeDevice telescope) {
         ArgumentNullException.ThrowIfNull(telescope);
         try {
             var actions = telescope.SupportedActions;

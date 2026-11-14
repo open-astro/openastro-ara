@@ -300,6 +300,9 @@ namespace OpenAstroAra.Test {
                 : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                // RA/Dec is the mount's essential read: a mount that cannot answer it is degraded (ADR 0011 rule 2).
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "1.0"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "-40.0"
                 : null);
             var (hub, faults) = Hub();
 
@@ -344,6 +347,8 @@ namespace OpenAstroAra.Test {
                 : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
                 : path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" // Topocentric: a JNOW mount (#1124 refuses an unknown one)
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "1.0" // the essential read: no degraded fault ahead of the OpError
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "-40.0"
                 : null,
                 putResponder: path => path.EndsWith("/slewtocoordinatesasync", StringComparison.Ordinal)
                     ? ScriptedAlpacaDevice.Error("simulated: the mount refused the goto") : null);

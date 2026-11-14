@@ -49,6 +49,11 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token);
 
+        /// <summary>Why the last start failed, in the guider's own words (e.g. its refusal of the guide RPC), or
+        /// null when it gave none. A refused start returns false without throwing, so Start Guiding reads it
+        /// for the pause reason (#1875).</summary>
+        string? LastStartError { get; }
+
         /// <summary>#1716: guide on a new calibration. If that fails, put back the guider's saved
         /// calibration, guide on it and warn. False only when neither gives guiding.</summary>
         Task<bool> RecalibrateAndGuide(IProgress<ApplicationStatus> progress, CancellationToken token);

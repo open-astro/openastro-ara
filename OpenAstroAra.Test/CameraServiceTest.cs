@@ -44,7 +44,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ForgetAsync_after_a_disconnect_drops_the_retained_device() {
-            using var svc = new CameraService();
+            using var svc = new CameraService { DeviceFactory = _ => new FakeCameraDevice() };
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Camera, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // Disconnect supersedes the in-flight connect (generation bump), so no settle poll is needed.
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ForgetAsync_while_connecting_throws_InvalidOperation() {
-            using var svc = new CameraService();
+            using var svc = new CameraService { DeviceFactory = _ => new FakeCameraDevice() };
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Camera, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             // ConnectAsync sets Connecting synchronously; the live states refuse a removal (→ 409).

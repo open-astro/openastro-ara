@@ -1,3 +1,5 @@
+import '../../support/storage_fixture.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,6 +16,7 @@ import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 
 import '../../helpers/fake_data_manager_client.dart';
+
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -70,23 +73,27 @@ class _FakeProfileApi extends ProfileApi {
   Future<PlateSolveSettings> getPlateSolveSettings() async =>
       const PlateSolveSettings();
   @override
-  Future<PlateSolveSettings> putPlateSolveSettings(PlateSolveSettings v) async =>
-      v;
+  Future<PlateSolveSettings> putPlateSolveSettings(
+    PlateSolveSettings v,
+  ) async => v;
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
       const AutofocusSettings();
   @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async => v;
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
+      v;
   @override
-  Future<CameraElectronics> getCameraElectronics() async => const CameraElectronics();
+  Future<CameraElectronics> getCameraElectronics() async =>
+      const CameraElectronics();
   @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async => v;
+  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
+      v;
   @override
   Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
   @override
   Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
   @override
-  Future<StorageSettings> getStorageSettings() async => const StorageSettings();
+  Future<StorageSettings> getStorageSettings() async => kTestStorage;
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
   @override
@@ -109,26 +116,33 @@ Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {
 }
 
 void main() {
-  testWidgets('Save & Exit shows the blocking spinner while the save is in-flight',
-      (tester) async {
-    final api = _FakeProfileApi();
-    await tester.pumpWidget(_host(api, onComplete: () {}));
+  testWidgets(
+    'Save & Exit shows the blocking spinner while the save is in-flight',
+    (tester) async {
+      final api = _FakeProfileApi();
+      await tester.pumpWidget(_host(api, onComplete: () {}));
 
-    await tester.tap(find.text('Save & Exit'));
-    await tester.pump(); // kick off the async save (create is held by the gate)
+      await tester.tap(find.text('Save & Exit'));
+      await tester
+          .pump(); // kick off the async save (create is held by the gate)
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget,
-        reason: 'a blocking spinner is shown during the round-trip');
-    expect(api.createCalls, 1);
+      expect(
+        find.byType(CircularProgressIndicator),
+        findsOneWidget,
+        reason: 'a blocking spinner is shown during the round-trip',
+      );
+      expect(api.createCalls, 1);
 
-    api.releaseCreate();
-    await tester.pumpAndSettle();
-    // Spinner dismissed via the captured navigator once the save settles.
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-  });
+      api.releaseCreate();
+      await tester.pumpAndSettle();
+      // Spinner dismissed via the captured navigator once the save settles.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
 
-  testWidgets('a rapid double-tap on Save creates the profile only once',
-      (tester) async {
+  testWidgets('a rapid double-tap on Save creates the profile only once', (
+    tester,
+  ) async {
     final api = _FakeProfileApi();
     await tester.pumpWidget(_host(api, onComplete: () {}));
 
@@ -139,13 +153,19 @@ void main() {
     await tester.tap(find.text('Save & Exit'), warnIfMissed: false);
     await tester.pump();
 
-    expect(api.createCalls, 1, reason: 'double-tap must not start a second save');
+    expect(
+      api.createCalls,
+      1,
+      reason: 'double-tap must not start a second save',
+    );
 
     api.releaseCreate();
     await tester.pumpAndSettle();
   });
 
-  testWidgets('on success the wizard pops and onComplete fires', (tester) async {
+  testWidgets('on success the wizard pops and onComplete fires', (
+    tester,
+  ) async {
     final api = _FakeProfileApi();
     var completed = false;
     await tester.pumpWidget(_host(api, onComplete: () => completed = true));
@@ -158,96 +178,131 @@ void main() {
     expect(completed, isTrue);
   });
 
-  testWidgets('a successful save refreshes the profile list (so the new profile shows)',
-      (tester) async {
-    // The bug: the wizard saved the profile on the daemon but the cached
-    // profile-list provider was never invalidated, so the new profile didn't
-    // appear and it looked like nothing saved. The wizard now invalidates it.
-    final api = _FakeProfileApi();
-    final container = ProviderContainer(overrides: [
-      activeServerProvider
-          .overrideWithValue(const AraServer(hostname: 'daemon', port: 5555)),
-      // The list provider reads the API through profileApiProvider — point it at
-      // the same fake so we can count list re-fetches.
-      profileApiProvider.overrideWithValue(api),
-    ]);
-    addTearDown(container.dispose);
-    // Keep the list provider alive so an invalidate triggers a real re-fetch.
-    container.listen(profileManagementProvider, (_, _) {});
-    await container.read(profileManagementProvider.future);
-    expect(api.listCalls, 1, reason: 'initial load fetched the list once');
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
-      ),
-    ));
-    await tester.tap(find.text('Save & Exit'));
-    await tester.pump();
-    api.releaseCreate();
-    await tester.pumpAndSettle();
-
-    expect(api.listCalls, 2,
-        reason: 'a successful save invalidates + re-fetches the profile list');
-  });
-
-  for (final tick in [true, false]) {
-    testWidgets('a saved profile queues the chosen star databases on the rig (ticked=$tick, §36.10)',
-        (tester) async {
+  testWidgets(
+    'a successful save refreshes the profile list (so the new profile shows)',
+    (tester) async {
+      // The bug: the wizard saved the profile on the daemon but the cached
+      // profile-list provider was never invalidated, so the new profile didn't
+      // appear and it looked like nothing saved. The wizard now invalidates it.
       final api = _FakeProfileApi();
-      final dm = FakeDataManagerClient();
-      final container = ProviderContainer(overrides: [
-        activeServerProvider.overrideWithValue(const AraServer(hostname: 'daemon', port: 5555)),
-        dataManagerApiProvider.overrideWithValue(dm),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'daemon', port: 5555),
+          ),
+          // The list provider reads the API through profileApiProvider — point it at
+          // the same fake so we can count list re-fetches.
+          profileApiProvider.overrideWithValue(api),
+        ],
+      );
       addTearDown(container.dispose);
-      final draft = container.read(wizardControllerProvider).draft;
-      draft.plateSolve.solverDatabasePackageIds = ['astap-d05', 'astap-d50'];
-      draft.plateSolve.downloadSolverDatabase = tick;
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(home: WizardShell(createApi: (_) => api, onComplete: (_) {})),
-      ));
+      // Keep the list provider alive so an invalidate triggers a real re-fetch.
+      container.listen(profileManagementProvider, (_, _) {});
+      await container.read(profileManagementProvider.future);
+      expect(api.listCalls, 1, reason: 'initial load fetched the list once');
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+          ),
+        ),
+      );
       await tester.tap(find.text('Save & Exit'));
       await tester.pump();
       api.releaseCreate();
       await tester.pumpAndSettle();
-      expect(dm.downloaded, tick ? ['astap-d05', 'astap-d50'] : isEmpty,
-          reason: 'ticked → both queued after the save; unticked → nothing');
-    });
+
+      expect(
+        api.listCalls,
+        2,
+        reason: 'a successful save invalidates + re-fetches the profile list',
+      );
+    },
+  );
+
+  for (final tick in [true, false]) {
+    testWidgets(
+      'a saved profile queues the chosen star databases on the rig (ticked=$tick, §36.10)',
+      (tester) async {
+        final api = _FakeProfileApi();
+        final dm = FakeDataManagerClient();
+        final container = ProviderContainer(
+          overrides: [
+            activeServerProvider.overrideWithValue(
+              const AraServer(hostname: 'daemon', port: 5555),
+            ),
+            dataManagerApiProvider.overrideWithValue(dm),
+          ],
+        );
+        addTearDown(container.dispose);
+        final draft = container.read(wizardControllerProvider).draft;
+        draft.plateSolve.solverDatabasePackageIds = ['astap-d05', 'astap-d50'];
+        draft.plateSolve.downloadSolverDatabase = tick;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Save & Exit'));
+        await tester.pump();
+        api.releaseCreate();
+        await tester.pumpAndSettle();
+        expect(
+          dm.downloaded,
+          tick ? ['astap-d05', 'astap-d50'] : isEmpty,
+          reason: 'ticked → both queued after the save; unticked → nothing',
+        );
+      },
+    );
   }
 
-  testWidgets('the bottom-nav Skip is gated like Next while the step is invalid',
-      (tester) async {
-    // A skippable gate is no gate: §68.2 (and the field-validation screens,
-    // whose invalid values are already in the draft) must block BOTH advance
-    // buttons. Back stays available.
-    final api = _FakeProfileApi();
-    final container = ProviderContainer(overrides: [
-      activeServerProvider.overrideWithValue(
-        const AraServer(hostname: 'daemon', port: 5555),
-      ),
-    ]);
-    addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
-      ),
-    ));
+  testWidgets(
+    'the bottom-nav Skip is gated like Next while the step is invalid',
+    (tester) async {
+      // A skippable gate is no gate: §68.2 (and the field-validation screens,
+      // whose invalid values are already in the draft) must block BOTH advance
+      // buttons. Back stays available.
+      final api = _FakeProfileApi();
+      final container = ProviderContainer(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'daemon', port: 5555),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+          ),
+        ),
+      );
 
-    final skip = find.widgetWithText(TextButton, 'Skip — use defaults');
-    expect(tester.widget<TextButton>(skip).onPressed, isNotNull,
-        reason: 'a valid step skips normally');
+      final skip = find.widgetWithText(TextButton, 'Skip — use defaults');
+      expect(
+        tester.widget<TextButton>(skip).onPressed,
+        isNotNull,
+        reason: 'a valid step skips normally',
+      );
 
-    container.read(wizardStepValidProvider.notifier).setValid(false);
-    await tester.pump();
-    expect(tester.widget<TextButton>(skip).onPressed, isNull,
-        reason: 'an invalid/gated step blocks Skip exactly like Next');
-    final next = find.widgetWithText(FilledButton, 'Next');
-    expect(tester.widget<FilledButton>(next).onPressed, isNull);
-    // (Back is null here only because step 1 has nothing to go back to —
-    // the gate itself never disables it.)
-  });
+      container.read(wizardStepValidProvider.notifier).setValid(false);
+      await tester.pump();
+      expect(
+        tester.widget<TextButton>(skip).onPressed,
+        isNull,
+        reason: 'an invalid/gated step blocks Skip exactly like Next',
+      );
+      final next = find.widgetWithText(FilledButton, 'Next');
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      // (Back is null here only because step 1 has nothing to go back to —
+      // the gate itself never disables it.)
+    },
+  );
 }

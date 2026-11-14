@@ -132,7 +132,8 @@ class ProfileApi {
   /// (`GET /api/v1/profiles/{id}/guider-twin`), for the delete dialog.
   Future<GuiderTwinPreview> getGuiderTwin(String id) async {
     final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/profiles/${Uri.encodeComponent(id)}/guider-twin');
+      '/api/v1/profiles/${Uri.encodeComponent(id)}/guider-twin',
+    );
     return GuiderTwinPreview.fromJson(res.data ?? const <String, dynamic>{});
   }
 
@@ -141,8 +142,10 @@ class ProfileApi {
   /// Guider profile (calibration and dark library included) — now, or queued
   /// until the guider is connected and idle — and the result says which. The
   /// default never touches guider data.
-  Future<ProfileDeleteResult> deleteProfile(String id,
-      {bool deleteGuiderProfile = false}) async {
+  Future<ProfileDeleteResult> deleteProfile(
+    String id, {
+    bool deleteGuiderProfile = false,
+  }) async {
     final res = await _dio.delete<dynamic>(
       '/api/v1/profiles/${Uri.encodeComponent(id)}',
       queryParameters: {
@@ -352,12 +355,14 @@ class ProfileApi {
 
   /// Wire shape of the §36 custom horizon (`{points: [{azimuth_deg, altitude_deg}]}`),
   /// also what the offline profile cache stores (#1137).
-  static Map<String, dynamic> customHorizonToJson(List<CustomHorizonPoint> points) => {
-        'points': [
-          for (final p in points)
-            {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
-        ],
-      };
+  static Map<String, dynamic> customHorizonToJson(
+    List<CustomHorizonPoint> points,
+  ) => {
+    'points': [
+      for (final p in points)
+        {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
+    ],
+  };
 
   static List<CustomHorizonPoint> customHorizonFromJson(
     Map<String, dynamic> json,
@@ -431,6 +436,32 @@ class ProfileApi {
   Future<StorageSettings> getStorageSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
     return _storageSettingsFromJson(res.data ?? const {});
+  }
+
+  /// GET the storage section with the rig's `ETag` (ADR 0015).
+  Future<({StorageSettings value, String? etag})> getStorageSection() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
+    return (
+      value: _storageSettingsFromJson(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
+  /// PUT the storage section; [ifMatch] is the `ETag` of the copy that was
+  /// loaded, so a newer copy on the rig answers 412 and is left alone.
+  Future<({StorageSettings value, String? etag})> putStorageSection(
+    StorageSettings value, {
+    String? ifMatch,
+  }) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/storage',
+      data: _storageSettingsToJson(value),
+      options: Options(headers: {'If-Match': ?ifMatch}),
+    );
+    return (
+      value: _storageSettingsFromJson(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
   }
 
   /// PUT the active profile's storage-settings section.
@@ -528,7 +559,9 @@ class ProfileApi {
   /// predating the section (404) answers the defaults.
   Future<UnguidedSettings> getUnguidedSettings() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/unguided');
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/profile/unguided',
+      );
       return unguidedSettingsFromJson(res.data ?? const {});
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return const UnguidedSettings();
@@ -664,7 +697,9 @@ class ProfileApi {
   }
 
   /// PUT the active profile's filter-wheel policy. Returns Ara's echo.
-  Future<FilterWheelPolicy> putFilterWheelPolicy(FilterWheelPolicy value) async {
+  Future<FilterWheelPolicy> putFilterWheelPolicy(
+    FilterWheelPolicy value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/filter-wheel/policy',
       data: value.toJson(),
@@ -846,20 +881,16 @@ class ProfileApi {
   static StorageSettings _storageSettingsFromJson(
     Map<String, dynamic> j,
   ) => StorageSettings(
-    saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
-    fileFormat: StorageFileFormat.fromWire(j['file_format'] as String?),
-    compression: StorageCompression.fromWire(j['compression'] as String?),
-    // Fallback matches the StorageSettings() constructor default
-    // (raw-string literal with `\\` double-backslash separators).
-    filenameTemplate:
-        (j['filename_template'] as String?) ??
-        r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
-    minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num?)?.toInt() ?? 10,
-    minFreeDiskCriticalGb:
-        (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
-    backupRetentionCount: (j['backup_retention_count'] as num?)?.toInt() ?? 20,
-    faultLogRetentionDays:
-        (j['fault_log_retention_days'] as num?)?.toInt() ?? 90,
+    // No client defaults (ADR 0012/0015): the daemon's normalizer owns them, so
+    // a missing key fails the load instead of inventing a value.
+    saveDirectory: j['save_directory'] as String,
+    fileFormat: StorageFileFormat.fromWire(j['file_format'] as String),
+    compression: StorageCompression.fromWire(j['compression'] as String),
+    filenameTemplate: j['filename_template'] as String,
+    minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num).toInt(),
+    minFreeDiskCriticalGb: (j['min_free_disk_critical_gb'] as num).toInt(),
+    backupRetentionCount: (j['backup_retention_count'] as num).toInt(),
+    faultLogRetentionDays: (j['fault_log_retention_days'] as num).toInt(),
   );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
@@ -930,7 +961,8 @@ class ProfileApi {
         (j['force_calibration_each_session'] as bool?) ?? false,
     // §63.19 guide setup type — unknown tokens coerce to 'guide_scope'.
     guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
-        (j['guider_setup_type'] as String?) ?? 'guide_scope'),
+      (j['guider_setup_type'] as String?) ?? 'guide_scope',
+    ),
     // §63.5 guider-engine config (defaults match the server's optional-field defaults).
     guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
     guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
@@ -938,7 +970,10 @@ class ProfileApi {
     decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
     minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
     // #1156 — a daemon profile from before the split has no Dec value: Dec follows RA.
-    decMinimumMove: (j['dec_minimum_move'] as num?)?.toDouble() ?? (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
+    decMinimumMove:
+        (j['dec_minimum_move'] as num?)?.toDouble() ??
+        (j['minimum_move'] as num?)?.toDouble() ??
+        0.15,
     decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
     // §63.17 guider equipment selection ("" / 0 = unset).
     guiderCamera: (j['guider_camera'] as String?) ?? '',
@@ -1025,7 +1060,8 @@ class ProfileApi {
     Map<String, dynamic> j,
   ) => PlateSolveSettings(
     engine: _plateSolveEngineFromString(j['engine'] as String?),
-    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/opt/openastroara/astap_cli',
+    pathOrEndpoint:
+        (j['path_or_endpoint'] as String?) ?? '/opt/openastroara/astap_cli',
     indexDownloadPath:
         (j['index_download_path'] as String?) ?? '/var/lib/astap',
     searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
@@ -1149,79 +1185,79 @@ class ProfileApi {
 
   /// The safety-policies wire mapping, exposed for the round-trip test (#1138).
   @visibleForTesting
-  static SafetyPolicies safetyPoliciesFromJson(Map<String, dynamic> j) =>
-      SafetyPolicies(
-        onUnsafe: _unsafeActionFromString(j['on_unsafe'] as String?),
-        autoResumeWhenSafe: (j['auto_resume_when_safe'] as bool?) ?? true,
-        resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
-        meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
-        meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
-        meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
-        meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
-        meridianRefocus: _meridianRefocusFromString(j['meridian_refocus'] as String?),
-        meridianRefocusTempThresholdC:
-            (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
-        // A daemon/profile from before the mode carries null: left null here too, so a save
-        // does not invent a mode (the daemon keeps its legacy behaviour until the user picks one).
-        meridianGuiderRecal: j['meridian_guider_recal'] is String
-            ? _guiderRecalFromString(j['meridian_guider_recal'] as String)
-            : null,
-        unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
-        unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
-        onAltitudeLimit: _altitudeLimitActionFromString(
-          j['on_altitude_limit'] as String?,
-        ),
-        parkIfNoMoreTargets: (j['park_if_no_more_targets'] as bool?) ?? true,
-        onGuiderLost: _guiderLostActionFromString(
-          j['on_guider_lost'] as String?,
-        ),
-        guiderRetryTimeoutSec:
-            (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
-        skipTargetIfRecoveryFails:
-            (j['skip_target_if_recovery_fails'] as bool?) ?? true,
-        onDiskSpaceCritical: switch ((j['on_disk_space_critical'] as String?)?.toLowerCase()) {
-          'abort' => DiskSpaceCriticalAction.abort,
-          'pause' => DiskSpaceCriticalAction.pause,
-          _ => DiskSpaceCriticalAction.warn,
-        },
-        flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
-        expectedFlipSlewSeconds:
-            (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
-        firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
-        unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
-        unattendedShutdownEnabled:
-            (j['unattended_shutdown_enabled'] as bool?) ?? true,
-        unattendedShutdownWaitMinutes:
-            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 30,
-        calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
-          j['calibration_capture_default'] as String?,
-        ),
-        weatherTriggersEnabled: (j['weather_triggers_enabled'] as bool?) ?? false,
-        maxWindKmh: (j['max_wind_kmh'] as num?)?.toInt() ?? 36,
-        maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
-        minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
-        flatTargetAdu: (j['flat_target_adu'] as num?)?.toInt() ?? 30000,
-        flatTargetPercent:
-            (j['flat_target_percent'] as num?)?.toDouble() ?? 50,
-        flatTargetAduTolerancePct:
-            (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
-        flatFramesPerFilter:
-            (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
-        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? false,
-        skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
-        skyFlatFramesPerFilter:
-            (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,
-        skyFlatTargetAzimuth:
-            (j['sky_flat_target_azimuth'] as num?)?.toDouble() ?? 90.0,
-        skyFlatTargetAltitude:
-            (j['sky_flat_target_altitude'] as num?)?.toDouble() ?? 75.0,
-        skyFlatStopAtMaxAdu:
-            (j['sky_flat_stop_at_max_adu'] as num?)?.toDouble() ?? 50000.0,
-        skyFlatStopAtMinAdu:
-            (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
-        skyFlatSunAltitude:
-            (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
-      );
+  static SafetyPolicies safetyPoliciesFromJson(
+    Map<String, dynamic> j,
+  ) => SafetyPolicies(
+    onUnsafe: _unsafeActionFromString(j['on_unsafe'] as String?),
+    autoResumeWhenSafe: (j['auto_resume_when_safe'] as bool?) ?? true,
+    resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
+    meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
+    meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
+    meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
+    meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
+    meridianRefocus: _meridianRefocusFromString(
+      j['meridian_refocus'] as String?,
+    ),
+    meridianRefocusTempThresholdC:
+        (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
+    // A daemon/profile from before the mode carries null: left null here too, so a save
+    // does not invent a mode (the daemon keeps its legacy behaviour until the user picks one).
+    meridianGuiderRecal: j['meridian_guider_recal'] is String
+        ? _guiderRecalFromString(j['meridian_guider_recal'] as String)
+        : null,
+    unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
+    unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
+    onAltitudeLimit: _altitudeLimitActionFromString(
+      j['on_altitude_limit'] as String?,
+    ),
+    parkIfNoMoreTargets: (j['park_if_no_more_targets'] as bool?) ?? true,
+    onGuiderLost: _guiderLostActionFromString(j['on_guider_lost'] as String?),
+    guiderRetryTimeoutSec:
+        (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
+    skipTargetIfRecoveryFails:
+        (j['skip_target_if_recovery_fails'] as bool?) ?? true,
+    onDiskSpaceCritical: switch ((j['on_disk_space_critical'] as String?)
+        ?.toLowerCase()) {
+      'abort' => DiskSpaceCriticalAction.abort,
+      'pause' => DiskSpaceCriticalAction.pause,
+      _ => DiskSpaceCriticalAction.warn,
+    },
+    flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
+    expectedFlipSlewSeconds:
+        (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
+    firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+    unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
+    unattendedShutdownEnabled:
+        (j['unattended_shutdown_enabled'] as bool?) ?? true,
+    unattendedShutdownWaitMinutes:
+        (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 30,
+    calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
+      j['calibration_capture_default'] as String?,
+    ),
+    weatherTriggersEnabled: (j['weather_triggers_enabled'] as bool?) ?? false,
+    maxWindKmh: (j['max_wind_kmh'] as num?)?.toInt() ?? 36,
+    maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
+    minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
+    flatTargetAdu: (j['flat_target_adu'] as num?)?.toInt() ?? 30000,
+    flatTargetPercent: (j['flat_target_percent'] as num?)?.toDouble() ?? 50,
+    flatTargetAduTolerancePct:
+        (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
+    flatFramesPerFilter: (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
+    postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? false,
+    skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
+    skyFlatFramesPerFilter:
+        (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,
+    skyFlatTargetAzimuth:
+        (j['sky_flat_target_azimuth'] as num?)?.toDouble() ?? 90.0,
+    skyFlatTargetAltitude:
+        (j['sky_flat_target_altitude'] as num?)?.toDouble() ?? 75.0,
+    skyFlatStopAtMaxAdu:
+        (j['sky_flat_stop_at_max_adu'] as num?)?.toDouble() ?? 50000.0,
+    skyFlatStopAtMinAdu:
+        (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
+    skyFlatSunAltitude:
+        (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
+  );
 
   @visibleForTesting
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
@@ -1237,10 +1273,12 @@ class ProfileApi {
     'meridian_guider_recal': v.meridianGuiderRecal == null
         ? null
         : _guiderRecalToString(v.meridianGuiderRecal!),
-    'unattended_window_start':
-        v.unattendedWindowStart.isEmpty ? null : v.unattendedWindowStart,
-    'unattended_window_end':
-        v.unattendedWindowEnd.isEmpty ? null : v.unattendedWindowEnd,
+    'unattended_window_start': v.unattendedWindowStart.isEmpty
+        ? null
+        : v.unattendedWindowStart,
+    'unattended_window_end': v.unattendedWindowEnd.isEmpty
+        ? null
+        : v.unattendedWindowEnd,
     'on_altitude_limit': _altitudeLimitActionToString(v.onAltitudeLimit),
     'park_if_no_more_targets': v.parkIfNoMoreTargets,
     'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
@@ -1254,8 +1292,9 @@ class ProfileApi {
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
-    'calibration_capture_default':
-        _calibrationCaptureDefaultToString(v.calibrationCaptureDefault),
+    'calibration_capture_default': _calibrationCaptureDefaultToString(
+      v.calibrationCaptureDefault,
+    ),
     'weather_triggers_enabled': v.weatherTriggersEnabled,
     'max_wind_kmh': v.maxWindKmh,
     'max_humidity_pct': v.maxHumidityPct,
@@ -1317,12 +1356,11 @@ class ProfileApi {
     }
   }
 
-  static String _meridianRefocusToString(MeridianRefocusMode m) =>
-      switch (m) {
-        MeridianRefocusMode.always => 'always',
-        MeridianRefocusMode.never => 'never',
-        MeridianRefocusMode.ifTempDrifted => 'if_temp_drifted',
-      };
+  static String _meridianRefocusToString(MeridianRefocusMode m) => switch (m) {
+    MeridianRefocusMode.always => 'always',
+    MeridianRefocusMode.never => 'never',
+    MeridianRefocusMode.ifTempDrifted => 'if_temp_drifted',
+  };
 
   static GuiderRecalMode _guiderRecalFromString(String? s) {
     switch (s) {
@@ -1337,10 +1375,10 @@ class ProfileApi {
   }
 
   static String _guiderRecalToString(GuiderRecalMode m) => switch (m) {
-        GuiderRecalMode.full => 'full',
-        GuiderRecalMode.skip => 'skip',
-        GuiderRecalMode.autoRestore => 'auto_restore',
-      };
+    GuiderRecalMode.full => 'full',
+    GuiderRecalMode.skip => 'skip',
+    GuiderRecalMode.autoRestore => 'auto_restore',
+  };
 
   static UnsafeAction _unsafeActionFromString(String? s) {
     switch (s) {

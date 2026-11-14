@@ -116,12 +116,6 @@ public interface ITelescopeService {
     /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
-
-    /// <summary>#1246 — true once a refresh tick since the current connect read the runtime with
-    /// no driver error. The §42.3 ladder's "recovered" for the mount is gated on it: a bridge still
-    /// latched after the reconnect answers Connected while every read fails, and must walk the next
-    /// rung rather than resume the run.</summary>
-    bool HasCleanReadSinceConnect { get; }
 }
 
 public interface IFocuserService {

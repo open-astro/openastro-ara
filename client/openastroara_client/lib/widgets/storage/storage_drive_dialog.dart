@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 import '../../state/simple_messages_state.dart';
@@ -35,22 +38,24 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
 }
 
 /// What the disk chooser says when Use Disk fails, keyed on the helper's code.
-String storageConfigureMessage(AppLocalizations l,
-        StorageConfigureOutcome outcome, StorageDevice device) =>
-    switch (outcome.code) {
-      'not_ext4' => l.storageConfigureNotExt4,
-      'label_mismatch' => l.storageConfigureLabelMismatch,
-      'device_busy' when outcome.detail == 'previous_store' =>
-        l.storageConfigurePreviousBusy,
-      'device_busy' => l.storageConfigureBusy,
-      'system_disk' || 'refused' => l.storageConfigureSystemDisk,
-      'uuid_not_found' => l.storageConfigureDisconnected,
-      'helper_missing' => l.storageConfigureHelperMissing,
-      'mkfs_failed' => l.storageConfigureMkfsFailed,
-      'mount_failed' => l.storageConfigureMountFailed,
-      'exfat_unsupported' => l.storageConfigureExfatUnsupported,
-      _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
-    };
+String storageConfigureMessage(
+  AppLocalizations l,
+  StorageConfigureOutcome outcome,
+  StorageDevice device,
+) => switch (outcome.code) {
+  'not_ext4' => l.storageConfigureNotExt4,
+  'label_mismatch' => l.storageConfigureLabelMismatch,
+  'device_busy' when outcome.detail == 'previous_store' =>
+    l.storageConfigurePreviousBusy,
+  'device_busy' => l.storageConfigureBusy,
+  'system_disk' || 'refused' => l.storageConfigureSystemDisk,
+  'uuid_not_found' => l.storageConfigureDisconnected,
+  'helper_missing' => l.storageConfigureHelperMissing,
+  'mkfs_failed' => l.storageConfigureMkfsFailed,
+  'mount_failed' => l.storageConfigureMountFailed,
+  'exfat_unsupported' => l.storageConfigureExfatUnsupported,
+  _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
+};
 
 /// The list and its erase step: a dialog's content on its own, or laid out in
 /// place when the host passes [onClose] (Simple Mode has no popups).
@@ -71,9 +76,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   /// Simple Mode's 44 px floor; a dialog keeps its theme's size.
   Size? get _minSize => _inline ? const Size(0, 44) : null;
 
-  void _close() =>
-      _inline ? widget.onClose!() : Navigator.of(context).pop();
-
+  void _close() => _inline ? widget.onClose!() : Navigator.of(context).pop();
 
   StorageDevice? _selected;
   final TextEditingController _confirm = TextEditingController();
@@ -152,9 +155,12 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
         return;
       }
       if (outcome.success) {
-        final dir = outcome.saveDirectory;
-        if (dir != null && dir.isNotEmpty) {
-          ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
+        // The daemon wrote the Storage section itself (new save directory,
+        // new ETag) and no profile.updated follows this route: reload it, or
+        // the next Save sends the old tag and gets a false 412 (ADR 0015).
+        final profile = ref.read(profileApiProvider);
+        if (profile != null) {
+          unawaited(ref.read(storageSettingsProvider.notifier).load(profile));
         }
         final notify = userNotifier(context);
         final done = context.l10n.storageDiskNowUsed(device.friendlyName);
@@ -176,8 +182,11 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     }
   }
 
-  List<Widget> _contentsLines(AsyncValue<StorageContents> contents,
-      AppLocalizations l10n, ThemeData theme) {
+  List<Widget> _contentsLines(
+    AsyncValue<StorageContents> contents,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
     final body = theme.textTheme.bodySmall;
     final c = contents.asData?.value;
     if (contents.isLoading) {
@@ -196,23 +205,32 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     final newest = c.newestFrameUtc;
     return [
       Text(
-          newest == null
-              ? l10n.storageDiskContentsFramesUndated(c.frames)
-              : l10n.storageDiskContentsFrames(c.frames,
-                  DateFormat.yMMMd(l10n.localeName).format(newest.toLocal())),
-          style: body),
+        newest == null
+            ? l10n.storageDiskContentsFramesUndated(c.frames)
+            : l10n.storageDiskContentsFrames(
+                c.frames,
+                DateFormat.yMMMd(l10n.localeName).format(newest.toLocal()),
+              ),
+        style: body,
+      ),
       // What #1579 is for: as loud as the erase heading, never a footnote.
       if (c.framesNotCopied > 0)
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           spacing: 6,
           children: [
-            const Icon(Icons.warning_amber_rounded,
-                size: 20, color: AraColors.accentBusy),
+            const Icon(
+              Icons.warning_amber_rounded,
+              size: 20,
+              color: AraColors.accentBusy,
+            ),
             Expanded(
-              child: Text(l10n.storageDiskContentsNotCopied(c.framesNotCopied),
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(color: AraColors.accentBusy)),
+              child: Text(
+                l10n.storageDiskContentsNotCopied(c.framesNotCopied),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
+              ),
             ),
           ],
         ),
@@ -225,192 +243,214 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     final l10n = context.l10n;
     final async = ref.watch(storageDevicesProvider);
     final body = async.when(
-          loading: () => const SizedBox(
-              height: 140, child: Center(child: AdaptiveProgressIndicator())),
-          error: (e, _) => SizedBox(
+      loading: () => const SizedBox(
+        height: 140,
+        child: Center(child: AdaptiveProgressIndicator()),
+      ),
+      error: (e, _) => SizedBox(
+        height: 140,
+        child: Center(
+          child: Text(
+            friendlyError(l10n, e, action: l10n.storageDiskReadAction),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+      data: (all) {
+        final disks = all.where((d) => !d.isSystemDisk).toList();
+        // A rescan hands out fresh device objects — re-point the
+        // selection at its current record so the erase/label logic never
+        // reads pre-rescan state. A disk that vanished deselects.
+        final selectedPath = _selected?.path;
+        if (selectedPath != null) {
+          _selected = null;
+          for (final d in disks) {
+            if (d.path == selectedPath) {
+              _selected = d;
+              break;
+            }
+          }
+        }
+        if (disks.isEmpty) {
+          return SizedBox(
             height: 140,
             child: Center(
-                child: Text(friendlyError(l10n, e, action: l10n.storageDiskReadAction),
-                    textAlign: TextAlign.center)),
-          ),
-          data: (all) {
-            final disks = all.where((d) => !d.isSystemDisk).toList();
-            // A rescan hands out fresh device objects — re-point the
-            // selection at its current record so the erase/label logic never
-            // reads pre-rescan state. A disk that vanished deselects.
-            final selectedPath = _selected?.path;
-            if (selectedPath != null) {
-              _selected = null;
-              for (final d in disks) {
-                if (d.path == selectedPath) {
-                  _selected = d;
-                  break;
-                }
-              }
-            }
-            if (disks.isEmpty) {
-              return SizedBox(
-                height: 140,
-                child: Center(
-                  child: Text(
-                    l10n.storageDiskNoneFound,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              );
-            }
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    // Inline, the Settings page does the scrolling.
-                    physics:
-                        _inline ? const NeverScrollableScrollPhysics() : null,
-                    itemCount: disks.length,
-                    itemBuilder: (_, i) {
-                      final d = disks[i];
-                      final selected = identical(d, _selected) ||
-                          (_selected != null && d.path == _selected!.path);
-                      return ListTile(
-                        selected: selected,
-                        // Inline it sits on Simple Mode's tiles: the theme blue reads at 2:1.
-                        selectedColor: _inline ? AraColors.linkText : null,
-                        selectedTileColor: _inline
-                            ? AraColors.selectionTint
-                            : AraColors.textSecondary.withValues(alpha: 0.12),
-                        // A check too: the tint alone barely shows in Night mode.
-                        leading: Icon(
-                            selected
-                                ? Icons.check_circle
-                                : d.removable
-                                ? Icons.usb
-                                : Icons.storage,
-                            size: 28),
-                        title: Text(d.friendlyName),
-                        subtitle: Text(d.detailLine(l10n)),
-                        trailing: d.isAraStore
-                            ? Text(l10n.storageDiskInUse, style: theme.textTheme.bodySmall)
-                            : null,
-                        onTap: _busy
-                            ? null
-                            : () => setState(() {
-                                  _selected = d;
-                                  _confirm.clear();
-                                  _error = null;
-                                  _eraseAnyway = false;
-                                }),
-                      );
-                    },
-                  ),
-                ),
-                // A mountable drive offers the deliberate reformat path —
-                // how an existing ext4 store becomes a take-home exFAT one.
-                if (_selected != null && !_mustErase) ...[
-                  const Divider(height: 24),
-                  SwitchListTile(
-                    dense: !_inline,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.storageDiskEraseChange),
-                    subtitle: Text(
-                        l10n.storageDiskEraseChangeNote(
-                            '${_selected!.fileSystem}'),
-                        style: theme.textTheme.bodySmall),
-                    value: _eraseAnyway,
-                    onChanged: _busy
+              child: Text(
+                l10n.storageDiskNoneFound,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                // Inline, the Settings page does the scrolling.
+                physics: _inline ? const NeverScrollableScrollPhysics() : null,
+                itemCount: disks.length,
+                itemBuilder: (_, i) {
+                  final d = disks[i];
+                  final selected =
+                      identical(d, _selected) ||
+                      (_selected != null && d.path == _selected!.path);
+                  return ListTile(
+                    selected: selected,
+                    // Inline it sits on Simple Mode's tiles: the theme blue reads at 2:1.
+                    selectedColor: _inline ? AraColors.linkText : null,
+                    selectedTileColor: _inline
+                        ? AraColors.selectionTint
+                        : AraColors.textSecondary.withValues(alpha: 0.12),
+                    // A check too: the tint alone barely shows in Night mode.
+                    leading: Icon(
+                      selected
+                          ? Icons.check_circle
+                          : d.removable
+                          ? Icons.usb
+                          : Icons.storage,
+                      size: 28,
+                    ),
+                    title: Text(d.friendlyName),
+                    subtitle: Text(d.detailLine(l10n)),
+                    trailing: d.isAraStore
+                        ? Text(
+                            l10n.storageDiskInUse,
+                            style: theme.textTheme.bodySmall,
+                          )
+                        : null,
+                    onTap: _busy
                         ? null
-                        : (v) => setState(() {
-                              _eraseAnyway = v;
-                              _confirm.clear();
-                            }),
-                  ),
-                ],
-                if (_needsErase) ...[
-                  // What would be lost comes first, before how to erase.
-                  if (_contents case final contents?) ...[
-                    const SizedBox(height: 10),
-                    ..._contentsLines(contents, l10n, theme),
-                  ],
-                  if (_mustErase) ...[
-                    const Divider(height: 24),
-                    Text(l10n.storageDiskMustErase,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(color: AraColors.accentBusy)),
-                    const SizedBox(height: 6),
-                    Text(
-                      l10n.storageDiskMustEraseNote,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  RadioGroup<String>(
-                    groupValue: _newFilesystem,
-                    onChanged: (v) =>
-                        setState(() => _newFilesystem = v ?? 'exfat'),
-                    child: Column(
-                      children: [
-                        RadioListTile<String>(
-                          value: 'exfat',
-                          dense: !_inline,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.storageDiskExfat),
-                          subtitle: Text(
-                              l10n.storageDiskExfatNote,
-                              style: theme.textTheme.bodySmall),
-                        ),
-                        RadioListTile<String>(
-                          value: 'ext4',
-                          dense: !_inline,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.storageDiskExt4),
-                          subtitle: Text(
-                              l10n.storageDiskExt4Note,
-                              style: theme.textTheme.bodySmall),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                      (_selected!.label ?? '').isNotEmpty
-                          ? l10n.storageDiskTypeLabel(_selected!.label!)
-                          : l10n.storageDiskTypeErase,
-                      style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: _confirm,
-                    autofocus: true,
-                    enabled: !_busy,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(isDense: !_inline),
-                  ),
-                ],
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AraColors.accentBusy)),
-                ],
-                if (_busy) ...[
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2)),
-                    const SizedBox(width: 10),
-                    Text(
-                        _needsErase
-                            ? l10n.storageDiskErasing
-                            : l10n.storageDiskConnecting,
-                        style: theme.textTheme.bodySmall),
-                  ]),
-                ],
+                        : () => setState(() {
+                            _selected = d;
+                            _confirm.clear();
+                            _error = null;
+                            _eraseAnyway = false;
+                          }),
+                  );
+                },
+              ),
+            ),
+            // A mountable drive offers the deliberate reformat path —
+            // how an existing ext4 store becomes a take-home exFAT one.
+            if (_selected != null && !_mustErase) ...[
+              const Divider(height: 24),
+              SwitchListTile(
+                dense: !_inline,
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.storageDiskEraseChange),
+                subtitle: Text(
+                  l10n.storageDiskEraseChangeNote('${_selected!.fileSystem}'),
+                  style: theme.textTheme.bodySmall,
+                ),
+                value: _eraseAnyway,
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() {
+                        _eraseAnyway = v;
+                        _confirm.clear();
+                      }),
+              ),
+            ],
+            if (_needsErase) ...[
+              // What would be lost comes first, before how to erase.
+              if (_contents case final contents?) ...[
+                const SizedBox(height: 10),
+                ..._contentsLines(contents, l10n, theme),
               ],
-            );
-          },);
+              if (_mustErase) ...[
+                const Divider(height: 24),
+                Text(
+                  l10n.storageDiskMustErase,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: AraColors.accentBusy,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.storageDiskMustEraseNote,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 8),
+              RadioGroup<String>(
+                groupValue: _newFilesystem,
+                onChanged: (v) => setState(() => _newFilesystem = v ?? 'exfat'),
+                child: Column(
+                  children: [
+                    RadioListTile<String>(
+                      value: 'exfat',
+                      dense: !_inline,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.storageDiskExfat),
+                      subtitle: Text(
+                        l10n.storageDiskExfatNote,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    RadioListTile<String>(
+                      value: 'ext4',
+                      dense: !_inline,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.storageDiskExt4),
+                      subtitle: Text(
+                        l10n.storageDiskExt4Note,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                (_selected!.label ?? '').isNotEmpty
+                    ? l10n.storageDiskTypeLabel(_selected!.label!)
+                    : l10n.storageDiskTypeErase,
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _confirm,
+                autofocus: true,
+                enabled: !_busy,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(isDense: !_inline),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
+              ),
+            ],
+            if (_busy) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _needsErase
+                        ? l10n.storageDiskErasing
+                        : l10n.storageDiskConnecting,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
     final actions = [
       TextButton(
         style: TextButton.styleFrom(minimumSize: _minSize),
@@ -433,7 +473,8 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
             ? FilledButton.styleFrom(minimumSize: _minSize)
             : null,
         // A failed list can't vouch for the disk the confirmation named.
-        onPressed: _busy ||
+        onPressed:
+            _busy ||
                 async.hasError ||
                 _selected == null ||
                 !_selected!.selectable ||
@@ -441,7 +482,8 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
             ? null
             : _useDisk,
         child: Text(
-            _needsErase ? l10n.storageDiskEraseUse : l10n.storageDiskUse),
+          _needsErase ? l10n.storageDiskEraseUse : l10n.storageDiskUse,
+        ),
       ),
     ];
     final title = l10n.storageDiskChooseTitle;

@@ -38,6 +38,7 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
     this.simple = false,
     this.compact = false,
     this.large = false,
+    this.enabled = true,
   });
 
   final bool simple;
@@ -49,6 +50,10 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
   /// Monitor's corner version (#1724): the compact square at 108 pt, with
   /// type and icon to match.
   final bool large;
+
+  /// False: drawn disabled in its place (a phone before any rig has been
+  /// connected, #1775).
+  final bool enabled;
 
   @override
   ConsumerState<EmergencyStopButton> createState() =>
@@ -97,6 +102,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   }
 
   void _pressDown(PointerDownEvent e) {
+    if (!widget.enabled) return;
     // Only the primary button (a finger, a left click) arms the hold.
     if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) {
       return;
@@ -310,6 +316,12 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       backgroundColor: red,
       // Not onError: the app's dark scheme makes that black (4.2:1 on the red).
       foregroundColor: AraColors.onEmergencyStop,
+      // Drawn disabled (#1775), STOP still reads as STOP: a dim red with the
+      // icon and word in grey, not the theme's near-invisible default.
+      disabledBackgroundColor: widget.enabled
+          ? null
+          : red.withValues(alpha: 0.24),
+      disabledForegroundColor: widget.enabled ? null : AraColors.textSecondary,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : (simple ? 8 : 18),
         vertical: simple ? 0 : 7,
@@ -330,7 +342,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     // has no room for both on one line.
     final button = simple
         ? FilledButton(
-            onPressed: _inFlight ? null : _onPressed,
+            onPressed: _inFlight || !widget.enabled ? null : _onPressed,
             style: style,
             // Armed, the compact square drops the icon: PRESS AGAIN needs
             // both lines' room at larger text.
@@ -343,7 +355,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
             ),
           )
         : FilledButton.icon(
-            onPressed: _inFlight ? null : _onPressed,
+            onPressed: _inFlight || !widget.enabled ? null : _onPressed,
             style: style,
             icon: icon,
             label: label,

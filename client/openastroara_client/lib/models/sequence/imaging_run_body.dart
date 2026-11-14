@@ -46,11 +46,16 @@ class UnguidedOptions {
 /// ├─ Unpark Scope
 /// ├─ Set Tracking       (sidereal)
 /// ├─ Target SequentialContainer  (named after the target — see [buildTargetBlock])
-/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates; blind when autofocus follows)
+/// │   ├─ Slew to RA/Dec     (J2000 coordinates; blind when autofocus runs
+/// │   │                      first, i.e. without guiding)
 /// │   ├─ Switch Filter      (when a filter is chosen — matched by name)
-/// │   ├─ Run Autofocus      (when enabled)
-/// │   ├─ Slew to RA/Dec     (after autofocus only: the centring go-to)
 /// │   ├─ Cool Camera        (when a cooler target is configured; waits for the sensor)
+/// │   ├─ Start Guiding      (when guiding; then Run Autofocus, when enabled)
+/// │   ├─ Run Autofocus      (without guiding, when enabled: here, before the
+/// │   │                      centring go-to)
+/// │   ├─ Slew to RA/Dec     (without guiding, after autofocus: the centring
+/// │   │                      go-to)
+/// │   ├─ Tracking Probe     (no guider on the rig; before the first loop)
 /// │   └─ "Imaging" SequentialContainer
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
@@ -66,12 +71,15 @@ class UnguidedOptions {
 /// tracking / warm) stay at the root and are emitted once.
 ///
 /// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
-/// block becomes filter-aware: slew → switch to the FIRST plan filter →
-/// autofocus (through that filter) → go-to → optional Start Guiding → one
-/// `<Filter> Imaging` loop per plan step (each preceded by its Switch
-/// Filter), every loop carrying the dither / autofocus triggers. §63 made
-/// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding steps
-/// execute for real now.
+/// block becomes filter-aware, then runs one `<Filter> Imaging` loop per plan
+/// step (each preceded by its Switch Filter), every loop carrying the dither /
+/// autofocus triggers. Guiding plans run: go-to (centring) → switch to the
+/// FIRST plan filter → cool → Start Guiding → autofocus (through that filter).
+/// Plans without guiding and with autofocus run: blind slew → switch to the
+/// first filter → cool → autofocus → go-to; with autofocus off, go-to first.
+/// The probe follows only when the rig has no guider. §63 made
+/// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding
+/// steps execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
 /// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now).
@@ -199,10 +207,13 @@ class FilterPlanStep {
 }
 
 /// One target's worth of session — a SequentialContainer named after the
-/// target holding slew → optional filter switch → optional autofocus →
-/// go-to (with autofocus, the first slew is blind and this one centres) →
-/// optional Start Guiding → optional waiting Cool Camera → the Take-Exposure
-/// loop(s). With a [filterPlan],
+/// target holding, guiding: go-to (centring) → optional filter switch →
+/// optional waiting Cool Camera → Start Guiding → optional autofocus → the
+/// Take-Exposure loop(s); without guiding: with autofocus, blind slew →
+/// optional filter switch → optional Cool Camera → autofocus → go-to; without
+/// autofocus, go-to → optional filter switch → optional Cool Camera; then,
+/// with no guider on the rig, the Tracking Probe, then the loop(s). With a
+/// [filterPlan],
 /// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
 /// exposure and count); without one, the single default loop as before.
 /// This is the unit [buildImagingRunBody] wraps once and
@@ -455,9 +466,16 @@ Map<String, dynamic> buildTargetBlock({
   // instead of the default ContinueOnError: filter, focus, guiding and every
   // frame after it would run on the wrong patch of sky.
   //
-  // With autofocus, the block slews blind, focuses near the target, and only
-  // then centres: a solve on an out-of-focus field fails (user, 2026-11-02).
-  final focusFirst = afAtStart;
+  // Without guiding and with autofocus, the block slews blind, focuses near
+  // the target, and only then centres: a solve on an out-of-focus field fails
+  // (user, 2026-11-02).
+  //
+  // #1875 — one autofocus per plan, on a cooled sensor: slew, cool, start
+  // guiding, autofocus, first light. When guiding, the autofocus follows
+  // Start Guiding, so the go-to centres before it (a centre after the focus
+  // would pull the field off the guide star); without guiding it waits for
+  // the cool and keeps the blind slew and the late centre.
+  final focusFirst = afAtStart && !guide;
   final goToTarget = (positionAngleDeg != null
       ? (_item(centerAndRotateType)
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
@@ -487,21 +505,21 @@ Map<String, dynamic> buildTargetBlock({
         filterName.trim().isNotEmpty &&
         rig.filterWheel)
       ?switchTo(filterName),
-    if (afAtStart) _item(runAutofocusType),
-    if (focusFirst) goToTarget,
-    if (guide)
-      recalibrateGuider
-          ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
-          : _item(startGuidingType),
-    // After focus (the probe judges FWHM growth against its first rung, so it
-    // must see focused stars) and before the first imaging loop.
-    if (unguided) trackingProbe(),
     // Waits for the sensor: the session switched the cooler on without waiting,
-    // so the go-to, focus and guiding ran while it cooled.
+    // so the go-to ran while it cooled; focus and guiding need it cold.
     if (coolToC != null)
       _item(coolCameraType)
         ..['Temperature'] = coolToC
         ..['Duration'] = 0.0,
+    if (focusFirst) ...[_item(runAutofocusType), goToTarget],
+    if (guide)
+      recalibrateGuider
+          ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
+          : _item(startGuidingType),
+    if (afAtStart && guide) _item(runAutofocusType),
+    // After focus (the probe judges FWHM growth against its first rung, so it
+    // must see focused stars) and before the first imaging loop.
+    if (unguided) trackingProbe(),
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),

@@ -102,6 +102,8 @@ public sealed record SequenceUpdateResult(SequenceDto? Sequence, bool RunActive)
 /// </summary>
 public interface ISequencerService {
     Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct);
+    /// <summary>#1875 — the queued plan: from the running tree while a run exists, else from the stored body; null for an unknown sequence.</summary>
+    Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     /// <summary>§38.10 — resume a paused run. <paramref name="request"/> carries the

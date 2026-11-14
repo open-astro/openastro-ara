@@ -1006,6 +1006,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private async Task<bool> TryStartGuideCommand(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
             await WaitForSettling(progress, ct);
 
+            // The guider refuses "guide" with "all equipment must be connected first" when its camera or mount
+            // dropped (#1875, 2026-11-13: three pauses). Connect it here; a failure shows in the guide reply.
+            await EnsurePHD2EquipmentConnected().ConfigureAwait(false);
+
             var guideMsg = new Phd2Guide() {
                 Parameters = new Phd2GuideParameter() {
                     Settle = new Phd2Settle() {

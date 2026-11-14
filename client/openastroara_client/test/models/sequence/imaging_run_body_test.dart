@@ -70,10 +70,10 @@ void main() {
       final targetTypes = childrenOf(target).map(type).toList();
       expect(targetTypes, hasLength(5));
       expect(targetTypes[0], contains('.Telescope.SlewScopeToRaDec')); // blind
-      expect(targetTypes[1], contains('.Autofocus.RunAutofocus'));
-      expect(targetTypes[2], contains('.Telescope.SlewScopeToRaDec')); // centres on focused stars
-      // Waits for the session's cool, which ran during the slew and focus.
-      expect(targetTypes[3], contains('.Camera.CoolCamera'));
+      // Waits for the session's cool, which ran during the slew; focus needs it cold (#1875).
+      expect(targetTypes[1], contains('.Camera.CoolCamera'));
+      expect(targetTypes[2], contains('.Autofocus.RunAutofocus'));
+      expect(targetTypes[3], contains('.Telescope.SlewScopeToRaDec')); // centres on focused stars
       expect(targetTypes[4], contains('.Container.SequentialContainer'));
     });
 
@@ -435,7 +435,46 @@ void main() {
       expect(steps[wait]['Temperature'], -10);
       expect(steps[wait]['WaitForTemperature'] ?? true, true);
       final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
-      expect(focus, lessThan(wait), reason: 'focus runs while it cools');
+      expect(
+        focus,
+        greaterThan(wait),
+        reason: 'the one autofocus runs on a cooled sensor (#1875)',
+      );
+    });
+
+    test('with a guider: slew, cool, start guiding, autofocus, first light (#1875)', () {
+      final b = buildImagingRunBody(
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+        coolToC: -10,
+        startGuiding: true,
+        autofocusAfterTempChangeC: 1,
+      );
+      final steps = childrenOf(
+        childrenOf(b).firstWhere((c) => c['Name'] == 'M31'),
+      );
+      final types = [for (final c in steps) c[r'$type']];
+      expect(
+        types.where((t) => t == runAutofocusType),
+        hasLength(1),
+        reason: 'one autofocus per plan',
+      );
+      expect(
+        types.where((t) => t == slewScopeToRaDecType),
+        hasLength(1),
+        reason: 'centred before guiding starts',
+      );
+      int at(String t) => types.indexOf(t);
+      final firstLight = steps.indexWhere(
+        (c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType),
+      );
+      expect(at(slewScopeToRaDecType), lessThan(at(coolCameraType)));
+      expect(at(coolCameraType), lessThan(at(startGuidingType)));
+      expect(at(startGuidingType), lessThan(at(runAutofocusType)));
+      expect(at(runAutofocusType), lessThan(firstLight));
     });
 
     test('no cooler target: no cooling steps anywhere', () {
@@ -776,30 +815,29 @@ void main() {
     List<String?> types(Map<String, dynamic> node) =>
         childrenOf(node).map((c) => c[r'$type'] as String?).toList();
 
-    test('slew -> first-filter switch -> AF -> StartGuiding -> per-filter loops',
+    test('slew -> first-filter switch -> StartGuiding -> AF -> per-filter loops',
         () {
       final b = block();
       final t = types(b);
       expect(t, [
-        slewScopeToRaDecType, // blind
+        slewScopeToRaDecType, // centres before guiding starts
         switchFilterType, // Ha, so autofocus runs through it
-        runAutofocusType,
-        slewScopeToRaDecType, // centres on focused stars
         startGuidingType,
+        runAutofocusType, // the plan's one autofocus (#1875)
         sequentialContainerType, // Ha Imaging
         switchFilterType, // OIII
         sequentialContainerType, // OIII Imaging
       ]);
       final kids = childrenOf(b);
       expect((kids[1]['Filter'] as Map)['_name'], 'Ha');
-      expect(kids[5]['Name'], 'Ha Imaging');
-      expect((kids[6]['Filter'] as Map)['_name'], 'OIII');
-      expect(kids[7]['Name'], 'OIII Imaging');
+      expect(kids[4]['Name'], 'Ha Imaging');
+      expect((kids[5]['Filter'] as Map)['_name'], 'OIII');
+      expect(kids[6]['Name'], 'OIII Imaging');
     });
 
     test('each loop carries its own exposure, count, dither + scaled AF', () {
       final kids = childrenOf(block());
-      final ha = kids[5];
+      final ha = kids[4];
       final exposure = childrenOf(ha).single;
       expect(exposure['ExposureTime'], 300.0);
       expect(conditionsOf(ha).single['Iterations'], 20);

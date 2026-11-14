@@ -51,7 +51,7 @@ namespace OpenAstroAra.Test {
             var clock = new ManualClock();
             var log = new Recorder();
             var svc = new CameraService(log);
-            svc.WithLiveViewTestClientForTest();
+            svc.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
             svc.SetLiveViewClockForTest(clock);
             svc.SetLiveViewFrameSourceForTest(() => (LiveStackEngineLimitsTest.Field(1), LiveStackEngineLimitsTest.W, LiveStackEngineLimitsTest.H));
             return (svc, clock, log);

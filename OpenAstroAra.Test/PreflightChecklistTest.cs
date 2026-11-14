@@ -270,7 +270,6 @@ namespace OpenAstroAra.Test {
             public Task SetTrackingRateAsync(string rate, CancellationToken ct) => throw new NotSupportedException();
             public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) => throw new NotSupportedException();
             public Task AbortSlewAsync(CancellationToken ct) => throw new NotSupportedException();
-            public bool HasCleanReadSinceConnect => false;
         }
     }
 

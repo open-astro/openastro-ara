@@ -206,7 +206,7 @@ GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
 
 final _idleAssistant = _assistant('idle');
 
-/// A tap on Tools: it keeps the Guide tab's height and scrolls inside, so scroll to the target first.
+/// A tap on Tools: scroll to the target first, in case the panel runs past the screen.
 Future<void> _tapTools(WidgetTester tester, Finder target) async {
   await tester.ensureVisible(target);
   await tester.pump();
@@ -220,6 +220,65 @@ Future<void> _tab(WidgetTester tester, String name) async {
 }
 
 void main() {
+  testWidgets('while the guider calibrates, its steps are drawn where RMS and Exposure were (#1875 slice 3)',
+      (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
+          {'direction': 'West', 'step': 2, 'dx': 4.0, 'dy': 1.8, 'dist': 4.4},
+        ],
+      }),
+    );
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.byKey(const Key('simple-guider-calibration-plot')), findsOneWidget);
+    expect(find.byKey(const Key('simple-guide-exposure')).hitTestable(), findsNothing);
+    expect(find.text('RMS').hitTestable(), findsNothing);
+    // The key to its colours and a screen reader label (#1884 audit).
+    expect(find.text('RA (W/E)'), findsOneWidget);
+    expect(find.text('Dec (N/S)'), findsOneWidget);
+    expect(find.bySemanticsLabel('Calibration plot, 2 steps'), findsOneWidget);
+    // Tall enough to read each leg's steps on an iPad (#1884 re-audit).
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height,
+        greaterThanOrEqualTo(160));
+  });
+
+  testWidgets('the calibration plot keeps 160 pt above its key at 2x text (#1884 third audit)', (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
+        ],
+      }),
+    );
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height, greaterThanOrEqualTo(160));
+    expect(tester.takeException(), isNull, reason: 'no overflow with the larger key');
+  });
+
+  testWidgets('before the first calibration step the plot says it waits (#1884 audit)', (tester) async {
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(const GuiderLiveState())),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.text('Waiting for the first step…'), findsOneWidget);
+  });
+
   group('the Guider tabs (#1722)', () {
     List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run, GuiderLiveState? live}) => [
           simpleModeActiveProvider.overrideWithValue(true),
@@ -525,6 +584,18 @@ void main() {
       expect(find.text('Stop the guide loop to recalibrate.'), findsOneWidget);
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
+    });
+
+    testWidgets('the panel takes the height of the tab it shows: Tools does not scroll inside (#1875 slice 3)',
+        (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      final guide = tester.getSize(panel).height;
+      await _tab(tester, 'tools');
+      expect(find.descendant(of: panel, matching: find.byType(Scrollable)), findsNothing,
+          reason: 'the shell scrolls the panel past the space it has, not the panel itself');
+      await _tab(tester, 'tuning');
+      expect(tester.getSize(panel).height, isNot(guide), reason: 'Tuning is its own height');
     });
 
     testWidgets('a long failure reason keeps to two lines, so Tools keeps the Guide height', (tester) async {

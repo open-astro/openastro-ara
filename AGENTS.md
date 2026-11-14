@@ -14,6 +14,13 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
 
+## Flutter client state
+
+Client state is hand-written Riverpod 3 providers (`Notifier`, `AsyncNotifier`) in `client/openastroara_client/lib/state/`; the client has no code generation.
+
+- `ref.watch` in `build`, `ref.read` in callbacks, `ref.listen` for side effects.
+- A widget whose content is an `AsyncValue` renders data, loading and error (`.when`, or a `switch` on `AsyncData` / `AsyncLoading` / `AsyncError`). Code that needs only the current value reads it as nullable.
+
 ## Changelog
 
 A user-visible change adds `changelog.d/<branch-slug>.md`; never edit `CHANGELOG.md` (only the release step writes it). Format and commands: `changelog.d/README.md`; CI runs `scripts/changelog-fragments.py --check`.

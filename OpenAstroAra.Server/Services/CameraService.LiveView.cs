@@ -280,9 +280,9 @@ public sealed partial class CameraService {
                 }
                 (ushort[] Pixels, int Width, int Height)? acquired = null;
                 try {
-                    AlpacaCamera? client;
+                    ICameraDevice? client;
                     lock (_gate) {
-                        client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+                        client = _lifecycle.Live;
                     }
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
@@ -357,7 +357,7 @@ public sealed partial class CameraService {
     // never reached ImageReady / dropped). Throwing propagates to the loop's catch, which
     // counts it as a failure.
     private async Task<(ushort[] Pixels, int Width, int Height)?> AcquireLiveFramePixelsAsync(
-            AlpacaCamera client, LiveViewStartRequestDto request, bool applySettings, CancellationToken token) {
+            ICameraDevice client, LiveViewStartRequestDto request, bool applySettings, CancellationToken token) {
         // Reuse the capture path's settings application (bin/gain, full-frame subframe). Applied only
         // when the loop knows the device settings may be stale (first frame of a session, or after a
         // manual capture / error) — see RunLiveViewLoopAsync's settingsApplied tracking.
@@ -470,8 +470,8 @@ public sealed partial class CameraService {
 
     // Called from Dispose: cancel the loop promptly without awaiting it, and release the CTS. Not
     // awaiting is safe — the orphaned loop always completes on its own: it breaks on the
-    // _disposed/_client guard, and even if it's mid-download when Dispose tears down the
-    // AlpacaCamera, the synchronous client.ImageArray throws ObjectDisposedException, which the
+    // _lifecycle.Live guard, and even if it's mid-download when Dispose tears down the
+    // ICameraDevice, the synchronous client.ImageArray throws ObjectDisposedException, which the
     // loop's top-level catch(Exception) absorbs (it never faults the task).
     private void CancelLiveViewForDispose() {
         // Only READ the shared fields here — never write _liveViewCts/_liveViewLoop. This path runs

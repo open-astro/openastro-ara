@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -260,6 +261,38 @@ namespace OpenAstroAra.Test {
             Assert.That(described, Is.Not.Empty, "the running wait is described on the wire, not only on GET /state");
             Assert.That(progress.All(e => e.Payload.TryGetProperty("frames_captured", out _)), Is.True, "the frames filed ride every frame");
             Assert.That(progress.All(e => e.Payload.TryGetProperty("current_target_name", out _)), Is.True, "the target rides every frame (null before a target)");
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_plans_own_count_and_the_block_it_runs() {
+            // #1875 — a client re-reads the plan route when either changes, so both ride every frame:
+            // the plan's loop counts summed (not the session's frames, 0 here) and the entry holding
+            // the running leaf, which keeps a target-less block (Flats) named.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                var block = new SequentialContainer { Name = "Block A" };
+                // The first loop is done at once; the second runs ~3 s, so the 1 s live-status poll
+                // publishes frames while it runs, with one loop counted.
+                foreach (var (row, seconds) in new[] { ("L Imaging", 0), ("R Imaging", 3) }) {
+                    var loop = new SequentialContainer { Name = row };
+                    loop.Add(new LoopCondition { Iterations = 1 });
+                    loop.Add(new WaitForTimeSpan { Time = seconds });
+                    block.Add(loop);
+                }
+                c.Add(block);
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").ToList();
+            Assert.That(progress.All(e => e.Payload.TryGetProperty("plan_frames_done", out _) && e.Payload.TryGetProperty("current_block_name", out _)),
+                Is.True, "both scalars ride every frame");
+            Assert.That(progress.Any(e => e.Payload.GetProperty("current_block_name").GetString() == "Block A"
+                                          && e.Payload.GetProperty("plan_frames_done").GetInt32() == 1), Is.True,
+                "mid-run: the block holding the running leaf is named, and the first loop's completed iteration is counted (frames_captured is 0)");
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.PlanFramesDone, Is.EqualTo(2), "a finished run keeps its last counts");
         }
 
         [Test]

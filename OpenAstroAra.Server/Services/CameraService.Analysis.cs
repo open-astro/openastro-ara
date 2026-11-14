@@ -89,10 +89,10 @@ public sealed partial class CameraService : IAnalysisFrameSource {
 
     /// <inheritdoc/>
     public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, int? gain, int? offset, CancellationToken ct) {
-        AlpacaCamera? client;
+        ICameraDevice? client;
         CameraCapabilitiesDto? caps;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
             caps = _capabilities;
         }
         // Same validation contract as StartExposureAsync (argument range before the connected
@@ -165,9 +165,9 @@ public sealed partial class CameraService : IAnalysisFrameSource {
     /// triaging a failed centering exposure is not told an autofocus probe failed.
     /// </summary>
     private async Task<AnalysisFrame> CaptureUnpersistedAsync(ExposureRequestDto request, string kind, CancellationToken ct) {
-        AlpacaCamera? client;
+        ICameraDevice? client;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is null) {
             throw new CameraUnavailableException(CameraNotConnectedMessage, CameraNotConnectedTryAgain, null);
@@ -190,7 +190,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             // Re-snapshot under the gate — a disconnect/reconnect during the queue wait can
             // supersede the client grabbed above (same rationale as CaptureImage).
             lock (_gate) {
-                client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+                client = _lifecycle.Live;
             }
             if (client is null) {
                 throw new CameraUnavailableException(CameraNotConnectedMessage, CameraNotConnectedTryAgain, null);

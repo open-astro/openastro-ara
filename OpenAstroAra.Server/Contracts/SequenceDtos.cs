@@ -129,7 +129,43 @@ public sealed record SequenceRunStateDto(
     // #1597 — the next meridian flip as the run's trigger sees it; null when no run is active.
     MeridianFlipStatusDto? MeridianFlip = null,
     // #1557 — the run ends as Stopped once the exposure in progress is filed.
-    bool StopAfterFrame = false);
+    bool StopAfterFrame = false,
+    // #1875 — the plan's own count: the sum of every served plan row's done count (GET /sequences/{id}/plan),
+    // not the session's frames. A client re-reads the plan when it or CurrentBlockName changes.
+    int PlanFramesDone = 0,
+    // #1875 — the name of the plan entry whose block holds the running instruction; null when it is in
+    // none (the run's own start and end steps). Unlike CurrentTargetName it names a target-less block (Flats).
+    string? CurrentBlockName = null);
+
+/// <summary>#1875 — GET /api/v1/sequences/{id}/plan: the queued plan read off the rig. A read-only view of the
+/// sequence (ADR 0018), never a format: the entries in queue order, from the running tree while a run exists,
+/// else from the stored body. <c>RunId</c> is null until the sequence has run.</summary>
+public sealed record SequencePlanDto(Guid SequenceId, Guid? RunId, IReadOnlyList<SequencePlanTargetDto> Targets);
+
+/// <summary>One plan entry: a target block, or the Flats / Calibration block (<c>Calibration</c> true, no position).
+/// <c>RaDeg</c>/<c>DecDeg</c> are J2000 degrees; <c>Gain</c> is null for the profile default; <c>Flats</c> is a
+/// <see cref="SequencePlanFlats"/> token; <c>DawnProvider</c> is the NINA <c>$type</c> of the block's time stop.</summary>
+public sealed record SequencePlanTargetDto(
+    string Name,
+    bool Calibration,
+    double? RaDeg,
+    double? DecDeg,
+    int? Gain,
+    string Flats,
+    string? DawnProvider,
+    IReadOnlyList<SequencePlanRowDto> Rows);
+
+/// <summary>One loop of an entry (or one flat set): its filter, sub length, own count and own completed count.</summary>
+public sealed record SequencePlanRowDto(string? FilterName, double? ExposureSeconds, int FramesTotal, int FramesDone);
+
+/// <summary>The wire tokens of <see cref="SequencePlanTargetDto.Flats"/>.</summary>
+public static class SequencePlanFlats {
+    public const string None = "none";
+    public const string AfterTarget = "after_target";
+    public const string EndOfNight = "end_of_night";
+    /// <summary>The text of the Annotation a target block set to End of night holds (the rig holds that choice nowhere else).</summary>
+    public const string EndOfNightMarker = "Flats: end of night";
+}
 
 /// <summary>#1597 — the run's next flip. State: due_at, waiting_for_exposure, flipping, auto_flip_off or none_tonight.</summary>
 public sealed record MeridianFlipStatusDto(DateTimeOffset? ExpectedUtc, string State, string? Target);

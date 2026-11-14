@@ -196,6 +196,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Exposure_events_keep_the_wire_JSON_the_hand_built_payloads_sent() {
+            // Pinned bytes: the JsonObject payloads this replaced (same keys, order, "O" timestamp, null filter_name).
+            var (publisher, broadcaster) = NewPublisher();
+            var id = Guid.Parse("0b9d3c0e-5a41-4c1e-9f0a-6d2f7c1a8e55");
+            var started = new DateTimeOffset(2026, 10, 4, 21, 30, 15, 250, TimeSpan.Zero);
+            publisher.ExposureStarted(id, 120.5, started, "light", "Ha");
+            publisher.ExposureStarted(id, 2, started, "analysis", null);
+            publisher.ExposureComplete(id, 30, started, "flat", 31250);
+            publisher.ExposureFailed(id, "light", "cancelled");
+            Assert.That(broadcaster.Events.Select(e => e.Payload.GetRawText()), Is.EqualTo(new List<string> {
+                "{\"frame_id\":\"0b9d3c0e-5a41-4c1e-9f0a-6d2f7c1a8e55\",\"exposure_sec\":120.5,\"started_utc\":\"2026-10-04T21:30:15.2500000Z\",\"kind\":\"light\",\"filter_name\":\"Ha\"}",
+                "{\"frame_id\":\"0b9d3c0e-5a41-4c1e-9f0a-6d2f7c1a8e55\",\"exposure_sec\":2,\"started_utc\":\"2026-10-04T21:30:15.2500000Z\",\"kind\":\"analysis\",\"filter_name\":null}",
+                "{\"frame_id\":\"0b9d3c0e-5a41-4c1e-9f0a-6d2f7c1a8e55\",\"exposure_sec\":30,\"started_utc\":\"2026-10-04T21:30:15.2500000Z\",\"kind\":\"flat\",\"elapsed_ms\":31250}",
+                "{\"frame_id\":\"0b9d3c0e-5a41-4c1e-9f0a-6d2f7c1a8e55\",\"kind\":\"light\",\"reason\":\"cancelled\"}",
+            }));
+        }
+
+        [Test]
         public void Exposure_events_swallow_a_sync_broadcaster_fault() {
             var (publisher, broadcaster) = NewPublisher();
             broadcaster.ThrowSync = true;

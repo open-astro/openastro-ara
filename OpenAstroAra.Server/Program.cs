@@ -18,9 +18,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
-using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Services;
 using Scalar.AspNetCore;
 using Serilog;
@@ -109,6 +109,17 @@ public partial class Program {
         builder.Services.AddOpenApi(o => o.AddDocumentTransformer((doc, _, _) => {
             doc.Info.Title = "OpenAstro Ara REST API";
             doc.Info.Version = "v1";
+            return Task.CompletedTask;
+        }).AddOperationTransformer((op, ctx, _) => {
+            // ADR 0015 — a section PUT takes the tag of the copy the client loaded (WithSection).
+            if (ctx.Description.HttpMethod == "PUT"
+                && ctx.Description.ActionDescriptor.EndpointMetadata.OfType<ProfileSection>().Any()) {
+                (op.Parameters ??= []).Add(new Microsoft.OpenApi.OpenApiParameter {
+                    Name = "If-Match",
+                    In = Microsoft.OpenApi.ParameterLocation.Header,
+                    Schema = new Microsoft.OpenApi.OpenApiSchema { Type = Microsoft.OpenApi.JsonSchemaType.String },
+                });
+            }
             return Task.CompletedTask;
         }));
 
@@ -406,6 +417,7 @@ public partial class Program {
         // §63.3 guider-d — crash detection + auto-restart of the sibling openastro-guider unit.
         builder.Services.AddSingleton<IGuiderProcessSupervisor, SystemctlGuiderProcessSupervisor>();
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
+        builder.Services.AddSingleton<GuideCameraCustody>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
         // IGuiderMediator (§8.1; the mediator alias is registered below, replacing HeadlessGuiderMediator).
         builder.Services.AddSingleton<GuiderService>(sp => {
@@ -449,28 +461,12 @@ public partial class Program {
                 // profile list a queued name is checked against before it is deleted.
                 sp.GetService<IGuiderTwinDeleteStore>(),
                 () => sp.GetService<IProfileRepository>()?.List().Profiles.Select(p => (p.Id, (string?)p.Name)).ToList()
-                    ?? new List<(Guid, string?)>());
-            // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
-            // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
-            // and the guider refuses to guide under it. Resolved lazily: the focus service needs
-            // this very guider to construct.
-            guider.ReleaseGuideCameraAsync = async () => {
-                if (sp.GetService<IGuideFocusService>() is { IsActive: true } focus) {
-                    await focus.StopAsync().ConfigureAwait(false);
-                }
-            };
-            // ...and whether one is running: its lease is real, so it is ended (below) rather than pulled
-            // (resolved lazily for the same reason).
-            guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+                    ?? new List<(Guid, string?)>(),
+                // ADR 0016 — the one module that decides who holds the Guide Camera; Polar Align, guide focus and
+                // the live view reach it through the guider.
+                sp.GetRequiredService<GuideCameraCustody>());
             // #1364 — the guider settings beyond Tune Guiding, read from the active profile on every push.
             guider.AdvancedSettings = () => GuiderAdvancedSettingsMapping.ToEngine(sp.GetRequiredService<IProfileStore>().GetGuiderAdvancedSettings());
-            // ...and a polar alignment left open when a run asks to guide is ended (stopped, not completed):
-            // the Polar Align step without a Done kept the guider's lease and paused the run (2026-10-16).
-            guider.EndPolarAlignAsync = async ct => {
-                if (sp.GetService<IPolarAlignService>() is { } pa) {
-                    await pa.StopAsync(null, ct).ConfigureAwait(false);
-                }
-            };
             // #1311 — the polar alignment residual from guiding: logged with the running imaging
             // session, compared with tonight's Polar Align result, stamped with where the mount pointed.
             // §42.2 long star loss — the recovery re-centers through the ONE shared TargetRecenter and
@@ -518,8 +514,7 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
-                () => sp.GetService<IGuideFocusService>(),
-                sp.GetRequiredService<IPolarAlignMainCameraSolver>()));
+                mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>
@@ -527,7 +522,6 @@ public partial class Program {
                 sp.GetRequiredService<GuiderService>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 sp.GetRequiredService<IGuideFrameDecoder>(),
-                () => (sp.GetService<IPolarAlignService>() as PolarAlignService)?.IsActive ?? false,
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
                 optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));

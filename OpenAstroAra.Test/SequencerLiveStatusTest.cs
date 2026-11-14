@@ -53,6 +53,18 @@ namespace OpenAstroAra.Test {
             Assert.That(SequencerService.ResumedDescription, Does.StartWith("Resumed"));
         }
 
+        [TestCase("LblPHD2Calibrating")]
+        [TestCase("LblPHD2SelectingStar")]
+        [TestCase("LblPHD2Settling")]
+        [TestCase("LblPHD2StartGuiding")]
+        [TestCase("LblPHD2StartGuidingTimeoutRetry")]
+        public void A_guider_progress_detail_never_names_PHD2(string key) {
+            // #1875 — "Start guiding · PHD2 - Calibrating" reached the Plan pill; Simple Mode says "Guider".
+            var line = SequencerService.DescribeStatus(new ApplicationStatus { Status = "Start guiding", Status2 = OpenAstroAra.Core.Locale.Loc.Instance[key] });
+            Assert.That(line, Does.Not.Contain("PHD2"));
+            Assert.That(line, Does.Contain("Guider"));
+        }
+
         private static (SequenceRootContainer Root, TakeExposure Exposure, LoopCondition Loop) ClientBuiltTree(TakeExposure? withExposure = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var exposure = withExposure ?? (TakeExposure)factory.Items.OfType<TakeExposure>().First().Clone();

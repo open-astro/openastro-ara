@@ -18,10 +18,9 @@ using System;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// The per-service half of the §42.3 second channel: a <see cref="DeviceHealthTracker"/> plus the
-/// standing <c>degraded</c> fault it published, so the polling services share one piece of code
-/// instead of a copy each. Not synchronized — the owning
-/// service calls it under its connection gate, like the probe.
+/// The per-device half of the §42.3 second channel: a <see cref="DeviceHealthTracker"/> plus the
+/// standing <c>degraded</c> fault it published. Its one user is <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011
+/// rule 2: no device class holds its own copy). Not synchronized — the module calls it under its gate, like the probe.
 /// </summary>
 internal sealed class DeviceHealthWatch {
     private readonly DeviceType _deviceType;

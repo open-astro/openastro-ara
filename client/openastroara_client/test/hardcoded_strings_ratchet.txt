@@ -39,7 +39,7 @@ lib/screens/settings/panels/safety_policies_panel.dart 49
 lib/screens/settings/panels/safety_site_panel.dart 27
 lib/screens/settings/panels/session_calibration_panel.dart 19
 lib/screens/settings/panels/session_filenames_panel.dart 45
-lib/screens/settings/panels/session_notifications_panel.dart 21
+lib/screens/settings/panels/session_notifications_panel.dart 19
 lib/screens/settings/panels/session_stats_panel.dart 19
 lib/screens/settings/panels/sky_data_panel.dart 6
 lib/screens/settings/panels/storage_panel.dart 41

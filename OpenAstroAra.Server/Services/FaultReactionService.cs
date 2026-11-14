@@ -386,9 +386,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // LingerMaxAttempts (~an hour at the defaults). While the service reports Error the remembered
     // device is re-dispatched through the same TryReconnectAsync the ladder uses; the moment the
     // type reads Connected — whether the linger's own dispatch landed or the user re-seated a
-    // cable and the daemon auto-connected — and, for the mount, has had a clean read since that
-    // connect (#1246: a latched bridge answers Connected while every read fails, and gets the
-    // re-dispatch instead) — the device is re-adopted: runs the terminal pause left
+    // cable and the daemon auto-connected — and, for a device on the lifecycle module, has had a
+    // clean read since that connect (#1246: a latched bridge answers Connected while every read
+    // fails, and gets the re-dispatch instead) — the device is re-adopted: runs the terminal pause left
     // paused are resumed, and the recovery is published + notified. A Disconnected state stops the
     // linger silently: that is the shape of a DELIBERATE user disconnect (the services only park
     // in Error on a lost device), and the daemon must not fight the user for the device.
@@ -402,8 +402,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
             switch (state) {
                 case EquipmentConnectionState.Connected when !IsCleanlyConnected(fault.DeviceType):
-                    // #1246 — Connected but still latched (every read fails): not back. Re-dispatch
-                    // like the Error branch; the service's connect sends the disconnect/connect pair.
+                    // #1246 — Connected with no clean read since the connect (a latched bridge, failing
+                    // reads): not back. Re-dispatch like the Error branch; the lifecycle's recovery
+                    // dispatch sends the disconnect/connect pair (DeviceLifecycle.Dispatch).
                     if (!await TryReconnectAsync(fault.DeviceType).ConfigureAwait(false)) {
                         continue;
                     }
@@ -474,9 +475,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             TimeSpan? landedAt = null; // when the state first left Connecting
             while (true) {
                 var state = await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
-                // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
-                // reconnect answers Connected while every read fails. Wait for one clean tick, or let
-                // the confirm window run out and walk the next rung.
+                // #1246 — Connected is not recovered: a bridge still latched after the reconnect answers
+                // Connected while every read fails. Wait for one clean tick, or let the confirm window run
+                // out and walk the next rung.
                 if (state == EquipmentConnectionState.Connected && IsCleanlyConnected(type)) {
                     return true;
                 }
@@ -505,10 +506,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    // #1246 — Connected is "recovered" for every device but the mount, whose bridge can answer
-    // Connected while every read fails after a latch; the mount also needs a clean read since connect.
-    private bool IsCleanlyConnected(DeviceType type) =>
-        type.Canonical() != DeviceType.Telescope || _telescope is null || _telescope.HasCleanReadSinceConnect;
+    // #1246 — Connected is not "recovered": a bridge can answer Connected while every read fails after a
+    // latch. The device's lifecycle says whether a clean read followed the connect (ADR 0011 rule 2); a
+    // guider (PHD2, not on the module) answers true (EquipmentReconnector.IsCleanlyConnected).
+    private bool IsCleanlyConnected(DeviceType type) => _reconnector?.IsCleanlyConnected(type) ?? true;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort recovery attempt: a SetTracking/read fault counts as a failed attempt; it must never abort the episode. CA1031's log-and-recover boundary applies.")]

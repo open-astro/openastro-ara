@@ -48,23 +48,24 @@ namespace OpenAstroAra.Server.Services;
 /// REST-only: the <c>ICameraMediator</c>/<c>IImagingMediator</c> unification (the
 /// <c>TakeExposure</c> instruction) is the follow-up increment.
 /// </summary>
-public sealed partial class CameraService : ICameraService, IRetainedDeviceSource, IDisposable {
+public sealed partial class CameraService : ICameraService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
     /// <summary>The target a Take One (a frame outside any plan) is filed under, in the shared manual-capture session.</summary>
     public const string ManualCaptureTarget = "Manual capture";
 
     // #1127 — the record the card names. The remembered-selection store and this can diverge
     // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    // #1539 — the module records the desired connection state; the §42.3 ladder asks it.
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
+
+    // #1246 — recovered, not just Connected: a refresh tick since the connect read CameraState cleanly (ADR 0011 rule 2).
+    public bool IsCleanlyConnected => _lifecycle.HasCleanReadSinceConnect;
 
 
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ImageReadyPollInterval = TimeSpan.FromMilliseconds(250);
     // Margin on top of the requested exposure for the device to report ImageReady (shutter/readout
     // latency) before the capture is reported failed. Download time is bounded separately by the
@@ -75,39 +76,29 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private readonly ILogger<CameraService> _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
-    private readonly DeviceConnectionProbe _probe = new();
-    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
-    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
-    // Built in the constructor, once the fault sink is known.
-    private readonly DeviceHealthWatch _health;
-    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => _health.Observe(ok, reason, device);
-    private void ResetHealthLocked() => _health.Reset();
+    // ADR 0011 — connect, disconnect, forget, the refresh loop, the §42.3 probe, the read-health watch, the
+    // clean-read gate and the desired connection state live in the module. _gate is the module's lock, also
+    // guarding this class's session state (runtime, capabilities).
+    private readonly DeviceLifecycle<ICameraDevice> _lifecycle;
+    private object _gate => _lifecycle.Gate;
+    private Func<DiscoveredDeviceDto, ICameraDevice> _createDevice = AlpacaCameraDevice.Create;
+
+    /// <summary>Test seam (ADR 0011 rule 4): the device adapter the connect builds, instead of the Alpaca one.</summary>
+    internal Func<DiscoveredDeviceDto, ICameraDevice> DeviceFactory { init => _createDevice = value; }
 
     private readonly CoolingDriftMonitor _coolingDrift = new();
-    private readonly object _gate = new();
 
     // Cooler writes run one at a time under this lock, and every cooler-off bumps _coolerOffs,
     // so a cancelled ramp's hold can tell an off (Emergency Stop, the REST control) landed
     // after its ramp began and must not switch the cooler back on.
     private readonly object _coolerWriteGate = new();
     private long _coolerOffs;
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
+    // #1265 — bench-test knob: a fixture that needs "several ticks" waits milliseconds, not multiples of
+    // the 2 s production interval. Init-only (object initializer); never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
     private readonly IFrameRepository? _frames;
     private readonly IProfileStore? _profileStore;
     private readonly string? _fallbackFramesDir;
-    private AlpacaCamera? _client;
-    // The connected device's HTTP endpoint, for the direct ImageBytes
-    // download (skips the client library's int[,] inflation). Set alongside
-    // _client under _gate; null means "use the library path".
-    private Uri? _deviceBaseAddress;
-    private int _deviceNumber;
-    private static readonly HttpClient ImageBytesHttp = new() { Timeout = TimeSpan.FromSeconds(120) };
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
 
     /// <summary>Test seam (#1149): the capabilities are otherwise read only on a real Alpaca connect,
@@ -118,11 +109,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
     }
     private CameraStateDto _runtime = IdleRuntime;
-    private int _refreshing;
     // #1185 — heat-sink read cadence + NotImplemented latch for the connected driver.
     private readonly HeatSinkProbe _heatSink = new();
-    private int _refreshPending;
-    private long _connectGeneration;
     private int _captureInFlight;
 
     // Device failures in a row (a stalled exposure, a driver error, the camera vanishing
@@ -137,7 +125,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     internal bool? CanSetTemperatureNow {
         get {
             lock (_gate) {
-                return _state == EquipmentConnectionState.Connected ? _capabilities?.CanSetTemperature : null;
+                return _lifecycle.State == EquipmentConnectionState.Connected ? _capabilities?.CanSetTemperature : null;
             }
         }
     }
@@ -146,7 +134,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // behind the download, so timer refreshes would stall for the whole window — skip them instead
     // (exposure progress still updates: the ImageReady poll loop refreshes every tick).
     private int _downloading;
-    private bool _disposed;
+    private int _disposeStarted;
 
     public CameraService(
         ILogger<CameraService>? logger = null,
@@ -177,14 +165,19 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         _filterWheel = filterWheel;
         _events = events;
         _faults = faults;
-        _health = new DeviceHealthWatch(DeviceType.Camera, faults);
         _frames = frames;
         _profileStore = profileStore;
         _fallbackFramesDir = fallbackFramesDir;
         _focuser = focuser;
         _imageHistory = imageHistory;
         _weather = weather;
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        // A refresh waits out the blocking image download: serializing Alpaca bridges queue every request behind it.
+        // A teardown aborts the exposure only when a capture is in flight: ZWO/QHY drivers throw from AbortExposure when
+        // idle, which would put a spurious teardown entry in every normal disconnect's log.
+        _lifecycle = new DeviceLifecycle<ICameraDevice>(this, DeviceType.Camera, "camera",
+            d => _createDevice(d), ReadTick, ResetSessionLocked, DeviceHealthTracker.DefaultThreshold, _logger, events, faults,
+            skipTick: () => Volatile.Read(ref _downloading) == 1,
+            stopOnTeardown: () => Volatile.Read(ref _captureInFlight) == 1);
     }
 
     private readonly ImageHistoryService? _imageHistory;
@@ -320,91 +313,29 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     public Task<CameraDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<CameraDto?>(null);
             }
-            var state = _state;
+            var state = _lifecycle.State;
             var connected = state == EquipmentConnectionState.Connected;
             var runtime = connected ? _runtime : IdleRuntime;
             var caps = connected ? _capabilities : null;
-            return Task.FromResult<CameraDto?>(new CameraDto(_device.UniqueId, _device.Name, state, caps, runtime));
+            return Task.FromResult<CameraDto?>(new CameraDto(device.UniqueId, device.Name, state, caps, runtime));
         }
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("camera.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            _heatSink.Reset(); // a new driver may implement HeatSinkTemperature (#1185)
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("camera.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the camera is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the camera is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.Camera, removed.UniqueId, removed.Name);
-            return true;
-        }
-    }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaCamera? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
-            _deviceBaseAddress = null;
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("camera.disconnect", idempotencyKey));
-    }
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
 
     /// <summary>
     /// §60.5 async capture: validates, pre-allocates the frame id, kicks the capture pipeline off
@@ -413,11 +344,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     public Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        AlpacaCamera? client;
+        ICameraDevice? client;
         CameraCapabilitiesDto? caps;
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            client = _lifecycle.Live;
             caps = _capabilities;
         }
         // Dispose → argument range → connected, aligned with the other device services. Range
@@ -552,7 +483,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 // off", so it fails closed (review of #1084). The §58 ramp survives that:
                 // WarmCoolerAsync catches a failing ramp step and still issues its final
                 // cooler-off (pinned by A_failing_ramp_step_still_ends_with_the_cooler_off).
-                alreadyCooling = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
+                alreadyCooling = _lifecycle.State == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
             }
             if (!alreadyCooling && _profileStore?.GetCoolingFan().DeviceId is null) {
                 LogNoCoolingFanDesignated(_logger);
@@ -702,7 +633,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             client.ReadoutMode = (short)modeIndex; // ASCOM ReadoutMode is a short; index already validated against the list
         }, CancellationToken.None).ConfigureAwait(false);
         lock (_gate) {
-            if (ReferenceEquals(_client, client)) {
+            if (_lifecycle.IsCurrent(client)) {
                 _capabilities = null; // force a caps re-read: electronics are per-readout-mode
             }
         }
@@ -730,7 +661,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
+    private async Task CaptureInBackgroundAsync(ICameraDevice client, Guid frameId, ExposureRequestDto request) {
         try {
             // LIGHT is deliberate, not an oversight: the §60.5 manual-capture endpoint takes light/
             // test snapshots; calibration frames are sequencer-driven. See #1177 for the optional
@@ -790,7 +721,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
+            ICameraDevice client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 18 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
@@ -816,7 +747,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     }
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, Action markAnnounced, CancellationToken ct) {
+            ICameraDevice client, Guid frameId, ExposureRequestDto request, string kind, Action markAnnounced, CancellationToken ct) {
         var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
         var settingsMs = timing.ElapsedMilliseconds;
@@ -887,28 +818,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         int width, height;
         Interlocked.Exchange(ref _downloading, 1);
         try {
-            // Read the endpoint under the gate WITH the staleness check the
-            // rest of the class uses: if a reconnect swapped _client between
-            // the ImageReady poll and here, the direct path could silently
-            // pull bytes from the NEW device's endpoint and save them under
-            // the old exposure's frame id. Stale → library path on the
-            // original client (which fails honestly if it's gone).
-            Uri? baseAddress = null;
-            var deviceNumber = 0;
-            lock (_gate) {
-                if (ReferenceEquals(_client, client)) {
-                    baseAddress = _deviceBaseAddress;
-                    deviceNumber = _deviceNumber;
-                }
-            }
+            // The adapter holds its own device's endpoint, so a reconnect between the ImageReady poll and here
+            // cannot pull bytes from the NEW device under the old exposure's frame id: a superseded client
+            // fails honestly on its own device.
             (ushort[], int, int)? direct = null;
-            if (baseAddress is not null) {
-                try {
-                    direct = await AlpacaImageBytes.DownloadAsync(ImageBytesHttp, baseAddress, deviceNumber, ct)
-                        .ConfigureAwait(false);
-                } catch (Exception ex) when (ex is not OperationCanceledException) {
-                    LogImageBytesFallback(ex, frameId);
-                }
+            try {
+                direct = await client.DownloadImageBytesAsync(ct).ConfigureAwait(false);
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                LogImageBytesFallback(ex, frameId);
             }
             if (direct is { } d) {
                 (pixels, width, height) = d;
@@ -948,7 +865,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null, bool saveInBackground = false) {
+    private async Task<bool> CaptureCoreAsync(ICameraDevice client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null, bool saveInBackground = false) {
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
@@ -1130,7 +1047,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// and this frame's analysis is skipped (logged — its HFR stays unrecorded).</summary>
     internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName, double exposureSec = 0) {
         lock (_gate) {
-            if (_disposed) {
+            if (_lifecycle.IsDisposed) {
                 return false;
             }
             _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
@@ -1241,7 +1158,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort cancellation abort: AbortExposure on a cancelled capture can throw driver/HTTP exceptions which must not mask the OperationCanceledException being propagated. CA1031's log-and-recover boundary applies.")]
-    private void TryAbortQuietly(AlpacaCamera client) {
+    private void TryAbortQuietly(ICameraDevice client) {
         try {
             client.AbortExposure();
         } catch (Exception ex) {
@@ -1258,7 +1175,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // AlpacaBridge a read costs ~1 ms and a binning or subframe write ~47 ms (the SDK reconfigures),
     // so rewriting all eight cost ~0.3 s of every frame on a CM4. Reading the camera, not a cache of
     // what Ara last wrote, keeps this right after a bridge restart or another client's change.
-    private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
+    private void ApplyExposureSettings(ICameraDevice client, ExposureRequestDto request) {
         TrySet(() => WriteIfChanged(() => client.BinX, v => client.BinX = (short)v, request.BinX, "BinX"), "BinX");
         TrySet(() => WriteIfChanged(() => client.BinY, v => client.BinY = (short)v, request.BinY, "BinY"), "BinY");
         if (request.Gain is int gain) {
@@ -1317,7 +1234,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // null = the connection was dropped/superseded mid-capture.
     private enum ImageWait { Ready, Timeout, Aborted, Lost }
 
-    private async Task<ImageWait> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
+    private async Task<ImageWait> WaitForImageReadyAsync(ICameraDevice client, double exposureSec, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
         while (DateTimeOffset.UtcNow < deadline) {
             await Task.Delay(ImageReadyPollInterval, ct).ConfigureAwait(false);
@@ -1326,8 +1243,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             }
             bool stillOurClient;
             lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
+                stillOurClient = _lifecycle.IsLive(client);
             }
             if (!stillOurClient) {
                 return ImageWait.Lost; // disconnected / superseded — the capture can't complete
@@ -1342,7 +1258,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-poll read boundary: a transient ImageReady read throws; report null ('unknown') so the wait keeps polling rather than faulting the capture. CA1031's log-and-recover boundary applies.")]
-    private static bool? ReadImageReadySafe(AlpacaCamera client) {
+    private static bool? ReadImageReadySafe(ICameraDevice client) {
         try {
             return client.ImageReady;
         } catch (Exception) {
@@ -1416,7 +1332,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field readback boundary: a driver that throws from a settings read falls back to the requested value for that header rather than failing the capture. CA1031's log-and-recover boundary applies.")]
-    private static ExposureRequestDto ReadAppliedSettings(AlpacaCamera client, ExposureRequestDto request) {
+    private static ExposureRequestDto ReadAppliedSettings(ICameraDevice client, ExposureRequestDto request) {
         int binX = request.BinX, binY = request.BinY;
         var gain = request.Gain;
         var cameraOffset = request.CameraOffset;
@@ -1571,7 +1487,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (pointing is FramePointing pt) {
                 WritePointingHeaders(fits, pt, capturedAt);
             }
-            if (_device?.Name is string cam && cam.Length > 0) {
+            if (_lifecycle.Device?.Name is string cam && cam.Length > 0) {
                 fits.SetHeader("INSTRUME", cam, "camera");
             }
             if (prefs.HeaderTemperature) {
@@ -1959,7 +1875,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var j2000 = pointing is { IsJ2000: true } pt ? pt : (FramePointing?)null;
         var optics = _profileStore?.GetOpticsSettings();
         // #1757 — the camera, from the same selected device the FITS INSTRUME header is written from.
-        var device = _device;
+        var device = _lifecycle.Device;
         var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
             optics.PixelSizeUm * Math.Max(bin, 1),
             optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1));
@@ -1995,98 +1911,65 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             CameraId: string.IsNullOrWhiteSpace(device?.UniqueId) ? null : device.UniqueId), CancellationToken.None).ConfigureAwait(false);
     }
 
-    // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
+    // ── §32.4 cache (the module's single-flight refresh loop) ────────────────────────────────────
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
+    // A refresh requested while a tick is in flight is not dropped: the module makes one more pass after it.
+    private void RefreshCacheOnce() => _lifecycle.RequestRefresh();
 
-    private void RefreshCacheOnce() {
-        Volatile.Write(ref _refreshPending, 1);
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
+    // The camera's runtime read (ADR 0011): the module has probed the camera, this reads it off the gate and
+    // hands back the commit. The essential read is CameraState: a driver that has no CameraState reads clean
+    // (ReadRuntime reports no error for ASCOM.NotImplementedException); any other failure counts toward degraded.
+    private DeviceRead ReadTick(ICameraDevice client) {
+        bool needCaps;
+        lock (_gate) {
+            needCaps = _capabilities is null;
         }
-        try {
-            while (Interlocked.Exchange(ref _refreshPending, 0) == 1) {
-                RefreshPass();
-            }
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+        var runtime = ReadRuntime(client, _heatSink, out var readError);
+        var caps = needCaps ? ReadCapabilities(client) : null;
+        var driftVerdict = CoolingDriftVerdict.Idle;
+        DiscoveredDeviceDto? watchedDevice = null;
+        return new DeviceRead(readError,
+            CommitLocked: () => {
+                _runtime = runtime;
+                if (caps is not null) {
+                    _capabilities = caps;
+                }
+                // §42.2 — cooling-drift monitor, observed under the same commit lock so the
+                // liveness check and the observation are one critical section (the #789
+                // probe lesson). Wall-clock inside the monitor: download-skipped ticks
+                // must still count toward the sustained window.
+                driftVerdict = _coolingDrift.Observe(
+                    runtime.CoolerOn, runtime.CoolerSetpointC, runtime.CcdTemperature, DateTimeOffset.UtcNow);
+                watchedDevice = _lifecycle.Device;
+            },
+            AfterCommit: () => {
+                if (driftVerdict == CoolingDriftVerdict.Drifted) {
+                    var actual = runtime.CcdTemperature ?? double.NaN;
+                    var setpoint = runtime.CoolerSetpointC ?? double.NaN;
+                    LogCoolingDrift(watchedDevice?.Name ?? "?", actual, setpoint);
+                    _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
+                        watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.CoolingDrift,
+                        $"CCD at {actual:0.0}°C vs set-point {setpoint:0.0}°C for over {CoolingDriftMonitor.DefaultDriftWindow.TotalMinutes:0} min",
+                        DateTimeOffset.UtcNow));
+                } else if (driftVerdict == CoolingDriftVerdict.Recovered) {
+                    LogCoolingRecovered(watchedDevice?.Name ?? "?");
+                }
+                // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
+                // cache it into the profile's optics section so the Planning Frame FOV works without the
+                // user typing it (and re-cache on a swapped camera). Outside the lock: it does profile IO.
+                if (caps is not null) {
+                    MaybeAutoPopulateOptics(caps);
+                    MaybeAutoPopulateElectronics(caps);
+                }
+            });
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception escaping here crashes the process; the per-field reads already absorb device failures, this is the hard backstop. CA1031's log-and-recover boundary applies.")]
-    private void RefreshPass() {
-        if (Volatile.Read(ref _downloading) == 1) {
-            return; // don't queue status reads behind the blocking image download
-        }
-        try {
-            AlpacaCamera? client;
-            bool needCaps;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
-                }
-                client = _client;
-                needCaps = _capabilities is null;
-            }
-            if (client is null) {
-                return;
-            }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
-            // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
-            // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this pass's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, _heatSink, out var readError);
-            var caps = needCaps ? ReadCapabilities(client) : null;
-            var capsCommitted = false;
-            var driftVerdict = CoolingDriftVerdict.Idle;
-            DiscoveredDeviceDto? watchedDevice = null;
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
-                    ObserveRuntimeReadLocked(readError is null, readError, _device);
-                    if (caps is not null) {
-                        _capabilities = caps;
-                        capsCommitted = true;
-                    }
-                    // §42.2 — cooling-drift monitor, observed under the same commit lock so the
-                    // liveness check and the observation are one critical section (the #789
-                    // probe lesson). Wall-clock inside the monitor: download-skipped ticks
-                    // must still count toward the sustained window.
-                    driftVerdict = _coolingDrift.Observe(
-                        runtime.CoolerOn, runtime.CoolerSetpointC, runtime.CcdTemperature, DateTimeOffset.UtcNow);
-                    watchedDevice = _device;
-                }
-            }
-            if (driftVerdict == CoolingDriftVerdict.Drifted) {
-                var actual = runtime.CcdTemperature ?? double.NaN;
-                var setpoint = runtime.CoolerSetpointC ?? double.NaN;
-                LogCoolingDrift(watchedDevice?.Name ?? "?", actual, setpoint);
-                _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
-                    watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.CoolingDrift,
-                    $"CCD at {actual:0.0}°C vs set-point {setpoint:0.0}°C for over {CoolingDriftMonitor.DefaultDriftWindow.TotalMinutes:0} min",
-                    DateTimeOffset.UtcNow));
-            } else if (driftVerdict == CoolingDriftVerdict.Recovered) {
-                LogCoolingRecovered(watchedDevice?.Name ?? "?");
-            }
-            // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
-            // cache it into the profile's optics section so the Planning Frame FOV works without the
-            // user typing it (and re-cache on a swapped camera). Outside the lock: it does profile IO.
-            if (capsCommitted && caps is not null) {
-                MaybeAutoPopulateOptics(caps);
-                MaybeAutoPopulateElectronics(caps);
-            }
-        } catch (Exception ex) {
-            LogRuntimeReadFailed(ex);
-        }
+    // Caller holds the gate (adopt, disconnect and trip): a fresh, ended or tripped session forgets the last one's reads.
+    private void ResetSessionLocked() {
+        _capabilities = null;       // re-read for the new device
+        _runtime = IdleRuntime;     // don't serve a prior device's runtime
+        _coolingDrift.Reset();      // §42.2 — no drift accumulation carries across sessions
+        _heatSink.Reset();          // a new driver may implement HeatSinkTemperature (#1185)
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -2206,7 +2089,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing camera property falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static CameraStateDto ReadRuntime(AlpacaCamera c, HeatSinkProbe heatSinkProbe, out string? readError) {
+    private static CameraStateDto ReadRuntime(ICameraDevice c, HeatSinkProbe heatSinkProbe, out string? readError) {
         CameraState state;
         readError = null;
         // CameraState is the essential read: a streak of failures is a degraded fault (§42.3 second channel).
@@ -2267,7 +2150,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: each capability falls back to a safe default (zeroed range / false flag) rather than failing the whole capability read; ranges of zero defer validation to the device. CA1031's log-and-recover boundary applies.")]
-    private static CameraCapabilitiesDto ReadCapabilities(AlpacaCamera c) {
+    private static CameraCapabilitiesDto ReadCapabilities(ICameraDevice c) {
         int w = 0, h = 0;
         try { w = c.CameraXSize; h = c.CameraYSize; } catch (Exception) { }
         double pixelSize = 0;
@@ -2377,160 +2260,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         };
     }
 
-    // ── Connect / teardown (template) ────────────────────────────────────────────────────────────
+    // ── Connection (ADR 0011: the module owns connect, teardown, probe and trip) ─────────────────
 
-    private AlpacaCamera RequireConnectedClient() {
-        AlpacaCamera? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
-        return client ?? throw new InvalidOperationException("camera is not connected");
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaCamera is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaCamera? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaCamera(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    _deviceBaseAddress = new Uri(
-                        $"{(device.UseHttps ? "https" : "http")}://{host}:{device.IpPort}/");
-                    _deviceNumber = device.AlpacaDeviceNumber;
-                    _capabilities = null;   // re-read for the new device
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
-                    _probe.Reset(); ResetHealthLocked();         // §42.3 — a fresh session starts a fresh streak
-                    _coolingDrift.Reset();  // §42.2 — no drift accumulation carries across sessions
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            RefreshCacheOnce();
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.Camera, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: AbortExposure / Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaCamera client) {
-        // Only interrupt when an exposure is actually in flight: several drivers (ZWO/QHY) throw
-        // from AbortExposure when idle, which would put a spurious teardown entry in every normal
-        // disconnect's log.
-        if (Volatile.Read(ref _captureInFlight) == 1) {
-            try {
-                client.AbortExposure();
-            } catch (Exception ex) {
-                LogTeardownIgnored(ex);
-            }
-        }
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM-backed clients have been known to throw from Dispose(); the throw must be swallowed rather than escape a fire-and-forget Task.Run. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaCamera client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        _deviceBaseAddress = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaCamera c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
-    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
-    // while a stale probe of the dead session was still in flight. The liveness check and
-    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
-    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
-    // null when the probed client is stale (the observation is discarded).
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaCamera client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Re-checks the probed client's identity under the gate: a reconnect between the probe
-    // and this trip must never flip the NEW, healthy session to Error (review finding).
-    private void TripConnectionLost(AlpacaCamera probed) {
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset(); ResetHealthLocked();
-            _coolingDrift.Reset();
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
+    private ICameraDevice RequireConnectedClient() {
+        ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+        return _lifecycle.Live ?? throw new InvalidOperationException("camera is not connected");
     }
 
     // §42.4 — op-channel fault publish for capture failures: snapshot the device under the gate,
@@ -2538,20 +2272,20 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // superseded or disposed by a user disconnect/reconnect mid-exposure must stay a log line (the
     // §42.3 probe owns genuine disconnects), so the liveness check and the device snapshot share
     // one critical section (the peripheral mediators' PublishOpFault pattern).
-    private void PublishOpFault(AlpacaCamera client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(ICameraDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
-                return;
-            }
-            device = _device;
+        var device = _lifecycle.DeviceIfCurrent(client);
+        if (device is null) {
+            return;
         }
-        _faults.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
+        _faults.Publish(new EquipmentFaultEvent(DeviceType.Camera, device.UniqueId, device.Name,
             kind, details, DateTimeOffset.UtcNow));
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while aborting the Camera exposure")]
+    private partial void LogTeardownIgnored(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Optional FITS headers could not all be written; frame is intact")]
     private partial void LogHeaderEnrichmentFailed(Exception ex);
@@ -2559,65 +2293,27 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     [LoggerMessage(Level = LogLevel.Warning, Message = "Filename template failed for frame {FrameId}; using id-based name")]
     private partial void LogTemplateNamingFailed(Exception ex, Guid frameId);
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' cooler can't hold set-point: CCD {ActualC}°C vs {SetpointC}°C sustained — §42.2 fault published")]
     private partial void LogCoolingDrift(string device, double actualC, double setpointC);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Camera '{Device}' cooler back within band — drift monitor re-armed (§42.2)")]
     private partial void LogCoolingRecovered(string device);
 
-    // Caller must hold _gate.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.Camera, _device?.UniqueId, _device?.Name, state);
-    }
-
-    private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
-        new(OperationId: Guid.NewGuid(),
-            OperationType: operationType,
-            AcceptedUtc: DateTimeOffset.UtcNow,
-            IdempotencyKey: idempotencyKey);
-
     public void Dispose() {
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
+        if (Interlocked.Exchange(ref _disposeStarted, 1) == 1) {
+            return;
         }
         // The run's last frames land before the camera goes (bounded; a stuck save is logged).
         FinishPendingSavesForDispose();
-        AlpacaCamera? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-            _deviceBaseAddress = null;
-        }
-        _refreshTimer.Dispose();
+        // The module releases the device directly (no courtesy AbortExposure/Connected=false: blocking HTTP
+        // calls that would hang container shutdown if the device is unreachable).
+        _lifecycle.Dispose();
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis
         // pending at shutdown is acceptable loss (the frames themselves are safe on disk).
         _analysisQueue.Writer.TryComplete();
         CancelLiveViewForDispose();
-        // Dispose the client directly (guarded): the courtesy AbortExposure/Connected=false are
-        // blocking HTTP calls that would hang container shutdown if the device is unreachable.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
         GC.SuppressFinalize(this);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Camera runtime read failed")]
-    private partial void LogRuntimeReadFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Auto-populated optics sensor geometry from the connected camera: {Width}×{Height} px, {PixelSizeUm} µm")]
     private partial void LogOpticsAutoPopulated(int width, int height, double pixelSizeUm);
@@ -2639,12 +2335,6 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Mount pointing snapshot failed; recording the frame without RA/Dec")]
     private partial void LogPointingSnapshotFailed(Exception ex);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Camera connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Camera connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Capture {FrameId} failed")]
     private partial void LogCaptureFailed(Exception ex, Guid frameId);
@@ -2672,9 +2362,6 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "configured save directory {Dir} is unavailable — falling back to the daemon-local frames dir")]
     private partial void LogSaveDirUnavailable(string dir);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Camera during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical is abort or pause — the exposure never started")]
     private partial void LogPreCaptureDiskBlocked(Guid frameId, long freeBytes);

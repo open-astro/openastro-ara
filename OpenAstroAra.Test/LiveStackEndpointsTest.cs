@@ -97,8 +97,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Start_on_an_osc_session_at_1x1_is_409_but_a_binned_one_is_accepted() {
             using var svc = new CameraService();
+            svc.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
             svc.WithCapabilitiesForTest(Caps(1000, 800, "RGGB"));
-            svc.WithLiveViewTestClientForTest();
             try {
                 await svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 1, BinY: 1), CancellationToken.None);
                 Assert.That(StatusOf(LiveStackEndpoints.Start(svc)), Is.EqualTo(StatusCodes.Status409Conflict));
@@ -114,8 +114,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Start_with_a_known_frame_size_over_the_cap_is_409() {
             using var svc = new CameraService();
+            svc.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
             svc.WithCapabilitiesForTest(Caps(6000, 4000, null));
-            svc.WithLiveViewTestClientForTest();
             try {
                 await svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 1, BinY: 1), CancellationToken.None);
                 Assert.That(StatusOf(LiveStackEndpoints.Start(svc)), Is.EqualTo(StatusCodes.Status409Conflict));

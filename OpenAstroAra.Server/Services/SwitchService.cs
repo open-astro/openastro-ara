@@ -275,6 +275,15 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
     }
 
+    /// <summary>#1246 — false while any connected switch has not yet read its ports cleanly since its connect.</summary>
+    public bool IsCleanlyConnected {
+        get {
+            lock (_gate) {
+                return !_connections.Values.Any(c => c.Lifecycle.State == EquipmentConnectionState.Connected && !c.Lifecycle.HasCleanReadSinceConnect);
+            }
+        }
+    }
+
     // #1246 — true once a refresh tick since the switch's current connect read its ports cleanly.
     internal bool HasCleanReadSinceConnect(string deviceId) {
         lock (_gate) {

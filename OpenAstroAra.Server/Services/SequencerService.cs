@@ -131,6 +131,26 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
+    public async Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct) {
+        // The tree while a run holds one (live edits change it); the counts an ended run (completed, stopped
+        // or failed) left, only while the stored body is unchanged since its tree was released (a queue edited
+        // after the run is served from the body); else the stored body (queued, never started, or evicted).
+        _runs.TryGetValue(id, out var run);
+        var (snap, releasedUtc) = run?.PlanRead() ?? default;
+        if (snap is not null && releasedUtc is null) {
+            return new SequencePlanDto(id, run!.RunId, snap.Targets);
+        }
+        var dto = await (_sequencesResolver?.Invoke()?.GetAsync(id, ct) ?? Task.FromResult<SequenceDto?>(null)).ConfigureAwait(false);
+        if (snap is not null && dto is not null && dto.ModifiedUtc <= releasedUtc) {
+            return new SequencePlanDto(id, run!.RunId, snap.Targets);
+        }
+        // A stored body that does not deserialize is served as 404, like an unknown id: there is no plan to read.
+        if (dto is null || !_deserializer.TryDeserialize(dto.Body, out var top, out _) || top is null) {
+            return null;
+        }
+        return new SequencePlanDto(id, run?.RunId, SequencePlanBuilder.Build(top).Targets);
+    }
+
     public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
         // A generated flats or dark-library run has no lights to calibrate: asking "capture
         // calibration frames tonight?" about it (and queuing flats of the flats) is the prompt that
@@ -1288,6 +1308,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["frames_captured"] = run.FramesCaptured,
                 ["stop_after_frame"] = run.StopAfterFrame,
             };
+            // #1875 — a client re-reads the plan when either changes.
+            var plan = run.PlanSnapshot();
+            payload["plan_frames_done"] = plan?.FramesDone ?? 0;
+            payload["current_block_name"] = plan?.CurrentBlockName;
             // #1747 — the meridian wait starts mid-run, so its reason rides the progress frame too.
             var (reasonCode, reasonText, meridianWaitSecondsLeft) = run.Reason;
             payload["reason_code"] = reasonCode;
@@ -1535,10 +1559,34 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // #1068 — the tree is released at run end; keep its final estimate so a
                     // terminal run state still reports the total (and remaining = what was left).
                     _finalEstimate = EstimatedSecondsLocked(fresh: true);
+                    if (_bodyTop is not null) {
+                        var last = SequencePlanBuilder.Build(_bodyTop);
+                        _finalPlan = last with { CurrentBlockName = null };
+                        _finalPlanUtc = DateTimeOffset.UtcNow;
+                    }
                 }
                 _root = root;
                 _bodyTop = bodyTop ?? root;
             }
+        }
+
+        private SequencePlanBuilder.Plan? _finalPlan;
+        private DateTimeOffset? _finalPlanUtc;
+
+        /// <summary>#1875 — the plan read off the live tree; after release, the last one read (counts as the run left them).</summary>
+        public SequencePlanBuilder.Plan? PlanSnapshot() => PlanRead().Plan;
+
+        /// <summary><see cref="PlanSnapshot"/> with the time the tree was released (null while it is live),
+        /// read together: every terminal path releases it, whatever the run's end state.</summary>
+        public (SequencePlanBuilder.Plan? Plan, DateTimeOffset? ReleasedUtc) PlanRead() {
+            ISequenceContainer? top;
+            lock (_gate) {
+                top = _bodyTop;
+                if (top is null) {
+                    return (_finalPlan, _finalPlanUtc);
+                }
+            }
+            return (SequencePlanBuilder.Build(top), null);
         }
 
         private (double? Total, double? Remaining) _finalEstimate;
@@ -1813,7 +1861,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     ReasonText: _reasonText,
                     MeridianWaitSecondsLeft: _meridianWaitSecondsLeft);
             }
-            return dto with { MeridianFlip = MeridianFlipStatus() };
+            var plan = PlanSnapshot();
+            return dto with { MeridianFlip = MeridianFlipStatus(), PlanFramesDone = plan?.FramesDone ?? 0, CurrentBlockName = plan?.CurrentBlockName };
         }
     }
 }

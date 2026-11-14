@@ -49,7 +49,7 @@ namespace OpenAstroAra.Server.Services;
 /// <c>IGuiderMediator</c> (see <c>GuiderService.Mediator.cs</c>; registered as the mediator in
 /// Program.cs, replacing <c>HeadlessGuiderMediator</c>).
 /// </summary>
-public sealed partial class GuiderService : IGuiderService, IDisposable {
+public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IDisposable {
 
     /// <inheritdoc/>
     public async Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct) {
@@ -154,7 +154,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             Func<DiscoveredDeviceDto?>? mainCameraResolver = null,
             IEquipmentIdentityReconciler? identity = null,
             IGuiderTwinDeleteStore? twinDeleteQueue = null,
-            Func<IReadOnlyList<(Guid Id, string? Name)>>? araProfilesResolver = null) {
+            Func<IReadOnlyList<(Guid Id, string? Name)>>? araProfilesResolver = null,
+            GuideCameraCustody? custody = null) {
+        Custody = custody ?? new GuideCameraCustody();
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -173,6 +175,19 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _twinDeleteQueue = twinDeleteQueue;
         _araProfilesResolver = araProfilesResolver;
     }
+
+    /// <summary>ADR 0016 — who holds the Guide Camera. The Polar Align Routine, guide focus and the live
+    /// view take it through this; starting guiding takes it from them.</summary>
+    internal GuideCameraCustody Custody { get; }
+
+    // The custody module's view of this Guider: its app state and the guider program's lease.
+    string? IGuideCameraPort.AppState => ConnectedGuiderOrNull()?.State;
+
+    async Task<bool?> IGuideCameraPort.LeaseActiveAsync(CancellationToken ct) =>
+        (await RequireConnectedGuider().GetPaSessionAsync(ct).ConfigureAwait(false)).Active;
+
+    Task IGuideCameraPort.SetLeaseAsync(bool active, int? timeoutS, CancellationToken ct) =>
+        RequireConnectedGuider().SetPaSessionAsync(active, timeoutS, ct);
 
     // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
     // Null in benches/tests → the pin is still re-read and corrected, nobody is told.
@@ -345,13 +360,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
         var accepted = Accepted("guider.start", idempotencyKey);
-        // Guide pressed by hand gets the same preparation as a run's Start Guiding: the live-focus loop
-        // gives up the guide camera, and a stale lease or an open polar alignment is cleared, so the
-        // guider does not refuse with "polar-alignment session in progress" (review of #1365).
+        // Guide pressed by hand gets the same preparation as a run's Start Guiding: the custody module
+        // takes the guide camera from any setup holder and clears a stale lease, so the guider does not
+        // refuse with "polar-alignment session in progress" (review of #1365).
         _ = RunAndReportAsync(accepted, async () => {
             ThrowIfOutOfStep("Start guiding");
-            await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
-            await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
+            await Custody.TakeForGuidingAsync(this, CancellationToken.None).ConfigureAwait(false);
             return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
         }, ditherGuider: null, startGuider: guider);
         return Task.FromResult(accepted);

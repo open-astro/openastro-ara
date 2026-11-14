@@ -98,18 +98,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void The_daemon_owns_its_camera_while_guiding_or_calibrating() {
-            Assert.That(GuideFocusService.GuiderBusy("Guiding"), Is.True);
-            Assert.That(GuideFocusService.GuiderBusy("Calibrating"), Is.True);
-            Assert.That(GuideFocusService.GuiderBusy("LostLock"), Is.True);
-            Assert.That(GuideFocusService.GuiderBusy("Paused"), Is.True);
-            Assert.That(GuideFocusService.GuiderBusy("Looping"), Is.False, "looping is just exposing — the lease stops it");
-            Assert.That(GuideFocusService.GuiderBusy("Stopped"), Is.False);
-            Assert.That(GuideFocusService.GuiderBusy(""), Is.False);
-            Assert.That(GuideFocusService.GuiderBusy(null), Is.False);
-        }
-
-        [Test]
         public void Measure_reads_stars_hfr_peak_and_fwhm_from_a_guide_frame() {
             int w = 200, h = 200;
             var frame = FlatField(w, h);
@@ -155,15 +143,6 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(new GuideFocusStartRequestDto(2), CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("not connected"));
             Assert.That(svc.GetStatus().State, Is.EqualTo("idle"), "a refused start leaves no trace");
-        }
-
-        [Test]
-        public async Task Start_refuses_while_polar_alignment_holds_the_guide_camera() {
-            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), polarAlignActive: () => true);
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(new GuideFocusStartRequestDto(2), CancellationToken.None));
-            Assert.That(ex!.Message, Does.Contain("polar alignment"));
         }
 
         [Test]

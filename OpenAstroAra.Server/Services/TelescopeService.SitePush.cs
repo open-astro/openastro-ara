@@ -26,7 +26,7 @@ namespace OpenAstroAra.Server.Services;
 // device entry's learnSiteFromClient is on, the default.)
 public sealed partial class TelescopeService {
 
-    /// <summary>The mount's site as Alpaca exposes it (a seam over <see cref="AlpacaTelescope"/>).</summary>
+    /// <summary>The mount's site as Alpaca exposes it (a seam over <see cref="ITelescopeDevice"/>).</summary>
     internal interface IMountSite {
         double Latitude { get; }
         double Longitude { get; }
@@ -37,7 +37,7 @@ public sealed partial class TelescopeService {
         void SetElevation(double v);
     }
 
-    private sealed class AlpacaMountSite(AlpacaTelescope mount) : IMountSite {
+    private sealed class DeviceMountSite(ITelescopeDevice mount) : IMountSite {
         public double Latitude => mount.SiteLatitude;
         public double Longitude => mount.SiteLongitude;
         public double Elevation => mount.SiteElevation;
@@ -121,7 +121,7 @@ public sealed partial class TelescopeService {
         if (store is null || (!force && Volatile.Read(ref _siteFollowHolds) > 0)) {
             return;
         }
-        var mount = MountSiteSource is { } source ? source() : ConnectedAlpacaSite();
+        var mount = MountSiteSource is { } source ? source() : ConnectedDeviceSite();
         if (mount is null) {
             return;
         }
@@ -185,10 +185,10 @@ public sealed partial class TelescopeService {
         return false;
     }
 
-    private AlpacaMountSite? ConnectedAlpacaSite() {
+    private DeviceMountSite? ConnectedDeviceSite() {
         lock (_gate) {
-            return _state == OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected && _client is { } client
-                ? new AlpacaMountSite(client)
+            return _lifecycle.Live is { } client
+                ? new DeviceMountSite(client)
                 : null;
         }
     }

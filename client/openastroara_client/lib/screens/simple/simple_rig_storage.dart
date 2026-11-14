@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -101,6 +102,15 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
   @override
   void initState() {
     super.initState();
+    // The low-space line needs the rig's threshold; there is no default to use.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final api = ref.read(profileApiProvider);
+      if (mounted &&
+          api != null &&
+          ref.read(storageSettingsProvider).value == null) {
+        unawaited(ref.read(storageSettingsProvider.notifier).load(api));
+      }
+    });
     if (widget.reveal) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Scrollable.ensureVisible(context);
@@ -143,8 +153,9 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
         : hasFigures && free <= 0
         ? l10n.shellStorageFull
         : null;
-    final warnBytes =
-        ref.watch(storageSettingsProvider).minFreeDiskWarnGb * 1000000000;
+    // Null until the section is loaded from the rig: no low-space verdict then.
+    final warnGb = ref.watch(storageSettingsProvider).value?.minFreeDiskWarnGb;
+    final warnBytes = warnGb == null ? null : warnGb * 1000000000;
     return Column(
       key: const Key('simple-storage'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,7 +184,7 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
               minHeight: 8,
               color: problem != null
                   ? AraColors.accentError
-                  : free <= warnBytes
+                  : warnBytes != null && free <= warnBytes
                   ? AraColors.accentWarning
                   : null,
               backgroundColor: AraColors.textSecondary.withValues(alpha: 0.2),

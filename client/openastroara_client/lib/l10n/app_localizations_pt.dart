@@ -836,6 +836,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewPlanPaused => 'Plan paused';
 
   @override
+  String get previewPlanGuiderCalibrating =>
+      'Start guiding · Guider calibrating';
+
+  @override
+  String previewPlanGuiderCalibratingLeg(String leg) {
+    return 'Start guiding · Guider calibrating · $leg';
+  }
+
+  @override
   String get previewPlan => 'Plan';
 
   @override
@@ -2615,6 +2624,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusStopGuide => 'Stop the guide camera\'s live focus';
 
   @override
+  String get previewGuideLoopStart => 'Loop the guide camera\'s frames';
+
+  @override
+  String get previewGuideLoopStop => 'Stop the guide camera\'s frames';
+
+  @override
   String get focusScopeMain => 'Main';
 
   @override
@@ -2838,6 +2853,31 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guideToolMeasuring => 'Measuring drift…';
+
+  @override
+  String get guideCalibrationWaiting => 'Waiting for the first step…';
+
+  @override
+  String guideCalibrationPlot(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Calibration plot, $count steps',
+      one: 'Calibration plot, 1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideCalibrationKeyRa => 'RA (W/E)';
+
+  @override
+  String get guideCalibrationKeyDec => 'Dec (N/S)';
+
+  @override
+  String guideAssistantLeft(String time) {
+    return '$time left';
+  }
 
   @override
   String guideToolDone(int count) {
@@ -5246,6 +5286,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get statsBadgeEarned => 'Earned';
+
+  @override
+  String get settingsSectionLoading => 'Loading these settings from your rig…';
+
+  @override
+  String get settingsSectionNotLoaded =>
+      'Not loaded — these settings are on your rig and it did not answer.';
+
+  @override
+  String get settingsSectionRetry => 'Retry';
+
+  @override
+  String get settingsSectionConflict =>
+      'These settings were changed on another device. Nothing was saved. Reload to see the new values (your edits here will be replaced).';
+
+  @override
+  String get settingsSectionReload => 'Reload';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6096,6 +6153,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewPlanPaused => 'Plano pausado';
+
+  @override
+  String get previewPlanGuiderCalibrating =>
+      'Iniciar guiagem · Guia calibrando';
+
+  @override
+  String previewPlanGuiderCalibratingLeg(String leg) {
+    return 'Iniciar guiagem · Guia calibrando · $leg';
+  }
 
   @override
   String get previewPlan => 'Plano';
@@ -7887,6 +7953,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusStopGuide => 'Parar o foco ao vivo da câmera de guia';
 
   @override
+  String get previewGuideLoopStart => 'Repetir os quadros da câmera de guia';
+
+  @override
+  String get previewGuideLoopStop => 'Parar os quadros da câmera de guia';
+
+  @override
   String get focusScopeMain => 'Principal';
 
   @override
@@ -8111,6 +8183,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideToolMeasuring => 'Medindo a deriva…';
+
+  @override
+  String get guideCalibrationWaiting => 'Aguardando o primeiro passo…';
+
+  @override
+  String guideCalibrationPlot(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Gráfico de calibração, $count passos',
+      one: 'Gráfico de calibração, 1 passo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideCalibrationKeyRa => 'AR (O/L)';
+
+  @override
+  String get guideCalibrationKeyDec => 'Dec (N/S)';
+
+  @override
+  String guideAssistantLeft(String time) {
+    return 'faltam $time';
+  }
 
   @override
   String guideToolDone(int count) {
@@ -10531,4 +10628,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get statsBadgeEarned => 'Conquistado';
+
+  @override
+  String get settingsSectionLoading =>
+      'Carregando estas configurações do seu setup…';
+
+  @override
+  String get settingsSectionNotLoaded =>
+      'Não carregado — estas configurações estão no seu setup e ele não respondeu.';
+
+  @override
+  String get settingsSectionRetry => 'Tentar de novo';
+
+  @override
+  String get settingsSectionConflict =>
+      'Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).';
+
+  @override
+  String get settingsSectionReload => 'Recarregar';
 }

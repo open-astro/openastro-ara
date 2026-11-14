@@ -67,6 +67,8 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     public DesiredConnection? DesiredConnection => _lifecycle.Desired;
 
+    public bool IsCleanlyConnected => _lifecycle.HasCleanReadSinceConnect;
+
     public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     public Task<RotatorDto?> GetAsync(CancellationToken ct) {
