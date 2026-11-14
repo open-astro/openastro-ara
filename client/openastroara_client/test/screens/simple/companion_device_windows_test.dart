@@ -438,6 +438,16 @@ void main() {
             }
           }
           expect(rects.last.right, greaterThan(size.width), reason: 'swipes');
+          // One row: the strip is as tall as it is without the deck.
+          expect(
+            tester
+                .getSize(
+                  find.ancestor(of: row, matching: find.byType(SimplePanel)),
+                )
+                .height,
+            kSimpleBarHeight,
+            reason: 'a second strip row came back',
+          );
           final end = rects.last.right;
           await tester.drag(row, Offset(-end, 0));
           await tester.pump(const Duration(milliseconds: 500));

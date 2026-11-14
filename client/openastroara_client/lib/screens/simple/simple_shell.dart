@@ -1115,9 +1115,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           sequenceRunStateProvider.select((s) => simpleRunPhase(run, s.value)),
         ) !=
         SimpleRunPhase.none;
-    // #1777 — upright, the strip takes a second row for the device icons (or
-    // the note that there are none), so its icons are 44 px targets and its
-    // note shows whole at any text size.
+    // #1777 — upright, the strip stays one row while devices show (the icons
+    // swipe); with none, the note takes a row of its own so it shows whole at
+    // any text size.
     final deck = companionPortrait(context, ref);
     final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
     final railTop = kSimpleInset * 2 + barHeight;
@@ -2155,11 +2155,11 @@ TextStyle get _kStripNote => kSimpleText.copyWith(fontWeight: FontWeight.w600);
 /// The note's vertical padding and horizontal padding as a button.
 const _kNotePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
-/// #1777 — the height of the strip's second row on an upright phone: the 44 px
-/// icons with 4 px above and below, or the note at the user's text size, as
+/// #1777 — the height the strip adds on an upright phone: none with devices
+/// (the icons swipe in the one row), else the note at the user's text size, as
 /// many lines as it takes at the width the strip leaves it (never shrunk).
 double _companionStripRow(BuildContext context, WidgetRef ref) {
-  if (_anyDeviceShown(ref)) return 52;
+  if (_anyDeviceShown(ref)) return 0;
   final l10n = context.l10n;
   final painter = TextPainter(
     text: TextSpan(
@@ -2194,8 +2194,8 @@ class _StatusStrip extends ConsumerWidget {
     required this.onFullUi,
   });
 
-  /// #1777 — an upright phone: the device icons (or the note) take a second
-  /// row of their own, under the mark and the three buttons.
+  /// #1777 — an upright phone: the device icons are 44 px targets, and the
+  /// "no devices" note takes a second row of its own.
   final bool stacked;
 
   /// Opens Settings › Devices (the no-devices note).
@@ -2312,7 +2312,7 @@ class _StatusStrip extends ConsumerWidget {
     ];
     return SimplePanel(
       padding: const EdgeInsets.only(left: 8, right: 4),
-      child: stacked
+      child: stacked && !anyDevice
           ? Column(
               children: [
                 SizedBox(
