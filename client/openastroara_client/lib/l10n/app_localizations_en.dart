@@ -5246,4 +5246,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statsBadgeEarned => 'Earned';
+
+  @override
+  String get settingsSectionLoading => 'Loading these settings from your rig…';
+
+  @override
+  String get settingsSectionNotLoaded =>
+      'Not loaded — these settings are on your rig and it did not answer.';
+
+  @override
+  String get settingsSectionRetry => 'Retry';
+
+  @override
+  String get settingsSectionConflict =>
+      'These settings were changed on another device. Nothing was saved. Reload to see the new values (your edits here will be replaced).';
+
+  @override
+  String get settingsSectionReload => 'Reload';
 }

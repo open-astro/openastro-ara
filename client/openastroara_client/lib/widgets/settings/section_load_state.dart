@@ -38,8 +38,8 @@ class SectionNotLoaded extends ConsumerWidget {
             liveRegion: true,
             child: Text(
               failure == null
-                  ? 'Loading these settings from your rig…'
-                  : 'Not loaded — these settings are on your rig and it did not answer. '
+                  ? context.l10n.settingsSectionLoading
+                  : '${context.l10n.settingsSectionNotLoaded} '
                         '${friendlyError(context.l10n, failure, action: context.l10n.actionLoadSettings)}',
             ),
           ),
@@ -47,7 +47,7 @@ class SectionNotLoaded extends ConsumerWidget {
           OutlinedButton(
             key: const Key('section-retry'),
             onPressed: onRetry,
-            child: const Text('Retry'),
+            child: Text(context.l10n.settingsSectionRetry),
           ),
         ],
       ),
@@ -72,8 +72,7 @@ class SectionConflictBanner extends StatelessWidget {
             child: Semantics(
               liveRegion: true,
               child: Text(
-                'These settings were changed on another device. Nothing was saved. '
-                'Reload to see the new values (your edits here will be replaced).',
+                context.l10n.settingsSectionConflict,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
@@ -81,7 +80,7 @@ class SectionConflictBanner extends StatelessWidget {
           TextButton(
             key: const Key('section-reload'),
             onPressed: onReload,
-            child: const Text('Reload'),
+            child: Text(context.l10n.settingsSectionReload),
           ),
         ],
       ),

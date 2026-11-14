@@ -6698,5 +6698,25 @@
   "statsBadgeEarned": "Earned",
   "@statsBadgeEarned": {
     "description": "Stats: caption under a badge the user has earned"
+  },
+  "settingsSectionLoading": "Loading these settings from your rig…",
+  "@settingsSectionLoading": {
+    "description": "Settings panel: a rig-held section (ADR 0015) is still loading"
+  },
+  "settingsSectionNotLoaded": "Not loaded — these settings are on your rig and it did not answer.",
+  "@settingsSectionNotLoaded": {
+    "description": "Settings panel: a rig-held section failed to load; a friendlyError sentence follows"
+  },
+  "settingsSectionRetry": "Retry",
+  "@settingsSectionRetry": {
+    "description": "Settings panel: button that loads a rig-held section again"
+  },
+  "settingsSectionConflict": "These settings were changed on another device. Nothing was saved. Reload to see the new values (your edits here will be replaced).",
+  "@settingsSectionConflict": {
+    "description": "Settings panel: a save was refused because another device saved a newer copy"
+  },
+  "settingsSectionReload": "Reload",
+  "@settingsSectionReload": {
+    "description": "Settings panel: button that replaces local edits with the rig's newer copy"
   }
 }
