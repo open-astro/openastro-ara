@@ -161,9 +161,44 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         }
     }
 
-    public Task LoopAsync(CancellationToken ct) => _guider.RequireConnectedGuider().LoopAsync(ct);
+    // The live view's custody claim (ADR 0016): custody only, no guider lease — the loop is the guider's own
+    // state, which Guiding turns into guiding without a stop. Guarded by _claimGate.
+    private GuideCameraCustody.Claim? _claim;
+    private readonly object _claimGate = new();
 
-    public Task StopAsync(CancellationToken ct) => _guider.RequireConnectedGuider().StopCaptureAsync(ct);
+    /// <summary>Start looping. Refused while the Guider guides, calibrates, is paused or has lost the star; a
+    /// newer request takes the camera from guide focus or polar alignment first.</summary>
+    public async Task LoopAsync(CancellationToken ct) {
+        var guider = _guider.RequireConnectedGuider();
+        // A setup activity taking the camera ends the loop; Guiding takes over from it without a stop.
+        var claim = await _guider.Custody.TakeAsync(CameraUse.LiveView, _guider,
+            by => by == CameraUse.Guiding ? Task.CompletedTask : StopLoopAsync(), ct).ConfigureAwait(false);
+        lock (_claimGate) {
+            _claim = claim;
+        }
+        try {
+            await guider.LoopAsync(ct).ConfigureAwait(false);
+        } catch {
+            await ReleaseClaimAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task StopAsync(CancellationToken ct) {
+        await _guider.RequireConnectedGuider().StopCaptureAsync(ct).ConfigureAwait(false);
+        await ReleaseClaimAsync().ConfigureAwait(false);
+    }
+
+    private Task StopLoopAsync() => _guider.RequireConnectedGuider().StopCaptureAsync(CancellationToken.None);
+
+    private Task ReleaseClaimAsync() {
+        GuideCameraCustody.Claim? claim;
+        lock (_claimGate) {
+            claim = _claim;
+            _claim = null;
+        }
+        return claim?.ReleaseAsync() ?? Task.CompletedTask;
+    }
 
     /// <summary>Lock on the star nearest (x, y). Refused as out of range (400) when the position is
     /// negative or not finite, or — once the guider reports its frame size — outside the frame; with no

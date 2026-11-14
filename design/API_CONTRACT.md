@@ -209,6 +209,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+### 2026-11-13 — Live guide-camera loop: refused while the Guider is busy, and it takes the camera from setup activities (#1809)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/guider/live/loop` (amends the 2026-10-16 live-view entry).
+
+**Decision:** besides 409 when no guider is connected, `live/loop` answers a plain 409 (the reason in `detail`, e.g. "the guider is guiding — stop guiding before …") while the guider is guiding, calibrating, paused or has lost its star. When polar alignment or guide focus holds the Guide Camera, `live/loop` stops that activity first and then loops; the later request wins. Guiding later takes the camera from the loop without stopping it. `stop`, `select` and `deselect` are unchanged.
+
+**Reasoning:** ADR 0016 puts every hand-over of the Guide Camera in one custody module (`GuideCameraCustody`). Looping under an active guide would break guiding, so it is a state conflict the client can explain (409), not a 500. Stopping the older setup holder matches how polar alignment and guide focus already take the camera from each other.
+
+**Spec ref:** `Services/GuideCameraCustody.cs` (`TakeAsync`), `Services/GuiderLiveService.cs` (`LoopAsync`), `Endpoints/EquipmentEndpoints.cs` (`GuiderLiveResultAsync`).
+
+**Related:** ADR 0016, PR #1879.
+
+---
+
 ### 2026-11-11 — The dome follows the mount: `POST /equipment/dome/follow`, `GET/PUT /profile/dome`, and `following` on the dome status (#1689)
 
 **Endpoint(s) or area:** new `POST /api/v1/equipment/dome/follow` (body `{"enabled": bool}`); new `GET` and `PUT /api/v1/profile/dome` (`dome` profile section); `runtime.following` on `GET /api/v1/equipment/dome`.

@@ -85,16 +85,13 @@ public sealed partial class GuiderService {
 
     /// <summary>Why the guider's equipment must not be released right now, or null when it may be:
     /// an imaging run owns it (a sequence stops guiding for an autofocus, a slew or a flip and the
-    /// guider reads Stopped, but its next Start Guiding needs the equipment) or a polar alignment holds
-    /// the guide camera. Shared by the preview, the REST delete and the idle drain.</summary>
+    /// guider reads Stopped, but its next Start Guiding needs the equipment) or a setup activity (polar
+    /// alignment, guide focus, live view) holds the guide camera. Shared by the preview, the REST delete and the idle drain.</summary>
     private string? GuiderHeldReason() {
         if (ActiveRunSession?.Invoke() is not null) {
             return "An imaging run is in progress. It will be deleted once the run ends.";
         }
-        if (PolarAlignActive?.Invoke() == true) {
-            return "A polar alignment is in progress. It will be deleted once it ends.";
-        }
-        return null;
+        return Custody.HeldReason(ConnectedGuiderOrNull()?.State);
     }
 
     private static string BusyReason(string? appState) =>

@@ -341,7 +341,7 @@ namespace OpenAstroAra.Server.Services {
                 ["measured_at"] = result.MeasuredAt.ToString("O", CultureInfo.InvariantCulture),
             }).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("checked", CancellationToken.None).ConfigureAwait(false);
-            await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
+            await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
 
         /// <summary>The verdict bands the client's rating uses (polar_error_rating.dart).</summary>

@@ -768,6 +768,43 @@ namespace OpenAstroAra.Test {
             Assert.That(calls.IndexOf("set_connected"), Is.LessThan(calls.IndexOf("loop")), "equipment first, then loop");
         }
 
+        [TestCase("Guiding")]
+        [TestCase("Calibrating")]
+        [TestCase("Paused")]
+        [TestCase("LostLock")]
+        public async Task Loop_is_refused_while_the_guider_is_busy_and_sends_nothing(string state) {
+            // ADR 0016: a live view opened from a phone must not take the camera from Guiding.
+            var (fake, svc) = await ConnectedAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await fake.BroadcastAsync(PhdEvents.AppState(state)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == state).ConfigureAwait(false), Is.True);
+            var before = fake.ReceivedMethods.Count;
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await new GuiderLiveService(svc, new NoFrames()).LoopAsync(CancellationToken.None).ConfigureAwait(false));
+
+            Assert.That(ex!.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"));
+            Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("loop"));
+            Assert.That(svc.Custody.Holder, Is.Null);
+        }
+
+        [Test]
+        public async Task Loop_holds_the_camera_until_Stop_gives_it_back() {
+            var (fake, svc) = await ConnectedAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("loop", JsonValue.Create(0));
+            fake.OnRpc("stop_capture", JsonValue.Create(0));
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            await live.LoopAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(svc.Custody.Holder, Is.EqualTo(CameraUse.LiveView));
+
+            await live.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(svc.Custody.Holder, Is.Null);
+        }
+
         [Test]
         public async Task Loop_says_so_when_the_guider_cannot_connect_its_equipment() {
             var (fake, svc) = await ConnectedAsync().ConfigureAwait(false);

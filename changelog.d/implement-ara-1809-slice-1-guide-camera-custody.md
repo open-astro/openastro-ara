@@ -1,0 +1,3 @@
+### Changed (guiding)
+
+- **The Guide Camera changes hands by one rule in one daemon module** (#1809, ADR 0016): starting Guiding takes the camera from anyone (a polar alignment, a guide-camera focus loop or the live view is stopped, and the guider's lease is released). Polar Align, guide focus and the Guider live view are refused with a reason while the Guider guides, calibrates, is paused or has lost the star, and a newer one of them takes the camera from the older one: guide focus no longer refuses while a polar alignment runs, and opening the live view stops a running guide-camera focus loop. A profile's guider twin is no longer deleted while a guide-camera focus loop or the live view is open, as it already was not during a polar alignment.
