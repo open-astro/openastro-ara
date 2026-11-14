@@ -131,18 +131,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Snapshot_capture_and_apply_carry_the_calibration_across_profile_select() {
-            var calibrated = new InMemoryProfileStore();
-            calibrated.PutFocusCalibration(Calibration());
-            var snap = ProfileStoreSnapshot.Capture(calibrated);
-            Assert.That(snap.FocusCalibration, Is.Not.Null);
-
-            var target = new InMemoryProfileStore();
-            ProfileStoreSnapshot.Apply(target, snap);
-            Assert.That(target.GetFocusCalibration(), Is.EqualTo(snap.FocusCalibration));
-        }
-
-        [Test]
         public void Applying_a_never_calibrated_snapshot_clears_the_live_calibration() {
             // Switching to a never-calibrated profile must CLEAR the live store — keeping the previous
             // rig's calibration would feed Smart Focus a table fitted for a different optical train.

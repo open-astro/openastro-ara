@@ -37,6 +37,13 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
 
     private static readonly FocuserStateDto IdleRuntime = new("idle", null, null, false);
 
+    // Driver actions (AlpacaBridge lists them in SupportedActions) for what ASCOM's focuser has no member for:
+    // make the position now 0, and the Celestron focus motor's run to both stops to find its travel.
+    internal const string SetZeroAction = "SetZero";
+    internal const string CalibrateAction = "Calibrate";
+    internal const string AbortCalibrationAction = "AbortCalibration";
+    internal const string CalibrationStatusAction = "CalibrationStatus";
+
     private readonly ILogger<FocuserService> _logger;
     private readonly IEquipmentFaultSink? _faults;
     private readonly IProfileStore? _profiles;
@@ -130,6 +137,46 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
         return Accepted("focuser.halt", idempotencyKey);
     }
 
+    public Task<OperationAcceptedDto> SetZeroAsync(string? idempotencyKey, CancellationToken ct) =>
+        RunActionAsync(c => c.CanSetZero, SetZeroAction, "focuser.set_zero", idempotencyKey);
+
+    public Task<OperationAcceptedDto> CalibrateAsync(string? idempotencyKey, CancellationToken ct) =>
+        RunActionAsync(c => c.CanCalibrate, CalibrateAction, "focuser.calibrate", idempotencyKey);
+
+    public Task<OperationAcceptedDto> AbortCalibrationAsync(string? idempotencyKey, CancellationToken ct) =>
+        RunActionAsync(c => c.CanCalibrate, AbortCalibrationAction, "focuser.calibrate_abort", idempotencyKey);
+
+    // One driver action the capabilities say it offers; a zero or a calibration waits for the focuser to be still.
+    private async Task<OperationAcceptedDto> RunActionAsync(Func<FocuserCapabilitiesDto, bool> offered, string action,
+            string operationType, string? idempotencyKey) {
+        IFocuserDevice? client;
+        FocuserCapabilitiesDto? caps;
+        FocuserStateDto runtime;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            client = _lifecycle.ConnectedDevice();
+            caps = _capabilities;
+            runtime = _runtime;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("focuser is not connected");
+        }
+        if (caps is null || !offered(caps)) {
+            throw new InvalidOperationException($"the focuser's driver does not offer {action}");
+        }
+        if (action != AbortCalibrationAction
+                && (runtime.State is "moving" or "backlash_compensating" || runtime.Calibration == "calibrating")) {
+            throw new InvalidOperationException("focuser is moving");
+        }
+        await Task.Run(() => client.Action(action, string.Empty), CancellationToken.None).ConfigureAwait(false);
+        if (action == SetZeroAction) {
+            // The hardware's count starts again at 0: no backlash steps are in it any more.
+            lock (_gate) { _backlashOffset = 0; }
+        }
+        _lifecycle.Refresh();
+        return Accepted(operationType, idempotencyKey);
+    }
+
     public Task<OperationAcceptedDto> MoveAsync(FocuserMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         IFocuserDevice? client;
@@ -181,6 +228,9 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
         }
         var runtime = ReadRuntime(client, out var readError);
         var caps = knownCaps is null ? ReadCapabilities(client) : null;
+        if ((knownCaps ?? caps)?.CanCalibrate == true) {
+            runtime = runtime with { Calibration = ReadCalibration(client) };
+        }
         // A relative focuser may have no Position to read (NotImplemented is already excluded; some
         // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
         var essential = (knownCaps?.AbsoluteFocuser ?? true) ? readError : null;
@@ -230,10 +280,36 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
         // Absolute focusers take an absolute target in [0, MaxStep]; relative focusers take a
         // signed offset in [-MaxStep, MaxStep] (negative = backward). MinPosition reflects that so
         // MoveAsync's range check accepts backward moves on a relative focuser.
+        var actions = ReadActions(c);
+        bool Lists(string action) => actions.Any(a => string.Equals(a, action, StringComparison.OrdinalIgnoreCase));
         return new FocuserCapabilitiesDto(
             MinPosition: absolute ? 0 : -maxStep,
             MaxPosition: maxStep, StepSizeUm: stepSize,
-            CanTempComp: canTempComp, AbsoluteFocuser: absolute);
+            CanTempComp: canTempComp, AbsoluteFocuser: absolute,
+            // A relative focuser has no position to zero.
+            CanSetZero: absolute && Lists(SetZeroAction),
+            CanCalibrate: Lists(CalibrateAction) && Lists(CalibrationStatusAction));
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a failed CalibrationStatus is an unknown calibration, not a fault.")]
+    private static string? ReadCalibration(IFocuserDevice c) {
+        try {
+            return c.Action(CalibrationStatusAction, string.Empty) switch {
+                var s when s.Equals("Calibrating", StringComparison.OrdinalIgnoreCase) => "calibrating",
+                var s when s.Equals("Calibrated", StringComparison.OrdinalIgnoreCase) => "calibrated",
+                var s when s.Equals("NotCalibrated", StringComparison.OrdinalIgnoreCase) => "not_calibrated",
+                _ => null,
+            };
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A driver may NotImplement SupportedActions or fail it; it then offers no actions.")]
+    private static IList<string> ReadActions(IFocuserDevice c) {
+        try { return c.SupportedActions ?? []; } catch (Exception) { return []; }
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

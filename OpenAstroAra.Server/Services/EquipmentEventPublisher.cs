@@ -99,14 +99,14 @@ public sealed partial class EquipmentEventPublisher {
             var element = doc.RootElement.Clone();
 
             Publish(WsEventCatalog.EquipmentStateChanged, element);
-            var alias = state switch {
+            WsEvent? alias = state switch {
                 EquipmentConnectionState.Connected => WsEventCatalog.EquipmentConnected,
                 EquipmentConnectionState.Disconnected => WsEventCatalog.EquipmentDisconnected,
                 EquipmentConnectionState.Error => WsEventCatalog.EquipmentConnectionFailed,
                 _ => null, // Connecting is visible via state_changed only.
             };
-            if (alias is not null) {
-                Publish(alias, element);
+            if (alias is { } declared) {
+                Publish(declared, element);
             }
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
@@ -224,15 +224,8 @@ public sealed partial class EquipmentEventPublisher {
         Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
     public void ExposureStarted(Guid frameId, double exposureSec, DateTimeOffset startedUtc, string kind, string? filterName) {
         try {
-            var payload = new JsonObject {
-                ["frame_id"] = frameId.ToString(),
-                ["exposure_sec"] = exposureSec,
-                ["started_utc"] = startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-                ["kind"] = kind,
-                ["filter_name"] = filterName,
-            };
-            using var doc = JsonDocument.Parse(payload.ToJsonString());
-            Publish(WsEventCatalog.CameraExposureStarted, doc.RootElement.Clone());
+            var payload = new ExposureStartedPayload(frameId.ToString(), exposureSec, startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture), kind, filterName);
+            Publish(WsEventCatalog.CameraExposureStarted, JsonSerializer.SerializeToElement(payload, AraJsonSerializerContext.Default.ExposureStartedPayload));
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.CameraExposureStarted);
         }
@@ -245,15 +238,8 @@ public sealed partial class EquipmentEventPublisher {
         Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
     public void ExposureComplete(Guid frameId, double exposureSec, DateTimeOffset startedUtc, string kind, long elapsedMs) {
         try {
-            var payload = new JsonObject {
-                ["frame_id"] = frameId.ToString(),
-                ["exposure_sec"] = exposureSec,
-                ["started_utc"] = startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-                ["kind"] = kind,
-                ["elapsed_ms"] = elapsedMs,
-            };
-            using var doc = JsonDocument.Parse(payload.ToJsonString());
-            Publish(WsEventCatalog.CameraExposureComplete, doc.RootElement.Clone());
+            var payload = new ExposureCompletePayload(frameId.ToString(), exposureSec, startedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture), kind, elapsedMs);
+            Publish(WsEventCatalog.CameraExposureComplete, JsonSerializer.SerializeToElement(payload, AraJsonSerializerContext.Default.ExposureCompletePayload));
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.CameraExposureComplete);
         }
@@ -266,19 +252,14 @@ public sealed partial class EquipmentEventPublisher {
         Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into the capture path. CA1031's log-and-recover boundary applies.")]
     public void ExposureFailed(Guid frameId, string kind, string reason) {
         try {
-            var payload = new JsonObject {
-                ["frame_id"] = frameId.ToString(),
-                ["kind"] = kind,
-                ["reason"] = reason,
-            };
-            using var doc = JsonDocument.Parse(payload.ToJsonString());
-            Publish(WsEventCatalog.CameraExposureFailed, doc.RootElement.Clone());
+            var payload = new ExposureFailedPayload(frameId.ToString(), kind, reason);
+            Publish(WsEventCatalog.CameraExposureFailed, JsonSerializer.SerializeToElement(payload, AraJsonSerializerContext.Default.ExposureFailedPayload));
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.CameraExposureFailed);
         }
     }
 
-    private void Publish(string eventType, JsonElement payload) {
+    private void Publish(WsEvent eventType, JsonElement payload) {
         var task = _broadcaster.PublishAsync(eventType, payload, CancellationToken.None);
         if (!task.IsCompletedSuccessfully) {
             // Observe the asynchronous tail so a channel fault can never become

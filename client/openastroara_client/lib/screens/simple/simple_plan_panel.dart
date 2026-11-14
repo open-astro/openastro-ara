@@ -56,6 +56,7 @@ import 'simple_calibration.dart' show SimpleNightCalibration;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
+        SimpleCountField,
         SimplePresetTile,
         SimpleWheelKeys,
         exposurePresets,
@@ -809,8 +810,6 @@ TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 TextStyle get _head =>
     kSimpleText.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
 
-const _kFramePresets = [5, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 240, 300];
-
 /// Plan's sheet, centred over the image: the target (a search, or Pick in
 /// Sky), a row per filter (sub length and frames), then Create plan (Save
 /// plan once one exists); once the run ends, Night done. The shutter starts
@@ -1277,14 +1276,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
               ),
               Expanded(
-                child: SimplePresetTile<int>(
-                  key: Key('simple-run-frames-$i'),
+                child: SimpleCountField(
+                  id: 'simple-run-frames-$i',
                   label: context.l10n.planFrames,
                   value: steps[i].frameCount,
-                  options: _kFramePresets,
-                  format: (n) => '× $n',
-                  onSelected: (n) => plan.setFrames(i, n),
-                  wheel: true,
+                  onChanged: (n) => plan.setFrames(i, n),
                 ),
               ),
             ],

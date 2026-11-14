@@ -98,3 +98,5 @@ referred to by its slug until it is written, and numbered then.
 - [A sequence is stored in NINA's JSON format, and NINA's engine runs it](0018-a-sequence-is-stored-in-ninas-json-format.md)
 - [The planetarium is the Stellarium Web Engine in the platform's native webview](0019-the-planetarium-is-stellarium-in-a-native-webview.md)
 - [Guiding is done by a separate guider service that the daemon drives over the PHD2 protocol](0020-guiding-is-a-separate-guider-service.md)
+- [A Prompt is raised in one client state module](0021-a-prompt-is-raised-in-one-client-module.md)
+- [A Refusal is declared once](0022-a-refusal-is-declared-once.md)

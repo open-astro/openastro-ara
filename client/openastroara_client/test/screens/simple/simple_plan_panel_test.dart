@@ -939,42 +939,25 @@ void main() {
       expect(rows(), hasLength(1), reason: 'a run needs something to take');
     });
 
-    testWidgets('Frames opens a wheel; spinning it and Done sets the count', (tester) async {
+    testWidgets('Frames is a typed count with - and + beside it', (tester) async {
       final c = await _pump(tester, _Seq(),
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
-      await tester.tap(find.byKey(const Key('simple-run-frames-0')));
-      await tester.pumpAndSettle();
-      final wheel = find.byType(CupertinoPicker);
-      expect(wheel, findsOneWidget);
-      tester.widget<CupertinoPicker>(wheel).onSelectedItemChanged!(0); // 5 frames
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(c.read(simpleRunPlanProvider).first.frameCount, 5);
-      expect(wheel, findsNothing);
+      await tester.enterText(find.byKey(const Key('simple-run-frames-0')), '47');
+      await tester.pump();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 47, reason: 'any count, not only a preset');
+      await tester.tap(find.byKey(const Key('simple-run-frames-0-up')));
+      await tester.pump();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 48);
+      expect(find.byType(CupertinoPicker), findsNothing, reason: 'no wheel for Frames');
     });
 
-    testWidgets('a keyboard reaches Frames and Enter opens its wheel (WCAG 2.1.1)', (tester) async {
-      await _pump(tester, _Seq(),
+    testWidgets('a keyboard reaches Frames and types a count (WCAG 2.1.1)', (tester) async {
+      final c = await _pump(tester, _Seq(),
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue, reason: 'Tab reaches it like the other tiles');
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(find.byType(CupertinoPicker), findsOneWidget);
-    });
-
-    testWidgets('the Frames wheel turns with the arrow keys: Enter opens it focused, Down is the next count', (tester) async {
-      final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
-      final before = c.read(simpleRunPlanProvider).first.frameCount;
-      expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(FocusManager.instance.primaryFocus?.debugLabel, 'simple-wheel-Frames', reason: 'focus lands on the wheel');
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(c.read(simpleRunPlanProvider).first.frameCount, greaterThan(before));
+      tester.testTextInput.enterText('15');
+      await tester.pump();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 15);
     });
 
     testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {

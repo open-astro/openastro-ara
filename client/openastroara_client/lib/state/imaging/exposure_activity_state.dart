@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/ws_event_types.dart';
 import '../../services/ws_event_stream.dart';
 import '../ws/ws_providers.dart';
 
@@ -91,39 +92,59 @@ const Duration kExposureActivityGrace = Duration(minutes: 2);
 class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
   Timer? _watchdog;
 
+  /// frame.complete is the belt to exposure_complete's braces: if the complete
+  /// event was lost the catalogued frame still closes the timer. Only for THIS
+  /// exposure's id, for all three: a stale frame registering late (the §28.8
+  /// orphan scan) or a late failed for an earlier exposure must not kill a
+  /// live timer.
+  void _endIfCurrent(Object? id) {
+    final current = state;
+    if (current != null && id == current.frameId) _end();
+  }
+
   @override
   ExposureActivity? build() {
     ref.onDispose(() => _watchdog?.cancel());
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       if (event == null) return;
-      final payload = event.payload;
+      // Only the fromJson calls sit in a try, so a TypeError raised by _begin
+      // or _end is not swallowed as a malformed payload.
       switch (event.type) {
-        case 'camera.exposure_started':
-          final frameId = payload['frame_id'];
-          final secs = payload['exposure_sec'];
-          if (frameId is! String || frameId.isEmpty || secs is! num) return;
-          final kind = payload['kind'];
-          final filter = payload['filter_name'];
+        case WsEventTypes.cameraExposureStarted:
+          final CameraExposureStartedPayload p;
+          try {
+            p = CameraExposureStartedPayload.fromJson(event.payload);
+          } on TypeError {
+            return;
+          }
+          if (p.frameId.isEmpty) return;
+          final filter = p.filterName;
           _begin(ExposureActivity(
-            frameId: frameId,
-            exposure: Duration(milliseconds: (secs * 1000).round()),
+            frameId: p.frameId,
+            exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
             startedAt: clock.now(),
-            kind: kind is String && kind.isNotEmpty ? kind : 'light',
-            filterName: filter is String && filter.isNotEmpty ? filter : null,
+            kind: p.kind.isNotEmpty ? p.kind : 'light',
+            filterName: filter != null && filter.isNotEmpty ? filter : null,
           ));
-        case 'camera.exposure_complete':
-        case 'camera.exposure_failed':
-        case 'frame.complete':
-          // frame.complete is the belt to exposure_complete's braces: if the
-          // complete event was lost the catalogued frame still closes the
-          // timer. Only for THIS exposure's id, for all three: a stale frame
-          // registering late (the §28.8 orphan scan) or a late failed for an
-          // earlier exposure must not kill a live timer.
-          final id = payload['frame_id'];
-          final current = state;
-          if (current == null) return;
-          if (id == current.frameId) _end();
+        case WsEventTypes.cameraExposureComplete:
+          final String id;
+          try {
+            id = CameraExposureCompletePayload.fromJson(event.payload).frameId;
+          } on TypeError {
+            return;
+          }
+          _endIfCurrent(id);
+        case WsEventTypes.cameraExposureFailed:
+          final String id;
+          try {
+            id = CameraExposureFailedPayload.fromJson(event.payload).frameId;
+          } on TypeError {
+            return;
+          }
+          _endIfCurrent(id);
+        case WsEventTypes.frameComplete:
+          _endIfCurrent(event.payload['frame_id']);
       }
     });
     // A dropped link means we may never hear the complete event; a frozen

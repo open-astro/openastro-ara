@@ -3,6 +3,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
+import 'companion_portrait_shell.dart';
 import 'simple_search.dart';
 import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
@@ -200,6 +201,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
+
+  // The Sky Map asked for but not drawn yet: shown anyway when this runs out.
+  Timer? _skyWait;
+  bool _skyWaitOver = false;
   bool _hadFrame = false;
   _Popover _popover = _Popover.none;
 
@@ -230,28 +235,41 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
+  double _simplePreflightRowWidth = 0;
   double _statusHeight = 0;
   double _messagesHeight = 0;
+  double _messagesCardWidth = 0;
   final _messagesKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
+  final _deckKey = GlobalKey();
+  // #1775 — the portrait deck's height; 0 until measured.
+  double _deckHeight = 0;
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _simplePreflightRowKey.currentContext?.size?.height;
-    final messages = _messagesKey.currentContext?.size?.height ?? 0;
+    final row = _simplePreflightRowKey.currentContext?.size;
+    final deckH = _deckKey.currentContext?.size?.height ?? 0;
+    final messages = _messagesKey.currentContext?.size;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight) {
+        (row != null &&
+            (row.height != _simplePreflightRowHeight ||
+                row.width != _simplePreflightRowWidth)) ||
+        deckH != _deckHeight ||
+        (messages?.height ?? 0) != _messagesHeight ||
+        (messages?.width ?? 0) != _messagesCardWidth) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
-        _messagesHeight = messages;
+        _simplePreflightRowHeight = row?.height ?? _simplePreflightRowHeight;
+        _simplePreflightRowWidth = row?.width ?? _simplePreflightRowWidth;
+        _deckHeight = deckH;
+        _messagesHeight = messages?.height ?? 0;
+        _messagesCardWidth = messages?.width ?? 0;
       });
     }
   });
@@ -537,6 +555,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   void dispose() {
+    _skyWait?.cancel();
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
@@ -677,6 +696,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _popover = _Popover.none;
     }
   });
+
+  void _openLibrary() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+    ),
+  );
+
+  /// The deck's settings chip: the right rail's, in Preflight's two-line form.
+  String _deckChipLabel(SimpleModeScreen mode, bool preflight) {
+    final label = SimpleScreen.of(mode).caption(context, ref);
+    return preflight
+        ? '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}'
+        : label;
+  }
 
   /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
   void _openMonitor() => unawaited(
@@ -1026,6 +1059,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final showSky = _sky || !hasFrame;
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
+    final skyAsked = showSky && !wallpaper;
+    if (!skyAsked) {
+      _skyWait?.cancel();
+      _skyWait = null;
+      _skyWaitOver = false;
+    } else if (!_skyWaitOver && _skyWait == null) {
+      _skyWait = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _skyWaitOver = true);
+      });
+    }
+    final skyShown =
+        skyAsked && (ref.watch(planetariumReadyProvider) || _skyWaitOver);
     final linkUp = ref.watch(serverLinkUpProvider);
     // Monitor's trends and link age run from when Simple Mode opens (#1724).
     ref.listen(monitorTrendsProvider, (_, _) {});
@@ -1080,43 +1125,73 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // What sits above the bottom row drops to the inset while it is empty
     // (ALP-4935).
     final statsShown = _statsShown(ref);
-    final aboveRow = statsShown ? kSimpleInset * 2 + bottomRow : kSimpleInset;
+    // #1775 — a phone held upright: one deck along the bottom in place of
+    // both rails and Stop; everything else sits above it.
+    final deck = companionPortrait(context, ref);
+    // Until the deck is measured, a guess keeps the first frame close: its
+    // height in two rows at 1x, as on a 390 px phone.
+    final deckTop = kSimpleInset + (_deckHeight == 0 ? 192.0 : _deckHeight);
+    final rowBottom = deck ? deckTop + AraSpace.s8 : kSimpleInset;
+    final aboveRow = statsShown
+        ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
+        : rowBottom;
+    // Beside the rail, the right edge the panels keep: the deck has no rail.
+    final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
     // The status card (the status lines, then the messages) sits top left,
-    // starting under the Preflight strip when it shows. On a window narrower
-    // than its widest plus the insets (a phone) it takes the whole row.
+    // under the status strip; under the Preflight strip only when the two
+    // would overlap (the strip is centred, so a wide window has room beside
+    // it). On a window narrower than its widest plus the insets (a phone) it
+    // takes the whole row.
     final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
     final messagesWidth = width - kSimpleInset * 2;
-    final messagesTop = simplePreflightRow
-        ? railTop + _simplePreflightRowHeight + AraSpace.s12
-        : railTop;
-    _measure();
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
-    final leftRailTop = _leftRailHeight == 0
+    final leftRailTop = deck
+        ? height - deckTop - kSimpleInset
+        : _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
+    // A card too tall for the room above the left rail moves beside it, when
+    // the room between the rails leaves it a readable width; otherwise it
+    // paints over the left rail. Either way it stops short of the right rail.
+    final railShift = railWidth + kSimpleInset;
+    final besideRoom = messagesWidth - railShift * 2;
+    bool besideRailAt(double top) =>
+        !narrow &&
+        _messagesHeight > (panels ? leftRailTop - top - kSimpleInset : double.infinity) &&
+        besideRoom >= 240;
+    // Beside the steps only when its real left edge (moved beside the rail
+    // when it is that tall) leaves the gap. Not measured yet (0): under them,
+    // so the first frame never overlaps.
+    final besideSteps =
+        !narrow &&
+        _simplePreflightRowWidth > 0 &&
+        kSimpleInset +
+                (besideRailAt(railTop) ? railShift : 0) +
+                _messagesCardWidth +
+                AraSpace.s12 <=
+            (width - _simplePreflightRowWidth) / 2;
+    final messagesTop = simplePreflightRow && !besideSteps
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
+        : railTop;
+    _measure();
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
-    // A card too tall for the room above the left rail moves beside it, when
-    // the room between the rails leaves it a readable width; otherwise it
-    // paints over the left rail. Either way it stops short of the right rail.
-    final railShift = railWidth + kSimpleInset;
-    final besideRoom = messagesWidth - railShift * 2;
-    final pillsBesideRail =
-        !narrow && _messagesHeight > messagesRoom && besideRoom >= 240;
+    final pillsBesideRail = besideRailAt(messagesTop);
     final pillsOverRail =
+        !deck &&
         panels &&
         _messagesHeight > messagesRoom &&
         !pillsBesideRail &&
@@ -1138,8 +1213,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
-    final betweenBottom =
-        (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
+    final betweenBottom = deck
+        ? rowBottom
+        : (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -1148,6 +1224,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Large text or a short window: the right rail reaches down into the
     // plan squares' corner, so they sit beside it, never over its chip.
     final squaresBesideRail =
+        !deck &&
         rightRailTop + _rightRailHeight + AraSpace.s8 >
         height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
     // Beside it they still hold one square (a rail wide): a phone at 2x text.
@@ -1191,8 +1268,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: kSimpleInset * 2 + (railWidth + stopSize) / 2,
-      bottom: kSimpleInset,
+      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
@@ -1298,17 +1375,47 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               key: const Key('simple-frame'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
-                              child: !showSky
-                                  ? (screenFrame ?? const FrameViewer())
-                                  : wallpaper
-                                  ? const SimpleWallpaper(
-                                      key: Key('simple-wallpaper'),
-                                    )
-                                  // The sky, asked for.
-                                  : KeyedSubtree(
-                                      key: const Key('simple-planetarium'),
-                                      child: widget.planetarium,
+                              // The sky loads with Simple Mode and stays
+                              // loaded, offstage with its tickers off while
+                              // a frame or the wallpaper shows: opening it
+                              // no longer starts the web view, the engine and
+                              // its tiles again, and it shows only once it has
+                              // drawn (or after 3 s), so the tiles are never
+                              // seen filling in (user, 2026-11-13). Put away,
+                              // the page rests and draws nothing
+                              // (PlanetariumShownListener).
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Offstage(
+                                    offstage: !skyShown,
+                                    child: TickerMode(
+                                      enabled: skyShown,
+                                      child: KeyedSubtree(
+                                        key: const Key('simple-planetarium'),
+                                        child: widget.planetarium,
+                                      ),
                                     ),
+                                  ),
+                                  if (!showSky)
+                                    screenFrame ?? const FrameViewer()
+                                  else if (!skyShown) ...[
+                                    const SimpleWallpaper(
+                                      key: Key('simple-wallpaper'),
+                                    ),
+                                    if (!wallpaper)
+                                      Center(
+                                        child: Text(
+                                          context.l10n.shellLoadingSky,
+                                          key: const Key('simple-sky-loading'),
+                                          style: kSimpleText.copyWith(
+                                            color: AraColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -1330,8 +1437,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // #1559 — no rig link: the card offers one, over the wallpaper.
                         if (!linkUp) ...[
                           if (!cardNarrow) rigCard,
-                        ] else if (!hasFrame)
+                        ] else if (!hasFrame &&
+                            // #1775 — upright, a panel opens across the middle:
+                            // the hint waits for it rather than show half under it.
+                            !(deck &&
+                                (_popover != _Popover.none ||
+                                    _device != null ||
+                                    _adding)))
                           Positioned.fill(
+                            // #1775 — upright, centred in the panels' room
+                            // between the strip and the deck, not under it.
+                            left: deck ? kSimpleInset : 0,
+                            top: deck ? kSimpleInset + kSimpleBarHeight : 0,
+                            right: deck ? railGap : 0,
+                            bottom: deck ? betweenBottom : 0,
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
@@ -1392,13 +1511,40 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right:
-                                    kSimpleInset * 2 +
-                                    (railWidth + stopSize) / 2,
-                                bottom: kSimpleInset,
+                                right: deck
+                                    ? kSimpleInset
+                                    : kSimpleInset * 2 +
+                                          (railWidth + stopSize) / 2,
+                                bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
                               ),
+                              // #1775 — the deck: both rails and Stop in one.
+                              if (deck)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset,
+                                  child: KeyedSubtree(
+                                    key: _deckKey,
+                                    child: CompanionDeck(
+                                      mode: shown,
+                                      chipLabel: _deckChipLabel(shown, pilot != null),
+                                      settingsOpen: _popover == _Popover.settings,
+                                      sky: _sky,
+                                      info: ref.watch(simpleInfoShownProvider),
+                                      onSection: _pickFromGrid,
+                                      onMonitor: _openMonitor,
+                                      onSky: () => setState(() => _sky = !_sky),
+                                      onInfo: () => ref
+                                          .read(simpleInfoShownProvider.notifier)
+                                          .toggle(),
+                                      onLibrary: _openLibrary,
+                                      onSettings: () => _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                )
+                              else ...[
                               Positioned(
                                 left: kSimpleInset,
                                 top: railTop,
@@ -1448,13 +1594,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              ],
                               // #1562 — the first-time Rig setup sheet, where Plan's
                               // sheet sits: each window and popover after it here
                               // draws over it, and it stays up under Settings so
                               // its ticks follow the edits.
                               Positioned(
                                 left: kSimpleInset,
-                                right: kSimpleInset * 2 + railWidth,
+                                right: railGap,
                                 top: popoverTop,
                                 bottom: betweenBottom,
                                 child: SimpleRigSetupHost(
@@ -1475,7 +1622,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // with the sheet's height (user, 2026-11-04;
                                   // it was centred over the image).
                                   left: kSimpleInset,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  right: railGap,
                                   // Centred between the status pill and the
                                   // bottom row (user, 2026-11-04).
                                   top: popoverTop,
@@ -1493,8 +1640,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 _Popover.queue,
                               }.contains(_popover))
                                 Positioned(
-                                  left: 0,
-                                  right: kSimpleInset * 2 + railWidth,
+                                  left: deck ? kSimpleInset : 0,
+                                  right: railGap,
                                   top: popoverTop,
                                   // Plan's bottom limit; the plan squares,
                                   // which its sheet moves, stay clear.
@@ -1503,6 +1650,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
+                                      fitWidth: deck,
                                       centre:
                                           preflightPanel ||
                                           (_popover == _Popover.settings &&
@@ -1549,7 +1697,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // never slide there.
                               if (!runSheet &&
                                   !preflightPanel &&
-                                  _rightRailHeight > 0)
+                                  (deck || _rightRailHeight > 0))
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: squaresLeft,
@@ -1691,10 +1839,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         )),
                                         section: _menuSection,
                                         revealStorage: _revealStoragePending,
-                                        onRigSetup: () => setState(() {
-                                          _popover = _Popover.none;
-                                          ref.read(rigSetupSheetProvider.notifier).set(true);
-                                        }),
+                                        onOpenGuider: () => _openFromPill(
+                                          SimpleStatusOrigin.guide,
+                                        ),
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
@@ -1704,6 +1851,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               ],
                               // Stop on its own at the bottom, under the rail.
+                              if (!deck)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
@@ -1754,6 +1902,39 @@ class _SkyPick extends ConsumerWidget {
     return _card(context, art);
   }
 
+  /// [thumbnail] with an info mark in its corner that shows the Art's credit
+  /// on a tap; the thumbnail alone when the Art has no credit.
+  Widget _artCredit(BuildContext context, AlbumArt art, Widget thumbnail) {
+    final credit = art.creditLine;
+    if (credit == null) return thumbnail;
+    return Tooltip(
+      key: const Key('simple-sky-art-credit'),
+      message: context.l10n.albumArtCredit(credit),
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 4),
+      child: Stack(
+        children: [
+          thumbnail,
+          const Positioned(
+            right: 2,
+            bottom: 2,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.overlayScrim,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.info_outline,
+                size: 14,
+                color: AraColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
@@ -1762,24 +1943,30 @@ class _SkyPick extends ConsumerWidget {
       children: [
         if (art != null)
           // A small portrait thumbnail at the Album's aspect, on its backdrop.
-          Semantics(
-            image: true,
-            label: selection.name,
-            child: ExcludeSemantics(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AraRadius.container),
-                child: ColoredBox(
-                  color: AraColors.albumArtBackdrop,
-                  child: SizedBox(
-                    width: 52,
-                    child: AspectRatio(
-                      aspectRatio: albumCardAspect,
-                      child: Image.asset(
-                        art.asset!,
-                        key: const Key('simple-sky-art'),
-                        fit: BoxFit.cover,
-                        cacheWidth: 156, // 3x of 52 px (iPad)
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          // The credit CC BY asks for is behind the info mark: a tap (or a
+          // hover) on the thumbnail shows it.
+          _artCredit(
+            context,
+            art,
+            Semantics(
+              image: true,
+              label: selection.name,
+              child: ExcludeSemantics(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AraRadius.container),
+                  child: ColoredBox(
+                    color: AraColors.albumArtBackdrop,
+                    child: SizedBox(
+                      width: 52,
+                      child: AspectRatio(
+                        aspectRatio: albumCardAspect,
+                        child: Image.asset(
+                          art.asset!,
+                          key: const Key('simple-sky-art'),
+                          fit: BoxFit.cover,
+                          cacheWidth: 156, // 3x of 52 px (iPad)
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),
@@ -1810,15 +1997,6 @@ class _SkyPick extends ConsumerWidget {
                       : AraColors.textSecondary,
                 ),
               ),
-              if (art?.creditLine != null)
-                Text(
-                  context.l10n.albumArtCredit(art!.creditLine!),
-                  key: const Key('simple-sky-art-credit'),
-                  style: kSimpleText.copyWith(
-                    fontSize: AraFontSize.simpleCaption,
-                    color: AraColors.textSecondary,
-                  ),
-                ),
             ],
           ),
         ),
@@ -1904,16 +2082,27 @@ Widget simpleFrost(Widget child) => ClipRRect(
 /// the rail) when it fits below, moved up as much as it needs when it doesn't;
 /// or, with [centre], centred in the room (Preflight's step panels).
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail({required this.preferredTop, this.centre = false});
+  const _BesideRail({
+    required this.preferredTop,
+    this.centre = false,
+    this.fitWidth = false,
+  });
 
   final double preferredTop;
   final bool centre;
 
-  // Height only: a panel wider than a phone-width window runs off its left
-  // edge, as before (phone layout: ALP-4865).
+  /// The portrait deck (#1775): the panel keeps inside the room, both edges
+  /// on screen.
+  final bool fitWidth;
+
+  // Otherwise height only: a panel wider than a landscape phone runs off its
+  // left edge, as before.
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints(maxHeight: constraints.maxHeight);
+      BoxConstraints(
+        maxHeight: constraints.maxHeight,
+        maxWidth: fitWidth ? constraints.maxWidth : double.infinity,
+      );
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -1926,7 +2115,9 @@ class _BesideRail extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_BesideRail old) =>
-      old.preferredTop != preferredTop || old.centre != centre;
+      old.preferredTop != preferredTop ||
+      old.centre != centre ||
+      old.fitWidth != fitWidth;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing
@@ -2961,15 +3152,16 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     this.section = 'Rig',
     required this.onClose,
     this.revealStorage = false,
-    this.onRigSetup,
+    this.onOpenGuider,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
 
-  /// #1562 — the Rig setup row: closes Settings and shows the Rig setup sheet.
-  final VoidCallback? onRigSetup;
+  /// #1562 — the Rig page's Rig setup header, for the Guider calibration:
+  /// closes Settings and shows Guider mode.
+  final VoidCallback? onOpenGuider;
 
   /// Rig opens scrolled to its Storage block (Plan's Open Storage).
   final bool revealStorage;
@@ -2990,17 +3182,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     final l10n = context.l10n;
     // Only a device appearing or going rebuilds this, not each 1 s reading.
     // The id picks the section (and a search hit names it); the label shows.
-    final sections = <(String, String, Widget Function(Color), bool)>[
-      // #1562 — while the rig still lacks a fact the first night needs.
-      if (widget.onRigSetup != null && ref.watch(rigSetupGapsProvider).isNotEmpty)
-        ('RigSetup', l10n.rigSetupTitle, (c) => glyph(Icons.checklist, c), false),
-      ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
-      (
-        'Devices',
-        l10n.shellSectionDevices,
-        (c) => glyph(Icons.settings_input_component_outlined, c),
-        false,
-      ),
+    // Under Devices by name, as on the Devices page.
+    final devices = <(String, String, Widget Function(Color), bool)>[
       if (ref.watch(cameraStatusProvider.select((v) => v.value != null)))
         (
           'Camera',
@@ -3075,6 +3258,16 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.videocam_outlined, c),
           true,
         ),
+    ]..sort((a, b) => simpleCompareNames(a.$2, b.$2));
+    final sections = <(String, String, Widget Function(Color), bool)>[
+      ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
+      (
+        'Devices',
+        l10n.shellSectionDevices,
+        (c) => glyph(Icons.settings_input_component_outlined, c),
+        false,
+      ),
+      ...devices,
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -3102,9 +3295,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
                         borderRadius: BorderRadius.circular(AraRadius.container),
-                        onTap: () => name == 'RigSetup'
-                            ? widget.onRigSetup?.call()
-                            : setState(() => _section = name),
+                        onTap: () => setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
                           label: narrow ? title : null,
@@ -3152,6 +3343,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               child: switch (_section) {
                 'Rig' => _ThisRig(
                   onClose: widget.onClose,
+                  onOpenGuider: widget.onOpenGuider,
                   revealStorage: widget.revealStorage,
                 ),
                 'Camera' => const SimpleCameraWindow(inSettings: true),
@@ -3772,10 +3964,34 @@ Widget _gearRow({
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
 /// and the logs.
 class _ThisRig extends ConsumerWidget {
-  const _ThisRig({required this.onClose, this.revealStorage = false});
+  const _ThisRig({
+    required this.onClose,
+    this.onOpenGuider,
+    this.revealStorage = false,
+  });
 
   final VoidCallback onClose;
+  final VoidCallback? onOpenGuider;
   final bool revealStorage;
+
+  /// The site rows and the guide scope, for the Rig setup header's fixes.
+  /// One Rig page is up at a time, so a global key by name is safe.
+  static const _siteKey = GlobalObjectKey('simple-rig-site');
+  static const _guideKey = GlobalObjectKey('simple-rig-guide-scope');
+
+  /// Scrolls the Rig page so [key]'s block shows: [alignment] 0 puts it at
+  /// the top, 1 at the bottom.
+  static void _reveal(GlobalKey key, double alignment) {
+    final c = key.currentContext;
+    if (c == null) return;
+    Scrollable.ensureVisible(
+      c,
+      alignment: alignment,
+      duration: MediaQuery.disableAnimationsOf(c)
+          ? Duration.zero
+          : const Duration(milliseconds: 300),
+    );
+  }
 
   /// Apply a value and keep it in the profile; a failed save says so.
   static Future<void> _save(
@@ -3937,6 +4153,22 @@ class _ThisRig extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
+        // #1562 — while the rig still lacks a fact the first night needs.
+        SimpleRigSetupHeader(
+          onFix: (gap) {
+            switch (gap) {
+              case RigSetupGap.site:
+                // The bottom, so the latitude and longitude above show too.
+                _reveal(_siteKey, 1);
+              case RigSetupGap.guideScope:
+                _reveal(_guideKey, 0);
+              case RigSetupGap.mainOptics:
+                openSettingsPanel(ref, 'img.optics');
+              case RigSetupGap.guiderCalibration:
+                onOpenGuider?.call();
+            }
+          },
+        ),
         const SimpleSystemPanel(expand: true),
         Column(
           children: [
@@ -4000,6 +4232,7 @@ class _ThisRig extends ConsumerWidget {
         // The guide scope: read from the guider when the profile left it
         // unset, kept in the profile (polar alignment solves with it).
         _GuideOpticsReader(
+          key: _guideKey,
           child: _RigWheelRow.millimetres(
             l10n,
             id: 'guidefocal',
@@ -4102,6 +4335,7 @@ class _ThisRig extends ConsumerWidget {
           ),
         ),
         Align(
+          key: _siteKey,
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             key: const Key('simple-rig-use-location'),
@@ -4165,8 +4399,13 @@ class _ThisRig extends ConsumerWidget {
           ],
         ),
         const Divider(height: AraSpace.s16),
+        SimpleStorageBlock(reveal: revealStorage),
+        const Divider(height: AraSpace.s16),
+        const SimpleLogsBlock(),
+        const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
-        // a part the rig can't read is left out.
+        // a part the rig can't read is left out. Last, as in each device's
+        // window in Settings.
         SimpleVersions(
           key: const Key('simple-versions'),
           rows: [
@@ -4200,10 +4439,6 @@ class _ThisRig extends ConsumerWidget {
               (name, v ?? '—'),
           ],
         ),
-        const Divider(height: AraSpace.s16),
-        SimpleStorageBlock(reveal: revealStorage),
-        const Divider(height: AraSpace.s16),
-        const SimpleLogsBlock(),
       ],
     );
   }
@@ -4229,7 +4464,7 @@ class _SettingsPage extends ConsumerWidget {
 /// Reads the profile's guide optics when Rig opens, and again each time the
 /// guider connects (the rig fills unset ones then); draws [child].
 class _GuideOpticsReader extends ConsumerStatefulWidget {
-  const _GuideOpticsReader({required this.child});
+  const _GuideOpticsReader({super.key, required this.child});
 
   final Widget child;
 

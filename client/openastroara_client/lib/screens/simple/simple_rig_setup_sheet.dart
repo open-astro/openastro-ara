@@ -19,8 +19,8 @@ import 'simple_shell.dart' show SimplePanel, simpleRailScale;
 ///
 /// It opens by itself once per shell mount per rig (the link up, the profile
 /// read, something missing, "Not now" not chosen on this device), closes with
-/// a "Rig set up" pill when nothing is missing, and the Settings menu's Rig
-/// setup row opens it again.
+/// a "Rig set up" pill when nothing is missing. Settings › Rig heads with
+/// [SimpleRigSetupHeader] while something is missing.
 class SimpleRigSetupHost extends ConsumerStatefulWidget {
   const SimpleRigSetupHost({
     super.key,
@@ -95,51 +95,23 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
       return const SizedBox.shrink();
     }
     final l10n = context.l10n;
-    final gaps = rigSetupGaps(facts);
-    final lines = <_Line>[
-      _Line(
-        id: 'site',
-        label: l10n.rigSetupSite,
-        missing: gaps.contains(RigSetupGap.site)
-            ? l10n.rigSetupSiteMissing
-            : null,
-        action: l10n.rigSetupSiteAction,
-        onTap: widget.onOpenRig,
-      ),
-      _Line(
-        id: 'optics',
-        label: l10n.rigSetupOptics,
-        missing: gaps.contains(RigSetupGap.mainOptics)
-            ? l10n.rigSetupOpticsMissing
-            : null,
-        action: l10n.rigSetupOpticsAction,
-        onTap: () => openSettingsPanel(ref, 'img.optics'),
-      ),
-      if (facts.hasGuider) ...[
+    final items = _items(l10n, facts);
+    final lines = [
+      for (final item in items)
         _Line(
-          id: 'guide-scope',
-          label: l10n.rigSetupGuideScope,
-          missing: gaps.contains(RigSetupGap.guideScope)
-              ? l10n.rigSetupGuideScopeMissing
-              : null,
-          action: l10n.rigSetupGuideScopeAction,
-          onTap: widget.onOpenRig,
-        ),
-        _Line(
-          id: 'calibration',
-          label: l10n.rigSetupCalibration,
-          missing: !gaps.contains(RigSetupGap.guiderCalibration)
-              ? null
-              : facts.calibrationUnchecked
-              ? l10n.rigSetupCalibrationConnect
-              : l10n.rigSetupCalibrationMissing,
-          action: l10n.rigSetupCalibrationAction,
-          onTap: () {
-            ref.read(rigSetupSheetProvider.notifier).set(false);
-            widget.onOpenGuider();
+          id: item.id,
+          label: item.label,
+          missing: item.missing,
+          action: item.action,
+          onTap: switch (item.gap) {
+            RigSetupGap.site || RigSetupGap.guideScope => widget.onOpenRig,
+            RigSetupGap.mainOptics => () => openSettingsPanel(ref, 'img.optics'),
+            RigSetupGap.guiderCalibration => () {
+              ref.read(rigSetupSheetProvider.notifier).set(false);
+              widget.onOpenGuider();
+            },
           },
         ),
-      ],
     ];
     return Center(
       child: ConstrainedBox(
@@ -161,17 +133,27 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
                   style: kSimpleText.copyWith(color: AraColors.textSecondary),
                 ),
                 for (final line in lines) line,
-                Align(
-                  alignment: Alignment.centerRight,
-                  // Its own width, not the panel's: the fixes are the main
-                  // actions.
-                  child: IntrinsicWidth(
-                    child: SimpleWindowButton(
-                      key: const Key('simple-rig-setup-not-now'),
-                      label: l10n.rigSetupNotNow,
-                      onTap: _notNow,
+                // The count, and Not now as plain text: the amber fixes above
+                // are the actions.
+                const Divider(height: 1, color: AraColors.border),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _progress(l10n, items),
+                        style: AraText.caption,
+                      ),
                     ),
-                  ),
+                    TextButton(
+                      key: const Key('simple-rig-setup-not-now'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AraColors.textSecondary,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      onPressed: _notNow,
+                      child: Text(l10n.rigSetupNotNow, style: kSimpleText),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -216,8 +198,9 @@ class _Line extends StatelessWidget {
             key: Key('simple-rig-setup-$id-action'),
             label: action,
             onTap: onTap,
+            accent: AraColors.accentWarning,
           );
-    return LayoutBuilder(
+    final row = LayoutBuilder(
       builder: (context, box) {
         final beside =
             box.maxWidth >= _kLineBesideWidth * simpleRailScale(context);
@@ -266,6 +249,165 @@ class _Line extends StatelessWidget {
           ],
         );
       },
+    );
+    if (done) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+        child: row,
+      );
+    }
+    // A missing fact and its fix in one amber box, so the button reads as
+    // this line's.
+    return DecoratedBox(
+      key: Key('simple-rig-setup-$id-box'),
+      decoration: BoxDecoration(
+        color: AraColors.accentWarning.withValues(alpha: 0.10),
+        border: Border.all(
+          color: AraColors.accentWarning.withValues(alpha: 0.45),
+        ),
+        borderRadius: BorderRadius.circular(AraRadius.container),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AraSpace.s12),
+        child: row,
+      ),
+    );
+  }
+}
+
+/// One Rig setup item: its words, what is missing (null when done) and the
+/// fix's label, in the sheet's order.
+typedef _Item = ({
+  RigSetupGap gap,
+  String id,
+  String label,
+  String? missing,
+  String action,
+});
+
+List<_Item> _items(AppLocalizations l10n, RigSetupFacts facts) {
+  final gaps = rigSetupGaps(facts);
+  return [
+    (
+      gap: RigSetupGap.site,
+      id: 'site',
+      label: l10n.rigSetupSite,
+      missing: gaps.contains(RigSetupGap.site) ? l10n.rigSetupSiteMissing : null,
+      action: l10n.rigSetupSiteAction,
+    ),
+    (
+      gap: RigSetupGap.mainOptics,
+      id: 'optics',
+      label: l10n.rigSetupOptics,
+      missing: gaps.contains(RigSetupGap.mainOptics)
+          ? l10n.rigSetupOpticsMissing
+          : null,
+      action: l10n.rigSetupOpticsAction,
+    ),
+    if (facts.hasGuider) ...[
+      (
+        gap: RigSetupGap.guideScope,
+        id: 'guide-scope',
+        label: l10n.rigSetupGuideScope,
+        missing: gaps.contains(RigSetupGap.guideScope)
+            ? l10n.rigSetupGuideScopeMissing
+            : null,
+        action: l10n.rigSetupGuideScopeAction,
+      ),
+      (
+        gap: RigSetupGap.guiderCalibration,
+        id: 'calibration',
+        label: l10n.rigSetupCalibration,
+        missing: !gaps.contains(RigSetupGap.guiderCalibration)
+            ? null
+            : facts.calibrationUnchecked
+            ? l10n.rigSetupCalibrationConnect
+            : l10n.rigSetupCalibrationMissing,
+        action: l10n.rigSetupCalibrationAction,
+      ),
+    ],
+  ];
+}
+
+String _progress(AppLocalizations l10n, List<_Item> items) => l10n
+    .rigSetupProgress(items.where((i) => i.missing == null).length, items.length);
+
+/// #1562 — Settings › Rig's header while the rig still lacks a fact: the count,
+/// a bar, and the next missing item with its fix. [onFix] runs the fix for
+/// that item; it is gone once nothing is missing.
+class SimpleRigSetupHeader extends ConsumerWidget {
+  const SimpleRigSetupHeader({super.key, required this.onFix});
+
+  final ValueChanged<RigSetupGap> onFix;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final facts = ref.watch(rigSetupFactsProvider);
+    if (facts == null) return const SizedBox.shrink();
+    final l10n = context.l10n;
+    final items = _items(l10n, facts);
+    final next = items.where((i) => i.missing != null).firstOrNull;
+    if (next == null) return const SizedBox.shrink();
+    final done = items.where((i) => i.missing == null).length;
+    return DecoratedBox(
+      key: const Key('simple-rig-setup-header'),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanelAlt,
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(AraRadius.container),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AraSpace.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s8,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      l10n.rigSetupTitle,
+                      style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                Text(_progress(l10n, items), style: AraText.caption),
+              ],
+            ),
+            LinearProgressIndicator(
+              value: done / items.length,
+              minHeight: 4,
+              color: AraColors.accentConnected,
+              backgroundColor: AraColors.bgInput,
+            ),
+            Row(
+              spacing: AraSpace.s12,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.rigSetupNext(next.label),
+                        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      Text(next.missing!, style: AraText.caption),
+                    ],
+                  ),
+                ),
+                SimpleWindowButton(
+                  key: const Key('simple-rig-setup-header-action'),
+                  label: next.action,
+                  onTap: () => onFix(next.gap),
+                  accent: AraColors.accentWarning,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -14,6 +14,7 @@
 
 using Microsoft.Data.Sqlite;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -192,7 +193,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 {"reason":"{{safeReason}}","restart_at_utc":"{{restartAt}}"}
                 """;
             using var doc = JsonDocument.Parse(json);
-            await _broadcaster.PublishAsync("server.restart_imminent", doc.RootElement.Clone(), CancellationToken.None);
+            await _broadcaster.PublishAsync(WsEventCatalog.ServerRestartImminent, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // Broadcast best-effort — never let it abort the restart.
         }

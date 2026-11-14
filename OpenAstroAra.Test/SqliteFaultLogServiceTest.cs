@@ -463,7 +463,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_connected_transition_at_the_publisher_resolves_the_fault_log() {
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             var log = new Mock<IFaultLogService>();
             var publisher = new EquipmentEventPublisher(ws.Object, logger: null, faultLog: log.Object);
@@ -504,7 +504,7 @@ namespace OpenAstroAra.Test {
             var hub = new EquipmentFaultHub(ws.Object, logger: null, faultLog: log.Object);
 
             Assert.DoesNotThrow(() => hub.Publish(Fault()));
-            ws.Verify(w => w.PublishAsync("equipment.fault", It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()),
+            ws.Verify(w => w.PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.EquipmentFault, It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()),
                 Times.Once, "the WS broadcast still goes out");
         }
 
@@ -566,7 +566,7 @@ namespace OpenAstroAra.Test {
             Assert.That(recorded.Last(), Is.EqualTo("gave_up:pause_sequence"),
                 "the stored action carries the terminal outcome inline");
         }
-    
+
         // §42.5 retention (#1145): rows detected before the cutoff go, resolved or not; newer rows stay.
         [Test]
         public async Task PruneBefore_removes_rows_older_than_the_cutoff_and_keeps_the_rest() {

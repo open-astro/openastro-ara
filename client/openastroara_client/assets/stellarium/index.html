@@ -285,6 +285,47 @@
   </div>
 </div>
 
+<script>
+'use strict';
+// The Sky Map at rest (PR #1856). Simple Mode keeps this page loaded while a
+// frame shows, so opening the sky is instant; hidden, it must draw nothing.
+// Every animation frame asked for while it rests (the engine's render loop,
+// the FOV guard) is held, and runs when the sky is shown or woken. It rests
+// only once the first sky has drawn, so the tiles are loaded before it stops.
+var araSky = {
+  hidden: false, ready: false, awakeUntil: 0, held: [],
+  raf: window.requestAnimationFrame.bind(window),
+  now: function () { return Date.now(); }
+};
+window.requestAnimationFrame = function (cb) { return araSkyFrame(araSky, cb); };
+
+function araSkyResting(s) {
+  return s.hidden && s.ready && s.now() >= s.awakeUntil;
+}
+
+function araSkyFrame(s, cb) {
+  if (araSkyResting(s)) { s.held.push(cb); return 0; }
+  return s.raf(cb);
+}
+
+function araSkyRun(s) {
+  var held = s.held;
+  s.held = [];
+  for (var i = 0; i < held.length; i++) s.raf(held[i]);
+}
+
+// Draw for [ms] while hidden: a command (a goto, the site, a solve's box)
+// changed the sky, so its tiles load before it is shown.
+function araSkyWake(s, ms) {
+  s.awakeUntil = Math.max(s.awakeUntil, s.now() + ms);
+  araSkyRun(s);
+}
+
+function araSkySetHidden(s, hidden) {
+  s.hidden = hidden;
+  if (!hidden) araSkyRun(s);
+}
+</script>
 <script src="./stellarium-web-engine.js"></script>
 <script>
 'use strict';
@@ -297,10 +338,11 @@ if (qp('bare', '0') === '1') document.documentElement.classList.add('bare');
 // Full UI's saved layer toggles back (postDisplayPrefs, the dss goto flag).
 var CHART = document.documentElement.classList.contains('bare');
 
-// The Simple Mode chart: layers only, on the engine's default black sky.
+// The Simple Mode chart: layers only, on the engine's default black sky, over
+// the ground so the horizon shows.
 function applyChartPreset(core) {
   core.atmosphere.visible = false;
-  core.landscapes.visible = false;
+  core.landscapes.visible = true;
   core.milkyway.visible = false;
   core.dss.visible = false;
   core.constellations.images_visible = false;
@@ -712,7 +754,7 @@ function wireSelection() {
     updateStarScale();
     followFrame();
   });
-  setInterval(syncSelection, 150);
+  setInterval(function () { if (!araSkyResting(araSky)) syncSelection(); }, 150);
   (function guard() { clampFov(); window.requestAnimationFrame(guard); })();
   // Diagnostic telemetry to Flutter (debug builds only; see DEBUG).
   if (DEBUG) setInterval(function () {
@@ -1768,6 +1810,8 @@ function pollCmd() {
     .then(function (c) {
       if (!c || !c.type) return;
       debugEvent({ cmd: c.type });
+      if (c.type === 'visibility') { araSkySetHidden(araSky, !!c.hidden); return; }
+      if (araSky.hidden) araSkyWake(araSky, 1500);
       if (c.type === 'search') doSearch(c.q || '');
       else if (c.type === 'zoom') zoomBy(c.factor);
       // Observer site pushed from Flutter: every edit made in this client's
@@ -2130,6 +2174,16 @@ StelWebEngine({
     wireCatalogs();
     loadSite();                              // pull the real site from the daemon
     setInterval(loadSite, 30000);            // slow net for edits made on another client
+    // Tell the app the sky has drawn, so Simple Mode shows it only now and never
+    // the tiles filling in. A timer, not frames: a hidden web view (Simple Mode
+    // loads it offstage) may run no animation frames.
+    // shortcut: a fixed 800 ms settle, not the engine's tile queue; read the
+    // queue if pop-in still shows on a slow device.
+    setTimeout(function () {
+      araSky.ready = true;
+      fetch('/araevent', { method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ type: 'ready' }) }).catch(function () {});
+    }, 800);
   }
 });
 </script>

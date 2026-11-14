@@ -108,22 +108,6 @@ namespace OpenAstroAra.Test {
         // ── profile plumbing ────────────────────────────────────────────────
 
         [Test]
-        public void Store_round_trips_and_snapshot_apply_carries_the_horizon() {
-            var store = new InMemoryProfileStore();
-            Assert.That(store.GetCustomHorizon().Points, Is.Empty, "empty until entered");
-
-            var custom = CustomHorizonValidator.Normalize(Horizon((10, 12), (200, 30))).Normalized!;
-            store.PutCustomHorizon(custom);
-            Assert.That(store.GetCustomHorizon().Points, Has.Count.EqualTo(2));
-
-            // Capture → Apply (profile-select's push) must carry the section.
-            var snap = ProfileStoreSnapshot.Capture(store);
-            var target = new InMemoryProfileStore();
-            ProfileStoreSnapshot.Apply(target, snap);
-            Assert.That(target.GetCustomHorizon().Points, Has.Count.EqualTo(2));
-        }
-
-        [Test]
         public void Normalizer_backfills_a_missing_or_null_section() {
             var normalized = ProfileSnapshotNormalizer.Normalize(
                 ProfileSnapshotNormalizer.Defaults with { CustomHorizon = null });

@@ -1521,6 +1521,12 @@ abstract class AppLocalizations {
   /// **'Cooling'**
   String get previewCooling;
 
+  /// Simple Mode status pill: the camera's cooler went off and the sensor is warming back up (its temperature follows)
+  ///
+  /// In en, this message translates to:
+  /// **'Warming'**
+  String get previewWarming;
+
   /// Simple Mode status pill, screen-reader text: the status and its detail
   ///
   /// In en, this message translates to:
@@ -7899,6 +7905,30 @@ abstract class AppLocalizations {
   /// **'Not built'**
   String get calibrationGuideNotBuilt;
 
+  /// Calibration › Guide Camera: the Guider's file status is being read
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the Guider\'s files…'**
+  String get calibrationGuideChecking;
+
+  /// Calibration › Guide Camera: the rig could not read the Guider's dark library and bad-pixel map status
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read the Guider\'s files'**
+  String get calibrationGuideUnread;
+
+  /// Calibration › Guide Camera: under the unread line, why and what happens next
+  ///
+  /// In en, this message translates to:
+  /// **'The Guider may be restarting. Ara reads them again when it is back.'**
+  String get calibrationGuideUnreadNote;
+
+  /// Calibration › Guide Camera: reads the Guider's file status again
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get calibrationGuideRetry;
+
   /// Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels
   ///
   /// In en, this message translates to:
@@ -8475,6 +8505,12 @@ abstract class AppLocalizations {
   /// **'None yet.'**
   String get calibrationLibraryNone;
 
+  /// Calibration › Darks & bias: how many darks a gain and temperature group holds
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 exposure} other{{count} exposures}}'**
+  String calibrationDarkGroupCount(int count);
+
   /// Calibration library row: how old the set is and how many frames it holds
   ///
   /// In en, this message translates to:
@@ -8577,7 +8613,7 @@ abstract class AppLocalizations {
   /// **'Comma-separated'**
   String get libraryTagsCommaSeparated;
 
-  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  /// Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig
   ///
   /// In en, this message translates to:
   /// **'Rig setup'**
@@ -8679,6 +8715,18 @@ abstract class AppLocalizations {
   /// **'Not now'**
   String get rigSetupNotNow;
 
+  /// Rig setup sheet footer and Settings › Rig header: how many of the items are done
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} done'**
+  String rigSetupProgress(int done, int total);
+
+  /// Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)
+  ///
+  /// In en, this message translates to:
+  /// **'Next: {item}'**
+  String rigSetupNext(String item);
+
   /// Simple Mode result pill when the last Rig setup item is done
   ///
   /// In en, this message translates to:
@@ -8714,6 +8762,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'released — disconnected by hand'**
   String get faultGroupReleased;
+
+  /// Settings › Focuser: title of the section with Set zero and Calibrate travel
+  ///
+  /// In en, this message translates to:
+  /// **'Position'**
+  String get focuserPosition;
+
+  /// Settings › Focuser: the row and confirm button that make the focuser's current position 0
+  ///
+  /// In en, this message translates to:
+  /// **'Set zero'**
+  String get focuserSetZero;
+
+  /// Settings › Focuser: button that asks before making the current position 0
+  ///
+  /// In en, this message translates to:
+  /// **'Set zero…'**
+  String get focuserSetZeroButton;
+
+  /// Settings › Focuser: what Set zero does
+  ///
+  /// In en, this message translates to:
+  /// **'Make where it is now 0. The focuser doesn\'t move.'**
+  String get focuserSetZeroHint;
+
+  /// Settings › Focuser: the question before Set zero
+  ///
+  /// In en, this message translates to:
+  /// **'Make {position} the new 0? The last autofocus position and plan steps that move to a set position will be off by {position} steps until the next autofocus. Filter offsets stay as they are.'**
+  String focuserSetZeroAsk(String position);
+
+  /// Settings › Focuser: the row that runs the focuser to both stops to find its travel
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate travel'**
+  String get focuserCalibrate;
+
+  /// Settings › Focuser: button that starts a travel calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate'**
+  String get focuserCalibrateButton;
+
+  /// Settings › Focuser: what Calibrate travel does, before it runs
+  ///
+  /// In en, this message translates to:
+  /// **'The focuser runs to both stops and sets 0 at the inner one. Take off anything that could touch first.'**
+  String get focuserCalibrateHint;
+
+  /// Settings › Focuser: a travel calibration is running
+  ///
+  /// In en, this message translates to:
+  /// **'Running to both stops…'**
+  String get focuserCalibrating;
+
+  /// Settings › Focuser: the focuser's travel is calibrated
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrated'**
+  String get focuserCalibrated;
+
+  /// Error when the focuser refused Set zero
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t set the focuser\'s zero'**
+  String get focuserCouldntSetZero;
+
+  /// Error when the focuser refused to start or stop a calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t calibrate the focuser'**
+  String get focuserCouldntCalibrate;
+
+  /// Simple Mode: shown while the Sky Map draws its first sky after it was asked for
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the sky…'**
+  String get shellLoadingSky;
+
+  /// Stats dashboard: under the total integration
+  ///
+  /// In en, this message translates to:
+  /// **'{lights} light frames in {sessions} sessions'**
+  String statsIntegrationCaption(int lights, int sessions);
+
+  /// Stats: targets counted from frames that recorded a target name
+  ///
+  /// In en, this message translates to:
+  /// **'Named targets'**
+  String get statsNamedTargets;
+
+  /// Stats: caption under a badge the user has earned
+  ///
+  /// In en, this message translates to:
+  /// **'Earned'**
+  String get statsBadgeEarned;
 }
 
 class _AppLocalizationsDelegate

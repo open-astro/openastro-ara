@@ -275,10 +275,10 @@ public sealed class SqliteSessionService : ISessionService {
                 // (so WILMA can clear its in-flight banner) rather than
                 // racing the cancel CTS.
                 var elapsed = (DateTimeOffset.UtcNow - startUtc).TotalSeconds;
-                await EmitTerminalAsync("session.restretch.complete",
+                await EmitTerminalAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.SessionRestretchComplete,
                     sessionId, framesProcessed: done, durationSeconds: elapsed, error: null);
             } catch (Exception ex) {
-                await EmitTerminalAsync("session.restretch.failed",
+                await EmitTerminalAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.SessionRestretchFailed,
                     sessionId, framesProcessed: done, durationSeconds: null, error: ex.Message);
                 throw;
             }
@@ -304,18 +304,18 @@ public sealed class SqliteSessionService : ISessionService {
                 {"session_id":"{{sessionId}}","done":{{done}},"total":{{total}},"current_frame_id":"{{currentFrameId}}"}
                 """;
             using var doc = System.Text.Json.JsonDocument.Parse(json);
-            await _ws.PublishAsync("session.restretch.progress", doc.RootElement.Clone(), ct);
+            await _ws.PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.SessionRestretchProgress, doc.RootElement.Clone(), ct);
         } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // WS publish best-effort — never let it abort the job.
         }
     }
 
-    private async Task EmitTerminalAsync(string eventType, Guid sessionId, int framesProcessed, double? durationSeconds, string? error) {
+    private async Task EmitTerminalAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, Guid sessionId, int framesProcessed, double? durationSeconds, string? error) {
         // §65.7 session.restretch.{complete,failed} payload shapes. Same
         // hand-built JSON pattern as the progress event for AOT safety.
         try {
             string json;
-            if (eventType.EndsWith(".complete")) {
+            if (eventType.Token.EndsWith(".complete")) {
                 var dur = durationSeconds ?? 0;
                 json = $$"""
                     {"session_id":"{{sessionId}}","frames_processed":{{framesProcessed}},"duration_seconds":{{dur.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}}}

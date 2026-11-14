@@ -139,6 +139,17 @@ public interface IFocuserService {
     /// <summary>#1542: stop a focuser move now, the same panic-stop shape as the rotator. Throws
     /// InvalidOperationException when not connected.</summary>
     Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Make where the focuser is now 0; it doesn't move. Throws InvalidOperationException (→ 409)
+    /// when not connected, moving or calibrating, or when the driver offers no SetZero.</summary>
+    Task<OperationAcceptedDto> SetZeroAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Start the driver's travel calibration (it runs to both stops); the runtime's
+    /// <c>Calibration</c> reads "calibrating" until it ends. Throws as <see cref="SetZeroAsync"/>.</summary>
+    Task<OperationAcceptedDto> CalibrateAsync(string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Stop a travel calibration. Throws when not connected or the driver can't calibrate.</summary>
+    Task<OperationAcceptedDto> AbortCalibrationAsync(string? idempotencyKey, CancellationToken ct);
 }
 
 public interface IFilterWheelService {

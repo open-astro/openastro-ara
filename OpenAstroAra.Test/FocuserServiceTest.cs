@@ -13,9 +13,12 @@
 #endregion "copyright"
 
 using Moq;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -33,6 +36,118 @@ namespace OpenAstroAra.Test {
     /// </summary>
     [TestFixture]
     public class FocuserServiceTest {
+
+        private static async Task<(FocuserService Svc, FakeFocuserDevice Focuser)> ConnectFakeAsync(params string[] actions) {
+            var focuser = new FakeFocuserDevice();
+            focuser.Actions.AddRange(actions);
+            var svc = new FocuserService { RefreshPeriod = TimeSpan.FromMilliseconds(50), DeviceFactory = _ => focuser };
+            var device = new DiscoveredDeviceDto("focuser-under-test", "Bench Focuser", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
+            await PollAsync(svc, d => d.Capabilities is not null);
+            return (svc, focuser);
+        }
+
+        private static async Task<FocuserDto?> PollAsync(FocuserService svc, Func<FocuserDto, bool> done) {
+            for (var i = 0; i < 200; i++) {
+                var dto = await svc.GetAsync(CancellationToken.None);
+                if (dto is not null && done(dto)) {
+                    return dto;
+                }
+                await Task.Delay(25);
+            }
+            return await svc.GetAsync(CancellationToken.None);
+        }
+
+        [Test]
+        public async Task Capabilities_offer_zero_and_calibration_only_when_the_driver_lists_the_actions() {
+            var (none, _) = await ConnectFakeAsync();
+            using (none) {
+                var caps = (await none.GetAsync(CancellationToken.None))!.Capabilities!;
+                Assert.That((caps.CanSetZero, caps.CanCalibrate), Is.EqualTo((false, false)));
+            }
+            var (all, _) = await ConnectFakeAsync("setzero", "Calibrate", "AbortCalibration", "CalibrationStatus");
+            using (all) {
+                var caps = (await all.GetAsync(CancellationToken.None))!.Capabilities!;
+                Assert.That((caps.CanSetZero, caps.CanCalibrate), Is.EqualTo((true, true)), "names match case-insensitively");
+            }
+        }
+
+        [Test]
+        public async Task SetZeroAsync_runs_the_drivers_SetZero_and_the_position_reads_zero() {
+            var (svc, focuser) = await ConnectFakeAsync(FocuserService.SetZeroAction);
+            using (svc) {
+                Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.Position, Is.EqualTo(500));
+                var op = await svc.SetZeroAsync("k1", CancellationToken.None);
+                Assert.That(op.OperationType, Is.EqualTo("focuser.set_zero"));
+                Assert.That(focuser.ActionCalls, Is.EqualTo(new[] { FocuserService.SetZeroAction }));
+                Assert.That((await PollAsync(svc, d => d.Runtime.Position == 0))!.Runtime.Position, Is.EqualTo(0));
+            }
+        }
+
+        [Test]
+        public async Task SetZeroAsync_after_a_compensated_reversal_reads_zero_not_the_standing_offset() {
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(new AutofocusSettingsDto("hfr_v_curve", 4, 100, 2, 1, "L", false, 1.0, 10, 0, false, true, StepSizeAuto: false,
+                BacklashInSteps: 30, BacklashOutSteps: 40));
+            using var focuser = new FakeFocuserDevice();
+            focuser.MoveLands = true;
+            focuser.Actions.Add(FocuserService.SetZeroAction);
+            using var svc = new FocuserService(profiles: store) { RefreshPeriod = TimeSpan.FromMilliseconds(50), DeviceFactory = _ => focuser };
+            var device = new DiscoveredDeviceDto("focuser-under-test", "Bench Focuser", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
+            await PollAsync(svc, d => d.Capabilities is not null);
+            await svc.MoveFocuser(800, CancellationToken.None);
+            Assert.That(await svc.MoveFocuser(600, CancellationToken.None), Is.EqualTo(600), "the reversal went 30 further in: hardware 570, offset -30");
+
+            await svc.SetZeroAsync(null, CancellationToken.None);
+
+            Assert.That((await PollAsync(svc, d => d.Runtime.Position == 0))!.Runtime.Position, Is.EqualTo(0), "the zero leaves no standing offset");
+        }
+
+        [Test]
+        public async Task The_action_routes_answer_409_when_refused_not_500() {
+            // Not connected, then connected without the actions: each refusal is a state conflict.
+            using (var idle = new FocuserService()) {
+                Assert.That(await StatusOfAsync(() => idle.SetZeroAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+            }
+            var (svc, _) = await ConnectFakeAsync();
+            using (svc) {
+                Assert.That(await StatusOfAsync(() => svc.SetZeroAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(await StatusOfAsync(() => svc.CalibrateAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(await StatusOfAsync(() => svc.AbortCalibrationAsync(null, CancellationToken.None)), Is.EqualTo(StatusCodes.Status409Conflict));
+            }
+        }
+
+        private static async Task<int?> StatusOfAsync(Func<Task<OperationAcceptedDto>> action) =>
+            await EquipmentEndpoints.FocuserActionAsync(action) switch {
+                ProblemHttpResult p => p.StatusCode,
+                Accepted<OperationAcceptedDto> => StatusCodes.Status202Accepted,
+                var r => throw new InvalidOperationException(r.GetType().Name),
+            };
+
+        [Test]
+        public async Task SetZeroAsync_is_refused_when_the_driver_does_not_offer_it() {
+            var (svc, focuser) = await ConnectFakeAsync();
+            using (svc) {
+                await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetZeroAsync(null, CancellationToken.None));
+                Assert.That(focuser.ActionCalls, Is.Empty);
+            }
+        }
+
+        [Test]
+        public async Task A_running_calibration_reads_calibrating_refuses_a_zero_and_can_be_stopped() {
+            var (svc, focuser) = await ConnectFakeAsync(FocuserService.SetZeroAction, FocuserService.CalibrateAction,
+                FocuserService.AbortCalibrationAction, FocuserService.CalibrationStatusAction);
+            using (svc) {
+                Assert.That((await PollAsync(svc, d => d.Runtime.Calibration is not null))!.Runtime.Calibration, Is.EqualTo("not_calibrated"));
+                await svc.CalibrateAsync(null, CancellationToken.None);
+                focuser.CalibrationStatus = "Calibrating";
+                Assert.That((await PollAsync(svc, d => d.Runtime.Calibration == "calibrating"))!.Runtime.Calibration, Is.EqualTo("calibrating"));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetZeroAsync(null, CancellationToken.None));
+                await svc.AbortCalibrationAsync(null, CancellationToken.None);
+                Assert.That(focuser.ActionCalls, Is.EqualTo(new[] { FocuserService.CalibrateAction, FocuserService.AbortCalibrationAction }));
+            }
+        }
 
         [Test]
         public async Task HaltAsync_when_not_connected_throws_InvalidOperation() {
@@ -76,8 +191,8 @@ namespace OpenAstroAra.Test {
             // next poll, and the reconnector's retained-device fallback sees nothing afterwards.
             var ws = new Mock<IWsBroadcaster>();
             var events = new List<(string Type, JsonElement Payload)>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
                 .Returns(Task.CompletedTask);
             using var svc = new FocuserService(events: new EquipmentEventPublisher(ws.Object));
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);

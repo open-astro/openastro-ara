@@ -62,8 +62,8 @@ namespace OpenAstroAra.Test {
             publishedEvents = new List<string>();
             postedNotifications = new List<NotificationDto>();
 
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => { lock (publishedEvents) { publishedEvents.Add(t); } })
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => { lock (publishedEvents) { publishedEvents.Add(t); } })
                 .Returns(Task.CompletedTask);
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                 .Callback<NotificationDto, CancellationToken>((n, _) => { lock (postedNotifications) { postedNotifications.Add(n); } })
@@ -324,8 +324,8 @@ namespace OpenAstroAra.Test {
             await Build().ExecuteAsync();
 
             Assert.That(publishedEvents, Is.EqualTo(new[] {
-                WsEventCatalog.SafetyEmergencyStop,
-                WsEventCatalog.SafetyActionTaken,
+                WsEventCatalog.SafetyEmergencyStop.Token,
+                WsEventCatalog.SafetyActionTaken.Token,
             }), "the stop event must fire BEFORE the rungs so the client can alarm while the daemon works");
             Assert.That(postedNotifications, Has.Count.EqualTo(1));
             Assert.That(postedNotifications[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
@@ -504,7 +504,7 @@ namespace OpenAstroAra.Test {
         public async Task Execute_TheActionTakenPayload_SaysMountStopped_NotParkRequested() {
             string? actionTaken = null;
             ws.Setup(w => w.PublishAsync(WsEventCatalog.SafetyActionTaken, It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((_, e, _) => actionTaken = e.GetRawText())
+                .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((_, e, _) => actionTaken = e.GetRawText())
                 .Returns(Task.CompletedTask);
 
             await Build().ExecuteAsync();

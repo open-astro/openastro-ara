@@ -20,12 +20,12 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
+using OpenAstroAra.TestHarness.Polling;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.TestHarness.Polling;
 
 namespace OpenAstroAra.Test {
 
@@ -283,7 +283,7 @@ namespace OpenAstroAra.Test {
 
         private static (EquipmentFaultHub Hub, List<EquipmentFaultEvent> Faults) Hub() {
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             var hub = new EquipmentFaultHub(ws.Object);
             var faults = new List<EquipmentFaultEvent>();

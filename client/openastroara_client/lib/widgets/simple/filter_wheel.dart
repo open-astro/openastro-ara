@@ -5,13 +5,47 @@ import 'package:flutter/material.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../theme/ara_colors.dart';
 
+/// The usual filter names, lower case, and the short form a glass cell shows
+/// (user, 2026-11-13: Green and Clear read as slot numbers beside the Plan's
+/// names).
+const kFilterShortNames = {
+  'red': 'R',
+  'r': 'R',
+  'green': 'G',
+  'g': 'G',
+  'blue': 'B',
+  'b': 'B',
+  'clear': 'L',
+  'luminance': 'L',
+  'lum': 'L',
+  'l': 'L',
+  'ha': 'Ha',
+  'h-alpha': 'Ha',
+  'halpha': 'Ha',
+  'h alpha': 'Ha',
+  'hα': 'Ha',
+  'oiii': 'OIII',
+  'o3': 'OIII',
+  'o-iii': 'OIII',
+  'sii': 'SII',
+  's2': 'SII',
+  's-ii': 'SII',
+};
+
+/// The name's short form, lower case ('Green' → 'g'), so a tint follows the
+/// letters the cell shows.
+String _filterKey(String name) {
+  final n = name.trim().toLowerCase();
+  return (kFilterShortNames[n] ?? n).toLowerCase();
+}
+
 /// A filter's glass for its cell (#1676): the tint and the label colour on
 /// it. A name Ara doesn't know is plain glass. The tint is content, like the
 /// image behind the panel; the mark and the rings tell the state.
 ({Color glass, Color label}) filterGlass(String name) {
   const light = AraColors.bgPrimary, white = AraColors.selectionFg;
-  return switch (name.trim().toLowerCase()) {
-    'l' || 'lum' || 'luminance' => (glass: AraColors.glassClear, label: light),
+  return switch (_filterKey(name)) {
+    'l' => (glass: AraColors.glassClear, label: white),
     'uv/ir cut' => (glass: AraColors.glassUvIr, label: light),
     'r' => (glass: AraColors.glassRed, label: white),
     'g' => (glass: AraColors.glassGreen, label: white),
@@ -24,6 +58,10 @@ import '../../theme/ara_colors.dart';
     _ => (glass: AraColors.glassPlain, label: AraColors.textPrimary),
   };
 }
+
+/// Luminance passes all visible light, so its cell is a spectrum rather than
+/// a white disc that would be the brightest thing on screen at night.
+bool filterSpectrum(String name) => _filterKey(name) == 'l';
 
 /// What a cell's ring says.
 enum FilterCellRing { none, here, moving, asked, swap }
@@ -100,7 +138,15 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
   @override
   void initState() {
     super.initState();
-    _at = _indexOf(widget.pointAt);
+    _place();
+  }
+
+  /// Puts [SimpleFilterWheel.pointAt] under the mark, without a turn; with
+  /// none, the cell already there stays (the first, if the count has shrunk
+  /// past it).
+  void _place() {
+    _at = _indexOf(widget.pointAt) ?? _at;
+    if (_at != null && _at! >= widget.slots.length) _at = null;
     _from = _to = -(_at ?? 0) * _step;
   }
 
@@ -111,8 +157,13 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
   @override
   void didUpdateWidget(SimpleFilterWheel old) {
     super.didUpdateWidget(old);
-    final next = _indexOf(widget.pointAt);
     final n = widget.slots.length;
+    if (n != old.slots.length) {
+      // Another slot count spaces the cells anew: lay them out again, no turn.
+      _place();
+      return;
+    }
+    final next = _indexOf(widget.pointAt);
     if (n == 0 || next == null || next == _at) return;
     if (_at == null) {
       // Opened while the slot was unknown: no angle to turn from, so jump.
@@ -198,12 +249,20 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
                                 (p.dx - centre) * math.sin(rot) +
                                 (p.dy - centre) * math.cos(rot),
                           );
-                          final hit = math.max(cell, 44);
+                          // A round target, 44 pt where there is room but never
+                          // past half-way to the next cell, so a tap on a cell's
+                          // edge never picks its neighbour.
+                          final hit = math.min(
+                            math.max(cell, 44.0),
+                            n > 1
+                                ? 2 * ring * math.sin(math.pi / n)
+                                : double.infinity,
+                          );
                           return Positioned(
                             left: turned.dx - hit / 2,
                             top: turned.dy - hit / 2,
-                            width: hit.toDouble(),
-                            height: hit.toDouble(),
+                            width: hit,
+                            height: hit,
                             child: _Cell(
                               key: Key(
                                 'simple-filterwheel-slot-${widget.slots[i].position}',
@@ -364,7 +423,8 @@ class _CellState extends State<_Cell> {
       label: widget.semanticLabel,
       excludeSemantics: true,
       onTap: widget.onTap,
-      child: Center(
+      // The whole round box is the target, not only the glass.
+      child: ClipOval(
         child: Opacity(
           opacity: widget.dim ? 0.45 : 1,
           child: Material(
@@ -375,59 +435,88 @@ class _CellState extends State<_Cell> {
               customBorder: const CircleBorder(),
               containedInkWell: false,
               radius: d / 2,
-              child: Container(
-                width: d + 8,
-                height: d + 8,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    width: 2,
-                    color: _focused ? AraColors.accentInfo : Colors.transparent,
-                  ),
-                ),
+              child: Center(
                 child: Container(
-                  width: d,
-                  height: d,
+                  width: d + 8,
+                  height: d + 8,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: ring == null
-                        ? null
-                        : Border.all(color: ring, width: 2),
+                    border: Border.all(
+                      width: 2,
+                      color: _focused
+                          ? AraColors.accentInfo
+                          : Colors.transparent,
+                    ),
                   ),
-                  padding: EdgeInsets.all(ring == null ? 0 : 2),
-                  child: DecoratedBox(
+                  child: Container(
+                    width: d,
+                    height: d,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: tint.glass,
-                      border: Border.all(color: AraColors.bgPrimary, width: 2),
+                      border: ring == null
+                          ? null
+                          : Border.all(color: ring, width: 2),
                     ),
-                    position: DecorationPosition.background,
+                    padding: EdgeInsets.all(ring == null ? 0 : 2),
                     child: DecoratedBox(
-                      position: DecorationPosition.foreground,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          center: Alignment(-0.32, -0.44),
-                          radius: 0.9,
-                          colors: [AraColors.glassGloss, Colors.transparent],
-                          stops: [0, 0.5],
+                        color: tint.glass,
+                        gradient: filterSpectrum(widget.slot.name)
+                            ? AraColors.glassSpectrum
+                            : null,
+                        border: Border.all(
+                          color: AraColors.bgPrimary,
+                          width: 2,
                         ),
                       ),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            // Upright whatever the wheel's turn.
-                            child: Text(
-                              widget.label,
-                              maxLines: 1,
-                              textScaler: widget.labelScaler,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: tint.label,
+                      position: DecorationPosition.background,
+                      child: DecoratedBox(
+                        position: DecorationPosition.foreground,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            center: Alignment(-0.32, -0.44),
+                            radius: 0.9,
+                            colors: [AraColors.glassGloss, Colors.transparent],
+                            stops: [0, 0.5],
+                          ),
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              // Upright whatever the wheel's turn.
+                              child: Text(
+                                widget.label,
+                                maxLines: 1,
+                                textScaler: widget.labelScaler,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: tint.label,
+                                  // Dark shadows, tight to wide: one alone
+                                  // left the white L on the yellow and
+                                  // green under 2:1.
+                                  shadows: filterSpectrum(widget.slot.name)
+                                      ? const [
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 1,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 1.5,
+                                          ),
+                                          Shadow(
+                                            color: AraColors.glassDark,
+                                            blurRadius: 4,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
                               ),
                             ),
                           ),

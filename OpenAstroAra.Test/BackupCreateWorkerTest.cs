@@ -152,8 +152,8 @@ namespace OpenAstroAra.Test {
         public async Task The_worker_emits_started_then_complete_ws_events() {
             var events = new ConcurrentQueue<string>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback((OpenAstroAra.Server.Contracts.WsEvents.WsEvent type, JsonElement _, CancellationToken _) => events.Enqueue(type.Token))
                 .Returns(Task.CompletedTask);
             using var svc = new BackupService(_profileDir, NullLogger<BackupService>.Instance, ws: ws.Object);
 
@@ -165,8 +165,8 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(25);
             }
             var ordered = events.ToArray();
-            Assert.That(ordered, Does.Contain(BackupService.CreateStartedEvent));
-            Assert.That(ordered, Does.Contain(BackupService.CreateCompleteEvent));
+            Assert.That(ordered, Does.Contain(BackupService.CreateStartedEvent.Token));
+            Assert.That(ordered, Does.Contain(BackupService.CreateCompleteEvent.Token));
             Assert.That(Array.IndexOf(ordered, BackupService.CreateStartedEvent),
                 Is.LessThan(Array.IndexOf(ordered, BackupService.CreateCompleteEvent)));
         }
@@ -175,8 +175,8 @@ namespace OpenAstroAra.Test {
         public async Task A_failed_worker_emits_the_failed_ws_event() {
             var events = new ConcurrentQueue<string>();
             var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback((OpenAstroAra.Server.Contracts.WsEvents.WsEvent type, JsonElement _, CancellationToken _) => events.Enqueue(type.Token))
                 .Returns(Task.CompletedTask);
             using var svc = new BackupService(_profileDir, NullLogger<BackupService>.Instance, ws: ws.Object);
             svc.CreatePackagingTestHook = () => throw new IOException("boom");
@@ -189,8 +189,8 @@ namespace OpenAstroAra.Test {
             while (DateTime.UtcNow < deadline && !events.Contains(BackupService.CreateFailedEvent)) {
                 await Task.Delay(25);
             }
-            Assert.That(events, Does.Contain(BackupService.CreateFailedEvent));
-            Assert.That(events, Does.Not.Contain(BackupService.CreateCompleteEvent));
+            Assert.That(events, Does.Contain(BackupService.CreateFailedEvent.Token));
+            Assert.That(events, Does.Not.Contain(BackupService.CreateCompleteEvent.Token));
         }
 
         [Test]

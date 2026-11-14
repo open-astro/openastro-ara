@@ -15,6 +15,7 @@
 using ASCOM.Common.DeviceInterfaces;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace OpenAstroAra.Test {
@@ -74,14 +75,18 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeRotatorDevice : FakeDeviceAdapter, IRotatorDevice {
-        public bool IsMoving => false;
+        // Scripts: IsMovingScript answers (or throws) each IsMoving read; OnMove runs inside a move call
+        // (block it, or throw from it).
+        public Func<bool>? IsMovingScript;
+        public Action<float>? OnMove;
+        public bool IsMoving => IsMovingScript?.Invoke() ?? false;
         public float MechanicalPosition => 10f;
         public float Position { get { ThrowIfReadFails(); return 10f; } }
         public bool Reverse { get; set; }
         public bool CanReverse => true;
         public float StepSize => 0.1f;
-        public void MoveAbsolute(float position) { }
-        public void MoveMechanical(float position) { }
+        public void MoveAbsolute(float position) => OnMove?.Invoke(position);
+        public void MoveMechanical(float position) => OnMove?.Invoke(position);
         public void Sync(float position) { }
         public void Halt() { }
     }
@@ -158,15 +163,31 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeFocuserDevice : FakeDeviceAdapter, IFocuserDevice {
+        private int _position = 500;
         public bool IsMoving => false;
-        public int Position { get { ThrowIfReadFails(); return 500; } }
+        public int Position { get { ThrowIfReadFails(); return Volatile.Read(ref _position); } }
         public double Temperature => 8;
         public bool TempComp { get; set; }
         public int MaxStep => 1000;
         public double StepSize => 5;
         public bool TempCompAvailable => true;
         public bool Absolute => true;
-        public void Move(int position) { }
+        /// <summary>When true a move lands at once; by default it changes nothing.</summary>
+        public bool MoveLands { get; set; }
+        public void Move(int position) { if (MoveLands) { Volatile.Write(ref _position, position); } }
         public void Halt() { }
+        public List<string> Actions { get; } = [];
+        public System.Collections.Concurrent.ConcurrentQueue<string> ActionCalls { get; } = new();
+        public volatile string CalibrationStatus = "NotCalibrated";
+        public IList<string> SupportedActions => Actions;
+        public string Action(string actionName, string actionParameters) {
+            if (actionName != FocuserService.CalibrationStatusAction) {
+                ActionCalls.Enqueue(actionName);
+            }
+            if (actionName == FocuserService.SetZeroAction) {
+                Volatile.Write(ref _position, 0);
+            }
+            return actionName == FocuserService.CalibrationStatusAction ? CalibrationStatus : string.Empty;
+        }
     }
 }

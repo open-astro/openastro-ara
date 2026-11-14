@@ -191,8 +191,117 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
               ],
             ),
           ),
+        ..._positionActions(s),
       ],
     );
+  }
+
+  // Set zero asked, waiting for its confirm.
+  bool _askZero = false;
+
+  /// The driver's Set zero and Calibrate travel, each only when it offers it
+  /// (ADR 0009: the same daemon routes Simple Mode's Focuser window uses).
+  List<Widget> _positionActions(FocuserStatus s) {
+    final c = s.capabilities;
+    if (c == null || !(c.canSetZero || c.canCalibrate)) return const [];
+    final l10n = context.l10n;
+    final calibrating = s.calibration == 'calibrating';
+    final still = !s.isMoving && !calibrating;
+    final pos = s.position ?? 0;
+    final n = ref.read(focuserProvider.notifier);
+    return [
+      const SizedBox(height: 12),
+      if (c.canSetZero) ...[
+        Row(
+          children: [
+            Expanded(child: Text(l10n.focuserSetZeroHint)),
+            OutlinedButton(
+              key: const Key('focuser-set-zero'),
+              onPressed: still && !_askZero && pos != 0
+                  ? () => setState(() => _askZero = true)
+                  : null,
+              child: Text(l10n.focuserSetZeroButton),
+            ),
+          ],
+        ),
+        if (_askZero)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(child: Text(l10n.focuserSetZeroAsk('$pos'))),
+                TextButton(
+                  onPressed: () => setState(() => _askZero = false),
+                  child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+                ),
+                FilledButton(
+                  key: const Key('focuser-set-zero-confirm'),
+                  onPressed: () =>
+                      _runAction(n.setZero, l10n.focuserCouldntSetZero),
+                  child: Text(l10n.focuserSetZero),
+                ),
+              ],
+            ),
+          ),
+      ],
+      if (c.canCalibrate) ...[
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                switch (s.calibration) {
+                  'calibrating' => l10n.focuserCalibrating,
+                  'calibrated' => l10n.focuserCalibrated,
+                  _ => l10n.focuserCalibrateHint,
+                },
+              ),
+            ),
+            calibrating
+                ? FilledButton(
+                    key: const Key('focuser-calibrate-stop'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AraColors.emergencyStop,
+                      foregroundColor: AraColors.selectionFg,
+                    ),
+                    onPressed: () => _runAction(
+                      () => n.calibrate(abort: true),
+                      l10n.focuserCouldntCalibrate,
+                    ),
+                    child: Text(l10n.deviceStop),
+                  )
+                : OutlinedButton(
+                    key: const Key('focuser-calibrate'),
+                    onPressed: still
+                        ? () => _runAction(
+                            n.calibrate,
+                            l10n.focuserCouldntCalibrate,
+                          )
+                        : null,
+                    child: Text(l10n.focuserCalibrateButton),
+                  ),
+          ],
+        ),
+      ],
+    ];
+  }
+
+  Future<void> _runAction(Future<bool> Function() action, String failed) async {
+    setState(() => _askZero = false);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    try {
+      if (!await action()) {
+        messenger.showSnackBar(SnackBar(content: Text(l10n.deviceBusyDetail)));
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('$failed: ${failureReason(l10n, e)}'),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
+    }
   }
 
   Widget _row(String label, String value) => Padding(

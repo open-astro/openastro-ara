@@ -46,16 +46,17 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class RotatorService : IRotatorMediator {
 
-    private const int MoveSettleMaxPolls = 600; // ~60s at MoveSettlePollInterval
-    // Consecutive unreadable IsMoving polls after which we treat the property as unsupported and stop
-    // waiting (such drivers complete Move synchronously), rather than burning the full bound. Large
-    // enough to ride out a transient read-blip streak on a non-blocking driver.
-    private const int UnknownReadsBeforeSettled = 5;
-    private static readonly TimeSpan MoveSettlePollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for the blocking MoveAbsolute/MoveMechanical CALL only (not the whole op): a
-    // silent device must not park a sequence thread until the OS TCP timeout. The settle-wait adds at
-    // most ~60s, so worst-case total is ~MoveHardTimeout + 60s.
-    private static readonly TimeSpan MoveHardTimeout = TimeSpan.FromMinutes(5);
+    // ADR 0011 rule 5: the move's timeout values and terminal condition. Hard timeout = wall-clock
+    // ceiling for the blocking MoveAbsolute/MoveMechanical CALL only (settle adds at most ~60s). IsMoving
+    // is optional: 5 unreadable polls in a row mean the driver has none and its Move blocked until done.
+    internal static readonly DeviceCommandPolicy MovePolicy = new(Contracts.DeviceType.Rotator,
+        HardTimeout: TimeSpan.FromMinutes(5), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 600,
+        MotionFlagOptional: true, UnreadableReadsBeforeSettled: 5);
+
+    // Test seam: millisecond timeouts. Production keeps MovePolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; init; } = MovePolicy;
+    private DeviceCommand? _command;
+    private DeviceCommand Command => _command ??= new DeviceCommand(CommandPolicy, _faults, _logger);
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
@@ -136,8 +137,6 @@ public sealed partial class RotatorService : IRotatorMediator {
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<float> MoveBlockingAsync(float target, bool useMechanical, CancellationToken ct) {
         if (_lifecycle.IsDisposed) {
             return 0;
@@ -149,57 +148,22 @@ public sealed partial class RotatorService : IRotatorMediator {
             return CachedAngle(useMechanical);
         }
         try {
-            // Race the blocking ASCOM move against BOTH the sequencer token and an explicit wall-clock
-            // bound so a hung HTTP call can't pin the sequence thread regardless of cancellation. The
-            // abandoned move is observed so it can't surface as an unobserved task exception.
-            var moveTask = Task.Run(
-                () => { if (useMechanical) { client.MoveMechanical(target); } else { client.MoveAbsolute(target); } },
-                CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(MoveHardTimeout);
-                var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != moveTask) {
-                    ObserveQuietly(moveTask);
-                    ct.ThrowIfCancellationRequested();          // sequencer cancel → propagate
-                    throw new TimeoutException(                 // wall-clock bound → device fault
-                        $"rotator move to {target}° did not complete within {MoveHardTimeout.TotalSeconds:0}s");
-                }
-                await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
-            }
-            await moveTask.ConfigureAwait(false); // observe the move's result / surface its exception
-            // §42.2 item 4 — the move dispatched: arm the drift watch on the commanded target so a
-            // rotator that settles off-target (or slips later) is caught by the refresh tick.
-            RecordMoveIfLive(client, target, useMechanical);
-            if (!await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false)) {
-                // §42.2 — the move dispatched fine but was never confirmed settled (still moving
-                // after the full bound, or the connection dropped mid-move — the publish gate
-                // suppresses the latter and the §42.3 probe owns it). Fail the instruction — a
-                // rotator at an unknown angle must not read as a completed move.
-                var msg = $"rotator move to {target}° was not confirmed settled within the {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s bound";
-                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
-                throw new SequenceEntityFailedException(msg);
-            }
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            // On every failure path the drift watch forgets the expectation: the fault (if any) is
-            // already classified above, and where the rotator sits after a cancelled/failed/stalled
-            // move is unknown — a lingering record would double-report the same episode ~16s later.
+            var what = $"rotator move to {target}°";
+            await Command.RunAsync(new DeviceCommandRequest(what,
+                Call: () => { if (useMechanical) { client.MoveMechanical(target); } else { client.MoveAbsolute(target); } },
+                IsLive: () => _lifecycle.IsLive(client),
+                CurrentDevice: () => _lifecycle.DeviceIfCurrent(client),
+                Terminal: () => ReadIsMoving(client) is bool moving ? !moving : null,
+                // §42.2 item 4 — the move dispatched: arm the drift watch on the commanded target so a
+                // rotator that settles off-target (or slips later) is caught by the refresh tick.
+                Dispatched: () => RecordMoveIfLive(client, target, useMechanical),
+                Polled: _lifecycle.Refresh), ct).ConfigureAwait(false);
+        } catch (Exception) {
+            // On every failure path the drift watch forgets the expectation: the module already
+            // classified and published the fault, and where the rotator sits after a cancelled/failed/
+            // stalled move is unknown — a lingering record would double-report it ~16s later.
             ResetDriftIfLive(client);
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (SequenceEntityFailedException) {
-            ResetDriftIfLive(client);
-            throw; // already classified + published above
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking move never returned — a stalled op (§42.4).
-            // §42.2: publish AND fail the instruction so retries/instruction_failed engage.
-            ResetDriftIfLive(client);
-            LogMoveFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            throw new SequenceEntityFailedException(ex.Message, ex);
-        } catch (Exception ex) {
-            ResetDriftIfLive(client);
-            LogMoveFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"rotator move to {target}° failed: {ex.Message}");
-            throw new SequenceEntityFailedException($"rotator move to {target}° failed: {ex.Message}", ex);
+            throw;
         }
         _lifecycle.Refresh();
         // Prefer a direct device read for the returned angle so a single-flight RefreshCacheOnce that
@@ -207,41 +171,6 @@ public sealed partial class RotatorService : IRotatorMediator {
         // nor the cache is available, report 0 ("unknown") rather than the requested target.
         var settled = ReadAngle(client, useMechanical);
         return settled ?? CachedAngle(useMechanical);
-    }
-
-    // Polls the device's IsMoving directly (not via the single-flight cache, which can no-op against a
-    // concurrent timer tick) until the rotator settles or the bound elapses, refreshing the §32.4
-    // cache each tick so GetInfo/GetAsync stay current. Returns false when the move could not be
-    // CONFIRMED settled — bound exhausted with the device still reporting motion, or the device
-    // dropped/was superseded mid-wait (angle unknown; the instruction must fail even though the
-    // §42.3 disconnect episode owns the fault/reaction — the publish gate suppresses a spurious
-    // stall event for that case, aligning with the mount/dome/filter settle loops). A driver
-    // without IsMoving reports true: its blocking Move settled when the call returned.
-    private async Task<bool> WaitForMoveCompleteAsync(IRotatorDevice client, CancellationToken ct) {
-        var unknownStreak = 0;
-        for (var i = 0; i < MoveSettleMaxPolls; i++) {
-            await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
-            // Stop if the device is gone (disconnected / superseded / disposed): a dropped connection
-            // must NOT be mistaken for "settled" the way a swallowed IsMoving read would be.
-            if (!_lifecycle.IsLive(client)) {
-                return false;
-            }
-            var moving = ReadIsMoving(client);
-            _lifecycle.Refresh();
-            if (moving == false) {
-                return true; // confirmed settled
-            }
-            if (moving is null) {
-                // Brief null streak = transient blip (keep waiting); a persistent streak means the
-                // driver doesn't implement IsMoving (its Move blocks until done), so stop early.
-                if (++unknownStreak >= UnknownReadsBeforeSettled) {
-                    return true;
-                }
-            } else {
-                unknownStreak = 0; // moving == true: real read; reset the transient counter
-            }
-        }
-        return false; // still reports moving after the full settle bound
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -270,30 +199,15 @@ public sealed partial class RotatorService : IRotatorMediator {
         }
     }
 
-    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
-    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
-    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
-    // so the liveness check and the device snapshot share one critical section.
+    // §42.4 — the drift watch's fault publish (a move's own faults go through the command module).
+    // A fault may only be blamed on the LIVE client: the liveness check and the device snapshot share
+    // one critical section, so a superseded client's drift stays a log line.
     private void PublishOpFault(IRotatorDevice client, EquipmentFaultKind kind, string details) {
-        if (_faults is null) {
+        if (_faults is null || _lifecycle.DeviceIfCurrent(client) is not { } device) {
             return;
         }
-        if (_lifecycle.DeviceIfCurrent(client) is not { } device) {
-            return;
-        }
-        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Rotator, device?.UniqueId, device?.Name,
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Rotator, device.UniqueId, device.Name,
             kind, details, DateTimeOffset.UtcNow));
-    }
-
-    // Observes an abandoned (cancelled/timed-out) move task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem.
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedMoveFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
     }
 
     // Normalize any angle into [0, 360).
@@ -327,9 +241,6 @@ public sealed partial class RotatorService : IRotatorMediator {
     public event EventHandler<RotatorEventArgs>? Synced;
     public event Func<object, RotatorEventArgs, Task>? Moved;
     public event Func<object, RotatorEventArgs, Task>? MovedMechanical;
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "abandoned rotator move (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedMoveFaulted(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Rotator sync ignored")]
     private partial void LogSyncIgnored(Exception ex);

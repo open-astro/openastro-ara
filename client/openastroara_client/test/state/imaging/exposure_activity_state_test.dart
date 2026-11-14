@@ -20,6 +20,15 @@ Map<String, dynamic> _started(String id, double secs, {String kind = 'light', St
       'filter_name': filter,
     };
 
+// The daemon's camera.exposure_complete payload (all fields).
+Map<String, dynamic> _complete(String id) => <String, dynamic>{
+      'frame_id': id,
+      'exposure_sec': 30,
+      'started_utc': '2026-10-04T21:00:00.000Z',
+      'kind': 'light',
+      'elapsed_ms': 31250,
+    };
+
 class _Rig {
   final ws = StreamController<WsEvent>();
   final link = StreamController<WsConnectionState>();
@@ -57,7 +66,7 @@ void main() {
     expect(a.filterName, 'Ha');
     expect(a.startedAt.isBefore(before), isFalse);
 
-    rig.ws.add(_ev('camera.exposure_complete', {'frame_id': 'f1'}, 2));
+    rig.ws.add(_ev('camera.exposure_complete', _complete('f1'), 2));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state, isNull);
   });
@@ -72,14 +81,14 @@ void main() {
     rig.ws.add(_ev('frame.complete', {'frame_id': 'other'}, 2));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state, isNotNull, reason: 'a late orphan registering is not ours');
-    rig.ws.add(_ev('frame.complete', {'frame_id': 'f2'}, 3));
+    rig.ws.add(_ev('frame.complete', _complete('f2'), 3));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state, isNull);
 
     rig.ws.add(_ev('camera.exposure_started', _started('f3', 5, kind: 'flat'), 4));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state!.kindLabel, 'Flat');
-    rig.ws.add(_ev('camera.exposure_failed', {'frame_id': 'f3', 'reason': 'cancelled'}, 5));
+    rig.ws.add(_ev('camera.exposure_failed', {'frame_id': 'f3', 'kind': 'light', 'reason': 'cancelled'}, 5));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state, isNull);
   });
@@ -90,11 +99,11 @@ void main() {
     addTearDown(rig.dispose);
     rig.ws.add(_ev('camera.exposure_started', _started('f6', 30)));
     await Future<void>.delayed(Duration.zero);
-    rig.ws.add(_ev('camera.exposure_failed', {'frame_id': 'f5', 'reason': 'aborted'}, 2));
-    rig.ws.add(_ev('camera.exposure_complete', {'frame_id': 'f5'}, 3));
+    rig.ws.add(_ev('camera.exposure_failed', {'frame_id': 'f5', 'kind': 'light', 'reason': 'aborted'}, 2));
+    rig.ws.add(_ev('camera.exposure_complete', _complete('f5'), 3));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state?.frameId, 'f6', reason: 'events for another frame are not ours');
-    rig.ws.add(_ev('camera.exposure_complete', {'frame_id': 'f6'}, 4));
+    rig.ws.add(_ev('camera.exposure_complete', _complete('f6'), 4));
     await Future<void>.delayed(Duration.zero);
     expect(rig.state, isNull);
   });

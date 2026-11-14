@@ -120,6 +120,10 @@ class _GuideBuilt extends GuiderCalibrationNotifier {
   Future<CalibrationStatusResponse?> build() async => const CalibrationStatusResponse(
       connected: true,
       status: CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true));
+
+  /// The tab reads again when it opens: the same files.
+  @override
+  Future<void> refresh() async {}
 }
 
 class _Guiding extends GuiderStatusNotifier {
@@ -188,6 +192,8 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
         final c = ProviderContainer(overrides: [
+          // flutter_test runs as Android: at 320 wide that is a phone, whose deck replaces the rails these cases open.
+          companionPlatformProvider.overrideWithValue(TargetPlatform.linux),
           simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
           // The Connect to your rig card (no rig link here) scans: no network in a test.

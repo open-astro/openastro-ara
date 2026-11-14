@@ -1142,6 +1142,10 @@
   "@previewCooling": {
     "description": "Simple Mode status pill: the camera sensor is cooling to its target (temperatures follow)"
   },
+  "previewWarming": "Warming",
+  "@previewWarming": {
+    "description": "Simple Mode status pill: the camera's cooler went off and the sensor is warming back up (its temperature follows)"
+  },
   "previewStatusSpoken": "{label}, {detail}",
   "@previewStatusSpoken": {
     "description": "Simple Mode status pill, screen-reader text: the status and its detail",
@@ -5904,6 +5908,22 @@
   "@calibrationGuideNotBuilt": {
     "description": "Calibration panel, Guide Camera: no dark library or bad-pixel map yet"
   },
+  "calibrationGuideChecking": "Checking the Guider's files…",
+  "@calibrationGuideChecking": {
+    "description": "Calibration › Guide Camera: the Guider's file status is being read"
+  },
+  "calibrationGuideUnread": "Couldn't read the Guider's files",
+  "@calibrationGuideUnread": {
+    "description": "Calibration › Guide Camera: the rig could not read the Guider's dark library and bad-pixel map status"
+  },
+  "calibrationGuideUnreadNote": "The Guider may be restarting. Ara reads them again when it is back.",
+  "@calibrationGuideUnreadNote": {
+    "description": "Calibration › Guide Camera: under the unread line, why and what happens next"
+  },
+  "calibrationGuideRetry": "Try again",
+  "@calibrationGuideRetry": {
+    "description": "Calibration › Guide Camera: reads the Guider's file status again"
+  },
   "calibrationGuideUse": "Use while guiding",
   "@calibrationGuideUse": {
     "description": "Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels"
@@ -6391,6 +6411,13 @@
   "@calibrationLibraryNone": {
     "description": "Calibration panel, Darks & bias: no darks (or no bias) in the library"
   },
+  "calibrationDarkGroupCount": "{count, plural, =1{1 exposure} other{{count} exposures}}",
+  "@calibrationDarkGroupCount": {
+    "description": "Calibration › Darks & bias: how many darks a gain and temperature group holds",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "calibrationLibraryAge": "{age} · {frames, plural, =1{1 frame} other{{frames} frames}}",
   "@calibrationLibraryAge": {
     "description": "Calibration library row: how old the set is and how many frames it holds",
@@ -6487,7 +6514,7 @@
   },
   "rigSetupTitle": "Rig setup",
   "@rigSetupTitle": {
-    "description": "Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row"
+    "description": "Simple Mode: title of the first-time Rig setup sheet and of the Rig setup header in Settings › Rig"
   },
   "rigSetupIntro": "Before a first night, Ara needs a few facts about this rig.",
   "@rigSetupIntro": {
@@ -6553,6 +6580,21 @@
   "@rigSetupNotNow": {
     "description": "Rig setup: closes the sheet and keeps it closed for this rig on this device"
   },
+  "rigSetupProgress": "{done} of {total} done",
+  "@rigSetupProgress": {
+    "description": "Rig setup sheet footer and Settings › Rig header: how many of the items are done",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "rigSetupNext": "Next: {item}",
+  "@rigSetupNext": {
+    "description": "Settings › Rig header: the next missing Rig setup item, by its line's name (Site, Guide scope)",
+    "placeholders": {
+      "item": {"type": "String"}
+    }
+  },
   "rigSetupDonePill": "Rig set up",
   "@rigSetupDonePill": {
     "description": "Simple Mode result pill when the last Rig setup item is done"
@@ -6579,5 +6621,82 @@
   "faultGroupReleased": "released — disconnected by hand",
   "@faultGroupReleased": {
     "description": "Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered"
+  },
+  "focuserPosition": "Position",
+  "@focuserPosition": {
+    "description": "Settings › Focuser: title of the section with Set zero and Calibrate travel"
+  },
+  "focuserSetZero": "Set zero",
+  "@focuserSetZero": {
+    "description": "Settings › Focuser: the row and confirm button that make the focuser's current position 0"
+  },
+  "focuserSetZeroButton": "Set zero…",
+  "@focuserSetZeroButton": {
+    "description": "Settings › Focuser: button that asks before making the current position 0"
+  },
+  "focuserSetZeroHint": "Make where it is now 0. The focuser doesn't move.",
+  "@focuserSetZeroHint": {
+    "description": "Settings › Focuser: what Set zero does"
+  },
+  "focuserSetZeroAsk": "Make {position} the new 0? The last autofocus position and plan steps that move to a set position will be off by {position} steps until the next autofocus. Filter offsets stay as they are.",
+  "@focuserSetZeroAsk": {
+    "description": "Settings › Focuser: the question before Set zero",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "focuserCalibrate": "Calibrate travel",
+  "@focuserCalibrate": {
+    "description": "Settings › Focuser: the row that runs the focuser to both stops to find its travel"
+  },
+  "focuserCalibrateButton": "Calibrate",
+  "@focuserCalibrateButton": {
+    "description": "Settings › Focuser: button that starts a travel calibration"
+  },
+  "focuserCalibrateHint": "The focuser runs to both stops and sets 0 at the inner one. Take off anything that could touch first.",
+  "@focuserCalibrateHint": {
+    "description": "Settings › Focuser: what Calibrate travel does, before it runs"
+  },
+  "focuserCalibrating": "Running to both stops…",
+  "@focuserCalibrating": {
+    "description": "Settings › Focuser: a travel calibration is running"
+  },
+  "focuserCalibrated": "Calibrated",
+  "@focuserCalibrated": {
+    "description": "Settings › Focuser: the focuser's travel is calibrated"
+  },
+  "focuserCouldntSetZero": "Couldn't set the focuser's zero",
+  "@focuserCouldntSetZero": {
+    "description": "Error when the focuser refused Set zero"
+  },
+  "focuserCouldntCalibrate": "Couldn't calibrate the focuser",
+  "@focuserCouldntCalibrate": {
+    "description": "Error when the focuser refused to start or stop a calibration"
+  },
+  "shellLoadingSky": "Loading the sky…",
+  "@shellLoadingSky": {
+    "description": "Simple Mode: shown while the Sky Map draws its first sky after it was asked for"
+  },
+  "statsIntegrationCaption": "{lights} light frames in {sessions} sessions",
+  "@statsIntegrationCaption": {
+    "description": "Stats dashboard: under the total integration",
+    "placeholders": {
+      "lights": {
+        "type": "int"
+      },
+      "sessions": {
+        "type": "int"
+      }
+    }
+  },
+  "statsNamedTargets": "Named targets",
+  "@statsNamedTargets": {
+    "description": "Stats: targets counted from frames that recorded a target name"
+  },
+  "statsBadgeEarned": "Earned",
+  "@statsBadgeEarned": {
+    "description": "Stats: caption under a badge the user has earned"
   }
 }

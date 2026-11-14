@@ -167,10 +167,6 @@ class CameraCapabilities {
       ]);
 }
 
-/// Live status of the connected ASCOM Camera
-/// (`GET /api/v1/equipment/camera` → `CameraDto`). `runtimeState` is the device
-/// activity (idle / exposing / downloading / error), distinct from the
-/// connection [connectionState].
 /// #1663 — the switch port that is the camera's own anti-dew heater: the
 /// switch device's id and the port's id. The level and range stay on the
 /// switch list.
@@ -199,6 +195,10 @@ class DewHeaterRef {
   int get hashCode => Object.hash(deviceId, portId);
 }
 
+/// Live status of the connected ASCOM Camera
+/// (`GET /api/v1/equipment/camera` → `CameraDto`). `runtimeState` is the device
+/// activity (idle / exposing / downloading / error), distinct from the
+/// connection [connectionState].
 class CameraStatus extends EquipmentDeviceStatus {
   final String deviceId;
   @override
