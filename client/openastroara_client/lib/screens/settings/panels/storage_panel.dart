@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/simple_messages_state.dart';
 import '../../../state/simple_mode_state.dart';
@@ -19,6 +22,8 @@ import '../../../services/storage_copy_api.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../state/settings/loaded_section.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../services/storage_browse_api.dart';
 import '../../../widgets/storage/sky_photo_cache_row.dart';
 import '../../../widgets/help_icon.dart';
@@ -48,16 +53,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
   Future<void> _hydrate() async {
     final api = _api();
     if (api == null) return;
-    try {
-      await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
+    await ref.read(storageSettingsProvider.notifier).load(api);
   }
 
   @override
@@ -84,28 +80,44 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       return;
     }
     try {
-      await ref.read(storageSettingsProvider.notifier).persistToServer(api);
+      await ref.read(storageSettingsProvider.notifier).save(api);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError =
+            e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
 
   ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    return ref.read(profileApiProvider);
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(storageSettingsProvider);
+    final section = ref.watch(storageSettingsProvider);
+    // A new rig or profile resets the section (migrated_sections.dart), also
+    // after a failed load: load it again.
+    ref.listen(storageSettingsProvider, (_, next) {
+      if (next.source == SectionSource.notLoaded && next.lastFailure == null) {
+        _hydrate();
+      }
+    });
     final n = ref.read(storageSettingsProvider.notifier);
+    final s = section.value;
+    if (s == null) {
+      return SectionNotLoaded(section: section, onRetry: _hydrate);
+    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: _hydrate),
         // One destination, stated plainly, with the capacity you'd actually
         // ask about — the Time Machine "backup disk" model. Paths, mount
         // points and filesystems are plumbing; they live behind Advanced.
@@ -113,9 +125,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
         ExpansionTile(
           title: Text(
             'Advanced',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AraColors.textSecondary),
           ),
           tilePadding: EdgeInsets.zero,
           childrenPadding: const EdgeInsets.only(bottom: 8),
@@ -125,7 +136,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
               helpKey: 'session.storage.save_directory',
               currentValue: s.saveDirectory,
               getCanonical: () =>
-                  ref.read(storageSettingsProvider).saveDirectory,
+                  ref.read(storageSettingsProvider).value!.saveDirectory,
               parse: n.setSaveDirectory,
             ),
             Align(
@@ -192,9 +203,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
             s.fileFormat == StorageFileFormat.xisf
                 ? 'PixInsight reads compressed XISF directly.'
                 : 'FITS is always written uncompressed. Pick XISF to compress frames.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         const SettingsRow(
@@ -208,8 +218,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Warn below (GB free)',
           helpKey: 'session.storage.min_free_disk_warn_gb',
           currentValue: s.minFreeDiskWarnGb.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).minFreeDiskWarnGb.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .minFreeDiskWarnGb
+              .toString(),
           parse: (v) {
             final gb = int.tryParse(v.trim());
             if (gb != null) n.setMinFreeDiskWarnGb(gb);
@@ -221,6 +234,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           currentValue: s.minFreeDiskCriticalGb.toString(),
           getCanonical: () => ref
               .read(storageSettingsProvider)
+              .value!
               .minFreeDiskCriticalGb
               .toString(),
           parse: (v) {
@@ -236,8 +250,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Keep backup snapshots',
           helpKey: 'session.storage.backup_retention_count',
           currentValue: s.backupRetentionCount.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).backupRetentionCount.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .backupRetentionCount
+              .toString(),
           parse: (v) {
             final count = int.tryParse(v.trim());
             if (count != null) n.setBackupRetentionCount(count);
@@ -248,8 +265,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           label: 'Keep fault history (days)',
           helpKey: 'session.storage.fault_log_retention_days',
           currentValue: s.faultLogRetentionDays.toString(),
-          getCanonical: () =>
-              ref.read(storageSettingsProvider).faultLogRetentionDays.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .value!
+              .faultLogRetentionDays
+              .toString(),
           parse: (v) {
             final days = int.tryParse(v.trim());
             if (days != null) n.setFaultLogRetentionDays(days);
@@ -340,9 +360,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           child: Text(
             'Back up your profile configuration (settings + sequences) to a ZIP '
             'snapshot on Ara, download a snapshot, or restore one.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         Align(
@@ -796,7 +815,13 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCheckDisk)),
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionCheckDisk,
+            ),
+          ),
         ),
       );
     } finally {
@@ -874,7 +899,13 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCleanPreviewCache)),
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionCleanPreviewCache,
+            ),
+          ),
         ),
       );
     } finally {
@@ -908,9 +939,8 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
               children: [
                 Text(
                   'Thumbnails + previews',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
                 const HelpIcon(helpKey: 'session.storage.preview_cache'),
               ],

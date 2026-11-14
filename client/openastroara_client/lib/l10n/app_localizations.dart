@@ -2493,7 +2493,7 @@ abstract class AppLocalizations {
   /// **'Camera (Guide)'**
   String get shellSectionGuider;
 
-  /// Simple Mode Settings › Devices when the app has no link to the rig
+  /// Simple Mode Settings › Devices, and a full UI settings panel whose values are on the rig (Storage, File naming), when the app has no link to the rig
   ///
   /// In en, this message translates to:
   /// **'Rig not connected'**
@@ -8858,6 +8858,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Earned'**
   String get statsBadgeEarned;
+
+  /// Settings panel: a rig-held section (ADR 0015) is still loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading these settings from your rig…'**
+  String get settingsSectionLoading;
+
+  /// Settings panel: a rig-held section failed to load; a friendlyError sentence follows
+  ///
+  /// In en, this message translates to:
+  /// **'Not loaded — these settings are on your rig and it did not answer.'**
+  String get settingsSectionNotLoaded;
+
+  /// Settings panel: button that loads a rig-held section again
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get settingsSectionRetry;
+
+  /// Settings panel: a save was refused because another device saved a newer copy
+  ///
+  /// In en, this message translates to:
+  /// **'These settings were changed on another device. Nothing was saved. Reload to see the new values (your edits here will be replaced).'**
+  String get settingsSectionConflict;
+
+  /// Settings panel: button that replaces local edits with the rig's newer copy
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get settingsSectionReload;
 }
 
 class _AppLocalizationsDelegate

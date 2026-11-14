@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -45,8 +47,11 @@ class _SessionNotificationsPanelState
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
         );
       }
     }
@@ -74,7 +79,13 @@ class _SessionNotificationsPanelState
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionSave,
+        ),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -218,9 +229,15 @@ class _SessionNotificationsPanelState
         SettingsSwitchRow(
           // The threshold itself lives in Storage → "Warn below (GB free)";
           // quoting it live keeps the two panels from contradicting each other.
-          label:
-              'Disk space low (below '
-              '${ref.watch(storageSettingsProvider).minFreeDiskWarnGb} GB free)',
+          label: () {
+            final gb = ref
+                .watch(storageSettingsProvider)
+                .value
+                ?.minFreeDiskWarnGb;
+            return gb == null
+                ? 'Disk space low (threshold in Storage)'
+                : 'Disk space low (below $gb GB free)';
+          }(),
           helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,

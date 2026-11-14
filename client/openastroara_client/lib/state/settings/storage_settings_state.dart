@@ -1,14 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
 /// §29 Storage settings — save directory + file format + compression +
-/// filename template. Phase 12h.6c wires the daemon round-trip via
-/// [ProfileApi]: [StorageSettingsNotifier.hydrateFromServer] runs on
-/// panel mount, [StorageSettingsNotifier.persistToServer] runs from the
-/// Save button. Local state is still the source of truth between syncs.
+/// filename template. ADR 0015: the section is loaded from the rig before it
+/// can be saved ([SectionNotifier]); until then it holds no value, not defaults.
 
 /// The on-disk frame container (#1148). FITS is always written
 /// uncompressed; XISF is PixInsight's native format and the one that
@@ -63,16 +61,16 @@ class StorageSettings {
   // pruned once a day. 0 = keep everything (#1145).
   final int faultLogRetentionDays;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012).
   const StorageSettings({
-    this.saveDirectory = '/media/openastroara',
-    this.fileFormat = StorageFileFormat.fits,
-    this.compression = StorageCompression.zstd,
-    this.filenameTemplate =
-        r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
-    this.minFreeDiskWarnGb = 10,
-    this.minFreeDiskCriticalGb = 2,
-    this.backupRetentionCount = 20,
-    this.faultLogRetentionDays = 90,
+    required this.saveDirectory,
+    required this.fileFormat,
+    required this.compression,
+    required this.filenameTemplate,
+    required this.minFreeDiskWarnGb,
+    required this.minFreeDiskCriticalGb,
+    required this.backupRetentionCount,
+    required this.faultLogRetentionDays,
   });
 
   StorageSettings copyWith({
@@ -84,42 +82,47 @@ class StorageSettings {
     int? minFreeDiskCriticalGb,
     int? backupRetentionCount,
     int? faultLogRetentionDays,
-  }) =>
-      StorageSettings(
-        saveDirectory: saveDirectory ?? this.saveDirectory,
-        fileFormat: fileFormat ?? this.fileFormat,
-        compression: compression ?? this.compression,
-        filenameTemplate: filenameTemplate ?? this.filenameTemplate,
-        minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
-        minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
-        backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
-        faultLogRetentionDays:
-            faultLogRetentionDays ?? this.faultLogRetentionDays,
-      );
+  }) => StorageSettings(
+    saveDirectory: saveDirectory ?? this.saveDirectory,
+    fileFormat: fileFormat ?? this.fileFormat,
+    compression: compression ?? this.compression,
+    filenameTemplate: filenameTemplate ?? this.filenameTemplate,
+    minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
+    minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
+    backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
+    faultLogRetentionDays: faultLogRetentionDays ?? this.faultLogRetentionDays,
+  );
 }
 
-class StorageSettingsNotifier extends Notifier<StorageSettings>
-    with SettingsSyncMixin<StorageSettings> {
+class StorageSettingsNotifier extends SectionNotifier<StorageSettings> {
   @override
-  StorageSettings build() => const StorageSettings();
+  Future<Tagged<StorageSettings>> fetch(ProfileApi api) =>
+      api.getStorageSection();
+
+  @override
+  Future<Tagged<StorageSettings>> send(
+    ProfileApi api,
+    StorageSettings value,
+    String? etag,
+  ) => api.putStorageSection(value, ifMatch: etag);
 
   void setSaveDirectory(String s) {
     // Empty save directory would write to current dir at runtime — reject.
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(saveDirectory: v);
+    edit((c) => c.copyWith(saveDirectory: v));
   }
 
   void setFileFormat(StorageFileFormat f) =>
-      state = state.copyWith(fileFormat: f);
+      edit((c) => c.copyWith(fileFormat: f));
 
   void setCompression(StorageCompression c) =>
-      state = state.copyWith(compression: c);
+      edit((s) => s.copyWith(compression: c));
 
   void setFilenameTemplate(String t) {
     final v = t.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(filenameTemplate: v);
+    edit((c) => c.copyWith(filenameTemplate: v));
   }
 
   // §29 — thresholds are whole GiB ≥ 1. Each field validates independently (so editing one doesn't snap back
@@ -127,38 +130,37 @@ class StorageSettingsNotifier extends Notifier<StorageSettings>
   // ([thresholdsValid]) with a visible error, and the server rejects an invalid pair with a 400.
   void setMinFreeDiskWarnGb(int v) {
     if (v < 1) return;
-    state = state.copyWith(minFreeDiskWarnGb: v);
+    edit((c) => c.copyWith(minFreeDiskWarnGb: v));
   }
 
   void setMinFreeDiskCriticalGb(int v) {
     if (v < 1) return;
-    state = state.copyWith(minFreeDiskCriticalGb: v);
+    edit((c) => c.copyWith(minFreeDiskCriticalGb: v));
   }
 
   // §43-2b — 0 is meaningful (keep everything); negatives are rejected like the
   // server's 400 (backup_retention_count must be >= 0).
   void setBackupRetentionCount(int v) {
     if (v < 0) return;
-    state = state.copyWith(backupRetentionCount: v);
+    edit((c) => c.copyWith(backupRetentionCount: v));
   }
 
   // §42.5 — same contract as the backup count: 0 keeps everything, negatives
   // are rejected like the server's 400 (fault_log_retention_days must be >= 0).
   void setFaultLogRetentionDays(int v) {
     if (v < 0) return;
-    state = state.copyWith(faultLogRetentionDays: v);
+    edit((c) => c.copyWith(faultLogRetentionDays: v));
   }
 
   /// Whether the current pair satisfies critical &lt; warn (checked before persisting).
-  bool get thresholdsValid => state.minFreeDiskCriticalGb < state.minFreeDiskWarnGb;
-
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getStorageSettings());
-
-  Future<StorageSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putStorageSettings(sent));
+  /// True while nothing is loaded: the load-before-save rule refuses that case.
+  bool get thresholdsValid {
+    final v = state.value;
+    return v == null || v.minFreeDiskCriticalGb < v.minFreeDiskWarnGb;
+  }
 }
 
 final storageSettingsProvider =
-    NotifierProvider<StorageSettingsNotifier, StorageSettings>(
-        StorageSettingsNotifier.new);
+    NotifierProvider<StorageSettingsNotifier, LoadedSection<StorageSettings>>(
+      StorageSettingsNotifier.new,
+    );

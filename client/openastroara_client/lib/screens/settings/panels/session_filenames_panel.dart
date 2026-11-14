@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -13,6 +15,8 @@ import '../../../util/frame_naming.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../state/settings/loaded_section.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/storage/fits_header_reference.dart';
 
@@ -36,14 +40,20 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     with PanelSaveRegistration {
   String? _lastError;
 
-  /// Save persists four providers; until every one has been hydrated, saving
-  /// would push defaults over server values a failed hydrate never loaded.
+  /// Save also persists filenames, site and optics; until all three have been
+  /// hydrated, saving would push defaults over server values a failed hydrate
+  /// never loaded. Storage guards its own save (ADR 0015).
   bool _hydrated = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Storage loads on its own, never from [_hydrate]: a failed hydrate must
+      // not stop it, and Save's retry of [_hydrate] must not drop its edits.
+      _reloadStorage();
+      _hydrate();
+    });
   }
 
   Future<void> _hydrate() async {
@@ -51,19 +61,20 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     if (api == null) return;
     try {
       await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
-      // This panel's Save persists every provider it touches, so every one
-      // of them must be hydrated first — Save must never push defaults over
-      // values it hasn't seen (the transient-draft lesson). Storage rides
-      // along because the filename template lives there.
-      await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
+      // This panel's Save persists these three as well, so each must be
+      // hydrated first — Save must never push defaults over values it hasn't
+      // seen (the transient-draft lesson).
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       _hydrated = true;
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
         );
       }
     }
@@ -101,7 +112,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     try {
       // The template rides with storage settings; the separator + compression
       // toggles ride with filenames. Both panels' saves stay independent.
-      await ref.read(storageSettingsProvider.notifier).persistToServer(api);
+      await ref.read(storageSettingsProvider.notifier).save(api);
       await ref.read(filenamesSettingsProvider.notifier).persistToServer(api);
       await ref.read(siteSettingsProvider.notifier).persistToServer(api);
       await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
@@ -109,22 +120,42 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError =
+            e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+  ProfileApi? _api() => ref.read(profileApiProvider);
+
+  void _reloadStorage() {
+    final api = _api();
+    if (api != null) {
+      unawaited(ref.read(storageSettingsProvider.notifier).load(api));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final fs = ref.watch(filenamesSettingsProvider);
     final fn = ref.read(filenamesSettingsProvider.notifier);
-    final ss = ref.watch(storageSettingsProvider);
+    final section = ref.watch(storageSettingsProvider);
+    // A new rig or profile resets the section (migrated_sections.dart), also
+    // after a failed load: load it again.
+    ref.listen(storageSettingsProvider, (_, next) {
+      if (next.source == SectionSource.notLoaded && next.lastFailure == null) {
+        _reloadStorage();
+      }
+    });
     final sn = ref.read(storageSettingsProvider.notifier);
+    final ss = section.value;
+    if (ss == null) {
+      return SectionNotLoaded(section: section, onRetry: _reloadStorage);
+    }
     final site = ref.watch(siteSettingsProvider);
     final optics = ref.watch(opticsSettingsProvider);
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
@@ -132,9 +163,12 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: _reloadStorage),
         _PreviewCard(
           template: ss.filenameTemplate,
-          extension: ss.fileFormat == StorageFileFormat.xisf ? '.xisf' : '.fits',
+          extension: ss.fileFormat == StorageFileFormat.xisf
+              ? '.xisf'
+              : '.fits',
         ),
         const SizedBox(height: 20),
         if (model != null) ...[
@@ -184,9 +218,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             'This naming template was written by hand (or imported), so the '
             'usual choices are hidden to avoid rewriting it. Edit it below, '
             'or start over with the standard naming.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 8),
           EditableTextRow(
@@ -194,7 +227,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             helpKey: 'session.storage.filename_template',
             currentValue: ss.filenameTemplate,
             getCanonical: () =>
-                ref.read(storageSettingsProvider).filenameTemplate,
+                ref.read(storageSettingsProvider).value?.filenameTemplate ?? '',
             parse: sn.setFilenameTemplate,
             maxLines: 2,
           ),
@@ -326,7 +359,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
                 helpKey: 'session.storage.filename_template',
                 currentValue: ss.filenameTemplate,
                 getCanonical: () =>
-                    ref.read(storageSettingsProvider).filenameTemplate,
+                    ref.read(storageSettingsProvider).value?.filenameTemplate ??
+                    '',
                 parse: sn.setFilenameTemplate,
                 maxLines: 2,
               ),
@@ -347,9 +381,12 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
-          Text(
-            _lastError!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _lastError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
           const SizedBox(height: 12),
         ],
