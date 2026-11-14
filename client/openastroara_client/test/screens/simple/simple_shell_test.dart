@@ -5172,7 +5172,22 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     final idle = guider.refreshes;
     await tester.pump(const Duration(seconds: 5));
-    expect(guider.refreshes, idle, reason: 'idle: no more polling');
+    expect(guider.refreshes, lessThanOrEqualTo(idle + 1), reason: 'idle: a slow read, not every 2 s');
+  });
+
+  testWidgets('a guider that starts while the last read said stopped shows without a visit to Advanced Mode '
+      '(rig 2026-11-13, #1875 slice 3)', (tester) async {
+    // A plan's Start guiding runs on the rig: nothing pushes the guider's new state to the app.
+    final guider = _GuiderAt('stopped');
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    expect(find.ancestor(of: find.textContaining('Guiding'), matching: pills), findsNothing);
+    guider.rig = 'guiding';
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(find.ancestor(of: find.textContaining('Guiding'), matching: pills), findsOneWidget);
   });
 
   testWidgets('concurrent things each get a pill, stacked: a frame and the guider both show (user, 2026-11-04)',

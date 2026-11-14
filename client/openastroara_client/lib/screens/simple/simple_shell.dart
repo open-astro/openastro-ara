@@ -625,21 +625,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   SimpleModeScreen? _lastShown;
 
-  // Simple Mode re-reads the guider every 2 s while it is doing anything:
-  // nothing else polls it here, and some changes (a stop that lands seconds
-  // after the ask) push nothing (rig, 2026-11-04).
+  // Simple Mode re-reads the guider every 2 s while it is doing anything and
+  // every 10 s while it is idle: nothing else polls it here, and some changes
+  // push nothing (a stop that lands seconds after the ask, rig 2026-11-04; a
+  // plan's Start guiding on the rig, rig 2026-11-13).
   Timer? _guiderPoll;
+  bool? _guiderPollBusy;
 
-  void _syncGuiderPoll(bool active) {
-    if (active) {
-      _guiderPoll ??= Timer.periodic(
-        const Duration(seconds: 2),
-        (_) => ref.read(guiderStatusProvider.notifier).refresh(),
-      );
-    } else {
-      _guiderPoll?.cancel();
-      _guiderPoll = null;
-    }
+  void _syncGuiderPoll(bool busy) {
+    if (_guiderPollBusy == busy) return;
+    _guiderPollBusy = busy;
+    _guiderPoll?.cancel();
+    _guiderPoll = Timer.periodic(
+      Duration(seconds: busy ? 2 : 10),
+      (_) => ref.read(guiderStatusProvider.notifier).refresh(),
+    );
   }
 
   /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
