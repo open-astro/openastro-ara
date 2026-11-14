@@ -2814,6 +2814,31 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/sequences/{id}/plan':
+    get:
+      tags:
+        - Sequences
+      operationId: GetSequencePlan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SequencePlanDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   '/api/v1/sequences/{id}/start':
     post:
       tags:
@@ -15008,6 +15033,103 @@ components:
           type:
             - 'null'
             - string
+    SequencePlanDto:
+      required:
+        - sequence_id
+        - run_id
+        - targets
+      type: object
+      properties:
+        sequence_id:
+          type: string
+          format: uuid
+        run_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SequencePlanTargetDto'
+    SequencePlanRowDto:
+      required:
+        - filter_name
+        - exposure_seconds
+        - frames_total
+        - frames_done
+      type: object
+      properties:
+        filter_name:
+          type:
+            - 'null'
+            - string
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        frames_total:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        frames_done:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    SequencePlanTargetDto:
+      required:
+        - name
+        - calibration
+        - ra_deg
+        - dec_deg
+        - gain
+        - flats
+        - dawn_provider
+        - rows
+      type: object
+      properties:
+        name:
+          type: string
+        calibration:
+          type: boolean
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        flats:
+          type: string
+        dawn_provider:
+          type:
+            - 'null'
+            - string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/SequencePlanRowDto'
     SequenceResumeRequestDto:
       required:
         - recenter
@@ -15185,6 +15307,17 @@ components:
         stop_after_frame:
           type: boolean
           default: false
+        plan_frames_done:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        current_block_name:
+          type:
+            - 'null'
+            - string
     SequenceShareDto:
       required:
         - sequence_id
