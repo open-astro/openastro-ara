@@ -1866,7 +1866,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       // A running plan says what it's doing (cooling, slewing, centring,
       // focusing), with how far the step has got along the pill's foot.
       // #1596: a finished run that imaged nothing keeps its reason on the pill.
+      // A plan's autofocus has the Focus pill alone; this one returns after it
+      // (#1875 slice 3).
       if ((planActive || run?.reasonText != null) &&
+          !af.isRunning &&
           step != null &&
           step.isNotEmpty)
         _PillData(

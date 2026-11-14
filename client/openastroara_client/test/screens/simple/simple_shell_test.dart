@@ -2493,6 +2493,34 @@ void main() {
     });
   }
 
+  testWidgets("a plan's autofocus shows one Focus pill; the Plan pill returns once it ends (rig 2026-11-13, #1875 slice 3)",
+      (tester) async {
+    final live = _LiveSweeping();
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Run autofocus'),
+        gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    await tester.pump();
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join('|');
+    expect(pill(), contains('Run autofocus'));
+    live.sweep();
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(pill(), contains('Focus'));
+    expect(pill(), isNot(contains('Run autofocus')), reason: 'one pill for one routine');
+    live.state = const AutofocusLive();
+    await tester.pump();
+    await _letPillLeave(tester);
+    expect(pill(), contains('Run autofocus'), reason: 'the Plan pill returns');
+  });
+
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
     final container = await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
