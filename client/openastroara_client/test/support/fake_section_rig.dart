@@ -37,6 +37,17 @@ class FakeSectionRig implements HttpClientAdapter {
   void savedElsewhere(String section) =>
       _versions[section] = (_versions[section] ?? 1) + 1;
 
+  /// The daemon itself wrote [section] outside the profile routes (a device
+  /// action such as the dome's follow switch): the copy and its tag move, no
+  /// client PUT is recorded and no `profile.updated` reaches the client.
+  void daemonWrote(String section, Object? body) {
+    _sections[section] = body;
+    savedElsewhere(section);
+  }
+
+  /// The rig's current copy of [section].
+  Object? sectionOf(String section) => _sections[section];
+
   /// A [ProfileApi] whose requests reach this rig and nothing else.
   ProfileApi api({String hostname = 'rig.test'}) => ProfileApi(
     AraServer(hostname: hostname, port: 1),
