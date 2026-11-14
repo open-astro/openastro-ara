@@ -1445,6 +1445,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     _device != null ||
                                     _adding)))
                           Positioned.fill(
+                            // #1775 — upright, centred in the panels' room
+                            // between the strip and the deck, not under it.
+                            left: deck ? kSimpleInset : 0,
+                            top: deck ? kSimpleInset + kSimpleBarHeight : 0,
+                            right: deck ? railGap : 0,
+                            bottom: deck ? betweenBottom : 0,
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(

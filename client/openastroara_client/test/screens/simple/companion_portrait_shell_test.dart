@@ -428,6 +428,61 @@ void main() {
     },
   );
 
+  for (final (size, locale, scale) in [
+    for (final size in [const Size(360, 780), const Size(375, 667), _portrait])
+      for (final locale in [const Locale('en'), const Locale('pt', 'BR')])
+        for (final scale in [1.0, 1.5, 2.0]) (size, locale, scale),
+  ]) {
+    testWidgets(
+      'on a phone upright at $size in $locale at text ${scale}x the shutter hint sits whole between the strip and the deck',
+      skip: !hasFonts,
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await _pump(tester, size, locale: locale);
+        final hint = find.text(lookupAppLocalizations(locale).shellTapShutter);
+        expect(hint, findsOneWidget, reason: 'no frame yet: the hint shows');
+        final rect = tester.getRect(hint);
+        // The strip's and the deck's frosted panels, as drawn.
+        Rect panel(String key) => tester.getRect(
+          find
+              .ancestor(
+                of: find.byKey(Key(key)),
+                matching: find.byType(SimplePanel),
+              )
+              .first,
+        );
+        final strip = panel('simple-ara-mark');
+        final deck = panel('companion-deck');
+        expect(
+          rect.top,
+          greaterThanOrEqualTo(strip.bottom),
+          reason: 'the hint runs under the strip: $rect, $strip',
+        );
+        expect(
+          rect.bottom,
+          lessThanOrEqualTo(deck.top),
+          reason: 'the hint runs under the deck: $rect, $deck',
+        );
+        // Whole and at its size: not clipped to the room, not shrunk into it.
+        final p = tester.renderObject<RenderParagraph>(hint);
+        expect(
+          p.size.height,
+          greaterThanOrEqualTo(p.getMinIntrinsicHeight(p.size.width)),
+          reason: 'the hint is cut short',
+        );
+        expect(
+          MatrixUtils.transformRect(
+            p.getTransformTo(null),
+            Offset.zero & p.size,
+          ).height,
+          greaterThanOrEqualTo(p.textScaler.scale(p.text.style!.fontSize!)),
+          reason: 'the hint is shrunk',
+        );
+      },
+    );
+  }
+
   testWidgets(
     'before any rig has been connected STOP is drawn disabled in its place and starts no hold',
     (tester) async {
