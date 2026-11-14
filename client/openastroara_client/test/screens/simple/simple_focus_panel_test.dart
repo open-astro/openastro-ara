@@ -280,6 +280,25 @@ void main() {
     }
   });
 
+  // #1898 review: the warning's slot scales with the text; at 2x the two-line warning still fits.
+  testWidgets('at 2x text the weak-fit warning fits its slot under the chart (#1898)', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    // Only overflow down counts here: the panel's rows overflow sideways at 2x on master too.
+    final down = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (d) {
+      if (d.exceptionAsString().contains('on the bottom')) down.add(d.exceptionAsString());
+    };
+    await _pump(tester, focuser: _focuser(), run: weak);
+    FlutterError.onError = previous;
+    expect(down, isEmpty);
+    expect(find.byKey(const Key('simple-focus-weak-fit')), findsOneWidget);
+  });
+
   testWidgets('Measured stars, hidden for its room at large text before a frame, is not read out', (tester) async {
     tester.view.physicalSize = const Size(1600, 1600);
     tester.view.devicePixelRatio = 1;

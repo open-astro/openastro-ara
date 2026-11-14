@@ -742,11 +742,13 @@ void main() {
   for (final (name, wire, status) in [
     ('guiding', _wire(), 'Guiding'),
     ('idle', _wire(runtime: 'stopped'), 'Idle'),
-    ('not connected', _wire(state: 'disconnected', runtime: 'stopped'), 'Camera (Guide) not connected'),
+    ('not connected', _wire(state: 'disconnected', runtime: 'stopped'), 'Guider not connected'),
   ]) {
     testWidgets('$name: the Guide panel has no status line of its own, the pill shows it (#1898)', (tester) async {
       await _pump(tester, wire);
-      expect(find.descendant(of: find.byKey(const Key('simple-guide-panel')), matching: find.text(status)), findsNothing);
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      expect(find.descendant(of: panel, matching: find.text(status)), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byType(StatusDot)), findsNothing, reason: "the status line's dot");
     });
   }
 

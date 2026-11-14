@@ -23,8 +23,10 @@ class VCurveChart extends StatelessWidget {
     final l10n = context.l10n;
     final sweep = run.sweepProbes;
     final coarse = run.coarseProbes;
-    final fit = run.fit;
     final empty = sweep.isEmpty && coarse.isEmpty;
+    // Nothing measured: the empty frame draws no fit or Focus line either.
+    final fit = empty ? null : run.fit;
+    final finalPosition = empty ? null : run.finalPosition;
     if (empty && !simple) return _emptyText(context);
 
     final xs = <double>[if (empty) ...[0, 1]];
@@ -59,7 +61,7 @@ class VCurveChart extends StatelessWidget {
       }
       if (fit.bestPosition > 0) xs.add(fit.bestPosition);
     }
-    if (run.finalPosition != null) xs.add(run.finalPosition!.toDouble());
+    if (finalPosition != null) xs.add(finalPosition.toDouble());
 
     var minX = xs.reduce((a, b) => a < b ? a : b);
     var maxX = xs.reduce((a, b) => a > b ? a : b);
@@ -123,16 +125,16 @@ class VCurveChart extends StatelessWidget {
         ),
       ));
     }
-    if (run.finalPosition != null && run.isComplete) {
+    if (finalPosition != null && run.isComplete) {
       verticals.add(VerticalLine(
-        x: run.finalPosition!.toDouble(),
+        x: finalPosition.toDouble(),
         color: AraColors.accentConnected,
         strokeWidth: 1.5,
         label: VerticalLineLabel(
           show: true,
           alignment: Alignment.bottomRight,
           style: const TextStyle(fontSize: 10, color: AraColors.accentConnected),
-          labelResolver: (_) => l10n.focusChartFocus(run.finalPosition!),
+          labelResolver: (_) => l10n.focusChartFocus(finalPosition),
         ),
       ));
     }
