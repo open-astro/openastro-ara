@@ -508,7 +508,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     // #1246 — Connected is not "recovered": a bridge can answer Connected while every read fails after a
     // latch. The device's lifecycle says whether a clean read followed the connect (ADR 0011 rule 2); a
-    // device not on the module yet answers true (EquipmentReconnector.IsCleanlyConnected).
+    // guider (PHD2, not on the module) answers true (EquipmentReconnector.IsCleanlyConnected).
     private bool IsCleanlyConnected(DeviceType type) => _reconnector?.IsCleanlyConnected(type) ?? true;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

@@ -29,7 +29,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>ADR 0011 rule 2 — the fault ladder asks a device's lifecycle whether a Connected device read
     /// cleanly since the connect, through one type-free seam, for every device on the module (not the mount
-    /// alone). A device not on the module yet keeps "Connected is recovered". No test here dials a port.</summary>
+    /// alone). The Guider (PHD2, not Alpaca) is off the module and keeps "Connected is recovered". No test here dials a port.</summary>
     [TestFixture]
     public class CleanReadGateTest {
 
@@ -89,6 +89,8 @@ namespace OpenAstroAra.Test {
                     typeof(IRotatorService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
                 "Dome" => Wire(new DomeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeDomeDevice()) },
                     typeof(IDomeService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
+                "Camera" => Wire(new CameraService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeCameraDevice()) },
+                    typeof(ICameraService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
                 "Telescope" => Wire(new TelescopeService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeTelescopeDevice()) },
                     typeof(ITelescopeService), s => s.GetAsync(ct).Result?.State, s => s.ConnectAsync(request, null, ct)),
                 "FilterWheel" => Wire(new FilterWheelService { RefreshPeriod = Tick, DeviceFactory = _ => Track(new FakeFilterWheelDevice()) },
@@ -108,7 +110,7 @@ namespace OpenAstroAra.Test {
         }
 
         public static readonly string[] OnTheModule =
-            ["Rotator", "Dome", "Telescope", "FilterWheel", "Focuser", "FlatDevice", "ObservingConditions", "SafetyMonitor", "Switch"];
+            ["Rotator", "Dome", "Telescope", "Camera", "FilterWheel", "Focuser", "FlatDevice", "ObservingConditions", "SafetyMonitor", "Switch"];
 
         // SafetyMonitor is not here: a failed read trips it to Error at once (ADR 0011 rule 3), so it is never
         // Connected-and-unreadable; the held-read case below covers its gate.
@@ -176,12 +178,12 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_type_whose_service_is_off_the_module_keeps_Connected_as_recovered() {
             var services = new Mock<IServiceProvider>();
-            services.Setup(p => p.GetService(typeof(ICameraService))).Returns(new Mock<ICameraService>().Object);
+            services.Setup(p => p.GetService(typeof(IGuiderService))).Returns(new Mock<IGuiderService>().Object);
             var reconnector = new EquipmentReconnector(services.Object, new Mock<IEquipmentSelectionStore>().Object,
                 NullLogger<EquipmentReconnector>.Instance);
 
-            Assert.That(reconnector.IsCleanlyConnected(DeviceType.Camera), Is.True, "a service with no lifecycle module has no gate");
-            Assert.That(reconnector.IsCleanlyConnected(DeviceType.Guider), Is.True, "no service at all");
+            Assert.That(reconnector.IsCleanlyConnected(DeviceType.Guider), Is.True, "the guider (PHD2) has no lifecycle module, so no gate");
+            Assert.That(reconnector.IsCleanlyConnected(DeviceType.Camera), Is.True, "no service at all");
         }
 
         // ── Item 4: a driver that lacks its essential read must not hold the gate shut forever ──

@@ -1,0 +1,3 @@
+### Changed (equipment)
+
+- **The camera moves onto the shared device lifecycle, so all ten Alpaca devices share one connect, probe, read-health and clean-read path** (#1696): the camera now connects, refreshes, trips on a lost connection and records your connect or disconnect through the same lifecycle module as the other nine, so a camera you disconnected by hand is left alone by recovery. After a reconnect the fault ladder counts the camera as recovered only once a refresh has read its state cleanly, not as soon as it answers Connected. A camera driver with no CameraState read still counts as clean. Exposures, aborts, cooler handling and the lost-camera pause are unchanged; only the guider (PHD2) stays off the module.

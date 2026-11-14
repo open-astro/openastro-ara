@@ -86,6 +86,8 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private readonly Func<TDevice, Action>? _prepareSession;
     private readonly Action? _onConnected;
     private readonly bool _failedReadTrips;
+    private readonly Func<bool>? _skipTick;
+    private readonly Func<bool>? _stopOnTeardown;
     private readonly ILogger _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
@@ -113,6 +115,10 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// the action it returns runs under the gate on adopt, before the device reads Connected.</param>
     /// <param name="onConnected">Optional, runs off the gate once a connect adopted and its seed read
     /// finished, while the device still reads Connected (Switch: the late cooling-fan catch-up).</param>
+    /// <param name="skipTick">Optional: true makes a refresh tick do nothing (no probe, no read). The Camera waits out
+    /// its blocking image download this way, since a serializing Alpaca bridge queues every request behind it.</param>
+    /// <param name="stopOnTeardown">Optional: false makes a teardown skip <see cref="IDeviceAdapter.Stop"/>. The Camera
+    /// aborts its exposure only while a capture is in flight (ZWO and QHY drivers throw from AbortExposure when idle).</param>
     /// <param name="failedReadTrips">A failed essential read or a failed connection probe is a lost connection:
     /// the device goes to Error with a Disconnected fault on that read or probe, instead of a degraded episode
     /// or a lost streak after their thresholds (SafetyMonitor, ADR 0011 rule 3: a dead monitor is never read as safe).</param>
@@ -120,7 +126,10 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             Func<DiscoveredDeviceDto, TDevice> createDevice, Func<TDevice, DeviceRead> read,
             Action resetSessionLocked, int failedReadThreshold, ILogger logger,
             EquipmentEventPublisher? events, IEquipmentFaultSink? faults,
-            Func<TDevice, Action>? prepareSession = null, Action? onConnected = null, bool failedReadTrips = false) {
+            Func<TDevice, Action>? prepareSession = null, Action? onConnected = null, bool failedReadTrips = false,
+            Func<bool>? skipTick = null, Func<bool>? stopOnTeardown = null) {
+        _skipTick = skipTick;
+        _stopOnTeardown = stopOnTeardown;
         _owner = owner;
         _type = type;
         _noun = noun;
@@ -321,6 +330,9 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The device class's reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
     private void RefreshPass() {
+        if (_skipTick?.Invoke() == true) {
+            return;
+        }
         try {
             TDevice? client;
             lock (Gate) {
@@ -439,7 +451,9 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         try {
             // Interrupt any in-flight motion so a disconnect mid-move fails fast rather than waiting
             // out the full ASCOM timeout.
-            client.Stop();
+            if (_stopOnTeardown?.Invoke() != false) {
+                client.Stop();
+            }
         } catch (Exception ex) {
             DeviceLifecycleLog.TeardownIgnored(_logger, ex, _type);
         }

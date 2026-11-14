@@ -72,12 +72,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public CameraInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var runtime = _runtime;
             return new CameraInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = _lifecycle.Device?.Name ?? string.Empty,
+                DeviceId = _lifecycle.Device?.UniqueId ?? string.Empty,
                 Temperature = connected ? runtime.CcdTemperature ?? double.NaN : double.NaN,
                 CoolerOn = connected && runtime.CoolerOn,
                 CoolerPower = connected ? runtime.CoolerPowerPct ?? double.NaN : double.NaN,
@@ -105,9 +105,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         if (StoreEjected(out var ejectedDir)) {
             throw new StoreUnavailableException(StoreMissingMessage(ejectedDir));
         }
-        AlpacaCamera? client;
+        ICameraDevice? client;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is null) {
             throw new CameraUnavailableException(CameraNotConnectedMessage);
@@ -150,7 +150,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // (ApplyExposureSettings/StartExposure) against a stale connection — fast-fail instead.
             // (_frames needs no re-check: it's set once in the constructor and never reassigned.)
             lock (_gate) {
-                client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+                client = _lifecycle.Live;
             }
             if (client is null) {
                 throw new CameraUnavailableException(CameraNotConnectedMessage);
@@ -189,9 +189,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     // The connection each capture attempt runs on: re-read per attempt, so the retry after a lost
     // exposure uses the client a reconnect put in place rather than the superseded one.
-    private AlpacaCamera CurrentClientOrThrow(string? nextStep = null) {
+    private ICameraDevice CurrentClientOrThrow(string? nextStep = null) {
         lock (_gate) {
-            return !_disposed && _state == EquipmentConnectionState.Connected && _client is { } c
+            return _lifecycle.Live is { } c
                 ? c
                 : throw new CameraUnavailableException(CameraNotConnectedMessage, nextStep, null);
         }
@@ -244,7 +244,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     // A camera that can't report its minimum, or reports 0, keeps the step's exposure.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "ExposureMin is an optional ASCOM read; any driver/HTTP failure means 'unknown' and the step's exposure stands.")]
-    private double BiasExposureSec(AlpacaCamera client, double requested) {
+    private double BiasExposureSec(ICameraDevice client, double requested) {
         double min;
         var readThisConnection = false;
         lock (_gate) {
@@ -268,7 +268,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     // ExposureMin read straight from the driver when the cached capabilities lack it, with the
     // connection it was read on.
-    private (AlpacaCamera Client, double Min)? _exposureMinRead;
+    private (ICameraDevice Client, double Min)? _exposureMinRead;
 
     // NINA ImageTypes → §28 catalog FrameType. SNAPSHOT counts as a light; DARKFLAT (used by some
     // NINA flows) coarsens to the catalog's Dark — the FrameType enum has no DarkFlat — while the
@@ -337,7 +337,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         // which reads it in Stretch/DetectStars); the solve path never calls those and SaveToDisk
         // does not touch it — so null is fine.
         var profile = _legacyProfile?.Invoke();
-        var cameraName = _device?.Name;
+        var cameraName = _lifecycle.Device?.Name;
         // The AutoSTF render is ~50-200 ms on a full frame; keep it off the caller's thread.
         return await Task.Run(() => RenderForSolve(frame, request, isBayered, cameraName, profile), token)
             .ConfigureAwait(false);
@@ -421,9 +421,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         Task.FromException<IExposureData>(new NotSupportedException("raw mediator Download is not wired; captures go through IImagingMediator.CaptureImage"));
 
     void ICameraMediator.AbortExposure() {
-        AlpacaCamera? client;
+        ICameraDevice? client;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is not null) {
             TryAbortQuietly(client);
@@ -496,7 +496,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     public double TargetTemp {
         get {
             lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
+                if (_lifecycle.Live is null) {
                     return double.NaN;
                 }
                 if (!double.IsNaN(_coolingTargetC)) {
@@ -511,7 +511,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         get {
             double temperature;
             lock (_gate) {
-                temperature = _state == EquipmentConnectionState.Connected ? _runtime.CcdTemperature ?? double.NaN : double.NaN;
+                temperature = _lifecycle.State == EquipmentConnectionState.Connected ? _runtime.CcdTemperature ?? double.NaN : double.NaN;
             }
             var target = TargetTemp;
             return !double.IsNaN(temperature) && !double.IsNaN(target) && Math.Abs(temperature - target) <= AtTargetToleranceC;
@@ -649,7 +649,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             ct.ThrowIfCancellationRequested();
             bool coolerKnownOn;
             lock (_gate) {
-                coolerKnownOn = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
+                coolerKnownOn = _lifecycle.State == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
             }
             var syncFan = !wrote || !coolerKnownOn || sinceFanSync >= CoolingFanSyncInterval;
             await SetCoolerAsync(enabled: true, step, syncFan, ct).ConfigureAwait(false);
@@ -754,7 +754,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         bool connected;
         CameraCapabilitiesDto? caps;
         lock (_gate) {
-            connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            connected = _lifecycle.Live is not null;
             caps = _capabilities;
         }
         if (!connected) {
@@ -811,9 +811,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported or failing temperature/power/cooler read (or a client disposed by a concurrent disconnect) degrades to unknown, which the stall timeout then bounds. Same pattern as ReadRuntime.")]
     private async Task<CoolingTelemetry?> ReadCoolingTelemetryAsync() {
-        AlpacaCamera? client;
+        ICameraDevice? client;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is null) {
             return null;
