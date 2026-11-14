@@ -36,26 +36,27 @@ const _running = SequenceRunStateInfo(
 );
 
 void main() {
-  test('Pause tapped again after a failed pause leaves one error pill', () async {
-    final api = _Api();
-    final c = ProviderContainer(
-      overrides: [
-        sequenceApiProvider.overrideWithValue(api),
-      ],
-    );
-    addTearDown(c.dispose);
-    c.read(selectedSequenceIdProvider.notifier).select('s1');
-    await c.read(sequenceRunStateProvider.future);
+  test(
+    'Pause tapped again after a failed pause leaves one error pill',
+    () async {
+      final api = _Api();
+      final c = ProviderContainer(
+        overrides: [sequenceApiProvider.overrideWithValue(api)],
+      );
+      addTearDown(c.dispose);
+      c.read(selectedSequenceIdProvider.notifier).select('s1');
+      await c.read(sequenceRunStateProvider.future);
 
-    final run = c.read(simpleRunProvider.notifier);
-    await run.pause();
-    await run.pause();
-    await run.pause();
+      final run = c.read(simpleRunProvider.notifier);
+      await run.pause();
+      await run.pause();
+      await run.pause();
 
-    expect(api.pauses, 3, reason: 'each tap reached the daemon');
-    final errors = c
-        .read(simpleMessagesProvider)
-        .where((m) => m.kind == SimpleMessageKind.error);
-    expect(errors, hasLength(1));
-  });
+      expect(api.pauses, 3, reason: 'each tap reached the daemon');
+      final errors = c
+          .read(simpleMessagesProvider)
+          .where((m) => m.kind == SimpleMessageKind.error);
+      expect(errors, hasLength(1));
+    },
+  );
 }

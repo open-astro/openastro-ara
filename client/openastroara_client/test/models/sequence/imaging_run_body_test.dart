@@ -435,19 +435,42 @@ void main() {
       expect(steps[wait]['Temperature'], -10);
       expect(steps[wait]['WaitForTemperature'] ?? true, true);
       final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
-      expect(focus, greaterThan(wait), reason: 'the one autofocus runs on a cooled sensor (#1875)');
+      expect(
+        focus,
+        greaterThan(wait),
+        reason: 'the one autofocus runs on a cooled sensor (#1875)',
+      );
     });
 
     test('with a guider: slew, cool, start guiding, autofocus, first light (#1875)', () {
       final b = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
-          coolToC: -10, startGuiding: true, autofocusAfterTempChangeC: 1);
-      final steps = childrenOf(childrenOf(b).firstWhere((c) => c['Name'] == 'M31'));
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+        coolToC: -10,
+        startGuiding: true,
+        autofocusAfterTempChangeC: 1,
+      );
+      final steps = childrenOf(
+        childrenOf(b).firstWhere((c) => c['Name'] == 'M31'),
+      );
       final types = [for (final c in steps) c[r'$type']];
-      expect(types.where((t) => t == runAutofocusType), hasLength(1), reason: 'one autofocus per plan');
-      expect(types.where((t) => t == slewScopeToRaDecType), hasLength(1), reason: 'centred before guiding starts');
+      expect(
+        types.where((t) => t == runAutofocusType),
+        hasLength(1),
+        reason: 'one autofocus per plan',
+      );
+      expect(
+        types.where((t) => t == slewScopeToRaDecType),
+        hasLength(1),
+        reason: 'centred before guiding starts',
+      );
       int at(String t) => types.indexOf(t);
-      final firstLight = steps.indexWhere((c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType));
+      final firstLight = steps.indexWhere(
+        (c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType),
+      );
       expect(at(slewScopeToRaDecType), lessThan(at(coolCameraType)));
       expect(at(coolCameraType), lessThan(at(startGuidingType)));
       expect(at(startGuidingType), lessThan(at(runAutofocusType)));
