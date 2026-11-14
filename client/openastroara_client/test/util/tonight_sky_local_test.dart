@@ -48,6 +48,86 @@ void main() {
     );
   });
 
+  group('Tonight\'s Best for the rest of tonight (#1875 slice 6)', () {
+    const catalog = [
+      PlanningDso(
+        id: 'HIGH',
+        name: 'High',
+        type: 'G',
+        magnitude: 9,
+        raDeg: 135.0,
+        decDeg: 41.3,
+      ),
+      PlanningDso(
+        id: 'LOW',
+        name: 'Low',
+        type: 'G',
+        magnitude: 3,
+        raDeg: 135.0,
+        decDeg: -30.0,
+      ),
+    ];
+    List<TonightSkyObject> rank(DateTime at, {bool rest = true}) =>
+        computeTonightSkyLocal(
+          site: site,
+          optics: const OpticsSettings(),
+          atUtc: at,
+          catalog: catalog,
+          restOfNight: rest,
+        );
+
+    test('hours above 30° from now to dawn lead the order; one that never clears 30° has 0 and goes last', () {
+      final r = rank(DateTime.utc(2026, 1, 15, 3));
+      final quarters = [for (final o in r) (o.hoursLeft * 4).round()];
+      expect(
+        quarters,
+        [...quarters]..sort((a, b) => b.compareTo(a)),
+        reason: 'most hours left first',
+      );
+      expect(r.first.hoursLeft, greaterThan(3));
+      expect(r.firstWhere((o) => o.id == 'HIGH').hoursLeft, greaterThan(3));
+      expect(r.firstWhere((o) => o.id == 'LOW').hoursLeft, 0);
+      expect(
+        r.map((o) => o.id).toList().indexOf('HIGH'),
+        lessThan(r.map((o) => o.id).toList().indexOf('LOW')),
+      );
+    });
+
+    test('the hours left shrink as the night goes: it is re-ranked from the clock, not from last night', () {
+      final early = rank(DateTime.utc(2026, 1, 15, 3))
+          .firstWhere((o) => o.id == 'HIGH')
+          .hoursLeft;
+      final late = rank(DateTime.utc(2026, 1, 15, 8))
+          .firstWhere((o) => o.id == 'HIGH')
+          .hoursLeft;
+      expect(late, lessThan(early));
+    });
+
+    test('the plain ranking leaves hoursLeft at 0', () {
+      expect(
+        rank(
+          DateTime.utc(2026, 1, 15, 3),
+          rest: false,
+        ).every((o) => o.hoursLeft == 0),
+        isTrue,
+      );
+    });
+
+    test('restOfNightSpan runs from dark (or now) to the site dawn; hoursAboveInSpan counts 5-minute slots', () {
+      final now = DateTime.utc(2026, 1, 15, 3);
+      final span = restOfNightSpan(site, now)!;
+      expect(span.from, now);
+      expect(span.to, nightEnd(site, now));
+      final h = hoursAboveInSpan(span, 135.0, 41.3, site);
+      expect((h * 12) % 1, 0, reason: 'whole 5-minute slots');
+      expect(
+        restOfNightSpan(const SiteSettings(), now),
+        isNull,
+        reason: 'no site',
+      );
+    });
+  });
+
   group('the dawn stop (#1560)', () {
     double sun(DateTime t) =>
         sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg;

@@ -8942,6 +8942,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reload'**
   String get settingsSectionReload;
+
+  /// Plan sheet caption above the last targets imaged or searched (uppercase)
+  ///
+  /// In en, this message translates to:
+  /// **'RECENT'**
+  String get planRecent;
+
+  /// Recent target that never clears 30° tonight (second line, lower case)
+  ///
+  /// In en, this message translates to:
+  /// **'not up tonight'**
+  String get planNotUpTonight;
+
+  /// Picked target card: the target never reaches 30° before dawn
+  ///
+  /// In en, this message translates to:
+  /// **'Not above 30° tonight'**
+  String get planNotAbove30;
+
+  /// Picked target card: hours from now to dawn the target is above 30°
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h left above 30°'**
+  String planHoursLeft(String hours);
+
+  /// Plan warning: only this many of the typed frames fit before the target drops below 30° or dawn
+  ///
+  /// In en, this message translates to:
+  /// **'Fits {fits} of them before 30°/dawn'**
+  String planFramesFit(int fits);
 }
 
 class _AppLocalizationsDelegate

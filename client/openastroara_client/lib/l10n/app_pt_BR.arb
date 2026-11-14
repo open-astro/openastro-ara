@@ -1473,5 +1473,10 @@
   "settingsSectionNotLoaded": "Não carregado — estas configurações estão no seu setup e ele não respondeu.",
   "settingsSectionRetry": "Tentar de novo",
   "settingsSectionConflict": "Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).",
-  "settingsSectionReload": "Recarregar"
+  "settingsSectionReload": "Recarregar",
+  "planRecent": "RECENTES",
+  "planNotUpTonight": "não aparece esta noite",
+  "planNotAbove30": "Não passa dos 30° esta noite",
+  "planHoursLeft": "{hours} h restantes acima dos 30°",
+  "planFramesFit": "Cabem {fits} deles antes dos 30°/amanhecer"
 }

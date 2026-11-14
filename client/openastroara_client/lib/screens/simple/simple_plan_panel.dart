@@ -40,11 +40,12 @@ import '../../state/sky_atlas/dso_catalog_state.dart'
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../state/simple_recent_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
 import '../../util/tonight_sky_local.dart'
-    show altitudeDegAt, darkStart, nightEnd;
+    show altitudeDegAt, darkStart, hoursAboveInSpan, nightEnd;
 import '../../widgets/platform_context_menu.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show suggestedSubSeconds;
@@ -1030,18 +1031,34 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final canSchedule = ref.watch(simpleScheduleAllowedProvider);
     final startAt = _startNow || !canSchedule ? null : _pickedStart ?? dark;
     final queueOff = sel == null || sel.neverRises || run.busy;
-    final best = (ref.watch(tonightSkyProvider).value ?? const [])
+    final best = (ref.watch(tonightsBestProvider).value ?? const [])
         .where((o) => o.maxAltitudeDeg > 0)
         .take(4)
         .toList();
+    final recent = ref.watch(simpleRecentProvider);
+    final site = ref.watch(siteSettingsProvider);
+    final span = ref.watch(simpleRestOfNightProvider);
+    double hoursOf(double raDeg, double decDeg) =>
+        span == null ? 0 : hoursAboveInSpan(span, raDeg, decDeg, site);
+    final selHours = sel == null
+        ? 0.0
+        : hoursOf(sel.raJ2000Hours * 15, sel.decJ2000Deg);
+    final fits = simpleFramesThatFit(steps, selHours);
+    bool picked(String name) =>
+        sel != null &&
+        (sel.name == name ||
+            sel.designations.any(
+              (d) => designationKey(d) == designationKey(name),
+            ));
     // A wide window puts the lists in a column beside the plan, so the sheet
     // stays short enough to clear the status pill.
     final wide =
-        best.isNotEmpty &&
+        (best.isNotEmpty || recent.isNotEmpty) &&
         editing == null &&
         MediaQuery.sizeOf(context).width >= _kTwoColumnWidth;
+    final tileWidth = wide ? _kListsWidth : (400 - AraSpace.s8) / 2;
     final lists = <Widget>[
-      // Tonight's best, from the full UI's ranking: one tap picks a target.
+      // Tonight's best, ranked for the rest of tonight: one tap picks a target.
       if (best.isNotEmpty) ...[
         Text(context.l10n.planTonightsBest, style: AraText.caption),
         Wrap(
@@ -1049,63 +1066,66 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           runSpacing: AraSpace.s8,
           children: [
             for (final o in best)
-              // 52 px at 1x, growing with the user's text size.
-              Semantics(
-                selected: sel?.name == o.name,
-                child: SizedBox(
-                  width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
-                  child: Material(
-                    color: sel?.name == o.name
-                        ? AraColors.selectionBg
-                        : AraColors.tileFill,
-                    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                    child: InkWell(
-                      key: Key('simple-run-suggestion-${o.name}'),
-                      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                      onTap: () => ref
-                          .read(planetariumSelectionProvider.notifier)
-                          .set(simpleSelectionOf(o)),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 52),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                o.name,
-                                style: kSimpleText.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  // White on the blue reads at 4.6:1.
-                                  color: sel?.name == o.name
-                                      ? AraColors.selectionFg
-                                      : null,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                simpleSuggestionLine(context.l10n, o),
-                                style: _dim.copyWith(
-                                  fontSize: AraFontSize.simpleCaption,
-                                  color: sel?.name == o.name
-                                      ? AraColors.selectionFg
-                                      : null,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+              _ListTile(
+                key: Key('simple-run-suggestion-${o.name}'),
+                width: tileWidth,
+                title: o.name,
+                line: simpleSuggestionLine(context.l10n, o),
+                selected: picked(o.name) || picked(o.id),
+                onTap: () => ref
+                    .read(planetariumSelectionProvider.notifier)
+                    .set(simpleSelectionOf(o)),
+              ),
+          ],
+        ),
+      ],
+      // The last targets imaged or searched; one that never clears 30°
+      // tonight stays, greyed.
+      if (recent.isNotEmpty) ...[
+        Text(context.l10n.planRecent, style: AraText.caption),
+        Wrap(
+          spacing: AraSpace.s8,
+          runSpacing: AraSpace.s8,
+          children: [
+            for (final (i, r) in recent.indexed)
+              _ListTile(
+                key: Key('simple-run-recent-$i'),
+                width: tileWidth,
+                title: r.name,
+                line: [
+                  MaterialLocalizations.of(context)
+                      .formatShortDate(r.when.toLocal()),
+                  if (hoursOf(r.raDeg, r.decDeg) <= 0)
+                    context.l10n.planNotUpTonight
+                  else
+                    context.l10n.planAltitudeUp(
+                      altitudeDegAt(
+                        r.raDeg,
+                        r.decDeg,
+                        latitudeDeg: site.latitudeDeg,
+                        longitudeDeg: site.longitudeDeg,
+                        utc: now.toUtc(),
+                      ).round(),
+                    ),
+                ].join(' · '),
+                selected: picked(r.name),
+                greyed: hoursOf(r.raDeg, r.decDeg) <= 0,
+                onTap: () => ref
+                    .read(planetariumSelectionProvider.notifier)
+                    .set(
+                      simplePickDso(
+                        ref,
+                        PlanningDso(
+                          id: r.name,
+                          name: r.name,
+                          type: '',
+                          magnitude: null,
+                          raDeg: r.raDeg,
+                          decDeg: r.decDeg,
                         ),
+                        designation: r.name,
                       ),
                     ),
-                  ),
-                ),
               ),
           ],
         ),
@@ -1122,6 +1142,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           Text(
             context.l10n.planEditTarget(run.targets[editing].name),
             style: _head,
+          ),
+        // The picked target, whatever list it came from.
+        if (sel != null && editing == null)
+          _TargetCard(
+            sel: sel,
+            hours: selHours,
+            onPickInSky: widget.onPickInSky,
           ),
         if (!wide && editing == null) ...lists,
         // Editing keeps the target: to change it, delete it and add another.
@@ -1170,47 +1197,19 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   setState(() => _suggesting = false);
                 },
               ),
-          Row(
-            children: [
-              Expanded(
-                child: sel == null
-                    ? Text(context.l10n.planSearchOrPick, style: _dim)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Wraps, never cut short: whole up to 2x text.
-                          Text(
-                            designationWithName(
-                              // The first catalog designation: the one it was
-                              // picked by, not a SIMBAD "NAME ..." identifier.
-                              sel.designations
-                                      .where(isCatalogDesignation)
-                                      .firstOrNull ??
-                                  '',
-                              sel.name,
-                            ),
-                            style: kSimpleText.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            simpleTargetStatus(sel, context.l10n),
-                            style: sel.belowHorizon
-                                ? kSimpleText.copyWith(
-                                    color: AraColors.accentBusy,
-                                  )
-                                : _dim,
-                          ),
-                        ],
-                      ),
-              ),
-              TextButton(
-                key: const Key('simple-run-pick-in-sky'),
-                onPressed: widget.onPickInSky,
-                child: Text(context.l10n.planPickInSky),
-              ),
-            ],
-          ),
+          if (sel == null)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(context.l10n.planSearchOrPick, style: _dim),
+                ),
+                TextButton(
+                  key: const Key('simple-run-pick-in-sky'),
+                  onPressed: widget.onPickInSky,
+                  child: Text(context.l10n.planPickInSky),
+                ),
+              ],
+            ),
         ],
         const Divider(height: 1),
         // The filters as chips: a tap adds a row, another takes it out (the
@@ -1323,6 +1322,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             Text(simpleRunDuration(seconds), style: _dim),
           ],
         ),
+        // Warns only; the typed count stays.
+        if (sel != null && fits < simplePlanTotal(steps))
+          Text(
+            context.l10n.planFramesFit(fits),
+            key: const Key('simple-run-frames-fit'),
+            style: kSimpleText.copyWith(color: AraColors.accentBusy),
+          ),
         // The full UI asks before Run; here it only warns (a permanent pier
         // or a daytime test runs fine unaligned).
         if (editing == null &&
@@ -1533,6 +1539,161 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         ),
         SizedBox(width: 400, child: main),
       ],
+    );
+  }
+}
+
+/// A target in one of Plan's lists: its name and a line under it; blue when
+/// picked, dimmed when [greyed] (it doesn't rise above 30° tonight).
+class _ListTile extends StatelessWidget {
+  const _ListTile({
+    super.key,
+    required this.width,
+    required this.title,
+    required this.line,
+    required this.selected,
+    this.greyed = false,
+    required this.onTap,
+  });
+
+  final double width;
+  final String title;
+  final String line;
+  final bool selected;
+  final bool greyed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? AraColors.selectionFg : null;
+    return Semantics(
+      selected: selected,
+      child: SizedBox(
+        width: width,
+        child: Opacity(
+          opacity: greyed && !selected ? 0.55 : 1,
+          child: Material(
+            color: selected ? AraColors.selectionBg : AraColors.tileFill,
+            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+              onTap: onTap,
+              // 52 px at 1x, growing with the user's text size.
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 52),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: kSimpleText.copyWith(
+                          fontWeight: FontWeight.w600,
+                          // White on the blue reads at 4.6:1.
+                          color: fg,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        line,
+                        style: _dim.copyWith(
+                          fontSize: AraFontSize.simpleCaption,
+                          color: fg,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The picked target at the top of Plan: art, name, altitude now and the
+/// hours it stays above 30° before dawn.
+class _TargetCard extends StatelessWidget {
+  const _TargetCard({
+    required this.sel,
+    required this.hours,
+    required this.onPickInSky,
+  });
+
+  final PlanetariumSelection sel;
+  final double hours;
+  final VoidCallback onPickInSky;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    // Altitude now (or when it rises), then the hours left tonight.
+    final status = [
+      sel.belowHorizon || sel.neverRises
+          ? simpleTargetStatus(sel, l)
+          : l.planAltitudeUp((sel.altDeg ?? 0).round()),
+      hours <= 0 ? l.planNotAbove30 : l.planHoursLeft(hours.toStringAsFixed(1)),
+    ].join(' · ');
+    return Container(
+      key: const Key('simple-run-target-card'),
+      padding: const EdgeInsets.only(left: AraSpace.s8),
+      decoration: BoxDecoration(
+        color: AraColors.selectionBg.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+      ),
+      child: Row(
+        spacing: AraSpace.s8,
+        children: [
+          // Decorative: the name beside it says it all.
+          ExcludeSemantics(
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                gradient: const RadialGradient(
+                  colors: [Color(0xFF3A4A66), Color(0xFF0E1118)],
+                ),
+              ),
+              child: const Icon(Icons.auto_awesome, size: 20),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Wraps, never cut short: whole up to 2x text.
+                Text(
+                  designationWithName(
+                    // The first catalog designation: the one it was picked
+                    // by, not a SIMBAD "NAME ..." identifier.
+                    sel.designations.where(isCatalogDesignation).firstOrNull ??
+                        '',
+                    sel.name,
+                  ),
+                  style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(status, style: _dim),
+              ],
+            ),
+          ),
+          TextButton(
+            key: const Key('simple-run-pick-in-sky'),
+            onPressed: onPickInSky,
+            child: Text(l.planPickInSky),
+          ),
+        ],
+      ),
     );
   }
 }
