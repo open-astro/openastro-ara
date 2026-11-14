@@ -31,6 +31,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,7 +62,8 @@ namespace OpenAstroAra.Test {
     /// Record 0015 rule 5, built on the section table of record 0012: every profile section a client can write
     /// answers a read with an <c>ETag</c> derived from the stored section, refuses a write whose <c>If-Match</c>
     /// names another copy with a 412 that writes nothing, and (until the daemon requires a version) still
-    /// accepts a write with no <c>If-Match</c>. The test walks <see cref="ProfileSections.All"/> and finds each
+    /// accepts a write with no <c>If-Match</c>. A write that changes the section moves the tag, so the copy
+    /// loaded before it is refused and a read answers the new tag. The test walks <see cref="ProfileSections.All"/> and finds each
     /// section's route by the DTO its PUT accepts, so a new section is covered without a new test.
     /// </summary>
     [TestFixture]
@@ -74,6 +76,44 @@ namespace OpenAstroAra.Test {
             "FocusCalibration", "CalibrationState", "TrackingCalibration",
             "SkyModelCalibration", "EquipmentIdentity", "FilterFocusOffsets",
         ];
+
+        /// <summary>One valid edit per routed section, applied to the body its GET returned. The walk PUTs it so
+        /// the stored copy really changes: a fixed tag, a tag hashed from the request body, or a route that reads
+        /// another section's tag all keep the same tag across a real write and fail there.</summary>
+        private static readonly Dictionary<string, Action<JsonObject>> Changes = new() {
+            ["ImagingDefaults"] = o => Bump(o, "exposure_seconds"),
+            ["Storage"] = o => Bump(o, "backup_retention_count"),
+            ["Notifications"] = o => Flip(o, "in_app_banner"),
+            ["Site"] = o => o["latitude_deg"] = -33.856784,
+            ["Filenames"] = o => Flip(o, "compress_darks_and_bias"),
+            ["SafetyPolicies"] = o => Flip(o, "auto_resume_when_safe"),
+            ["Autofocus"] = o => Bump(o, "steps"),
+            ["PlateSolve"] = o => Bump(o, "timeout_seconds"),
+            ["DiagnosticsMode"] = o => o["mode"] = "pause_on_critical",
+            ["Phd2"] = o => Flip(o, "dither_enabled"),
+            ["EquipmentConnection"] = o => Flip(o, "camera"),
+            ["StretchDefaults"] = o => Bump(o, "asinh_default_beta"),
+            ["Optics"] = o => Bump(o, "focal_length_mm"),
+            ["CameraElectronics"] = o => o["sensor_name"] = "IMX571",
+            ["FilterSet"] = o => o["filters"] = new JsonArray(new JsonObject { ["name"] = "Lum", ["kind"] = "l" }),
+            ["FilterWheelLabels"] = o => o["labels"] = new JsonArray("Lum", "Red", "Green", "Blue"),
+            ["CustomHorizon"] = o => o["points"] = new JsonArray(
+                new JsonObject { ["azimuth_deg"] = 0.0, ["altitude_deg"] = 12.0 },
+                new JsonObject { ["azimuth_deg"] = 180.0, ["altitude_deg"] = 15.0 }),
+            ["PolarAlign"] = o => Bump(o, "exposure_seconds"),
+            ["Unguided"] = o => Flip(o, "guard_enabled"),
+            ["GuiderAdvanced"] = o => Flip(o, "multi_star_enabled"),
+            ["FilterWheelPolicy"] = o => Flip(o, "home_on_first_connect"),
+            ["SavedTargets"] = o => o["targets"] = new JsonArray(new JsonObject {
+                ["name"] = "M 31", ["aliases"] = new JsonArray(), ["ra_deg"] = 10.6847, ["dec_deg"] = 41.2689,
+                ["source"] = "typed", ["saved_utc"] = "2026-11-14T00:00:00Z",
+            }),
+            ["CoolingFan"] = o => { o["device_id"] = "switch-1"; o["port_id"] = 2; },
+            ["Dome"] = o => Bump(o, "dome_radius_mm"),
+        };
+
+        private static void Bump(JsonObject o, string key) => o[key] = o[key]!.GetValue<double>() + 1;
+        private static void Flip(JsonObject o, string key) => o[key] = !(o[key]?.GetValue<bool>() ?? false);
 
         private sealed record Route(string Section, string Path);
 
@@ -134,6 +174,7 @@ namespace OpenAstroAra.Test {
             Assert.That(neither, Is.Empty, "a section with no PUT route must be listed as daemon-only, or the walk below skips it");
             Assert.That(routed.Intersect(DaemonOnly), Is.Empty, "a daemon-only section gained a PUT route: drop it from DaemonOnly");
             Assert.That(_routes, Has.Count.GreaterThanOrEqualTo(24));
+            Assert.That(Changes.Keys, Is.EquivalentTo(routed), "every routed section needs one edit in Changes, and only those");
         }
 
         [Test]
@@ -171,6 +212,41 @@ namespace OpenAstroAra.Test {
                 using (var unversioned = await Put(path, body, null)) {
                     if (unversioned.StatusCode != HttpStatusCode.OK) {
                         failures.Add($"{section} PUT {path} with no If-Match: {(int)unversioned.StatusCode}, want 200 until a version is required");
+                    }
+                }
+
+                // A real write moves the tag; the copy loaded before it is then stale; a read answers the new tag.
+                var changed = JsonNode.Parse(body)!.AsObject();
+                Changes[section](changed);
+                string? moved;
+                using (var write = await Put(path, changed.ToJsonString(), etag)) {
+                    moved = write.Headers.ETag?.ToString();
+                    if (write.StatusCode != HttpStatusCode.OK || string.IsNullOrEmpty(moved) || moved == etag) {
+                        failures.Add($"{section} PUT {path} of a changed section: {(int)write.StatusCode}, ETag {etag} -> '{moved}', want 200 and a new tag");
+                        continue;
+                    }
+                }
+                writesBefore = _counter.WriteCalls;
+                using (var old = await Put(path, body, etag)) {
+                    if (old.StatusCode != HttpStatusCode.PreconditionFailed) {
+                        failures.Add($"{section} PUT {path} with the tag from before the write: {(int)old.StatusCode}, want 412");
+                    }
+                }
+                if (_counter.WriteCalls != writesBefore) {
+                    failures.Add($"{section} PUT {path} with the tag from before the write wrote to the store");
+                }
+                using (var reread = await _http.GetAsync(new Uri(path, UriKind.Relative))) {
+                    var now = reread.Headers.ETag?.ToString();
+                    if (now != moved) {
+                        failures.Add($"{section} GET {path} after the write: ETag '{now}', want {moved}");
+                    }
+                    if (await reread.Content.ReadAsStringAsync() == body) {
+                        failures.Add($"{section}: the edit in Changes did not change the stored section");
+                    }
+                }
+                using (var any = await Put(path, body, "*")) {
+                    if (any.StatusCode != HttpStatusCode.OK) {
+                        failures.Add($"{section} PUT {path} with If-Match *: {(int)any.StatusCode}, want 200");
                     }
                 }
             }
