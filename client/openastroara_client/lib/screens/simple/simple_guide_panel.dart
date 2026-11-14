@@ -296,25 +296,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                 ],
               ),
             ),
-            // The guide camera's exposure, picked as Preview's; set live.
-            SimplePresetTile<int>(
-              key: const Key('simple-guide-exposure'),
-              label: l10n.previewExposure,
-              value: phd2.guideExposureMs,
-              options: [
-                for (final ms in guideExposureChoicesMs)
-                  if (ms >= 200 && ms <= 15000) ms,
-              ],
-              format: (ms) => ms <= 0
-                  ? l10n.guideExposureOwn
-                  : formatExposure(Duration(milliseconds: ms)),
-              onSelected: (ms) => simpleSaveGuider(
-                context,
-                ref,
-                (p) => p.setGuideExposureMs(ms),
-                live: true,
-              ),
-            ),
+            const SimpleGuiderExposureTile(),
                     ],
                   ),
                 ),
@@ -1094,6 +1076,39 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
         ),
       ),
       percent,
+    );
+  }
+}
+
+/// "2 s", or "The guider's own" while none is set: the guider's exposure as
+/// Simple Mode writes it.
+String simpleGuiderExposureText(AppLocalizations l10n, int ms) =>
+    ms <= 0 ? l10n.guideExposureOwn : formatExposure(Duration(milliseconds: ms));
+
+/// The guider's exposure, set live: what its loop and its guiding run at.
+/// Shared by Guide and Preview › Guide, whose shutter loops the guider
+/// (#1884 review).
+class SimpleGuiderExposureTile extends ConsumerWidget {
+  const SimpleGuiderExposureTile({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return SimplePresetTile<int>(
+      key: const Key('simple-guide-exposure'),
+      label: l10n.previewExposure,
+      value: ref.watch(phd2SettingsProvider.select((p) => p.guideExposureMs)),
+      options: [
+        for (final ms in guideExposureChoicesMs)
+          if (ms >= 200 && ms <= 15000) ms,
+      ],
+      format: (ms) => simpleGuiderExposureText(l10n, ms),
+      onSelected: (ms) => simpleSaveGuider(
+        context,
+        ref,
+        (p) => p.setGuideExposureMs(ms),
+        live: true,
+      ),
     );
   }
 }

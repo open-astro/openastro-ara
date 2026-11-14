@@ -265,7 +265,39 @@ void main() {
     expect(find.byType(FilterDropdown), findsNothing);
     expect(find.text('Loop'), findsNothing);
     expect(find.text('Single'), findsNothing);
-    expect(find.text('2 s'), findsOneWidget, reason: 'the guide exposure, 2 s to start');
+    expect(find.text("The guider's own"), findsOneWidget, reason: 'the guider keeps its own exposure until one is set');
+  });
+
+  testWidgets("Preview › Guide's Exposure is the guider's, which its loop uses (#1884 review)", (tester) async {
+    await _pump(tester, Column(children: [
+      const SimpleSettingsPopover(),
+      const SimpleInfoPanel(),
+      Consumer(builder: (context, ref, _) => Text(simpleSettingsSummary(context, ref), key: const Key('caption'))),
+    ]));
+    _c.read(phd2SettingsProvider.notifier).setGuideExposureMs(4000);
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-guide-exposure')), matching: find.text('4 s')),
+        findsOneWidget, reason: 'the tile shows and sets the exposure the plain loop runs at');
+    expect(find.byKey(const Key('simple-exposure')), findsNothing, reason: 'no focus-loop exposure beside this shutter');
+    expect(tester.widget<Text>(find.byKey(const Key('caption'))).data, contains('4 s'));
+    expect(find.text('4 s'), findsNWidgets(2), reason: 'the tile and the Info tile agree');
+  });
+
+  testWidgets("the guider's own loop leaves the Guide row usable and locks Main (#1884 review)", (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), runtime: 'looping');
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: _row('guide'), matching: find.text('ZWO ASI120MM Mini')), findsOneWidget,
+        reason: 'the loop Preview started is not a reason to stop the guider');
+    const why = "Stop the guide camera's frames first.";
+    expect(find.descendant(of: _row('main'), matching: find.text(why)), findsOneWidget);
+    await tester.tap(_row('main'), warnIfMissed: false);
+    await tester.pump();
+    expect(_c.read(previewCameraProvider), PreviewCamera.guide, reason: 'leaving would strand the loop with no stop');
+    await tester.pump(kSimpleResultLife);
   });
 
   testWidgets("with Guide picked the shutter loops the guider's plain frames, not the focus loop "

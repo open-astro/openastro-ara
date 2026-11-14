@@ -64,9 +64,11 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
-    show simpleGuiderColour, simpleGuiderPendingProvider;
-import 'simple_focus_panel.dart'
-    show kSimpleGuideExposures, simpleGuideExposureProvider;
+    show
+        SimpleGuiderExposureTile,
+        simpleGuiderColour,
+        simpleGuiderExposureText,
+        simpleGuiderPendingProvider;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
@@ -188,9 +190,10 @@ class _PreviewShot extends Notifier<PreviewShot> {
 /// "Guide" over its own exposure and gain.
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
-    final seconds = ref.watch(simpleGuideExposureProvider).round();
-    final gain = ref.watch(phd2SettingsProvider).guideCameraGain;
-    return '${context.l10n.focusScopeGuide}\n$seconds s · $gain';
+    // The guider's own exposure: the one Preview › Guide's loop runs at.
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
+    return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
@@ -375,9 +378,11 @@ class _GuideInfoTiles extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final status = ref.watch(guideFocusProvider.select((g) => g.status));
-    final seconds = status.active
-        ? status.exposureSec
-        : ref.watch(simpleGuideExposureProvider);
+    // A focus loop found running reports its own exposure; otherwise the
+    // frames are the guider's loop, at the guider's exposure.
+    final guiderMs = ref.watch(
+      phd2SettingsProvider.select((p) => p.guideExposureMs),
+    );
     final gain = ref.watch(
       phd2SettingsProvider.select((p) => p.guideCameraGain),
     );
@@ -387,7 +392,11 @@ class _GuideInfoTiles extends ConsumerWidget {
         (l10n.previewStars, status.latest?.stars.toString() ?? '—'),
         (
           l10n.previewExposure,
-          formatExposure(Duration(milliseconds: (seconds * 1000).round())),
+          status.active
+              ? formatExposure(
+                  Duration(milliseconds: (status.exposureSec * 1000).round()),
+                )
+              : simpleGuiderExposureText(l10n, guiderMs),
         ),
         (l10n.deviceGain, '$gain %'),
       ],
@@ -536,14 +545,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[
-            SimplePresetTile<double>(
-              key: const Key('simple-exposure'),
-              label: context.l10n.previewExposure,
-              value: ref.watch(simpleGuideExposureProvider),
-              options: kSimpleGuideExposures,
-              format: (s) => '${s.round()} s',
-              onSelected: ref.read(simpleGuideExposureProvider.notifier).set,
-            ),
+            // The shutter beside it loops the guider, at the guider's
+            // exposure (#1884 review).
+            const SimpleGuiderExposureTile(),
             const SimpleGuideGainSlider(),
           ] else ...[
             SimplePresetTile<Duration>(
@@ -618,14 +622,16 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final guideActive = ref.watch(
       guideFocusProvider.select((g) => g.status.active),
     );
+    // The guider's plain loop is Preview › Guide's own (#1875 slice 3).
+    final running = guideActive || simpleGuideLooping(guider);
     // A guide loop already running keeps its row: its stop is reached there.
     final blocked =
-        guideFocusBlocker(l10n, guider, active: guideActive) ??
-        (ref.watch(mainCameraBusyProvider) && !guideActive
+        guideFocusBlocker(l10n, guider, active: running) ??
+        (ref.watch(mainCameraBusyProvider) && !running
             ? l10n.shellMainCameraBusy
             : null);
     // Leaving Guide while its loop runs would strand it with no stop.
-    final lockedMain = guideActive ? l10n.previewStopGuideFrames : null;
+    final lockedMain = running ? l10n.previewStopGuideFrames : null;
     Widget row(
       PreviewCamera value,
       String id,
