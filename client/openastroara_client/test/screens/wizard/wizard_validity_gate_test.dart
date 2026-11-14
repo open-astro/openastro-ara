@@ -143,6 +143,7 @@ void main() {
     testWidgets(
       'the wizard footer keeps the Skip text readable at 390 px in $locale',
       (tester) async {
+        expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
         await _pumpShell(tester, size: const Size(390, 844), locale: locale);
         final skip = lookupAppLocalizations(locale).wizardSkipDefaults;
         expect(
@@ -150,7 +151,8 @@ void main() {
           greaterThanOrEqualTo(100),
         );
       },
-      skip: !hasFonts,
+      // A dev box without the SDK fonts skips; CI must run it.
+      skip: !hasFonts && !Platform.environment.containsKey('CI'),
     );
   }
 

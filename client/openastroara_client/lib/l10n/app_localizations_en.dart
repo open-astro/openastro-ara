@@ -5768,9 +5768,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'AlpacaBridge is ARA\'s equipment hub. It should have been installed alongside ARA Core via apt. If it wasn\'t, install it on Ara host, then retry:';
 
   @override
-  String get wizardDiscoveryInstallCommand => 'sudo apt install alpaca-bridge';
-
-  @override
   String wizardDiscoveryDetails(String details) {
     return 'Details: $details';
   }

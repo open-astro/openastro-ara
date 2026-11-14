@@ -340,11 +340,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                     color: AraColors.bgPrimary,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(context.l10n.wizardDiscoveryInstallCommand,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(fontFamily: 'monospace')),
+                  child: Text(
+                    'sudo apt install alpaca-bridge', // l10n-ok
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontFamily: 'monospace'),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(context.l10n.wizardDiscoveryDetails('$_result'),

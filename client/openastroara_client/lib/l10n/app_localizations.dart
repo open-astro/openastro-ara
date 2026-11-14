@@ -9735,12 +9735,6 @@ abstract class AppLocalizations {
   /// **'AlpacaBridge is ARA\'s equipment hub. It should have been installed alongside ARA Core via apt. If it wasn\'t, install it on Ara host, then retry:'**
   String get wizardDiscoveryNotDetectedBody;
 
-  /// Wizard step 2: the shell command to install the bridge (never translated)
-  ///
-  /// In en, this message translates to:
-  /// **'sudo apt install alpaca-bridge'**
-  String get wizardDiscoveryInstallCommand;
-
   /// Wizard step 2: raw detection result
   ///
   /// In en, this message translates to:

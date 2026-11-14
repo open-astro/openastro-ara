@@ -1606,7 +1606,6 @@
   "wizardDiscoveryRetryDetection": "Detectar de novo",
   "wizardDiscoveryNotDetected": "AlpacaBridge não detectado.",
   "wizardDiscoveryNotDetectedBody": "O AlpacaBridge é o hub de equipamentos do ARA. Ele deveria ter sido instalado junto com o ARA Core via apt. Se não foi, instale-o no host do Ara e tente de novo:",
-  "wizardDiscoveryInstallCommand": "sudo apt install alpaca-bridge",
   "wizardDiscoveryDetails": "Detalhes: {details}",
   "wizardDiscoverySkipTipOn": "Continuar com o endereço acima; a detecção será ignorada.",
   "wizardDiscoverySkipTipOff": "Digite o host:porta da sua ponte acima para ativar.",

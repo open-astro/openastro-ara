@@ -7428,10 +7428,6 @@
   "@wizardDiscoveryNotDetectedBody": {
     "description": "Wizard step 2: failure explanation, followed by an install command"
   },
-  "wizardDiscoveryInstallCommand": "sudo apt install alpaca-bridge",
-  "@wizardDiscoveryInstallCommand": {
-    "description": "Wizard step 2: the shell command to install the bridge (never translated)"
-  },
   "wizardDiscoveryDetails": "Details: {details}",
   "@wizardDiscoveryDetails": {
     "description": "Wizard step 2: raw detection result",
