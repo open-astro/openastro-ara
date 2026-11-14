@@ -131,6 +131,19 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
+    public async Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct) {
+        // The tree while a run holds one (live edits change it), the last counts it kept at release for a
+        // finished run still retained, else the stored body (queued, never started, or evicted).
+        if (_runs.TryGetValue(id, out var run) && run.PlanSnapshot() is { } snap) {
+            return new SequencePlanDto(id, run.RunId, snap.Targets);
+        }
+        var dto = await (_sequencesResolver?.Invoke()?.GetAsync(id, ct) ?? Task.FromResult<SequenceDto?>(null)).ConfigureAwait(false);
+        if (dto is null || !_deserializer.TryDeserialize(dto.Body, out var top, out _) || top is null) {
+            return null;
+        }
+        return new SequencePlanDto(id, run?.RunId, SequencePlanBuilder.Build(top).Targets);
+    }
+
     public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
         // A generated flats or dark-library run has no lights to calibrate: asking "capture
         // calibration frames tonight?" about it (and queuing flats of the flats) is the prompt that
@@ -1288,6 +1301,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["frames_captured"] = run.FramesCaptured,
                 ["stop_after_frame"] = run.StopAfterFrame,
             };
+            // #1875 — a client re-reads the plan when either changes.
+            var plan = run.PlanSnapshot();
+            payload["plan_frames_done"] = plan?.FramesDone ?? 0;
+            payload["current_block_name"] = plan?.CurrentBlockName;
             // #1747 — the meridian wait starts mid-run, so its reason rides the progress frame too.
             var (reasonCode, reasonText, meridianWaitSecondsLeft) = run.Reason;
             payload["reason_code"] = reasonCode;
@@ -1535,10 +1552,28 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // #1068 — the tree is released at run end; keep its final estimate so a
                     // terminal run state still reports the total (and remaining = what was left).
                     _finalEstimate = EstimatedSecondsLocked(fresh: true);
+                    if (_bodyTop is not null) {
+                        var last = SequencePlanBuilder.Build(_bodyTop);
+                        _finalPlan = last with { CurrentBlockName = null };
+                    }
                 }
                 _root = root;
                 _bodyTop = bodyTop ?? root;
             }
+        }
+
+        private SequencePlanBuilder.Plan? _finalPlan;
+
+        /// <summary>#1875 — the plan read off the live tree; after release, the last one read (counts as the run left them).</summary>
+        public SequencePlanBuilder.Plan? PlanSnapshot() {
+            ISequenceContainer? top;
+            lock (_gate) {
+                top = _bodyTop;
+                if (top is null) {
+                    return _finalPlan;
+                }
+            }
+            return SequencePlanBuilder.Build(top);
         }
 
         private (double? Total, double? Remaining) _finalEstimate;
@@ -1813,7 +1848,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     ReasonText: _reasonText,
                     MeridianWaitSecondsLeft: _meridianWaitSecondsLeft);
             }
-            return dto with { MeridianFlip = MeridianFlipStatus() };
+            var plan = PlanSnapshot();
+            return dto with { MeridianFlip = MeridianFlipStatus(), PlanFramesDone = plan?.FramesDone ?? 0, CurrentBlockName = plan?.CurrentBlockName };
         }
     }
 }

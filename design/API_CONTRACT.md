@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-14 — #1875 the daemon serves the queued plan: `GET /sequences/{id}/plan`
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/plan` (`SequencePlanDto`, `SequencePlanTargetDto`, `SequencePlanRowDto`); `SequenceRunStateDto.plan_frames_done` and `.current_block_name`; the same two keys on the `sequence.progress` WebSocket payload.
+
+**Decision:** the queued plan is read off the rig, so any client rebuilds Simple Mode's queue instead of relying on the client that queued it. The route returns `{sequence_id, run_id?, targets[]}`; each target is `{name, calibration, ra_deg?, dec_deg?, gain?, flats, dawn_provider?, rows[]}` and each row `{filter_name?, exposure_seconds?, frames_total, frames_done}`. Entries are the child containers of the body's top, in queue order; the root children named `Flats` and `Calibration` are entries with `calibration: true` and no position. A row is a loop container (its `LoopCondition.Iterations` is `frames_total`, its `CompletedIterations` clamped to that is `frames_done`) or, in a calibration entry, a flat set (`FrameCount`, done once finished); its filter is the last `SwitchFilter` before it. `ra_deg`/`dec_deg` are J2000 degrees from the block's horizon condition (else a DSO container's target); an unset position is null. `gain` is the first light exposure's gain, null for the profile default (-1). `flats` is `none`, `after_target` (a flat set in the block) or `end_of_night`: the block holds an `Annotation` whose text is exactly `Flats: end of night`, the one place the rig records that choice. `dawn_provider` is the NINA `$type` of the block's `TimeCondition` provider. While a run holds a tree the route reads it (live edits show); a finished run still retained serves the counts it left; else it reads the stored body, so a queue that has not started is served too. An unknown sequence is a 404 problem. `plan_frames_done` is the sum of every served row's `frames_done`; `current_block_name` is the entry whose block holds the running leaf, null when none does (the run's own start and end steps), and unlike `current_target_name` it names a target-less block. A client re-reads the plan when either changes.
+
+**Reasoning:** the session's frame count (`frames_captured`) says nothing about one loop's count (rig night 2026-11-13: a loop read 0/240 while the session had filed 16). The plan is a read-only view like `SequenceRunStateDto`, never a sequence format (ADR 0018): NINA's JSON stays the only one, and the marker is an ordinary NINA item. Two scalars on the existing progress frame need no new event.
+
+**Spec ref:** `Services/SequencePlanBuilder.cs`, `Services/SequencerService.cs` (`GetPlanAsync`, `RunState.PlanSnapshot`), `Endpoints/SequenceEndpoints.cs`.
+
+**Related:** #1875 slice 1; tests `SequencePlanTest`, `SequencerServiceTest.Progress_frames_carry_the_plans_own_count_and_the_block_it_runs`.
+
+---
+
 ## 2026-11-12 — #1757 the dark and bias library belongs to one camera
 
 **Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.

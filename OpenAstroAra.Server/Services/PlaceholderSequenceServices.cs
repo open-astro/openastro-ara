@@ -65,6 +65,9 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
+    // The placeholder runs no tree, so it has no plan to serve.
+    public Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct) => Task.FromResult<SequencePlanDto?>(null);
+
     public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
         var existing = _runs.GetValueOrDefault(id);
         if (existing is not null && existing.State is SequenceRunState.Running or SequenceRunState.Paused or SequenceRunState.Starting) {
