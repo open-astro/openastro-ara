@@ -39,7 +39,12 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
     this.compact = false,
     this.large = false,
     this.enabled = true,
+    this.label,
   });
+
+  /// Replaces the idle "STOP" word (the safety alarm's "Emergency Abort");
+  /// the hold, its fill and the stop itself are unchanged.
+  final String? label;
 
   final bool simple;
 
@@ -308,7 +313,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           ? l10n.estopHoldToConfirm
           : _armed
           ? l10n.estopPressAgain
-          : l10n.estopLabel,
+          : (widget.label ?? l10n.estopLabel),
       maxLines: _armed && compact ? 2 : 1,
       textAlign: TextAlign.center,
     );

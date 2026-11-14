@@ -4,10 +4,12 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../settings/notifications_settings_state.dart';
+import '../simple_mode_state.dart' show companionModeProvider;
 import '../ws/ws_providers.dart';
 
 /// §35.5 bundled tones (generated sine-synth loops shipped in assets/audio/).
@@ -44,12 +46,48 @@ class AudioplayersAlarmPlayer implements SafetyAlarmPlayer {
   void dispose() => _player.dispose();
 }
 
+/// The vibration surface (§41.1, a phone only) — a seam beside
+/// [SafetyAlarmPlayer] so tests assert it without a device motor.
+abstract interface class SafetyAlarmHaptics {
+  void start();
+  void stop();
+}
+
+/// Production haptics: Flutter's own [HapticFeedback] (no extra package),
+/// pulsed every second until stopped.
+class PlatformAlarmHaptics implements SafetyAlarmHaptics {
+  Timer? _timer;
+
+  @override
+  void start() {
+    _timer?.cancel();
+    unawaited(HapticFeedback.vibrate());
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => unawaited(HapticFeedback.vibrate()),
+    );
+  }
+
+  @override
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
+
+/// Overridable in tests.
+final safetyAlarmHapticsProvider = Provider<SafetyAlarmHaptics>((ref) {
+  final haptics = PlatformAlarmHaptics();
+  ref.onDispose(haptics.stop);
+  return haptics;
+});
+
 /// Device-local §35.5 knobs (each desktop picks its own tone/delay — the
 /// machine that rings is the one being configured). Same JSON-in-app-support
 /// pattern as the backup-stream prefs.
 class SafetyAlarmPrefsService {
   SafetyAlarmPrefsService({Future<Directory> Function()? supportDir})
-      : _supportDir = supportDir ?? getApplicationSupportDirectory;
+    : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _fileName = 'safety_alarm.json';
@@ -66,7 +104,9 @@ class SafetyAlarmPrefsService {
       if (!await f.exists()) return (delaySec: 5, tone: 'siren');
       final decoded = jsonDecode(await f.readAsString());
       if (decoded is! Map) return (delaySec: 5, tone: 'siren');
-      final tone = decoded['tone'] is String ? decoded['tone'] as String : 'siren';
+      final tone = decoded['tone'] is String
+          ? decoded['tone'] as String
+          : 'siren';
       return (
         delaySec: decoded['delay_sec'] is int ? decoded['delay_sec'] as int : 5,
         tone: safetyAlarmTones.containsKey(tone) ? tone : 'siren',
@@ -81,16 +121,21 @@ class SafetyAlarmPrefsService {
       try {
         final f = await _file();
         await f.writeAsString(
-            jsonEncode({'delay_sec': delaySec, 'tone': tone}), flush: true);
-      } catch (_) {/* best effort — prefs must not break the alarm */}
+          jsonEncode({'delay_sec': delaySec, 'tone': tone}),
+          flush: true,
+        );
+      } catch (_) {
+        /* best effort — prefs must not break the alarm */
+      }
     });
     _chain = task;
     return task;
   }
 }
 
-final safetyAlarmPrefsProvider =
-    Provider<SafetyAlarmPrefsService>((ref) => SafetyAlarmPrefsService());
+final safetyAlarmPrefsProvider = Provider<SafetyAlarmPrefsService>(
+  (ref) => SafetyAlarmPrefsService(),
+);
 
 @immutable
 class SafetyAlarmState {
@@ -120,14 +165,13 @@ class SafetyAlarmState {
     String? reason,
     int? delaySec,
     String? tone,
-  }) =>
-      SafetyAlarmState(
-        pending: pending ?? this.pending,
-        ringing: ringing ?? this.ringing,
-        reason: reason ?? this.reason,
-        delaySec: delaySec ?? this.delaySec,
-        tone: tone ?? this.tone,
-      );
+  }) => SafetyAlarmState(
+    pending: pending ?? this.pending,
+    ringing: ringing ?? this.ringing,
+    reason: reason ?? this.reason,
+    delaySec: delaySec ?? this.delaySec,
+    tone: tone ?? this.tone,
+  );
 }
 
 /// §35.5 — the audible alarm. `safety.unsafe` / `safety.emergency_stop`
@@ -156,9 +200,11 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
       switch (event.type) {
         case 'safety.unsafe':
           final reasons = event.payload['reasons'];
-          trigger(reasons is List && reasons.isNotEmpty
-              ? reasons.whereType<String>().join('; ')
-              : 'Conditions are UNSAFE');
+          trigger(
+            reasons is List && reasons.isNotEmpty
+                ? reasons.whereType<String>().join('; ')
+                : 'Conditions are UNSAFE',
+          );
         case 'safety.emergency_stop':
           trigger(kEmergencyStopReason, urgent: true);
         case 'safety.safe':
@@ -186,10 +232,12 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     // the WHOLE state, and writing the still-default other knob would clobber
     // its saved value on disk (read-modify-write race).
     final prefs = ref.read(safetyAlarmPrefsProvider);
-    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
-      if (!ref.mounted) return; // disposed mid-flight — nothing to persist
-      unawaited(prefs.save(delaySec: state.delaySec, tone: state.tone));
-    }));
+    unawaited(
+      (_restoreDone ?? Future<void>.value()).then((_) {
+        if (!ref.mounted) return; // disposed mid-flight — nothing to persist
+        unawaited(prefs.save(delaySec: state.delaySec, tone: state.tone));
+      }),
+    );
   }
 
   void setDelaySec(int v) {
@@ -228,11 +276,13 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     // resolved (a tiny file read) — an event racing app launch must ring
     // with the USER'S delay/tone, not the defaults. The modal is already
     // up either way; silence() mid-wait still wins (pending re-checked).
-    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
-      if (!ref.mounted || !state.pending) return;
-      _delayTimer?.cancel();
-      _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
-    }));
+    unawaited(
+      (_restoreDone ?? Future<void>.value()).then((_) {
+        if (!ref.mounted || !state.pending) return;
+        _delayTimer?.cancel();
+        _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
+      }),
+    );
   }
 
   void _startRinging() {
@@ -243,10 +293,16 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
       return;
     }
     state = state.copyWith(pending: false, ringing: true);
+    // §41.1 — a phone also vibrates; desktops only ring.
+    if (ref.read(companionModeProvider)) {
+      ref.read(safetyAlarmHapticsProvider).start();
+    }
     _player ??= (playerFactory ?? AudioplayersAlarmPlayer.new)();
-    unawaited(_player!
-        .playLoop(safetyAlarmTones[state.tone] ?? safetyAlarmTones['siren']!)
-        .catchError((Object e) => debugPrint('safety alarm play failed: $e')));
+    unawaited(
+      _player!
+          .playLoop(safetyAlarmTones[state.tone] ?? safetyAlarmTones['siren']!)
+          .catchError((Object e) => debugPrint('safety alarm play failed: $e')),
+    );
   }
 
   /// Stops the countdown and/or the tone — the modal's Silence button and
@@ -256,6 +312,7 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     _delayTimer = null;
     if (state.ringing) {
       unawaited(_player?.stop());
+      ref.read(safetyAlarmHapticsProvider).stop();
     }
     if (state.pending || state.ringing) {
       state = state.copyWith(pending: false, ringing: false);
@@ -274,4 +331,5 @@ const kEmergencyStopReason = 'EMERGENCY STOP triggered';
 
 final safetyAlarmProvider =
     NotifierProvider<SafetyAlarmController, SafetyAlarmState>(
-        SafetyAlarmController.new);
+      SafetyAlarmController.new,
+    );

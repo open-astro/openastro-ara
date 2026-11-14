@@ -8942,6 +8942,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reload'**
   String get settingsSectionReload;
+
+  /// Companion Mode question pill: offers the phone's location and time to a rig with no recent time sync
+  ///
+  /// In en, this message translates to:
+  /// **'The rig has no clock or site yet. Send this phone\'s location and time?'**
+  String get companionTimeOfferQuestion;
+
+  /// Companion Mode time offer pill: decline until the next session
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get companionTimeOfferNotNow;
+
+  /// Companion Mode time offer pill: send the phone's location and time
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get companionTimeOfferSend;
+
+  /// Companion Mode result pill: the phone's location and time reached the rig
+  ///
+  /// In en, this message translates to:
+  /// **'Sent this phone\'s location and time'**
+  String get companionTimeOfferSent;
+
+  /// Companion Mode result pill title: no location permission or fix on the phone; the detail says why
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t get this phone\'s location'**
+  String get companionTimeOfferNoGps;
+
+  /// Safety alarm on a phone: says the alarm uses sound and vibration
+  ///
+  /// In en, this message translates to:
+  /// **'This phone sounds and vibrates until you silence the alarm.'**
+  String get safetyAlarmPhoneNote;
+
+  /// Safety alarm on a phone: the hold-to-confirm abort button, same hold and fill as STOP
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency Abort'**
+  String get safetyAlarmEmergencyAbort;
 }
 
 class _AppLocalizationsDelegate

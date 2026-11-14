@@ -5303,6 +5303,29 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsSectionReload => 'Reload';
+
+  @override
+  String get companionTimeOfferQuestion =>
+      'The rig has no clock or site yet. Send this phone\'s location and time?';
+
+  @override
+  String get companionTimeOfferNotNow => 'Not now';
+
+  @override
+  String get companionTimeOfferSend => 'Send';
+
+  @override
+  String get companionTimeOfferSent => 'Sent this phone\'s location and time';
+
+  @override
+  String get companionTimeOfferNoGps => 'Couldn\'t get this phone\'s location';
+
+  @override
+  String get safetyAlarmPhoneNote =>
+      'This phone sounds and vibrates until you silence the alarm.';
+
+  @override
+  String get safetyAlarmEmergencyAbort => 'Emergency Abort';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -10646,4 +10669,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsSectionReload => 'Recarregar';
+
+  @override
+  String get companionTimeOfferQuestion =>
+      'O equipamento ainda não tem hora nem local. Enviar a localização e a hora deste celular?';
+
+  @override
+  String get companionTimeOfferNotNow => 'Agora não';
+
+  @override
+  String get companionTimeOfferSend => 'Enviar';
+
+  @override
+  String get companionTimeOfferSent =>
+      'Localização e hora deste celular enviadas';
+
+  @override
+  String get companionTimeOfferNoGps =>
+      'Não foi possível obter a localização deste celular';
+
+  @override
+  String get safetyAlarmPhoneNote =>
+      'Este celular toca e vibra até você silenciar o alarme.';
+
+  @override
+  String get safetyAlarmEmergencyAbort => 'Abortar em emergência';
 }

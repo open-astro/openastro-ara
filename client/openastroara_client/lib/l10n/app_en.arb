@@ -6769,5 +6769,33 @@
   "settingsSectionReload": "Reload",
   "@settingsSectionReload": {
     "description": "Settings panel: button that replaces local edits with the rig's newer copy"
+  },
+  "companionTimeOfferQuestion": "The rig has no clock or site yet. Send this phone's location and time?",
+  "@companionTimeOfferQuestion": {
+    "description": "Companion Mode question pill: offers the phone's location and time to a rig with no recent time sync"
+  },
+  "companionTimeOfferNotNow": "Not now",
+  "@companionTimeOfferNotNow": {
+    "description": "Companion Mode time offer pill: decline until the next session"
+  },
+  "companionTimeOfferSend": "Send",
+  "@companionTimeOfferSend": {
+    "description": "Companion Mode time offer pill: send the phone's location and time"
+  },
+  "companionTimeOfferSent": "Sent this phone's location and time",
+  "@companionTimeOfferSent": {
+    "description": "Companion Mode result pill: the phone's location and time reached the rig"
+  },
+  "companionTimeOfferNoGps": "Couldn't get this phone's location",
+  "@companionTimeOfferNoGps": {
+    "description": "Companion Mode result pill title: no location permission or fix on the phone; the detail says why"
+  },
+  "safetyAlarmPhoneNote": "This phone sounds and vibrates until you silence the alarm.",
+  "@safetyAlarmPhoneNote": {
+    "description": "Safety alarm on a phone: says the alarm uses sound and vibration"
+  },
+  "safetyAlarmEmergencyAbort": "Emergency Abort",
+  "@safetyAlarmEmergencyAbort": {
+    "description": "Safety alarm on a phone: the hold-to-confirm abort button, same hold and fill as STOP"
   }
 }

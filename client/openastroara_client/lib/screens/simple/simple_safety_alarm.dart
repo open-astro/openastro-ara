@@ -10,7 +10,7 @@ import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/emergency_stop_button.dart'
-    show localEmergencyStopProvider;
+    show EmergencyStopButton, localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
 import 'simple_message_pills.dart';
 import 'simple_shell.dart'
@@ -33,7 +33,9 @@ class SimpleSafetyAlarmLayer extends ConsumerWidget {
         child,
         // With the shell on top its own pills show; over a pushed page these do.
         // Not over Monitor: its top line carries the message (#1724).
-        if (simple && !ref.watch(simpleShellOnTopProvider) && !ref.watch(monitorShowingProvider))
+        if (simple &&
+            !ref.watch(simpleShellOnTopProvider) &&
+            !ref.watch(monitorShowingProvider))
           const _MessagesOverRoutes(),
         if (simple) const SimpleSafetyAlarm(),
       ],
@@ -179,6 +181,25 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                             color: AraColors.textSecondary,
                           ),
                         ),
+                        // §41.1 — a phone: the sound and vibration note, and
+                        // Emergency Abort as the STOP hold (2 s), never a tap.
+                        if (ref.watch(companionModeProvider)) ...[
+                          Text(
+                            context.l10n.safetyAlarmPhoneNote,
+                            textAlign: TextAlign.center,
+                            style: kSimpleText.copyWith(
+                              color: AraColors.textSecondary,
+                            ),
+                          ),
+                          SizedBox(
+                            width: 220,
+                            child: EmergencyStopButton(
+                              key: const Key('simple-safety-abort'),
+                              simple: true,
+                              label: context.l10n.safetyAlarmEmergencyAbort,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: AraSpace.s8),
                         FilledButton(
                           key: const Key('simple-safety-silence'),
