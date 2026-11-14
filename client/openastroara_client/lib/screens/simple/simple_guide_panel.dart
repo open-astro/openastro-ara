@@ -248,16 +248,13 @@ class SimpleGuidePanel extends ConsumerWidget {
                 child: Text(l10n.preflightDoneStartImaging),
               ),
             _SimpleGuiderTabs(selected: tab),
-            // Guide stays laid out, so the panel keeps one height across tabs;
-            // Tools lies over it and scrolls inside when its suggestion list runs longer.
-            Stack(
-              fit: StackFit.passthrough,
-              children: [
-            IndexedStack(
-              index: tab == 2 ? null : tab,
-              sizing: StackFit.loose,
-              children: [
-                Column(
+            // The panel takes the height of the tab it shows; the shell
+            // scrolls it past the room between the strip and the bottom row
+            // (#1875 slice 3).
+            switch (tab) {
+              1 => const _SimpleGuiderTuning(),
+              2 => const _SimpleGuiderTools(),
+              _ => Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 4,
@@ -372,15 +369,7 @@ class SimpleGuidePanel extends ConsumerWidget {
             ),
                   ],
                 ),
-                tab == 1 ? const _SimpleGuiderTuning() : const SizedBox.shrink(),
-              ],
-            ),
-                if (tab == 2)
-                  const Positioned.fill(
-                    child: SingleChildScrollView(child: _SimpleGuiderTools()),
-                  ),
-              ],
-            ),
+            },
           ],
         ),
       ),

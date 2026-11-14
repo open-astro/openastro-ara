@@ -1449,8 +1449,8 @@ void main() {
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
   });
 
-  testWidgets("with the histogram showing, Tools with every suggestion listed keeps Guide's height and scrolls inside (#1759)",
-      (tester) async {
+  testWidgets("with the histogram showing, Tools with every suggestion listed grows past Guide's height and scrolls "
+      'only past the room above the bottom row (#1759, #1875 slice 3)', (tester) async {
     // 1.0x for the reason the Tools step above gives: the test font wraps the prose far more than the iPad's.
     final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
         gear: [guiderStatusProvider.overrideWith(_GuiderUp.new), guidingAssistantProvider.overrideWith(_AssistantDoneAll.new)]);
@@ -1465,17 +1465,15 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-guider-tab-tools')));
     await tester.pump();
     expect(find.byType(CheckboxListTile), findsNWidgets(6), reason: 'precondition: the whole list shows');
-    final scroll = tester.state<ScrollableState>(
-        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
-    expect(scroll.position.maxScrollExtent, 0, reason: 'the panel fits: no scrolling outside it');
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
-    expect(panel.height, guideHeight, reason: "the panel keeps the Guide tab's height");
-    expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
-    // A list longer than the room scrolls inside the panel, down to Apply.
+    expect(panel.height, greaterThan(guideHeight), reason: 'the panel takes the height its content needs');
+    final room = tester.getRect(
+        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
+    expect(room.bottom, lessThanOrEqualTo(768 - kSimpleInset), reason: 'the room ends above the bottom row');
+    // A list longer than the room scrolls, down to Apply.
     await tester.ensureVisible(find.text('Apply 6 suggestions'));
     await tester.pump();
     expect(find.text('Apply 6 suggestions').hitTestable(), findsOneWidget);
-    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))), panel, reason: 'the panel did not move or grow');
   });
 
   testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",

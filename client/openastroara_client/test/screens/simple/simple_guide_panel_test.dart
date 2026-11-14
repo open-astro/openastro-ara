@@ -206,7 +206,7 @@ GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
 
 final _idleAssistant = _assistant('idle');
 
-/// A tap on Tools: it keeps the Guide tab's height and scrolls inside, so scroll to the target first.
+/// A tap on Tools: scroll to the target first, in case the panel runs past the screen.
 Future<void> _tapTools(WidgetTester tester, Finder target) async {
   await tester.ensureVisible(target);
   await tester.pump();
@@ -547,6 +547,18 @@ void main() {
       expect(find.text('Stop the guide loop to recalibrate.'), findsOneWidget);
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
+    });
+
+    testWidgets('the panel takes the height of the tab it shows: Tools does not scroll inside (#1875 slice 3)',
+        (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      final guide = tester.getSize(panel).height;
+      await _tab(tester, 'tools');
+      expect(find.descendant(of: panel, matching: find.byType(Scrollable)), findsNothing,
+          reason: 'the shell scrolls the panel past the space it has, not the panel itself');
+      await _tab(tester, 'tuning');
+      expect(tester.getSize(panel).height, isNot(guide), reason: 'Tuning is its own height');
     });
 
     testWidgets('a long failure reason keeps to two lines, so Tools keeps the Guide height', (tester) async {
