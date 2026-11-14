@@ -1135,7 +1135,7 @@ jobs:
   #                      merge queue: merge-gate.sh requires every check green
   #                      on the PR head, so they still gate the merge, and in
   #                      the queue they held the few macOS runners and set the
-  #                      length of every queue run (2026-11-15).
+  #                      length of every queue run (2026-11-14).
   #   client-test        the required `macos-latest` and `windows-latest`
   #                      contexts: passes only when every desktop shard passed.
   client-test-shard:

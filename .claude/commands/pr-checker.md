@@ -359,7 +359,8 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
    `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they come
    from `client-test`, a reporting job with no gate over the `client-test-desktop-shard` matrix.
    It always runs and reports `pass` when every desktop shard passed, or when the shards were
-   skipped for a pull request or a docs-only change, never `skipping` (#1025). The shard matrix
+   skipped for a merge group or a docs-only change, never `skipping` (#1025). On a pull request
+   with code changes the desktop shards run, and a skip there fails `client-test`. The shard matrix
    then reports **one** `skipping` context under its raw name
    `Client (analyze + test) — ${{ matrix.os }}, shard ${{ matrix.shard }}/3`.
    The `ubuntu-latest` context is the non-matrix `client-test-linux` job: it always runs and

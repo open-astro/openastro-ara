@@ -158,7 +158,7 @@ class CiRunTimeTest(unittest.TestCase):
 
     def test_the_macos_and_windows_shards_run_on_the_pull_request_not_in_the_merge_queue(self):
         # merge-gate.sh requires every check green on the PR head, so they still gate the merge; in the
-        # queue they held the scarce macOS runners and set the length of every queue run (2026-11-15).
+        # queue they held the scarce macOS runners and set the length of every queue run (2026-11-14).
         block = job(self.text, "client-test-desktop-shard")
         self.assertIn("        os: [macos-latest, windows-latest]\n", block)
         self.assertIn("    runs-on: ${{ matrix.os }}\n", block)
