@@ -51,8 +51,14 @@ public interface IEquipmentReconnector {
     Task<ReconnectOutcome> RecoverAsync(DeviceType type, CancellationToken ct) => ReconnectAsync(type, ct);
 
     /// <summary>#1539 — the desired connection state the type's service records, or null when it
-    /// records none (no device selected, or a service without the lifecycle module yet).</summary>
+    /// records none (no device selected, or the guider, which is PHD2 and not on the lifecycle module).</summary>
     DesiredConnection? GetDesiredConnection(DeviceType type) => null;
+
+    /// <summary>#1246 / ADR 0011 rule 2 — whether a Connected device of <paramref name="type"/> is recovered:
+    /// its lifecycle has read it cleanly since the connect. A type whose service is not on the lifecycle
+    /// module (no <see cref="IRecoverableDevice"/>: only the guider, which is PHD2 and not Alpaca) has no such gate, so
+    /// Connected is recovered.</summary>
+    bool IsCleanlyConnected(DeviceType type) => true;
 
     /// <summary>The connection state of the device service for <paramref name="type"/>, so a
     /// caller that dispatched a background <see cref="ReconnectAsync"/> can confirm the outcome.
@@ -142,6 +148,8 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     public Task<ReconnectOutcome> RecoverAsync(DeviceType type, CancellationToken ct) => DispatchAsync(type, recovery: true, ct);
 
     public DesiredConnection? GetDesiredConnection(DeviceType type) => (ResolveService(type) as IRecoverableDevice)?.DesiredConnection;
+
+    public bool IsCleanlyConnected(DeviceType type) => ResolveService(type) is not IRecoverableDevice device || device.IsCleanlyConnected;
 
     private async Task<ReconnectOutcome> DispatchAsync(DeviceType type, bool recovery, CancellationToken ct) {
         // The guider is not an Alpaca device (PHD2 over JSON-RPC) and never appears in

@@ -55,6 +55,8 @@ namespace OpenAstroAra.Test {
         [SetUp]
         public void SetUp() {
             reconnector = new Mock<IEquipmentReconnector>();
+            // ADR 0011 rule 2 — a device's lifecycle says whether a Connected device read cleanly; clean unless a test says otherwise.
+            reconnector.Setup(r => r.IsCleanlyConnected(It.IsAny<DeviceType>())).Returns(true);
             profiles = new Mock<IProfileStore>();
             sequencer = new Mock<ISequencerService>();
             telescope = new Mock<ITelescopeService>();
@@ -288,7 +290,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(() => Elapsed() < TimeSpan.FromMilliseconds(300)
                     ? EquipmentConnectionState.Connecting
                     : EquipmentConnectionState.Connected);
-            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(() => Elapsed() >= TimeSpan.FromMilliseconds(400));
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Telescope)).Returns(() => Elapsed() >= TimeSpan.FromMilliseconds(400));
 
             service.OnFault(Fault(DeviceType.Telescope));
             await service.WhenIdleAsync();
@@ -516,7 +518,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_mount_that_reconnects_without_a_clean_read_is_not_recovered_and_the_ladder_walks_on() {
             ReconnectSucceeds(DeviceType.Telescope);
-            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(false);
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Telescope)).Returns(false);
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
             service.LingerMaxAttempts = 3; // the post-give-up linger must not re-adopt a still-latched mount either
 
@@ -537,7 +539,7 @@ namespace OpenAstroAra.Test {
         public async Task The_linger_readopts_a_latched_mount_only_once_it_reads_cleanly() {
             ReconnectSucceeds(DeviceType.Telescope);
             var clean = false;
-            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(() => Volatile.Read(ref clean));
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Telescope)).Returns(() => Volatile.Read(ref clean));
             service.LingerMaxAttempts = 10;
 
             service.OnFault(Fault(DeviceType.Telescope));
@@ -557,7 +559,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_mount_that_reconnects_with_a_clean_read_is_recovered() {
             ReconnectSucceeds(DeviceType.Telescope);
-            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(true);
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Telescope)).Returns(true);
 
             service.OnFault(Fault(DeviceType.Telescope));
             await service.WhenIdleAsync();
@@ -567,14 +569,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_camera_reconnect_does_not_consult_the_mount_read_gate() {
+        public async Task A_camera_reconnect_is_recovered_by_its_own_gate_whatever_the_mount_reads() {
             ReconnectSucceeds(DeviceType.Camera);
-            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(false);
+            reconnector.Setup(r => r.IsCleanlyConnected(DeviceType.Telescope)).Returns(false);
 
             service.OnFault(Fault(DeviceType.Camera));
             await service.WhenIdleAsync();
 
-            Assert.That(Actions(), Does.Contain("recovered"), "the clean-read gate is the mount's alone");
+            Assert.That(Actions(), Does.Contain("recovered"), "the clean-read gate is the device's own");
         }
 
         [Test]

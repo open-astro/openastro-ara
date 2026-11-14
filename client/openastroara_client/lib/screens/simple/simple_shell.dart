@@ -1115,7 +1115,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           sequenceRunStateProvider.select((s) => simpleRunPhase(run, s.value)),
         ) !=
         SimpleRunPhase.none;
-    const railTop = kSimpleInset * 2 + kSimpleBarHeight;
+    // #1777 — upright, the strip stays one row while devices show (the icons
+    // swipe); with none, the note takes a row of its own so it shows whole at
+    // any text size.
+    final deck = companionPortrait(context, ref);
+    final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
+    final railTop = kSimpleInset * 2 + barHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
@@ -1127,7 +1132,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final statsShown = _statsShown(ref);
     // #1775 — a phone held upright: one deck along the bottom in place of
     // both rails and Stop; everything else sits above it.
-    final deck = companionPortrait(context, ref);
     // Until the deck is measured, a guess keeps the first frame close: its
     // height in two rows at 1x, as on a 390 px phone.
     final deckTop = kSimpleInset + (_deckHeight == 0 ? 192.0 : _deckHeight);
@@ -1448,7 +1452,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             // #1775 — upright, centred in the panels' room
                             // between the strip and the deck, not under it.
                             left: deck ? kSimpleInset : 0,
-                            top: deck ? kSimpleInset + kSimpleBarHeight : 0,
+                            top: deck ? kSimpleInset + barHeight : 0,
                             right: deck ? railGap : 0,
                             bottom: deck ? betweenBottom : 0,
                             child: IgnorePointer(
@@ -1485,8 +1489,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 left: kSimpleInset,
                                 right: kSimpleInset,
                                 top: kSimpleInset,
-                                height: kSimpleBarHeight,
+                                height: barHeight,
                                 child: _StatusStrip(
+                                  stacked: deck,
                                   onAra: () => _toggle(_Popover.ara),
                                   onSearch: () => _toggle(_Popover.search),
                                   onSettings: () => _openMenu(),
@@ -1788,7 +1793,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               if (_popover == _Popover.ara)
                                 Positioned(
-                                  top: kSimpleInset * 2 + kSimpleBarHeight,
+                                  top: kSimpleInset * 2 + barHeight,
                                   left: _topLeftOverlayLeft(context),
                                   child: _AraSheet(
                                     onClose: () => setState(
@@ -1803,7 +1808,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
-                                  top: kSimpleInset + kSimpleBarHeight,
+                                  top: kSimpleInset + barHeight,
                                   child: GestureDetector(
                                     key: const Key('simple-menu-veil'),
                                     behavior: HitTestBehavior.opaque,
@@ -2143,14 +2148,55 @@ bool _anyDeviceShown(WidgetRef ref) {
   ].any((l) => l != StatusLevel.disconnected);
 }
 
+/// The note that stands in for the device icons: link up, no gear shown, or
+/// no rig at all.
+TextStyle get _kStripNote => kSimpleText.copyWith(fontWeight: FontWeight.w600);
+
+/// The note's vertical padding and horizontal padding as a button.
+const _kNotePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
+/// #1777 — the height the strip adds on an upright phone: none with devices
+/// (the icons swipe in the one row), else the note at the user's text size, as
+/// many lines as it takes at the width the strip leaves it (never shrunk).
+double _companionStripRow(BuildContext context, WidgetRef ref) {
+  if (_anyDeviceShown(ref)) return 0;
+  final l10n = context.l10n;
+  final painter = TextPainter(
+    text: TextSpan(
+      text: ref.watch(serverLinkUpProvider)
+          ? l10n.shellNoDevices
+          : l10n.shellRigNotConnected,
+      style: _kStripNote,
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout(maxWidth: _noteWidth(context));
+  final height = painter.height + _kNotePadding.vertical;
+  painter.dispose();
+  return math.max(44, height);
+}
+
+/// What the strip's second row leaves the note's words: the screen less the
+/// insets (16 each side), the strip's 8 and 4 px, and the button's padding.
+double _noteWidth(BuildContext context) =>
+    MediaQuery.sizeOf(context).width -
+    kSimpleInset * 2 -
+    12 -
+    _kNotePadding.horizontal;
+
 class _StatusStrip extends ConsumerWidget {
   const _StatusStrip({
+    required this.stacked,
     required this.onAra,
     required this.onSearch,
     required this.onSettings,
     required this.onDevices,
     required this.onFullUi,
   });
+
+  /// #1777 — an upright phone: the device icons are 44 px targets, and the
+  /// "no devices" note takes a second row of its own.
+  final bool stacked;
 
   /// Opens Settings › Devices (the no-devices note).
   final VoidCallback onDevices;
@@ -2170,96 +2216,123 @@ class _StatusStrip extends ConsumerWidget {
       AsyncData(:final value) => value,
       _ => false,
     };
+    final linkUp = ref.watch(serverLinkUpProvider);
+    final anyDevice = _anyDeviceShown(ref);
+    // Only gear that's connected; a fault still shows. With none of it
+    // showing, a note says so and opens Devices.
+    final devices = anyDevice
+        ? EquipmentChipCompact(
+            compact: true,
+            touch: stacked,
+            child: SingleChildScrollView(
+              key: stacked ? const Key('simple-strip-devices') : null,
+              scrollDirection: Axis.horizontal,
+              child: const EquipmentChipHideDisconnected(
+                child: TopEquipmentChips(),
+              ),
+            ),
+          )
+        : TextButton(
+            key: const Key('simple-no-devices'),
+            onPressed: onDevices,
+            // No rig is amber (needs a look), not the link blue, which reads
+            // as connecting.
+            style: stacked
+                ? TextButton.styleFrom(
+                    foregroundColor: linkUp ? null : AraColors.accentWarning,
+                    textStyle: _kStripNote,
+                    padding: _kNotePadding,
+                    alignment: Alignment.centerLeft,
+                  )
+                : linkUp
+                ? null
+                : TextButton.styleFrom(
+                    foregroundColor: AraColors.accentWarning,
+                  ),
+            child: Text(
+              linkUp
+                  ? context.l10n.shellNoDevices
+                  : context.l10n.shellRigNotConnected,
+            ),
+          );
+    final mark = [
+      // The brand is a control: it opens the OpenAstro Ara sheet (#1602).
+      IconButton(
+        key: const Key('simple-ara-mark'),
+        icon: const AraMark(size: 30),
+        tooltip: kAppName,
+        onPressed: onAra,
+      ),
+      // A hairline sets the brand apart from the device dots, which
+      // otherwise read as one more device (user, 2026-11-06).
+      Container(
+        key: const Key('simple-ara-divider'),
+        width: 1,
+        height: 28,
+        margin: const EdgeInsets.only(left: AraSpace.s4, right: AraSpace.s12),
+        color: AraColors.border,
+      ),
+    ];
+    final buttons = [
+      // Simple Mode's own search: the sky, its settings, its modes and
+      // the Image Library; nothing it finds leads out.
+      IconButton(
+        key: const Key('simple-search-button'),
+        icon: const Icon(Icons.search, size: 22),
+        tooltip: context.l10n.shellSearch,
+        onPressed: onSearch,
+      ),
+      IconButton(
+        icon: Icon(
+          night ? Icons.nights_stay : Icons.nights_stay_outlined,
+          size: 22,
+          color: night ? AraColors.accentInfo : null,
+        ),
+        tooltip: night
+            ? context.l10n.shellNightModeOn
+            : context.l10n.shellNightMode,
+        onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
+      ),
+      if (!ref.watch(companionModeProvider))
+        IconButton(
+          key: const Key('simple-full-ui-button'),
+          icon: const Icon(
+            Icons.fit_screen,
+            size: 22,
+            color: AraColors.accentInfo,
+          ),
+          tooltip: context.l10n.shellFullUi,
+          onPressed: onFullUi,
+        ),
+      IconButton(
+        icon: const Icon(Icons.settings_outlined, size: 22),
+        tooltip: context.l10n.shellSettings,
+        onPressed: onSettings,
+      ),
+    ];
     return SimplePanel(
       padding: const EdgeInsets.only(left: 8, right: 4),
-      child: Row(
-        children: [
-          // The brand is a control: it opens the OpenAstro Ara sheet (#1602).
-          IconButton(
-            key: const Key('simple-ara-mark'),
-            icon: const AraMark(size: 30),
-            tooltip: kAppName,
-            onPressed: onAra,
-          ),
-          // A hairline sets the brand apart from the device dots, which
-          // otherwise read as one more device (user, 2026-11-06).
-          Container(
-            key: const Key('simple-ara-divider'),
-            width: 1,
-            height: 28,
-            margin: const EdgeInsets.only(left: AraSpace.s4, right: AraSpace.s12),
-            color: AraColors.border,
-          ),
-          // Only gear that's connected; a fault still shows. With none of it
-          // showing, a note says so and opens Devices.
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _anyDeviceShown(ref)
-                  ? const EquipmentChipCompact(
-                      compact: true,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: EquipmentChipHideDisconnected(
-                          child: TopEquipmentChips(),
-                        ),
-                      ),
-                    )
-                  : TextButton(
-                      key: const Key('simple-no-devices'),
-                      onPressed: onDevices,
-                      // No rig is amber (needs a look), not the link blue,
-                      // which reads as connecting.
-                      style: ref.watch(serverLinkUpProvider)
-                          ? null
-                          : TextButton.styleFrom(
-                              foregroundColor: AraColors.accentWarning,
-                            ),
-                      child: Text(
-                        ref.watch(serverLinkUpProvider)
-                            ? context.l10n.shellNoDevices
-                            : context.l10n.shellRigNotConnected,
-                      ),
-                    ),
+      child: stacked && !anyDevice
+          ? Column(
+              children: [
+                SizedBox(
+                  height: kSimpleBarHeight,
+                  child: Row(children: [...mark, const Spacer(), ...buttons]),
+                ),
+                Expanded(
+                  child: Align(alignment: Alignment.centerLeft, child: devices),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                ...mark,
+                Expanded(
+                  child: Align(alignment: Alignment.centerLeft, child: devices),
+                ),
+                ...buttons,
+              ],
             ),
-          ),
-          // Simple Mode's own search: the sky, its settings, its modes and
-          // the Image Library; nothing it finds leads out.
-          IconButton(
-            key: const Key('simple-search-button'),
-            icon: const Icon(Icons.search, size: 22),
-            tooltip: context.l10n.shellSearch,
-            onPressed: onSearch,
-          ),
-          IconButton(
-            icon: Icon(
-              night ? Icons.nights_stay : Icons.nights_stay_outlined,
-              size: 22,
-              color: night ? AraColors.accentInfo : null,
-            ),
-            tooltip: night
-                ? context.l10n.shellNightModeOn
-                : context.l10n.shellNightMode,
-            onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
-          ),
-          if (!ref.watch(companionModeProvider))
-            IconButton(
-              key: const Key('simple-full-ui-button'),
-              icon: const Icon(
-                Icons.fit_screen,
-                size: 22,
-                color: AraColors.accentInfo,
-              ),
-              tooltip: context.l10n.shellFullUi,
-              onPressed: onFullUi,
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 22),
-            tooltip: context.l10n.shellSettings,
-            onPressed: onSettings,
-          ),
-        ],
-      ),
     );
   }
 }
