@@ -78,6 +78,7 @@ namespace OpenAstroAra.Test {
             racing.As<IRecoverableDevice>().Setup(r => r.TryRecover(It.IsAny<DiscoveredDeviceDto>()))
                 .Returns((DiscoveredDeviceDto d) => rotator.TryRecover(d));
             racing.As<IRecoverableDevice>().Setup(r => r.DesiredConnection).Returns(() => rotator.DesiredConnection);
+            racing.As<IRecoverableDevice>().Setup(r => r.IsCleanlyConnected).Returns(() => rotator.IsCleanlyConnected);
             var services = new Mock<IServiceProvider>();
             services.Setup(s => s.GetService(typeof(IRotatorService))).Returns(racing.Object);
             var store = new Mock<IEquipmentSelectionStore>();

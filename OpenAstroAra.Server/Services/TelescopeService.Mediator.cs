@@ -95,14 +95,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// </summary>
     public TelescopeInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var runtime = _runtime;
             var caps = _capabilities;
             var epoch = MapEpoch(_equatorialSystemRaw);
             var info = new TelescopeInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = _lifecycle.Device?.Name ?? string.Empty,
+                DeviceId = _lifecycle.Device?.UniqueId ?? string.Empty,
                 RightAscension = connected ? runtime.RightAscensionHours ?? 0 : 0,
                 Declination = connected ? runtime.DeclinationDegrees ?? 0 : 0,
                 TrackingEnabled = connected && runtime.Tracking,
@@ -248,9 +248,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // so the refresh stops retrying. Null means still unknown: the caller refuses the op rather than
     // guess JNOW (a J2000 target precessed into JNOW for a J2000 mount lands ~0.36° off). A read
     // against a client that was superseded or disconnected meanwhile is not trusted.
-    private async Task<EquatorialCoordinateType?> ResolveEquatorialSystemAsync(AlpacaTelescope client, CancellationToken ct) {
+    private async Task<EquatorialCoordinateType?> ResolveEquatorialSystemAsync(ITelescopeDevice client, CancellationToken ct) {
         lock (_gate) {
-            if (_equatorialSystemKnown && ReferenceEquals(_client, client)) {
+            if (_equatorialSystemKnown && _lifecycle.IsCurrent(client)) {
                 return _equatorialSystemRaw;
             }
         }
@@ -264,7 +264,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             value = null;
         }
         lock (_gate) {
-            if (_disposed || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
+            if (!_lifecycle.IsLive(client)) {
                 return null;
             }
             if (_equatorialSystemKnown) {
@@ -294,16 +294,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // The goto alone: drive the slew and wait for arrival, no settle. The flip goto uses it directly —
     // MeridianFlipExecutor settles after it with MeridianFlipSettings.SettleTime.
     private Task<bool> GotoAsync(Coordinates coords, CancellationToken token) {
-        AlpacaTelescope client;
+        ITelescopeDevice client;
         bool parked;
         lock (_gate) {
             // Connected check BEFORE the transform: Transform P/Invokes NOVAS, which must not run
             // (and on a dev box without the native lib, cannot run) for a slew that is going to be
             // reported as failed anyway.
-            if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
+            var live = _lifecycle.Live;
+            if (live is null) {
                 return Task.FromResult(false);
             }
-            client = _client;
+            client = live;
             parked = _runtime.Parked;
         }
         if (parked) {
@@ -455,12 +456,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// (0, 0, J2000) sentinel when not connected or the position hasn't been read yet.
     /// </summary>
     public Coordinates GetCurrentPosition() {
-        AlpacaTelescope? unresolved = null;
+        ITelescopeDevice? unresolved = null;
         lock (_gate) {
-            if (!_disposed && _state == EquipmentConnectionState.Connected && _client is not null
-                    && !_equatorialSystemKnown && !_positionFrameReadAttempted) {
+            var live = _lifecycle.Live;
+            if (live is not null && !_equatorialSystemKnown && !_positionFrameReadAttempted) {
                 _positionFrameReadAttempted = true;
-                unresolved = _client;
+                unresolved = live;
             }
         }
         if (unresolved is not null) {
@@ -475,7 +476,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             }
         }
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             if (connected && _runtime.RightAscensionHours is double ra && _runtime.DeclinationDegrees is double dec) {
                 return new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), MapEpoch(_equatorialSystemRaw));
             }
@@ -488,7 +489,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunMountOpAsync(string op, Action<AlpacaTelescope> action, Func<AlpacaTelescope, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
+    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
@@ -549,14 +550,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // read !Slewing + near-target and declare a slew settled before the mount ever moved (a target
     // within the tolerance of the current heading defeats the PointingNear guard). One unconditional
     // poll interval gives the driver that window; it costs 100ms on already-satisfied conditions.
-    private async Task<bool> WaitForMountConditionAsync(AlpacaTelescope client, Func<AlpacaTelescope, bool> isDone, CancellationToken ct, int maxPolls = MountOpSettleMaxPolls) {
+    private async Task<bool> WaitForMountConditionAsync(ITelescopeDevice client, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int maxPolls = MountOpSettleMaxPolls) {
         var loggedReadFailure = false;
         for (var i = 0; i < maxPolls; i++) {
             await Task.Delay(MountOpPollInterval, ct).ConfigureAwait(false);
             bool stillOurClient;
             lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
+                stillOurClient = _lifecycle.IsLive(client);
             }
             if (!stillOurClient) {
                 return false; // disconnected / superseded — the op can't be confirmed
@@ -579,7 +579,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; report null ('unknown') so the wait keeps polling (and logs once) rather than faulting. CA1031's log-and-recover boundary applies.")]
-    private static bool? ReadCondition(AlpacaTelescope client, Func<AlpacaTelescope, bool> isDone) {
+    private static bool? ReadCondition(ITelescopeDevice client, Func<ITelescopeDevice, bool> isDone) {
         try {
             return isDone(client);
         } catch (Exception) {
@@ -589,7 +589,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-op aid: a goto needs Tracking, and some mounts (e.g. iOptron) won't park from a stationary/home state — both want Tracking enabled first. A mount that rejects the write may still accept the op (or fail it with its own clear error, which the op path logs); swallowing the write failure keeps the op attempt authoritative. CA1031's log-and-recover boundary applies.")]
-    private void TryEnableTracking(AlpacaTelescope client) {
+    private void TryEnableTracking(ITelescopeDevice client) {
         try {
             if (!client.Tracking) {
                 client.Tracking = true;
@@ -601,7 +601,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Prompt tracking write boundary: the blocking ASCOM property write can throw arbitrary driver/HTTP exceptions; the failure is logged and reported as false to the instruction rather than faulting the sequence. CA1031's log-and-recover boundary applies.")]
-    private bool TrySetTracking(AlpacaTelescope client, bool enabled) {
+    private bool TrySetTracking(ITelescopeDevice client, bool enabled) {
         try {
             client.Tracking = enabled;
             RefreshCacheOnce();
@@ -614,7 +614,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Prompt tracking write boundary: the blocking ASCOM TrackingRate/Tracking writes can throw arbitrary driver/HTTP exceptions; the failure is logged and reported as false to the instruction rather than faulting the sequence. CA1031's log-and-recover boundary applies.")]
-    private bool TrySetTrackingMode(AlpacaTelescope client, TrackingMode trackingMode) {
+    private bool TrySetTrackingMode(ITelescopeDevice client, TrackingMode trackingMode) {
         try {
             if (trackingMode == TrackingMode.Stopped) {
                 client.Tracking = false;
@@ -638,9 +638,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         _ => DriveRate.Sidereal,
     };
 
-    private AlpacaTelescope? ConnectedClientOrNull() {
+    private ITelescopeDevice? ConnectedClientOrNull() {
         lock (_gate) {
-            return !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            return _lifecycle.Live;
         }
     }
 
@@ -675,16 +675,16 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(AlpacaTelescope client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(ITelescopeDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null || _opFaultsSuppressed.Value) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
+            if (!_lifecycle.IsCurrent(client)) {
                 return;
             }
-            device = _device;
+            device = _lifecycle.Device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
@@ -692,11 +692,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an
     // unsupported/transient property; the predicate treats a throw as not-yet-done via ReadCondition).
-    private static bool ReadSlewing(AlpacaTelescope c) => c.Slewing;
-    private static bool ReadAtPark(AlpacaTelescope c) => c.AtPark;
-    private static bool ReadAtHome(AlpacaTelescope c) => c.AtHome;
+    private static bool ReadSlewing(ITelescopeDevice c) => c.Slewing;
+    private static bool ReadAtPark(ITelescopeDevice c) => c.AtPark;
+    private static bool ReadAtHome(ITelescopeDevice c) => c.AtHome;
 
-    private static bool PointingNear(AlpacaTelescope c, double targetRaHours, double targetDecDeg) {
+    private static bool PointingNear(ITelescopeDevice c, double targetRaHours, double targetDecDeg) {
         var raDiffHours = Math.Abs(c.RightAscension - targetRaHours);
         var raDiffDeg = Math.Min(raDiffHours, 24.0 - raDiffHours) * 15.0; // wrap-aware, hours → degrees
         return raDiffDeg < SlewToleranceDeg && Math.Abs(c.Declination - targetDecDeg) < SlewToleranceDeg;
@@ -724,7 +724,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         lock (_gate) {
             // Connected check before the transform (which P/Invokes NOVAS): don't run native astrometry
             // for a sync that's going to be reported failed anyway.
-            if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
+            if (_lifecycle.Live is null) {
                 return false;
             }
             parked = _runtime.Parked;
@@ -805,7 +805,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // do the flip, as before. Best-effort by design — it never fails the flip on its own.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pier-side hint ahead of the flip goto: any driver/HTTP failure here is logged and the goto still runs (the mount flips on its own past the meridian). CA1031's log-and-recover boundary applies.")]
-    private async Task CommandDestinationPierSideAsync(AlpacaTelescope client, Coordinates target, CancellationToken token) {
+    private async Task CommandDestinationPierSideAsync(ITelescopeDevice client, Coordinates target, CancellationToken token) {
         try {
             if (!client.CanSetPierSide) {
                 return;
@@ -849,10 +849,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         Justification = "Optional-property read boundary: DestinationSideOfPier is unimplemented on many drivers; the read falls back to pierUnknown rather than failing the caller. CA1031's log-and-recover boundary applies.")]
     public PierSide DestinationSideOfPier(Coordinates coordinates) {
         ArgumentNullException.ThrowIfNull(coordinates);
-        AlpacaTelescope? client;
+        ITelescopeDevice? client;
         EquatorialCoordinateType system;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected && _equatorialSystemKnown ? _client : null;
+            client = _equatorialSystemKnown ? _lifecycle.Live : null;
             system = _equatorialSystemRaw;
         }
         if (client is null) {

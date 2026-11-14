@@ -42,8 +42,16 @@ public interface IRecoverableDevice {
 
     /// <summary>The ladder's connect: dispatches like <c>ConnectAsync</c>, but refuses (false) when
     /// the user has disconnected the device. The check and the dispatch are one step under the
-    /// device's gate, so a user disconnect cannot land between them.</summary>
+    /// device's gate, so a user disconnect cannot land between them. Unlike <c>ConnectAsync</c>, a device
+    /// already Connected with no clean read since its connect is reconnected, not left as the no-op.</summary>
     bool TryRecover(DiscoveredDeviceDto device);
+
+    /// <summary>#1246 — recovered, not just Connected: true once a refresh tick since the current connect
+    /// read the device cleanly (ADR 0011 rule 2). A bridge that stays latched after a reconnect answers
+    /// Connected while every read fails, and must walk the next rung rather than resume the run.
+    /// False while the device is not Connected (Switch: true while none of its switches is connected);
+    /// both callers ask it only once the state reads Connected.</summary>
+    bool IsCleanlyConnected { get; }
 }
 
 /// <summary>What a device class hands its <see cref="DeviceLifecycle{TDevice}"/> per refresh tick
@@ -91,6 +99,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
     private bool _cleanReadSinceConnect;
     private int _refreshing;
+    private int _refreshRequested;
     private long _connectGeneration;
     private bool _disposed;
 
@@ -192,7 +201,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         lock (Gate) {
             ObjectDisposedException.ThrowIf(_disposed, _owner);
             _desired = DesiredConnection.ConnectedByUser;
-            Dispatch(device);
+            Dispatch(device, recovering: false);
         }
         return Task.FromResult(Accepted($"{_noun}.connect", idempotencyKey));
     }
@@ -204,18 +213,25 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             if (_disposed || _desired == DesiredConnection.DisconnectedByUser) {
                 return false;
             }
-            Dispatch(device);
+            Dispatch(device, recovering: true);
             return true;
         }
     }
 
-    // Caller holds Gate. A connect to the device already connecting or connected is a no-op.
-    private void Dispatch(DiscoveredDeviceDto device) {
+    // Caller holds Gate. A connect to the device already connecting or connected is a no-op, except the
+    // ladder's dispatch to a device Connected with no clean read since its connect (#1246, ADR 0011 rule 2):
+    // a bridge that answers Connected while its reads fail needs the disconnect/connect pair again.
+    private void Dispatch(DiscoveredDeviceDto device, bool recovering) {
+        var unreadSession = recovering && _state == EquipmentConnectionState.Connected && !_cleanReadSinceConnect;
         if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-            && _device?.UniqueId == device.UniqueId) {
+            && _device?.UniqueId == device.UniqueId && !unreadSession) {
             return;
         }
-        DisposeClientLocked();
+        // #1246 — the old session's Connected=false must reach the device BEFORE the new session's
+        // Connected=true (that ordered pair is what clears a latched bridge), so the teardown is handed
+        // to the connect task instead of racing beside it.
+        var previous = _client;
+        _client = null;
         // §60.9 — a lost or failed device is torn down before the replacement's Connecting, so a WS
         // subscriber sees a clean transition (Error → Disconnected → Connecting).
         if (_state == EquipmentConnectionState.Error) {
@@ -224,7 +240,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         _device = device;
         var generation = ++_connectGeneration;
         SetState(EquipmentConnectionState.Connecting);
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
+        _ = Task.Run(() => ConnectInBackground(device, generation, previous), CancellationToken.None);
     }
 
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey) {
@@ -281,12 +297,30 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The device class's reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
     public void Refresh() {
         if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
             return;
         }
+        try {
+            do {
+                Volatile.Write(ref _refreshRequested, 0);
+                RefreshPass();
+            } while (Volatile.Read(ref _refreshRequested) == 1);
+        } finally {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    /// <summary>A refresh now (a command just changed the device): when a tick is already in flight it
+    /// makes one more pass after it, so a write that lands mid-tick is not left stale until the next period.</summary>
+    public void RequestRefresh() {
+        Volatile.Write(ref _refreshRequested, 1);
+        Refresh();
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The device class's reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
+    private void RefreshPass() {
         try {
             TDevice? client;
             lock (Gate) {
@@ -334,8 +368,6 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             }
         } catch (Exception ex) {
             DeviceLifecycleLog.RuntimeReadFailed(_logger, ex, _type);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
         }
     }
 
@@ -343,10 +375,13 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         Justification = "Background connect boundary: building the device and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "Ownership is explicit: on every non-adopt path SafeDisconnectDispose disposes the device; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
+    private void ConnectInBackground(DiscoveredDeviceDto device, long generation, TDevice? previous) {
         TDevice? client = null;
         var adopted = false;
         try {
+            if (previous is not null) {
+                SafeDisconnectDispose(previous);
+            }
             client = _createDevice(device);
             client.Connect();
             var commitPrepared = _prepareSession?.Invoke(client);
@@ -426,14 +461,6 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         }
     }
 
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
     private static bool ProbeConnected(TDevice c) {
@@ -453,11 +480,11 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// it), desired state Faulted, and publish the §42.2 fault. Re-checks the probed client under the gate:
     /// a reconnect between the read and this trip must never flip the NEW, healthy session to Error.
     /// <paramref name="reason"/> is the user-facing fault text (the probe, a class's own detector).</summary>
-    public void TripConnectionLost(TDevice probed, string reason) {
+    public bool TripConnectionLost(TDevice probed, string reason) {
         DiscoveredDeviceDto? device;
         lock (Gate) {
             if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
+                return false;
             }
             device = _device;
             _desired = DesiredConnection.Faulted;
@@ -469,6 +496,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         DeviceLifecycleLog.ConnectionLost(_logger, _type, device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(_type, device?.UniqueId, device?.Name,
             EquipmentFaultKind.Disconnected, reason, DateTimeOffset.UtcNow));
+        return true;
     }
 
     // Caller holds Gate; the publisher's synchronous part only serializes a small payload and hands off.
