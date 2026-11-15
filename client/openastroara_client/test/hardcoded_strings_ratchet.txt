@@ -9,7 +9,7 @@ lib/screens/calibration/calibration_screen.dart 60
 lib/screens/library/image_library_screen.dart 25
 lib/screens/library/live_frame_viewer_screen.dart 5
 lib/screens/settings/panels/about_panel.dart 15
-lib/screens/settings/panels/camera_electronics_panel.dart 17
+lib/screens/settings/panels/camera_electronics_panel.dart 16
 lib/screens/settings/panels/diagnostics_mode_panel.dart 12
 lib/screens/settings/panels/equipment_camera_panel.dart 8
 lib/screens/settings/panels/equipment_dome_panel.dart 20
@@ -26,13 +26,13 @@ lib/screens/settings/panels/experimental_panel.dart 8
 lib/screens/settings/panels/filter_set_panel.dart 16
 lib/screens/settings/panels/imaging_autofocus_panel.dart 20
 lib/screens/settings/panels/imaging_defaults_panel.dart 27
-lib/screens/settings/panels/imaging_plate_solve_panel.dart 19
-lib/screens/settings/panels/imaging_unguided_panel.dart 28
+lib/screens/settings/panels/imaging_plate_solve_panel.dart 18
+lib/screens/settings/panels/imaging_unguided_panel.dart 27
 lib/screens/settings/panels/optics_panel.dart 16
 lib/screens/settings/panels/profile_active_panel.dart 9
 lib/screens/settings/panels/profile_wizard_panel.dart 5
 lib/screens/settings/panels/safety_policies_panel.dart 49
-lib/screens/settings/panels/safety_site_panel.dart 27
+lib/screens/settings/panels/safety_site_panel.dart 26
 lib/screens/settings/panels/session_calibration_panel.dart 19
 lib/screens/settings/panels/session_filenames_panel.dart 44
 lib/screens/settings/panels/session_notifications_panel.dart 18
