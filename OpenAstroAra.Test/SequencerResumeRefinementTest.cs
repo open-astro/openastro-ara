@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
+using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
@@ -229,6 +230,43 @@ namespace OpenAstroAra.Test {
             Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(b).And.Not.SameAs(paused),
                 "the resume's ReferenceEquals guard sees the plan moved on");
             Assert.That(SequencerService.TargetCoordinates(b)!.Dec, Is.EqualTo(20).Within(1e-6));
+        }
+
+        [Test]
+        public void The_Simple_Mode_finder_skips_blocks_that_already_ran() {
+            var root = new SequentialContainer { Name = "root" };
+            var a = SimpleBlock("A", 1, 10);
+            var b = SimpleBlock("B", 2, 20);
+            root.Items.Add(a);
+            root.Items.Add(b);
+            a.Status = SequenceEntityStatus.FINISHED;
+            b.Status = SequenceEntityStatus.CREATED;
+
+            Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(b),
+                "a pause between two blocks must not slew back to the finished one");
+
+            b.Status = SequenceEntityStatus.FINISHED;
+            Assert.That(SequencerService.FindActiveTarget(root), Is.Null, "every block has run");
+        }
+
+        [Test]
+        public void A_Simple_Mode_block_without_a_slew_takes_its_coordinates_from_the_AboveHorizonCondition() {
+            var block = new SequentialContainer { Name = "framed" };
+            block.Items.Add(new CenterAndRotate());
+            var profile = new Mock<OpenAstroAra.Profile.Interfaces.IProfileService>();
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Latitude).Returns(-33.856784);
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Longitude).Returns(151.215297);
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Elevation).Returns(42);
+            var condition = new OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition(profile.Object);
+            condition.Data.Coordinates = new InputCoordinates(new Coordinates(Angle.ByHours(3), Angle.ByDegree(-12), Epoch.J2000));
+            block.Conditions.Add(condition);
+            var root = new SequentialContainer { Name = "root" };
+            root.Items.Add(block);
+
+            var found = SequencerService.FindActiveTarget(root);
+
+            Assert.That(found, Is.SameAs(block));
+            Assert.That(SequencerService.TargetCoordinates(found!)!.Dec, Is.EqualTo(-12).Within(1e-6));
         }
 
         [Test]

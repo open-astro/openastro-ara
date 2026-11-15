@@ -630,7 +630,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     /// <summary>#1890 — the active target in either plan shape: a deep-sky container, else a Simple
     /// Mode block (a plain SequentialContainer carrying the target's slew and AboveHorizonCondition).
-    /// The running block wins over the first, as for deep-sky targets.</summary>
+    /// The running block wins; with none running, the first block that has not run yet. A block that
+    /// already ran (FINISHED, SKIPPED, FAILED) is never the target, so a pause between two blocks does not
+    /// slew back to the finished one; when every block has run the result is null.</summary>
     internal static ISequenceContainer? FindActiveTarget(ISequenceContainer root) {
         if (FindActiveDeepSkyTarget(root) is { } dso) return dso;
         ISequenceContainer? first = null;
@@ -642,7 +644,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             foreach (var item in container.GetItemsSnapshot()) {
                 if (item is not ISequenceContainer child) continue;
                 if (SimpleModeCoordinates(child) is not null) {
-                    first ??= child;
+                    if (child.Status is not (SequenceEntityStatus.FINISHED or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.FAILED)) {
+                        first ??= child;
+                    }
                     if (child.Status == SequenceEntityStatus.RUNNING) {
                         running = child;
                         return;
@@ -665,7 +669,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (item is OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec slew) return slew.Coordinates?.Coordinates;
         }
         if (block is OpenAstroAra.Sequencer.Container.SequenceContainer sc) {
-            foreach (var cond in sc.Conditions) {
+            foreach (var cond in sc.GetConditionsSnapshot()) {
                 if (cond is OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition h) return h.Data?.Coordinates?.Coordinates;
             }
         }
