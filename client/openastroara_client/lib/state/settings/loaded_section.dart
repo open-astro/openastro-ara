@@ -81,6 +81,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   // an older load must not land.
   int _generation = 0;
   Future<void>? _saveChain;
+  T? _held; // The rig's copy (last load or save); see [replaceAndSave].
 
   /// Replace the section with the rig's copy (also discards edits and a
   /// conflict). A failure is kept in [LoadedSection.lastFailure]; a section
@@ -90,6 +91,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     try {
       final r = await fetch(api);
       if (ref.mounted && gen == _generation) {
+        _held = r.value;
         state = LoadedSection(
           value: r.value,
           source: SectionSource.rig,
@@ -120,16 +122,16 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
       (throw StateError('Not connected — connect to your rig to save this.'));
 
   /// Save [next] whole (a picker, a form). A 412 keeps [next] and flags the
-  /// conflict (ADR 0015 rule 6). Any other failure puts the old value back,
+  /// conflict (ADR 0015 rule 6). Any other failure puts the rig's copy back,
   /// unless a later edit already replaced [next]: that edit's save decides.
   Future<void> replaceAndSave(T next) async {
-    final before = state.value;
     try {
       await editAndSave((_) => next);
     } on SectionConflictException {
       rethrow;
     } catch (_) {
-      if (before != null && identical(state.value, next)) edit((_) => before);
+      final held = _held;
+      if (held != null && identical(state.value, next)) edit((_) => held);
       rethrow;
     }
   }
@@ -148,6 +150,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   /// Back to not loaded (rig or profile changed).
   void reset() {
     _generation++;
+    _held = null;
     state = const LoadedSection();
   }
 
@@ -175,6 +178,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
         rethrow;
       }
       if (ref.mounted && gen == _generation) {
+        _held = r.value;
         // Edits made while the PUT was in flight stay; the tag moves on.
         state = LoadedSection(
           value: identical(state.value, sent) ? r.value : state.value,

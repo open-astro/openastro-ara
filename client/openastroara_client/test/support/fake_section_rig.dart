@@ -25,8 +25,8 @@ class FakeSectionRig implements HttpClientAdapter {
   /// Sections whose GET fails as an unreachable rig does.
   final Set<String> failGet = {};
 
-  /// Sections whose next PUT fails with a server error (nothing written).
-  final Set<String> failPut = {};
+  /// Each entry fails one PUT to its section with a 500 (nothing written).
+  final List<String> failPut = [];
 
   /// Every write that landed, in order.
   final List<LandedPut> puts = [];

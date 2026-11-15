@@ -175,4 +175,20 @@ void main() {
     expect(c.read(diagnosticsModeProvider).value, tapped);
     expect(rig.puts.single.body, {'mode': 'abort_on_critical'});
   });
+
+  test('diagnostics-mode: two quick taps that both fail show the mode the '
+      'rig holds', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    await n.replaceAndSave(tapped);
+    rig.failPut.addAll([mode, mode]);
+    final first = n.replaceAndSave(DiagnosticsMode.pauseOnCritical);
+    final second = n.replaceAndSave(DiagnosticsMode.notifyOnly);
+    await expectLater(first, throwsException);
+    await expectLater(second, throwsException);
+    expect(c.read(diagnosticsModeProvider).value, tapped);
+    expect(rig.puts.single.body, {'mode': 'abort_on_critical'});
+  });
 }
