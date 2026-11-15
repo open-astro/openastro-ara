@@ -544,25 +544,6 @@ class ProfileApi {
     return _storageSettingsFromJson(res.data ?? const {});
   }
 
-  /// GET the active profile's notifications-settings section.
-  Future<NotificationsSettings> getNotificationsSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/notifications',
-    );
-    return _notificationsSettingsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's notifications-settings section.
-  Future<NotificationsSettings> putNotificationsSettings(
-    NotificationsSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/notifications',
-      data: _notificationsSettingsToJson(value),
-    );
-    return _notificationsSettingsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's site-settings section.
   Future<SiteSettings> getSiteSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/site');
@@ -576,25 +557,6 @@ class ProfileApi {
       data: siteSettingsToJson(value),
     );
     return siteSettingsFromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's filenames-settings section.
-  Future<FilenamesSettings> getFilenamesSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/filenames',
-    );
-    return _filenamesSettingsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's filenames-settings section.
-  Future<FilenamesSettings> putFilenamesSettings(
-    FilenamesSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/filenames',
-      data: _filenamesSettingsToJson(value),
-    );
-    return _filenamesSettingsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's safety policies.
@@ -719,27 +681,6 @@ class ProfileApi {
       data: _plateSolveSettingsToJson(value),
     );
     return _plateSolveSettingsFromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's diagnostics mode.
-  Future<DiagnosticsMode> getDiagnosticsMode() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/diagnostics-mode',
-    );
-    return _diagnosticsModeFromString(
-      (res.data ?? const {})['mode'] as String?,
-    );
-  }
-
-  /// PUT the active profile's diagnostics mode.
-  Future<DiagnosticsMode> putDiagnosticsMode(DiagnosticsMode value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/diagnostics-mode',
-      data: {'mode': _diagnosticsModeToString(value)},
-    );
-    return _diagnosticsModeFromString(
-      (res.data ?? const {})['mode'] as String?,
-    );
   }
 
   /// GET the active profile's OpenAstro Guider settings.

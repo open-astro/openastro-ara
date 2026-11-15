@@ -156,6 +156,22 @@ void main() {
   });
 
   test(
+    'Sound alert rings when notifications are not loaded from the rig',
+    () async {
+      // A rig or profile change resets the section; no value means no mute.
+      container.read(notificationsSettingsProvider.notifier).reset();
+      expect(container.read(notificationsSettingsProvider).value, isNull);
+      emit('safety.unsafe');
+      await settle();
+
+      expect(container.read(safetyAlarmProvider).ringing, isTrue);
+      expect(player.played, [
+        'audio/alarm_siren.wav',
+      ], reason: 'a safety alarm fails loud, not quiet');
+    },
+  );
+
+  test(
     'touching one knob before restore keeps the OTHER persisted value',
     () async {
       container.dispose();
