@@ -99,16 +99,15 @@ void main() {
     expect(rig.puts, hasLength(1));
   });
 
-  testWidgets('diagnostics modes read as one radio group, the loaded one '
-      'checked', (tester) async {
+  testWidgets('diagnostics modes read as one radio group, each name once and '
+      'the loaded one checked', (tester) async {
     await _pump(
       tester,
       FakeSectionRig({'diagnostics-mode': <String, Object?>{}}),
       const DiagnosticsModePanel(),
     );
-    expect(
-      tester.getSemantics(find.text('Notify only (default)')),
-      isSemantics(isInMutuallyExclusiveGroup: true, isChecked: true),
-    );
+    final row = tester.getSemantics(find.text('Notify only (default)'));
+    expect(row, isSemantics(isInMutuallyExclusiveGroup: true, isChecked: true));
+    expect('Notify only (default)'.allMatches(row.label), hasLength(1));
   });
 }

@@ -107,7 +107,6 @@ class _ModeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: label,
       checked: selected,
       inMutuallyExclusiveGroup: true,
       button: true,
