@@ -1165,6 +1165,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Only_an_adoptable_pause_stops_the_frame_in_progress() {
+            // The star-lost pause (adoptable) stops a light on a lost star; a safety or user pause lets it finish.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }), new RecordingWsBroadcaster());
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.PauseActiveRunsAsync(CancellationToken.None);
+            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "a plain daemon pause lets the frame finish");
+            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
+
+            await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            Assert.That(svc.PauseInterruptsFrame(id), Is.True, "the star-lost pause stops the frame");
+            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
+            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "Resume clears it");
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task DaemonPausedRunsAsync_drops_a_run_the_user_re_paused_or_stopped() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody(c => {

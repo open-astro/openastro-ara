@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
@@ -28,8 +29,8 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §42.2 "Guider (PHD2): loses guide star" — a star that stays lost for longer than the grace period
-/// runs the on_guider_lost reaction (pause by default), and the first guide step afterwards resumes
-/// the runs that pause parked. Before this the sequencer never heard about a lost star: on
+/// runs the on_guider_lost reaction (pause by default), and the first settled stretch of guiding
+/// afterwards resumes the runs that pause parked (#1891: a guide step far from the lock is not guiding). Before this the sequencer never heard about a lost star: on
 /// 2026-10-16 the guider chased a lost star for nine minutes after a Home while Ara's run carried on.
 /// Unlike a link or camera drop this is not one-shot per connect: clouds pass more than once a night.
 /// </summary>
@@ -41,7 +42,8 @@ public sealed partial class GuiderService {
     /// star within a few frames; a passing cloud takes longer). Internal so tests can shorten it.</summary>
     internal TimeSpan StarLostGrace { get; set; } = DefaultStarLostGrace;
 
-    private Timer? _starLostTimer;                 // armed on star_lost, disarmed by any guide step (under _gate)
+    private Timer? _starLostTimer;                 // armed on star_lost, disarmed by a settled guide step (under _gate)
+    private DateTimeOffset? _settledSinceUtc;      // the current run of guide steps inside the settle distance (under _gate)
     private bool _guidingSeen;                     // a guide step or guiding_started since the last guiding_stopped
     private bool _starLostReacted;                 // the reaction ran for the current lost-star episode
     private EquipmentFaultEvent? _starLostFault;   // its §42.5 row, resolved when the star is back
@@ -62,6 +64,7 @@ public sealed partial class GuiderService {
                 case "lock_position_lost":
                     // PHD2 also reports StarLost while merely looping with a star selected; only a star
                     // lost from a guiding session concerns the run.
+                    _settledSinceUtc = null;
                     if (_guidingSeen) {
                         ArmStarLostWatchLocked();
                     }
@@ -71,6 +74,7 @@ public sealed partial class GuiderService {
                     // outstanding stays until guide steps return, a later daemon pause adopts it, or the
                     // user resumes.
                     _guidingSeen = false;
+                    _settledSinceUtc = null;
                     _guidingStoppedUtc ??= DateTimeOffset.UtcNow;
                     DisarmStarLostWatchLocked();
                     if (_recoveryStopPending) {
@@ -102,20 +106,26 @@ public sealed partial class GuiderService {
         DisarmStarLostWatchLocked();
         ResetStarLostRecoveryLocked();
         _guidingSeen = false;
+        _settledSinceUtc = null;
         _starLostReacted = false;
         _starLostFault = null;
         _starLostPausedRuns = Array.Empty<Guid>();
     }
 
-    private void OnStarLostGraceElapsed(object? _) {
+    internal void OnStarLostGraceElapsed(object? _) {
         EquipmentFaultEvent fault;
         lock (_gate) {
             DisarmStarLostWatchLocked();
             if (_disposed || _guider is null || _state != EquipmentConnectionState.Connected || _starLostReacted) {
                 return;
             }
-            if (_guider.AppState?.State != "LostLock") {
-                return; // the star came back (or guiding ended) before the grace ran out
+            if (_settledSinceUtc is not null) {
+                return; // a late callback: Dispose does not stop one already queued, and a settled step has ended the loss
+            }
+            // Only a settled guide step disarms the timer, so a star found far from the lock (Guiding,
+            // not settled) still counts as lost; a stopped or looping guider is not this watch's.
+            if (_guider.AppState?.State is not ("LostLock" or "Guiding")) {
+                return; // guiding ended before the grace ran out
             }
             _starLostReacted = true;
             // A new episode starts clean: a give-up, the failure count, the one-warning latch and the
@@ -123,27 +133,49 @@ public sealed partial class GuiderService {
             ResetStarLostRecoveryLocked();
             fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
                 EquipmentFaultKind.TrackingLost,
-                $"guide star lost for more than {(int) StarLostGrace.TotalSeconds} s — the guider is still looking for it",
+                $"guide star lost for more than {(int)StarLostGrace.TotalSeconds} s — the guider is still looking for it",
                 DateTimeOffset.UtcNow);
             _starLostFault = fault;
         }
-        LogStarLostGraceElapsed((int) StarLostGrace.TotalSeconds);
+        LogStarLostGraceElapsed((int)StarLostGrace.TotalSeconds);
         RecordFaultQuietly(fault);
         _ = Task.Run(() => ReactToGuidingLossAsync(GuiderFaultKind.StarLost, fault), CancellationToken.None);
     }
 
+    // The profile's settle rule, PHD2's own: the total error (RA and Dec together, pixels) inside
+    // SettlePixels for SettleTime seconds. Caller holds _gate.
+    private void TrackSettleLocked(IGuideStep step) {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        if (Math.Sqrt((step.RADistanceRaw * step.RADistanceRaw) + (step.DECDistanceRaw * step.DECDistanceRaw)) <= settings.SettlePixels) {
+            _settledSinceUtc ??= DateTimeOffset.UtcNow;
+        } else {
+            _settledSinceUtc = null;
+        }
+    }
+
     // Caller holds _gate.
-    private void NoteGuideStepLocked() {
+    private bool GuidingSettledLocked() =>
+        _settledSinceUtc is { } since
+        && DateTimeOffset.UtcNow - since >= TimeSpan.FromSeconds(Math.Max(0, _profileService.ActiveProfile.GuiderSettings.SettleTime));
+
+    // Caller holds _gate.
+    private void NoteGuideStepLocked(IGuideStep step) {
         _guidingSeen = true;
         _guidingStoppedUtc = null;
-        DisarmStarLostWatchLocked();
+        TrackSettleLocked(step);
+        if (_settledSinceUtc is not null) {
+            DisarmStarLostWatchLocked(); // settled guiding ends the loss; a star found far from lock does not
+        }
         if (!_starLostReacted) {
             return;
         }
         if (_recoveryInFlight && _recoveryStoppedGuiding) {
             // The recovery restarted guiding itself: it re-centered first and resumes the run once
-            // guiding is confirmed, with the notification that says so. Not a relock.
+            // guiding has settled, with the notification that says so. Not a relock.
             return;
+        }
+        if (!GuidingSettledLocked()) {
+            return; // found again, not yet guiding: the run stays paused
         }
         DisarmStarLostRecoveryLocked();
         _starLostReacted = false;

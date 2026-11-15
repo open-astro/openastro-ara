@@ -520,13 +520,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 }
                 continue;
             }
-            run.Gate.RequestPause();
+            // An adoptable pause is the star-lost watch's: a frame in flight on a lost star is stopped
+            // (not saved) and taken again on Resume. Every other pause lets the frame finish.
+            run.Gate.RequestPause(interruptFrames: adoptable);
             run.DaemonPaused = true;
             run.AdoptablePause = adoptable;
             paused.Add(id);
         }
         return Task.FromResult<IReadOnlyList<Guid>>(paused);
     }
+
+    /// <summary>Whether the run's pending pause also stops the frame in progress (tests).</summary>
+    internal bool PauseInterruptsFrame(Guid id) => _runs.TryGetValue(id, out var run) && run.Gate.FrameInterruptToken.IsCancellationRequested;
 
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
         // §35 safety auto-resume — daemon-automated (no NotifyUserActivity), and it
