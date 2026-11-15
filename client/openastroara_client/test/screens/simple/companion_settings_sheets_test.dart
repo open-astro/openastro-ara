@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,8 +10,14 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/services/storage_devices_api.dart';
+import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/profile_management_state.dart'
+    show profileApiProvider;
 import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/saved_server_state.dart'
+    show activeServerProvider;
 import 'package:openastroara/state/server_state.dart'
     show discoveredServersProvider;
 import 'package:openastroara/state/settings/settings_nav.dart';
@@ -18,9 +25,41 @@ import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
-    show clockProvider;
+    show clockProvider, tonightSkyProvider;
 import 'package:openastroara/state/ws/ws_providers.dart';
+
+import '../../support/storage_fixture.dart';
+
+import 'package:openastroara/screens/simple/simple_rig_storage.dart'
+    show SimpleStorageBlock;
+import 'package:openastroara/services/tonight_sky_api.dart'
+    show TonightSkyObject;
+import 'package:openastroara/widgets/inline_choices.dart' show InlineConfirm;
+import 'package:openastroara/widgets/sky_atlas/stellarium_view.dart'
+    show SkyPanelsLayout;
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
+
+const _store = StorageDevice(
+  path: '/dev/sda1',
+  uuid: 'AAAA',
+  label: 'STORE',
+  fileSystem: 'ext4',
+  removable: true,
+  isSystemDisk: false,
+  isAraStore: true,
+);
+
+const _rig = AraServer(hostname: '192.0.2.10', port: 5555);
+
+/// The drive list and its contents, with no network.
+class _StorageApi extends StorageDevicesApi {
+  _StorageApi() : super(_rig);
+  @override
+  Future<StorageContents> contents(String uuid) async =>
+      StorageContents.unknown;
+  @override
+  void close() {}
+}
 
 class _Prefs extends SimpleModePrefsService {
   @override
@@ -191,19 +230,124 @@ void main() {
           of: menu,
           matching: find.byType(SingleChildScrollView),
         );
-        await tester.drag(page.first, const Offset(0, -3000));
-        await tester.pump(const Duration(milliseconds: 500));
+        for (var i = 0; i < 3; i++) {
+          await tester.drag(page.first, const Offset(0, -3000));
+          await tester.pump(const Duration(milliseconds: 500));
+        }
         expect(tester.takeException(), isNull);
+        final position = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: page.first, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+        expect(position.maxScrollExtent, greaterThan(0));
+        expect(position.extentAfter, lessThan(0.5));
         final deck = tester.getRect(find.byKey(const Key('companion-deck')));
         expect(tester.getRect(menu).bottom, lessThanOrEqualTo(deck.top));
       },
     );
   }
 
-  // Tonight's Sky, given the screen's width on an upright phone.
+  // Tonight's Sky in the Sky Atlas host: full width on an upright phone,
+  // docked at 360 px beside the sky in landscape.
+  Future<void> pumpHost(
+    WidgetTester tester,
+    Size size,
+    bool upright,
+    Locale locale,
+  ) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tonightSkyProvider.overrideWith(
+            (ref) async => [
+              for (var i = 0; i < 12; i++)
+                TonightSkyObject(
+                  id: 'M$i',
+                  name: 'Target $i',
+                  type: 'galaxy',
+                  magnitude: 3.4,
+                  raDeg: 10.6847,
+                  decDeg: 41.269,
+                  altitudeDeg: 55,
+                  maxAltitudeDeg: 60,
+                ),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          // The host gives the layout the page's tight size, as the Expanded
+          // in StellariumView does.
+          home: Scaffold(
+            body: SizedBox.expand(
+              child: SkyPanelsLayout(
+                sky: const Expanded(child: SizedBox(key: Key('sky'))),
+                tonightOpen: true,
+                rotateOpen: false,
+                upright: upright,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+  }
+
   for (final (locale, scale) in _textSizes) {
     testWidgets(
       "Tonight's Sky fills a 390 px phone in $locale at text ${scale}x without overflow",
+      skip: !hasFonts,
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpHost(tester, _portrait, true, locale);
+        expect(tester.takeException(), isNull);
+        expect(tester.getSize(find.byType(TonightSkyPanel)).width, 390);
+        // Full height and scrolls to its end without overflow.
+        expect(tester.getSize(find.byType(TonightSkyPanel)).height, 844);
+        final list = find.descendant(
+          of: find.byType(TonightSkyPanel),
+          matching: find.byType(Scrollable),
+        );
+        final position = tester.state<ScrollableState>(list.first).position;
+        expect(position.maxScrollExtent, greaterThan(0));
+        // The list's length is an estimate until its end is built: drag twice.
+        for (var i = 0; i < 2; i++) {
+          await tester.drag(list.first, const Offset(0, -5000));
+          await tester.pump(const Duration(milliseconds: 500));
+        }
+        expect(position.extentAfter, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    "Tonight's Sky in landscape still docks at 360 px beside the sky",
+    (tester) async {
+      await pumpHost(tester, const Size(844, 390), false, const Locale('en'));
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(TonightSkyPanel)).width, 360);
+      expect(tester.getSize(find.byKey(const Key('sky'))).width, 844 - 360);
+    },
+  );
+
+  Finder anyOverlay() => find.byWidgetPredicate(
+    (w) => w is Dialog || w is BottomSheet || w is SnackBar || w is AlertDialog,
+  );
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets(
+      'on a phone upright Rig Storage opens its confirmation and drive list in place at text ${scale}x',
       skip: !hasFonts,
       (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
@@ -213,19 +357,71 @@ void main() {
         addTearDown(tester.view.reset);
         await tester.pumpWidget(
           ProviderScope(
+            overrides: [
+              activeServerProvider.overrideWithValue(_rig),
+              profileApiProvider.overrideWithValue(FakeStorageApi()),
+              storageDevicesApiFactoryProvider.overrideWithValue(
+                (_) => _StorageApi(),
+              ),
+              storageDevicesProvider.overrideWith(
+                (ref) async => const [_store],
+              ),
+              storageSpaceProvider.overrideWith(
+                (ref) async => const StorageSpace(
+                  saveDirectory: '/mnt/store',
+                  isFallback: false,
+                  freeBytes: 100,
+                  totalBytes: 200,
+                ),
+              ),
+            ],
             child: MaterialApp(
-              locale: locale,
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: const Scaffold(
-                body: TonightSkyPanel(width: double.infinity),
+                body: SingleChildScrollView(child: SimpleStorageBlock()),
               ),
             ),
           ),
         );
-        await tester.pump();
+        await tester.pumpAndSettle();
+        for (final k in ['simple-storage-choose', 'simple-storage-check']) {
+          await tester.ensureVisible(find.byKey(Key(k)));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(Key(k)));
+          await tester.pumpAndSettle();
+        }
+        expect(find.byKey(const Key('simple-storage-chooser')), findsOneWidget);
+        expect(find.byType(InlineConfirm), findsOneWidget);
+        // Both opened in the page: no route, dialog, sheet or snackbar.
+        expect(
+          tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+          isFalse,
+        );
+        expect(anyOverlay(), findsNothing);
         expect(tester.takeException(), isNull);
-        expect(tester.getSize(find.byType(TonightSkyPanel)).width, 390);
+      },
+    );
+
+    testWidgets(
+      'on a phone upright the Ara sheet shows Change rig and Change profile within the screen at text ${scale}x',
+      skip: !hasFonts,
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await _pump(tester, _portrait);
+        await tester.tap(find.byKey(const Key('simple-ara-mark')));
+        await tester.pump(const Duration(milliseconds: 500));
+        for (final k in [
+          'simple-ara-change-rig',
+          'simple-ara-change-profile',
+        ]) {
+          final r = tester.getRect(find.byKey(Key(k)));
+          expect(r.left, greaterThanOrEqualTo(0), reason: k);
+          expect(r.right, lessThanOrEqualTo(390), reason: k);
+        }
+        expect(anyOverlay(), findsNothing);
+        expect(tester.takeException(), isNull);
       },
     );
   }
