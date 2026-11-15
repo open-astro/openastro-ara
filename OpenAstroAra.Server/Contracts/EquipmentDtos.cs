@@ -703,7 +703,9 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or
 /// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>ao</c>, <c>no_calibration</c>,
-/// <c>no_pixel_scale</c>, <c>no_fit</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
+/// <c>no_pixel_scale</c>, <c>no_fit</c>, <c>guiding_not_holding</c>: an axis ran away, 10 steps with the pulse pinned
+/// and the distance growing; <c>settle_failed</c>: a settle ended in an error; <c>mount_not_tracking</c>: the mount
+/// was not tracking when the run started; the first reason set is kept). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
 /// <c>UncertaintyArcmin</c> exceeds max(1′, half the value), or when the value less twice that
 /// uncertainty is more than 2′ above <c>AlignErrorArcmin</c> (#1731). <c>AlignErrorArcmin</c> is the last

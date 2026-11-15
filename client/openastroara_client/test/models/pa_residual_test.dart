@@ -58,7 +58,7 @@ void main() {
         expect(PaResidual.reasonText(u.reason), contains('comet'));
         for (final (reason, word) in [
           ('guiding_not_holding', 'not holding'),
-          ('settle_timed_out', 'settle'),
+          ('settle_failed', 'settle'),
           ('mount_not_tracking', 'not tracking'),
         ]) {
           final text = PaResidual.reasonText(reason);

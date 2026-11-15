@@ -97,12 +97,13 @@ public sealed partial class GuiderService {
         lock (_paGate) {
             action = _paTracker.OnMarker(kind);
             generation = NewPaRunGenerationLocked(action);
-            // A settle that gave up (PHD2's own timeout carries an error) means guiding was not holding.
-            failed = kind == "settle_done" && settleError is not null && _paTracker.Fail();
+            // A settle that failed (PHD2 sends an error: timeout, lost star) means guiding was not holding.
+            // "Stopped capturing" is our own stop; GuidingStopped ends the run (as PHD2Guider's start retry does).
+            failed = kind == "settle_done" && settleError is not null && settleError != "Stopped capturing" && _paTracker.Fail();
         }
         HandlePaResidualAction(guider, action, generation);
         if (failed) {
-            MarkPaRunUnavailable(generation, "settle_timed_out");
+            MarkPaRunUnavailable(generation, "settle_failed");
         }
     }
 
@@ -206,7 +207,8 @@ public sealed partial class GuiderService {
     private void MarkPaRunUnavailable(long generation, string reason) {
         PaResidualDto? current;
         lock (_paGate) {
-            if (generation != _paGeneration || _paCurrent is null) {
+            // The first reason is the most specific one: keep it.
+            if (generation != _paGeneration || _paCurrent is null || _paUnavailable is not null) {
                 return;
             }
             _paUnavailable = reason;

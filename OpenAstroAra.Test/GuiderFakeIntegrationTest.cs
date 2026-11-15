@@ -541,8 +541,49 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
             await Task.Delay(300).ConfigureAwait(false);
             Assert.That(rig.Statuses, Does.Not.Contain("done"));
-            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("settle_timed_out"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("settle_failed"));
             Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_lost_star_during_a_settle_makes_the_run_unavailable_as_a_failed_settle() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 3).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "lost the star")).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 4, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Does.Not.Contain("done"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("settle_failed"));
+        }
+
+        [Test]
+        public async Task A_stopped_capturing_settle_does_not_make_the_run_unavailable() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 3).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing")).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 4, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Statuses, Does.Not.Contain("unavailable"));
+        }
+
+        [Test]
+        public async Task A_run_that_began_with_the_mount_not_tracking_keeps_that_reason_when_RA_runs_away() {
+            await using var rig = await StartPaRigAsync(mountTracking: false).ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 30, raGrowthPx: 0.25).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("mount_not_tracking"));
+            Assert.That(rig.Statuses.Count(s => s == "unavailable"), Is.EqualTo(1));
         }
 
         [Test]
