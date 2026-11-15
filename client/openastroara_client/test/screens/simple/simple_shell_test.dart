@@ -3266,16 +3266,14 @@ void main() {
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets("Focus's panel turns Info on too", (tester) async {
+  testWidgets("Focus's panel has no Info toggle (#1875)", (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-info-on')));
-    await tester.pump();
-    expect(container.read(simpleInfoShownProvider), isTrue);
+    expect(find.byKey(const Key('simple-focus-stars-off')).evaluate().length + find.byKey(const Key('simple-info-on')).evaluate().length, 0);
   });
 
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {

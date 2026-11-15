@@ -30,6 +30,7 @@ import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -147,20 +148,19 @@ void main() {
     });
   });
 
-  testWidgets('Main / Guide on top, Auto / Manual on a row under it; the guide camera has no Auto / Manual row',
-      (tester) async {
-    // User, 2026-11-04: Main, Guide, Auto, Manual on one line read as four of a kind.
-    await _pump(tester);
+  testWidgets('Main / Guide on top, the Tools rows under Autofocus; the guide camera has no Tools', (tester) async {
+    await _pump(tester, focuser: _focuser());
     final main = tester.getRect(find.byKey(const Key('simple-focus-scope-main')));
     final guide = tester.getRect(find.byKey(const Key('simple-focus-scope-guide')));
-    final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
+    final manual = tester.getRect(find.byKey(const Key('simple-focus-tool-manual')));
     expect(guide.top, main.top, reason: 'one row');
-    expect(auto.top, greaterThan(main.bottom), reason: 'the method under the camera');
-    expect(auto.left, main.left);
+    expect(manual.top, greaterThan(main.bottom), reason: 'Tools under the camera row');
+    expect(find.byKey(const Key('simple-focus-tool-offsets')), findsOneWidget);
+    expect(find.byKey(const Key('simple-info-on')), findsNothing, reason: 'Focus has no Info toggle');
     _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
     await tester.pump();
-    expect(find.byKey(const Key('simple-focus-method-auto')), findsNothing);
-    expect(find.byKey(const Key('simple-focus-method-manual')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-tool-offsets')), findsNothing);
   });
 
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
@@ -240,6 +240,10 @@ void main() {
   });
 
   testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
+    // Tall enough for the Tools rows too: the panel scrolls once the window caps it.
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
     double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
     final start = height();
@@ -386,20 +390,69 @@ void main() {
     expect(find.byKey(const Key('simple-focus-stars-on')), findsNothing);
   });
 
-  testWidgets('Auto / Manual at the top of the panel picks the method (the chip follows)', (tester) async {
+  testWidgets('Focus by hand opens in place and Back returns to Autofocus (the chip follows)', (tester) async {
     await _pump(tester, focuser: _focuser());
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-auto'))).selected, isTrue,
-        reason: 'a connected focuser: Auto to start');
-    await tester.tap(find.byKey(const Key('simple-focus-method-manual')));
+    expect(find.byKey(const Key('simple-focus-back')), findsNothing, reason: 'a connected focuser: Autofocus to start');
+    await tester.tap(find.byKey(const Key('simple-focus-tool-manual')));
     await tester.pump();
     expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov);
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).selected, isTrue);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-focus-back')));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.autofocus);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget);
   });
 
-  testWidgets('the method is locked while autofocus runs', (tester) async {
+  testWidgets('the Tools rows are locked while autofocus runs', (tester) async {
     await _pump(tester,
         focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-focus-tool-manual'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-focus-tool-offsets'))).onPressed, isNull);
+  });
+
+  group('Autofocus exposure in Simple Mode', () {
+    Future<void> pumpWith(WidgetTester tester, {int? seconds}) async {
+      await _pump(tester, focuser: _focuser());
+      if (seconds != null) _c.read(autofocusSettingsProvider.notifier).setExposureSeconds(seconds);
+      await tester.pump();
+    }
+
+    bool selected(WidgetTester tester, String key) =>
+        tester.widget<SimpleSegment>(find.byKey(Key('simple-focus-af-exposure-$key'))).selected;
+
+    testWidgets('2 / 5 / 10 / 15 s, 5 s to start; Steps and Step size are not offered', (tester) async {
+      await pumpWith(tester);
+      for (final s in ['2', '5', '10', '15']) {
+        expect(find.byKey(Key('simple-focus-af-exposure-$s')), findsOneWidget);
+      }
+      expect(selected(tester, '5'), isTrue);
+      expect(find.textContaining('Step'), findsNothing);
+    });
+
+    testWidgets('a pick writes the profile setting Advanced Mode edits', (tester) async {
+      await pumpWith(tester);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 10);
+      expect(selected(tester, '10'), isTrue);
+    });
+
+    testWidgets('a profile value outside the four shows as its own chip and is not rewritten', (tester) async {
+      await pumpWith(tester, seconds: 3);
+      expect(selected(tester, '3'), isTrue);
+      expect(find.text('3 s'), findsOneWidget);
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 3);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-15')));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-focus-af-exposure-3')), findsNothing);
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 15);
+    });
+
+    testWidgets('locked while autofocus runs', (tester) async {
+      await _pump(tester,
+          focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
+      expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-af-exposure-10'))).onTap, isNull);
+    });
   });
 
   testWidgets(
@@ -650,14 +703,6 @@ void main() {
       await tester.pump();
       return o;
     }
-
-    testWidgets('Offsets is a third routine on the Auto / Manual row, locked while autofocus runs', (tester) async {
-      await _pump(tester, focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
-      final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
-      final offsets = find.byKey(const Key('simple-focus-method-offsets'));
-      expect(tester.getRect(offsets).top, auto.top, reason: 'one row');
-      expect(tester.widget<SimpleSegment>(offsets).onTap, isNull);
-    });
 
     testWidgets('Offsets is locked while a plan runs, and says why', (tester) async {
       await offsets(tester, plan: true);

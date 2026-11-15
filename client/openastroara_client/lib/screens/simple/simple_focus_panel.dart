@@ -30,7 +30,9 @@ import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_preflight_state.dart';
 import 'simple_preview_panel.dart'
-    show SimpleInfoToggle, SimpleShutterButton, kSimpleText;
+    show SimpleShutterButton, kSimpleText;
+import 'simple_guide_panel.dart'
+    show SimpleToolRow, simpleToolButton;
 import 'simple_device_windows.dart' show simpleCelsius, simpleSigned;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -81,10 +83,6 @@ final simpleFocusScopeProvider =
     NotifierProvider<SimpleFocusScopeNotifier, SimpleFocusScope>(
       SimpleFocusScopeNotifier.new,
     );
-
-/// #1675 — the main telescope's routine row: Auto and Manual are the focus
-/// method; Offsets measures each filter's focus offset.
-enum SimpleFocusRoutine { auto, manual, offsets }
 
 /// Whether the Offsets routine is picked (session only; off to start). A
 /// calibration found on the rig, running or with results waiting, picks it.
@@ -162,6 +160,10 @@ String? simpleOffsetsBlocker(WidgetRef ref, AppLocalizations l10n) {
   if (reference == null || picks.length < 2) return l10n.focusOffsetsPickOne;
   return null;
 }
+
+/// The autofocus exposures Simple Mode offers (seconds); the profile default
+/// is 5.
+const kSimpleAutofocusExposures = [2, 5, 10, 15];
 
 /// The guide camera's live-focus exposures, and the one picked (2 s to
 /// start), as the full UI's card offers them.
@@ -428,20 +430,22 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         : null;
     return SimplePanel(
       // 12 above and below, and 4 between rows (6 before 2026-11-04): with
-      // the Auto / Manual row under Main / Guide it still fits an iPad.
+      // the Exposure and Tools rows under Autofocus it still fits an iPad.
       padding: const EdgeInsets.symmetric(
         horizontal: AraSpace.s16,
         vertical: AraSpace.s12,
       ),
+      // Scrolls when the exposure row and the Tools rows do not fit the window.
       child: SizedBox(
         width: 400,
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 4,
           children: [
-            // Which camera, then under it how to focus the main one (the
-            // guide camera has no focuser: no Auto / Manual row).
+            // Which camera; for the main one, Back to Autofocus from a tool view (the
+            // guide camera has no focuser: no Back row).
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 4,
@@ -465,50 +469,54 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                               : pick();
                         },
                 ),
-                // The method: Smart Focus with the focuser, or by hand with a
-                // Bahtinov mask; or Offsets, which measures each filter's
-                // focus offset (#1675). Locked while a run goes.
-                if (scope == SimpleFocusScope.main)
-                  SimpleSegments<SimpleFocusRoutine>(
-                    keyPrefix: 'simple-focus-method',
-                    options: [
-                      (SimpleFocusRoutine.auto, l10n.focusAuto, 'auto'),
-                      (SimpleFocusRoutine.manual, l10n.focusManual, 'manual'),
-                      (SimpleFocusRoutine.offsets, l10n.focusOffsets, 'offsets'),
-                    ],
-                    selected: offsetsPicked
-                        ? SimpleFocusRoutine.offsets
-                        : method == MainFocusMethod.autofocus
-                        ? SimpleFocusRoutine.auto
-                        : SimpleFocusRoutine.manual,
-                    onPick: locked
-                        ? null
-                        : (r) {
-                            void pick() {
-                              ref
-                                  .read(simpleFocusOffsetsProvider.notifier)
-                                  .set(r == SimpleFocusRoutine.offsets);
-                              if (r != SimpleFocusRoutine.offsets) {
-                                ref
-                                    .read(mainFocusMethodProvider.notifier)
-                                    .pick(
-                                      r == SimpleFocusRoutine.auto
-                                          ? MainFocusMethod.autofocus
-                                          : MainFocusMethod.bahtinov,
-                                    );
-                              }
-                            }
+                // Focus by hand and Filter offsets open in place (Tools rows
+                // under Autofocus, #1875); Back returns to Autofocus. Locked
+                // while a run goes.
+                if (scope == SimpleFocusScope.main &&
+                    (offsetsPicked || method == MainFocusMethod.bahtinov))
+                  Row(
+                    spacing: AraSpace.s8,
+                    children: [
+                      IconButton(
+                        key: const Key('simple-focus-back'),
+                        tooltip: l10n.focusBackToAutofocus,
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: locked
+                            ? null
+                            : () {
+                                void back() {
+                                  ref
+                                      .read(simpleFocusOffsetsProvider.notifier)
+                                      .set(false);
+                                  ref
+                                      .read(mainFocusMethodProvider.notifier)
+                                      .pick(MainFocusMethod.autofocus);
+                                }
 
-                            r != SimpleFocusRoutine.manual &&
-                                    method == MainFocusMethod.bahtinov &&
-                                    !offsetsPicked
-                                ? _leaveManual(bahtinov, pick)
-                                : pick();
-                          },
+                                method == MainFocusMethod.bahtinov &&
+                                        !offsetsPicked
+                                    ? _leaveManual(bahtinov, back)
+                                    : back();
+                              },
+                      ),
+                      Expanded(
+                        child: Text(
+                          offsetsPicked
+                              ? l10n.focusToolOffsets
+                              : l10n.focusToolManual,
+                          style: kSimpleText.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
-            const SimpleInfoToggle(),
             if (scope == SimpleFocusScope.guide)
               ..._guide(l10n, guide)
             else if (_askMask)
@@ -665,11 +673,68 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   context.l10n.focusNoFocuser,
                   style: kSimpleText.copyWith(color: AraColors.textSecondary),
                 ),
+              ..._autofocusExtras(l10n, locked),
             ],
           ],
         ),
+        ),
       ),
     );
+  }
+
+  /// Under Autofocus: the next run's exposure (the profile's autofocus
+  /// exposure, the same setting Advanced Mode edits; Steps and Step size stay
+  /// there) and the Tools rows that open Focus by hand and Filter offsets.
+  List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked) {
+    final seconds = ref.watch(
+      autofocusSettingsProvider.select((s) => s.exposureSeconds),
+    );
+    // A profile value outside the four shows as its own chip, never rewritten
+    // until the user picks one of the four.
+    final choices = {...kSimpleAutofocusExposures, seconds}.toList()..sort();
+    return [
+      Row(
+        spacing: AraSpace.s12,
+        children: [
+          Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
+          SimpleSegments<int>(
+            keyPrefix: 'simple-focus-af-exposure',
+            expand: false,
+            options: [for (final s in choices) (s, '$s s', '$s')],
+            selected: seconds,
+            onPick: locked
+                ? null
+                : ref
+                      .read(autofocusSettingsProvider.notifier)
+                      .setExposureSeconds,
+          ),
+        ],
+      ),
+      SimpleToolRow(
+        title: l10n.focusToolManual,
+        button: simpleToolButton(
+          key: const Key('simple-focus-tool-manual'),
+          label: l10n.focusToolManualOpen,
+          semantics: l10n.focusToolManualOpenSemantics,
+          onPressed: locked
+              ? null
+              : () => ref
+                    .read(mainFocusMethodProvider.notifier)
+                    .pick(MainFocusMethod.bahtinov),
+        ),
+      ),
+      SimpleToolRow(
+        title: l10n.focusToolOffsets,
+        button: simpleToolButton(
+          key: const Key('simple-focus-tool-offsets'),
+          label: l10n.focusToolOffsetsOpen,
+          semantics: l10n.focusToolOffsetsOpenSemantics,
+          onPressed: locked
+              ? null
+              : () => ref.read(simpleFocusOffsetsProvider.notifier).set(true),
+        ),
+      ),
+    ];
   }
 
   /// Offsets (#1675): before a run, the reference and the filter picker; while

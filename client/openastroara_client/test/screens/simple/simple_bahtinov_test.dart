@@ -156,7 +156,7 @@ void main() {
 
   testWidgets('leaving Manual before Finish asks for the mask first, then switches', (tester) async {
     await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
-    await tester.tap(find.byKey(const Key('simple-focus-method-auto')));
+    await tester.tap(find.byKey(const Key('simple-focus-back')));
     await tester.pump();
     expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
     await tester.tap(find.text('Mask removed'));

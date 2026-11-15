@@ -2328,6 +2328,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusMeasuredStars => 'Measured stars';
 
   @override
+  String get focusToolManual => 'Focus by hand';
+
+  @override
+  String get focusToolManualOpen => 'Open';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Open focus by hand';
+
+  @override
+  String get focusToolOffsets => 'Filter offsets';
+
+  @override
+  String get focusToolOffsetsOpen => 'Measure';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
+
+  @override
+  String get focusBackToAutofocus => 'Back to Autofocus';
+
+  @override
   String get bahtinovInFocusMaskOff => 'In focus · mask off';
 
   @override

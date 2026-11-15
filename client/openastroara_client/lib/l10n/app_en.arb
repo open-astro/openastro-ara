@@ -3254,6 +3254,34 @@
   "@focusMeasuredStars": {
     "description": "Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen"
   },
+  "focusToolManual": "Focus by hand",
+  "@focusToolManual": {
+    "description": "Simple Focus tool row and its open view's title: the Bahtinov mask readout"
+  },
+  "focusToolManualOpen": "Open",
+  "@focusToolManualOpen": {
+    "description": "Simple Focus tool row button that opens focus by hand"
+  },
+  "focusToolManualOpenSemantics": "Open focus by hand",
+  "@focusToolManualOpenSemantics": {
+    "description": "Spoken name of the focus by hand button"
+  },
+  "focusToolOffsets": "Filter offsets",
+  "@focusToolOffsets": {
+    "description": "Simple Focus tool row and its open view's title: the filter offsets measurement"
+  },
+  "focusToolOffsetsOpen": "Measure",
+  "@focusToolOffsetsOpen": {
+    "description": "Simple Focus tool row button that opens the filter offsets measurement"
+  },
+  "focusToolOffsetsOpenSemantics": "Open filter offsets",
+  "@focusToolOffsetsOpenSemantics": {
+    "description": "Spoken name of the filter offsets button"
+  },
+  "focusBackToAutofocus": "Back to Autofocus",
+  "@focusBackToAutofocus": {
+    "description": "Spoken name of the back arrow in Simple Focus's tool views"
+  },
   "bahtinovInFocusMaskOff": "In focus · mask off",
   "@bahtinovInFocusMaskOff": {
     "description": "Bahtinov focusing finished in focus, mask taken off"
@@ -3680,7 +3708,7 @@
   },
   "focusScopeMain": "Main",
   "@focusScopeMain": {
-    "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"
+    "description": "Focus panel: focus the main telescope (short, shares a line with Guide)"
   },
   "focusScopeGuide": "Guide",
   "@focusScopeGuide": {

@@ -2328,6 +2328,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusMeasuredStars => 'Measured stars';
 
   @override
+  String get focusToolManual => 'Focus by hand';
+
+  @override
+  String get focusToolManualOpen => 'Open';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Open focus by hand';
+
+  @override
+  String get focusToolOffsets => 'Filter offsets';
+
+  @override
+  String get focusToolOffsetsOpen => 'Measure';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
+
+  @override
+  String get focusBackToAutofocus => 'Back to Autofocus';
+
+  @override
   String get bahtinovInFocusMaskOff => 'In focus · mask off';
 
   @override
@@ -8270,6 +8291,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusMeasuredStars => 'Estrelas medidas';
+
+  @override
+  String get focusToolManual => 'Focar à mão';
+
+  @override
+  String get focusToolManualOpen => 'Abrir';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Abrir focar à mão';
+
+  @override
+  String get focusToolOffsets => 'Offsets de filtro';
+
+  @override
+  String get focusToolOffsetsOpen => 'Medir';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Abrir offsets de filtro';
+
+  @override
+  String get focusBackToAutofocus => 'Voltar ao autofoco';
 
   @override
   String get bahtinovInFocusMaskOff => 'Em foco · sem máscara';
