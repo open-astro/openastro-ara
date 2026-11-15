@@ -221,7 +221,7 @@ namespace OpenAstroAra.Test {
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
             await Task.Delay(Grace).ConfigureAwait(false);
             Assert.That(rig.Resumed(), Is.Zero, "one settled step is not a settled stretch");
-            await Task.Delay(TimeSpan.FromMilliseconds(1000)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(1300)).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "a settled stretch must resume the paused run");
             rig.Sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Single() == rig.RunId), It.IsAny<CancellationToken>()), Times.Once);
@@ -263,13 +263,14 @@ namespace OpenAstroAra.Test {
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
 
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromMilliseconds(700)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.GuideStep(3.0, 0.0)).ConfigureAwait(false); // out of the 1.5 px: the stretch starts over
-            await Task.Delay(TimeSpan.FromMilliseconds(700)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
-            Assert.That(rig.Resumed(), Is.Zero, "1.4 s since the first settled step, but the stretch was broken");
+            await Task.Delay(Grace).ConfigureAwait(false); // the step must land before the check
+            Assert.That(rig.Resumed(), Is.Zero, "1.6 s since the first settled step, but the stretch was broken");
 
-            await Task.Delay(TimeSpan.FromMilliseconds(1100)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(1300)).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "a whole second settled resumes the run");
         }
@@ -278,15 +279,35 @@ namespace OpenAstroAra.Test {
         public async Task The_recovery_resumes_the_run_only_once_the_restarted_guiding_has_settled() {
             using var rig = new Rig(runActive: true);
             rig.Profile.ActiveProfile.GuiderSettings.SettlePixels = 1.5;
-            rig.Profile.ActiveProfile.GuiderSettings.SettleTime = 1;
+            // 2 s, checked against 1 s: a loaded runner may see the restart late, which eats into the margin.
+            rig.Profile.ActiveProfile.GuiderSettings.SettleTime = 2;
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
             Assert.That(await WaitUntilAsync(() => rig.Restarts == 1).ConfigureAwait(false), Is.True, "the recovery restarted guiding");
             var restartedAt = DateTime.UtcNow;
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the settled guiding resumed the run");
-            Assert.That(DateTime.UtcNow - restartedAt, Is.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(900)),
+            Assert.That(DateTime.UtcNow - restartedAt, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(1)),
                 "the recovery's resume waited for the settle time, not just the restart");
+        }
+
+        [Test]
+        public async Task A_grace_callback_that_runs_after_a_settled_step_does_not_pause_the_run() {
+            // Disposing the timer does not stop a callback already queued or waiting on the lock; it runs
+            // after the settled step and must stand down.
+            using var rig = new Rig(runActive: true, grace: RoomyWindow);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            var rmsBefore = (await rig.Service.GetAsync(CancellationToken.None).ConfigureAwait(false))?.Runtime.RmsTotal;
+
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime.RmsTotal != rmsBefore).ConfigureAwait(false),
+                Is.True, "the settled step never landed");
+            rig.Service.OnStarLostGraceElapsed(null);
+            await Task.Delay(Grace).ConfigureAwait(false);
+
+            Assert.That(rig.Paused(), Is.Zero, "the star is back and settled: a late grace callback pauses nothing");
+            Assert.That(rig.Notifications, Is.Empty);
         }
 
         [Test]

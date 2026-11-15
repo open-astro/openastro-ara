@@ -112,7 +112,7 @@ public sealed partial class GuiderService {
         _starLostPausedRuns = Array.Empty<Guid>();
     }
 
-    private void OnStarLostGraceElapsed(object? _) {
+    internal void OnStarLostGraceElapsed(object? _) {
         EquipmentFaultEvent fault;
         lock (_gate) {
             DisarmStarLostWatchLocked();
