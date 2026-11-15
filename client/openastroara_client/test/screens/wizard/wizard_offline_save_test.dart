@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,6 +87,22 @@ class _UnreachableOnCreate extends ProfileApi {
     type: DioExceptionType.connectionError,
     message: 'Connection refused',
   );
+}
+
+/// createProfile hangs until [fail] is called, then dies in transit.
+class _UnreachableLater extends ProfileApi {
+  _UnreachableLater() : super(const AraServer(hostname: 'rig-a', port: 5555));
+  final _gate = Completer<void>();
+  void fail() => _gate.complete();
+  @override
+  Future<ProfileMeta> createProfile(String name) async {
+    await _gate.future;
+    throw DioException(
+      requestOptions: RequestOptions(path: '/api/v1/profiles'),
+      type: DioExceptionType.connectionError,
+      message: 'Connection refused',
+    );
+  }
 }
 
 void main() {
@@ -319,6 +337,74 @@ void main() {
       expect(completed, 1);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.textContaining('saved on this device'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a wizard closed during a failing save still tells the user, with no uncaught error',
+    (tester) async {
+      final api = _UnreachableLater();
+      final container = ProviderContainer(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'rig-a', port: 5555),
+          ),
+          pendingProfileDraftServiceProvider.overrideWithValue(_MemStore()),
+          wsEventStreamProvider.overrideWithValue(null),
+        ],
+      );
+      addTearDown(container.dispose);
+      final wizardRoute = MaterialPageRoute<void>(
+        builder: (_) => WizardShell(createApi: (_) => api),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).push(wizardRoute),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      container
+          .read(wizardControllerProvider.notifier)
+          .jumpTo(ProfileWizard.totalSteps);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      await tester.tap(find.text('Save Profile'));
+      await tester.pump(const Duration(milliseconds: 100));
+      // The wizard route goes away under the spinner (e.g. the shell reset it).
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .removeRoute(wizardRoute);
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(WizardShell), findsNothing);
+
+      api.fail();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     },
   );
 }

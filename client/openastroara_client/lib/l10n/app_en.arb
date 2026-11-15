@@ -6761,5 +6761,733 @@
   "settingsSectionReload": "Reload",
   "@settingsSectionReload": {
     "description": "Settings panel: button that replaces local edits with the rig's newer copy"
+  },
+  "firstRunTitle": "Connect to OpenAstro Ara",
+  "@firstRunTitle": {
+    "description": "First-run screen: app bar title"
+  },
+  "firstRunRescanTooltip": "Rescan for servers",
+  "@firstRunRescanTooltip": {
+    "description": "First-run screen: tooltip of the refresh button"
+  },
+  "firstRunRigsFound": "Rigs found on your network",
+  "@firstRunRigsFound": {
+    "description": "First-run screen: heading above the discovered servers"
+  },
+  "firstRunLooking": "Looking for servers… rescanning every few seconds.\nIf yours doesn’t appear, pull down, tap ⟳ (top right) or add it manually below.",
+  "@firstRunLooking": {
+    "description": "First-run screen: shown while no server is discovered yet"
+  },
+  "firstRunAddManually": "Or add manually:",
+  "@firstRunAddManually": {
+    "description": "First-run screen: heading above the manual host and port fields"
+  },
+  "firstRunHostLabel": "Hostname or IP",
+  "@firstRunHostLabel": {
+    "description": "First-run screen: manual host field label"
+  },
+  "firstRunPortLabel": "Port",
+  "@firstRunPortLabel": {
+    "description": "First-run screen: manual port field label"
+  },
+  "firstRunUse": "Use",
+  "@firstRunUse": {
+    "description": "First-run screen: button that picks the manually typed server"
+  },
+  "firstRunPlanOffline": "Plan offline — set up your night without a server",
+  "@firstRunPlanOffline": {
+    "description": "First-run screen: button that enters the app without a server"
+  },
+  "firstRunConnectedTo": "Connected to {name}",
+  "@firstRunConnectedTo": {
+    "description": "First-run screen: server handshake succeeded",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "firstRunServerVersion": "Server version: {version}",
+  "@firstRunServerVersion": {
+    "description": "First-run screen: server version line",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "firstRunApiVersion": "API version: {version}",
+  "@firstRunApiVersion": {
+    "description": "First-run screen: API version line",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "firstRunAddress": "Address: {address}",
+  "@firstRunAddress": {
+    "description": "First-run screen: server address line",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "firstRunContinue": "Continue",
+  "@firstRunContinue": {
+    "description": "First-run screen: button that confirms the connected server"
+  },
+  "firstRunConnecting": "Connecting to {address}…",
+  "@firstRunConnecting": {
+    "description": "First-run screen: handshake in progress",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "firstRunConnectionFailed": "Connection failed: {address}",
+  "@firstRunConnectionFailed": {
+    "description": "First-run screen: handshake failed",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "launchTitle": "OpenAstro Ara",
+  "@launchTitle": {
+    "description": "Launch profile screen: heading (product name)"
+  },
+  "launchRig": "Rig: {name}",
+  "@launchRig": {
+    "description": "Launch profile screen: names the chosen rig",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "launchChooseRig": "Choose a different rig",
+  "@launchChooseRig": {
+    "description": "Launch profile screen: button back to the server chooser"
+  },
+  "launchRetry": "Retry",
+  "@launchRetry": {
+    "description": "Launch profile screen: reload the profile list"
+  },
+  "launchOr": "or",
+  "@launchOr": {
+    "description": "Launch profile screen: divider between the profile list and Add / Import"
+  },
+  "launchAddProfile": "Add a Profile",
+  "@launchAddProfile": {
+    "description": "Launch profile screen: opens the setup wizard"
+  },
+  "launchImportProfile": "Import Profile",
+  "@launchImportProfile": {
+    "description": "Launch profile screen: imports a profile file"
+  },
+  "launchNoProfiles": "No profiles yet — add or import one to get started.",
+  "@launchNoProfiles": {
+    "description": "Launch profile screen: shown when the rig has no profile"
+  },
+  "launchActiveProfile": "Active profile:",
+  "@launchActiveProfile": {
+    "description": "Launch profile screen: label above the profile dropdown"
+  },
+  "launchDeleteProfile": "Delete \"{name}\"",
+  "@launchDeleteProfile": {
+    "description": "Launch profile screen: tooltip of the delete button",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "launchImage": "Image",
+  "@launchImage": {
+    "description": "Launch profile screen: button that opens the shell with the picked profile"
+  },
+  "offlineTitle": "OpenAstro Ara",
+  "@offlineTitle": {
+    "description": "Offline launch screen: heading (product name)"
+  },
+  "offlineSubtitle": "Planning offline — no server connected",
+  "@offlineSubtitle": {
+    "description": "Offline launch screen: subtitle"
+  },
+  "offlineNoProfiles": "No profiles are cached on this device — offline planning needs one. Connect to your server once and set up a profile first.",
+  "@offlineNoProfiles": {
+    "description": "Offline launch screen: shown when no profile is cached"
+  },
+  "offlineBackToSetup": "Back to server setup",
+  "@offlineBackToSetup": {
+    "description": "Offline launch screen: button that leaves offline mode"
+  },
+  "offlinePlanWithProfile": "Plan with profile:",
+  "@offlinePlanWithProfile": {
+    "description": "Offline launch screen: label above the profile dropdown"
+  },
+  "offlineUnnamedProfile": "(unnamed profile)",
+  "@offlineUnnamedProfile": {
+    "description": "Offline launch screen: dropdown entry for a profile with an empty name"
+  },
+  "offlineNotCached": "This profile's gear settings haven't been cached yet (it was never active while connected) — planning will use defaults.",
+  "@offlineNotCached": {
+    "description": "Offline launch screen: the picked profile has no cached gear sections"
+  },
+  "offlineGearCached": "Gear cached {age} — reconnect to refresh if your setup changed.",
+  "@offlineGearCached": {
+    "description": "Offline launch screen: when the gear settings were cached; age is one of the offlineAge* phrases",
+    "placeholders": {
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "offlineAgeJustNow": "just now",
+  "@offlineAgeJustNow": {
+    "description": "Offline launch screen: cache age under an hour, fills {age}"
+  },
+  "offlineAgeHours": "{hours} h ago",
+  "@offlineAgeHours": {
+    "description": "Offline launch screen: cache age in hours, fills {age}",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "offlineAgeDays": "{days} days ago",
+  "@offlineAgeDays": {
+    "description": "Offline launch screen: cache age in days, fills {age}",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offlinePlan": "Plan",
+  "@offlinePlan": {
+    "description": "Offline launch screen: button that enters the shell with the picked profile"
+  },
+  "appShellTabPlanning": "Planning",
+  "@appShellTabPlanning": {
+    "description": "App shell: navigation tab"
+  },
+  "appShellTabChecklist": "Checklist",
+  "@appShellTabChecklist": {
+    "description": "App shell: navigation tab"
+  },
+  "appShellTabSequence": "Sequence",
+  "@appShellTabSequence": {
+    "description": "App shell: navigation tab"
+  },
+  "appShellTabLive": "Live",
+  "@appShellTabLive": {
+    "description": "App shell: navigation tab"
+  },
+  "appShellTabSettings": "Settings",
+  "@appShellTabSettings": {
+    "description": "App shell: navigation tab and the top-bar gear"
+  },
+  "appShellSearchSettings": "Search settings ({shortcut})",
+  "@appShellSearchSettings": {
+    "description": "App shell: tooltip of the search button; shortcut is the key combination",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "appShellNightModeOnTip": "Night mode on ({shortcut})",
+  "@appShellNightModeOnTip": {
+    "description": "App shell: tooltip of the night mode button while on",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "appShellNightModeTip": "Night mode ({shortcut})",
+  "@appShellNightModeTip": {
+    "description": "App shell: tooltip of the night mode button while off",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "appShellHelp": "Help & report a bug",
+  "@appShellHelp": {
+    "description": "App shell: tooltip of the help button"
+  },
+  "appShellLauncherLibrary": "Image Library",
+  "@appShellLauncherLibrary": {
+    "description": "App shell: status bar launcher"
+  },
+  "appShellLauncherCalibration": "Calibration",
+  "@appShellLauncherCalibration": {
+    "description": "App shell: status bar launcher"
+  },
+  "appShellLauncherLaunchpad": "Launchpad",
+  "@appShellLauncherLaunchpad": {
+    "description": "App shell: status bar launcher that returns to the launch screen"
+  },
+  "appShellLauncherWizard": "Run profile wizard",
+  "@appShellLauncherWizard": {
+    "description": "App shell: status bar launcher that opens the profile wizard"
+  },
+  "wizardMissingScreen": "Missing screen builder for step {step}",
+  "@wizardMissingScreen": {
+    "description": "Wizard: developer fallback when a step has no screen",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "wizardTitle": "Set up profile · Step {step} of {total}",
+  "@wizardTitle": {
+    "description": "Wizard: app bar title",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "wizardSaveExit": "Save & Exit",
+  "@wizardSaveExit": {
+    "description": "Wizard: app bar button that saves a partial profile and leaves"
+  },
+  "wizardSavedWithNotes": "Profile saved. {notes}",
+  "@wizardSavedWithNotes": {
+    "description": "Wizard: snack bar after saving when some follow-ups degraded; notes are the joined follow-up sentences",
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardSavedLocally": "\"{name}\" is saved on this device. It will be applied to your rig the next time you connect.",
+  "@wizardSavedLocally": {
+    "description": "Wizard: snack bar after saving a profile offline",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardSaveProfile": "Save Profile",
+  "@wizardSaveProfile": {
+    "description": "Wizard: last-step button"
+  },
+  "wizardNext": "Next",
+  "@wizardNext": {
+    "description": "Wizard: next-step button"
+  },
+  "wizardBack": "Back",
+  "@wizardBack": {
+    "description": "Wizard: previous-step button"
+  },
+  "wizardSkipDefaults": "Skip — use defaults",
+  "@wizardSkipDefaults": {
+    "description": "Wizard: button that skips a step and keeps defaults"
+  },
+  "wizardSkipBlocked": "Resolve the issue on this screen to continue.",
+  "@wizardSkipBlocked": {
+    "description": "Wizard: tooltip on the disabled Skip button"
+  },
+  "wizardNextBlocked": "Fix the highlighted field to continue.",
+  "@wizardNextBlocked": {
+    "description": "Wizard: tooltip on the disabled Next button"
+  },
+  "wizardDoneTitle": "Profile saved",
+  "@wizardDoneTitle": {
+    "description": "Wizard done view: app bar title"
+  },
+  "wizardDoneHeading": "You're all set",
+  "@wizardDoneHeading": {
+    "description": "Wizard done view: heading"
+  },
+  "wizardDoneBody": "Your profile is saved and active. The dark library is shooting in the background — it finishes on the server even if you leave now.",
+  "@wizardDoneBody": {
+    "description": "Wizard done view: explains the dark library build"
+  },
+  "wizardDoneFinish": "Finish",
+  "@wizardDoneFinish": {
+    "description": "Wizard done view: closes the wizard"
+  },
+  "wizardKitStage": "Stage {stage} — {label}",
+  "@wizardKitStage": {
+    "description": "Wizard: stage line above each step; label is the stage name",
+    "placeholders": {
+      "stage": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardKitSkipped": "This screen was skipped — defaults will fill in until you review it in Settings.",
+  "@wizardKitSkipped": {
+    "description": "Wizard: banner on a skipped step"
+  },
+  "wizardKitResetOnSave": "Reset to default on Save",
+  "@wizardKitResetOnSave": {
+    "description": "Wizard: tooltip of the clear button on an optional field"
+  },
+  "wizardBasicsIntro": "Name this profile and (optionally) set your observing site. Everything here can be changed later in Settings.",
+  "@wizardBasicsIntro": {
+    "description": "Wizard step 1: introduction"
+  },
+  "wizardBasicsBefore": "Before you begin: power on your mount and the rest of your gear, make sure they're reachable on the same local network as the server, and that every device is already configured in AlpacaBridge — the wizard discovers equipment live in the next steps and can only find what AlpacaBridge exposes.",
+  "@wizardBasicsBefore": {
+    "description": "Wizard step 1: heads-up about powering on and configuring gear first"
+  },
+  "wizardBasicsProfileName": "Profile name",
+  "@wizardBasicsProfileName": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsProfileNameHint": "e.g. Backyard New Mexico",
+  "@wizardBasicsProfileNameHint": {
+    "description": "Wizard step 1: example for the profile name field"
+  },
+  "wizardBasicsSiteName": "Site name",
+  "@wizardBasicsSiteName": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsSiteNameHint": "e.g. New Mexico USA",
+  "@wizardBasicsSiteNameHint": {
+    "description": "Wizard step 1: example for the site name field"
+  },
+  "wizardBasicsLocation": "Location (optional)",
+  "@wizardBasicsLocation": {
+    "description": "Wizard step 1: section header"
+  },
+  "wizardBasicsFillGps": "Fill from GPS",
+  "@wizardBasicsFillGps": {
+    "description": "Wizard step 1: button that fills the site from a GPS"
+  },
+  "wizardBasicsGpsTip": "Tip: plug a USB GPS dongle into this computer and turn on Settings → Site → GPS on this computer. No mount GPS needed.",
+  "@wizardBasicsGpsTip": {
+    "description": "Wizard step 1: how to get a GPS fix"
+  },
+  "wizardBasicsGpsEdited": "A location was found, but you edited the site fields while it was being looked up — not overwritten. Press Fill from GPS again to apply it.",
+  "@wizardBasicsGpsEdited": {
+    "description": "Wizard step 1: GPS result discarded because the user typed meanwhile"
+  },
+  "wizardBasicsGpsFilled": "Filled from {source}.",
+  "@wizardBasicsGpsFilled": {
+    "description": "Wizard step 1: GPS fill done; source names where the fix came from",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardBasicsLatitude": "Latitude (°)",
+  "@wizardBasicsLatitude": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsNorthPositive": "North positive.",
+  "@wizardBasicsNorthPositive": {
+    "description": "Wizard step 1: latitude helper"
+  },
+  "wizardBasicsLongitude": "Longitude (°)",
+  "@wizardBasicsLongitude": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsEastPositive": "East positive.",
+  "@wizardBasicsEastPositive": {
+    "description": "Wizard step 1: longitude helper"
+  },
+  "wizardBasicsAltitude": "Altitude (m)",
+  "@wizardBasicsAltitude": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsBortle": "Bortle class (1-9)",
+  "@wizardBasicsBortle": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city.",
+  "@wizardBasicsBortleHelper": {
+    "description": "Wizard step 1: Bortle helper"
+  },
+  "wizardBasicsBortleError": "Enter a whole number from 1 to 9.",
+  "@wizardBasicsBortleError": {
+    "description": "Wizard step 1: Bortle validation error"
+  },
+  "wizardBasicsSqm": "SQM reading (mag/arcsec²), optional",
+  "@wizardBasicsSqm": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsSqmHelper": "Leave empty if not measured (Bortle is used). 16 to 22.5.",
+  "@wizardBasicsSqmHelper": {
+    "description": "Wizard step 1: SQM helper"
+  },
+  "wizardBasicsSqmError": "Enter a value from 16 to 22.5, or leave empty.",
+  "@wizardBasicsSqmError": {
+    "description": "Wizard step 1: SQM validation error"
+  },
+  "wizardBasicsTimezone": "Timezone",
+  "@wizardBasicsTimezone": {
+    "description": "Wizard step 1: field label"
+  },
+  "wizardBasicsTimezoneHint": "e.g. America/Denver",
+  "@wizardBasicsTimezoneHint": {
+    "description": "Wizard step 1: example for the timezone field"
+  },
+  "wizardBasicsTimezoneHelper": "Filled in automatically from the coordinates — only change it to view a remote rig in another zone.",
+  "@wizardBasicsTimezoneHelper": {
+    "description": "Wizard step 1: timezone helper"
+  },
+  "wizardReviewIntro": "Review your profile. Tap Edit on any section to jump back and change it, then choose Save Profile below to finish. Anything left \"Not set\" keeps the built-in default — you can adjust it later in Settings.",
+  "@wizardReviewIntro": {
+    "description": "Wizard step 5: introduction"
+  },
+  "wizardReviewSecBasics": "Profile basics",
+  "@wizardReviewSecBasics": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecConnection": "Connection",
+  "@wizardReviewSecConnection": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecEquipment": "Equipment",
+  "@wizardReviewSecEquipment": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecTelescope": "Telescope",
+  "@wizardReviewSecTelescope": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecCamera": "Camera",
+  "@wizardReviewSecCamera": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecFilterWheel": "Filter wheel",
+  "@wizardReviewSecFilterWheel": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecFocuser": "Focuser",
+  "@wizardReviewSecFocuser": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecMount": "Mount",
+  "@wizardReviewSecMount": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecRotator": "Rotator",
+  "@wizardReviewSecRotator": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecGuider": "OpenAstro Guider",
+  "@wizardReviewSecGuider": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecPlateSolving": "Plate solving",
+  "@wizardReviewSecPlateSolving": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecAutofocus": "Autofocus",
+  "@wizardReviewSecAutofocus": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecFileSaving": "File saving",
+  "@wizardReviewSecFileSaving": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecImaging": "Imaging defaults",
+  "@wizardReviewSecImaging": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecSafety": "Safety",
+  "@wizardReviewSecSafety": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewSecSite": "Site preferences",
+  "@wizardReviewSecSite": {
+    "description": "Wizard step 5: review section title"
+  },
+  "wizardReviewEdit": "Edit",
+  "@wizardReviewEdit": {
+    "description": "Wizard step 5: button that jumps back to a section"
+  },
+  "wizardReviewDefaultsLater": "Defaults · edit later in Settings",
+  "@wizardReviewDefaultsLater": {
+    "description": "Wizard step 5: shown instead of Edit for sections with no wizard screen"
+  },
+  "wizardReviewSkipped": "Skipped — defaults will apply.",
+  "@wizardReviewSkipped": {
+    "description": "Wizard step 5: a skipped section"
+  },
+  "wizardReviewSolverTitle": "Plate-solver star database",
+  "@wizardReviewSolverTitle": {
+    "description": "Wizard step 5: solver database block title"
+  },
+  "wizardReviewRecheck": "Recheck",
+  "@wizardReviewRecheck": {
+    "description": "Wizard step 5: reloads the solver database recommendation"
+  },
+  "wizardReviewSolverWorking": "Working out the field of view…",
+  "@wizardReviewSolverWorking": {
+    "description": "Wizard step 5: solver database loading"
+  },
+  "wizardReviewSolverDownload": "Download after setup ({size}, the rig needs internet once)",
+  "@wizardReviewSolverDownload": {
+    "description": "Wizard step 5: checkbox to queue the solver database download",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardReviewSolverDownloadNote": "Runs on the rig in the background; progress in Settings → Sky data.",
+  "@wizardReviewSolverDownloadNote": {
+    "description": "Wizard step 5: explains the solver database download"
+  },
+  "wizardReviewSolverTooNarrow": "{field} — cannot plate-solve. {reason}",
+  "@wizardReviewSolverTooNarrow": {
+    "description": "Wizard step 5: a camera whose field is too narrow; field is the field-of-view phrase, reason comes from the server",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardReviewRoleGuideCamera": "Guide camera",
+  "@wizardReviewRoleGuideCamera": {
+    "description": "Wizard step 5: solver database row role"
+  },
+  "wizardReviewRoleCamera": "Camera",
+  "@wizardReviewRoleCamera": {
+    "description": "Wizard step 5: solver database row role"
+  },
+  "wizardReviewSolverField": "{role}: {fov}° field ({band})",
+  "@wizardReviewSolverField": {
+    "description": "Wizard step 5: solver database row field of view; band is the server's band name",
+    "placeholders": {
+      "role": {
+        "type": "String"
+      },
+      "fov": {
+        "type": "String"
+      },
+      "band": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardReviewAlreadyOnRig": "already on the rig",
+  "@wizardReviewAlreadyOnRig": {
+    "description": "Wizard step 5: the solver database package is installed"
+  },
+  "wizardDiscoveryIntro": "ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through a bridge (AlpacaPi, INDIGO Sky's -A Alpaca server). Leave the address blank to let Ara auto-discover devices over UDP.",
+  "@wizardDiscoveryIntro": {
+    "description": "Wizard step 2: introduction"
+  },
+  "wizardDiscoveryAddressLabel": "AlpacaBridge address",
+  "@wizardDiscoveryAddressLabel": {
+    "description": "Wizard step 2: field label"
+  },
+  "wizardDiscoveryAddressHint": "auto-discover (UDP 32227) — or host:port to override",
+  "@wizardDiscoveryAddressHint": {
+    "description": "Wizard step 2: hint of the address field"
+  },
+  "wizardDiscoveryDetecting": "Detecting…",
+  "@wizardDiscoveryDetecting": {
+    "description": "Wizard step 2: button label while detecting"
+  },
+  "wizardDiscoveryRetryDetection": "Retry detection",
+  "@wizardDiscoveryRetryDetection": {
+    "description": "Wizard step 2: button that runs the detection again"
+  },
+  "wizardDiscoveryNotDetected": "AlpacaBridge not detected.",
+  "@wizardDiscoveryNotDetected": {
+    "description": "Wizard step 2: failure heading"
+  },
+  "wizardDiscoveryNotDetectedBody": "AlpacaBridge is ARA's equipment hub. It should have been installed alongside ARA Core via apt. If it wasn't, install it on Ara host, then retry:",
+  "@wizardDiscoveryNotDetectedBody": {
+    "description": "Wizard step 2: failure explanation, followed by an install command"
+  },
+  "wizardDiscoveryDetails": "Details: {details}",
+  "@wizardDiscoveryDetails": {
+    "description": "Wizard step 2: raw detection result",
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardDiscoverySkipTipOn": "Continue with the address above; detection is skipped.",
+  "@wizardDiscoverySkipTipOn": {
+    "description": "Wizard step 2: tooltip of the skip button when an address is typed"
+  },
+  "wizardDiscoverySkipTipOff": "Enter your bridge's host:port above to enable.",
+  "@wizardDiscoverySkipTipOff": {
+    "description": "Wizard step 2: tooltip of the skip button when no address is typed"
+  },
+  "wizardDiscoverySkipped": "Continuing with the address override.",
+  "@wizardDiscoverySkipped": {
+    "description": "Wizard step 2: skip button label after the skip"
+  },
+  "wizardDiscoverySkip": "Skip — I'm using a non-standard bridge address",
+  "@wizardDiscoverySkip": {
+    "description": "Wizard step 2: skip button label"
+  },
+  "wizardDiscoveryChoose": "Choose {slot}",
+  "@wizardDiscoveryChoose": {
+    "description": "Device sheet: title; slot is the device type name",
+    "placeholders": {
+      "slot": {
+        "type": "String"
+      }
+    }
+  },
+  "wizardDiscoveryRescan": "Re-scan",
+  "@wizardDiscoveryRescan": {
+    "description": "Device sheet: refresh button"
+  },
+  "wizardDiscoveryNone": "— None",
+  "@wizardDiscoveryNone": {
+    "description": "Device sheet: entry that clears the device"
+  },
+  "wizardDiscoveryNoneNote": "Don't use this device type",
+  "@wizardDiscoveryNoneNote": {
+    "description": "Device sheet: explains the None entry"
+  },
+  "wizardDiscoveryFailed": "Discovery failed",
+  "@wizardDiscoveryFailed": {
+    "description": "Device sheet: error title"
+  },
+  "wizardDiscoveryNoDevices": "No devices found",
+  "@wizardDiscoveryNoDevices": {
+    "description": "Device sheet: empty title"
+  },
+  "wizardDiscoveryNoDevicesDetail": "Make sure the driver is running and reachable on Ara's subnet, then re-scan.",
+  "@wizardDiscoveryNoDevicesDetail": {
+    "description": "Device sheet: empty explanation"
+  },
+  "wizardDiscoveryDeviceLine": "{address} ·  device #{number}\nAdvertised — connectivity is verified when you connect",
+  "@wizardDiscoveryDeviceLine": {
+    "description": "Device sheet: second line of a discovered device; address is scheme://host:port",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
   }
 }
