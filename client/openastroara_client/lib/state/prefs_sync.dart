@@ -54,6 +54,10 @@ class PrefsSync {
   // between a change and its upload.
   final _chains = <String, Future<void>>{};
 
+  // Pushes asked for and not yet started, per key. One waiting behind a
+  // reconcile means its change's local save may already have landed.
+  final _waitingPushes = <String, int>{};
+
   Future<R> _serial<R>(String key, Future<R> Function() job) {
     final previous = _chains[key] ?? Future<void>.value();
     final run = previous.then((_) => job());
@@ -67,6 +71,9 @@ class PrefsSync {
   ///  * a key marked pending goes to the rig first (the local change wins);
   ///  * a rig with no value for the key is seeded from the local one;
   ///  * otherwise the rig's value lands locally (lists combine, see [SyncedPref]).
+  ///
+  /// A change pushed while this reconcile waited in the queue wins: the
+  /// reconcile returns null and writes nothing over that change's local save.
   Future<T?> reconcile<T>(SyncedPref<T> pref) => _serial(pref.key, () async {
     if (!_ref.mounted) return null;
     try {
@@ -79,7 +86,7 @@ class PrefsSync {
     if (settings == null) return null;
     final pending = await _ref.read(syncedPrefsPendingProvider).load();
     final local = await pref.readLocal();
-    if (!_ref.mounted) return null;
+    if (!_ref.mounted || (_waitingPushes[pref.key] ?? 0) > 0) return null;
     final raw = settings.settings[pref.key];
     final serverVal = raw == null ? null : pref.decode(raw);
 
@@ -114,22 +121,25 @@ class PrefsSync {
   /// connected. An older daemon (no merge route) keeps it local, unmarked.
   /// [after] is a local save still running: the push queues now, so a
   /// reconcile started after the change can't apply the rig's older value.
-  Future<void> push<T>(SyncedPref<T> pref, T value, {Future<void>? after}) =>
-      _serial(pref.key, () async {
-        await after;
-        if (!_ref.mounted) return;
-        var v = value;
-        final raw = _ref
-            .read(clientSettingsProvider)
-            .asData
-            ?.value
-            ?.settings[pref.key];
-        final serverVal = raw == null ? null : pref.decode(raw);
-        if (serverVal != null && pref.pushOver != null) {
-          v = pref.pushOver!(value, serverVal);
-        }
-        await _send(pref, v);
-      });
+  Future<void> push<T>(SyncedPref<T> pref, T value, {Future<void>? after}) {
+    _waitingPushes.update(pref.key, (n) => n + 1, ifAbsent: () => 1);
+    return _serial(pref.key, () async {
+      _waitingPushes.update(pref.key, (n) => n - 1);
+      await after;
+      if (!_ref.mounted) return;
+      var v = value;
+      final raw = _ref
+          .read(clientSettingsProvider)
+          .asData
+          ?.value
+          ?.settings[pref.key];
+      final serverVal = raw == null ? null : pref.decode(raw);
+      if (serverVal != null && pref.pushOver != null) {
+        v = pref.pushOver!(value, serverVal);
+      }
+      await _send(pref, v);
+    });
+  }
 
   Future<void> _send<T>(SyncedPref<T> pref, T value) async {
     final pending = _ref.read(syncedPrefsPendingProvider);

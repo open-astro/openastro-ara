@@ -238,6 +238,56 @@ void main() {
     expect(await again.pending.load(), isEmpty);
   });
 
+  test('a reconcile queued before a change never writes the rig value over the saved change', () async {
+    // CI flake on Windows (#1912): a reconcile already in the queue read the
+    // local file after the change's save had landed, found no pending mark,
+    // applied the rig's 9 and wrote it over the user's 4.
+    final rig = FakeRigSettings({
+      'planning': {'noise_tolerance_pct': 9.0},
+    });
+    final container = ProviderContainer(
+      overrides: [
+        clientSettingsApiProvider.overrideWithValue(rig),
+        syncedPrefsPendingProvider.overrideWithValue(
+          SyncedPrefsPendingService(
+            supportDir: () async =>
+                Directory.systemTemp.createTempSync('ara-sync-'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(clientSettingsProvider.future);
+
+    double? local;
+    final gate = Completer<void>();
+    var reads = 0;
+    final pref = SyncedPref<double>(
+      key: 'planning',
+      readLocal: () async {
+        if (reads++ == 0) await gate.future;
+        return local;
+      },
+      writeLocal: (v) async => local = v,
+      encode: (v) => {'noise_tolerance_pct': v},
+      decode: (raw) =>
+          raw is Map ? (raw['noise_tolerance_pct'] as num?)?.toDouble() : null,
+    );
+    final sync = container.read(prefsSyncProvider);
+    final queued = sync.reconcile(pref);
+    final pushed = sync.push<double>(pref, 4, after: (() async => local = 4)());
+    gate.complete();
+    await queued;
+    await pushed;
+
+    expect(
+      local,
+      4,
+      reason: 'the change saved after the queued reconcile wins',
+    );
+    expect((rig.stored['planning'] as Map)['noise_tolerance_pct'], 4);
+  });
+
   test('two devices saving different keys at once keep both', () async {
     final rig = FakeRigSettings();
     final a = _Device(rig);
