@@ -13,11 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Hosting;
-using NUnit.Framework;
 using OpenAstroAra.Server.Services;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
