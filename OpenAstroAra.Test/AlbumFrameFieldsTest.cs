@@ -93,6 +93,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_capture_with_no_profile_pixel_size_takes_the_connected_cameras() {
+            // Rig 11-13/11-14: the profile's pixel size read 0 mid-session while the focal length held, and 175
+            // lights were stored with no pixel scale, so they could fill a Sky Album card only by target name.
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.EnsureManualCaptureSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Session);
+            var profile = new InMemoryProfileStore();
+            profile.PutOpticsSettings(profile.GetOpticsSettings() with { FocalLengthMm = 375, PixelSizeUm = 0 });
+            using var camera = new CameraService(frames: frames.Object, profileStore: profile);
+            camera.WithCapabilitiesForTest(new CameraCapabilitiesDto(SensorWidth: 3008, SensorHeight: 3008, PixelSizeUm: 3.76,
+                CanSetTemperature: false, CanAbortExposure: false, CanGetCoolerPower: false,
+                MinGain: 0, MaxGain: 0, MinOffset: 0, MaxOffset: 0,
+                MinBinX: 1, MaxBinX: 1, MinBinY: 1, MaxBinY: 1,
+                MinExposureSec: 0, MaxExposureSec: 0));
+            var path = Path.Combine(_dir, "capture.fits");
+            await File.WriteAllBytesAsync(path, new byte[64]);
+
+            var id = Guid.NewGuid();
+            await camera.RegisterFrameAsync(id, new ExposureRequestDto(60, 100), FrameType.Light, "NGC1269",
+                Captured, path, 3008, 3008, appliedBin: 1, pointing: new CameraService.FramePointing(3.29, -41.13, Epoch.J2000));
+
+            // 206.265 x 3.76 um / 375 mm = 2.0682 arcsec per pixel.
+            frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == id
+                && d.PixelScaleArcsec.HasValue && Math.Abs(d.PixelScaleArcsec.Value - 2.0682) < 1e-3),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task A_capture_records_the_camera_it_came_from() {
             // #1757 — the name is the one the FITS INSTRUME header carries (the selected camera's), plus its unique id.
             var frames = new Mock<IFrameRepository>();

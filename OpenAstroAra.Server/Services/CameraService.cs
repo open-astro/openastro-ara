@@ -108,6 +108,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             _capabilities = capabilities;
         }
     }
+    /// <summary>The profile's pixel size, or the connected camera's when the profile has none: a profile
+    /// read 0 mid-session on the rig (11-13) and left 175 lights with no XPIXSZ and no Sky Album scale.</summary>
+    private double PixelSizeUm(OpticsSettingsDto optics) =>
+        optics.PixelSizeUm > 0 ? optics.PixelSizeUm : _capabilities?.PixelSizeUm ?? 0;
+
     private CameraStateDto _runtime = IdleRuntime;
     // #1185 — heat-sink read cadence + NotImplemented latch for the connected driver.
     private readonly HeatSinkProbe _heatSink = new();
@@ -1514,10 +1519,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 if (optics.ApertureMm > 0) {
                     fits.SetHeader("APTDIA", optics.ApertureMm, "aperture diameter mm");
                 }
-                if (optics.PixelSizeUm > 0) {
+                var pixelSize = PixelSizeUm(optics);
+                if (pixelSize > 0) {
                     // Effective pixel size after binning — what plate solvers want.
-                    fits.SetHeader("XPIXSZ", optics.PixelSizeUm * request.BinX, "pixel width um (binned)");
-                    fits.SetHeader("YPIXSZ", optics.PixelSizeUm * request.BinY, "pixel height um (binned)");
+                    fits.SetHeader("XPIXSZ", pixelSize * request.BinX, "pixel width um (binned)");
+                    fits.SetHeader("YPIXSZ", pixelSize * request.BinY, "pixel height um (binned)");
                 }
             }
 
@@ -1877,7 +1883,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // #1757 — the camera, from the same selected device the FITS INSTRUME header is written from.
         var device = _lifecycle.Device;
         var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
-            optics.PixelSizeUm * Math.Max(bin, 1),
+            PixelSizeUm(optics) * Math.Max(bin, 1),
             optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1));
         await _frames!.InsertAsync(new FrameDto(
             Id: frameId,
