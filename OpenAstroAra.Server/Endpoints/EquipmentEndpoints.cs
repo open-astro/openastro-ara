@@ -325,6 +325,7 @@ public static partial class EquipmentEndpoints {
             return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
         });
         camera.MapLiveStackEndpoints();
+        camera.MapSessionLiveStackEndpoints();
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");

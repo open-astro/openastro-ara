@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
         // Falsified by: Start answering 200/204 (the contract is 202), or any of the others answering differently.
         [Test]
         public void Start_is_202_stop_and_reset_are_204_status_is_200_and_the_frame_is_204_until_a_light_is_stacked() {
-            using var svc = new CameraService();
+            using var svc = new CameraService { DeviceFactory = _ => new FakeCameraDevice() };
             Assert.Multiple(() => {
                 Assert.That(StatusOf(SessionLiveStackEndpoints.Start(svc)), Is.EqualTo(202));
                 Assert.That(StatusOf(SessionLiveStackEndpoints.Status(svc)), Is.EqualTo(200));
@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
         // Falsified by: dropping a header, or a cacheable frame, breaks a poller's change detection.
         [Test]
         public void The_frame_is_a_no_store_jpeg_with_the_sequence_and_light_count() {
-            using var svc = new CameraService();
+            using var svc = new CameraService { DeviceFactory = _ => new FakeCameraDevice() };
             svc.SessionLiveStack.Enable(0);
             svc.SessionLiveStack.AddColour(OscScene.Mosaic(1), OscScene.W, OscScene.H, BayerPattern.RGGB);
             var http = new DefaultHttpContext();
@@ -78,6 +78,18 @@ namespace OpenAstroAra.Test {
                 Assert.That(http.Response.Headers["X-Stack-Seq"].ToString(), Is.EqualTo("1"));
                 Assert.That(http.Response.Headers["X-Stack-Lights"].ToString(), Is.EqualTo("1"));
                 Assert.That(http.Response.Headers.CacheControl.ToString(), Is.EqualTo("no-store"));
+            });
+        }
+
+        // Falsified by: leaving SessionLiveStackStatusDto out of AraJsonSerializerContext (or a renamed field) breaks the snake_case wire shape.
+        [Test]
+        public void The_status_serialises_snake_case_with_the_unsupported_reason() {
+            using var svc = new CameraService { DeviceFactory = _ => new FakeCameraDevice() };
+            var json = System.Text.Json.JsonSerializer.Serialize(svc.GetSessionLiveStackStatus(), OpenAstroAra.Server.AraJsonSerializerContext.Default.SessionLiveStackStatusDto);
+            Assert.Multiple(() => {
+                Assert.That(json, Does.Contain("\"unsupported\":\"no_camera\""));
+                Assert.That(json, Does.Contain("\"lights_skipped_busy\":0"));
+                Assert.That(json, Does.Contain("\"stack_seq\":0"));
             });
         }
     }

@@ -242,7 +242,8 @@ namespace OpenAstroAra.Test {
         [TestCase("disconnect")]
         public async Task Reset_Stop_and_disconnect_do_not_stop_the_saves_while_a_stack_runs(string how) {
             using var cam = NewCamera();
-            cam.WithLiveViewTestClientForTest();
+            cam.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
+            cam.WithCapabilitiesForTest(Caps("RGGB")); // the connect re-read the fake's mono capabilities
             Control(cam).StartSessionLiveStack();
             await Save(cam, Light(1));
             await Stacked(cam, 1);
@@ -318,7 +319,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_camera_disconnect_clears_the_stack() {
             using var cam = NewCamera();
-            cam.WithLiveViewTestClientForTest();
+            cam.WithLiveViewTestClientForTest(() => new FakeCameraDevice { ExposureFails = true });
+            cam.WithCapabilitiesForTest(Caps("RGGB")); // the connect re-read the fake's mono capabilities
             Control(cam).StartSessionLiveStack();
             await Save(cam, Light(1));
             await Stacked(cam, 1);
