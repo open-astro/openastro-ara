@@ -119,6 +119,9 @@ public sealed partial class GuiderService {
             if (_disposed || _guider is null || _state != EquipmentConnectionState.Connected || _starLostReacted) {
                 return;
             }
+            if (_settledSinceUtc is not null) {
+                return; // a late callback: Dispose does not stop one already queued, and a settled step has ended the loss
+            }
             // Only a settled guide step disarms the timer, so a star found far from the lock (Guiding,
             // not settled) still counts as lost; a stopped or looping guider is not this watch's.
             if (_guider.AppState?.State is not ("LostLock" or "Guiding")) {
@@ -130,11 +133,11 @@ public sealed partial class GuiderService {
             ResetStarLostRecoveryLocked();
             fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
                 EquipmentFaultKind.TrackingLost,
-                $"guide star lost for more than {(int) StarLostGrace.TotalSeconds} s — the guider is still looking for it",
+                $"guide star lost for more than {(int)StarLostGrace.TotalSeconds} s — the guider is still looking for it",
                 DateTimeOffset.UtcNow);
             _starLostFault = fault;
         }
-        LogStarLostGraceElapsed((int) StarLostGrace.TotalSeconds);
+        LogStarLostGraceElapsed((int)StarLostGrace.TotalSeconds);
         RecordFaultQuietly(fault);
         _ = Task.Run(() => ReactToGuidingLossAsync(GuiderFaultKind.StarLost, fault), CancellationToken.None);
     }

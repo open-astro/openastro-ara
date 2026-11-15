@@ -53,6 +53,7 @@ namespace OpenAstroAra.Sequencer.Utility {
         // Resume in that gap must still swap it, or the token stays cancelled on an unarmed gate.
         private bool _interruptHandedOut;
         private CancellationTokenSource _frameInterrupt = new();
+        private bool _frameInterruptHandedOut; // the same gap for a frame-interrupting pause
 
         /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
         /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
@@ -101,6 +102,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             lock (_lock) {
                 if (interruptFrames) {
                     frameInterrupt = _frameInterrupt;
+                    _frameInterruptHandedOut = true;
                 }
                 _resume ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (kind > _kind) {
@@ -123,8 +125,9 @@ namespace OpenAstroAra.Sequencer.Utility {
                 toComplete = _resume;
                 _resume = null;
                 _kind = PauseKind.User;
-                if (_frameInterrupt.IsCancellationRequested) {
+                if (_frameInterruptHandedOut || _frameInterrupt.IsCancellationRequested) {
                     _frameInterrupt = new CancellationTokenSource();
+                    _frameInterruptHandedOut = false;
                 }
                 if (_interruptHandedOut || _interrupt.IsCancellationRequested) {
                     _interrupt = new CancellationTokenSource();

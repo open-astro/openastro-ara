@@ -265,7 +265,7 @@ public sealed partial class GuiderService {
         lock (_gate) {
             fault = _starLostFault;
         }
-        var lostMinutes = fault is null ? 0 : Math.Max(1, (int) Math.Round((DateTimeOffset.UtcNow - fault.DetectedUtc).TotalMinutes));
+        var lostMinutes = fault is null ? 0 : Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - fault.DetectedUtc).TotalMinutes));
         if (Recenter is null) {
             // Nothing to re-center with: say so and leave the guider as it is (no stop has happened,
             // so _recoveryStoppedGuiding is false and GiveUpAsync restarts nothing), so a star that
@@ -406,7 +406,7 @@ public sealed partial class GuiderService {
         var backoff = StarLostRetryBackoff.Count == 0
             ? StarLostProbeInterval
             : StarLostRetryBackoff[Math.Min(failures, StarLostRetryBackoff.Count) - 1];
-        LogStarLostRecoveryAttemptFailed(why, failures, (int) backoff.TotalMinutes);
+        LogStarLostRecoveryAttemptFailed(why, failures, (int)backoff.TotalMinutes);
         if (guider.AppState?.State == PhdAppState.GUIDING) {
             // The restart took but did not settle in time: PHD2 is guiding on the re-centered target.
             // Leave it. Its guide steps reach NoteGuideStepLocked once this attempt is over and resume
@@ -426,7 +426,7 @@ public sealed partial class GuiderService {
             }
             await NotifyQuietlyAsync(NotificationSeverity.Warning, "Guide star still lost — re-center failed, Ara keeps trying",
                 $"Stars are back on the guide frames but the recovery did not go through ({why}). The run stays paused; "
-                + $"Ara tries again in {(int) backoff.TotalMinutes} min and keeps trying until the run resumes, you act, or the safety engine takes over.")
+                + $"Ara tries again in {(int)backoff.TotalMinutes} min and keeps trying until the run resumes, you act, or the safety engine takes over.")
                 .ConfigureAwait(false);
         }
         return backoff;
