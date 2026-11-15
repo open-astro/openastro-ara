@@ -212,7 +212,8 @@ enum MonitorTargetWord { tracking, queued, parked }
 class MonitorFlip {
   const MonitorFlip({required this.state, this.at, this.step});
 
-  /// `due_at`, `waiting_for_exposure`, `flipping`, `auto_flip_off`,
+  /// `due_at`, `waiting_for_exposure`, `flipping`, `waiting_for_meridian` (the
+  /// client's name for `flipping` while the pass-meridian wait runs), `auto_flip_off`,
   /// `none_tonight`; null with no active run.
   final String? state;
   final DateTime? at;
@@ -573,8 +574,9 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final active = info?.state?.isActive ?? false;
     final paused = info?.state == SequenceRunState.paused;
     final awaitingUser = info?.state == SequenceRunState.pausedAwaitingUser;
-    final flipping = active && info?.meridianFlip?.state == 'flipping';
     final waitLeft = active ? info?.meridianWaitLeft : null;
+    // The daemon says `flipping` for the whole flip trigger, the pass-meridian wait included; while that wait runs the mount stands still.
+    final flipping = active && info?.meridianFlip?.state == 'flipping' && waitLeft == null;
     final startAt = !active && run.startAt != null && run.startAt!.isAfter(now) ? run.startAt : null;
     final ours = run.sequenceId != null && info?.sequenceId == run.sequenceId;
     final targets = ours || !run.started ? run.targets : const <SimpleTarget>[];
@@ -942,8 +944,9 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       tonightsBest: best,
       target: targetTile,
       flip: MonitorFlip(
-        state: flipInfo?.state,
-        at: flipInfo?.expectedUtc?.toLocal(),
+        state: flipInfo?.state == 'flipping' && waitLeft != null ? 'waiting_for_meridian' : flipInfo?.state,
+        // The wait counts down on its own; the daemon sends no expected time while it runs.
+        at: waitLeft != null && flipInfo?.state == 'flipping' ? now.add(Duration(seconds: waitLeft)) : flipInfo?.expectedUtc?.toLocal(),
         step: flipping ? info?.currentInstructionDescription : null,
       ),
       safety: safety,

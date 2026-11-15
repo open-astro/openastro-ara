@@ -342,6 +342,23 @@ void main() {
       expect(calm.read().verdict.kind, MonitorVerdictKind.linkLost, reason: 'link lost keeps its age on the top line');
     });
 
+    test('the pass-meridian wait inside a flipping trigger is the wait, not the flip (#1897)', () async {
+      final r = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping'), reasonCode: 'meridian', waitLeft: 182));
+      expect(r.read().verdict.kind, MonitorVerdictKind.waitingForFlip);
+      expect(r.read().now.word, MonitorNowWord.waitingForFlip);
+      expect(r.read().flip.step, isNull, reason: 'no step text under a wait');
+      expect(r.read().flip.state, 'waiting_for_meridian');
+      expect(r.read().flip.at, _t0.add(const Duration(seconds: 182)));
+    });
+
+    test('once the countdown clears, a flipping state is the flip again (#1897)', () async {
+      final r = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping'), reasonCode: 'meridian'));
+      expect(r.read().verdict.kind, MonitorVerdictKind.flipping);
+      expect(r.read().now.word, MonitorNowWord.flipping);
+      expect(r.read().flip.state, 'flipping');
+      expect(r.read().flip.step, 'Taking frames');
+    });
+
     test('a meridian flip in progress, the wait before it, a pause and the wait for dark', () async {
       final flipping = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping')));
       expect(flipping.read().verdict.kind, MonitorVerdictKind.flipping);
