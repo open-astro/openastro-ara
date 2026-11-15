@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
                 "its localhost camera is the one on its own box");
         }
 
-        // ─── the loop itself, driven through the synthetic-frames seam (no guider daemon) ───
+        // ─── the loop itself, driven by the in-process fake guider (one case on the synthetic-frames path) ───
 
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
@@ -272,6 +272,32 @@ namespace OpenAstroAra.Test {
             Assert.That(restarted.State, Is.EqualTo("running"));
             Assert.That(restarted.Error, Is.Null);
             await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task The_synthetic_frames_path_measures_frames_with_no_guider_and_takes_no_lease() {
+            // Development mode: frames come from the synthetic source, so a disconnected guider is never asked for one.
+            var guider = new FakeGuideCapture { Connected = false };
+            var calls = 0;
+            var thirdFrame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            (ushort[] Pixels, int Width, int Height) Frames() {
+                if (Interlocked.Increment(ref calls) == 3) thirdFrame.TrySetResult();
+                return StarFrame();
+            }
+            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), Mock.Of<IGuideFrameDecoder>(),
+                syntheticFrames: Frames);
+
+            await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
+            // Frame n + 1 is drawn only after frame n is recorded: a third draw means two measured frames.
+            await thirdFrame.Task.WaitAsync(Timeout);
+            var running = svc.GetStatus();
+            Assert.That(running.State, Is.EqualTo("running"));
+            Assert.That(running.Latest, Is.Not.Null);
+            Assert.That(guider.LeaseCalls, Is.Empty, "no lease without a guider");
+            Assert.That(guider.Captures, Is.Empty, "no capture through the guider");
+
+            await svc.StopAsync();
+            Assert.That(svc.GetStatus().State, Is.EqualTo("stopped"));
         }
 
         [Test]
