@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §42.2 "Guider (PHD2): loses guide star" against the fake guider: a star lost for longer than the
-    /// grace period pauses the active runs through the on_guider_lost reaction, and the first guide step
+    /// grace period pauses the active runs through the on_guider_lost reaction, and a settled stretch of guiding
     /// afterwards resumes exactly those runs. A star that comes back inside the grace does nothing.
     /// </summary>
     [TestFixture]

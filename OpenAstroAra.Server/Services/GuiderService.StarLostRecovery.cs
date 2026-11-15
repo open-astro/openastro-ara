@@ -131,7 +131,7 @@ public sealed partial class GuiderService {
                 return;
             }
             // The star-lost pause is the guider's to recover only while the guider is still the one
-            // looking: once it relocks (Guiding) the guide step resumes the run; once it was stopped by
+            // looking: once it relocks (Guiding) a settled stretch of guiding resumes the run; once it was stopped by
             // the user or a park there is nothing to probe. Our own stop (a failed attempt) keeps the
             // episode alive: the guider was put back to looping for the next probe.
             var state = _guider.AppState?.State;
@@ -141,7 +141,7 @@ public sealed partial class GuiderService {
                     // Selected or Calibrating after a partial restart: ask again rather than fall silent.
                     ArmStarLostRecoveryLocked(StarLostProbeInterval);
                 }
-                return; // Guiding: the relock resume owns it now
+                return; // Guiding: the settled-guiding resume owns it now
             }
             if (safetyHolds) {
                 LogStarLostRecoveryDeferredToSafety();
@@ -269,7 +269,7 @@ public sealed partial class GuiderService {
         if (Recenter is null) {
             // Nothing to re-center with: say so and leave the guider as it is (no stop has happened,
             // so _recoveryStoppedGuiding is false and GiveUpAsync restarts nothing), so a star that
-            // drifts back into the box still relocks and resumes the run the old way.
+            // drifts back into the box still relocks and resumes the run once guiding settles.
             return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
                 $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
                 + "This daemon has no plate solver wired, so Ara cannot re-center the target itself. Check the sky and press Resume.").ConfigureAwait(false);
@@ -435,7 +435,7 @@ public sealed partial class GuiderService {
     /// <summary>Nothing more this recovery can do for the episode: say so once and stop probing. The
     /// pause stays the guider's and the user's Resume works as always. When the attempt had already
     /// stopped the guider, guiding is restarted best-effort so a star that drifts back into the box
-    /// can still relock and resume the run the old way (a stopped guider never relocks).</summary>
+    /// can still relock and resume the run once guiding settles (a stopped guider never relocks).</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The restart is best-effort: a guider that will not start leaves the run paused for the user, which is the give-up outcome anyway.")]
     private async Task<TimeSpan?> GiveUpAsync(PHD2Guider guider, EquipmentFaultEvent? fault, string title, string message) {
@@ -451,7 +451,7 @@ public sealed partial class GuiderService {
         }
         await NotifyQuietlyAsync(NotificationSeverity.Warning, title, message).ConfigureAwait(false);
         if (restart) {
-            // After the notice: a relock from the restarted guider resumes the run the old way, with
+            // After the notice: a relock from the restarted guider resumes the run once guiding settles, with
             // its own "Guide star back" notice, and that must read as the later event.
             try {
                 var started = RestartGuidingOverride is { } seam
