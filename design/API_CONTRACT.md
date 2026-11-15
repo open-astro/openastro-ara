@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-15 — #1859 a template that fails the schema check answers 422: `POST /sequences/templates/{name}/instantiate`
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
+
+**Decision:** after the `{{token}}` substitution the body is checked with `SequenceSchemaValidator` (`requireCapturableInstruction: false`) before it is stored. A body that fails answers `422 {error}` with the validator's reason, and no sequence is created. An unknown template stays a 404.
+
+**Reasoning:** the create route already refuses a body that fails the schema check with the same 422 (ADR 0018); instantiate stored whatever a disk template held, so a bad template became a stored sequence the engine could not load. The same status and `{error}` shape keeps one client error path. The capturable-instruction level stays off because a template may be a skeleton the user completes.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1sequences~1templates~1{name}~1instantiate`
+
+**Related:** #1859
+
+---
+
 ## 2026-11-14 — A version on every profile section: `ETag` and `If-Match` on the 24 section routes (#1807)
 
 **Endpoint(s) or area:** the GET and PUT of the 24 client-writable profile sections under `/api/v1/profile/` (imaging-defaults, storage, notifications, site, custom-horizon, saved-targets, filenames, safety, autofocus, polar-align, unguided, guider-advanced, plate-solve, diagnostics-mode, phd2, optics, camera-electronics, filter-set, filter-wheel/labels, filter-wheel/policy, cooling-fan, dome, equipment-connection, stretch-defaults). Not the six sections only the daemon writes.

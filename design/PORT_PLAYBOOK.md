@@ -4400,6 +4400,7 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 |---|---|---|
 | `server.pending_restart` | `{current_version, pending_version, reason}` | Emitted once on WS connect if flag is set; emitted again when postinst sets the flag on an already-connected WILMA |
 | `server.restart_imminent` | `{in_seconds, reason}` | 5 s before a planned graceful restart |
+| `server.restart_pending` | `{reason, requested_utc}` | A "Restart when idle" request arrived while a run is on; not the update flag of `server.pending_restart` |
 
 **§61 search registry entries** (added in 12h Settings sub-PR):
 
