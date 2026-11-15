@@ -84,6 +84,50 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Has("server.restart_imminent"), Is.True);
         }
 
+        private static Moq.Mock<ISequencerService> SequencerWith(Func<int> activeRuns) {
+            var seq = new Moq.Mock<ISequencerService>();
+            seq.Setup(x => x.ActiveRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
+                .Returns(() => Task.FromResult<IReadOnlyList<Guid>>(Enumerable.Range(0, activeRuns()).Select(_ => Guid.NewGuid()).ToList()));
+            return seq;
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_waits_for_a_sequencer_run_that_has_no_catalog_session() {
+            var fake = new FakeRestarter();
+            var active = 1;
+            var seq = SequencerWith(() => active);
+            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry(), sequencerResolver: () => seq.Object);
+
+            await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+
+            await Task.Delay(2500);
+            Assert.That(fake.Calls, Is.EqualTo(0), "a sequencer run is on, so no restart");
+            active = 0;
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+            await Task.Delay(2500);
+            Assert.That(fake.Calls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_does_not_restart_when_a_run_starts_inside_the_notice_window() {
+            var fake = new FakeRestarter();
+            var active = 0;
+            var seq = SequencerWith(() => active);
+            var runs = new ActiveRunSessionRegistry();
+            var svc = new PlaceholderServerStateService(restarter: fake, runs: runs, sequencerResolver: () => seq.Object);
+            var session = Guid.NewGuid();
+            runs.Enter(session);
+            await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+
+            runs.Exit(session); // the run ends ...
+            active = 1;          // ... and its auto-flats run starts at once
+            await Task.Delay(3500);
+
+            Assert.That(fake.Calls, Is.EqualTo(0), "the flats run must not be killed");
+            active = 0;
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+        }
+
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime {
             public int StopCalls;
             public CancellationToken ApplicationStarted => CancellationToken.None;

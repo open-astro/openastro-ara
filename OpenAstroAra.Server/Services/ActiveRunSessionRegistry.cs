@@ -36,16 +36,10 @@ public sealed class ActiveRunSessionRegistry {
         }
     }
 
-    /// <summary>Raised after the last in-flight run exits (completed, aborted or failed).</summary>
-    public event EventHandler? BecameIdle;
-
     public void Exit(Guid sessionId) {
-        bool idle;
         lock (_gate) {
             _active.Remove(sessionId);
-            idle = _active.Count == 0;
         }
-        if (idle) BecameIdle?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>The active run session when exactly one run is in flight; null when
