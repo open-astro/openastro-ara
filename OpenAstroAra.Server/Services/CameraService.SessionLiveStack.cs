@@ -82,8 +82,8 @@ public sealed partial class CameraService : ISessionLiveStackControl {
         lock (_sessionStackSync) {
             _sessionStackOn = false;
             BumpSessionStackLocked();
-            _sessionStack.Disable();
         }
+        _sessionStack.Disable();
     }
 
     public void ResetSessionLiveStack() {
