@@ -143,6 +143,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_light_with_no_profile_pixel_size_takes_the_connected_cameras_in_its_header() {
+            // Rig 11-13: the profile's pixel size read 0 mid-session and lights were written with no XPIXSZ.
+            _profile.PutOpticsSettings(_profile.GetOpticsSettings() with { PixelSizeUm = 0 });
+            _camera.WithCapabilitiesForTest(new CameraCapabilitiesDto(SensorWidth: 3008, SensorHeight: 3008, PixelSizeUm: 3.76,
+                CanSetTemperature: false, CanAbortExposure: false, CanGetCoolerPower: false,
+                MinGain: 0, MaxGain: 0, MinOffset: 0, MaxOffset: 0,
+                MinBinX: 1, MaxBinX: 2, MinBinY: 1, MaxBinY: 2,
+                MinExposureSec: 0, MaxExposureSec: 0));
+            UseStorage("fits", "off");
+            var path = _camera.WriteFrame(Guid.NewGuid(), Pattern(8, 8), 8, 8,
+                new ExposureRequestDto(ExposureSec: 60, Gain: 100, BinX: 2, BinY: 2), "LIGHT", Captured,
+                focuserPosition: null, targetName: "NGC 1269", sensorTemp: null, tempSetPoint: null);
+            var headers = FrameFileReader.Read(path).Headers;
+            Assert.Multiple(() => {
+                Assert.That(double.Parse(headers["XPIXSZ"], CultureInfo.InvariantCulture), Is.EqualTo(7.52).Within(1e-9), "3.76 um x bin 2");
+                Assert.That(double.Parse(headers["YPIXSZ"], CultureInfo.InvariantCulture), Is.EqualTo(7.52).Within(1e-9));
+            });
+        }
+
+        [Test]
         public void An_xisf_frame_carries_the_spec_image_type_and_native_properties() {
             UseStorage("xisf", "zstd");
             var path = Capture(Pattern(8, 8), 8, 8, imageType: "DARKFLAT");

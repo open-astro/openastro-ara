@@ -457,8 +457,7 @@ public static partial class ProfileEndpoints {
             .WithName("GetOpticsSettings")
             .WithSummary("Get the active profile's optics settings.");
 
-        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store, HttpContext http,
-                Microsoft.Extensions.Logging.ILogger<Program> logger) => {
+        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store, HttpContext http, Microsoft.Extensions.Logging.ILogger<Program> logger) => {
             // reducer_factor multiplies focal length in the pixel-scale formula, so
             // 0 (or negative) would divide-by-zero / invert the FOV. It must stay
             // strictly positive (1.0 = no reducer/barlow).
@@ -475,13 +474,7 @@ public static partial class ProfileEndpoints {
                     detail: "focal_length_mm, pixel_size_um, aperture_mm and sensor dimensions must be >= 0 (0 = unset).",
                     statusCode: StatusCodes.Status400BadRequest);
             }
-            // A pixel size that went to 0 mid-session on the rig (11-13) left no trace: name the client that changed optics.
-            var before = store.GetOpticsSettings();
-            if (before != body) {
-                var remoteIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                var userAgent = http.Request.Headers.UserAgent.ToString();
-                LogOpticsReplaced(logger, remoteIp, userAgent, before, body);
-            }
+            LogOpticsChange(store.GetOpticsSettings(), body, http, logger);
             store.PutOpticsSettings(body);
             return Results.Ok(body);
         })
@@ -887,6 +880,18 @@ public static partial class ProfileEndpoints {
     /// <summary>The guider refuses a gain outside 0..100 (percent of the camera's range).</summary>
     internal static string? ValidateGuideCameraGain(Phd2SettingsDto body) =>
         body.GuideCameraGain is < 0 or > 100 ? "guide_camera_gain must be 0..100 (percent of the camera's gain range)." : null;
+
+    /// <summary>A pixel size that went to 0 mid-session on the rig (11-13) left no trace: an optics PUT that
+    /// changes the optics names the client that sent it. An identical PUT logs nothing.</summary>
+    internal static void LogOpticsChange(OpticsSettingsDto before, OpticsSettingsDto after, HttpContext http,
+            Microsoft.Extensions.Logging.ILogger logger) {
+        if (before == after) {
+            return;
+        }
+        var remoteIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var userAgent = http.Request.Headers.UserAgent.ToString();
+        LogOpticsReplaced(logger, remoteIp, userAgent, before, after);
+    }
 
     [Microsoft.Extensions.Logging.LoggerMessage(EventId = 3730,
         Level = Microsoft.Extensions.Logging.LogLevel.Information,
