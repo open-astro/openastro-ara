@@ -988,6 +988,103 @@ void main() {
     });
 
     testWidgets(
+      'with no site set (0, 0) the hours are unknown: no hours on the card, no fits warning, no greyed Recent row',
+      (tester) async {
+        await _pump(
+          tester,
+          _Seq(),
+          sheet(),
+          overrides: [
+            siteSettingsProvider.overrideWith(
+              () =>
+                  _SiteAt(const SiteSettings(latitudeDeg: 0, longitudeDeg: 0)),
+            ),
+            clockProvider.overrideWithValue(() => night),
+            simpleRecentProvider.overrideWith(
+              (ref) => [
+                (
+                  name: 'Sh2-240',
+                  raDeg: 85.0,
+                  decDeg: -60.0,
+                  when: DateTime.utc(2026, 1, 9),
+                ),
+              ],
+            ),
+          ],
+        );
+        expect(find.byKey(const Key('simple-run-target-card')), findsOneWidget);
+        expect(find.textContaining('Not above 30°'), findsNothing);
+        expect(find.textContaining('h left above 30°'), findsNothing);
+        expect(find.byKey(const Key('simple-run-frames-fit')), findsNothing);
+        expect(find.textContaining('not up tonight'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'editing a queued target gives no fits warning from the sky pick (another object)',
+      (tester) async {
+        final c = await _pump(tester, _Seq(), sheet(), overrides: rig);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        // Sh2-240 never clears 30° here; the edited target is M31.
+        c
+            .read(planetariumSelectionProvider.notifier)
+            .set(
+              const PlanetariumSelection(
+                name: 'Sh2-240',
+                kind: 'SNR',
+                raHours: 5.7,
+                decDeg: -60,
+                raJ2000Hours: 5.7,
+                decJ2000Deg: -60,
+                altDeg: -12,
+                maxAltDeg: 5,
+              ),
+            );
+        c
+            .read(simpleRunPlanProvider.notifier)
+            .load(c.read(simpleRunProvider).targets[0].steps);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: c,
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: SimpleRunSheet(
+                    editing: 0,
+                    onShowSky: () {},
+                    onPickInSky: () {},
+                    onCreated: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Edit M31'), findsOneWidget);
+        expect(find.byKey(const Key('simple-run-frames-fit')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the card reads at 4.5:1 over a bright frame: the 25% selection tint, the status line in textPrimary',
+      (tester) async {
+        await _pump(tester, _Seq(), sheet(), overrides: rig);
+        final card = find.byKey(const Key('simple-run-target-card'));
+        final box = tester.widget<Container>(card).decoration! as BoxDecoration;
+        expect(box.color, AraColors.selectionTint);
+        final status = tester.widget<Text>(
+          find.descendant(
+            of: card,
+            matching: find.textContaining('h left above 30°'),
+          ),
+        );
+        expect(status.style?.color, AraColors.textPrimary);
+      },
+    );
+
+    testWidgets(
       'Recent lists the last imaged and searched, newest first; one not up tonight is greyed and says so',
       (tester) async {
         final c = await _pump(
@@ -1033,13 +1130,33 @@ void main() {
           ),
           findsOneWidget,
         );
+        // Greyed by its title colour, not by opacity: the second line keeps
+        // textSecondary (4.7:1 on a tile).
+        expect(
+          find.descendant(of: far, matching: find.byType(Opacity)),
+          findsNothing,
+        );
         expect(
           tester
-              .widget<Opacity>(
-                find.descendant(of: far, matching: find.byType(Opacity)),
+              .widget<Text>(
+                find.descendant(of: far, matching: find.text('Sh2-240')),
               )
-              .opacity,
-          lessThan(1),
+              .style
+              ?.color,
+          AraColors.textSecondary,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byKey(const Key('simple-run-recent-0')),
+                  matching: find.text('M31'),
+                ),
+              )
+              .style
+              ?.color,
+          isNot(AraColors.textSecondary),
+          reason: 'one that is up keeps the normal title',
         );
         await tester.tap(find.byKey(const Key('simple-run-recent-0')));
         await tester.pump();

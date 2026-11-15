@@ -1038,12 +1038,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final recent = ref.watch(simpleRecentProvider);
     final site = ref.watch(siteSettingsProvider);
     final span = ref.watch(simpleRestOfNightProvider);
-    double hoursOf(double raDeg, double decDeg) =>
-        span == null ? 0 : hoursAboveInSpan(span, raDeg, decDeg, site);
+    // Null: unknown (no site set, or no night ahead), never zero hours.
+    double? hoursOf(double raDeg, double decDeg) =>
+        span == null ? null : hoursAboveInSpan(span, raDeg, decDeg, site);
+    final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;
     final selHours = sel == null
-        ? 0.0
+        ? null
         : hoursOf(sel.raJ2000Hours * 15, sel.decJ2000Deg);
-    final fits = simpleFramesThatFit(steps, selHours);
+    final recentHours = [for (final r in recent) hoursOf(r.raDeg, r.decDeg)];
     bool picked(String name) =>
         sel != null &&
         (sel.name == name ||
@@ -1095,9 +1097,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),
-                  if (hoursOf(r.raDeg, r.decDeg) <= 0)
+                  if (recentHours[i] case final h? when h <= 0)
                     context.l10n.planNotUpTonight
-                  else
+                  else if (siteSet)
                     context.l10n.planAltitudeUp(
                       altitudeDegAt(
                         r.raDeg,
@@ -1109,7 +1111,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     ),
                 ].join(' · '),
                 selected: picked(r.name),
-                greyed: hoursOf(r.raDeg, r.decDeg) <= 0,
+                greyed: (recentHours[i] ?? 1) <= 0,
                 onTap: () => ref
                     .read(planetariumSelectionProvider.notifier)
                     .set(
@@ -1322,10 +1324,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             Text(simpleRunDuration(seconds), style: _dim),
           ],
         ),
-        // Warns only; the typed count stays.
-        if (sel != null && fits < simplePlanTotal(steps))
+        // Warns only; the typed count stays. Not while editing: the sky pick
+        // may be another object than the queued target.
+        if (editing == null &&
+            selHours != null &&
+            simpleFramesThatFit(steps, selHours) < simplePlanTotal(steps))
           Text(
-            context.l10n.planFramesFit(fits),
+            context.l10n.planFramesFit(simpleFramesThatFit(steps, selHours)),
             key: const Key('simple-run-frames-fit'),
             style: kSimpleText.copyWith(color: AraColors.accentBusy),
           ),
@@ -1544,7 +1549,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
 }
 
 /// A target in one of Plan's lists: its name and a line under it; blue when
-/// picked, dimmed when [greyed] (it doesn't rise above 30° tonight).
+/// picked, its title dimmed when [greyed] (it doesn't rise above 30° tonight).
 class _ListTile extends StatelessWidget {
   const _ListTile({
     super.key,
@@ -1570,47 +1575,45 @@ class _ListTile extends StatelessWidget {
       selected: selected,
       child: SizedBox(
         width: width,
-        child: Opacity(
-          opacity: greyed && !selected ? 0.7 : 1,
-          child: Material(
-            color: selected ? AraColors.selectionBg : AraColors.tileFill,
+        child: Material(
+          color: selected ? AraColors.selectionBg : AraColors.tileFill,
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          child: InkWell(
             borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-              onTap: onTap,
-              // 52 px at 1x, growing with the user's text size.
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 52),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: kSimpleText.copyWith(
-                          fontWeight: FontWeight.w600,
-                          // White on the blue reads at 4.6:1.
-                          color: fg,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+            onTap: onTap,
+            // 52 px at 1x, growing with the user's text size.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: kSimpleText.copyWith(
+                        fontWeight: FontWeight.w600,
+                        // White on the blue reads at 4.6:1; greyed is
+                        // textSecondary (4.7:1 on a tile).
+                        color: fg ?? (greyed ? AraColors.textSecondary : null),
                       ),
-                      Text(
-                        line,
-                        style: _dim.copyWith(
-                          fontSize: AraFontSize.simpleCaption,
-                          color: fg,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      line,
+                      style: _dim.copyWith(
+                        fontSize: AraFontSize.simpleCaption,
+                        color: fg,
                       ),
-                    ],
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1622,7 +1625,7 @@ class _ListTile extends StatelessWidget {
 }
 
 /// The picked target at the top of Plan: art, name, altitude now and the
-/// hours it stays above 30° before dawn.
+/// hours it stays above 30° before dawn ([hours] null: unknown, left out).
 class _TargetCard extends StatelessWidget {
   const _TargetCard({
     required this.sel,
@@ -1631,24 +1634,30 @@ class _TargetCard extends StatelessWidget {
   });
 
   final PlanetariumSelection sel;
-  final double hours;
+  final double? hours;
   final VoidCallback onPickInSky;
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
     // Altitude now (or when it rises), then the hours left tonight.
+    final hours = this.hours;
     final status = [
       sel.belowHorizon || sel.neverRises
           ? simpleTargetStatus(sel, l)
           : l.planAltitudeUp((sel.altDeg ?? 0).round()),
-      hours <= 0 ? l.planNotAbove30 : l.planHoursLeft(hours.toStringAsFixed(1)),
+      if (hours != null)
+        hours <= 0
+            ? l.planNotAbove30
+            : l.planHoursLeft(hours.toStringAsFixed(1)),
     ].join(' · ');
     return Container(
       key: const Key('simple-run-target-card'),
       padding: const EdgeInsets.only(left: AraSpace.s8),
       decoration: BoxDecoration(
-        color: AraColors.selectionBg.withValues(alpha: 0.32),
+        // 25 %: textPrimary reads at 7.9:1 and linkText at 4.7:1 on it over
+        // a bright frame (at 32 % linkText fell to 4.4:1).
+        color: AraColors.selectionTint,
         borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       ),
       child: Row(
@@ -1683,7 +1692,8 @@ class _TargetCard extends StatelessWidget {
                   ),
                   style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
                 ),
-                Text(status, style: _dim),
+                // textPrimary: textSecondary reads only 4:1 on the tint.
+                Text(status, style: kSimpleText),
               ],
             ),
           ),
