@@ -178,8 +178,13 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
         // serialized to text, {{token}} placeholders are swapped for the
         // request's Parameters values via SequenceTemplateVariables.Substitute,
         // then the result is parsed back to a JsonElement. Unknown tokens are
-        // preserved literally so §38.5 validation can flag them.
+        // preserved literally; a token left in a value is still a valid string.
         var substitutedBody = SubstituteTemplateBody(template.Body, request.Parameters);
+
+        // ADR 0018 rules 1 and 3: a stored body must load in the engine, so a disk
+        // template is checked like a created sequence. The endpoint maps this to 422.
+        var (valid, reason) = SequenceSchemaValidator.Validate(substitutedBody, requireCapturableInstruction: false);
+        if (!valid) throw new ArgumentException(reason);
 
         // Reuse the §38 create path so the new sequence shows up in
         // /api/v1/sequences immediately.
