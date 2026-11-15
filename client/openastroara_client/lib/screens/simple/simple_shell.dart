@@ -1735,13 +1735,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // The sky's pick, offered to Plan; above the plan
-                              // squares while they show.
+                              // squares while they show. #1778: upright, above
+                              // the deck and within its insets, never over it.
                               if (_sky && sel != null && !runSheet)
                                 Positioned(
-                                  left: 0,
-                                  right: 0,
+                                  left: deck ? kSimpleInset : 0,
+                                  right: deck ? kSimpleInset : 0,
                                   bottom: planSquares && !preflightPanel
                                       ? popoverBottom
+                                      : deck
+                                      ? aboveRow
                                       : kSimpleInset * 2 + 40,
                                   child: Center(
                                     child: _SkyPick(
@@ -5134,12 +5137,13 @@ class _AraSheet extends ConsumerWidget {
         ?.name;
     // As wide as its text, up to 420 px; past that the table shrinks the
     // value column to its longest word and the text wraps.
-    final maxWidth = math.min(
-      420.0,
-      MediaQuery.sizeOf(context).width -
-          _topLeftOverlayLeft(context) -
-          kSimpleInset,
-    );
+    final room =
+        MediaQuery.sizeOf(context).width -
+        _topLeftOverlayLeft(context) -
+        kSimpleInset;
+    // #1778: an upright phone gives the sheet the screen's width, as Settings.
+    final upright = companionPortrait(context, ref);
+    final maxWidth = upright ? room : math.min(420.0, room);
     final running = ref.watch(
       sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
     );
@@ -5148,7 +5152,7 @@ class _AraSheet extends ConsumerWidget {
       key: const Key('simple-ara-sheet'),
       // minWidth stays <= maxWidth in a window narrower than 312 px.
       constraints: BoxConstraints(
-        minWidth: math.min(280.0, maxWidth),
+        minWidth: upright ? maxWidth : math.min(280.0, maxWidth),
         maxWidth: maxWidth,
       ),
       child: IntrinsicWidth(
