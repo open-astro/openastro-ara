@@ -276,6 +276,9 @@ public static class WsEventCatalog {
 
     // Phase 9 — server lifecycle + notifications + storage
     public static readonly WsEvent ServerRestartImminent = new("server.restart_imminent");
+    // #1865 — restart-on-idle asked while a run is active: server.restart_pending { reason, requested_utc };
+    // the restart follows (server.restart_imminent) when the run ends.
+    public static readonly WsEvent ServerRestartPending = new("server.restart_pending");
 
     // §29 — a block device appeared or vanished, or the store mount came/went;
     // clients re-fetch device+space state (empty payload by design).
@@ -402,6 +405,7 @@ public static class WsEventCatalog {
         ProfileUpdated,
         ClientSettingsUpdated,
         ServerRestartImminent,
+        ServerRestartPending,
         StorageDevicesChanged,
         DataManagerDownloadProgress,
         DataManagerDownloadComplete,
