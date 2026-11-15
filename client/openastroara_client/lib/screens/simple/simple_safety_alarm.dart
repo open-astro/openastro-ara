@@ -182,14 +182,16 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                             color: AraColors.textSecondary,
                           ),
                         ),
-                        // §41.1 — a phone: the sound and vibration note (only
-                        // with Sound alert on: muted, it neither rings nor
-                        // vibrates), and Emergency Abort as the STOP hold
-                        // (2 s), never a tap.
+                        // §41.1 — a phone: the sound and vibration note (not
+                        // with Sound alert off: muted, it neither rings nor
+                        // vibrates; not loaded from the rig, it rings), and
+                        // Emergency Abort as the STOP hold (2 s), never a tap.
                         if (ref.watch(companionModeProvider)) ...[
                           if (ref
-                              .watch(notificationsSettingsProvider)
-                              .soundAlert)
+                                  .watch(notificationsSettingsProvider)
+                                  .value
+                                  ?.soundAlert !=
+                              false)
                             Text(
                               context.l10n.safetyAlarmPhoneNote,
                               textAlign: TextAlign.center,

@@ -10,6 +10,8 @@ import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 
+import '../../support/section_load.dart';
+
 class _RecordingPlayer implements SafetyAlarmPlayer {
   final List<String> played = [];
   int stops = 0;
@@ -55,7 +57,11 @@ void main() {
           SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
     ]);
     // Sound alert defaults on in NotificationsSettings? Ensure it's on.
-    container.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    await loadSection(
+      container,
+      notificationsSettingsProvider,
+      'notifications',
+    );
     // Riverpod 3 pauses providers without active listeners — in production
     // the shell's SafetyAlarmListener watches; tests need an explicit one or
     // the controller's ws subscription never delivers.
@@ -149,6 +155,22 @@ void main() {
     expect(player.played, isEmpty, reason: 'the toggle gates only the tone');
   });
 
+  test(
+    'Sound alert rings when notifications are not loaded from the rig',
+    () async {
+      // A rig or profile change resets the section; no value means no mute.
+      container.read(notificationsSettingsProvider.notifier).reset();
+      expect(container.read(notificationsSettingsProvider).value, isNull);
+      emit('safety.unsafe');
+      await settle();
+
+      expect(container.read(safetyAlarmProvider).ringing, isTrue);
+      expect(player.played, [
+        'audio/alarm_siren.wav',
+      ], reason: 'a safety alarm fails loud, not quiet');
+    },
+  );
+
   test('touching one knob before restore keeps the OTHER persisted value', () async {
     container.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -162,7 +184,11 @@ void main() {
       safetyAlarmPrefsProvider.overrideWithValue(
           SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
     ]);
-    container.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    await loadSection(
+      container,
+      notificationsSettingsProvider,
+      'notifications',
+    );
     container.listen(safetyAlarmProvider, (prev, next) {});
     final c = container.read(safetyAlarmProvider.notifier);
     c.playerFactory = () => player;
@@ -212,7 +238,11 @@ void main() {
       safetyAlarmPrefsProvider.overrideWithValue(
           SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
     ]);
-    container.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    await loadSection(
+      container,
+      notificationsSettingsProvider,
+      'notifications',
+    );
     container.listen(safetyAlarmProvider, (prev, next) {});
     final c = container.read(safetyAlarmProvider.notifier);
     c.playerFactory = () => player;

@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
 import '../../../state/profile_management_state.dart';
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
@@ -15,8 +12,7 @@ import '../../../util/frame_naming.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
-import '../../../state/settings/loaded_section.dart';
-import '../../../widgets/settings/section_load_state.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/storage/fits_header_reference.dart';
 
@@ -37,33 +33,33 @@ class SessionFilenamesPanel extends ConsumerStatefulWidget {
 }
 
 class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
-  /// Save also persists filenames, site and optics; until all three have been
-  /// hydrated, saving would push defaults over server values a failed hydrate
-  /// never loaded. Storage guards its own save (ADR 0015).
+  /// Save also persists site and optics, which still load the old way; until
+  /// both have been hydrated, saving would push defaults over server values a
+  /// failed hydrate never loaded. Storage and filenames guard their own save
+  /// (ADR 0015).
   bool _hydrated = false;
+
+  // The template rides with storage settings; the separator + compression
+  // toggles ride with filenames. Both are one save.
+  @override
+  List<PanelSection> get sections => [
+    storageSettingsProvider,
+    filenamesSettingsProvider,
+  ];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Storage loads on its own, never from [_hydrate]: a failed hydrate must
-      // not stop it, and Save's retry of [_hydrate] must not drop its edits.
-      _reloadStorage();
-      _hydrate();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
   Future<void> _hydrate() async {
-    final api = _api();
+    final api = ref.read(profileApiProvider);
     if (api == null) return;
     try {
-      await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
-      // This panel's Save persists these three as well, so each must be
-      // hydrated first — Save must never push defaults over values it hasn't
-      // seen (the transient-draft lesson).
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       _hydrated = true;
@@ -81,19 +77,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
   }
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
     if (!_hydrated) {
       // Retry the load rather than save blind: persisting unhydrated
       // providers would overwrite real profile values with defaults.
@@ -105,57 +90,28 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
               'Couldn\'t load your saved settings — not saving over them. '
               'Check the connection and try again.',
         );
-        messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(_lastError!)));
         return;
       }
     }
-    try {
-      // The template rides with storage settings; the separator + compression
-      // toggles ride with filenames. Both panels' saves stay independent.
-      await ref.read(storageSettingsProvider.notifier).save(api);
-      await ref.read(filenamesSettingsProvider.notifier).persistToServer(api);
-      await ref.read(siteSettingsProvider.notifier).persistToServer(api);
-      await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _lastError =
-            e is SectionNotLoadedException || e is SectionConflictException
-            ? e.toString()
-            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
-  }
-
-  ProfileApi? _api() => ref.read(profileApiProvider);
-
-  void _reloadStorage() {
-    final api = _api();
-    if (api != null) {
-      unawaited(ref.read(storageSettingsProvider.notifier).load(api));
-    }
+    final error = await saveSections(
+      andThen: (api) async {
+        await ref.read(siteSettingsProvider.notifier).persistToServer(api);
+        await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
+      },
+    );
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final fs = ref.watch(filenamesSettingsProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final fs = ref.watch(filenamesSettingsProvider).value!;
     final fn = ref.read(filenamesSettingsProvider.notifier);
-    final section = ref.watch(storageSettingsProvider);
-    // A new rig or profile resets the section (migrated_sections.dart), also
-    // after a failed load: load it again.
-    ref.listen(storageSettingsProvider, (_, next) {
-      if (next.source == SectionSource.notLoaded && next.lastFailure == null) {
-        _reloadStorage();
-      }
-    });
     final sn = ref.read(storageSettingsProvider.notifier);
-    final ss = section.value;
-    if (ss == null) {
-      return SectionNotLoaded(section: section, onRetry: _reloadStorage);
-    }
+    final ss = ref.watch(storageSettingsProvider).value!;
     final site = ref.watch(siteSettingsProvider);
     final optics = ref.watch(opticsSettingsProvider);
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
@@ -163,7 +119,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        if (section.conflict) SectionConflictBanner(onReload: _reloadStorage),
+        ?sectionConflict(),
         _PreviewCard(
           template: ss.filenameTemplate,
           extension: ss.fileFormat == StorageFileFormat.xisf

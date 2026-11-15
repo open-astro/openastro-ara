@@ -1,31 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
 /// §51 diagnostics mode. Phase 12h.6j wires the daemon round-trip via
 /// [ProfileApi] (`/api/v1/profile/diagnostics-mode`). The picker
 /// auto-saves on each radio tap (no Save button — single-choice UX),
-/// so [persistToServer] runs from the panel's `_selectAndSave` after
-/// it calls [setMode] to update local state optimistically.
+/// so the panel's `_selectAndSave` calls [replaceAndSave], which edits
+/// and saves with the loaded tag (ADR 0015).
 
 enum DiagnosticsMode { notifyOnly, pauseOnCritical, abortOnCritical }
 
-class DiagnosticsModeNotifier extends Notifier<DiagnosticsMode>
-    with SettingsSyncMixin<DiagnosticsMode> {
+class DiagnosticsModeNotifier extends SectionNotifier<DiagnosticsMode> {
+  void setMode(DiagnosticsMode m) => edit((c) => m);
+
   @override
-  DiagnosticsMode build() => DiagnosticsMode.notifyOnly;
+  Future<Tagged<DiagnosticsMode>> fetch(ProfileApi api) =>
+      api.getDiagnosticsModeSection();
 
-  void setMode(DiagnosticsMode m) => state = m;
-
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getDiagnosticsMode());
-
-  Future<DiagnosticsMode> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putDiagnosticsMode(sent));
+  @override
+  Future<Tagged<DiagnosticsMode>> send(
+    ProfileApi api,
+    DiagnosticsMode value,
+    String? etag,
+  ) => api.putDiagnosticsModeSection(value, ifMatch: etag);
 }
 
 final diagnosticsModeProvider =
-    NotifierProvider<DiagnosticsModeNotifier, DiagnosticsMode>(
-        DiagnosticsModeNotifier.new);
+    NotifierProvider<DiagnosticsModeNotifier, LoadedSection<DiagnosticsMode>>(
+      DiagnosticsModeNotifier.new,
+    );

@@ -642,7 +642,7 @@ const List<Setting> settingsRegistry = [
       'Pause on critical',
       'Abort on critical',
     ]),
-    defaultValue: 'Notify only',
+    defaultValue: null,
     profilePath: 'diagnostics.mode',
   ),
 
@@ -1609,7 +1609,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sound', 'alarm', 'audio', 'alert', 'beep'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.sound_alert',
   ),
   Setting(
@@ -1641,7 +1641,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['pushover', 'token', 'phone', 'mobile', 'push', 'remote'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'notifications.pushover_token',
   ),
   Setting(
@@ -1660,7 +1660,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'notifications.pushover_user_key',
     relatedSettings: ['session.notifications.pushover_token'],
   ),
@@ -1671,7 +1671,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['telegram', 'bot', 'token', 'chat', 'remote', 'mobile'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'notifications.telegram_bot_token',
   ),
   Setting(
@@ -1690,7 +1690,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'notifications.telegram_chat_id',
     relatedSettings: ['session.notifications.telegram_bot_token'],
   ),
@@ -1702,7 +1702,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sequence', 'complete', 'finish', 'done', 'trigger'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_sequence_complete',
   ),
   Setting(
@@ -1712,7 +1712,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sequence', 'paused', 'pause', 'wait', 'trigger'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_sequence_paused',
   ),
   Setting(
@@ -1729,7 +1729,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_critical_diagnostic',
   ),
   Setting(
@@ -1739,7 +1739,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['safety', 'weather', 'unsafe', 'park', 'alarm', 'trigger'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_safety_event',
   ),
   Setting(
@@ -1749,7 +1749,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['autofocus', 'failed', 'focus', 'hfr', 'trigger'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_autofocus_failed',
   ),
   Setting(
@@ -1766,7 +1766,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_plate_solve_failed',
   ),
   Setting(
@@ -1777,7 +1777,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['disk', 'space', 'low', 'storage', 'full', 'free', 'trigger'],
     path: ['Settings', 'Your night', 'Notifications'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'notifications.on_disk_space_low',
   ),
 
@@ -2034,7 +2034,7 @@ const List<Setting> settingsRegistry = [
       '_ (underscore)',
       '- (dash)',
     ]),
-    defaultValue: '/ (forward slash)',
+    defaultValue: null,
     profilePath: 'filenames.date_separator',
   ),
   Setting(
@@ -2052,7 +2052,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Filenames'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'filenames.compress_darks_and_bias',
   ),
 

@@ -6,6 +6,8 @@ import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 
+import '../../support/section_load.dart';
+
 class _Player implements SafetyAlarmPlayer {
   final played = <String>[];
   @override
@@ -48,6 +50,7 @@ void main() {
       ],
     );
     addTearDown(c.dispose);
+    await loadSection(c, notificationsSettingsProvider, 'notifications');
     c.read(notificationsSettingsProvider.notifier).setSoundAlert(soundAlert);
     c.listen(safetyAlarmProvider, (_, _) {});
     final alarm = c.read(safetyAlarmProvider.notifier);

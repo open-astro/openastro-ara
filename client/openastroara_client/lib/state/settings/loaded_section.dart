@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
+import '../profile_management_state.dart' show profileApiProvider;
 
 /// ADR 0015 — a client profile section is loaded before it is saved.
 ///
@@ -80,6 +81,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   // an older load must not land.
   int _generation = 0;
   Future<void>? _saveChain;
+  T? _held; // The rig's copy (last load or save); see [replaceAndSave].
 
   /// Replace the section with the rig's copy (also discards edits and a
   /// conflict). A failure is kept in [LoadedSection.lastFailure]; a section
@@ -89,6 +91,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     try {
       final r = await fetch(api);
       if (ref.mounted && gen == _generation) {
+        _held = r.value;
         state = LoadedSection(
           value: r.value,
           source: SectionSource.rig,
@@ -114,9 +117,40 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     state = state.copyWith(value: change(v));
   }
 
+  ProfileApi _activeApi() =>
+      ref.read(profileApiProvider) ??
+      (throw StateError('Not connected — connect to your rig to save this.'));
+
+  /// Save [next] whole (a picker, a form). A 412 keeps [next] and flags the
+  /// conflict (ADR 0015 rule 6). Any other failure puts the rig's copy back,
+  /// unless a later edit already replaced [next]: that edit's save decides.
+  Future<void> replaceAndSave(T next) async {
+    try {
+      await editAndSave((_) => next);
+    } on SectionConflictException {
+      rethrow;
+    } catch (_) {
+      final held = _held;
+      if (held != null && identical(state.value, next)) edit((_) => held);
+      rethrow;
+    }
+  }
+
+  /// An auto-save row (a switch that saves on change): edit, then save.
+  /// Throws [SectionNotLoadedException] without editing when nothing was
+  /// loaded, so a refused toggle never shows as set.
+  Future<void> editAndSave(T Function(T current) change) {
+    if (!state.canSave) {
+      return Future.error(SectionNotLoadedException(state.lastFailure));
+    }
+    edit(change);
+    return save(_activeApi());
+  }
+
   /// Back to not loaded (rig or profile changed).
   void reset() {
     _generation++;
+    _held = null;
     state = const LoadedSection();
   }
 
@@ -144,6 +178,7 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
         rethrow;
       }
       if (ref.mounted && gen == _generation) {
+        _held = r.value;
         // Edits made while the PUT was in flight stay; the tag moves on.
         state = LoadedSection(
           value: identical(state.value, sent) ? r.value : state.value,

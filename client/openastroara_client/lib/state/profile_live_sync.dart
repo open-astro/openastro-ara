@@ -11,21 +11,18 @@ import 'settings/autofocus_settings_state.dart';
 import 'settings/camera_electronics_state.dart';
 import 'settings/cooling_fan_state.dart';
 import 'settings/custom_horizon_state.dart';
-import 'settings/diagnostics_mode_state.dart';
 import 'settings/dome_settings_state.dart';
 import 'settings/equipment_connection_state.dart';
-import 'settings/filenames_settings_state.dart';
 import 'settings/filter_set_state.dart';
 import 'settings/filter_wheel_labels_state.dart';
 import 'settings/filter_wheel_policy_state.dart';
 import 'settings/imaging_defaults_state.dart';
-import 'settings/notifications_settings_state.dart';
+import 'settings/migrated_sections.dart';
 import 'settings/optics_settings_state.dart';
 import 'settings/phd2_settings_state.dart';
 import 'settings/plate_solve_settings_state.dart';
 import 'settings/safety_policies_state.dart';
 import 'settings/site_settings_state.dart';
-import 'settings/storage_settings_state.dart';
 import 'settings/unguided_settings_state.dart';
 
 /// #1644 — another device (or the daemon) wrote profile [section]
@@ -60,8 +57,15 @@ Future<void> applyProfileUpdated(
 typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
 
 // Wire section name (first path segment under /api/v1/profile/) → the
-// notifier holding that section.
+// notifier holding that section. A section on the section module is read from
+// `migratedSections`, so adding one there adds its row here.
 final Map<String, _Hydrate> _hydrators = {
+  for (final route in {for (final s in migratedSections) s.route})
+    route: (c, api) => Future.wait([
+      for (final s in migratedSections)
+        if (s.route == route)
+          c.read(s.provider.notifier).hydrateFromServer(api),
+    ]),
   'imaging-defaults': (c, api) =>
       c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
   'autofocus': (c, api) =>
@@ -88,18 +92,10 @@ final Map<String, _Hydrate> _hydrators = {
       c.read(customHorizonProvider.notifier).hydrateFromServer(api),
   'safety': (c, api) =>
       c.read(safetyPoliciesProvider.notifier).hydrateFromServer(api),
-  'storage': (c, api) =>
-      c.read(storageSettingsProvider.notifier).hydrateFromServer(api),
-  'filenames': (c, api) =>
-      c.read(filenamesSettingsProvider.notifier).hydrateFromServer(api),
   'plate-solve': (c, api) =>
       c.read(plateSolveSettingsProvider.notifier).hydrateFromServer(api),
   'phd2': (c, api) =>
       c.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
-  'notifications': (c, api) =>
-      c.read(notificationsSettingsProvider.notifier).hydrateFromServer(api),
-  'diagnostics-mode': (c, api) =>
-      c.read(diagnosticsModeProvider.notifier).hydrateFromServer(api),
   'equipment-connection': (c, api) =>
       c.read(equipmentConnectionProvider.notifier).hydrateFromServer(api),
 };
