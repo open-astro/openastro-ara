@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/settings/panels/diagnostics_mode_panel.dart';
 import 'package:openastroara/screens/settings/panels/session_notifications_panel.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
@@ -8,15 +9,16 @@ import 'package:openastroara/state/settings/panel_save_registry.dart';
 
 import '../../support/fake_section_rig.dart';
 
-// The shared panel scaffold (SectionPanel), exercised through one panel: the
-// notifications panel on a fake rig.
+// The shared panel scaffold (SectionPanel) on a fake rig, exercised through
+// the notifications panel; the last case checks the diagnostics panel's radios.
 
 const _section = 'notifications';
 
 Future<ProviderContainer> _pump(
   WidgetTester tester,
-  FakeSectionRig? rig,
-) async {
+  FakeSectionRig? rig, [
+  Widget panel = const SessionNotificationsPanel(),
+]) async {
   tester.view.physicalSize = const Size(1400, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -27,9 +29,7 @@ Future<ProviderContainer> _pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(
-        home: Scaffold(body: SessionNotificationsPanel()),
-      ),
+      child: MaterialApp(home: Scaffold(body: panel)),
     ),
   );
   await tester.pumpAndSettle();
@@ -97,5 +97,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.ifMatches, ['"$_section-v1"']);
     expect(rig.puts, hasLength(1));
+  });
+
+  testWidgets('diagnostics modes read as one radio group, the loaded one '
+      'checked', (tester) async {
+    await _pump(
+      tester,
+      FakeSectionRig({'diagnostics-mode': <String, Object?>{}}),
+      const DiagnosticsModePanel(),
+    );
+    expect(
+      tester.getSemantics(find.text('Notify only (default)')),
+      isSemantics(isInMutuallyExclusiveGroup: true, isChecked: true),
+    );
   });
 }

@@ -108,7 +108,8 @@ class _ModeOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: label,
-      selected: selected,
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
       button: true,
       child: InkWell(
         onTap: onTap,
