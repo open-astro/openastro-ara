@@ -23,9 +23,11 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services.LiveStack;
 
 /// <summary>What one <see cref="LiveStackEngine.Add"/> did with a frame.</summary>
-public enum StackAddOutcome { Reference, Stacked, Unregistered, WrongSize, TooLarge, Dropped,
+public enum StackAddOutcome {
+    Reference, Stacked, Unregistered, WrongSize, TooLarge, Dropped,
     /// <summary>Colour mode only: registered after a 180-degree turn (a meridian flip) and stacked.</summary>
-    Flipped }
+    Flipped
+}
 
 /// <summary>Result of one Add. Offsets follow the engine convention: a frame's stars sit at
 /// <c>R(rot)·(p − centre) + centre + (dx, dy)</c> relative to the reference (centre = width/2, height/2).</summary>
