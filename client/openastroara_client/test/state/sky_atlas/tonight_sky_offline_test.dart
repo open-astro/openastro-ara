@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -39,7 +40,8 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   _SeededElectronics(this._v);
   final CameraElectronics _v;
   @override
-  CameraElectronics build() => _v;
+  LoadedSection<CameraElectronics> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededFilters extends FilterSetNotifier {
@@ -167,5 +169,27 @@ void main() {
     // The sub length is the ranker output every object carries; the hours' 1/k
     // scaling is pinned in integration_budget_test (the same input feeds both).
     expect(fitted.optimalSubS!, greaterThan(spec.optimalSubS!), reason: 'half the sky rate: the Glover floor moves out');
+  });
+
+  test('camera electronics not loaded: ranks with unset electronics, no optimal sub', () async {
+    final c = ProviderContainer(overrides: [
+      savedServersProvider.overrideWith(_NoServers.new),
+      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+            siteName: 'cached', latitudeDeg: 34.0, longitudeDeg: -84.0, bortleClass: 6,
+            defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
+      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+            focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
+            sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+      filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
+            filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
+    ]);
+    addTearDown(c.dispose);
+    expect(c.read(cameraElectronicsProvider).value, isNull);
+    final keep = c.listen(tonightSkyProvider, (_, _) {});
+    addTearDown(keep.close);
+    final list = await c.read(tonightSkyProvider.future);
+    expect(list, isNotEmpty, reason: 'planning still ranks');
+    expect(list.where((o) => o.optimalSubS != null), isEmpty,
+        reason: 'no electronics loaded: no optimal sub is invented');
   });
 }

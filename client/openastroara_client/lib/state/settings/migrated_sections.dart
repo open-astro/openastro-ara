@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
+import 'camera_electronics_state.dart';
+import 'custom_horizon_state.dart';
 import 'diagnostics_mode_state.dart';
 import 'filenames_settings_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
+import 'plate_solve_settings_state.dart';
 import 'storage_settings_state.dart';
+import 'unguided_settings_state.dart';
 
 /// ADR 0015 — the one reset point: a different rig or a different active
 /// profile sends every migrated section back to not loaded, so no value from
@@ -34,10 +38,14 @@ typedef MigratedSection = ({
 /// that [resetMigratedSections] and the live-sync table (profile_live_sync.dart)
 /// read, and a test checks both against.
 final List<MigratedSection> migratedSections = [
+  (route: 'camera-electronics', provider: cameraElectronicsProvider),
+  (route: 'custom-horizon', provider: customHorizonProvider),
   (route: 'diagnostics-mode', provider: diagnosticsModeProvider),
   (route: 'filenames', provider: filenamesSettingsProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
+  (route: 'plate-solve', provider: plateSolveSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
+  (route: 'unguided', provider: unguidedSettingsProvider),
 ];
 
 /// Root-mounted (main.dart) next to `launchGateRearmProvider`.

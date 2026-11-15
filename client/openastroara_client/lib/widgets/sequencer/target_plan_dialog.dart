@@ -126,7 +126,8 @@ double suggestedSubSeconds(
 }) {
   final outcome = resolveOptimalSubLocal(
     optics: ref.read(opticsSettingsProvider),
-    electronics: ref.read(cameraElectronicsProvider),
+    electronics:
+        ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
     site: ref.read(siteSettingsProvider),
     filterSet: ref.read(filterSetProvider),
     filterName: filterName,

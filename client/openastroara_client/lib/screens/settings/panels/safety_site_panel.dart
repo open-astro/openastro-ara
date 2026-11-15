@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
@@ -12,6 +11,8 @@ import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_load_state.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/settings/time_sync_section.dart';
 import '../../../widgets/adaptive_controls.dart';
@@ -27,7 +28,7 @@ class SafetySitePanel extends ConsumerStatefulWidget {
 }
 
 class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
   bool _gpsBusy = false;
   String? _gpsStatus;
@@ -36,6 +37,11 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   // seeded controllers stale until the panel is reopened.
   int _gpsFill = 0;
 
+  // The skyline loads and saves through the section module; the site still
+  // loads and saves the old way until its own migration.
+  @override
+  List<PanelSection> get sections => [customHorizonProvider];
+
   @override
   void initState() {
     super.initState();
@@ -43,11 +49,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   }
 
   Future<void> _hydrate() async {
-    final api = _api();
+    final api = ref.read(profileApiProvider);
     if (api == null) return;
     try {
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-      await ref.read(customHorizonProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
         setState(
@@ -59,39 +64,25 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   }
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
     // Two sequential PUTs — track which committed so a partial failure
     // reports honestly ("site saved; skyline failed") instead of implying
     // the whole Save was rolled back (review r2).
     var siteSaved = false;
-    try {
-      await ref.read(siteSettingsProvider.notifier).persistToServer(api);
-      siteSaved = true;
-      await ref.read(customHorizonProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _lastError = siteSaved
-            ? 'Site preferences saved, but the horizon skyline was not. '
-                '${friendlyError(context.l10n, e, action: context.l10n.actionSaveHorizon)}'
-            : friendlyError(context.l10n, e, action: context.l10n.actionSave),
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
+    final error = await saveSections(
+      andThen: (api) async {
+        await ref.read(siteSettingsProvider.notifier).persistToServer(api);
+        siteSaved = true;
+        await ref.read(customHorizonProvider.notifier).save(api);
+      },
+    );
+    if (!mounted) return;
+    setState(
+      () => _lastError = error != null && siteSaved
+          ? 'Site preferences saved, but the horizon skyline was not. $error'
+          : error,
+    );
   }
 
   /// Fill the observing site from GPS (§31.3). Preferred: a USB GPS dongle on
@@ -186,13 +177,9 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
-
   @override
   Widget build(BuildContext context) {
+    reloadWhenReset();
     final s = ref.watch(siteSettingsProvider);
     final n = ref.read(siteSettingsProvider.notifier);
 
@@ -325,7 +312,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           onChanged: n.setUseCustomHorizon,
         ),
         if (s.useCustomHorizon)
-          const _CustomHorizonEditor()
+          _CustomHorizonEditor(onRetry: loadSections)
         else
           EditableNumberRow(
             label: 'Default horizon altitude (°)',
@@ -431,17 +418,24 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
 /// interpolates between vertices and canonicalizes on Save, so a handful of
 /// measured points (one per obstruction) is the intended workflow.
 class _CustomHorizonEditor extends ConsumerWidget {
-  const _CustomHorizonEditor();
+  const _CustomHorizonEditor({required this.onRetry});
+
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final points = ref.watch(customHorizonProvider);
+    final section = ref.watch(customHorizonProvider);
+    final points = section.value;
+    if (points == null) {
+      return SectionNotLoaded(section: section, onRetry: onRetry);
+    }
     final n = ref.read(customHorizonProvider.notifier);
     final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: onRetry),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
@@ -464,8 +458,11 @@ class _CustomHorizonEditor extends ConsumerWidget {
                   label: 'Azimuth (°)',
                   helpKey: 'safety.site.horizon_azimuth',
                   currentValue: points[i].azimuthDeg.toString(),
-                  getCanonical: () =>
-                      ref.read(customHorizonProvider)[i].azimuthDeg.toString(),
+                  getCanonical: () => ref
+                      .read(customHorizonProvider)
+                      .value![i]
+                      .azimuthDeg
+                      .toString(),
                   parse: (str) {
                     final v = double.tryParse(str);
                     if (v != null) n.updateAt(i, azimuthDeg: v);
@@ -477,8 +474,11 @@ class _CustomHorizonEditor extends ConsumerWidget {
                   label: 'Altitude (°)',
                   helpKey: 'safety.site.horizon_altitude',
                   currentValue: points[i].altitudeDeg.toString(),
-                  getCanonical: () =>
-                      ref.read(customHorizonProvider)[i].altitudeDeg.toString(),
+                  getCanonical: () => ref
+                      .read(customHorizonProvider)
+                      .value![i]
+                      .altitudeDeg
+                      .toString(),
                   parse: (str) {
                     final v = double.tryParse(str);
                     if (v != null) n.updateAt(i, altitudeDeg: v);

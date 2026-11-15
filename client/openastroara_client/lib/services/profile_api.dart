@@ -336,23 +336,6 @@ class ProfileApi {
     return customHorizonFromJson(res.data ?? const {});
   }
 
-  /// PUT the skyline; the daemon canonicalizes (sort/dedupe/wrap, 422 on
-  /// out-of-range values) and echoes the canonical list.
-  Future<List<CustomHorizonPoint>> putCustomHorizon(
-    List<CustomHorizonPoint> points,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/custom-horizon',
-      data: {
-        'points': [
-          for (final p in points)
-            {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
-        ],
-      },
-    );
-    return customHorizonFromJson(res.data ?? const {});
-  }
-
   /// Wire shape of the §36 custom horizon (`{points: [{azimuth_deg, altitude_deg}]}`),
   /// also what the offline profile cache stores (#1137).
   static Map<String, dynamic> customHorizonToJson(
@@ -535,6 +518,55 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({CameraElectronics value, String? etag})>
+  getCameraElectronicsSection() =>
+      _getTagged('camera-electronics', cameraElectronicsFromJson);
+  Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
+    CameraElectronics v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'camera-electronics',
+    cameraElectronicsToJson(v),
+    cameraElectronicsFromJson,
+    ifMatch,
+  );
+
+  Future<({List<CustomHorizonPoint> value, String? etag})>
+  getCustomHorizonSection() =>
+      _getTagged('custom-horizon', customHorizonFromJson);
+  Future<({List<CustomHorizonPoint> value, String? etag})>
+  putCustomHorizonSection(List<CustomHorizonPoint> v, {String? ifMatch}) =>
+      _putTagged(
+        'custom-horizon',
+        customHorizonToJson(v),
+        customHorizonFromJson,
+        ifMatch,
+      );
+
+  Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
+      _getTagged('unguided', unguidedSettingsFromJson);
+  Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
+    UnguidedSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'unguided',
+    unguidedSettingsToJson(v),
+    unguidedSettingsFromJson,
+    ifMatch,
+  );
+
+  Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
+      _getTagged('plate-solve', _plateSolveSettingsFromJson);
+  Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
+    PlateSolveSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'plate-solve',
+    _plateSolveSettingsToJson(v),
+    _plateSolveSettingsFromJson,
+    ifMatch,
+  );
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -600,15 +632,6 @@ class ProfileApi {
       if (e.response?.statusCode == 404) return const UnguidedSettings();
       rethrow;
     }
-  }
-
-  /// PUT the active profile's unguided-imaging settings (#1264).
-  Future<UnguidedSettings> putUnguidedSettings(UnguidedSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/unguided',
-      data: unguidedSettingsToJson(value),
-    );
-    return unguidedSettingsFromJson(res.data ?? const {});
   }
 
   static UnguidedSettings unguidedSettingsFromJson(Map<String, dynamic> j) {

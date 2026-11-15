@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../models/server.dart';
 import '../../../services/plate_solve_database_api.dart';
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/plate_solve_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.10 Plate Solving panel — editable. Phase 12h.6i added the daemon
@@ -20,92 +15,47 @@ import '../../../widgets/settings/settings_row.dart';
 class ImagingPlateSolvePanel extends ConsumerStatefulWidget {
   const ImagingPlateSolvePanel({super.key});
 
-  /// How the panel reaches the daemon; tests swap in an API over a recording
-  /// transport so the Save round-trip can be exercised without a server (#1215).
-  @visibleForTesting
-  static ProfileApi Function(AraServer server) apiFactory = ProfileApi.new;
-
   @override
   ConsumerState<ImagingPlateSolvePanel> createState() =>
       _ImagingPlateSolvePanelState();
 }
 
 class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
-    try {
-      await ref
-          .read(plateSolveSettingsProvider.notifier)
-          .hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [plateSolveSettingsProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      // A field still being edited commits on focus loss; drop focus first so
-      // the typed value is what gets sent, and so the rows re-sync afterwards.
-      FocusManager.instance.primaryFocus?.unfocus();
-      final notifier = ref.read(plateSolveSettingsProvider.notifier);
-      await notifier.persistToServer(api);
-      if (!mounted) return;
+    // A field still being edited commits on focus loss; drop focus first so
+    // the typed value is what gets sent, and so the rows re-sync afterwards.
+    FocusManager.instance.primaryFocus?.unfocus();
+    final error = await saveSections();
+    if (error == null && mounted) {
       // #1215 — the daemon normalises on write (a stock solver path such as /usr/bin/astap
       // becomes the bundled /opt/openastroara/astap_cli, #1136);
       // re-read so the fields show what was stored, not what was typed.
-      await notifier.hydrateFromServer(api);
-      if (!mounted) return;
+      await loadSections();
       // The index path or solver path may have changed: re-read the status.
       ref.invalidate(plateSolveDatabaseStatusProvider);
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ImagingPlateSolvePanel.apiFactory(server);
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(plateSolveSettingsProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final s = ref.watch(plateSolveSettingsProvider).value!;
     final n = ref.read(plateSolveSettingsProvider.notifier);
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         const SettingsSectionHeader('Solver'),
         SettingsDropdownRow<PlateSolveEngine>(
           label: 'Engine',
@@ -133,7 +83,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           helpKey: 'img.platesolve.solver_path',
           currentValue: s.pathOrEndpoint,
           getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).pathOrEndpoint,
+              ref.read(plateSolveSettingsProvider).value!.pathOrEndpoint,
           parse: n.setPathOrEndpoint,
         ),
         EditableTextRow(
@@ -141,7 +91,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           helpKey: 'img.platesolve.index_path',
           currentValue: s.indexDownloadPath,
           getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).indexDownloadPath,
+              ref.read(plateSolveSettingsProvider).value!.indexDownloadPath,
           parse: n.setIndexDownloadPath,
         ),
         const _StarDatabaseStatus(),
@@ -150,8 +100,11 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           label: 'Search radius (°)',
           helpKey: 'img.platesolve.search_radius_deg',
           currentValue: s.searchRadiusDeg.toString(),
-          getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).searchRadiusDeg.toString(),
+          getCanonical: () => ref
+              .read(plateSolveSettingsProvider)
+              .value!
+              .searchRadiusDeg
+              .toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSearchRadiusDeg(v);
@@ -161,8 +114,11 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           label: 'Downsample factor (0 = auto, 1..8)',
           helpKey: 'img.platesolve.downsample_factor',
           currentValue: s.downsampleFactor.toString(),
-          getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).downsampleFactor.toString(),
+          getCanonical: () => ref
+              .read(plateSolveSettingsProvider)
+              .value!
+              .downsampleFactor
+              .toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setDownsampleFactor(v);
@@ -172,8 +128,11 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           label: 'Timeout (s)',
           helpKey: 'img.platesolve.timeout',
           currentValue: s.timeoutSeconds.toString(),
-          getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).timeoutSeconds.toString(),
+          getCanonical: () => ref
+              .read(plateSolveSettingsProvider)
+              .value!
+              .timeoutSeconds
+              .toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setTimeoutSeconds(v);
@@ -201,8 +160,11 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           label: 'Max iterations',
           helpKey: 'img.platesolve.max_iterations',
           currentValue: s.maxIterations.toString(),
-          getCanonical: () =>
-              ref.read(plateSolveSettingsProvider).maxIterations.toString(),
+          getCanonical: () => ref
+              .read(plateSolveSettingsProvider)
+              .value!
+              .maxIterations
+              .toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setMaxIterations(v);
@@ -214,6 +176,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           currentValue: s.convergenceToleranceArcsec.toString(),
           getCanonical: () => ref
               .read(plateSolveSettingsProvider)
+              .value!
               .convergenceToleranceArcsec
               .toString(),
           parse: (str) {

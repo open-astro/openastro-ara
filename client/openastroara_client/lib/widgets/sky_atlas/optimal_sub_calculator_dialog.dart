@@ -19,7 +19,8 @@ import '../settings/settings_row.dart';
 /// the noise-tolerance knob and the fitted sky-model k for that filter's kind).
 Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
   final optics = ref.read(opticsSettingsProvider);
-  final cam = ref.read(cameraElectronicsProvider);
+  final cam =
+      ref.read(cameraElectronicsProvider).value ?? const CameraElectronics();
   final site = ref.read(siteSettingsProvider);
   final filters = ref.read(filterSetProvider).filters;
   final k =

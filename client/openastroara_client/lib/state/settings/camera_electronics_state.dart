@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
@@ -68,51 +68,52 @@ class CameraElectronics {
       );
 }
 
-class CameraElectronicsNotifier extends Notifier<CameraElectronics>
-    with SettingsSyncMixin<CameraElectronics> {
-  @override
-  CameraElectronics build() => const CameraElectronics();
-
+class CameraElectronicsNotifier extends SectionNotifier<CameraElectronics> {
   // Boundary validation mirrors the daemon's PUT guards (finite, >= 0; QE in
   // [0, 1]; gain >= -1) so a rejected value can't silently desync field/state.
-  void setSensorName(String v) => state = state.copyWith(sensorName: v);
+  void setSensorName(String v) => edit((c) => c.copyWith(sensorName: v));
 
   void setReadNoiseE(double v) {
     if (v < 0) return;
     // A manual edit takes ownership — but read noise was never ASCOM's, so it
     // doesn't clear the auto-captured provenance of the other fields.
-    state = state.copyWith(readNoiseE: v);
+    edit((c) => c.copyWith(readNoiseE: v));
   }
 
   void setFullWellE(double v) {
     if (v < 0) return;
-    state = state.copyWith(fullWellE: v, autoCaptured: false);
+    edit((c) => c.copyWith(fullWellE: v, autoCaptured: false));
   }
 
   void setElectronsPerAdu(double v) {
     if (v < 0) return;
-    state = state.copyWith(electronsPerAdu: v, autoCaptured: false);
+    edit((c) => c.copyWith(electronsPerAdu: v, autoCaptured: false));
   }
 
   void setGain(int v) {
     if (v < -1) return;
-    state = state.copyWith(gain: v, autoCaptured: false);
+    edit((c) => c.copyWith(gain: v, autoCaptured: false));
   }
 
   void setQuantumEfficiencyPeak(double v) {
     if (v < 0 || v > 1) return;
-    state = state.copyWith(quantumEfficiencyPeak: v);
+    edit((c) => c.copyWith(quantumEfficiencyPeak: v));
   }
 
-  /// Replace local state with what the daemon currently holds.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getCameraElectronics());
+  @override
+  Future<Tagged<CameraElectronics>> fetch(ProfileApi api) =>
+      api.getCameraElectronicsSection();
 
-  /// Send the current local state to the daemon; returns its echo.
-  Future<CameraElectronics> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putCameraElectronics(sent));
+  @override
+  Future<Tagged<CameraElectronics>> send(
+    ProfileApi api,
+    CameraElectronics value,
+    String? etag,
+  ) => api.putCameraElectronicsSection(value, ifMatch: etag);
 }
 
 final cameraElectronicsProvider =
-    NotifierProvider<CameraElectronicsNotifier, CameraElectronics>(
-        CameraElectronicsNotifier.new);
+    NotifierProvider<
+      CameraElectronicsNotifier,
+      LoadedSection<CameraElectronics>
+    >(CameraElectronicsNotifier.new);

@@ -2,11 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/diagnostics_mode_state.dart';
 import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
+import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
 
@@ -14,10 +18,20 @@ import '../../support/fake_section_rig.dart';
 // reset and the live-sync table.
 
 /// Every migrated section by the path the rig serves it under.
-const _paths = ['diagnostics-mode', 'filenames', 'notifications', 'storage'];
+const _paths = [
+  'camera-electronics',
+  'custom-horizon',
+  'diagnostics-mode',
+  'filenames',
+  'notifications',
+  'plate-solve',
+  'storage',
+  'unguided',
+];
 
 FakeSectionRig _rig() => FakeSectionRig({
   for (final p in _paths) p: <String, Object?>{},
+  'custom-horizon': {'points': []},
   'storage': {
     'save_directory': '/data',
     'file_format': 'fits',
@@ -75,6 +89,15 @@ void main() {
 
   // One edit per section, made on a copy the rig served.
   final edits = <String, void Function(ProviderContainer)>{
+    'unguided': (c) =>
+        c.read(unguidedSettingsProvider.notifier).setGuardEnabled(false),
+    'plate-solve': (c) =>
+        c.read(plateSolveSettingsProvider.notifier).setCenterAfterSlew(false),
+    'camera-electronics': (c) => c
+        .read(cameraElectronicsProvider.notifier)
+        .edit((v) => v.copyWith(readNoiseE: 1.5)),
+    'custom-horizon': (c) =>
+        c.read(customHorizonProvider.notifier).addPoint(90, 20),
     'notifications': (c) =>
         c.read(notificationsSettingsProvider.notifier).setPushoverToken('mine'),
     'filenames': (c) => c

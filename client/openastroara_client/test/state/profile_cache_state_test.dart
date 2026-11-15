@@ -17,6 +17,8 @@ import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
+import '../support/section_load.dart';
+
 /// ProfileApi double serving fixed section payloads for the capture path.
 class _FakeApi extends ProfileApi {
   _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
@@ -119,7 +121,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
     expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    final seeded = container.read(customHorizonProvider);
+    final seeded = container.read(customHorizonProvider).value!;
     expect(seeded.map((p) => p.azimuthDeg), [90, 180]);
     expect(seeded.map((p) => p.altitudeDeg), [25, 12]);
   });
@@ -139,9 +141,10 @@ void main() {
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
     addTearDown(container.dispose);
+    await loadSection(container, unguidedSettingsProvider, 'unguided');
     container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('pixel');
     expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    expect(container.read(unguidedSettingsProvider).priorToleranceBasis, 'pixel',
+    expect(container.read(unguidedSettingsProvider).value!.priorToleranceBasis, 'pixel',
         reason: 'an older snapshot must not reset the knob to defaults');
   });
 
@@ -152,9 +155,10 @@ void main() {
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
     addTearDown(container.dispose);
+    await loadSection(container, customHorizonProvider, 'custom-horizon', {'points': []});
     container.read(customHorizonProvider.notifier).addPoint(45, 30);
     expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    expect(container.read(customHorizonProvider), hasLength(1), reason: 'an older snapshot must not wipe a staged skyline');
+    expect(container.read(customHorizonProvider).value!, hasLength(1), reason: 'an older snapshot must not wipe a staged skyline');
   });
 
   test('cachedProfilesProvider reflects capture, including hasSections',
@@ -182,7 +186,7 @@ void main() {
     expect(c.read(imagingDefaultsProvider).defaultGain, 101);
     expect(c.read(siteSettingsProvider).siteName, 'South GA');
     expect(c.read(filterSetProvider).filters.single.name, 'Ha');
-    expect(c.read(cameraElectronicsProvider).readNoiseE, 1.5);
+    expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',
