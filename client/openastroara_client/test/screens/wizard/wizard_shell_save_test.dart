@@ -9,7 +9,6 @@ import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_shell.dart';
-import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
@@ -32,9 +31,7 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 /// blocking spinner is observable) and which records how many times the profile
 /// was created — the regression hooks for the navigator/spinner + double-tap
 /// guard the bot flagged on PR #486.
-class _FakeProfileApi extends ProfileApi {
-  _FakeProfileApi() : super(const AraServer(hostname: 'test', port: 1));
-
+class _FakeProfileApi extends FakeStorageApi {
   int createCalls = 0;
   final Completer<void> _gate = Completer<void>();
   void releaseCreate() => _gate.complete();
@@ -94,8 +91,10 @@ class _FakeProfileApi extends ProfileApi {
   Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
   @override
   Future<StorageSettings> getStorageSettings() async => kTestStorage;
+  // The wizard writes Storage with no tag; the rig takes it and its tag moves.
   @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
+  Future<StorageSettings> putStorageSettings(StorageSettings v) async =>
+      (await putStorageSection(v)).value;
   @override
   Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
   @override
@@ -176,6 +175,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(completed, isTrue);
+  });
+
+  testWidgets('a saved profile sends a loaded section back to not loaded, so '
+      'its next Save is not refused', (tester) async {
+    final api = _FakeProfileApi()..releaseCreate();
+    await tester.pumpWidget(_host(api, onComplete: () {}));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(WizardShell)),
+      listen: false,
+    );
+    final storage = container.read(storageSettingsProvider.notifier);
+    await storage.load(api);
+    await tester.tap(find.text('Save & Exit'));
+    await tester.pumpAndSettle();
+    expect(container.read(storageSettingsProvider).value, isNull);
+    await storage.save(api);
+    expect(api.ifMatches, [null, '"v2"'], reason: 'the wizard wrote untagged');
   });
 
   testWidgets(
