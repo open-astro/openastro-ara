@@ -103,17 +103,20 @@ class _StatusApi implements PolarAlignClient {
 final _asks = <String>[];
 
 class _Mount extends MountNotifier {
-  /// Tracking asks to refuse first; -1 refuses every one.
-  int refuse = 0;
+  /// Refuses every tracking ask.
+  bool refuse = false;
   @override
-  Future<MountStatus?> build() async => null;
+  Future<MountStatus?> build() async => MountStatus.fromJson({
+    'device_id': 'm',
+    'name': 'EQ6-R',
+    'state': 'connected',
+    'capabilities': {'can_set_tracking': true},
+    'runtime': {'state': 'idle', 'tracking': false},
+  });
   @override
   Future<bool> setTracking(bool enabled) async {
     _asks.add('tracking:$enabled');
-    if (refuse != 0) {
-      if (refuse > 0) refuse--;
-      throw StateError('Mount is parked');
-    }
+    if (refuse) throw StateError('Mount is parked');
     return true;
   }
 }
@@ -130,7 +133,7 @@ class _Guider extends GuiderStatusNotifier {
   Future<void> startGuiding() async => _asks.add('startGuiding');
 }
 
-Future<ProviderContainer> _container({bool prefs = true, int refuseTracking = 0}) async {
+Future<ProviderContainer> _container({bool prefs = true, bool refuseTracking = false}) async {
   _asks.clear();
   final c = ProviderContainer(
     overrides: [
@@ -383,7 +386,7 @@ void main() {
 
   // Falsified by: mount_state.dart ensureTracking, return true after the last refused try.
   test('a mount that refuses tracking every time: no guiding, an error pill', () async {
-    final c = await _container(refuseTracking: -1);
+    final c = await _container(refuseTracking: true);
     await c.read(simpleModeProvider.future);
     await c.read(guiderStatusProvider.future);
     c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);

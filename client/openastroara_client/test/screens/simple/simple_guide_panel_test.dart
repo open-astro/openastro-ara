@@ -46,11 +46,22 @@ class _Run extends SequenceRunStateNotifier {
 /// The mount and the guider's asks, in the order they came.
 final _order = <String>[];
 
-/// A mount that takes the tracking ask, or refuses it while [refuse] is set.
+/// A connected mount; [canSetTracking] false is one that cannot set it.
+Map<String, dynamic> _mountWire({bool canSetTracking = true}) => {
+  'device_id': 'm',
+  'name': 'EQ6-R',
+  'state': 'connected',
+  'capabilities': {'can_set_tracking': canSetTracking},
+  'runtime': {'state': 'idle', 'tracking': false},
+};
+
+/// A mount that takes the tracking ask, or refuses it while [refuse] is set;
+/// [wire] null is no mount at all.
 class _Mount extends MountNotifier {
   static bool refuse = false;
+  static Map<String, dynamic>? wire;
   @override
-  Future<MountStatus?> build() async => null;
+  Future<MountStatus?> build() async => wire == null ? null : MountStatus.fromJson(wire!);
   @override
   Future<bool> setTracking(bool enabled) async {
     _order.add('tracking:$enabled');
@@ -131,7 +142,6 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
   addTearDown(tester.view.resetPhysicalSize);
   _g = _Guider(wire, lag: lag);
   _order.clear();
-  _Mount.refuse = false;
   final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g), mountProvider.overrideWith(_Mount.new), ...rig]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -241,6 +251,11 @@ Future<void> _tab(WidgetTester tester, String name) async {
 }
 
 void main() {
+  setUp(() {
+    _Mount.refuse = false;
+    _Mount.wire = _mountWire();
+  });
+
   testWidgets('while the guider calibrates, its steps are drawn where RMS and Exposure were (#1875 slice 3)',
       (tester) async {
     final live = GuiderLiveState(
@@ -812,6 +827,26 @@ void main() {
     expect(_order.where((a) => a == 'tracking:true').length, 5);
     expect(_order, isNot(contains('startGuiding')));
     expect(c.read(simpleMessagesProvider), isNotEmpty);
+  });
+
+  // Falsified by: mount_state.dart ensureTracking, drop the canSetTracking == false guard.
+  testWidgets('a mount that cannot set tracking: the shutter starts guiding without asking', (tester) async {
+    _Mount.wire = _mountWire(canSetTracking: false);
+    _Mount.refuse = true;
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_order, ['startGuiding']);
+  });
+
+  // Falsified by: mount_state.dart ensureTracking, drop the no-connected-mount guard.
+  testWidgets('no mount connected (ST-4 guiding): the shutter starts guiding without asking', (tester) async {
+    _Mount.wire = null;
+    _Mount.refuse = true;
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_order, ['startGuiding']);
   });
 
   // One pump per test: a second container leaves the first's autoDispose

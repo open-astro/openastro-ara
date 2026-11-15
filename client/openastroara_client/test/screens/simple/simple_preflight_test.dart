@@ -78,7 +78,12 @@ class _Plan extends SimpleRunNotifier {
 /// A mount that takes the tracking ask: the Guide step turns tracking on first (#1888).
 class _Mount extends MountNotifier {
   @override
-  Future<MountStatus?> build() async => null;
+  Future<MountStatus?> build() async => MountStatus.fromJson({
+    'device_id': 'm',
+    'name': 'EQ6-R',
+    'state': 'connected',
+    'capabilities': {'can_set_tracking': true},
+  });
   @override
   Future<bool> setTracking(bool enabled) async => true;
 }
@@ -200,7 +205,7 @@ void main() {
       c.read(_aligned.notifier).set(SetupStepState.done);
       pilot.next();
       expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-      await Future<void>.value();
+      await Future<void>.delayed(Duration.zero); // the mount status read, then the start
       expect(guider.calls, starts ? ['start'] : isEmpty, reason: '$queue');
     }
   });
@@ -217,7 +222,7 @@ void main() {
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     pilot.next(); // polar align's Done (or Skip)
     expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-    await Future<void>.value();
+    await Future<void>.delayed(Duration.zero); // the mount status read, then the start
     expect(guider.calls, ['start'], reason: 'entering Guide starts the routine (calibrating when needed)');
     guider.guiding();
     pilot.next(); // Guide's Done · Start imaging
