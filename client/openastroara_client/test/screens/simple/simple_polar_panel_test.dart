@@ -361,10 +361,36 @@ void main() {
       ),
     );
     expect(find.text('Rough'), findsOneWidget);
-    expect(find.text('✓ Rough'), findsNothing);
+    expect(find.byIcon(Icons.check), findsNothing);
     expect(find.text('Fine'), findsOneWidget);
     expect(find.text('Verify'), findsOneWidget);
   });
+
+  testWidgets(
+    'the current step is selectionBg with white text: 4.6:1, not the brightest block at night (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          totalErrorArcmin: 9,
+        ),
+      );
+      final box =
+          tester
+                  .widget<Container>(
+                    find.byKey(const Key('simple-polar-step-0')),
+                  )
+                  .decoration!
+              as BoxDecoration;
+      expect(box.color, AraColors.selectionBg);
+      expect(
+        tester.widget<Text>(find.text('Rough')).style!.color,
+        AraColors.selectionFg,
+      );
+    },
+  );
 
   testWidgets(
     'the stepper ticks Rough once the routine is in the fine step (#1875)',
@@ -377,7 +403,19 @@ void main() {
           totalErrorArcmin: 9,
         ),
       );
-      expect(find.text('✓ Rough'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('simple-polar-step-0')),
+          matching: find.byIcon(Icons.check),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.check)).semanticLabel,
+        'Done',
+        reason: 'a screen reader hears the tick',
+      );
+      expect(find.text('Rough'), findsOneWidget);
       expect(find.text('Fine'), findsOneWidget);
     },
   );
@@ -450,6 +488,29 @@ void main() {
       );
       expect(find.text('Setup'), findsOneWidget);
       expect(find.text('Error'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Layout A order: Setup above Error, the Verify caption above the fine buttons (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 0.8,
+          totalErrorArcmin: 1.0,
+          zone: 'green',
+        ),
+      );
+      double top(Finder f) => tester.getTopLeft(f).dy;
+      expect(top(find.text('Setup')), lessThan(top(find.text('Error'))));
+      expect(
+        top(find.byKey(const Key('simple-polar-verify-caption'))),
+        lessThan(top(find.byKey(const Key('simple-polar-check')))),
+      );
     },
   );
 

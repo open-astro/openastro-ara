@@ -337,12 +337,57 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               _PolarStepper(
                 key: const Key('simple-polar-stepper'),
                 step: step,
+                doneLabel: l10n.polarStepDone,
                 labels: [
                   l10n.polarStepRough,
                   l10n.polarStepFine,
                   l10n.polarStepVerify,
                 ],
               ),
+            if (!verifying) ...[
+              Text(l10n.polarSetup, style: AraText.caption),
+              // The settings for the next frame: a row each like the Focus
+              // panel's choices (user, 2026-11-04: one row read oddly); side by
+              // side while it runs, so the bullseye panel still fits an iPad.
+              Flex(
+                key: const Key('simple-polar-setup'),
+                direction: active && !stack ? Axis.horizontal : Axis.vertical,
+                crossAxisAlignment: active && !stack
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.stretch,
+                spacing: AraSpace.s8,
+                children: [
+                  for (final w in <Widget>[
+                    SimpleSegments<String>(
+                      options: [
+                        (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
+                        (
+                          PolarAlignLoopModes.single,
+                          l10n.polarSingle,
+                          'single',
+                        ),
+                      ],
+                      selected: settings.loopMode,
+                      onPick: (mode) =>
+                          _save(settings.copyWith(loopMode: mode)),
+                    ),
+                    SimplePresetTile<Duration>(
+                      key: const Key('simple-polar-exposure'),
+                      label: l10n.polarExposure,
+                      value: _exposure(settings),
+                      options: exposurePresets(minSec: 0, maxSec: 60),
+                      format: formatExposure,
+                      onSelected: (d) => _save(
+                        settings.copyWith(
+                          exposureSeconds: d.inMilliseconds / 1000,
+                        ),
+                      ),
+                    ),
+                  ])
+                    active && !stack ? Expanded(child: w) : w,
+                ],
+              ),
+            ],
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)
               Text(
@@ -421,50 +466,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            if (!verifying) ...[
-              Text(l10n.polarSetup, style: AraText.caption),
-              // The settings for the next frame: a row each like the Focus
-              // panel's choices (user, 2026-11-04: one row read oddly); side by
-              // side while it runs, so the bullseye panel still fits an iPad.
-              Flex(
-                key: const Key('simple-polar-setup'),
-                direction: active && !stack ? Axis.horizontal : Axis.vertical,
-                crossAxisAlignment: active && !stack
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.stretch,
-                spacing: AraSpace.s8,
-                children: [
-                  for (final w in <Widget>[
-                    SimpleSegments<String>(
-                      options: [
-                        (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
-                        (
-                          PolarAlignLoopModes.single,
-                          l10n.polarSingle,
-                          'single',
-                        ),
-                      ],
-                      selected: settings.loopMode,
-                      onPick: (mode) =>
-                          _save(settings.copyWith(loopMode: mode)),
-                    ),
-                    SimplePresetTile<Duration>(
-                      key: const Key('simple-polar-exposure'),
-                      label: l10n.polarExposure,
-                      value: _exposure(settings),
-                      options: exposurePresets(minSec: 0, maxSec: 60),
-                      format: formatExposure,
-                      onSelected: (d) => _save(
-                        settings.copyWith(
-                          exposureSeconds: d.inMilliseconds / 1000,
-                        ),
-                      ),
-                    ),
-                  ])
-                    active && !stack ? Expanded(child: w) : w,
-                ],
-              ),
-            ],
             if (active && live.waitingForHome)
               FilledButton(
                 key: const Key('simple-polar-continue'),
@@ -526,6 +527,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 onPressed: busy ? null : () => _done(inSimplePreflight),
                 child: Text(_doneLabel(l10n, inSimplePreflight)),
               ),
+            if (active &&
+                live.stage != PolarAlignStages.coarse &&
+                (live.phase == PolarAlignStates.adjusting ||
+                    live.phase == PolarAlignStates.paused))
+              Text(
+                l10n.polarVerifyCaption,
+                key: const Key('simple-polar-verify-caption'),
+                style: AraText.caption,
+                maxLines: 3,
+              ),
             // A null stage is an older daemon's one-stage routine: the fine buttons.
             if (active &&
                 live.stage != PolarAlignStages.coarse &&
@@ -570,16 +581,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   ),
                 ],
               ),
-            if (active &&
-                live.stage != PolarAlignStages.coarse &&
-                (live.phase == PolarAlignStates.adjusting ||
-                    live.phase == PolarAlignStates.paused))
-              Text(
-                l10n.polarVerifyCaption,
-                key: const Key('simple-polar-verify-caption'),
-                style: AraText.caption,
-                maxLines: 3,
-              ),
           ],
         ),
       ),
@@ -612,9 +613,15 @@ class SimplePolarFrame extends ConsumerWidget {
 /// Rough → Fine → Verify: the step the routine is on is filled, the steps
 /// before it carry a tick.
 class _PolarStepper extends StatelessWidget {
-  const _PolarStepper({super.key, required this.step, required this.labels});
+  const _PolarStepper({
+    super.key,
+    required this.step,
+    required this.doneLabel,
+    required this.labels,
+  });
 
   final int step;
+  final String doneLabel;
   final List<String> labels;
 
   @override
@@ -630,18 +637,35 @@ class _PolarStepper extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: i == step ? AraColors.accentInfo : AraColors.tileFill,
+                // White on selectionBg is 4.6:1 and dimmer than accentInfo at night.
+                color: i == step ? AraColors.selectionBg : AraColors.tileFill,
                 borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               ),
-              child: Text(
-                i < step ? '✓ ${labels[i]}' : labels[i],
-                style: AraText.caption.copyWith(
-                  color: i < step
-                      ? AraColors.accentConnected
-                      : i == step
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                spacing: AraSpace.s4,
+                children: [
+                  // An icon, not U+2713: the glyph falls back to a box in Roboto.
+                  if (i < step)
+                    Icon(
+                      Icons.check,
+                      size: AraText.caption.fontSize,
+                      color: AraColors.accentConnected,
+                      semanticLabel: doneLabel,
+                    ),
+                  Flexible(
+                    child: Text(
+                      labels[i],
+                      style: AraText.caption.copyWith(
+                        color: i < step
+                            ? AraColors.accentConnected
+                            : i == step
+                            ? AraColors.selectionFg
+                            : AraColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
