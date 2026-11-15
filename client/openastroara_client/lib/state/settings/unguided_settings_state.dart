@@ -15,8 +15,9 @@ class UnguidedSettings {
   final int stepDownAfter;
   final int stepUpAfter;
 
-  /// Ascending ladder before the planned-sub / 2 × prior cap.
-  final List<double> probeRungsSeconds;
+  /// Ascending ladder before the planned-sub / 2 × prior cap; null (or
+  /// empty) is the daemon's own ladder, see [effectiveProbeRungsSeconds].
+  final List<double>? probeRungsSeconds;
   final double recentreDriftArcmin;
   final int recentreSolveEveryN;
 
@@ -60,8 +61,15 @@ class UnguidedSettings {
     priorToleranceBasis: priorToleranceBasis ?? this.priorToleranceBasis,
   );
 
+  /// The ladder the probe runs: the daemon's default when the section holds
+  /// none (`UnguidedSettingsDto.EffectiveProbeRungsSeconds`).
+  List<double> get effectiveProbeRungsSeconds {
+    final r = probeRungsSeconds;
+    return r == null || r.isEmpty ? defaultProbeRungsSeconds : r;
+  }
+
   /// The ladder as "10, 30, 60, 120" for the settings row.
-  String get probeRungsText => probeRungsSeconds
+  String get probeRungsText => effectiveProbeRungsSeconds
       .map((r) => r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toStringAsFixed(1))
       .join(', ');
 

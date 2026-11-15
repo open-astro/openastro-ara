@@ -596,20 +596,16 @@ class ProfileApi {
     if (!j.containsKey('probe_rungs_seconds')) {
       throw const FormatException('probe_rungs_seconds missing');
     }
-    // Null or empty is the daemon's own ladder (EffectiveProbeRungsSeconds).
-    final rungs = [
-      for (final r in j['probe_rungs_seconds'] as List? ?? const [])
-        (r as num).toDouble(),
-    ];
+    // Null is the daemon's own ladder (EffectiveProbeRungsSeconds): kept as
+    // null, so Save writes it back unchanged.
+    final rungs = j['probe_rungs_seconds'] as List?;
     return UnguidedSettings(
       guardEnabled: j['guard_enabled'] as bool,
       eccentricityTolerance: (j['eccentricity_tolerance'] as num).toDouble(),
       goodEccentricity: (j['good_eccentricity'] as num).toDouble(),
       stepDownAfter: (j['step_down_after'] as num).toInt(),
       stepUpAfter: (j['step_up_after'] as num).toInt(),
-      probeRungsSeconds: rungs.isEmpty
-          ? UnguidedSettings.defaultProbeRungsSeconds
-          : rungs,
+      probeRungsSeconds: rungs?.map((r) => (r as num).toDouble()).toList(),
       recentreDriftArcmin: (j['recentre_drift_arcmin'] as num).toDouble(),
       recentreSolveEveryN: (j['recentre_solve_every_n'] as num).toInt(),
       priorToleranceBasis: j['prior_tolerance_basis'] as String,

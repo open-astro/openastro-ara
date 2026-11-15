@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fake_section_rig.dart';
 import '../../support/section_load.dart';
 
 import 'package:openastroara/services/profile_api.dart';
@@ -115,6 +116,23 @@ void main() {
       expect(c.read(unguidedSettingsProvider).value!.recentreDriftArcmin, 10);
     },
   );
+
+  test("the daemon's own ladder (null) is saved back as null, never as a "
+      'fixed list', () async {
+    final rig = FakeSectionRig({'unguided': rigDefaults['unguided']});
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(unguidedSettingsProvider.notifier);
+    await n.load(rig.api());
+    n.setGuardEnabled(false);
+    await n.save(rig.api());
+    expect((rig.puts.single.body as Map)['probe_rungs_seconds'], isNull);
+    expect(
+      c.read(unguidedSettingsProvider).value!.probeRungsText,
+      '10, 30, 60, 120',
+    );
+    expect(unguidedOptionsOf(c).probeRungsSeconds, [10, 30, 60, 120]);
+  });
 
   test('not loaded: the run builder reads the shipped defaults, never a saved value', () {
     final c = ProviderContainer();

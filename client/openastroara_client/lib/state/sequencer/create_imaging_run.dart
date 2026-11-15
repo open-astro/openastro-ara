@@ -885,7 +885,7 @@ UnguidedOptions unguidedOptionsOf(ProviderContainer container) {
     goodEccentricity: u.goodEccentricity,
     stepDownAfter: u.stepDownAfter,
     stepUpAfter: u.stepUpAfter,
-    probeRungsSeconds: u.probeRungsSeconds,
+    probeRungsSeconds: u.effectiveProbeRungsSeconds,
     recentreDriftArcmin: u.recentreDriftArcmin,
     recentreSolveEveryN: u.recentreSolveEveryN,
   );
