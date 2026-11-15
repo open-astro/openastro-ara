@@ -158,7 +158,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             if (target is null) {
                 return;
             }
-            var minutes = Math.Max(1, (int) Math.Round(gap.TotalMinutes));
+            var minutes = Math.Max(1, (int)Math.Round(gap.TotalMinutes));
             Logger.Warning($"Dither: guiding stopped {minutes} min ago — re-centering the target before restarting guiding");
             progress?.Report(new ApplicationStatus { Status = $"Guiding stopped {minutes} min ago — re-centering before restarting guiding" });
             var recentered = await restartRecenter.RecenterAsync(target, progress, token);

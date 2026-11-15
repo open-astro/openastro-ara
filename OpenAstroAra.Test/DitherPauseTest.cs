@@ -108,7 +108,8 @@ namespace OpenAstroAra.Test {
             var (guider, calls) = Guider(connected: true, "timed-out waiting for guider to settle", "timed-out waiting for guider to settle");
             var (item, _) = Rig(guider.Object);
 
-            await item.Execute(NoProgress, CancellationToken.None);
+            // Bounded: the old code parks on the gate after the second failure and would hang, not fail.
+            await item.Execute(NoProgress, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.That(calls, Has.Count.EqualTo(1), "no extra dither after a failed settle");
         }
@@ -121,7 +122,7 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
 
-            Assert.That(status, Does.Contain("did not settle"));
+            Assert.That(status, Does.Contain("carrying on"));
             Assert.That(status, Does.Contain("timed-out waiting for guider to settle"));
         }
 
@@ -130,8 +131,8 @@ namespace OpenAstroAra.Test {
             var (guider, calls) = Guider(connected: true, "timed-out waiting for guider to settle", "settle timed out — no SettleDone from the guider");
             var (item, gate) = Rig(guider.Object);
 
-            await item.Execute(NoProgress, CancellationToken.None);
-            await item.Execute(NoProgress, CancellationToken.None);
+            await item.Execute(NoProgress, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+            await item.Execute(NoProgress, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.That(gate.IsPauseRequested, Is.False);
             Assert.That(calls, Has.Count.EqualTo(2), "one dither per Execute");
@@ -394,7 +395,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Without_a_guiding_stopped_time_no_re_center_runs() {
             var (guider, dithers) = Guider(connected: true, "refused", null);
-            guider.SetupGet(g => g.GuidingStoppedUtc).Returns((DateTimeOffset?) null);
+            guider.SetupGet(g => g.GuidingStoppedUtc).Returns((DateTimeOffset?)null);
             var (item, _, calls) = TargetRig(guider);
 
             await item.Execute(new SyncProgress(_ => { }), CancellationToken.None);
