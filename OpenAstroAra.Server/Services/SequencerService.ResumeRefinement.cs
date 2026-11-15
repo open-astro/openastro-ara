@@ -64,16 +64,21 @@ public sealed partial class SequencerService {
         var recenter = request?.Recenter ?? true;
         var refocus = request?.Refocus ?? false;
         if (!recenter && !refocus) return false;
+        // #1890 — every skip below says why; a silent skip hid a broken refinement for a whole night.
 
         // Consume the pause snapshot regardless of outcome — it describes THIS
         // pause episode only.
         var paused = run.PausedTarget;
         run.PausedTarget = null;
-        if (paused is null) return false;
-        var current = run.Root is ISequenceContainer root ? FindActiveDeepSkyTarget(root) : null;
+        if (paused is null) {
+            LogResumeRefinementSkipped(id, "no target was found at the pause");
+            return false;
+        }
+        var current = run.Root is ISequenceContainer root ? FindActiveTarget(root) : null;
         if (!ReferenceEquals(paused, current)) {
             // The plan moved on (or the target finished) — a re-center here
             // would slew BACKWARDS to the old target.
+            LogResumeRefinementSkipped(id, "the plan moved on from the paused target");
             return false;
         }
         // Resolver probes are guarded here too (review #873 r3): this runs
@@ -90,8 +95,14 @@ public sealed partial class SequencerService {
             LogResumeRefinementProbeFailed(ex, id);
             return false;
         }
-        if (!wantsCentering && !wantsFocus) return false;
-        if (!run.TryClaimResumeRefinement()) return false;
+        if (!wantsCentering && !wantsFocus) {
+            LogResumeRefinementSkipped(id, "no centering or autofocus service is wired for what was asked");
+            return false;
+        }
+        if (!run.TryClaimResumeRefinement()) {
+            LogResumeRefinementSkipped(id, "another refinement already owns the gate release");
+            return false;
+        }
 
         _ = Task.Run(() => ResumeRefinementAsync(id, run, paused, wantsCentering, wantsFocus), CancellationToken.None);
         return true;
@@ -102,7 +113,7 @@ public sealed partial class SequencerService {
     // faulted background task. CA1031's log-and-recover boundary applies.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Pre-release refinement boundary: centering/autofocus faults must degrade to a resume-with-warning, never fault the background task or starve the gate release. CA1031's log-and-recover boundary applies.")]
-    private async Task ResumeRefinementAsync(Guid id, RunState run, IDeepSkyObjectContainer target, bool recenter, bool refocus) {
+    private async Task ResumeRefinementAsync(Guid id, RunState run, ISequenceContainer target, bool recenter, bool refocus) {
         var centeringOutcome = "skipped";
         var focusOutcome = refocus ? "failed" : "skipped";
         try {
@@ -119,7 +130,7 @@ public sealed partial class SequencerService {
             // pause the target may have sunk below the horizon limit; re-centering (and refocusing)
             // on it would waste minutes of rig time on a target the plan's altitude conditions are
             // about to abandon. Unknown altitude proceeds — the guard only ever SKIPS work.
-            var coords = target.Target?.InputCoordinates?.Coordinates;
+            var coords = TargetCoordinates(target);
             if (coords is not null && Recenter.TargetBelowHorizon(coords) is { } low) {
                 LogResumeTargetTooLow(id, low.AltitudeDeg, low.LimitDeg);
                 await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, recenter, refocus).ConfigureAwait(false);
@@ -276,6 +287,9 @@ public sealed partial class SequencerService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: a service resolver faulted during the probe — resuming without refinement")]
     private partial void LogResumeRefinementProbeFailed(Exception ex, Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§38.10 resume refinement on run {SequenceId}: skipped — {Reason}")]
+    private partial void LogResumeRefinementSkipped(Guid sequenceId, string reason);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§38.10 resume refinement on run {SequenceId}: re-centering the paused target before releasing the gate")]
     private partial void LogResumeRecenterStarted(Guid sequenceId);

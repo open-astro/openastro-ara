@@ -410,7 +410,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Reference identity is the cleanest test: the tree is pinned via
             // run.SetRoot for the run's lifetime. Runs on the engine thread.
             if (run.Root is ISequenceContainer pausedRoot) {
-                run.PausedTarget = FindActiveDeepSkyTarget(pausedRoot);
+                run.PausedTarget = FindActiveTarget(pausedRoot);
             }
             if (kind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser) {
                 // §58.12 — a failure left the rig needing a human; start the unattended-shutdown
@@ -624,8 +624,52 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         if (!_runs.TryGetValue(id, out var run) || run.Root is not ISequenceContainer root) {
             return Task.FromResult<OpenAstroAra.Astrometry.Coordinates?>(null);
         }
-        var dso = FindActiveDeepSkyTarget(root);
-        return Task.FromResult(dso?.Target?.InputCoordinates?.Coordinates);
+        var target = FindActiveTarget(root);
+        return Task.FromResult(target is null ? null : TargetCoordinates(target));
+    }
+
+    /// <summary>#1890 — the active target in either plan shape: a deep-sky container, else a Simple
+    /// Mode block (a plain SequentialContainer carrying the target's slew and AboveHorizonCondition).
+    /// The running block wins over the first, as for deep-sky targets.</summary>
+    internal static ISequenceContainer? FindActiveTarget(ISequenceContainer root) {
+        if (FindActiveDeepSkyTarget(root) is { } dso) return dso;
+        ISequenceContainer? first = null;
+        ISequenceContainer? running = null;
+        Walk(root);
+        return running ?? first;
+
+        void Walk(ISequenceContainer container) {
+            foreach (var item in container.GetItemsSnapshot()) {
+                if (item is not ISequenceContainer child) continue;
+                if (SimpleModeCoordinates(child) is not null) {
+                    first ??= child;
+                    if (child.Status == SequenceEntityStatus.RUNNING) {
+                        running = child;
+                        return;
+                    }
+                }
+                Walk(child);
+                if (running is not null) return;
+            }
+        }
+    }
+
+    /// <summary>The coordinates of a target found by <see cref="FindActiveTarget"/>.</summary>
+    internal static OpenAstroAra.Astrometry.Coordinates? TargetCoordinates(ISequenceContainer target) =>
+        target is IDeepSkyObjectContainer dso ? dso.Target?.InputCoordinates?.Coordinates : SimpleModeCoordinates(target);
+
+    /// <summary>Simple Mode's generated block holds the target's coordinates on its own
+    /// SlewScopeToRaDec and AboveHorizonCondition (imaging_run_body.dart); null for any other container.</summary>
+    private static OpenAstroAra.Astrometry.Coordinates? SimpleModeCoordinates(ISequenceContainer block) {
+        foreach (var item in block.GetItemsSnapshot()) {
+            if (item is OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec slew) return slew.Coordinates?.Coordinates;
+        }
+        if (block is OpenAstroAra.Sequencer.Container.SequenceContainer sc) {
+            foreach (var cond in sc.Conditions) {
+                if (cond is OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition h) return h.Data?.Coordinates?.Coordinates;
+            }
+        }
+        return null;
     }
 
     /// <summary>Prefer the RUNNING target container (the one a pause interrupted) over the
@@ -1605,11 +1649,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // wait against that narrow disposal race.
         public SemaphoreSlim EditLock { get; } = new(1, 1);
 
-        // §38.10 — the DSO container the pause interrupted (set in OnPauseEntered,
+        // §38.10 — the target container (DSO or Simple Mode block) the pause interrupted (set in OnPauseEntered,
         // consumed by the resume refinement's same-target check). Reference to a
         // node of the pinned run tree; cleared when consumed.
-        private IDeepSkyObjectContainer? _pausedTarget;
-        public IDeepSkyObjectContainer? PausedTarget {
+        private ISequenceContainer? _pausedTarget;
+        public ISequenceContainer? PausedTarget {
             get { lock (_gate) { return _pausedTarget; } }
             set { lock (_gate) { _pausedTarget = value; } }
         }
