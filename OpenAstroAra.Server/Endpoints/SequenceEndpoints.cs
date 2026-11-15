@@ -320,11 +320,14 @@ public static class SequenceEndpoints {
                         return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
                     } catch (KeyNotFoundException) {
                         return Results.NotFound();
+                    } catch (ArgumentException ex) {
+                        return Results.UnprocessableEntity(new { error = ex.Message });
                     }
                 })
            .Accepts<TemplateInstantiateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("InstantiateSequenceTemplate");
 
         // POST /sequences/import was REMOVED (PORT_DECISIONS 2026-07-15, PR F):

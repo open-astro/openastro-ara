@@ -16,8 +16,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
-using System.IO;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -96,17 +96,52 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
         }
     }
 
-    private static JsonElement TemplateBody(string targetTokenName, string filterSet, int framesPerFilter, int integrationMinutes) {
-        // §38.6 placeholder bodies — exercise the {{token}} substitution path
-        // end-to-end without prescribing the full §38.1 sequence schema yet.
-        // Real template authoring lands when the sequencer renderer is in place.
+    // Built-in bodies are real §38.1 sequence trees (same shape as the shipped starters in
+    // templates/*.json): a root SequentialContainer holding one LoopCondition block per filter.
+    // The {{target_name}} token is replaced on instantiate.
+    private const string SeqNs = "OpenAstroAra.Sequencer";
+    private const string ColArgs = "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.";
+
+    private static string Col(string iface, string values) =>
+        $$"""{ "$type": "{{ColArgs}}{{iface}}, {{SeqNs}}]], System.ObjectModel", "$values": [{{values}}] }""";
+
+    private static JsonElement TemplateBody(string targetTokenName, string[] filters, int framesPerFilter, int exposureSeconds) {
+        var token = "{{" + targetTokenName + "}}";
+        var blocks = new System.Text.StringBuilder();
+        for (var i = 0; i < filters.Length; i++) {
+            if (i > 0) blocks.Append(',');
+            var loop = $$"""{ "$type": "{{SeqNs}}.Conditions.LoopCondition, {{SeqNs}}", "Iterations": {{framesPerFilter}}, "Parent": null }""";
+            var items = $$"""
+                { "$type": "{{SeqNs}}.SequenceItem.FilterWheel.SwitchFilter, {{SeqNs}}",
+                  "Filter": { "$type": "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core", "_name": "{{filters[i]}}", "_position": {{i}} },
+                  "Parent": null, "ErrorBehavior": 0, "Attempts": 1 },
+                { "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                  "ExposureTime": {{exposureSeconds}}.0, "Gain": -1, "Offset": -1,
+                  "Binning": { "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core", "X": 1, "Y": 1 },
+                  "ImageType": "LIGHT", "ExposureCount": 0, "Parent": null, "ErrorBehavior": 0, "Attempts": 1 }
+                """;
+            blocks.Append($$"""
+                { "$type": "{{SeqNs}}.Container.SequentialContainer, {{SeqNs}}",
+                  "Strategy": { "$type": "{{SeqNs}}.Container.ExecutionStrategy.SequentialStrategy, {{SeqNs}}" },
+                  "Name": "{{filters[i]}} x{{framesPerFilter}}",
+                  "Conditions": {{Col("Conditions.ISequenceCondition", loop)}},
+                  "IsExpanded": true,
+                  "Items": {{Col("SequenceItem.ISequenceItem", items)}},
+                  "Triggers": {{Col("Trigger.ISequenceTrigger", "")}},
+                  "Parent": null, "ErrorBehavior": 0, "Attempts": 1 }
+                """);
+        }
         var json = $$"""
             {
               "schemaVersion": "openastroara-sequence-v1",
-              "target": "{{"{{"}}{{targetTokenName}}{{"}}"}}",
-              "filterSet": "{{filterSet}}",
-              "framesPerFilter": {{framesPerFilter}},
-              "integrationMinutes": {{integrationMinutes}}
+              "$type": "{{SeqNs}}.Container.SequentialContainer, {{SeqNs}}",
+              "Strategy": { "$type": "{{SeqNs}}.Container.ExecutionStrategy.SequentialStrategy, {{SeqNs}}" },
+              "Name": "{{string.Join("", filters)}} - {{token}}",
+              "Conditions": {{Col("Conditions.ISequenceCondition", "")}},
+              "IsExpanded": true,
+              "Items": {{Col("SequenceItem.ISequenceItem", blocks.ToString())}},
+              "Triggers": {{Col("Trigger.ISequenceTrigger", "")}},
+              "Parent": null, "ErrorBehavior": 0, "Attempts": 1
             }
             """;
         return JsonDocument.Parse(json).RootElement.Clone();
@@ -118,19 +153,19 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
             Category: "single-target",
             Description: "One target, 4 filters (L/R/G/B), default per-filter framecount + dithering.",
             IsBuiltIn: true,
-            Body: TemplateBody("target_name", "LRGB", 30, 120)),
+            Body: TemplateBody("target_name", new[] { "L", "R", "G", "B" }, 30, 120)),
         new SequenceTemplateDto(
             Name: "single-target-narrowband",
             Category: "single-target",
             Description: "One target, 3 narrowband filters (Ha/OIII/SII), longer per-filter exposures.",
             IsBuiltIn: true,
-            Body: TemplateBody("target_name", "SHO", 20, 180)),
+            Body: TemplateBody("target_name", new[] { "Ha", "OIII", "SII" }, 20, 180)),
         new SequenceTemplateDto(
             Name: "all-night-dso-roster",
             Category: "multi-target",
             Description: "Cycle through a target list; rotate when altitude crosses §35.4 limit.",
             IsBuiltIn: true,
-            Body: TemplateBody("target_name", "LRGB", 60, 240)),
+            Body: TemplateBody("target_name", new[] { "L", "R", "G", "B" }, 60, 240)),
     };
 
     public Task<IReadOnlyList<SequenceTemplateDto>> ListAsync(CancellationToken ct) {
@@ -178,8 +213,13 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
         // serialized to text, {{token}} placeholders are swapped for the
         // request's Parameters values via SequenceTemplateVariables.Substitute,
         // then the result is parsed back to a JsonElement. Unknown tokens are
-        // preserved literally so §38.5 validation can flag them.
+        // preserved literally; a token left in a value is still a valid string.
         var substitutedBody = SubstituteTemplateBody(template.Body, request.Parameters);
+
+        // ADR 0018 rules 1 and 3: a stored body must load in the engine, so a disk
+        // template is checked like a created sequence. The endpoint maps this to 422.
+        var (valid, reason) = SequenceSchemaValidator.Validate(substitutedBody, requireCapturableInstruction: false);
+        if (!valid) throw new ArgumentException(reason);
 
         // Reuse the §38 create path so the new sequence shows up in
         // /api/v1/sequences immediately.
@@ -242,5 +282,3 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
     [LoggerMessage(Level = LogLevel.Warning, Message = "Starter-template seeding failed; built-in templates still serve")]
     private partial void LogTemplateSeedFailed(Exception ex);
 }
-
-
