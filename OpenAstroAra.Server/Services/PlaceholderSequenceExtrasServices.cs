@@ -16,8 +16,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
-using System.IO;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -247,5 +247,3 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
     [LoggerMessage(Level = LogLevel.Warning, Message = "Starter-template seeding failed; built-in templates still serve")]
     private partial void LogTemplateSeedFailed(Exception ex);
 }
-
-
