@@ -55,6 +55,14 @@ void main() {
     alarm.setDelaySec(0);
     alarm.trigger('wind over the limit');
     await Future<void>.delayed(const Duration(milliseconds: 100));
+    // The ring waits on a real prefs file read, which a loaded host can
+    // stretch past any fixed wait: poll for it when a ring is expected.
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (soundAlert &&
+        !c.read(safetyAlarmProvider).ringing &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     return (c, player, haptics);
   }
 
