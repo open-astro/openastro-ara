@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/state/equipment/filter_choices_state.dart';
@@ -15,10 +14,8 @@ class _Wheel extends FilterWheelNotifier {
 
 class _Labels extends FilterWheelLabelsNotifier {
   @override
-  LoadedSection<FilterWheelLabels> build() => LoadedSection(
-    value: FilterWheelLabels(labels: const ['L', 'R', 'G', 'B', 'Hα', '', '']),
-    source: SectionSource.rig,
-  );
+  FilterWheelLabels build() =>
+      FilterWheelLabels(labels: const ['L', 'R', 'G', 'B', 'Hα', '', '']);
 }
 
 FilterWheelStatus _wheel(

@@ -964,7 +964,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final sel = ref.watch(planetariumSelectionProvider);
     final steps = ref.watch(simpleRunPlanProvider);
     final plan = ref.read(simpleRunPlanProvider.notifier);
-    final filters = ref.watch(filterSetProvider).value?.filters ?? const [];
+    final filters = ref.watch(filterSetProvider).filters;
     final seconds = steps.fold(
       0.0,
       (t, s) => t + s.exposureSeconds * s.frameCount,

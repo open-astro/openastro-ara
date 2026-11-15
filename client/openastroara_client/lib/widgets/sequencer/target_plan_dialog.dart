@@ -126,10 +126,9 @@ double suggestedSubSeconds(
 }) {
   final outcome = resolveOptimalSubLocal(
     optics: ref.read(opticsSettingsProvider),
-    electronics:
-        ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
+    electronics: ref.read(cameraElectronicsProvider),
     site: ref.read(siteSettingsProvider),
-    filterSet: ref.read(filterSetProvider).value ?? const FilterSetSettings(),
+    filterSet: ref.read(filterSetProvider),
     filterName: filterName,
     raDeg: raDeg,
     decDeg: decDeg,
@@ -208,13 +207,9 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     _guide = widget.guiderAvailable;
     // No labelled wheel slots = no filter wheel on this rig: the plan's
     // filter changes become Wait-for-User pauses (screw-in swap + Resume).
-    final wheel = ref.read(filterWheelLabelsProvider).value;
-    _manualSwap =
-        wheel != null &&
-        !List.generate(
-          wheel.slotCount,
-          (i) => wheel.labelAt(i + 1),
-        ).any((l) => l.trim().isNotEmpty);
+    final wheel = ref.read(filterWheelLabelsProvider);
+    _manualSwap = !List.generate(wheel.slotCount, (i) => wheel.labelAt(i + 1))
+        .any((l) => l.trim().isNotEmpty);
     _options = _buildOptions();
   }
 
@@ -254,7 +249,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
       .join(' ·   ');
 
   List<_PlanOption> _buildOptions() {
-    final filters = ref.read(filterSetProvider).value?.filters ?? const [];
+    final filters = ref.read(filterSetProvider).filters;
     PlanningFilter? byKind(FilterKind k) =>
         filters.where((f) => f.kind == k).firstOrNull;
 

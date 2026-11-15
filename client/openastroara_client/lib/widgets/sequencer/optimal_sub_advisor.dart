@@ -207,12 +207,9 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       if (!mounted || seq != _fetchSeq) return; // superseded
       final outcome = resolveOptimalSubLocal(
         optics: ref.read(opticsSettingsProvider),
-        electronics:
-            ref.read(cameraElectronicsProvider).value ??
-            const CameraElectronics(),
+        electronics: ref.read(cameraElectronicsProvider),
         site: ref.read(siteSettingsProvider),
-        filterSet:
-            ref.read(filterSetProvider).value ?? const FilterSetSettings(),
+        filterSet: ref.read(filterSetProvider),
         filterName: widget.filterName,
         noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
         skyCalibrationK: skyCalibrationK,

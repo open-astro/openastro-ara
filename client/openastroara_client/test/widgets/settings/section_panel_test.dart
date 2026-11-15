@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/settings/panels/camera_electronics_panel.dart';
+import 'package:openastroara/screens/settings/panels/session_notifications_panel.dart';
 import 'package:openastroara/state/profile_management_state.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 
 import '../../support/fake_section_rig.dart';
 
 // The shared panel scaffold (SectionPanel), exercised through one panel: the
-// camera electronics panel on a fake rig.
+// notifications panel on a fake rig.
 
-const _section = 'camera-electronics';
+const _section = 'notifications';
 
 Future<ProviderContainer> _pump(
   WidgetTester tester,
@@ -27,7 +27,9 @@ Future<ProviderContainer> _pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: Scaffold(body: CameraElectronicsPanel())),
+      child: const MaterialApp(
+        home: Scaffold(body: SessionNotificationsPanel()),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -35,7 +37,7 @@ Future<ProviderContainer> _pump(
 }
 
 FakeSectionRig _rig() => FakeSectionRig({
-  _section: {'sensor_name': 'IMX-rig', 'gain': 100},
+  _section: {'pushover_token': 'rig-token'},
 });
 
 void main() {
@@ -44,12 +46,12 @@ void main() {
     final rig = _rig()..failGet.add(_section);
     await _pump(tester, rig);
     expect(find.textContaining('Not loaded'), findsOneWidget);
-    expect(find.text('Sensor name'), findsNothing);
+    expect(find.text('Pushover app token'), findsNothing);
     rig.failGet.clear();
     await tester.tap(find.byKey(const Key('section-retry')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('section-retry')), findsNothing);
-    expect(find.text('Sensor name'), findsOneWidget);
+    expect(find.text('Pushover app token'), findsOneWidget);
   });
 
   testWidgets('no rig connected: the panel says so, with no Retry', (
@@ -64,26 +66,33 @@ void main() {
       "restores the rig's copy", (tester) async {
     final rig = _rig();
     final container = await _pump(tester, rig);
-    container.read(cameraElectronicsProvider.notifier).setSensorName('mine');
+    container
+        .read(notificationsSettingsProvider.notifier)
+        .setPushoverToken('mine');
     rig.savedElsewhere(_section);
     await tester.runAsync(container.read(panelSaveActionProvider)!);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('section-reload')), findsOneWidget);
-    expect(container.read(cameraElectronicsProvider).value!.sensorName, 'mine');
+    expect(
+      container.read(notificationsSettingsProvider).value!.pushoverToken,
+      'mine',
+    );
     expect(rig.puts, isEmpty);
     await tester.tap(find.byKey(const Key('section-reload')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('section-reload')), findsNothing);
     expect(
-      container.read(cameraElectronicsProvider).value!.sensorName,
-      'IMX-rig',
+      container.read(notificationsSettingsProvider).value!.pushoverToken,
+      'rig-token',
     );
   });
 
   testWidgets('Save sends the tag the panel loaded', (tester) async {
     final rig = _rig();
     final container = await _pump(tester, rig);
-    container.read(cameraElectronicsProvider.notifier).setSensorName('mine');
+    container
+        .read(notificationsSettingsProvider.notifier)
+        .setPushoverToken('mine');
     await tester.runAsync(container.read(panelSaveActionProvider)!);
     await tester.pumpAndSettle();
     expect(rig.ifMatches, ['"$_section-v1"']);

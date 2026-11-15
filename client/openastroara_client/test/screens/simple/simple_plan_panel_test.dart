@@ -9,8 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/services/profile_api.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -55,8 +53,6 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
-
-import '../../support/fake_section_rig.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -209,10 +205,7 @@ class _Filters extends FilterSetNotifier {
   _Filters([this.filters = _lrgb]);
   final List<PlanningFilter> filters;
   @override
-  LoadedSection<FilterSetSettings> build() => LoadedSection(
-    value: FilterSetSettings(filters: filters),
-    source: SectionSource.rig,
-  );
+  FilterSetSettings build() => FilterSetSettings(filters: filters);
 }
 
 /// A colour camera's dual-band filters: long names.
@@ -238,15 +231,8 @@ class _Optics extends OpticsSettingsNotifier {
 
 class _Electronics extends CameraElectronicsNotifier {
   @override
-  LoadedSection<CameraElectronics> build() => LoadedSection(
-    value: const CameraElectronics(
-      readNoiseE: 0.7,
-      fullWellE: 50000,
-      electronsPerAdu: 0.8,
-      quantumEfficiencyPeak: 0.8,
-    ),
-    source: SectionSource.rig,
-  );
+  CameraElectronics build() =>
+      const CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
 }
 
 class _Site extends SiteSettingsNotifier {
@@ -363,10 +349,6 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
   return FocusManager.instance.primaryFocus?.debugLabel == label;
 }
 
-/// The filter set the rig serves, as a re-read of it would return.
-ProfileApi _filterRig(FilterSetSettings v) =>
-    FakeSectionRig({'filter-set': ProfileApi.filterSetToJson(v)}).api();
-
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
     final lrgb = simpleRunDefaultPlan(_lrgb, 300);
@@ -451,26 +433,12 @@ void main() {
       final rows = c.read(simpleRunPlanProvider.notifier);
       rows.setExposure(0, 120);
       final edited = c.read(simpleRunPlanProvider);
-      await c
-          .read(filterSetProvider.notifier)
-          .load(_filterRig(FilterSetSettings(filters: [..._lrgb])));
-      expect(
-        c.read(simpleRunPlanProvider),
-        edited,
-        reason: 'the same filters read again',
-      );
-      const queued = [
-        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12),
-      ];
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => FilterSetSettings(filters: [..._lrgb]));
+      expect(c.read(simpleRunPlanProvider), edited, reason: 'the same filters read again');
+      const queued = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12)];
       rows.load(queued);
-      await c
-          .read(filterSetProvider.notifier)
-          .load(_filterRig(const FilterSetSettings(filters: _duo)));
-      expect(
-        c.read(simpleRunPlanProvider),
-        queued,
-        reason: "editing a queued target: its own rows",
-      );
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => const FilterSetSettings(filters: _duo));
+      expect(c.read(simpleRunPlanProvider), queued, reason: "editing a queued target: its own rows");
       c.invalidate(simpleRunPlanProvider);
       expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['L-enhance', 'L-eXtreme'],
           reason: 'a new plan follows the filters');

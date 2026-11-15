@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
-import 'loaded_section.dart';
+import 'settings_sync_mixin.dart';
 
 /// #1264 — Imaging → Unguided (profile section `unguided`): the knobs behind
 /// the Tracking Probe, the Unguided Exposure Guard and Center After Drift on a
@@ -80,70 +80,64 @@ class UnguidedSettings {
   }
 }
 
-class UnguidedSettingsNotifier extends SectionNotifier<UnguidedSettings> {
-  void setGuardEnabled(bool v) => edit((c) => c.copyWith(guardEnabled: v));
+class UnguidedSettingsNotifier extends Notifier<UnguidedSettings>
+    with SettingsSyncMixin<UnguidedSettings> {
+  @override
+  UnguidedSettings build() => const UnguidedSettings();
+
+  void setGuardEnabled(bool v) => state = state.copyWith(guardEnabled: v);
 
   /// (0, 1]; the good bar is kept strictly below it.
   void setEccentricityTolerance(double v) {
     if (!v.isFinite || v <= 0 || v > 1) return;
-    edit((c) {
-      final good = c.goodEccentricity < v ? c.goodEccentricity : v / 2;
-      return c.copyWith(eccentricityTolerance: v, goodEccentricity: good);
-    });
+    final good = state.goodEccentricity < v ? state.goodEccentricity : v / 2;
+    state = state.copyWith(eccentricityTolerance: v, goodEccentricity: good);
   }
 
   /// (0, tolerance).
   void setGoodEccentricity(double v) {
-    edit(
-      (c) => !v.isFinite || v <= 0 || v >= c.eccentricityTolerance
-          ? c
-          : c.copyWith(goodEccentricity: v),
-    );
+    if (!v.isFinite || v <= 0 || v >= state.eccentricityTolerance) return;
+    state = state.copyWith(goodEccentricity: v);
   }
 
   void setStepDownAfter(int v) {
     if (v < 1) return;
-    edit((c) => c.copyWith(stepDownAfter: v));
+    state = state.copyWith(stepDownAfter: v);
   }
 
   void setStepUpAfter(int v) {
     if (v < 1) return;
-    edit((c) => c.copyWith(stepUpAfter: v));
+    state = state.copyWith(stepUpAfter: v);
   }
 
   void setProbeRungs(List<double> rungs) {
     if (rungs.isEmpty) return;
-    edit((c) => c.copyWith(probeRungsSeconds: List.unmodifiable(rungs)));
+    state = state.copyWith(probeRungsSeconds: List.unmodifiable(rungs));
   }
 
   void setRecentreDriftArcmin(double v) {
     if (!v.isFinite || v <= 0) return;
-    edit((c) => c.copyWith(recentreDriftArcmin: v));
+    state = state.copyWith(recentreDriftArcmin: v);
   }
 
   void setRecentreSolveEveryN(int v) {
     if (v < 1) return;
-    edit((c) => c.copyWith(recentreSolveEveryN: v));
+    state = state.copyWith(recentreSolveEveryN: v);
   }
 
   void setPriorToleranceBasis(String v) {
     if (!UnguidedSettings.toleranceBases.contains(v)) return;
-    edit((c) => c.copyWith(priorToleranceBasis: v));
+    state = state.copyWith(priorToleranceBasis: v);
   }
 
-  @override
-  Future<Tagged<UnguidedSettings>> fetch(ProfileApi api) =>
-      api.getUnguidedSection();
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getUnguidedSettings());
 
-  @override
-  Future<Tagged<UnguidedSettings>> send(
-    ProfileApi api,
-    UnguidedSettings value,
-    String? etag,
-  ) => api.putUnguidedSection(value, ifMatch: etag);
+  Future<UnguidedSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putUnguidedSettings(sent));
 }
 
 final unguidedSettingsProvider =
-    NotifierProvider<UnguidedSettingsNotifier, LoadedSection<UnguidedSettings>>(
+    NotifierProvider<UnguidedSettingsNotifier, UnguidedSettings>(
       UnguidedSettingsNotifier.new,
     );

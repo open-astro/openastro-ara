@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -212,8 +211,7 @@ class _FixedFan extends CoolingFanNotifier {
   _FixedFan(this.fan);
   final CoolingFan fan;
   @override
-  LoadedSection<CoolingFan> build() =>
-      LoadedSection(value: fan, source: SectionSource.rig);
+  Future<CoolingFan> build() async => fan;
 }
 
 class _SwitchListNotifierForTest extends SwitchListNotifier {

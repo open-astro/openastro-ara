@@ -860,7 +860,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['camera', 'sensor', 'name', 'model', 'electronics', 'imx'],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.string(),
-    defaultValue: null,
+    defaultValue: '',
     profilePath: 'camera_electronics.sensor_name',
   ),
   Setting(
@@ -879,7 +879,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 0.1),
-    defaultValue: null,
+    defaultValue: 0.0,
     profilePath: 'camera_electronics.read_noise_e',
     relatedSettings: ['img.electronics.full_well_e', 'img.optics.aperture_mm'],
   ),
@@ -899,7 +899,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.doubleRange(min: 0, max: 1000000, step: 100),
-    defaultValue: null,
+    defaultValue: 0.0,
     profilePath: 'camera_electronics.full_well_e',
   ),
   Setting(
@@ -917,7 +917,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 0.01),
-    defaultValue: null,
+    defaultValue: 0.0,
     profilePath: 'camera_electronics.electrons_per_adu',
   ),
   Setting(
@@ -927,7 +927,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['gain', 'camera', 'electronics', 'iso', 'readout'],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.intRange(min: -1, max: 10000),
-    defaultValue: null,
+    defaultValue: -1,
     profilePath: 'camera_electronics.gain',
   ),
   Setting(
@@ -944,7 +944,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Camera electronics'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.01),
-    defaultValue: null,
+    defaultValue: 0.0,
     profilePath: 'camera_electronics.quantum_efficiency_peak',
   ),
 
@@ -1351,7 +1351,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'guard', 'trailing', 'step down', 'eccentricity'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'unguided.guard_enabled',
   ),
   Setting(
@@ -1361,7 +1361,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'eccentricity', 'trailed', 'tolerance', 'probe'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.doubleRange(min: 0.05, max: 1.0, step: 0.05),
-    defaultValue: null,
+    defaultValue: 0.5,
     profilePath: 'unguided.eccentricity_tolerance',
   ),
   Setting(
@@ -1371,7 +1371,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'eccentricity', 'round', 'step up'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.doubleRange(min: 0.05, max: 1.0, step: 0.05),
-    defaultValue: null,
+    defaultValue: 0.3,
     profilePath: 'unguided.good_eccentricity',
   ),
   Setting(
@@ -1381,7 +1381,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'guard', 'step down', 'streak'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.intRange(min: 1, max: 20),
-    defaultValue: null,
+    defaultValue: 2,
     profilePath: 'unguided.step_down_after',
   ),
   Setting(
@@ -1391,7 +1391,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'guard', 'step up', 'streak'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.intRange(min: 1, max: 100),
-    defaultValue: null,
+    defaultValue: 10,
     profilePath: 'unguided.step_up_after',
   ),
   Setting(
@@ -1401,7 +1401,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'probe', 'ladder', 'rungs', 'exposures'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.string(),
-    defaultValue: null,
+    defaultValue: '10, 30, 60, 120',
     profilePath: 'unguided.probe_rungs_seconds',
   ),
   Setting(
@@ -1417,7 +1417,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.doubleRange(min: 0.5, max: 120, step: 0.5),
-    defaultValue: null,
+    defaultValue: 10.0,
     profilePath: 'unguided.recentre_drift_arcmin',
   ),
   Setting(
@@ -1427,7 +1427,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['unguided', 'drift', 'plate solve', 'every'],
     path: ['Settings', 'Imaging', 'Unguided'],
     type: SettingType.intRange(min: 1, max: 50),
-    defaultValue: null,
+    defaultValue: 1,
     profilePath: 'unguided.recentre_solve_every_n',
   ),
   Setting(
@@ -1448,7 +1448,7 @@ const List<Setting> settingsRegistry = [
       'One pixel',
       'Half the seeing disc',
     ]),
-    defaultValue: null,
+    defaultValue: 'Larger of one pixel or half the seeing',
     profilePath: 'unguided.prior_tolerance_basis',
   ),
   Setting(
@@ -2084,7 +2084,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.complex(),
-    defaultValue: null,
+    defaultValue: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
     profilePath: 'filterwheel.slot_labels',
   ),
 
@@ -2107,7 +2107,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'filter_wheel_policy.home_on_first_connect',
   ),
   Setting(
@@ -2125,7 +2125,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'filter_wheel_policy.use_filter_wheel_offsets',
   ),
 
@@ -2143,7 +2143,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['camera', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Camera'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.camera.auto_connect',
   ),
   Setting(
@@ -2160,7 +2160,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Mount'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.mount.auto_connect',
   ),
   Setting(
@@ -2177,7 +2177,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Focuser'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.focuser.auto_connect',
   ),
   Setting(
@@ -2194,7 +2194,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.filterwheel.auto_connect',
   ),
   Setting(
@@ -2204,7 +2204,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['rotator', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Rotator'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.rotator.auto_connect',
   ),
   Setting(
@@ -2222,7 +2222,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'equipment.guider.auto_connect',
   ),
   Setting(
@@ -2240,7 +2240,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Flat Panel'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.flat.auto_connect',
   ),
   Setting(
@@ -2250,7 +2250,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'shutter', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'equipment.dome.auto_connect',
   ),
   Setting(
@@ -2260,7 +2260,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'follow', 'slave', 'slit', 'mount', 'sync'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'dome.follow_mount',
   ),
   Setting(
@@ -2270,7 +2270,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'mount', 'equatorial', 'fork', 'geometry'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.enumValue(['equatorial', 'fork_on_wedge']),
-    defaultValue: null,
+    defaultValue: 'equatorial',
     profilePath: 'dome.mount_type',
   ),
   Setting(
@@ -2280,7 +2280,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'radius', 'geometry', 'follow'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.doubleRange(min: 0, max: 100000, step: 10),
-    defaultValue: null,
+    defaultValue: 0.0,
     profilePath: 'dome.dome_radius_mm',
   ),
   Setting(
@@ -2310,7 +2310,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'tolerance', 'azimuth', 'follow', 'degrees'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.doubleRange(min: 0.5, max: 90, step: 0.5),
-    defaultValue: null,
+    defaultValue: 2.0,
     profilePath: 'dome.azimuth_tolerance_degrees',
   ),
   Setting(
@@ -2320,7 +2320,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'slew', 'synchronize', 'during', 'follow'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'dome.synchronize_during_mount_slew',
   ),
   Setting(
@@ -2337,7 +2337,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Weather'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: false,
     profilePath: 'equipment.weather.auto_connect',
   ),
   Setting(
@@ -2354,7 +2354,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Safety Monitor'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'equipment.safety.auto_connect',
   ),
 
@@ -2563,7 +2563,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['engine', 'astap', 'astrometry.net', 'platesolve2', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.enumValue(['ASTAP']),
-    defaultValue: null,
+    defaultValue: 'ASTAP',
     profilePath: 'platesolve.engine',
   ),
   Setting(
@@ -2573,7 +2573,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['path', 'endpoint', 'executable', 'url', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.path(),
-    defaultValue: null,
+    defaultValue: '/opt/openastroara/astap_cli',
     profilePath: 'platesolve.path_or_endpoint',
   ),
   Setting(
@@ -2583,7 +2583,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['index', 'download', 'database', 'stars', 'catalog', 'path'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.path(),
-    defaultValue: null,
+    defaultValue: '/var/lib/astap',
     profilePath: 'platesolve.index_download_path',
   ),
   Setting(
@@ -2593,7 +2593,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['search', 'radius', 'degrees', 'hint', 'blind'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.doubleRange(min: 0, max: 180, step: 1),
-    defaultValue: null,
+    defaultValue: 30.0,
     profilePath: 'platesolve.search_radius_deg',
   ),
   Setting(
@@ -2603,7 +2603,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['downsample', 'factor', 'resolution', 'speed', 'auto'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.intRange(min: 0, max: 8),
-    defaultValue: null,
+    defaultValue: 0,
     profilePath: 'platesolve.downsample_factor',
   ),
   Setting(
@@ -2613,7 +2613,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['timeout', 'seconds', 'wait', 'limit'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.intRange(min: 5, max: 600),
-    defaultValue: null,
+    defaultValue: 60,
     profilePath: 'platesolve.timeout_seconds',
   ),
   Setting(
@@ -2623,7 +2623,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['blind', 'fallback', 'retry', 'alignment'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'platesolve.use_blind_fallback',
   ),
   Setting(
@@ -2633,7 +2633,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['center', 'slew', 'pointing', 'recenter', 'goto'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'platesolve.center_after_slew',
   ),
   Setting(
@@ -2643,7 +2643,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sync', 'mount', 'coordinates', 'pointing', 'alignment'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.bool(),
-    defaultValue: null,
+    defaultValue: true,
     profilePath: 'platesolve.sync_to_coordinates',
   ),
   Setting(
@@ -2653,7 +2653,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['iterations', 'max', 'centering', 'refine'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.intRange(min: 1, max: 20),
-    defaultValue: null,
+    defaultValue: 5,
     profilePath: 'platesolve.max_iterations',
   ),
   Setting(
@@ -2663,7 +2663,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['convergence', 'tolerance', 'arcsec', 'precision', 'centering'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.doubleRange(min: 1, max: 600, step: 1),
-    defaultValue: null,
+    defaultValue: 60.0,
     profilePath: 'platesolve.convergence_tolerance_arcsec',
   ),
 

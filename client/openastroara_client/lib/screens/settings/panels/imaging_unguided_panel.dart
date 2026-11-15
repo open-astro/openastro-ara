@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/tracking_calibration.dart';
+import '../../../services/profile_api.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -13,7 +14,6 @@ import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
-import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// #1264 Imaging → Unguided — what the rig's mount can hold without a guider,
@@ -31,18 +31,54 @@ class ImagingUnguidedPanel extends ConsumerStatefulWidget {
 }
 
 class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
-    with PanelSaveRegistration, SectionPanel {
+    with PanelSaveRegistration {
   bool _busy = false;
   String? _lastError;
 
   @override
-  List<PanelSection> get sections => [unguidedSettingsProvider];
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  ProfileApi? _api() {
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
+  }
+
+  Future<void> _hydrate() async {
+    final api = _api();
+    if (api == null) return;
+    try {
+      await ref.read(unguidedSettingsProvider.notifier).hydrateFromServer(api);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings));
+      }
+    }
+  }
 
   @override
-  Future<void> panelSave() async {
+  Future<void> panelSave() => _save();
+
+  Future<void> _save() async {
     setState(() => _lastError = null);
-    final error = await saveSections();
-    if (mounted) setState(() => _lastError = error);
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      setState(() => _lastError = 'Not connected — connect to your rig to save this.');
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+      return;
+    }
+    try {
+      await ref.read(unguidedSettingsProvider.notifier).persistToServer(api);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    }
   }
 
   Future<void> _recalibrate() async {
@@ -80,15 +116,12 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
     final cal = ref.watch(trackingCalibrationProvider);
     final record = cal.asData?.value;
     final mount = ref.watch(mountProvider);
-    final gate = sectionGate();
-    if (gate != null) return gate;
-    final u = ref.watch(unguidedSettingsProvider).value!;
+    final u = ref.watch(unguidedSettingsProvider);
     final n = ref.read(unguidedSettingsProvider.notifier);
     final dim = Theme.of(context).textTheme.labelSmall?.copyWith(color: AraColors.textDisabled);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        ?sectionConflict(),
         if (_lastError != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -185,9 +218,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Trailed above eccentricity',
           helpKey: 'img.unguided.eccentricity',
           currentValue: _num(u.eccentricityTolerance),
-          getCanonical: () => _num(
-            ref.read(unguidedSettingsProvider).value!.eccentricityTolerance,
-          ),
+          getCanonical: () => _num(ref.read(unguidedSettingsProvider).eccentricityTolerance),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setEccentricityTolerance(v);
@@ -198,8 +229,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           helpKey: 'img.unguided.eccentricity',
           hint: 'Kept below the trailed bar; follows it down when you lower that',
           currentValue: _num(u.goodEccentricity),
-          getCanonical: () =>
-              _num(ref.read(unguidedSettingsProvider).value!.goodEccentricity),
+          getCanonical: () => _num(ref.read(unguidedSettingsProvider).goodEccentricity),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setGoodEccentricity(v);
@@ -209,11 +239,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Step down after N trailed lights',
           helpKey: 'img.unguided.guard_enabled',
           currentValue: u.stepDownAfter.toString(),
-          getCanonical: () => ref
-              .read(unguidedSettingsProvider)
-              .value!
-              .stepDownAfter
-              .toString(),
+          getCanonical: () => ref.read(unguidedSettingsProvider).stepDownAfter.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setStepDownAfter(v);
@@ -223,8 +249,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Step up after N round lights',
           helpKey: 'img.unguided.guard_enabled',
           currentValue: u.stepUpAfter.toString(),
-          getCanonical: () =>
-              ref.read(unguidedSettingsProvider).value!.stepUpAfter.toString(),
+          getCanonical: () => ref.read(unguidedSettingsProvider).stepUpAfter.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setStepUpAfter(v);
@@ -235,8 +260,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Probe ladder (s, shortest first)',
           helpKey: 'img.unguided.probe_rungs',
           currentValue: u.probeRungsText,
-          getCanonical: () =>
-              ref.read(unguidedSettingsProvider).value!.probeRungsText,
+          getCanonical: () => ref.read(unguidedSettingsProvider).probeRungsText,
           parse: (s) {
             final rungs = UnguidedSettings.parseRungs(s);
             if (rungs != null) n.setProbeRungs(rungs);
@@ -268,9 +292,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Re-centre past drift (arcmin)',
           helpKey: 'img.unguided.recentre',
           currentValue: _num(u.recentreDriftArcmin),
-          getCanonical: () => _num(
-            ref.read(unguidedSettingsProvider).value!.recentreDriftArcmin,
-          ),
+          getCanonical: () => _num(ref.read(unguidedSettingsProvider).recentreDriftArcmin),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setRecentreDriftArcmin(v);
@@ -280,11 +302,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
           label: 'Solve every N lights',
           helpKey: 'img.unguided.recentre',
           currentValue: u.recentreSolveEveryN.toString(),
-          getCanonical: () => ref
-              .read(unguidedSettingsProvider)
-              .value!
-              .recentreSolveEveryN
-              .toString(),
+          getCanonical: () => ref.read(unguidedSettingsProvider).recentreSolveEveryN.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setRecentreSolveEveryN(v);

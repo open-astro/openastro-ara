@@ -108,26 +108,12 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   /// Same as [load], for the live-sync table.
   Future<void> hydrateFromServer(ProfileApi api) => load(api);
 
-  /// Apply an edit; ignored unless the value came from the rig. An offline
-  /// cache seed is read-only: an edit on it would be replaced by the retry-load
-  /// of the next Save, which would then report Saved (ADR 0015).
+  /// Apply an edit; ignored while there is nothing loaded to edit.
   void edit(T Function(T current) change) {
     final v = state.value;
-    if (v == null || !state.canSave) return;
+    if (v == null) return;
     state = state.copyWith(value: change(v));
   }
-
-  /// Offline planning: show the cache's copy of the section (readable, never
-  /// saved). A copy from the rig, or a load still in flight, is never replaced.
-  void seed(T value) {
-    if (state.canSave) return;
-    state = LoadedSection(value: value, source: SectionSource.cache);
-  }
-
-  /// Entry point of the pre-ADR 0015 notifiers: the same as [save], which
-  /// the Simple Mode callers keep using until slice 3 moves them. No [api]:
-  /// the active rig's.
-  Future<void> persistToServer([ProfileApi? api]) => save(api ?? _activeApi());
 
   ProfileApi _activeApi() =>
       ref.read(profileApiProvider) ??
@@ -196,28 +182,5 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     });
     _saveChain = run;
     return run;
-  }
-}
-
-/// A section read outside Settings (no panel opens it first): loads itself
-/// once the notifier is built and whenever it is back to not loaded with no
-/// failure, such as after the reset point (migrated_sections.dart) or when the
-/// rig connects. A failed load stays failed until Retry or the next Save.
-abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
-  @override
-  LoadedSection<T> build() {
-    listenSelf((_, next) => _loadIfDue(next));
-    ref.listen(profileApiProvider, (_, _) => _loadIfDue(state));
-    Future.microtask(() => ref.mounted ? _loadIfDue(state) : null);
-    return const LoadedSection();
-  }
-
-  void _loadIfDue(LoadedSection<T> now) {
-    final api = ref.read(profileApiProvider);
-    if (api != null &&
-        now.source == SectionSource.notLoaded &&
-        now.lastFailure == null) {
-      load(api);
-    }
   }
 }

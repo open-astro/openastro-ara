@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -22,16 +21,7 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   _SeededElectronics(this._v);
   final CameraElectronics _v;
   @override
-  LoadedSection<CameraElectronics> build() =>
-      LoadedSection(value: _v, source: SectionSource.rig);
-}
-
-class _SeededFilters extends FilterSetNotifier {
-  _SeededFilters(this._v);
-  final FilterSetSettings _v;
-  @override
-  LoadedSection<FilterSetSettings> build() =>
-      LoadedSection(value: _v, source: SectionSource.rig);
+  CameraElectronics build() => _v;
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -84,39 +74,33 @@ void main() {
       List<Object> overrides = const [],
     }) async {
       TargetPlanChoice? result;
-      final container = ProviderContainer(
-        overrides: [
-          filterSetProvider.overrideWith(
-            () => _SeededFilters(FilterSetSettings(filters: filters)),
-          ),
-          ...overrides.cast(),
-        ],
-      );
+      final container = ProviderContainer(overrides: overrides.cast());
       addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Builder(
-              builder: (context) => Center(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    result = await showTargetPlanDialog(
-                      context,
-                      targetName: 'Veil',
-                      raDeg: 311.0,
-                      decDeg: 31.7,
-                      remainingDarkHours: 6,
-                      guiderAvailable: guider,
-                    );
-                  },
-                  child: const Text('go'),
-                ),
+      for (final f in filters) {
+        container.read(filterSetProvider.notifier).addFilter(f);
+      }
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  result = await showTargetPlanDialog(
+                    context,
+                    targetName: 'Veil',
+                    raDeg: 311.0,
+                    decDeg: 31.7,
+                    remainingDarkHours: 6,
+                    guiderAvailable: guider,
+                  );
+                },
+                child: const Text('go'),
               ),
             ),
           ),
         ),
-      );
+      ));
       await tester.tap(find.text('go'));
       await tester.pumpAndSettle();
       await interact(tester);

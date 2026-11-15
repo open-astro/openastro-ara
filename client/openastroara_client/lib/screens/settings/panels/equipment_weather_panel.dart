@@ -12,7 +12,7 @@ import '../../../util/tonight_sky_local.dart'
     show moonPhase, sqmDerived, sunMoonAltitudeDeg;
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
-import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Weather (ObservingConditions) panel. Shows the connected device's live
@@ -23,6 +23,8 @@ class EquipmentWeatherPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final connection = ref.watch(equipmentConnectionProvider);
+    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(weatherProvider);
     final policies = ref.watch(safetyPoliciesProvider);
     final notifier = ref.read(weatherProvider.notifier);
@@ -43,7 +45,12 @@ class EquipmentWeatherPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _WeatherBody(status: s),
         ),
-        AutoConnectRow(EquipmentDeviceType.weather),
+        SettingsSwitchRow(
+          label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
+          value: connection.autoConnect(EquipmentDeviceType.weather),
+          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.weather, v),
+        ),
         const SettingsSectionHeader('Thresholds'),
         // Live values from the §35 safety policies — the ONE place they are
         // configured. Shown read-only here so this panel can never disagree

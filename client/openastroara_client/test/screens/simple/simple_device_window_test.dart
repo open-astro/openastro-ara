@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
@@ -15,8 +14,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _FixedFan extends CoolingFanNotifier {
   @override
-  LoadedSection<CoolingFan> build() =>
-      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
+  Future<CoolingFan> build() async => CoolingFan.none;
 }
 
 class _Camera extends CameraStatusNotifier {

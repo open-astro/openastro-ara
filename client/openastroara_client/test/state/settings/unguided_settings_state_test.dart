@@ -1,8 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../../support/section_load.dart';
-
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
@@ -70,47 +67,37 @@ void main() {
 
   test(
     'the notifier keeps the two eccentricity bars ordered and rejects junk',
-    () async {
+    () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
-      await loadSection(c, unguidedSettingsProvider, 'unguided');
       final n = c.read(unguidedSettingsProvider.notifier);
       n.setGoodEccentricity(0.6);
       expect(
-        c.read(unguidedSettingsProvider).value!.goodEccentricity,
+        c.read(unguidedSettingsProvider).goodEccentricity,
         0.3,
         reason: 'must stay below the trailed bar',
       );
       n.setEccentricityTolerance(0.25);
+      expect(c.read(unguidedSettingsProvider).eccentricityTolerance, 0.25);
       expect(
-        c.read(unguidedSettingsProvider).value!.eccentricityTolerance,
-        0.25,
-      );
-      expect(
-        c.read(unguidedSettingsProvider).value!.goodEccentricity,
+        c.read(unguidedSettingsProvider).goodEccentricity,
         0.125,
         reason: 'the round bar follows down',
       );
       n.setEccentricityTolerance(1.5);
       expect(
-        c.read(unguidedSettingsProvider).value!.eccentricityTolerance,
+        c.read(unguidedSettingsProvider).eccentricityTolerance,
         0.25,
         reason: '> 1 ignored',
       );
       n.setStepDownAfter(0);
-      expect(c.read(unguidedSettingsProvider).value!.stepDownAfter, 2);
+      expect(c.read(unguidedSettingsProvider).stepDownAfter, 2);
       n.setPriorToleranceBasis('whatever');
-      expect(
-        c.read(unguidedSettingsProvider).value!.priorToleranceBasis,
-        'max',
-      );
+      expect(c.read(unguidedSettingsProvider).priorToleranceBasis, 'max');
       n.setPriorToleranceBasis('pixel');
-      expect(
-        c.read(unguidedSettingsProvider).value!.priorToleranceBasis,
-        'pixel',
-      );
+      expect(c.read(unguidedSettingsProvider).priorToleranceBasis, 'pixel');
       n.setRecentreDriftArcmin(-1);
-      expect(c.read(unguidedSettingsProvider).value!.recentreDriftArcmin, 10);
+      expect(c.read(unguidedSettingsProvider).recentreDriftArcmin, 10);
     },
   );
 }

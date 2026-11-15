@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:openastroara/state/settings/loaded_section.dart';
 
 import 'fake_section_rig.dart';
@@ -18,9 +17,3 @@ Future<void> loadSection<N extends SectionNotifier<T>, T>(
       .load(FakeSectionRig({section: body}).api());
   if (!ok) throw StateError('test rig did not serve $section');
 }
-
-/// Wait until [provider]'s self-loading section holds the rig's copy.
-Future<void> settleLoaded<T>(
-  ProviderContainer container,
-  ProviderListenable<LoadedSection<T>> provider,
-) => settle(() => container.read(provider).canSave);

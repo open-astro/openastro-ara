@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/switch_device.dart';
@@ -59,8 +58,7 @@ class _Rig implements SwitchClient {
 
 class _FixedFan extends CoolingFanNotifier {
   @override
-  LoadedSection<CoolingFan> build() =>
-      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
+  Future<CoolingFan> build() async => CoolingFan.none;
 }
 
 class _Camera extends CameraStatusNotifier {

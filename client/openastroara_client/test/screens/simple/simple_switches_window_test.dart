@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
@@ -21,8 +20,6 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_metrics.dart' show AraOpacity;
 import 'package:openastroara/widgets/status_indicator.dart' show StatusDot;
-
-import '../../support/section_load.dart';
 
 class _Servers implements SavedServerService {
   @override
@@ -105,23 +102,13 @@ Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> 
   ]);
   addTearDown(c.dispose);
   await c.read(switchListProvider.future);
-  await settleLoaded(c, coolingFanProvider);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: c,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: width,
-              child: SimpleSwitchesWindow(inSettings: inSettings),
-            ),
-          ),
-        ),
-      ),
+  await c.read(coolingFanProvider.future);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: c,
+    child: MaterialApp(
+      home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: SimpleSwitchesWindow(inSettings: inSettings)))),
     ),
-  );
+  ));
   await tester.pumpAndSettle();
   return (c, rig);
 }
@@ -556,6 +543,5 @@ class _FixedFan extends CoolingFanNotifier {
   _FixedFan(this.fan);
   final CoolingFan fan;
   @override
-  LoadedSection<CoolingFan> build() =>
-      LoadedSection(value: fan, source: SectionSource.rig);
+  Future<CoolingFan> build() async => fan;
 }

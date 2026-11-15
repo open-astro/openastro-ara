@@ -15,7 +15,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/screens/simple/simple_rig_storage.dart';
 import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/screens/stats/stats_dashboard_screen.dart';
@@ -8246,8 +8245,7 @@ void main() {
 
 class _NoFan extends CoolingFanNotifier {
   @override
-  LoadedSection<CoolingFan> build() =>
-      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
+  Future<CoolingFan> build() async => CoolingFan.none;
 }
 
 /// The Rig setup facts a test sets and changes.

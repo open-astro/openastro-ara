@@ -10,7 +10,7 @@ lib/screens/library/image_library_screen.dart 25
 lib/screens/library/live_frame_viewer_screen.dart 5
 lib/screens/settings/panels/about_panel.dart 15
 lib/screens/settings/panels/camera_electronics_panel.dart 17
-lib/screens/settings/panels/diagnostics_mode_panel.dart 13
+lib/screens/settings/panels/diagnostics_mode_panel.dart 12
 lib/screens/settings/panels/equipment_camera_panel.dart 8
 lib/screens/settings/panels/equipment_dome_panel.dart 20
 lib/screens/settings/panels/equipment_filter_wheel_panel.dart 12
@@ -34,8 +34,8 @@ lib/screens/settings/panels/profile_wizard_panel.dart 5
 lib/screens/settings/panels/safety_policies_panel.dart 49
 lib/screens/settings/panels/safety_site_panel.dart 27
 lib/screens/settings/panels/session_calibration_panel.dart 19
-lib/screens/settings/panels/session_filenames_panel.dart 45
-lib/screens/settings/panels/session_notifications_panel.dart 19
+lib/screens/settings/panels/session_filenames_panel.dart 44
+lib/screens/settings/panels/session_notifications_panel.dart 18
 lib/screens/settings/panels/session_stats_panel.dart 19
 lib/screens/settings/panels/sky_data_panel.dart 6
 lib/screens/settings/panels/storage_panel.dart 41
@@ -124,6 +124,7 @@ lib/widgets/sequencer/sequencer_palette.dart 1
 lib/widgets/sequencer/sequencer_toolbar.dart 55
 lib/widgets/sequencer/target_plan_dialog.dart 14
 lib/widgets/session_ended_summary_listener.dart 5
+lib/widgets/settings/section_panel.dart 1
 lib/widgets/settings/time_sync_section.dart 35
 lib/widgets/settings_gear_button.dart 1
 lib/widgets/simple_mode_switch_button.dart 1

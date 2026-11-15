@@ -14,7 +14,7 @@ import '../../../util/slew_rates.dart';
 import '../../../util/tracking_rate_words.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
-import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -51,6 +51,8 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final connection = ref.watch(equipmentConnectionProvider);
+    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(mountProvider);
     final notifier = ref.read(mountProvider.notifier);
     // The live mount when connected — gates the manual-control section (GoTo + the
@@ -76,7 +78,12 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _MountBody(status: s),
         ),
-        AutoConnectRow(EquipmentDeviceType.mount),
+        SettingsSwitchRow(
+          label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
+          value: connection.autoConnect(EquipmentDeviceType.mount),
+          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
+        ),
         // The press-and-hold direction pad sits between Auto-connect and the
         // Manual control section — shown whenever the mount can MoveAxis,
         // independent of GoTo (canSlew) capability.

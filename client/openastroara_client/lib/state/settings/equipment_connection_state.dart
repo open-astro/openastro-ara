@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'loaded_section.dart';
+import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
+import '../saved_server_state.dart';
 
 /// §52.1 connection-lifecycle defaults: which equipment device types
 /// auto-connect when the daemon boots. Phase 12h.6L wires the daemon
@@ -67,27 +68,59 @@ class EquipmentConnectionSettings {
 }
 
 class EquipmentConnectionNotifier
-    extends SelfLoadingSection<EquipmentConnectionSettings> {
-  /// Saves on change; throws when the rig did not take it (not loaded, 412,
-  /// unreachable) so the panel can say so. ADR 0015: nothing is changed or
-  /// sent while the section is not loaded from the rig.
-  Future<void> setAutoConnect(EquipmentDeviceType t, bool v) =>
-      editAndSave((c) => c.copyWithAutoConnect(t, v));
-
+    extends Notifier<EquipmentConnectionSettings>
+    with SettingsSyncMixin<EquipmentConnectionSettings> {
   @override
-  Future<Tagged<EquipmentConnectionSettings>> fetch(ProfileApi api) =>
-      api.getEquipmentConnectionSection();
+  EquipmentConnectionSettings build() {
+    // Schedule one-shot hydration after the current build pass. Calling
+    // ref.read inside build() synchronously would re-enter the notifier
+    // and trip an assertion; Future.microtask defers it cleanly.
+    Future.microtask(_tryHydrate);
+    return const EquipmentConnectionSettings();
+  }
 
-  @override
-  Future<Tagged<EquipmentConnectionSettings>> send(
-    ProfileApi api,
-    EquipmentConnectionSettings value,
-    String? etag,
-  ) => api.putEquipmentConnectionSection(value, ifMatch: etag);
+  void setAutoConnect(EquipmentDeviceType t, bool v) {
+    state = state.copyWithAutoConnect(t, v);
+    // Fire-and-forget PUT. Failures are silent (see class docstring).
+    Future.microtask(_tryPersist);
+  }
+
+  /// Manual hydrate — exposed for tests that want to inject a mocked api.
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getEquipmentConnection());
+
+  /// Manual persist — exposed for tests + future error-stream wiring.
+  Future<EquipmentConnectionSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putEquipmentConnection(sent));
+
+  ProfileApi? _activeApi() {
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
+  }
+
+  Future<void> _tryHydrate() async {
+    final api = _activeApi();
+    if (api == null) return;
+    try {
+      await hydrateGuarded(() => api.getEquipmentConnection());
+    } catch (_) {
+      // Silent — defaults remain.
+    }
+  }
+
+  Future<void> _tryPersist() async {
+    final api = _activeApi();
+    if (api == null) return;
+    try {
+      // Serialized + fenced through the mixin so rapid toggles can't let an
+      // out-of-order PUT echo revert a newer optimistic local update.
+      await persistGuarded((sent) => api.putEquipmentConnection(sent));
+    } catch (_) {
+      // Silent — local optimistic update stays.
+    }
+  }
 }
 
-final equipmentConnectionProvider =
-    NotifierProvider<
-      EquipmentConnectionNotifier,
-      LoadedSection<EquipmentConnectionSettings>
-    >(EquipmentConnectionNotifier.new);
+final equipmentConnectionProvider = NotifierProvider<
+    EquipmentConnectionNotifier,
+    EquipmentConnectionSettings>(EquipmentConnectionNotifier.new);

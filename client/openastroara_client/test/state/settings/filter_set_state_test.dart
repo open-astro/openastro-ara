@@ -1,23 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../../support/section_load.dart';
-
 import 'package:openastroara/state/settings/filter_set_state.dart';
 
 void main() {
   group('FilterSetNotifier', () {
     late ProviderContainer container;
 
-    setUp(() async {
-      container = ProviderContainer();
-      await loadSection(container, filterSetProvider, 'filter-set');
-    });
+    setUp(() => container = ProviderContainer());
     tearDown(() => container.dispose());
 
-    FilterSetNotifier notifier() => container.read(filterSetProvider.notifier);
+    FilterSetNotifier notifier() =>
+        container.read(filterSetProvider.notifier);
     List<PlanningFilter> filters() =>
-        container.read(filterSetProvider).value!.filters;
+        container.read(filterSetProvider).filters;
 
     test('starts empty', () {
       expect(filters(), isEmpty);

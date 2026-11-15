@@ -84,24 +84,17 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
     return const <TonightSkyObject>[];
   }
   final optics = ref.watch(opticsSettingsProvider);
-  // Planning reads what is loaded (the rig, or the offline cache); a section
-  // not loaded plans with the unset values, and is never saved from here.
-  final filterSet =
-      ref.watch(filterSetProvider).value ?? const FilterSetSettings();
-  final electronics =
-      ref.watch(cameraElectronicsProvider).value ?? const CameraElectronics();
+  final filterSet = ref.watch(filterSetProvider);
+  final electronics = ref.watch(cameraElectronicsProvider);
   // The bundled planning catalog (culled, plus any mirrored daemon rows the
   // bundle lacks) — never empty, so the ranker's starter-list fallback is
   // only reached by callers that pass no catalog at all.
   final catalog = await ref.watch(dsoCatalogProvider.future);
   // Plain records so the isolate payload stays model-free.
-  final horizonPoints =
-      ref
-          .watch(customHorizonProvider)
-          .value
-          ?.map((p) => (p.azimuthDeg, p.altitudeDeg))
-          .toList() ??
-      const <(double, double)>[];
+  final horizonPoints = ref
+      .watch(customHorizonProvider)
+      .map((p) => (p.azimuthDeg, p.altitudeDeg))
+      .toList();
   final opticsFinal = optics;
   // #1140 — the Glover noise-tolerance knob is a client preference; wait for
   // the saved value once so a non-default knob doesn't rank twice at launch.

@@ -3,21 +3,11 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
-import 'camera_electronics_state.dart';
-import 'cooling_fan_state.dart';
-import 'custom_horizon_state.dart';
 import 'diagnostics_mode_state.dart';
-import 'dome_settings_state.dart';
-import 'equipment_connection_state.dart';
 import 'filenames_settings_state.dart';
-import 'filter_set_state.dart';
-import 'filter_wheel_labels_state.dart';
-import 'filter_wheel_policy_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
-import 'plate_solve_settings_state.dart';
 import 'storage_settings_state.dart';
-import 'unguided_settings_state.dart';
 
 /// ADR 0015 — the one reset point: a different rig or a different active
 /// profile sends every migrated section back to not loaded, so no value from
@@ -36,7 +26,7 @@ void resetMigratedSections(T Function<T>(ProviderListenable<T>) read) {
 
 typedef MigratedSection = ({
   /// The first path segment under `/api/v1/profile/` that `profile.updated`
-  /// names (two sections share `filter-wheel`).
+  /// names .
   String route,
   NotifierProvider<SectionNotifier<Object?>, LoadedSection<Object?>> provider,
 });
@@ -45,20 +35,10 @@ typedef MigratedSection = ({
 /// that [resetMigratedSections] and the live-sync table (profile_live_sync.dart)
 /// read, and a test checks both against.
 final List<MigratedSection> migratedSections = [
-  (route: 'camera-electronics', provider: cameraElectronicsProvider),
-  (route: 'cooling-fan', provider: coolingFanProvider),
-  (route: 'custom-horizon', provider: customHorizonProvider),
   (route: 'diagnostics-mode', provider: diagnosticsModeProvider),
-  (route: 'dome', provider: domeSettingsProvider),
-  (route: 'equipment-connection', provider: equipmentConnectionProvider),
   (route: 'filenames', provider: filenamesSettingsProvider),
-  (route: 'filter-set', provider: filterSetProvider),
-  (route: 'filter-wheel', provider: filterWheelLabelsProvider),
-  (route: 'filter-wheel', provider: filterWheelPolicyProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
-  (route: 'plate-solve', provider: plateSolveSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
-  (route: 'unguided', provider: unguidedSettingsProvider),
 ];
 
 /// Root-mounted (main.dart) next to `launchGateRearmProvider`.

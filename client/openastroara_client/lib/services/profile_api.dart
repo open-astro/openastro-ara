@@ -464,7 +464,7 @@ class ProfileApi {
     );
   }
 
-  // ADR 0015 — the 13 sections that load before they save. Each pair reads or
+  // ADR 0015 — the sections that load before they save. Each pair reads or
   // writes the same route as its untagged twin above, with the rig's `ETag`
   // out and the loaded one back as `If-Match`.
   Future<({T value, String? etag})> _getTagged<T>(
@@ -495,67 +495,6 @@ class ProfileApi {
     );
   }
 
-  Future<({CameraElectronics value, String? etag})>
-  getCameraElectronicsSection() =>
-      _getTagged('camera-electronics', cameraElectronicsFromJson);
-  Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
-    CameraElectronics v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'camera-electronics',
-    cameraElectronicsToJson(v),
-    cameraElectronicsFromJson,
-    ifMatch,
-  );
-
-  Future<({List<CustomHorizonPoint> value, String? etag})>
-  getCustomHorizonSection() =>
-      _getTagged('custom-horizon', customHorizonFromJson);
-  Future<({List<CustomHorizonPoint> value, String? etag})>
-  putCustomHorizonSection(List<CustomHorizonPoint> v, {String? ifMatch}) =>
-      _putTagged(
-        'custom-horizon',
-        customHorizonToJson(v),
-        customHorizonFromJson,
-        ifMatch,
-      );
-
-  Future<({FilterSetSettings value, String? etag})> getFilterSetSection() =>
-      _getTagged('filter-set', filterSetFromJson);
-  Future<({FilterSetSettings value, String? etag})> putFilterSetSection(
-    FilterSetSettings v, {
-    String? ifMatch,
-  }) =>
-      _putTagged('filter-set', filterSetToJson(v), filterSetFromJson, ifMatch);
-
-  Future<({FilterWheelLabels value, String? etag})>
-  getFilterWheelLabelsSection() =>
-      _getTagged('filter-wheel/labels', _filterWheelLabelsFromJson);
-  Future<({FilterWheelLabels value, String? etag})> putFilterWheelLabelsSection(
-    FilterWheelLabels v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'filter-wheel/labels',
-    {
-      'labels': [for (var s = 1; s <= v.slotCount; s++) v.labelAt(s)],
-    },
-    _filterWheelLabelsFromJson,
-    ifMatch,
-  );
-
-  Future<({FilterWheelPolicy value, String? etag})>
-  getFilterWheelPolicySection() =>
-      _getTagged('filter-wheel/policy', FilterWheelPolicy.fromJson);
-  Future<({FilterWheelPolicy value, String? etag})> putFilterWheelPolicySection(
-    FilterWheelPolicy v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'filter-wheel/policy',
-    v.toJson(),
-    FilterWheelPolicy.fromJson,
-    ifMatch,
-  );
-
   Future<({NotificationsSettings value, String? etag})>
   getNotificationsSection() =>
       _getTagged('notifications', _notificationsSettingsFromJson);
@@ -581,30 +520,6 @@ class ProfileApi {
     ifMatch,
   );
 
-  Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
-      _getTagged('unguided', unguidedSettingsFromJson);
-  Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
-    UnguidedSettings v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'unguided',
-    unguidedSettingsToJson(v),
-    unguidedSettingsFromJson,
-    ifMatch,
-  );
-
-  Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
-      _getTagged('plate-solve', _plateSolveSettingsFromJson);
-  Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
-    PlateSolveSettings v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'plate-solve',
-    _plateSolveSettingsToJson(v),
-    _plateSolveSettingsFromJson,
-    ifMatch,
-  );
-
   Future<({DiagnosticsMode value, String? etag})> getDiagnosticsModeSection() =>
       _getTagged(
         'diagnostics-mode',
@@ -619,34 +534,6 @@ class ProfileApi {
     (j) => _diagnosticsModeFromString(j['mode'] as String?),
     ifMatch,
   );
-
-  Future<({EquipmentConnectionSettings value, String? etag})>
-  getEquipmentConnectionSection() =>
-      _getTagged('equipment-connection', _equipmentConnectionFromJson);
-  Future<({EquipmentConnectionSettings value, String? etag})>
-  putEquipmentConnectionSection(
-    EquipmentConnectionSettings v, {
-    String? ifMatch,
-  }) => _putTagged(
-    'equipment-connection',
-    _equipmentConnectionToJson(v),
-    _equipmentConnectionFromJson,
-    ifMatch,
-  );
-
-  Future<({CoolingFan value, String? etag})> getCoolingFanSection() =>
-      _getTagged('cooling-fan', CoolingFan.fromJson);
-  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
-    CoolingFan v, {
-    String? ifMatch,
-  }) => _putTagged('cooling-fan', v.toJson(), CoolingFan.fromJson, ifMatch);
-
-  Future<({DomeSettings value, String? etag})> getDomeSection() =>
-      _getTagged('dome', DomeSettings.fromJson);
-  Future<({DomeSettings value, String? etag})> putDomeSection(
-    DomeSettings v, {
-    String? ifMatch,
-  }) => _putTagged('dome', v.toJson(), DomeSettings.fromJson, ifMatch);
 
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {

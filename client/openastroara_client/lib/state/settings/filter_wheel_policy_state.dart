@@ -1,14 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'loaded_section.dart';
+import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
+import '../saved_server_state.dart';
 
 /// #1075 — the profile's filter-wheel policy, daemon-backed
 /// (`/api/v1/profile/filter-wheel/policy`): whether Ara parks the wheel on
 /// slot 0 (L) the first time it connects after the daemon starts (#1066).
-/// Same shape as [EquipmentConnectionNotifier]: loads itself, saves on change.
-/// ADR 0015: no value until the rig answered (no "home on" default).
+/// Same shape as [EquipmentConnectionNotifier]: one-shot hydrate on build,
+/// optimistic local update + fire-and-forget PUT on change, silent failure
+/// (best-effort, trusted LAN).
 class FilterWheelPolicy {
   final bool homeOnFirstConnect;
 
@@ -45,28 +47,59 @@ class FilterWheelPolicy {
   int get hashCode => Object.hash(homeOnFirstConnect, useFilterWheelOffsets);
 }
 
-class FilterWheelPolicyNotifier extends SelfLoadingSection<FilterWheelPolicy> {
-  /// Each switch saves on change (the panel shows a refusal).
-  Future<void> setHomeOnFirstConnect(bool v) =>
-      editAndSave((c) => c.copyWith(homeOnFirstConnect: v));
-
-  Future<void> setUseFilterWheelOffsets(bool v) =>
-      editAndSave((c) => c.copyWith(useFilterWheelOffsets: v));
-
+class FilterWheelPolicyNotifier extends Notifier<FilterWheelPolicy>
+    with SettingsSyncMixin<FilterWheelPolicy> {
   @override
-  Future<Tagged<FilterWheelPolicy>> fetch(ProfileApi api) =>
-      api.getFilterWheelPolicySection();
+  FilterWheelPolicy build() {
+    Future.microtask(_tryHydrate);
+    return const FilterWheelPolicy();
+  }
 
-  @override
-  Future<Tagged<FilterWheelPolicy>> send(
-    ProfileApi api,
-    FilterWheelPolicy value,
-    String? etag,
-  ) => api.putFilterWheelPolicySection(value, ifMatch: etag);
+  void setHomeOnFirstConnect(bool v) {
+    state = state.copyWith(homeOnFirstConnect: v);
+    Future.microtask(_tryPersist);
+  }
+
+  void setUseFilterWheelOffsets(bool v) {
+    state = state.copyWith(useFilterWheelOffsets: v);
+    Future.microtask(_tryPersist);
+  }
+
+  /// Manual hydrate — exposed for tests that inject a mocked api.
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getFilterWheelPolicy());
+
+  /// Manual persist — exposed for tests.
+  Future<FilterWheelPolicy> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putFilterWheelPolicy(sent));
+
+  ProfileApi? _activeApi() {
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
+  }
+
+  Future<void> _tryHydrate() async {
+    final api = _activeApi();
+    if (api == null) return;
+    try {
+      await hydrateGuarded(() => api.getFilterWheelPolicy());
+    } catch (_) {
+      // Silent — the default (home on) remains.
+    }
+  }
+
+  Future<void> _tryPersist() async {
+    final api = _activeApi();
+    if (api == null) return;
+    try {
+      await persistGuarded((sent) => api.putFilterWheelPolicy(sent));
+    } catch (_) {
+      // Silent — the local optimistic update stays.
+    }
+  }
 }
 
 final filterWheelPolicyProvider =
-    NotifierProvider<
-      FilterWheelPolicyNotifier,
-      LoadedSection<FilterWheelPolicy>
-    >(FilterWheelPolicyNotifier.new);
+    NotifierProvider<FilterWheelPolicyNotifier, FilterWheelPolicy>(
+  FilterWheelPolicyNotifier.new,
+);
