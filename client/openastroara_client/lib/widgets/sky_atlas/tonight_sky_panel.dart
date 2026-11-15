@@ -106,17 +106,14 @@ String? _nextOpening(List<TonightSkyObject> all, DateTime nowUtc) {
 }
 
 class TonightSkyPanel extends ConsumerWidget {
-  const TonightSkyPanel({super.key, this.width = defaultWidth});
+  const TonightSkyPanel({super.key});
 
   // Wider than the old 300 px: the equipment-aware row carries a score badge, a
   // framing chip and a timing line, and the design explicitly allows a bigger
   // panel ("It's ok if the screen is bigger").
   // S2 (planning redesign): 360 gives the cards' chips, window strips and
   // budget rings room to breathe; the sky keeps the rest.
-  static const double defaultWidth = 360;
-
-  /// #1778: an upright phone gives the panel the screen's width.
-  final double width;
+  static const double width = 360;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -152,8 +149,8 @@ class TonightSkyPanel extends ConsumerWidget {
                   Tooltip(
                     message: upNow
                         ? 'Showing only targets whose dark window is open '
-                              'right now (on automatically after dark) — tap '
-                              'to see the whole night'
+                            'right now (on automatically after dark) — tap '
+                            'to see the whole night'
                         : 'Show only targets you can point at right now',
                     child: FilterChip(
                       label: const Text('Up now'),
@@ -214,8 +211,7 @@ class TonightSkyPanel extends ConsumerWidget {
                       : all;
                   if (objects.isEmpty && all.isNotEmpty) {
                     return _Message(
-                      message:
-                          'Nothing on tonight\'s list is up right now — '
+                      message: 'Nothing on tonight\'s list is up right now — '
                           'the next one opens at '
                           '${_nextOpening(all, nowUtc) ?? 'a later hour'}. '
                           'Turn off "Up now" to see the whole night.',
@@ -349,7 +345,11 @@ class _ObjectRow extends ConsumerStatefulWidget {
 
   /// List position — drives the S10 entrance stagger only.
   final int index;
-  const _ObjectRow({super.key, required this.object, this.index = 0});
+  const _ObjectRow({
+    super.key,
+    required this.object,
+    this.index = 0,
+  });
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();
@@ -588,8 +588,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                               Text(
                                 standing.line,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color:
-                                      standing.standing ==
+                                  color: standing.standing ==
                                           TierStanding.finishesTonight
                                       ? AraColors.accentConnected
                                       : AraColors.textSecondary,
@@ -619,7 +618,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                           tooltip: online
                               ? 'Add to a new sequence'
                               : 'Save as a draft run (no server — pushes '
-                                    'when you reconnect)',
+                                  'when you reconnect)',
                           icon: const Icon(Icons.playlist_add),
                           onPressed: _addToSequence,
                         ),
@@ -816,24 +815,19 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     // #1140 P3 — the budget's inputs, so "Hours needed" is auditable.
     if (o.budget case final budget?) {
       rows.add(const SizedBox(height: 8));
-      rows.add(
-        Text(
-          'Hours needed — how it was computed',
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-      );
+      rows.add(Text('Hours needed — how it was computed',
+          style: Theme.of(context).textTheme.titleSmall));
       rows.add(_detailLine('Tiers', budget.display));
       for (final (label, value) in budget.auditLines) {
         rows.add(_detailLine(label, value));
       }
-      rows.add(
-        Text(
-          'T = SNR² · (S_target + S_sky) / S_target², per tier; the full and faint '
-          'tiers use the surface brightness dimmed by the offsets above.',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+      rows.add(Text(
+        'T = SNR² · (S_target + S_sky) / S_target², per tier; the full and faint '
+        'tiers use the surface brightness dimmed by the offsets above.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AraColors.textSecondary,
         ),
-      );
+      ));
     }
     if (o.scoreReasons case final reasons? when reasons.isNotEmpty) {
       rows.add(const SizedBox(height: 8));
@@ -864,9 +858,9 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   }
 
   static Widget _detailLine(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Text('$label: $value'),
-  );
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text('$label: $value'),
+      );
 
   /// Create a full imaging run for this object — cool/unpark/track/slew/
   /// autofocus + a Take-Exposure loop sized to tonight's remaining dark window
@@ -911,6 +905,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       showImagingRunFeedback(messenger, targetName: name, result: result);
     }
   }
+
 
   /// Compact local-time timing summary, e.g. "20:14–04:32 · 6.0 h dark ·
   /// 3.2 h left · transit 01:10". Null when the server sent no timing at all,
@@ -980,8 +975,10 @@ class _AdviceChip extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: color, fontWeight: FontWeight.w500),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     ),
@@ -1018,8 +1015,10 @@ class _ScoreBadge extends StatelessWidget {
       ),
       child: Text(
         '$s',
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w600),
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -1218,12 +1217,7 @@ final List<(RegExp, int)> _designationFamilies = [
   (RegExp(r'^IC ?\d+'), 2),
   (RegExp(r'^Sh2-\d+'), 3),
   (RegExp(r'^C \d+$'), 4),
-  (
-    RegExp(
-      r'^(Abell|Arp|vdB|LDN|LBN|Cr|Mel|Tr|Stock|Berkeley|King|Ced|RCW|Gum|Mi|Hen|PK|PN G) ',
-    ),
-    5,
-  ),
+  (RegExp(r'^(Abell|Arp|vdB|LDN|LBN|Cr|Mel|Tr|Stock|Berkeley|King|Ced|RCW|Gum|Mi|Hen|PK|PN G) '), 5),
   (RegExp(r'^B\d+$'), 5),
   (RegExp(r'^WR \d+'), 5),
 ];

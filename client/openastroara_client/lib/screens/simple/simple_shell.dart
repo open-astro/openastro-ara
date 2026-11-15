@@ -1735,13 +1735,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // The sky's pick, offered to Plan; above the plan
-                              // squares while they show.
+                              // squares while they show. #1778: upright, above
+                              // the deck and within its insets, never over it.
                               if (_sky && sel != null && !runSheet)
                                 Positioned(
-                                  left: 0,
-                                  right: 0,
+                                  left: deck ? kSimpleInset : 0,
+                                  right: deck ? kSimpleInset : 0,
                                   bottom: planSquares && !preflightPanel
                                       ? popoverBottom
+                                      : deck
+                                      ? aboveRow
                                       : kSimpleInset * 2 + 40,
                                   child: Center(
                                     child: _SkyPick(

@@ -30,14 +30,21 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 
 import '../../support/storage_fixture.dart';
 
+import 'package:openastroara/screens/simple/simple_plan_panel.dart'
+    show SimpleRunSheet;
 import 'package:openastroara/screens/simple/simple_rig_storage.dart'
     show SimpleStorageBlock;
+import 'package:openastroara/services/dso_catalog_service.dart'
+    show PlanningDso;
 import 'package:openastroara/services/tonight_sky_api.dart'
     show TonightSkyObject;
+import 'package:openastroara/state/album/album_art.dart'
+    show AlbumArt, albumManifestProvider;
+import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart'
+    show bundledCatalogProvider;
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart'
+    show PlanetariumSelection, planetariumSelectionProvider;
 import 'package:openastroara/widgets/inline_choices.dart' show InlineConfirm;
-import 'package:openastroara/widgets/sky_atlas/stellarium_view.dart'
-    show SkyPanelsLayout;
-import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
 const _store = StorageDevice(
   path: '/dev/sda1',
@@ -86,12 +93,14 @@ Future<ProviderContainer> _pump(
   bool phone = true,
   bool linkUp = true,
   Locale? locale,
+  List<Object> overrides = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
     overrides: [
+      ...overrides.cast(),
       companionPlatformProvider.overrideWithValue(
         phone ? TargetPlatform.iOS : TargetPlatform.linux,
       ),
@@ -250,96 +259,180 @@ void main() {
     );
   }
 
-  // Tonight's Sky in the Sky Atlas host: full width on an upright phone,
-  // docked at 360 px beside the sky in landscape.
-  Future<void> pumpHost(
-    WidgetTester tester,
-    Size size,
-    bool upright,
-    Locale locale,
-  ) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          tonightSkyProvider.overrideWith(
-            (ref) async => [
-              for (var i = 0; i < 12; i++)
-                TonightSkyObject(
-                  id: 'M$i',
-                  name: 'Target $i',
-                  type: 'galaxy',
-                  magnitude: 3.4,
-                  raDeg: 10.6847,
-                  decDeg: 41.269,
-                  altitudeDeg: 55,
-                  maxAltitudeDeg: 60,
-                ),
-            ],
-          ),
-        ],
-        child: MaterialApp(
-          locale: locale,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          // The host gives the layout the page's tight size, as the Expanded
-          // in StellariumView does.
-          home: Scaffold(
-            body: SizedBox.expand(
-              child: SkyPanelsLayout(
-                sky: const Expanded(child: SizedBox(key: Key('sky'))),
-                tonightOpen: true,
-                rotateOpen: false,
-                upright: upright,
-              ),
-            ),
-          ),
-        ),
+  // Simple Mode's sky surfaces on an upright phone (the full UI's Sky Atlas
+  // never mounts in Companion Mode): Plan's Tonight's best and its search,
+  // and the card of an object picked in the Sky Map, all above the deck.
+  final catalog = [
+    for (final (id, name, m) in const [
+      ('NGC0224', 'Andromeda Galaxy', 31),
+      ('NGC0598', 'Triangulum Galaxy', 33),
+      ('NGC2168', 'Shoe-Buckle Cluster', 35),
+      ('NGC1960', 'Pinwheel Cluster', 36),
+      ('NGC2099', 'Salt and Pepper Cluster', 37),
+      ('NGC1912', 'Starfish Cluster', 38),
+      ('NGC1976', 'Orion Nebula', 42),
+    ])
+      PlanningDso(
+        id: id,
+        name: name,
+        type: 'G',
+        magnitude: 4,
+        raDeg: 10,
+        decDeg: 20,
+        messierNum: m,
+        aliases: ['M $m'],
       ),
-    );
-    await tester.pump();
-  }
+  ];
 
   for (final (locale, scale) in _textSizes) {
     testWidgets(
-      "Tonight's Sky fills a 390 px phone in $locale at text ${scale}x without overflow",
+      "on a phone upright Plan's Tonight's best and its search fit above the deck and scroll to the end in $locale at text ${scale}x",
       skip: !hasFonts,
       (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await pumpHost(tester, _portrait, true, locale);
-        expect(tester.takeException(), isNull);
-        expect(tester.getSize(find.byType(TonightSkyPanel)).width, 390);
-        // Full height and scrolls to its end without overflow.
-        expect(tester.getSize(find.byType(TonightSkyPanel)).height, 844);
-        final list = find.descendant(
-          of: find.byType(TonightSkyPanel),
-          matching: find.byType(Scrollable),
+        const best = ['M31', 'NGC 7000', 'M33', 'M45'];
+        await _pump(
+          tester,
+          _portrait,
+          locale: locale,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => catalog),
+            tonightSkyProvider.overrideWith(
+              (ref) async => [
+                for (final n in best)
+                  TonightSkyObject(
+                    id: n,
+                    name: n,
+                    type: 'Galaxy',
+                    magnitude: 5,
+                    raDeg: 10,
+                    decDeg: 40,
+                    altitudeDeg: 55,
+                    maxAltitudeDeg: 70,
+                  ),
+              ],
+            ),
+          ],
         );
-        final position = tester.state<ScrollableState>(list.first).position;
+        // The section row swipes: past 1x text Plan starts off screen.
+        final plan = find.byKey(const Key('companion-section-plan'));
+        await tester.ensureVisible(plan);
+        await tester.pump();
+        await tester.tap(plan);
+        await tester.pump(const Duration(milliseconds: 500));
+        final sheet = find.byType(SimpleRunSheet);
+        expect(sheet, findsOneWidget);
+        await tester.enterText(
+          find.byKey(const Key('simple-run-search')),
+          'm3',
+        );
+        await tester.pump();
+        await tester.pump();
+        final rows = [
+          for (final n in best) find.byKey(Key('simple-run-suggestion-$n')),
+          // The search's matches as you type: five at most.
+          for (var i = 0; i < 5; i++)
+            find.byKey(Key('simple-run-suggestion-$i')),
+        ];
+        final r = tester.getRect(sheet);
+        final deck = tester.getRect(find.byKey(const Key('companion-deck')));
+        expect(r.left, greaterThanOrEqualTo(0));
+        expect(r.right, lessThanOrEqualTo(390));
+        expect(r.bottom, lessThanOrEqualTo(deck.top));
+        for (final row in rows) {
+          expect(row, findsOneWidget);
+          final box = tester.getRect(row);
+          expect(box.left, greaterThanOrEqualTo(r.left), reason: '$row');
+          expect(box.right, lessThanOrEqualTo(r.right), reason: '$row');
+        }
+        final scroll = find
+            .descendant(of: sheet, matching: find.byType(Scrollable))
+            .first;
+        final position = tester.state<ScrollableState>(scroll).position;
         expect(position.maxScrollExtent, greaterThan(0));
-        // The list's length is an estimate until its end is built: drag twice.
-        for (var i = 0; i < 2; i++) {
-          await tester.drag(list.first, const Offset(0, -5000));
+        for (var i = 0; i < 3; i++) {
+          await tester.drag(scroll, const Offset(0, -3000));
           await tester.pump(const Duration(milliseconds: 500));
         }
-        expect(position.extentAfter, 0);
+        expect(position.extentAfter, lessThan(0.5));
+        expect(tester.getRect(sheet).bottom, lessThanOrEqualTo(deck.top));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'on a phone upright the Sky Map card with Image this fits above the deck in $locale at text ${scale}x',
+      skip: !hasFonts,
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final c = await _pump(
+          tester,
+          _portrait,
+          locale: locale,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => catalog),
+            // With its Art: the card at its widest.
+            albumManifestProvider.overrideWith(
+              (ref) async => const {
+                'M42': AlbumArt(
+                  asset: 'assets/album/art/m042.webp',
+                  credit: 'ESO',
+                  licence: 'CC BY 4.0',
+                ),
+              },
+            ),
+          ],
+        );
+        await tester.tap(find.byKey(const Key('simple-sky')));
+        await tester.pump();
+        c
+            .read(planetariumSelectionProvider.notifier)
+            .set(
+              const PlanetariumSelection(
+                name: 'Orion Nebula',
+                kind: 'Nebula',
+                raHours: 5.59,
+                decDeg: -5.39,
+                raJ2000Hours: 5.59,
+                decJ2000Deg: -5.39,
+                altDeg: 30,
+                maxAltDeg: 45,
+                designations: ['NAME Orion Nebula', 'M 42', 'NGC 1976'],
+              ),
+            );
+        await tester.pump();
+        await tester.pump(); // the manifest and the catalog resolve
+        expect(find.byKey(const Key('simple-sky-art')), findsOneWidget);
+        final image = find.byKey(const Key('simple-sky-image-this'));
+        final card = tester.getRect(
+          find.ancestor(of: image, matching: find.byType(SimplePanel)).first,
+        );
+        final deck = tester.getRect(find.byKey(const Key('companion-deck')));
+        expect(card.left, greaterThanOrEqualTo(kSimpleInset));
+        expect(card.right, lessThanOrEqualTo(390 - kSimpleInset));
+        expect(card.bottom, lessThanOrEqualTo(deck.top));
+        // A tap on Image this lands on it, and opens Plan's sheet above the
+        // deck.
+        final box = tester.renderObject(image);
+        expect(
+          tester
+              .hitTestOnBinding(tester.getCenter(image))
+              .path
+              .any((e) => e.target == box),
+          isTrue,
+        );
+        await tester.tap(image);
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          tester.getRect(find.byType(SimpleRunSheet)).bottom,
+          lessThanOrEqualTo(deck.top),
+        );
         expect(tester.takeException(), isNull);
       },
     );
   }
-
-  testWidgets(
-    "Tonight's Sky in landscape still docks at 360 px beside the sky",
-    (tester) async {
-      await pumpHost(tester, const Size(844, 390), false, const Locale('en'));
-      expect(tester.takeException(), isNull);
-      expect(tester.getSize(find.byType(TonightSkyPanel)).width, 360);
-      expect(tester.getSize(find.byKey(const Key('sky'))).width, 844 - 360);
-    },
-  );
 
   Finder anyOverlay() => find.byWidgetPredicate(
     (w) => w is Dialog || w is BottomSheet || w is SnackBar || w is AlertDialog,
