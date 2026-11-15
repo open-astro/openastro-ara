@@ -452,6 +452,59 @@ namespace OpenAstroAra.Test {
             Assert.That(await AutofocusSweepService.FocuserTravelAsync(focusers.Object, CancellationToken.None), Is.Null);
         }
 
+        [Test]
+        public async Task A_failed_run_says_why_through_LastFailure_and_a_later_success_clears_it() {
+            // #1892 — RunAutofocus retries, then tells the user what failed.
+            var connected = false;
+            var position = StartPosition;
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = connected, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(Profiles(Settings()).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position - (StartPosition - 150)) / 100.0, 2), 42));
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            Assert.That(svc.LastFailure, Is.Not.Null);
+            Assert.That(svc.LastFailure!.Reason, Does.Contain("focuser is not connected"));
+            Assert.That(svc.LastFailure.AtFocuserLimit, Is.False);
+            Assert.That(svc.LastFailure.Cancelled, Is.False);
+
+            connected = true;
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+            Assert.That(svc.LastFailure, Is.Null);
+        }
+
+        [Test]
+        public async Task A_curve_minimum_below_the_focusers_zero_fails_with_AtFocuserLimit_set() {
+            // #1892 — best focus lies past the travel stop at 0: the sweep clamps there, the sharpest probe is
+            // the one at 0 and the fit is out of range, so the failure blames the focuser travel.
+            var position = 500;
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position + 300) / 100.0, 2), 42),
+                coarseMetric: (_, _) => 1000.0 + position);
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            Assert.That(svc.LastFailure, Is.Not.Null);
+            Assert.That(svc.LastFailure!.Reason, Does.Contain("inRange=False"));
+            Assert.That(svc.LastFailure.AtFocuserLimit, Is.True);
+        }
+
+        [TestCase(0, 0, 12_000, 100, true)]       // best probe at the focuser's zero
+        [TestCase(11_900, 0, 12_000, 100, true)]  // top probe sits one overshoot below the maximum
+        [TestCase(5_000, 0, 12_000, 100, false)]  // mid-travel
+        [TestCase(null, 0, 12_000, 100, false)]   // no edge minimum
+        [TestCase(0, int.MinValue, int.MaxValue, 100, false)] // unbounded travel has no limit
+        public void AtTravelLimit_is_true_only_when_the_best_probe_sits_at_a_focuser_end(int? edge, int min, int max, int approach, bool expected) =>
+            Assert.That(AutofocusSweepService.AtTravelLimit(edge, (min, max), approach), Is.EqualTo(expected));
+
         [TestCase(100, 400)]       // lowest probe would be below 0
         [TestCase(5_000, 5_000)]   // already inside
         [TestCase(11_900, 11_500)] // overshoot above the top probe would pass 12000

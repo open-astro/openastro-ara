@@ -218,7 +218,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         }
     }
 
+    private volatile AutofocusFailure? _lastFailure;
+
+    /// <inheritdoc/>
+    public AutofocusFailure? LastFailure => _lastFailure;
+
     private async Task<bool> RunGatedAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        _lastFailure = null;
         // The run's own cancellation source, linked to the caller's token: the §59.12 Smart Focus pane cancels a
         // run through the tracker (POST /api/v1/autofocus/cancel) whoever started it — the focuser endpoint's
         // job or a sequence instruction — and that must cancel the sweep, not just the job polling it.
@@ -254,6 +260,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // step fails per its own policy instead of tearing the whole sequence down. The focuser
             // endpoint's job reads the tracker and lands as `cancelled` (see RunAutofocus).
             await RecordCancelledAsync(settings.RestorePositionOnFailure ? startPosition : null).ConfigureAwait(false);
+            _lastFailure = new AutofocusFailure("the autofocus run was cancelled", Cancelled: true);
             return false;
         } catch (OperationCanceledException) {
             await RecordCancelledAsync(settings.RestorePositionOnFailure ? startPosition : null).ConfigureAwait(false);
@@ -457,7 +464,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 return await FailAsync(fit is null
                     ? "curve fit produced no result"
                     : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}, need ≥ {MinFitRSquared}) — widen the sweep or re-centre focus manually",
-                    restoreOnFailure, startPosition).ConfigureAwait(false);
+                    restoreOnFailure, startPosition, atFocuserLimit: AtTravelLimit(EdgeMinimum(fitPoints), travel, approach)).ConfigureAwait(false);
             }
 
             var best = (int)Math.Round(fit.BestPosition);
@@ -511,20 +518,29 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         }
     }
 
+    /// <summary>True when the sweep's sharpest probe is the one at the focuser's own end of travel (its
+    /// minimum or, allowing the approach overshoot above the top probe, its maximum): focus lies beyond the
+    /// focuser's reach, so only re-zeroing or moving it out helps.</summary>
+    internal static bool AtTravelLimit(int? edge, (int Min, int Max) travel, int approach) =>
+        edge is int e && ((travel.Min != int.MinValue && e <= travel.Min)
+            || (travel.Max != int.MaxValue && (long)e + approach >= travel.Max));
+
     private async Task<bool> RejectAsync(string reason) {
         LogSweepRejected(reason);
         _tracker?.Fail(reason, null);
         await PublishFailedAsync(reason, null).ConfigureAwait(false);
+        _lastFailure = new AutofocusFailure(reason);
         return false;
     }
 
-    private async Task<bool> FailAsync(string reason, bool restore, int startPosition, bool alreadyLogged = false) {
+    private async Task<bool> FailAsync(string reason, bool restore, int startPosition, bool alreadyLogged = false, bool atFocuserLimit = false) {
         if (!alreadyLogged) {
             LogSweepFailed(reason);
         }
         await RestoreAsync(restore, startPosition, CancellationToken.None).ConfigureAwait(false);
         _tracker?.Fail(reason, restore ? startPosition : null);
         await PublishFailedAsync(reason, restore ? startPosition : null).ConfigureAwait(false);
+        _lastFailure = new AutofocusFailure(reason, atFocuserLimit);
         return false;
     }
 

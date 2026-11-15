@@ -14,6 +14,8 @@
 
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,8 +29,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Autofocus {
     /// Ported as a first-class type so NINA exports round-trip instead of degrading to an
     /// <see cref="UnknownSequenceItem"/>. EXECUTION runs the real §59.8 V-curve sweep through
     /// <see cref="IAutofocusExecutor"/> (probe positions → HFR → curve fit → move to best); a
-    /// failed or unwired sweep fails this step loudly rather than silently skipping focus
-    /// (which would quietly ruin the subsequent frames).
+    /// failed sweep is retried (3 attempts in all), then parks the run awaiting the user; an unwired
+    /// sweep, or a failure with no pause gate, fails this step loudly rather than silently skipping
+    /// focus (which would quietly ruin the subsequent frames).
     /// </summary>
     [JsonObject(MemberSerialization.OptIn)]
     public class RunAutofocus : SequenceItem {
@@ -39,14 +42,46 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Autofocus {
 
         private readonly IAutofocusExecutor? autofocusExecutor;
 
+        /// <summary>A failed sweep is tried this many times in all before the run parks.</summary>
+        internal const int MaxAttempts = 3;
+
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (autofocusExecutor is null) {
                 throw new SequenceEntityFailedException("Autofocus is not wired for sequence execution on this daemon.");
             }
-            var ok = await autofocusExecutor.RunAutofocusAsync(progress, token);
-            if (!ok) {
-                // Continuing out of focus would quietly ruin every subsequent frame.
-                throw new SequenceEntityFailedException("Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
+            // #1892: imaging on out of focus ruins every frame. Retry, then park awaiting the user (the Start
+            // Guiding pattern; Resume tries again). Outside a run (no pause gate) the failure throws as before.
+            var gate = ItemUtility.GetPauseGate(Parent);
+            while (true) {
+                AutofocusFailure? failure = null;
+                for (var attempt = 1; attempt <= MaxAttempts; attempt++) {
+                    if (await autofocusExecutor.RunAutofocusAsync(progress, token)) {
+                        if (attempt > 1) {
+                            Logger.Info($"Autofocus: succeeded on attempt {attempt}");
+                        }
+                        return;
+                    }
+                    token.ThrowIfCancellationRequested();
+                    failure = autofocusExecutor.LastFailure;
+                    if (failure is { Cancelled: true }) {
+                        throw new SequenceEntityFailedException("Autofocus was cancelled.");
+                    }
+                    Logger.Warning($"Autofocus: attempt {attempt} of {MaxAttempts} failed: {failure?.Reason ?? "no reason reported"}");
+                }
+                var why = failure?.Reason ?? "see the daemon log (probe quality, curve fit, or focuser fault)";
+                var hint = failure is { AtFocuserLimit: true }
+                    ? " The best focus sat at the focuser's travel limit: re-zero the focuser or move it out, then press Resume."
+                    : " Check the focuser and sky, then press Resume to try again.";
+                if (gate is null) {
+                    throw new SequenceEntityFailedException($"Autofocus failed after {MaxAttempts} attempts: {why}.{hint}");
+                }
+                Logger.Warning($"Autofocus: failed {MaxAttempts} times ({why}) - pausing the run awaiting the user");
+                progress.Report(new ApplicationStatus() {
+                    Status = $"Autofocus failed {MaxAttempts} times ({why}).{hint}"
+                });
+                gate.RequestPause(PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+                Logger.Info("Autofocus: resumed - trying again");
             }
         }
 

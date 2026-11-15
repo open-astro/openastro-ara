@@ -41,5 +41,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Autofocus {
         /// restores the starting position per the profile's policy).
         /// </summary>
         Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>Why the last <see cref="RunAutofocusAsync"/> returned false; null when it succeeded or the
+        /// implementation does not say. Default-implemented so executors that only run a sweep (meridian flip,
+        /// filter offsets, fakes) need no change. Read right after the run returns: it describes the latest run.</summary>
+        AutofocusFailure? LastFailure => null;
     }
+
+    /// <summary>The cause of a failed sweep. <paramref name="Cancelled"/>: the user cancelled it (not a fault, never retried).
+    /// <paramref name="AtFocuserLimit"/>: the curve minimum sat at the focuser's travel limit.</summary>
+    public sealed record AutofocusFailure(string Reason, bool AtFocuserLimit = false, bool Cancelled = false);
 }

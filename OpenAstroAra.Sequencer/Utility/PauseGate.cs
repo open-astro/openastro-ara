@@ -55,7 +55,7 @@ namespace OpenAstroAra.Sequencer.Utility {
 
         /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
         /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
-        /// instruction's own wait for the user (a failed settle, a prompt) leaves it alone.</summary>
+        /// instruction's own wait for the user (a refused dither, a prompt) leaves it alone.</summary>
         public CancellationToken InterruptToken {
             get { lock (_lock) { return _interrupt.Token; } }
         }
