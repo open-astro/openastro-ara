@@ -855,6 +855,7 @@ class _FlipTile extends StatelessWidget {
           l10n.monitorFlipAt(simpleClockTime(f.at!)),
         ),
       'waiting_for_exposure' => (MonitorStatus.changing, l10n.monitorFlipComingUp, null, l10n.monitorFlipWaitsForFrame),
+      'waiting_for_meridian' => (MonitorStatus.changing, l10n.planWaitingForFlip, null, null),
       'flipping' => (MonitorStatus.working, l10n.deviceMoving, null, f.step),
       'auto_flip_off' => (MonitorStatus.off, null, null, l10n.monitorFlipOff),
       'none_tonight' => (MonitorStatus.normal, null, null, l10n.monitorFlipNone),
