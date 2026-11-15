@@ -107,6 +107,17 @@ void main() {
   });
 
   test(
+    'Custom horizon: an edit on the offline cache copy is ignored',
+    () async {
+      expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+      final cached = c.read(customHorizonProvider).value;
+      expect(cached, hasLength(1));
+      n().addPoint(45, 15);
+      expect(c.read(customHorizonProvider).value, same(cached));
+    },
+  );
+
+  test(
     'Custom horizon: Save over a copy another device replaced writes nothing',
     () async {
       final api = rig.api();
