@@ -98,6 +98,7 @@ abstract final class WsEventTypes {
   static const String profileUpdated = 'profile.updated';
   static const String clientSettingsUpdated = 'client_settings.updated';
   static const String serverRestartImminent = 'server.restart_imminent';
+  static const String serverRestartPending = 'server.restart_pending';
   static const String storageDevicesChanged = 'storage.devices_changed';
   static const String dataManagerDownloadProgress =
       'data_manager.download.progress';

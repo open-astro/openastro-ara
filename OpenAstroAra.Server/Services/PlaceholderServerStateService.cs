@@ -34,7 +34,8 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// <see cref="RestartAsync"/> restarts through <see cref="IDaemonRestarter"/>
 /// (a non-zero exit that <c>Restart=on-failure</c> turns into a restart);
-/// <see cref="RestartOnIdleAsync"/> is still a placeholder that does not restart.
+/// <see cref="RestartOnIdleAsync"/> does the same at once when no run is active, else remembers the
+/// request (in memory, one at a time), says <c>server.restart_pending</c> and restarts when the last run ends.
 /// </summary>
 public sealed class PlaceholderServerStateService : IServerStateService {
     private static readonly JsonDocument _empty = JsonDocument.Parse("{}");
@@ -44,6 +45,9 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private readonly INotificationService? _notifications;
     private readonly RigVersions _rig;
     private readonly IDaemonRestarter? _restarter;
+    private readonly ActiveRunSessionRegistry? _runs;
+    private readonly object _idleGate = new();
+    private string? _pendingReason;
 
     public PlaceholderServerStateService(
             IWsBroadcaster? broadcaster = null,
@@ -56,6 +60,8 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             IDaemonRestarter? restarter = null,
             ActiveRunSessionRegistry? runs = null) {
         _restarter = restarter;
+        _runs = runs;
+        if (runs is not null) runs.BecameIdle += (_, _) => OnRunsIdle();
         _broadcaster = broadcaster;
         _diagnostics = diagnostics;
         _notifications = notifications;
@@ -174,10 +180,13 @@ public sealed class PlaceholderServerStateService : IServerStateService {
 
     public Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct) {
         var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart", idempotencyKey);
+        ScheduleRestart(reason);
+        return Task.FromResult(accepted);
+    }
+
+    private void ScheduleRestart(string reason) {
         // §34.7 server.restart_imminent — give WILMA a heads-up before the
         // socket dies so the §60.9 reconnect-modal can show the right copy.
-        // Sent synchronously inside the request so it's broadcast before
-        // the 202 returns + before the daemon stops itself.
         _ = Task.Run(async () => {
             await EmitRestartImminentAsync(reason);
             // 2-second window matches the spec line 712 mapping; WILMA shows
@@ -185,7 +194,15 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             await Task.Delay(TimeSpan.FromSeconds(2));
             _restarter?.Restart();
         }, CancellationToken.None);
-        return Task.FromResult(accepted);
+    }
+
+    private void OnRunsIdle() {
+        string? reason;
+        lock (_idleGate) {
+            reason = _pendingReason;
+            _pendingReason = null;
+        }
+        if (reason is not null) ScheduleRestart(reason);
     }
 
     private async Task EmitRestartImminentAsync(string reason) {
@@ -203,11 +220,43 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         }
     }
 
-    public Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
-        // §34.7 restart-on-idle needs the §28 sequence-state check (don't
-        // restart mid-capture). Placeholder until §38 orchestrator is
-        // online + we can ask "is the daemon currently busy?".
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey));
+    public Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) {
+        var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey);
+        var runs = _runs;
+        var restartNow = false;
+        var announce = false;
+        lock (_idleGate) {
+            if (_pendingReason is not null) return Task.FromResult(accepted); // one pending restart, idempotent
+            if (runs is null || !runs.HasAny) {
+                restartNow = true;
+            } else {
+                _pendingReason = reason ?? "";
+                announce = true;
+            }
+        }
+        if (restartNow) ScheduleRestart(reason ?? "");
+        if (announce) {
+            _ = Task.Run(() => EmitRestartPendingAsync(reason ?? ""), CancellationToken.None);
+            // The last run may have exited between the check and the flag; BecameIdle fired for nobody then.
+            if (!runs!.HasAny) OnRunsIdle();
+        }
+        return Task.FromResult(accepted);
+    }
+
+    private async Task EmitRestartPendingAsync(string reason) {
+        if (_broadcaster is null) return;
+        var safeReason = reason.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var requestedAt = DateTimeOffset.UtcNow.ToString("O");
+        try {
+            var json = $$"""
+                {"reason":"{{safeReason}}","requested_utc":"{{requestedAt}}"}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            await _broadcaster.PublishAsync(WsEventCatalog.ServerRestartPending, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
+            // Broadcast best-effort.
+        }
+    }
 
     private static string ExtractGitSha() {
         var attr = typeof(PlaceholderServerStateService).Assembly

@@ -236,7 +236,7 @@ public partial class Program {
         // Phase 13.7 — placeholder IServerStateService for the §60.4 state
         // snapshot + §33.2.1 versions + §54 release notes. Restart exits the
         // daemon with code 75 and systemd's Restart=on-failure brings it back
-        // (§34.7); restart-on-idle is still a placeholder.
+        // (§34.7); restart-on-idle does the same at once when no run is active, else when the last run ends.
         builder.Services.AddSingleton<IDaemonRestarter, ExitDaemonRestarter>();
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
         // §27 single-client policy — owns the controlling session slot, the takeover
