@@ -91,7 +91,8 @@ public static class PhdEvents {
     /// pass them when a test needs pixel-vs-arcsec separation).
     /// </summary>
     public static JsonObject GuideStep(double raDistanceRaw, double decDistanceRaw, double dx = 0, double dy = 0,
-            int? frame = null, double decDurationMs = 0, string? decDirection = null) {
+            int? frame = null, double decDurationMs = 0, string? decDirection = null,
+            double raDurationMs = 0, string? raDirection = null) {
         var e = Base("GuideStep");
         e["dx"] = dx;
         e["dy"] = dy;
@@ -103,6 +104,10 @@ public static class PhdEvents {
         if (decDirection is not null) {
             e["DECDuration"] = decDurationMs; // PHD2 sends the length unsigned plus "North"/"South"
             e["DECDirection"] = decDirection;
+        }
+        if (raDirection is not null) {
+            e["RADuration"] = raDurationMs;
+            e["RADirection"] = raDirection;
         }
         return e;
     }

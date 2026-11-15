@@ -484,6 +484,7 @@ public partial class Program {
             guider.PaResidualLog = sp.GetService<IPaResidualLog>();
             guider.PolarAlignmentLog = sp.GetService<IPolarAlignmentLog>();
             guider.ActiveRunSession = () => sp.GetService<ActiveRunSessionRegistry>()?.Current;
+            guider.MountTracking = () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()?.GetInfo() is { Connected: true } t ? t.TrackingEnabled : null;
             guider.MountPointing = () => {
                 var info = sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>()?.GetInfo();
                 if (info is not { Connected: true } || !double.IsFinite(info.SiderealTime)) {

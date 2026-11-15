@@ -358,13 +358,23 @@ namespace OpenAstroAra.Test {
 
             // Guided frames from `firstFrame` on: the guider corrects 70 % of a steady Dec drift, PHD2's
             // way (a positive offset gets a South pulse). Frames are 2 s apart on the guider's clock.
-            public async Task GuideAsync(int firstFrame, int frames, double driftPxPerSec = 0.05) {
+            // raGrowthPx > 0: RA walks off by that much a frame with every RA pulse at the 2500 ms maximum
+            // (a mount that is not tracking), for the first raRunawayFrames frames; then RA is back on the star.
+            public async Task GuideAsync(int firstFrame, int frames, double driftPxPerSec = 0.05, double raGrowthPx = 0,
+                    int raRunawayFrames = int.MaxValue, double decGrowthPx = 0) {
                 var star = 0.0;
                 for (var frame = firstFrame; frame < firstFrame + frames; frame++) {
+                    var runaway = (raGrowthPx > 0 || decGrowthPx > 0) && frame - firstFrame < raRunawayFrames;
+                    var ra = runaway ? raGrowthPx * (frame - firstFrame + 1) : 0;
+                    if (decGrowthPx > 0 && runaway) {
+                        await Fake.BroadcastAsync(PhdEvents.GuideStep(0, decGrowthPx * (frame - firstFrame + 1), frame: frame,
+                            decDurationMs: 2500, decDirection: "South")).ConfigureAwait(false);
+                        continue;
+                    }
                     var pulseMs = 0.7 * Math.Abs(star) / (PaRatePxPerSec / 1000.0);
                     var direction = star > 0 ? "South" : "North";
-                    await Fake.BroadcastAsync(PhdEvents.GuideStep(0, star, frame: frame, decDurationMs: pulseMs, decDirection: direction))
-                        .ConfigureAwait(false);
+                    await Fake.BroadcastAsync(PhdEvents.GuideStep(ra, star, frame: frame, decDurationMs: pulseMs, decDirection: direction,
+                        raDurationMs: runaway ? 2500 : 0, raDirection: runaway ? "West" : null)).ConfigureAwait(false);
                     star += (direction == "South" ? -pulseMs : pulseMs) * PaRatePxPerSec / 1000.0 + driftPxPerSec * 2.0;
                 }
             }
@@ -375,7 +385,7 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static async Task<PaRig> StartPaRigAsync(bool withCalibration = true, bool lockShift = false, bool aoConnected = false) {
+        private static async Task<PaRig> StartPaRigAsync(bool withCalibration = true, bool lockShift = false, bool aoConnected = false, bool? mountTracking = null) {
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_pixel_scale", JsonValue.Create(PaScale));
@@ -403,6 +413,7 @@ namespace OpenAstroAra.Test {
             var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws) {
                 MountPointing = () => (41.5, -0.75),
+                MountTracking = () => mountTracking,
                 // Frames 2 s apart on the guider's clock, not the test's.
                 PaResidualStepTime = step => step.Frame * 2.0,
             };
@@ -473,6 +484,79 @@ namespace OpenAstroAra.Test {
             var status = await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(status!.Runtime.PaResidual?.Status, Is.EqualTo("done"), "a reconnecting client reads it from GET");
             Assert.That(rig.Fake.ReceivedMethods, Does.Contain("get_calibration_data"));
+        }
+
+        [Test]
+        public async Task A_run_whose_RA_runs_away_is_not_a_polar_alignment_measurement() {
+            // The mount is not tracking: RA walks off 0.25 px a frame and every RA pulse sits at the 2500 ms
+            // maximum without catching it, while the Dec drift is the #1311 test's. Not a PA signal.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20, raGrowthPx: 0.25).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Does.Not.Contain("done"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("guiding_not_holding"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_run_whose_Dec_runs_away_is_not_a_polar_alignment_measurement() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20, decGrowthPx: 0.5).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Does.Not.Contain("done"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("guiding_not_holding"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_short_pulse_limited_burst_that_recovers_is_still_measured() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20, raGrowthPx: 0.25, raRunawayFrames: 5).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True,
+                "five limited frames that recover are a gust, not a runaway");
+            Assert.That(rig.Statuses, Does.Not.Contain("unavailable"));
+            Assert.That(await WaitUntilAsync(() => rig.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
+        }
+
+        [Test]
+        public async Task A_settle_that_failed_during_the_run_makes_it_unavailable() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 3).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle")).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 4, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Does.Not.Contain("done"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("settle_timed_out"));
+            Assert.That(rig.Log.Rows, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_mount_that_is_not_tracking_when_the_run_starts_makes_it_unavailable() {
+            await using var rig = await StartPaRigAsync(mountTracking: false).ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True);
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Statuses, Does.Not.Contain("done"));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("mount_not_tracking"));
+            Assert.That(rig.Log.Rows, Is.Empty);
         }
 
         [Test]

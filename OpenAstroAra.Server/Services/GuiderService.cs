@@ -735,7 +735,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             // residual began at the assistant's start and the strip read "Guiding".
             return;
         }
-        FeedPaResidualMarker(guider, marker.Kind);
+        FeedPaResidualMarker(guider, marker.Kind, marker.Error);
         NoteStarLostMarker(marker.Kind);
     }
 
