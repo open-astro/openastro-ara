@@ -256,6 +256,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_star_found_far_from_lock_and_kept_there_pauses_the_run_after_the_grace() {
+            // No second loss: PHD2 reads Guiding again when the grace runs out, and the star is still 56 px off.
+            using var rig = new Rig(runActive: true, grace: RoomyWindow, recoverAfter: TimeSpan.FromMinutes(10));
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            var guider = rig.Service.RequireConnectedGuider();
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "mass changed")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.AppState?.State == "LostLock").ConfigureAwait(false), Is.True, "the loss never landed");
+            await fake.BroadcastAsync(PhdEvents.GuideStep(40.0, 40.0)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.AppState?.State == "Guiding").ConfigureAwait(false), Is.True, "the far step never landed");
+
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True,
+                "guiding 56 px from lock is not settled: the grace still runs out and pauses the run");
+        }
+
+        [Test]
         public async Task A_settled_stretch_restarts_when_the_error_leaves_the_settle_distance() {
             using var rig = new Rig(runActive: true, recoverAfter: TimeSpan.FromMinutes(10));
             rig.Profile.ActiveProfile.GuiderSettings.SettlePixels = 1.5;
