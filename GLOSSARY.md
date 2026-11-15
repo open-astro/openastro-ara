@@ -76,20 +76,20 @@ _Avoid_: error (for a declined command), rejection, failure (that is a device fa
 
 ### Presentations
 
-**Full UI**:
+**Advanced Mode**:
 The NINA-like presentation of the app, with every option in view. It is the default.
-_Avoid_: Advanced Mode, NINA Mode, Classic Mode
+_Avoid_: Full UI, NINA Mode, Classic Mode
 
 **Simple Mode**:
 The ASIAir-like presentation of the same app, which hides options without removing them or changing their values.
 _Avoid_: Easy Mode, Beginner Mode
 
 **Companion Mode**:
-The phone presentation of the app, built on Simple Mode, with no Full UI behind it.
+The phone presentation of the app, built on Simple Mode, with no Advanced Mode behind it.
 _Avoid_: Mobile Mode
 
 **Preflight**:
-Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment, guide), whose last step starts the Session. Not the Full UI's Checklist.
+Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment, guide), whose last step starts the Session. Not Advanced Mode's Checklist.
 _Avoid_: Night Setup, Guided Run, Autopilot
 
 **Screen**:
@@ -101,7 +101,7 @@ Simple Mode's full-screen, read-only view of the Session, opened from the left r
 _Avoid_: Cockpit, Night Watch, Dashboard
 
 **Prompt**:
-Something the rig's state asks or tells the person, shown as a dialog in the Full UI and as a pill in Simple Mode. Feedback for something the person just did is not a Prompt.
+Something the rig's state asks or tells the person, shown as a dialog in Advanced Mode and as a pill in Simple Mode. Feedback for something the person just did is not a Prompt.
 _Avoid_: notification, alert, toast, message (for a rig-raised one)
 
 ### Sky Album
