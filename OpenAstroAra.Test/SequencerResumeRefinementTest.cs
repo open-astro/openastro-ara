@@ -14,10 +14,15 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
+using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
@@ -75,11 +80,32 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        /// <summary>Simple Mode's shape (imaging_run_body.dart): a plain SequentialContainer named after
+        /// the target, a SlewScopeToRaDec holding its coordinates, two slow waits.</summary>
+        private static SequentialContainer SimpleBlock(string name, double raHours, double decDeg) {
+            var block = new SequentialContainer { Name = name };
+            block.Items.Add(new SlewScopeToRaDec(Mock.Of<ITelescopeMediator>(), Mock.Of<IGuiderMediator>()) {
+                Coordinates = new InputCoordinates(new Coordinates(Angle.ByHours(raHours), Angle.ByDegree(decDeg), Epoch.J2000)),
+            });
+            block.Items.Add(new WaitForTimeSpan { Time = 1 });
+            block.Items.Add(new WaitForTimeSpan { Time = 1 });
+            return block;
+        }
+
+        private static JsonElement SimpleModeBody(HeadlessSequencerFactory factory) {
+            var converter = new SequenceJsonConverter(factory);
+            var root = new SequentialContainer { Name = "resume-test root" };
+            root.Items.Add(SimpleBlock("M42", 5.5, -5.0));
+            using var doc = JsonDocument.Parse(converter.Serialize(root));
+            return doc.RootElement.Clone();
+        }
+
         private static (SequencerService Svc, Mock<ICenteringService> Centering, FakeAutofocus Af) BuildService(
                 Guid id, Func<CancellationToken, Task<PlateSolveResult>>? centerBehaviour = null,
-                IProfileStore? profileStore = null) {
+                IProfileStore? profileStore = null, Func<HeadlessSequencerFactory, JsonElement>? bodyBuilder = null,
+                Microsoft.Extensions.Logging.ILogger<SequencerService>? logger = null, bool wireServices = true) {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            var body = DsoBody(factory);
+            var body = (bodyBuilder ?? DsoBody)(factory);
             var store = new FakeStore(id, body);
             var centering = new Mock<ICenteringService>();
             centering.Setup(c => c.CenterOnTarget(
@@ -94,9 +120,9 @@ namespace OpenAstroAra.Test {
             var af = new FakeAutofocus();
             var svc = new SequencerService(new SequenceBodyDeserializer(factory),
                 ws: null, sequencesResolver: () => store, checkpoint: null,
-                profileStore: profileStore,
-                centeringResolver: () => centering.Object,
-                autofocusResolver: () => af);
+                profileStore: profileStore, logger: logger,
+                centeringResolver: wireServices ? () => centering.Object : null,
+                autofocusResolver: wireServices ? () => af : null);
             return (svc, centering, af);
         }
 
@@ -167,6 +193,163 @@ namespace OpenAstroAra.Test {
                 It.IsAny<CancellationToken>()), Times.Once,
                 "an absent body defaults to re-center on a same-target resume");
             Assert.That(af.Runs, Is.Zero, "refocus defaults to off");
+        }
+
+        [Test]
+        public async Task The_active_target_coordinates_of_a_paused_Simple_Mode_run_come_from_its_block() {
+            // The §35 safety auto-resume and the star-lost recovery read this; their tests mock the
+            // sequencer, so only this one runs the real finder through the service.
+            var id = Guid.NewGuid();
+            var (svc, _, _) = BuildService(id, bodyBuilder: SimpleModeBody);
+            await PauseAtBoundaryAsync(svc, id);
+
+            var coords = await svc.GetActiveTargetCoordinatesAsync(id, CancellationToken.None);
+
+            Assert.That(coords, Is.Not.Null);
+            Assert.That(coords!.RADegrees, Is.EqualTo(5.5 * 15).Within(1e-6));
+            Assert.That(coords.Dec, Is.EqualTo(-5.0).Within(1e-6));
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: false, Refocus: false), null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_Simple_Mode_run_recenters_on_Recenter_and_refocus() {
+            var id = Guid.NewGuid();
+            var (svc, centering, af) = BuildService(id, bodyBuilder: SimpleModeBody);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: true, Refocus: true), null, CancellationToken.None);
+
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            centering.Verify(c => c.CenterOnTarget(
+                It.Is<Coordinates>(k => Math.Abs(k.RADegrees - 5.5 * 15) < 1e-6 && Math.Abs(k.Dec + 5.0) < 1e-6),
+                It.IsAny<IProgress<PlateSolveProgress>?>(),
+                It.IsAny<IProgress<ApplicationStatus>?>(),
+                It.IsAny<CancellationToken>()), Times.Once,
+                "the paused Simple Mode target was re-centered on its slew coordinates before imaging continued");
+            Assert.That(af.Runs, Is.EqualTo(1), "the requested refocus ran");
+        }
+
+        [Test]
+        public void The_Simple_Mode_finder_follows_the_running_block_so_a_moved_on_plan_is_not_the_paused_target() {
+            var root = new SequentialContainer { Name = "root" };
+            var a = SimpleBlock("A", 1, 10);
+            var b = SimpleBlock("B", 2, 20);
+            root.Items.Add(a);
+            root.Items.Add(b);
+            a.Status = SequenceEntityStatus.RUNNING;
+            var paused = SequencerService.FindActiveTarget(root);
+            Assert.That(paused, Is.SameAs(a));
+
+            a.Status = SequenceEntityStatus.FINISHED;
+            b.Status = SequenceEntityStatus.RUNNING;
+
+            Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(b).And.Not.SameAs(paused),
+                "the resume's ReferenceEquals guard sees the plan moved on");
+            Assert.That(SequencerService.TargetCoordinates(b)!.Dec, Is.EqualTo(20).Within(1e-6));
+        }
+
+        [Test]
+        public void The_Simple_Mode_finder_skips_blocks_that_already_ran() {
+            var root = new SequentialContainer { Name = "root" };
+            var a = SimpleBlock("A", 1, 10);
+            var b = SimpleBlock("B", 2, 20);
+            root.Items.Add(a);
+            root.Items.Add(b);
+            a.Status = SequenceEntityStatus.FINISHED;
+            b.Status = SequenceEntityStatus.CREATED;
+
+            Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(b),
+                "a pause between two blocks must not slew back to the finished one");
+
+            b.Status = SequenceEntityStatus.FINISHED;
+            Assert.That(SequencerService.FindActiveTarget(root), Is.Null, "every block has run");
+        }
+
+        [Test]
+        public void The_Simple_Mode_finder_skips_a_disabled_block_between_a_finished_and_a_created_one() {
+            var root = new SequentialContainer { Name = "root" };
+            var a = SimpleBlock("A", 1, 10);
+            var b = SimpleBlock("B", 2, 20);
+            var c = SimpleBlock("C", 3, 30);
+            root.Items.Add(a);
+            root.Items.Add(b);
+            root.Items.Add(c);
+            a.Status = SequenceEntityStatus.FINISHED;
+            b.Status = SequenceEntityStatus.DISABLED;
+            c.Status = SequenceEntityStatus.CREATED;
+
+            Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(c),
+                "a disabled block never runs, so a resume must not re-center on it");
+        }
+
+        [Test]
+        public void A_Simple_Mode_block_without_a_slew_takes_its_coordinates_from_the_AboveHorizonCondition() {
+            var block = new SequentialContainer { Name = "framed" };
+            block.Items.Add(new CenterAndRotate());
+            var profile = new Mock<OpenAstroAra.Profile.Interfaces.IProfileService>();
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Latitude).Returns(-33.856784);
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Longitude).Returns(151.215297);
+            profile.SetupGet(p => p.ActiveProfile.AstrometrySettings.Elevation).Returns(42);
+            var condition = new OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition(profile.Object);
+            condition.Data.Coordinates = new InputCoordinates(new Coordinates(Angle.ByHours(3), Angle.ByDegree(-12), Epoch.J2000));
+            block.Conditions.Add(condition);
+            var root = new SequentialContainer { Name = "root" };
+            root.Items.Add(block);
+
+            var found = SequencerService.FindActiveTarget(root);
+
+            Assert.That(found, Is.SameAs(block));
+            Assert.That(SequencerService.TargetCoordinates(found!)!.Dec, Is.EqualTo(-12).Within(1e-6));
+        }
+
+        private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<SequencerService> {
+            private readonly System.Collections.Generic.List<string> _lines = new();
+            public string[] Lines { get { lock (_lines) { return _lines.ToArray(); } } }
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                lock (_lines) { _lines.Add(formatter(state, exception)); }
+            }
+        }
+
+        /// <summary>A root with no target block at all: nothing for the pause to snapshot.</summary>
+        private static JsonElement NoTargetBody(HeadlessSequencerFactory factory) {
+            var converter = new SequenceJsonConverter(factory);
+            var root = new SequentialContainer { Name = "resume-test root" };
+            root.Items.Add(new WaitForTimeSpan { Time = 1 });
+            root.Items.Add(new WaitForTimeSpan { Time = 1 });
+            using var doc = JsonDocument.Parse(converter.Serialize(root));
+            return doc.RootElement.Clone();
+        }
+
+        [Test]
+        public async Task A_resume_with_no_target_at_the_pause_logs_why_the_refinement_was_skipped() {
+            var id = Guid.NewGuid();
+            var log = new CapturingLogger();
+            var (svc, centering, _) = BuildService(id, bodyBuilder: NoTargetBody, logger: log);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(log.Lines, Has.Some.Contains("skipped").And.Contains("no target was found at the pause"));
+            centering.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public async Task A_resume_with_no_centering_service_wired_logs_why_the_refinement_was_skipped() {
+            var id = Guid.NewGuid();
+            var log = new CapturingLogger();
+            var (svc, _, _) = BuildService(id, logger: log, wireServices: false);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(log.Lines, Has.Some.Contains("skipped").And.Contains("no centering or autofocus service is wired"));
         }
 
         [Test]
