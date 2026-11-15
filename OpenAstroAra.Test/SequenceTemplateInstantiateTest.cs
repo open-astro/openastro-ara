@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -141,7 +142,10 @@ namespace OpenAstroAra.Test {
             var deserializer = new SequenceBodyDeserializer(HeadlessSequencerFactory.WithDefaults(), logger: null);
             var ok = deserializer.TryDeserialize(captured!.Body, out var container, out var error);
             Assert.That(ok, Is.True, $"engine could not load the instantiated body: {error}");
-            Assert.That(container, Is.Not.Null);
+            Assert.That(container, Is.TypeOf<SequentialContainer>(),
+                $"{templateName}: root must resolve to a real SequentialContainer, not Unknown*");
+            var (valid, reason) = SequenceSchemaValidator.Validate(captured.Body);
+            Assert.That(valid, Is.True, $"{templateName}: {reason}");
         }
     }
 }
