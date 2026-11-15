@@ -49,7 +49,7 @@ namespace OpenAstroAra.Server.Services;
 /// <c>IGuiderMediator</c> (see <c>GuiderService.Mediator.cs</c>; registered as the mediator in
 /// Program.cs, replacing <c>HeadlessGuiderMediator</c>).
 /// </summary>
-public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IDisposable {
+public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IGuideCapture, IDisposable {
 
     /// <inheritdoc/>
     public async Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct) {
@@ -188,6 +188,16 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, ID
 
     Task IGuideCameraPort.SetLeaseAsync(bool active, int? timeoutS, CancellationToken ct) =>
         RequireConnectedGuider().SetPaSessionAsync(active, timeoutS, ct);
+
+    // ADR 0016 rule 4: the custody and capture seam the Polar Align Routine and guide focus see.
+    IGuideCaptureLink IGuideCapture.ConnectedLink() => new Phd2GuideCaptureLink(RequireConnectedGuider());
+
+    string? IGuideCapture.OutOfStepReason => OutOfStepReason;
+
+    void IGuideCapture.ThrowIfOutOfStep(string operation) => ThrowIfOutOfStep(operation);
+
+    Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
+        Custody.TakeAsync(use, this, stop, ct);
 
     // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
     // Null in benches/tests → the pin is still re-read and corrected, nobody is told.
@@ -843,8 +853,9 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, ID
     internal static double? RmsArcsec(double? rmsPixels, double pixelScaleArcsecPerPx) =>
         rmsPixels is { } px && pixelScaleArcsecPerPx > 0 ? px * pixelScaleArcsecPerPx : null;
 
-    // internal (not private): the §45 PolarAlignService reuses this to reach the connected guider for the
-    // PA-session lease + solver captures, with the same connected-or-throw contract the guide ops use.
+    // internal (not private): the guider-side code (GuiderLiveService, this service's IGuideCapture seam) reaches
+    // the connected guider through this, with the connected-or-throw contract the guide ops use. The Polar Align
+    // Routine and guide focus no longer call it: they take the IGuideCapture seam (ADR 0016 rule 4).
     internal PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);

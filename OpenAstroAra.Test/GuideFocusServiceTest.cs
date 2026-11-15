@@ -15,9 +15,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
-using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -66,10 +66,6 @@ namespace OpenAstroAra.Test {
 
         private static DiscoveredDeviceDto Device(string host, string ip, int port, int number) =>
             new("id", "ASI220MM Mini", DeviceType.Camera, host, ip, port, number, false);
-
-        private static GuiderRecoveryCoordinator NewRecovery() =>
-            new(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(),
-                NullLogger<GuiderRecoveryCoordinator>.Instance);
 
         [Test]
         public void Validate_bounds_the_exposure_and_binning() {
@@ -128,8 +124,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Status_is_idle_before_a_start_and_start_refuses_a_disconnected_guider() {
-            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            var guider = new FakeGuideCapture { Connected = false };
             using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
 
             var status = svc.GetStatus();
@@ -147,8 +142,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Stop_when_nothing_runs_is_a_no_op() {
-            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            var guider = NewGuider();
             using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>());
             await svc.StopAsync();
             Assert.That(svc.GetStatus().State, Is.EqualTo("idle"));
@@ -182,11 +176,20 @@ namespace OpenAstroAra.Test {
 
         // ─── the loop itself, driven through the synthetic-frames seam (no guider daemon) ───
 
-        private static GuideFocusService NewLoopService(GuiderService guider, Func<(ushort[] Pixels, int Width, int Height)> frames) =>
-            new(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: frames);
+        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
-        private static GuiderService NewGuider() =>
-            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+        // The in-process fake stands in for the Guider (ADR 0016 rule 5): a frame is "captured" and "fetched" at once,
+        // the decoder hands back the synthetic star field, and a test waits on the fake's signals, never on a delay.
+        private static GuideFocusService NewLoopService(FakeGuideCapture guider, Func<(ushort[] Pixels, int Width, int Height)> frames,
+                Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null) {
+            var decoder = new Mock<IGuideFrameDecoder>();
+            decoder.Setup(d => d.Decode(It.IsAny<string>())).Returns(frames);
+            return new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(), decoder.Object, optics: optics) {
+                FailureBackoff = TimeSpan.Zero,
+            };
+        }
+
+        private static FakeGuideCapture NewGuider() => new();
 
         private static (ushort[] Pixels, int Width, int Height) StarFrame() {
             const int w = 128, h = 128;
@@ -197,22 +200,12 @@ namespace OpenAstroAra.Test {
             return (f, w, h);
         }
 
-        private static async Task<GuideFocusStatusDto> PollStatusAsync(GuideFocusService svc, Func<GuideFocusStatusDto, bool> done) {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            var status = svc.GetStatus();
-            while (!done(status)) {
-                await Task.Delay(20, cts.Token);
-                status = svc.GetStatus();
-            }
-            return status;
-        }
-
         private static GuideFocusSampleDto Sample(long seq, double hfr, int stars) =>
             new(seq, DateTimeOffset.UnixEpoch, hfr, stars, 20000, hfr * 2);
 
         [Test]
         public void Record_keeps_the_best_two_star_frame_caps_the_window_and_updates_the_frame() {
-            using var guider = NewGuider();
+            var guider = NewGuider();
             using var svc = NewLoopService(guider, StarFrame);
 
             svc.Record(Sample(1, 0.4, 1), jpeg: null);          // one "star" (a hot pixel) never counts as best
@@ -235,12 +228,14 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task The_loop_measures_frames_and_a_stop_ends_it() {
-            using var guider = NewGuider();
+            var guider = NewGuider();
             using var svc = NewLoopService(guider, StarFrame);
 
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
             Assert.That(svc.IsActive, Is.True);
-            var running = await PollStatusAsync(svc, s => s.Seq >= 2);
+            // The loop takes frame n + 1 only after it has recorded frame n: three captures means two measured frames.
+            await guider.WhenCapturedAsync(3).WaitAsync(Timeout);
+            var running = svc.GetStatus();
             Assert.That(running.State, Is.EqualTo("running"));
             Assert.That(running.Latest!.Stars, Is.GreaterThanOrEqualTo(2));
             Assert.That(running.BestHfr, Is.GreaterThan(0));
@@ -255,20 +250,25 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Repeated_frame_failures_end_the_loop_in_error_and_a_start_restarts_it() {
-            using var guider = NewGuider();
+            var guider = NewGuider();
             var fail = true;
-            using var svc = NewLoopService(guider, () => fail ? throw new InvalidOperationException("camera dropped") : StarFrame());
+            guider.Script = _ => Volatile.Read(ref fail) ? FakeCaptureOutcome.Failed : FakeCaptureOutcome.Saved;
+            using var svc = NewLoopService(guider, StarFrame);
 
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
-            var failed = await PollStatusAsync(svc, s => s.State != "running");
+            await guider.WhenLeaseReleasedAsync().WaitAsync(Timeout); // the loop gave up and handed the camera back
+            var failed = svc.GetStatus();
             Assert.That(failed.State, Is.EqualTo("error"));
             Assert.That(failed.Active, Is.False);
             Assert.That(failed.ConsecutiveFailures, Is.EqualTo(GuideFocusService.MaxConsecutiveFailures));
-            Assert.That(failed.Error, Does.Contain("camera dropped"));
+            Assert.That(failed.Error, Does.Contain(FakeGuideCapture.FailedCaptureError));
 
-            fail = false;
+            Volatile.Write(ref fail, false);
+            var failedCaptures = guider.Captures.Count;
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
-            var restarted = await PollStatusAsync(svc, s => s.Latest is not null);
+            await guider.WhenCapturedAsync(failedCaptures + 2).WaitAsync(Timeout);
+            var restarted = svc.GetStatus();
+            Assert.That(restarted.Latest, Is.Not.Null);
             Assert.That(restarted.State, Is.EqualTo("running"));
             Assert.That(restarted.Error, Is.Null);
             await svc.StopAsync();
@@ -319,7 +319,7 @@ namespace OpenAstroAra.Test {
             Assert.That(await EquipmentEndpoints.GuideCameraInUseAsync(Device("rc91.lan", "192.168.1.235", 6800, 0), connected.Object, profiles.Object, CancellationToken.None), Is.False);
             Assert.That(CameraConnectGuard.Detail(device, profiles.Object.GetPhd2Settings()), Does.Contain("Setup → Smart Focus"));
         }
-    
+
 
         [Test]
         public void Production_decoder_reads_a_guider_fits_through_the_daemons_own_cfitsio() {
@@ -347,7 +347,7 @@ namespace OpenAstroAra.Test {
                 Directory.Delete(dir, recursive: true);
             }
         }
-    
+
 
         [Test]
         public void ExpectedInFocusHfr_follows_the_guide_optics_and_never_drops_below_the_detector_floor() {
@@ -370,8 +370,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Status_carries_the_expected_hfr_from_the_optics_and_null_without_them() {
-            using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            var guider = NewGuider();
             using var withOptics = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
                 decoder: Mock.Of<IGuideFrameDecoder>(), optics: () => (120, 3.75, 0));
             Assert.That(withOptics.GetStatus().ExpectedHfr, Is.EqualTo(GuideFocusService.DetectorHfrFloorPx));
@@ -392,40 +391,44 @@ namespace OpenAstroAra.Test {
             Assert.That(GuideFocusService.MedianHfrOfBrightest(brightestFirst, 4), Is.EqualTo(1.0));
             Assert.That(GuideFocusService.MedianHfrOfBrightest(new List<DetectedStar>(), 12), Is.EqualTo(0.0));
         }
-    
+
 
         [Test]
         public async Task The_loop_stops_itself_once_the_median_hfr_has_held_under_the_target() {
             // An OAG at 2000 mm with a 200 mm aperture: the target is ~3.9 px × 1.3, and the synthetic
             // σ=1.8 stars read ~2 px, so the tenth measurable frame ends the run as "in_focus".
-            using var guider = NewGuider();
-            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
-                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (2000, 3.75, 200));
+            var guider = NewGuider();
+            // The gate holds the second run's first frame in the decoder, so its status is read before any frame lands.
+            using var gate = new ManualResetEventSlim(true);
+            using var svc = NewLoopService(guider, () => { gate.Wait(Timeout); return StarFrame(); }, optics: () => (2000, 3.75, 200));
 
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
-            var stopped = await PollStatusAsync(svc, s => s.State == "stopped");
+            await guider.WhenLeaseReleasedAsync().WaitAsync(Timeout); // the loop stopped itself and handed the camera back
+            var stopped = svc.GetStatus();
 
             Assert.That(stopped.StopReason, Is.EqualTo(GuideFocusService.StopReasonInFocus));
             Assert.That(stopped.Seq, Is.EqualTo(GuideFocusService.InFocusHoldFrames));
             Assert.That(svc.IsActive, Is.False);
 
             // A new run starts over: frame counter, trend and stop reason.
+            gate.Reset();
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
             var fresh = svc.GetStatus();
             Assert.That(fresh.Seq, Is.LessThan(GuideFocusService.InFocusHoldFrames));
             Assert.That(fresh.StopReason, Is.Null);
             Assert.That(fresh.Recent.Count, Is.LessThan(GuideFocusService.InFocusHoldFrames));
+            gate.Set();
             await svc.StopAsync();
         }
 
         [Test]
         public async Task The_loop_keeps_running_while_the_median_sits_above_the_target_or_without_a_target() {
-            using var guider = NewGuider();
+            var guider = NewGuider();
             // Guide scope at 120 mm: target 0.7 × 1.3 = 0.91 px, the σ=1.8 stars read ~2 px → never in focus.
-            using var svc = new GuideFocusService(guider, Mock.Of<IPolarAlignFrameFetcher>(),
-                decoder: Mock.Of<IGuideFrameDecoder>(), syntheticFrames: StarFrame, optics: () => (120, 3.75, 0));
+            using var svc = NewLoopService(guider, StarFrame, optics: () => (120, 3.75, 0));
             await svc.StartAsync(new GuideFocusStartRequestDto(GuideFocusService.MinExposureSec), CancellationToken.None);
-            var running = await PollStatusAsync(svc, s => s.Seq >= GuideFocusService.InFocusHoldFrames + 2);
+            await guider.WhenCapturedAsync(GuideFocusService.InFocusHoldFrames + 3).WaitAsync(Timeout);
+            var running = svc.GetStatus();
             Assert.That(running.State, Is.EqualTo("running"));
             Assert.That(running.StopReason, Is.Null);
             await svc.StopAsync();
@@ -436,7 +439,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void InFocusHeld_uses_the_median_so_single_bad_frames_do_not_reset_it() {
-            using var guider = NewGuider();
+            var guider = NewGuider();
             using var svc = NewLoopService(guider, StarFrame);
             // 10 frames at 0.8 with three seeing spikes at 1.6: median 0.8 ≤ 0.91.
             var hfrs = new[] { 0.8, 1.6, 0.8, 0.8, 1.6, 0.8, 0.8, 0.8, 1.6, 0.8 };
