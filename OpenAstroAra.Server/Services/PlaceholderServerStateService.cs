@@ -32,9 +32,9 @@ namespace OpenAstroAra.Server.Services;
 /// keeping them as opaque JSON here means each subsystem can publish
 /// its own summary shape without versioning churn on the outer DTO.
 ///
-/// <see cref="RestartAsync"/> and <see cref="RestartOnIdleAsync"/>
-/// throw — restarting the daemon from inside the daemon needs the
-/// systemd watchdog path, which is the §13 hardening pass.
+/// <see cref="RestartAsync"/> restarts through <see cref="IDaemonRestarter"/>
+/// (a non-zero exit that <c>Restart=on-failure</c> turns into a restart);
+/// <see cref="RestartOnIdleAsync"/> is still a placeholder that does not restart.
 /// </summary>
 public sealed class PlaceholderServerStateService : IServerStateService {
     private static readonly JsonDocument _empty = JsonDocument.Parse("{}");
@@ -43,6 +43,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private readonly IDiagnosticsService? _diagnostics;
     private readonly INotificationService? _notifications;
     private readonly RigVersions _rig;
+    private readonly IDaemonRestarter? _restarter;
 
     public PlaceholderServerStateService(
             IWsBroadcaster? broadcaster = null,
@@ -51,7 +52,9 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             IGuiderService? guider = null,
             IEquipmentSelectionStore? selections = null,
             IAlpacaManagementClient? alpaca = null,
-            IProfileStore? profiles = null) {
+            IProfileStore? profiles = null,
+            IDaemonRestarter? restarter = null) {
+        _restarter = restarter;
         _broadcaster = broadcaster;
         _diagnostics = diagnostics;
         _notifications = notifications;
@@ -173,13 +176,13 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         // §34.7 server.restart_imminent — give WILMA a heads-up before the
         // socket dies so the §60.9 reconnect-modal can show the right copy.
         // Sent synchronously inside the request so it's broadcast before
-        // the 202 returns + before the systemctl spawn fires.
+        // the 202 returns + before the daemon stops itself.
         _ = Task.Run(async () => {
             await EmitRestartImminentAsync(reason);
             // 2-second window matches the spec line 712 mapping; WILMA shows
             // the restart banner during this gap.
             await Task.Delay(TimeSpan.FromSeconds(2));
-            TrySpawnSystemctl("restart", "openastroara-server");
+            _restarter?.Restart();
         }, CancellationToken.None);
         return Task.FromResult(accepted);
     }
@@ -216,22 +219,5 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         var info = attr.InformationalVersion;
         var plus = info.IndexOf('+');
         return plus >= 0 && plus + 1 < info.Length ? info[(plus + 1)..] : "unknown";
-    }
-
-    private static void TrySpawnSystemctl(string verb, string unit) {
-        try {
-            var psi = new System.Diagnostics.ProcessStartInfo("systemctl", $"{verb} {unit}") {
-                UseShellExecute = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
-                CreateNoWindow = true,
-            };
-            System.Diagnostics.Process.Start(psi);
-        } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException or IOException) {
-            // No systemctl in PATH (non-Linux dev runs, or restricted
-            // environment without polkit permission). Swallow — the 202
-            // was already sent and there's nothing useful to log from a
-            // process that's about to be killed anyway.
-        }
     }
 }
