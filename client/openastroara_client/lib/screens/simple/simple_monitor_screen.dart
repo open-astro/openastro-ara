@@ -308,7 +308,7 @@ class _Grid extends StatelessWidget {
         padding: EdgeInsets.only(bottom: stop + _kGap),
         children: [
           for (final (tile, height) in [
-            (now, 220.0),
+            (now, 380.0),
             (target, 150.0),
             (flip, 150.0),
             if (safety != null) (safety, strip),
@@ -676,12 +676,20 @@ class _NowTile extends StatelessWidget {
         Text(task, style: kSimpleReading, maxLines: 2, overflow: TextOverflow.ellipsis),
         if (sub != null) Text(sub, style: _dim),
         const SizedBox(height: AraSpace.s8),
+        // A phone (#1915): Up next goes under the state block, so the countdown
+        // and the state word keep the tile's whole width.
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(child: big),
-            const SizedBox(width: AraSpace.s16),
-            SizedBox(width: 190, child: _UpNext(s: s)),
-          ]),
+          child: MediaQuery.sizeOf(context).width < kMonitorMinWidth
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Expanded(child: Align(alignment: Alignment.centerLeft, child: big)),
+                  const SizedBox(height: AraSpace.s8),
+                  _UpNext(s: s),
+                ])
+              : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  Expanded(child: big),
+                  const SizedBox(width: AraSpace.s16),
+                  SizedBox(width: 190, child: _UpNext(s: s)),
+                ]),
         ),
         if (n.filters.isNotEmpty) ...[
           const SizedBox(height: AraSpace.s8),
