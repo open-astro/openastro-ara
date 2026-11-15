@@ -111,21 +111,28 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task RestartOnIdleAsync_does_not_restart_when_a_run_starts_inside_the_notice_window() {
             var fake = new FakeRestarter();
+            var ws = new RecordingBroadcaster();
             var active = 0;
-            var seq = SequencerWith(() => active);
+            var seq = SequencerWith(() => Volatile.Read(ref active));
             var runs = new ActiveRunSessionRegistry();
-            var svc = new PlaceholderServerStateService(restarter: fake, runs: runs, sequencerResolver: () => seq.Object);
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs, sequencerResolver: () => seq.Object);
             var session = Guid.NewGuid();
             runs.Enter(session);
             await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+            runs.Exit(session); // the run ends; its auto-flats run is not on yet
 
-            runs.Exit(session); // the run ends ...
-            active = 1;          // ... and its auto-flats run starts at once
-            await Task.Delay(3500);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!ws.Has("server.restart_imminent") && DateTime.UtcNow < deadline) await Task.Delay(20);
+            Assert.That(ws.Has("server.restart_imminent"), Is.True, "the 2 s notice must start once no run is on");
 
+            Volatile.Write(ref active, 1); // the flats run starts inside the 2 s notice window
+            await Task.Delay(3000);
             Assert.That(fake.Calls, Is.EqualTo(0), "the flats run must not be killed");
-            active = 0;
+
+            Volatile.Write(ref active, 0);
             Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+            await Task.Delay(500);
+            Assert.That(fake.Calls, Is.EqualTo(1));
         }
 
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime {
