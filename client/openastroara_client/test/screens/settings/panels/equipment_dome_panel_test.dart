@@ -34,15 +34,20 @@ class _FakeProfileApi extends ProfileApi {
   DomeSettings settings;
   final puts = <DomeSettings>[];
   @override
-  Future<DomeSettings> getDomeSettings() async => settings;
+  Future<({DomeSettings value, String? etag})> getDomeSection() async =>
+      (value: settings, etag: '"dome-v1"');
   @override
-  Future<DomeSettings> putDomeSettings(DomeSettings value) async {
+  Future<({DomeSettings value, String? etag})> putDomeSection(
+    DomeSettings value, {
+    String? ifMatch,
+  }) async {
     puts.add(value);
     final offset = value.scopePositionNorthSouthMm.abs();
     if (offset > value.domeRadiusMm) {
       throw StateError('The scope sits outside the dome');
     }
-    return settings = value;
+    settings = value;
+    return (value: value, etag: '"dome-v1"');
   }
 }
 
@@ -284,6 +289,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Mount axis length (mm)'), findsNothing);
+    // A new scope loads the dome again: the first one's copy is kept while it lives.
+    await tester.pumpWidget(const SizedBox());
     await _pump(
       tester,
       _status(),

@@ -112,3 +112,11 @@ class FakeSectionRig implements HttpClientAdapter {
         },
       );
 }
+
+/// Wait (real time, at most 2 s) until [done]: the notifiers load on their
+/// own, over a client that answers on later event-loop turns.
+Future<void> settle(bool Function() done) async {
+  for (var i = 0; i < 200 && !done(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}

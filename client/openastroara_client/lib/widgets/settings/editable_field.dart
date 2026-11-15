@@ -218,7 +218,9 @@ class SettingsDropdownRow<T> extends StatelessWidget {
 class SettingsSwitchRow extends StatelessWidget {
   final String label;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// Null disables the switch (a section that is not loaded yet).
+  final ValueChanged<bool>? onChanged;
   final String? hint;
   final String? helpKey;
   const SettingsSwitchRow({

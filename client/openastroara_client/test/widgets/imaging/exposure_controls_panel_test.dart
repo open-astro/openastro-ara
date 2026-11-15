@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/models/camera_status.dart';
@@ -135,7 +136,10 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 class _FixedLabels extends FilterWheelLabelsNotifier {
   static List<String> labels = const [];
   @override
-  FilterWheelLabels build() => FilterWheelLabels(labels: labels);
+  LoadedSection<FilterWheelLabels> build() => LoadedSection(
+    value: FilterWheelLabels(labels: labels),
+    source: SectionSource.rig,
+  );
 }
 
 class _FixedCameraStatus extends CameraStatusNotifier {

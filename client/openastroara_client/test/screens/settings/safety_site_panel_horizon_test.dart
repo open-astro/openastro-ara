@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/safety_site_panel.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+
+import '../../support/fake_section_rig.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -25,9 +28,15 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     late ProviderContainer container;
+    final api = FakeSectionRig({
+      'custom-horizon': {'points': []},
+    }).api();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [savedServerServiceProvider.overrideWithValue(_NoServers())],
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(_NoServers()),
+          profileApiProvider.overrideWithValue(api),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);
@@ -48,7 +57,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     return container;
   }
 
@@ -93,14 +102,14 @@ void main() {
     container.read(customHorizonProvider.notifier).addPoint(120, 35);
     container.read(customHorizonProvider.notifier).updateAt(0, azimuthDeg: 200);
     await tester.pump();
-    final points = container.read(customHorizonProvider);
+    final points = container.read(customHorizonProvider).value!;
     expect(points.first.azimuthDeg, 200);
     expect(points.last.azimuthDeg, 120);
     expect(find.byKey(const ValueKey('horizon_point_1')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('remove_horizon_point_0')));
     await tester.pump();
-    expect(container.read(customHorizonProvider), hasLength(1));
-    expect(container.read(customHorizonProvider).single.azimuthDeg, 120);
+    expect(container.read(customHorizonProvider).value!, hasLength(1));
+    expect(container.read(customHorizonProvider).value!.single.azimuthDeg, 120);
   });
 }

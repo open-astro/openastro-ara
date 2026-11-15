@@ -1,15 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/section_load.dart';
+
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 
 void main() {
   group('NotificationsSettingsNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      container = ProviderContainer();
+      await loadSection(
+        container,
+        notificationsSettingsProvider,
+        'notifications',
+      );
+    });
     tearDown(() => container.dispose());
 
     test('defaults — channels + triggers on, tokens empty', () {
-      final s = container.read(notificationsSettingsProvider);
+      final s = container.read(notificationsSettingsProvider).value!;
       expect(s.inAppBanner, isTrue);
       expect(s.osDesktop, isTrue);
       expect(s.soundAlert, isTrue);
@@ -27,33 +37,43 @@ void main() {
     test('channel toggles flip state independently', () {
       final n = container.read(notificationsSettingsProvider.notifier);
       n.setInAppBanner(false);
-      expect(container.read(notificationsSettingsProvider).inAppBanner, isFalse);
-      expect(container.read(notificationsSettingsProvider).osDesktop, isTrue);
+      expect(
+        container.read(notificationsSettingsProvider).value!.inAppBanner,
+        isFalse,
+      );
+      expect(
+        container.read(notificationsSettingsProvider).value!.osDesktop,
+        isTrue,
+      );
     });
 
     test('setPushoverToken trims whitespace', () {
       final n = container.read(notificationsSettingsProvider.notifier);
       n.setPushoverToken('  abc-123  ');
-      expect(container.read(notificationsSettingsProvider).pushoverToken,
-          'abc-123');
+      expect(
+        container.read(notificationsSettingsProvider).value!.pushoverToken,
+        'abc-123',
+      );
     });
 
     test('setTelegramBotToken trims whitespace', () {
       final n = container.read(notificationsSettingsProvider.notifier);
       n.setTelegramBotToken('\tbot-xyz\n');
-      expect(container.read(notificationsSettingsProvider).telegramBotToken,
-          'bot-xyz');
+      expect(
+        container.read(notificationsSettingsProvider).value!.telegramBotToken,
+        'bot-xyz',
+      );
     });
 
     test('§54 second-half channel fields default empty, trim, and copyWith-preserve', () {
-      final s0 = container.read(notificationsSettingsProvider);
+      final s0 = container.read(notificationsSettingsProvider).value!;
       expect(s0.pushoverUserKey, '');
       expect(s0.telegramChatId, '');
 
       final n = container.read(notificationsSettingsProvider.notifier);
       n.setPushoverUserKey('  user-key-1 ');
       n.setTelegramChatId(' 12345\n');
-      final s = container.read(notificationsSettingsProvider);
+      final s = container.read(notificationsSettingsProvider).value!;
       expect(s.pushoverUserKey, 'user-key-1');
       expect(s.telegramChatId, '12345');
 
@@ -73,7 +93,7 @@ void main() {
       n.setOnAutofocusFailed(false);
       n.setOnPlateSolveFailed(false);
       n.setOnDiskSpaceLow(false);
-      final s = container.read(notificationsSettingsProvider);
+      final s = container.read(notificationsSettingsProvider).value!;
       expect(s.onSequenceComplete, isFalse);
       expect(s.onSequencePaused, isFalse);
       expect(s.onCriticalDiagnostic, isFalse);

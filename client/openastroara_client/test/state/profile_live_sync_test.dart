@@ -20,6 +20,8 @@ import 'package:openastroara/state/settings/dome_settings_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
+import '../support/section_load.dart';
+
 /// The rig's profile endpoints, as far as this test needs: the site section
 /// (whatever name it currently holds), the profile list, and any other
 /// section's stored JSON in [stored].
@@ -230,7 +232,7 @@ void main() {
       final c = _container(rig);
       // A screen holds them; wait for their first read from the rig.
       await _until(
-        () => c.read(filterWheelLabelsProvider).labelAt(2) == 'OIII',
+        () => c.read(filterWheelLabelsProvider).value?.labelAt(2) == 'OIII',
       );
       rig.stored[labels] = {
         'labels': ['Ha', 'Sulphur', 'SII'],
@@ -238,7 +240,7 @@ void main() {
 
       await applyProfileUpdated(c, 'filter-wheel');
 
-      expect(c.read(filterWheelLabelsProvider).labelAt(2), 'Sulphur');
+      expect(c.read(filterWheelLabelsProvider).value!.labelAt(2), 'Sulphur');
     },
   );
 
@@ -246,24 +248,26 @@ void main() {
     const fan = '/api/v1/profile/cooling-fan';
     final rig = _Rig()..stored[fan] = {'device_id': 'switch-1', 'port_id': 0};
     final c = _container(rig);
-    expect((await c.read(coolingFanProvider.future)).portId, 0);
+    await settleLoaded(c, coolingFanProvider);
+    expect(c.read(coolingFanProvider).value!.portId, 0);
     rig.stored[fan] = {'device_id': 'switch-1', 'port_id': 3};
 
     await applyProfileUpdated(c, 'cooling-fan');
 
-    expect((await c.read(coolingFanProvider.future)).portId, 3);
+    expect(c.read(coolingFanProvider).value!.portId, 3);
   });
 
   test('profile.updated for dome reads the dome geometry again', () async {
     const dome = '/api/v1/profile/dome';
     final rig = _Rig()..stored[dome] = {'dome_radius_mm': 1000};
     final c = _container(rig);
-    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1000);
+    await settleLoaded(c, domeSettingsProvider);
+    expect(c.read(domeSettingsProvider).value!.domeRadiusMm, 1000);
     rig.stored[dome] = {'dome_radius_mm': 1500};
 
     await applyProfileUpdated(c, 'dome');
 
-    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1500);
+    expect(c.read(domeSettingsProvider).value!.domeRadiusMm, 1500);
   });
 
   test(

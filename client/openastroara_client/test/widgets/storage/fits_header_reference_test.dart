@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/filenames_settings_state.dart';
+
+import '../../support/section_load.dart';
+
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/storage/fits_header_reference.dart';
 
@@ -112,6 +115,9 @@ void main() {
       (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
+    await tester.runAsync(
+      () => loadSection(container, filenamesSettingsProvider, 'filenames'),
+    );
     container.read(filenamesSettingsProvider.notifier).setHeaderSite(false);
     // Real coordinates exist, but the group is off — the sheet must show the
     // generic example, not data it just said won't be written.

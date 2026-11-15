@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
@@ -139,7 +140,8 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   _SeededElectronics(this._v);
   final CameraElectronics _v;
   @override
-  CameraElectronics build() => _v;
+  LoadedSection<CameraElectronics> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -153,7 +155,8 @@ class _SeededFilters extends FilterSetNotifier {
   _SeededFilters(this._v);
   final FilterSetSettings _v;
   @override
-  FilterSetSettings build() => _v;
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSkyModel extends SkyModelCalibrationNotifier {

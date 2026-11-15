@@ -18,6 +18,7 @@ import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import 'wizard_equipment_apply.dart';
+import '../../state/settings/migrated_sections.dart';
 import 'wizard_save.dart';
 import 'wizard_screens.dart';
 import '../../widgets/adaptive_controls.dart';
@@ -182,6 +183,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     String? error;
     try {
       await saveWizardProfile(api, draft);
+      resetMigratedSections(ref.read);
     } on ProfileSaveTransportFailure {
       // #1137 — the profile may already exist on this server (savedProfileId):
       // keep the draft pinned to it and replay the sections on reconnect.

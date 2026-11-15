@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
+import '../profile_management_state.dart' show profileApiProvider;
 
 /// ADR 0015 — a client profile section is loaded before it is saved.
 ///
@@ -107,11 +108,52 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   /// Same as [load], for the live-sync table.
   Future<void> hydrateFromServer(ProfileApi api) => load(api);
 
-  /// Apply an edit; ignored while there is nothing loaded to edit.
+  /// Apply an edit; ignored unless the value came from the rig. An offline
+  /// cache seed is read-only: an edit on it would be replaced by the retry-load
+  /// of the next Save, which would then report Saved (ADR 0015).
   void edit(T Function(T current) change) {
     final v = state.value;
-    if (v == null) return;
+    if (v == null || !state.canSave) return;
     state = state.copyWith(value: change(v));
+  }
+
+  /// Offline planning: show the cache's copy of the section (readable, never
+  /// saved). A copy from the rig, or a load still in flight, is never replaced.
+  void seed(T value) {
+    if (state.canSave) return;
+    state = LoadedSection(value: value, source: SectionSource.cache);
+  }
+
+  /// Entry point of the pre-ADR 0015 notifiers: the same as [save], which
+  /// the Simple Mode callers keep using until slice 3 moves them. No [api]:
+  /// the active rig's.
+  Future<void> persistToServer([ProfileApi? api]) => save(api ?? _activeApi());
+
+  ProfileApi _activeApi() =>
+      ref.read(profileApiProvider) ??
+      (throw StateError('Not connected — connect to your rig to save this.'));
+
+  /// Save [next] whole (a picker, a form): the old value stays when the rig
+  /// refuses, so the screen never shows a copy the rig does not hold.
+  Future<void> replaceAndSave(T next) async {
+    final before = state.value;
+    try {
+      await editAndSave((_) => next);
+    } catch (_) {
+      if (before != null) edit((_) => before);
+      rethrow;
+    }
+  }
+
+  /// An auto-save row (a switch that saves on change): edit, then save.
+  /// Throws [SectionNotLoadedException] without editing when nothing was
+  /// loaded, so a refused toggle never shows as set.
+  Future<void> editAndSave(T Function(T current) change) {
+    if (!state.canSave) {
+      return Future.error(SectionNotLoadedException(state.lastFailure));
+    }
+    edit(change);
+    return save(_activeApi());
   }
 
   /// Back to not loaded (rig or profile changed).
@@ -154,5 +196,28 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     });
     _saveChain = run;
     return run;
+  }
+}
+
+/// A section read outside Settings (no panel opens it first): loads itself
+/// once the notifier is built and whenever it is back to not loaded with no
+/// failure, such as after the reset point (migrated_sections.dart) or when the
+/// rig connects. A failed load stays failed until Retry or the next Save.
+abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
+  @override
+  LoadedSection<T> build() {
+    listenSelf((_, next) => _loadIfDue(next));
+    ref.listen(profileApiProvider, (_, _) => _loadIfDue(state));
+    Future.microtask(() => ref.mounted ? _loadIfDue(state) : null);
+    return const LoadedSection();
+  }
+
+  void _loadIfDue(LoadedSection<T> now) {
+    final api = ref.read(profileApiProvider);
+    if (api != null &&
+        now.source == SectionSource.notLoaded &&
+        now.lastFailure == null) {
+      load(api);
+    }
   }
 }

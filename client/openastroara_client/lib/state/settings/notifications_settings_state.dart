@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
@@ -85,42 +85,46 @@ class NotificationsSettings {
       );
 }
 
-class NotificationsSettingsNotifier extends Notifier<NotificationsSettings>
-    with SettingsSyncMixin<NotificationsSettings> {
-  @override
-  NotificationsSettings build() => const NotificationsSettings();
-
-  void setInAppBanner(bool v) => state = state.copyWith(inAppBanner: v);
-  void setOsDesktop(bool v) => state = state.copyWith(osDesktop: v);
-  void setSoundAlert(bool v) => state = state.copyWith(soundAlert: v);
+class NotificationsSettingsNotifier
+    extends SectionNotifier<NotificationsSettings> {
+  void setInAppBanner(bool v) => edit((c) => c.copyWith(inAppBanner: v));
+  void setOsDesktop(bool v) => edit((c) => c.copyWith(osDesktop: v));
+  void setSoundAlert(bool v) => edit((c) => c.copyWith(soundAlert: v));
   void setPushoverToken(String s) =>
-      state = state.copyWith(pushoverToken: s.trim());
+      edit((c) => c.copyWith(pushoverToken: s.trim()));
   void setPushoverUserKey(String s) =>
-      state = state.copyWith(pushoverUserKey: s.trim());
+      edit((c) => c.copyWith(pushoverUserKey: s.trim()));
   void setTelegramChatId(String s) =>
-      state = state.copyWith(telegramChatId: s.trim());
+      edit((c) => c.copyWith(telegramChatId: s.trim()));
   void setTelegramBotToken(String s) =>
-      state = state.copyWith(telegramBotToken: s.trim());
+      edit((c) => c.copyWith(telegramBotToken: s.trim()));
   void setOnSequenceComplete(bool v) =>
-      state = state.copyWith(onSequenceComplete: v);
+      edit((c) => c.copyWith(onSequenceComplete: v));
   void setOnSequencePaused(bool v) =>
-      state = state.copyWith(onSequencePaused: v);
+      edit((c) => c.copyWith(onSequencePaused: v));
   void setOnCriticalDiagnostic(bool v) =>
-      state = state.copyWith(onCriticalDiagnostic: v);
-  void setOnSafetyEvent(bool v) => state = state.copyWith(onSafetyEvent: v);
+      edit((c) => c.copyWith(onCriticalDiagnostic: v));
+  void setOnSafetyEvent(bool v) => edit((c) => c.copyWith(onSafetyEvent: v));
   void setOnAutofocusFailed(bool v) =>
-      state = state.copyWith(onAutofocusFailed: v);
+      edit((c) => c.copyWith(onAutofocusFailed: v));
   void setOnPlateSolveFailed(bool v) =>
-      state = state.copyWith(onPlateSolveFailed: v);
-  void setOnDiskSpaceLow(bool v) => state = state.copyWith(onDiskSpaceLow: v);
+      edit((c) => c.copyWith(onPlateSolveFailed: v));
+  void setOnDiskSpaceLow(bool v) => edit((c) => c.copyWith(onDiskSpaceLow: v));
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getNotificationsSettings());
+  @override
+  Future<Tagged<NotificationsSettings>> fetch(ProfileApi api) =>
+      api.getNotificationsSection();
 
-  Future<NotificationsSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putNotificationsSettings(sent));
+  @override
+  Future<Tagged<NotificationsSettings>> send(
+    ProfileApi api,
+    NotificationsSettings value,
+    String? etag,
+  ) => api.putNotificationsSection(value, ifMatch: etag);
 }
 
 final notificationsSettingsProvider =
-    NotifierProvider<NotificationsSettingsNotifier, NotificationsSettings>(
-        NotificationsSettingsNotifier.new);
+    NotifierProvider<
+      NotificationsSettingsNotifier,
+      LoadedSection<NotificationsSettings>
+    >(NotificationsSettingsNotifier.new);

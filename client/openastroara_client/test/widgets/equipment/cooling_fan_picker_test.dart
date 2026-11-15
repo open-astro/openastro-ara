@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/profile_list.dart';
@@ -18,6 +19,8 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/cooling_fan_prompt_listener.dart';
 import 'package:openastroara/widgets/equipment/cooling_fan_picker.dart';
+
+import '../../support/section_load.dart';
 
 SwitchDevice _box({
   String id = 'box',
@@ -55,13 +58,17 @@ class _Api extends ProfileApi {
   CoolingFan current = CoolingFan.none;
   final puts = <CoolingFan>[];
   @override
-  Future<CoolingFan> getCoolingFan() async => current;
+  Future<({CoolingFan value, String? etag})> getCoolingFanSection() async =>
+      (value: current, etag: null);
   @override
-  Future<CoolingFan> putCoolingFan(CoolingFan value) async {
+  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
+    CoolingFan value, {
+    String? ifMatch,
+  }) async {
     final e = refuse;
     if (e != null) throw e;
     puts.add(value);
-    return current = value;
+    return (value: current = value, etag: null);
   }
 }
 
@@ -246,7 +253,7 @@ void main() {
       coolingFanProvider,
       (_, _) {},
     ); // nothing but a listener keeps a rebuilt provider running
-    await c.read(coolingFanProvider.future);
+    await settleLoaded(c, coolingFanProvider);
     await c
         .read(coolingFanProvider.notifier)
         .choose(const CoolingFan(deviceId: 'box', portId: 1));
@@ -372,5 +379,12 @@ class _SlowFan extends CoolingFanNotifier {
   _SlowFan(this.gate);
   final Completer<CoolingFan> gate;
   @override
-  Future<CoolingFan> build() => gate.future;
+  LoadedSection<CoolingFan> build() {
+    gate.future.then((v) {
+      if (ref.mounted) {
+        state = LoadedSection(value: v, source: SectionSource.rig);
+      }
+    });
+    return const LoadedSection();
+  }
 }

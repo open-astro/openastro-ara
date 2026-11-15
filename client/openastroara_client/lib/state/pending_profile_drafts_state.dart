@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../screens/wizard/wizard_save.dart';
+import 'settings/migrated_sections.dart';
 import '../services/pending_profile_draft_service.dart';
 import '../services/profile_api.dart';
 import '../services/ws_event_stream.dart';
@@ -192,6 +193,7 @@ final pendingProfileDraftReplayProvider = Provider<void>((ref) {
       if (applied + failed + held + rejected == 0) return; // nothing pending
       if (applied > 0) {
         ref.invalidate(profileManagementProvider);
+        resetMigratedSections(ref.read);
       }
       unawaited(ref.read(pendingProfileDraftsProvider.notifier).refresh());
       final parts = <String>[

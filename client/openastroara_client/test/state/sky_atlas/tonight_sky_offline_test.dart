@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -39,14 +40,16 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   _SeededElectronics(this._v);
   final CameraElectronics _v;
   @override
-  CameraElectronics build() => _v;
+  LoadedSection<CameraElectronics> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededFilters extends FilterSetNotifier {
   _SeededFilters(this._v);
   final FilterSetSettings _v;
   @override
-  FilterSetSettings build() => _v;
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSite extends SiteSettingsNotifier {

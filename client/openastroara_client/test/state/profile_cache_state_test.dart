@@ -17,6 +17,8 @@ import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
+import '../support/section_load.dart';
+
 /// ProfileApi double serving fixed section payloads for the capture path.
 class _FakeApi extends ProfileApi {
   _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
@@ -104,25 +106,32 @@ void main() {
     // The staleness stamp the offline picker surfaces ("gear cached N days ago").
     expect(
         DateTime.tryParse(
-            (sections['p1'] as Map)['captured_utc']?.toString() ?? ''),
-        isNotNull);
-  });
+          (sections['p1'] as Map)['captured_utc']?.toString() ?? '',
+        ),
+        isNotNull,
+      );
+    },
+  );
 
-  test('#1137: the custom horizon is captured and seeds the offline notifier', () async {
-    await captureProfileCache(cache, _FakeApi(), list);
-    final stored = await cache.load();
-    final horizon = ((stored['sections'] as Map)['p1'] as Map)['custom_horizon'] as Map;
-    expect((horizon['points'] as List), hasLength(2));
+  test(
+    '#1137: the custom horizon is captured and seeds the offline notifier',
+    () async {
+      await captureProfileCache(cache, _FakeApi(), list);
+      final stored = await cache.load();
+      final horizon =
+          ((stored['sections'] as Map)['p1'] as Map)['custom_horizon'] as Map;
+      expect((horizon['points'] as List), hasLength(2));
 
-    final container = ProviderContainer(overrides: [
-      profileCacheServiceProvider.overrideWithValue(cache),
-    ]);
-    addTearDown(container.dispose);
-    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    final seeded = container.read(customHorizonProvider);
-    expect(seeded.map((p) => p.azimuthDeg), [90, 180]);
-    expect(seeded.map((p) => p.altitudeDeg), [25, 12]);
-  });
+      final container = ProviderContainer(
+        overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+      );
+      addTearDown(container.dispose);
+      expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+      final seeded = container.read(customHorizonProvider).value!;
+      expect(seeded.map((p) => p.azimuthDeg), [90, 180]);
+      expect(seeded.map((p) => p.altitudeDeg), [25, 12]);
+    },
+  );
 
   test('#1264: a failed unguided read is best-effort — the rest is captured, no unguided key', () async {
     await captureProfileCache(cache, _FailingUnguidedApi(), list);
@@ -132,43 +141,70 @@ void main() {
     expect(p1.containsKey('unguided'), isFalse);
   });
 
-  test('#1264: a snapshot without an unguided section leaves a staged knob alone', () async {
-    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
-    final container = ProviderContainer(overrides: [
-      profileCacheServiceProvider.overrideWithValue(cache),
-    ]);
-    addTearDown(container.dispose);
-    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('pixel');
-    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    expect(container.read(unguidedSettingsProvider).priorToleranceBasis, 'pixel',
-        reason: 'an older snapshot must not reset the knob to defaults');
-  });
+  test(
+    '#1264: a snapshot without an unguided section leaves a staged knob alone',
+    () async {
+      await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+      await cache.saveSections('p1', {
+        'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      });
+      final container = ProviderContainer(
+        overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+      );
+      addTearDown(container.dispose);
+      await loadSection(container, unguidedSettingsProvider, 'unguided');
+      container
+          .read(unguidedSettingsProvider.notifier)
+          .setPriorToleranceBasis('pixel');
+      expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+      expect(
+        container.read(unguidedSettingsProvider).value!.priorToleranceBasis,
+        'pixel',
+        reason: 'an older snapshot must not reset the knob to defaults',
+      );
+    },
+  );
 
-  test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
-    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
-    final container = ProviderContainer(overrides: [
-      profileCacheServiceProvider.overrideWithValue(cache),
-    ]);
-    addTearDown(container.dispose);
-    container.read(customHorizonProvider.notifier).addPoint(45, 30);
-    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
-    expect(container.read(customHorizonProvider), hasLength(1), reason: 'an older snapshot must not wipe a staged skyline');
-  });
+  test(
+    '#1137: a snapshot without a horizon leaves the notifier alone',
+    () async {
+      await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+      await cache.saveSections('p1', {
+        'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      });
+      final container = ProviderContainer(
+        overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+      );
+      addTearDown(container.dispose);
+      await loadSection(container, customHorizonProvider, 'custom-horizon', {
+        'points': [],
+      });
+      container.read(customHorizonProvider.notifier).addPoint(45, 30);
+      expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+      expect(
+        container.read(customHorizonProvider).value!,
+        hasLength(1),
+        reason: 'an older snapshot must not wipe a staged skyline',
+      );
+    },
+  );
 
-  test('cachedProfilesProvider reflects capture, including hasSections',
-      () async {
-    await captureProfileCache(cache, _FakeApi(), list);
-    final c = ProviderContainer(overrides: [
-      profileCacheServiceProvider.overrideWithValue(cache),
-    ]);
-    addTearDown(c.dispose);
-    final cached = await c.read(cachedProfilesProvider.future);
-    expect(cached.activeId, 'p1');
-    expect(cached.profiles.map((p) => (p.id, p.hasSections)),
-        [('p1', true), ('p2', false)]);
-  });
+  test(
+    'cachedProfilesProvider reflects capture, including hasSections',
+    () async {
+      await captureProfileCache(cache, _FakeApi(), list);
+      final c = ProviderContainer(
+        overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+      );
+      addTearDown(c.dispose);
+      final cached = await c.read(cachedProfilesProvider.future);
+      expect(cached.activeId, 'p1');
+      expect(cached.profiles.map((p) => (p.id, p.hasSections)), [
+        ('p1', true),
+        ('p2', false),
+      ]);
+    },
+  );
 
   test('seedPlanningFromCache hydrates the planning notifiers', () async {
     await captureProfileCache(cache, _FakeApi(), list);
@@ -181,8 +217,8 @@ void main() {
     expect(c.read(opticsSettingsProvider).focalLengthMm, 382);
     expect(c.read(imagingDefaultsProvider).defaultGain, 101);
     expect(c.read(siteSettingsProvider).siteName, 'South GA');
-    expect(c.read(filterSetProvider).filters.single.name, 'Ha');
-    expect(c.read(cameraElectronicsProvider).readNoiseE, 1.5);
+    expect(c.read(filterSetProvider).value!.filters.single.name, 'Ha');
+    expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',

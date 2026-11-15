@@ -624,7 +624,9 @@ Future<TargetPlanChoice?> _choosePlan(
 }) async {
   // The silent (no chooser) choice still guides when the rig has a guider —
   // an OSC rig with a guider skipped guiding for exactly this reason.
-  if (!planOptionsAvailable(container.read(filterSetProvider).filters)) {
+  if (!planOptionsAvailable(
+    container.read(filterSetProvider).value?.filters ?? const [],
+  )) {
     return TargetPlanChoice(guide: rig.guider);
   }
   // No widget (a container caller), or it is gone: the silent choice.
@@ -876,7 +878,9 @@ Future<void> _registerMosaicProject(
 
 /// #1264 — the Imaging → Unguided knobs as the run builder takes them.
 UnguidedOptions unguidedOptionsOf(ProviderContainer container) {
-  final u = container.read(unguidedSettingsProvider);
+  final u =
+      container.read(unguidedSettingsProvider).value ??
+      const UnguidedSettings();
   return UnguidedOptions(
     guardEnabled: u.guardEnabled,
     eccentricityTolerance: u.eccentricityTolerance,

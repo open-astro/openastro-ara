@@ -1,15 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:openastroara/state/profile_management_state.dart';
+
+import '../../support/fake_section_rig.dart';
+
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
 
 void main() {
   group('EquipmentConnectionNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      final rig = FakeSectionRig({
+        // The class default: every type connects at boot.
+        'equipment-connection': {
+          for (final k in ['guider', 'dome', 'weather']) k: true,
+        },
+      });
+      container = ProviderContainer(
+        overrides: [profileApiProvider.overrideWithValue(rig.api())],
+      );
+      // Self-loading: wait for the rig's copy.
+      container.read(equipmentConnectionProvider);
+      await settle(() => container.read(equipmentConnectionProvider).canSave);
+    });
     tearDown(() => container.dispose());
 
     test('defaults match playbook §52.1', () {
-      final s = container.read(equipmentConnectionProvider);
+      final s = container.read(equipmentConnectionProvider).value!;
       // Connect-by-default for core imaging chain.
       expect(s.autoConnect(EquipmentDeviceType.camera), isTrue);
       expect(s.autoConnect(EquipmentDeviceType.mount), isTrue);
@@ -25,11 +43,11 @@ void main() {
       expect(s.autoConnect(EquipmentDeviceType.weather), isTrue);
     });
 
-    test('setAutoConnect toggles independently per device type', () {
+    test('setAutoConnect toggles independently per device type', () async {
       final n = container.read(equipmentConnectionProvider.notifier);
-      n.setAutoConnect(EquipmentDeviceType.dome, false);
-      n.setAutoConnect(EquipmentDeviceType.camera, false);
-      final s = container.read(equipmentConnectionProvider);
+      await n.setAutoConnect(EquipmentDeviceType.dome, false);
+      await n.setAutoConnect(EquipmentDeviceType.camera, false);
+      final s = container.read(equipmentConnectionProvider).value!;
       expect(s.autoConnect(EquipmentDeviceType.dome), isFalse);
       expect(s.autoConnect(EquipmentDeviceType.camera), isFalse);
       // Other device types unchanged.

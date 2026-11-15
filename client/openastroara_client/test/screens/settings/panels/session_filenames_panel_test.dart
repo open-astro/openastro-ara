@@ -19,15 +19,17 @@ class _FakeRig extends FakeStorageApi {
   Object? failSite;
 
   @override
-  Future<FilenamesSettings> getFilenamesSettings() async {
+  Future<({FilenamesSettings value, String? etag})>
+  getFilenamesSection() async {
     if (failFilenames != null) throw failFilenames!;
-    return const FilenamesSettings();
+    return (value: const FilenamesSettings(), etag: '"f1"');
   }
 
   @override
-  Future<FilenamesSettings> putFilenamesSettings(
-    FilenamesSettings value,
-  ) async => value;
+  Future<({FilenamesSettings value, String? etag})> putFilenamesSection(
+    FilenamesSettings value, {
+    String? ifMatch,
+  }) async => (value: value, etag: '"f1"');
 
   @override
   Future<SiteSettings> getSiteSettings() async {
@@ -79,12 +81,16 @@ void main() {
       await _pump(tester, api);
       expect(find.textContaining('Not loaded'), findsOneWidget);
       expect(find.textContaining('Loading'), findsNothing);
-      // Storage answers on Retry; the filenames failure is still on screen.
+      // Storage answers on Retry; the filenames failure is still on screen,
+      // and so is Retry, until Filenames answers too.
       api.failGet = null;
       await tester.tap(find.byKey(const Key('section-retry')));
       await tester.pumpAndSettle();
+      expect(find.textContaining('Filenames did not answer.'), findsOneWidget);
+      api.failFilenames = null;
+      await tester.tap(find.byKey(const Key('section-retry')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('section-retry')), findsNothing);
-      expect(find.text('Filenames did not answer.'), findsOneWidget);
     },
   );
 

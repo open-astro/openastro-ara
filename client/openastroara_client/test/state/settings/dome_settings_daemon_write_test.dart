@@ -97,15 +97,20 @@ void main() {
     c.listen(domeSettingsProvider, (_, _) {});
     await c.read(savedServersProvider.future);
     await c.read(domeProvider.future);
-    final loaded = await c.read(domeSettingsProvider.future);
+    // The dome settings load themselves from the rig.
+    await settle(() => c.read(domeSettingsProvider).canSave);
+    final loaded = c.read(domeSettingsProvider).value!;
 
     await c.read(domeProvider.notifier).followMount(true);
-    await Future<void>.delayed(Duration.zero);
+    // The follow switch reloads the section: wait for the daemon's new tag.
+    await settle(
+      () => c.read(domeSettingsProvider).etag == rig.etagOf(_section),
+    );
     final tagAfterFollow = rig.etagOf(_section);
     try {
       await c
           .read(domeSettingsProvider.notifier)
-          .save(loaded.copyWith(azimuthToleranceDegrees: 4));
+          .apply(loaded.copyWith(azimuthToleranceDegrees: 4));
     } catch (_) {}
 
     expect(rig.ifMatches, [tagAfterFollow]);

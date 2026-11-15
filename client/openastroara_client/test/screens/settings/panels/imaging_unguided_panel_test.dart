@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/mount_spec_sheet.dart';
@@ -15,6 +16,8 @@ import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
+
+import '../../../support/fake_section_rig.dart';
 
 /// #1264 Imaging → Unguided: the stored ceiling, its ladder and Recalibrate.
 class _Fixed extends TrackingCalibrationNotifier {
@@ -64,6 +67,9 @@ Future<_Fixed> _pump(
       overrides: [
         activeServerProvider.overrideWithValue(
           connected ? const AraServer(hostname: 'rig', port: 5555) : null,
+        ),
+        profileApiProvider.overrideWithValue(
+          FakeSectionRig({'unguided': <String, Object?>{}}).api(),
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
         mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null, neverLoads: mountLoading)),
@@ -176,24 +182,55 @@ void main() {
     final element = tester.element(find.byType(ImagingUnguidedPanel));
     final container = ProviderScope.containerOf(element);
 
-    await tester.tap(find.descendant(
-        of: find.widgetWithText(SettingsSwitchRow, 'Unguided exposure guard'), matching: find.byType(Switch)));
-    await tester.pumpAndSettle();
-    expect(container.read(unguidedSettingsProvider).guardEnabled, isFalse);
-    expect(find.textContaining("Off: the probe's ceiling holds"), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.widgetWithText(SettingsSwitchRow, 'Unguided exposure guard'),
+          matching: find.byType(Switch),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        container.read(unguidedSettingsProvider).value!.guardEnabled,
+        isFalse,
+      );
+      expect(
+        find.textContaining("Off: the probe's ceiling holds"),
+        findsOneWidget,
+      );
 
-    final ladder = find.widgetWithText(EditableTextRow, 'Probe ladder (s, shortest first)');
-    await tester.scrollUntilVisible(ladder, 200, scrollable: find.byType(Scrollable).first);
-    await tester.enterText(find.descendant(of: ladder, matching: find.byType(TextField)), '5, 20, 80');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(container.read(unguidedSettingsProvider).probeRungsSeconds, [5, 20, 80]);
+      final ladder = find.widgetWithText(
+        EditableTextRow,
+        'Probe ladder (s, shortest first)',
+      );
+      await tester.scrollUntilVisible(
+        ladder,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.descendant(of: ladder, matching: find.byType(TextField)),
+        '5, 20, 80',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(unguidedSettingsProvider).value!.probeRungsSeconds,
+        [5, 20, 80],
+      );
 
-    await tester.enterText(find.descendant(of: ladder, matching: find.byType(TextField)), '80, 5');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(container.read(unguidedSettingsProvider).probeRungsSeconds, [5, 20, 80], reason: 'a descending ladder is rejected');
-  });
+      await tester.enterText(
+        find.descendant(of: ladder, matching: find.byType(TextField)),
+        '80, 5',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(unguidedSettingsProvider).value!.probeRungsSeconds,
+        [5, 20, 80],
+        reason: 'a descending ladder is rejected',
+      );
+    },
+  );
 
   testWidgets('#1264 the spec-sheet row tells a missing mount and a loading one apart from "no sheet"', (tester) async {
     await _pump(tester, connected: true);

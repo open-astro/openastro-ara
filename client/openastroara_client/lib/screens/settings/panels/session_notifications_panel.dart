@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/alarm/safety_alarm_state.dart';
 import '../../../state/settings/notifications_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/notifications/notification_center.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §54 Notifications panel — editable form wired to
@@ -28,81 +24,30 @@ class SessionNotificationsPanel extends ConsumerStatefulWidget {
 
 class _SessionNotificationsPanelState
     extends ConsumerState<SessionNotificationsPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
-    try {
-      await ref
-          .read(notificationsSettingsProvider.notifier)
-          .hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () => _lastError = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionLoadSettings,
-          ),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [notificationsSettingsProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref
-          .read(notificationsSettingsProvider.notifier)
-          .persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _lastError = friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionSave,
-        ),
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(notificationsSettingsProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final s = ref.watch(notificationsSettingsProvider).value!;
     final n = ref.read(notificationsSettingsProvider.notifier);
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         // Choosing what you get told is only half of it — the other half is
         // reading it later, which lives behind the bell.
         Align(
@@ -162,7 +107,7 @@ class _SessionNotificationsPanelState
           hint: 'Empty = disabled',
           currentValue: s.pushoverToken,
           getCanonical: () =>
-              ref.read(notificationsSettingsProvider).pushoverToken,
+              ref.read(notificationsSettingsProvider).value!.pushoverToken,
           parse: n.setPushoverToken,
         ),
         EditableTextRow(
@@ -171,7 +116,7 @@ class _SessionNotificationsPanelState
           hint: 'Both Pushover fields must be set for pushes to send',
           currentValue: s.pushoverUserKey,
           getCanonical: () =>
-              ref.read(notificationsSettingsProvider).pushoverUserKey,
+              ref.read(notificationsSettingsProvider).value!.pushoverUserKey,
           parse: n.setPushoverUserKey,
         ),
         EditableTextRow(
@@ -180,7 +125,7 @@ class _SessionNotificationsPanelState
           hint: 'Empty = disabled',
           currentValue: s.telegramBotToken,
           getCanonical: () =>
-              ref.read(notificationsSettingsProvider).telegramBotToken,
+              ref.read(notificationsSettingsProvider).value!.telegramBotToken,
           parse: n.setTelegramBotToken,
         ),
         EditableTextRow(
@@ -189,7 +134,7 @@ class _SessionNotificationsPanelState
           hint: 'Both Telegram fields must be set for pushes to send',
           currentValue: s.telegramChatId,
           getCanonical: () =>
-              ref.read(notificationsSettingsProvider).telegramChatId,
+              ref.read(notificationsSettingsProvider).value!.telegramChatId,
           parse: n.setTelegramChatId,
         ),
         const SettingsSectionHeader('Trigger on'),

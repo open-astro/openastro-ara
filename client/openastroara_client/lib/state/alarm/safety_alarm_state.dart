@@ -237,7 +237,8 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
 
   void _startRinging() {
     if (!state.pending) return;
-    if (!ref.read(notificationsSettingsProvider).soundAlert) {
+    // Not loaded from the rig yet: ring (a safety alarm fails loud, not quiet).
+    if (ref.read(notificationsSettingsProvider).value?.soundAlert == false) {
       // Sound muted: stay pending — the modal remains up until Silence or
       // safety.safe, it just never rings.
       return;

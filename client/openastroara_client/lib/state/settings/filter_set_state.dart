@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
@@ -98,60 +98,69 @@ class FilterSetSettings {
   }
 }
 
-class FilterSetNotifier extends Notifier<FilterSetSettings>
-    with SettingsSyncMixin<FilterSetSettings> {
-  @override
-  FilterSetSettings build() => const FilterSetSettings();
-
+class FilterSetNotifier extends SectionNotifier<FilterSetSettings> {
   /// Add a filter. No-ops on an empty or duplicate (case-insensitive) name —
   /// mirroring the daemon's PUT validation so a rejected save can't desync.
   void addFilter(PlanningFilter filter) {
     final name = filter.name.trim();
-    if (name.isEmpty || _hasName(name)) return;
-    state = FilterSetSettings(
-        filters: [...state.filters, filter.copyWith(name: name)]);
+    if (name.isEmpty) return;
+    edit(
+      (c) => _hasName(c, name)
+          ? c
+          : FilterSetSettings(
+              filters: [
+                ...c.filters,
+                filter.copyWith(name: name),
+              ],
+            ),
+    );
   }
 
-  void removeAt(int index) {
-    if (index < 0 || index >= state.filters.length) return;
-    final next = [...state.filters]..removeAt(index);
-    state = FilterSetSettings(filters: next);
-  }
+  void removeAt(int index) => edit((c) {
+    if (index < 0 || index >= c.filters.length) return c;
+    return FilterSetSettings(filters: [...c.filters]..removeAt(index));
+  });
 
   /// Replace the filter at [index]. No-ops when the new name is empty or
   /// collides with a DIFFERENT entry's name.
   void updateAt(int index, PlanningFilter filter) {
-    if (index < 0 || index >= state.filters.length) return;
     final name = filter.name.trim();
     if (name.isEmpty) return;
-    for (var i = 0; i < state.filters.length; i++) {
-      if (i != index && state.filters[i].name.toLowerCase() == name.toLowerCase()) {
-        return;
+    edit((c) {
+      if (index < 0 || index >= c.filters.length) return c;
+      for (var i = 0; i < c.filters.length; i++) {
+        if (i != index &&
+            c.filters[i].name.toLowerCase() == name.toLowerCase()) {
+          return c;
+        }
       }
-    }
-    final next = [...state.filters];
-    next[index] = filter.copyWith(name: name);
-    state = FilterSetSettings(filters: next);
+      final next = [...c.filters];
+      next[index] = filter.copyWith(name: name);
+      return FilterSetSettings(filters: next);
+    });
   }
 
   /// Seed entries from the connected filter wheel's slot labels — a
   /// convenience so the user only picks kinds instead of retyping names.
   /// Existing names are kept; only new labels are appended (kind defaults to
   /// a guess from the label, broadband L when unrecognisable).
-  void seedFromWheelLabels(Iterable<String> labels) {
+  void seedFromWheelLabels(Iterable<String> labels) => edit((c) {
     final added = <PlanningFilter>[];
     for (final raw in labels) {
       final name = raw.trim();
-      if (name.isEmpty || _hasName(name)) continue;
-      if (added.any((f) => f.name.toLowerCase() == name.toLowerCase())) continue;
+      if (name.isEmpty || _hasName(c, name)) continue;
+      if (added.any((f) => f.name.toLowerCase() == name.toLowerCase())) {
+        continue;
+      }
       added.add(PlanningFilter(name: name, kind: guessKind(name)));
     }
-    if (added.isEmpty) return;
-    state = FilterSetSettings(filters: [...state.filters, ...added]);
-  }
+    return added.isEmpty
+        ? c
+        : FilterSetSettings(filters: [...c.filters, ...added]);
+  });
 
-  bool _hasName(String name) => state.filters
-      .any((f) => f.name.toLowerCase() == name.trim().toLowerCase());
+  static bool _hasName(FilterSetSettings c, String name) =>
+      c.filters.any((f) => f.name.toLowerCase() == name.trim().toLowerCase());
 
   /// Best-effort kind guess from a wheel label ('Ha 3nm' → ha, 'OIII' → oiii,
   /// 'Red' → r …). Exposed for the seed flow + tests; the user can always
@@ -211,15 +220,19 @@ class FilterSetNotifier extends Notifier<FilterSetSettings>
     return null;
   }
 
-  /// Replace local state with what the daemon currently holds.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getFilterSet());
+  @override
+  Future<Tagged<FilterSetSettings>> fetch(ProfileApi api) =>
+      api.getFilterSetSection();
 
-  /// Send the current local state to the daemon; returns its echo.
-  Future<FilterSetSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putFilterSet(sent));
+  @override
+  Future<Tagged<FilterSetSettings>> send(
+    ProfileApi api,
+    FilterSetSettings value,
+    String? etag,
+  ) => api.putFilterSetSection(value, ifMatch: etag);
 }
 
 final filterSetProvider =
-    NotifierProvider<FilterSetNotifier, FilterSetSettings>(
-        FilterSetNotifier.new);
+    NotifierProvider<FilterSetNotifier, LoadedSection<FilterSetSettings>>(
+      FilterSetNotifier.new,
+    );
