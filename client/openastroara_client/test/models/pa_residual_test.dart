@@ -56,6 +56,19 @@ void main() {
         })!;
         expect(u.reason, 'lock_shift');
         expect(PaResidual.reasonText(u.reason), contains('comet'));
+        for (final (reason, word) in [
+          ('guiding_not_holding', 'not holding'),
+          ('settle_failed', 'settle'),
+          ('mount_not_tracking', 'not tracking'),
+        ]) {
+          final text = PaResidual.reasonText(reason);
+          expect(text, contains(word), reason: reason);
+          expect(
+            text,
+            isNot(PaResidual.reasonText(null)),
+            reason: '$reason is not the fallback',
+          );
+        }
         expect(PaResidual.fromJson(const {'status': 'idle'}), isNull);
         expect(PaResidual.fromJson(null), isNull);
         expect(

@@ -46,6 +46,9 @@ public sealed partial class GuiderService {
     /// <summary>The mount's Dec (°) and hour angle (h, −12…12) now, or null when unknown.</summary>
     public Func<(double DecDeg, double HourAngleHours)?>? MountPointing { get; set; }
 
+    /// <summary>Whether the mount is tracking now, or null when unknown (no mount connected).</summary>
+    public Func<bool?>? MountTracking { get; set; }
+
     // Test knobs: the frame time the fit uses (the guide step's receipt time by default) and the
     // wall clock stamped on the result.
     internal Func<IGuideStep, double> PaResidualStepTime { get; set; } = step => step.Time;
@@ -81,20 +84,27 @@ public sealed partial class GuiderService {
         PaResidualAction action;
         long generation;
         lock (_paGate) {
-            action = _paTracker.OnStep(PaResidualStepTime(step), step.DECDistanceRaw, step.DECDuration);
+            action = _paTracker.OnStep(PaResidualStepTime(step), step.DECDistanceRaw, step.DECDuration, step.RADistanceRaw, step.RADuration);
             generation = NewPaRunGenerationLocked(action);
         }
         HandlePaResidualAction(guider, action, generation);
     }
 
-    private void FeedPaResidualMarker(PHD2Guider guider, string? kind) {
+    private void FeedPaResidualMarker(PHD2Guider guider, string? kind, string? settleError = null) {
         PaResidualAction action;
         long generation;
+        bool failed = false;
         lock (_paGate) {
             action = _paTracker.OnMarker(kind);
             generation = NewPaRunGenerationLocked(action);
+            // A settle that failed (PHD2 sends an error: timeout, lost star) means guiding was not holding.
+            // "Stopped capturing" is our own stop; GuidingStopped ends the run (as PHD2Guider's start retry does).
+            failed = kind == "settle_done" && settleError is not null && settleError != "Stopped capturing" && _paTracker.Fail();
         }
         HandlePaResidualAction(guider, action, generation);
+        if (failed) {
+            MarkPaRunUnavailable(generation, "settle_failed");
+        }
     }
 
     // A new run's generation is taken under the same lock as the tracker's Begin cleared the
@@ -122,6 +132,9 @@ public sealed partial class GuiderService {
             case PaResidualAction.Progress:
                 PublishPaProgress();
                 break;
+            case PaResidualAction.Runaway:
+                MarkPaRunUnavailable(generation, "guiding_not_holding");
+                break;
             case PaResidualAction.Complete:
                 _ = FinishPaResidualAsync(guider);
                 break;
@@ -142,7 +155,8 @@ public sealed partial class GuiderService {
 
     private void BeginPaResidual(PHD2Guider guider, long generation) {
         // Lock-position shift (comet tracking) drifts the star in Dec on purpose: not a PA signal.
-        var unavailable = guider.ShiftEnabled ? "lock_shift" : null;
+        // A mount known not to be tracking carries the star away in RA and Dec: not a PA signal either.
+        var unavailable = guider.ShiftEnabled ? "lock_shift" : MountTracking?.Invoke() == false ? "mount_not_tracking" : null;
         PaResidualDto current;
         lock (_paGate) {
             if (generation != _paGeneration) {
@@ -193,7 +207,8 @@ public sealed partial class GuiderService {
     private void MarkPaRunUnavailable(long generation, string reason) {
         PaResidualDto? current;
         lock (_paGate) {
-            if (generation != _paGeneration || _paCurrent is null) {
+            // The first reason is the most specific one: keep it.
+            if (generation != _paGeneration || _paCurrent is null || _paUnavailable is not null) {
                 return;
             }
             _paUnavailable = reason;

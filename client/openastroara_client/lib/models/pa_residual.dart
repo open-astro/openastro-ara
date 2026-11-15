@@ -109,6 +109,10 @@ class PaResidual {
   static String reasonText(String? reason) => switch (reason) {
     'lock_shift' => 'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.',
     'ao' => 'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.',
+    'guiding_not_holding' => 'Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.',
+    'settle_failed' =>
+      'A settle failed during this run, so guiding was not holding the star.',
+    'mount_not_tracking' => 'The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.',
     'no_calibration' => "The guider's calibration data could not be read.",
     'no_pixel_scale' => 'The guider has not reported its pixel scale.',
     _ => 'Not enough clean guiding to fit the drift.',

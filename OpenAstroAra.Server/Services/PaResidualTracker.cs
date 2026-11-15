@@ -25,6 +25,8 @@ internal enum PaResidualAction {
     Complete,
     /// <summary>Guiding ended before enough clean guiding was in; nothing to report.</summary>
     Cancelled,
+    /// <summary>Guiding is not holding the star (an axis runs away against its maximum pulses): the run is not a measurement.</summary>
+    Runaway,
 }
 
 /// <summary>
@@ -58,7 +60,38 @@ internal sealed class PaResidualTracker {
     private bool _paused;
     private double _nextProgressAt;
 
-    public PaResidualAction OnStep(double timeSec, double decRawPx, double decDurationMs) {
+    // A runaway: this many steps in a row on one axis with the pulse at (within 5 % of) the largest
+    // one the run has sent and the distance never shrinking, ending at least 3x and 1 px above where
+    // the streak began. A steady drift also sits at one pulse length with a flat distance, so the
+    // growth is what tells them apart. 10 frames is ~20 s at PHD2's usual 2 s exposure: a gust or a
+    // bad frame recovers well inside it, a mount that is not tracking never does (rig night
+    // 2026-11-14: RA ran 0.5 to 37 px with every pulse at 2500 ms).
+    internal const int RunawaySteps = 10;
+    private const double PinnedFraction = 0.95, GrowthFactor = 3, GrowthMinPx = 1;
+    private readonly Axis _ra = new(), _dec = new();
+
+    private sealed class Axis {
+        public double MaxPulse, LastDistance, StartDistance;
+        public int Run;
+
+        public bool Step(double distance, double durationMs) {
+            var pulse = System.Math.Abs(durationMs);
+            MaxPulse = System.Math.Max(MaxPulse, pulse);
+            var pinned = pulse > 0 && pulse >= PinnedFraction * MaxPulse;
+            var growing = System.Math.Abs(distance) >= System.Math.Abs(LastDistance);
+            LastDistance = distance;
+            Run = pinned && growing ? Run + 1 : 0;
+            var now = System.Math.Abs(distance);
+            if (Run == 1) {
+                StartDistance = now;
+            }
+            return Run >= RunawaySteps && now >= GrowthFactor * StartDistance && now - StartDistance >= GrowthMinPx;
+        }
+
+        public void Clear() => (MaxPulse, LastDistance, StartDistance, Run) = (0, 0, 0, 0);
+    }
+
+    public PaResidualAction OnStep(double timeSec, double decRawPx, double decDurationMs, double raRawPx = 0, double raDurationMs = 0) {
         if (_runDone) {
             return PaResidualAction.None;
         }
@@ -66,6 +99,13 @@ internal sealed class PaResidualTracker {
         var action = Measuring ? PaResidualAction.None : Begin();
         if (_settling || _paused) {
             return action;
+        }
+        // Both axes are fed on every step (no short-circuit): each keeps its own streak.
+        var raRunaway = _ra.Step(raRawPx, raDurationMs);
+        var decRunaway = _dec.Step(decRawPx, decDurationMs);
+        if (raRunaway || decRunaway) {
+            Fail();
+            return PaResidualAction.Runaway;
         }
         Estimator.Add(timeSec, decRawPx, decDurationMs);
         var sampled = Estimator.SampleSeconds;
@@ -113,6 +153,18 @@ internal sealed class PaResidualTracker {
         }
     }
 
+    /// <summary>The run cannot be measured any more (a failed settle, a runaway): stop sampling until the next start.
+    /// False when no measurement was in flight.</summary>
+    public bool Fail() {
+        if (!Measuring) {
+            return false;
+        }
+        Measuring = false;
+        _runDone = true;
+        Estimator.Clear();
+        return true;
+    }
+
     /// <summary>The guider went away (disconnect, link loss): drop any measurement in flight.</summary>
     public PaResidualAction Reset() {
         var wasMeasuring = Measuring;
@@ -131,6 +183,8 @@ internal sealed class PaResidualTracker {
         _settling = false;
         _paused = false;
         _nextProgressAt = ProgressEverySeconds;
+        _ra.Clear();
+        _dec.Clear();
         return PaResidualAction.Started;
     }
 
