@@ -179,9 +179,10 @@ public interface ISequencerService {
     /// <summary>
     /// §35 — the run's live target coordinates (a deep-sky container, or a Simple Mode block with
     /// a slew or AboveHorizonCondition), or null when the run/plan carries none
-    /// (a plan with no coordinate-bearing target container, or an unknown run). Prefers the
-    /// RUNNING target over the first block not yet run, so a multi-target plan reports the one a
-    /// pause interrupted. Best-effort read of the live plan tree; the safety engine's
+    /// (a plan with no coordinate-bearing target container, or an unknown run). A deep-sky
+    /// container is found first and, with none running, the first one wins whatever its status.
+    /// Only for Simple Mode blocks is the RUNNING block preferred, else the first block not yet
+    /// run. Best-effort read of the live plan tree; the safety engine's
     /// auto-resume re-centering consumes this.
     /// </summary>
     Task<OpenAstroAra.Astrometry.Coordinates?> GetActiveTargetCoordinatesAsync(Guid id, CancellationToken ct);
