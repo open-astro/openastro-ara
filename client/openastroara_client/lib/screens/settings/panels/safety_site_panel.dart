@@ -186,6 +186,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        // The skyline's banner shows here, also with the editor hidden.
+        ?sectionConflict(),
         const SettingsSectionHeader('Location'),
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -435,7 +437,6 @@ class _CustomHorizonEditor extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (section.conflict) SectionConflictBanner(onReload: onRetry),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(

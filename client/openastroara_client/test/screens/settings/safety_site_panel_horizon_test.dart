@@ -158,4 +158,22 @@ void main() {
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byKey(const ValueKey('horizon_point_0')), findsNothing);
   });
+
+  testWidgets('a skyline refused with the toggle off offers Reload; Save then '
+      'lands the site', (tester) async {
+    final rig = FakeSectionRig({
+      'custom-horizon': {'points': []},
+      'site': <String, Object?>{},
+    });
+    final container = await pumpPanel(tester, rig: rig);
+    rig.savedElsewhere('custom-horizon');
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(rig.puts, isEmpty);
+    await tester.tap(find.byKey(const Key('section-reload')));
+    await tester.pumpAndSettle();
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(rig.puts.map((p) => p.section), ['custom-horizon', 'site']);
+  });
 }
