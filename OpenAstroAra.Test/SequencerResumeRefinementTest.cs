@@ -102,7 +102,8 @@ namespace OpenAstroAra.Test {
 
         private static (SequencerService Svc, Mock<ICenteringService> Centering, FakeAutofocus Af) BuildService(
                 Guid id, Func<CancellationToken, Task<PlateSolveResult>>? centerBehaviour = null,
-                IProfileStore? profileStore = null, Func<HeadlessSequencerFactory, JsonElement>? bodyBuilder = null) {
+                IProfileStore? profileStore = null, Func<HeadlessSequencerFactory, JsonElement>? bodyBuilder = null,
+                Microsoft.Extensions.Logging.ILogger<SequencerService>? logger = null, bool wireServices = true) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var body = (bodyBuilder ?? DsoBody)(factory);
             var store = new FakeStore(id, body);
@@ -119,9 +120,9 @@ namespace OpenAstroAra.Test {
             var af = new FakeAutofocus();
             var svc = new SequencerService(new SequenceBodyDeserializer(factory),
                 ws: null, sequencesResolver: () => store, checkpoint: null,
-                profileStore: profileStore,
-                centeringResolver: () => centering.Object,
-                autofocusResolver: () => af);
+                profileStore: profileStore, logger: logger,
+                centeringResolver: wireServices ? () => centering.Object : null,
+                autofocusResolver: wireServices ? () => af : null);
             return (svc, centering, af);
         }
 
@@ -284,6 +285,54 @@ namespace OpenAstroAra.Test {
 
             Assert.That(found, Is.SameAs(block));
             Assert.That(SequencerService.TargetCoordinates(found!)!.Dec, Is.EqualTo(-12).Within(1e-6));
+        }
+
+        private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<SequencerService> {
+            private readonly System.Collections.Generic.List<string> _lines = new();
+            public string[] Lines { get { lock (_lines) { return _lines.ToArray(); } } }
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                lock (_lines) { _lines.Add(formatter(state, exception)); }
+            }
+        }
+
+        /// <summary>A root with no target block at all: nothing for the pause to snapshot.</summary>
+        private static JsonElement NoTargetBody(HeadlessSequencerFactory factory) {
+            var converter = new SequenceJsonConverter(factory);
+            var root = new SequentialContainer { Name = "resume-test root" };
+            root.Items.Add(new WaitForTimeSpan { Time = 1 });
+            root.Items.Add(new WaitForTimeSpan { Time = 1 });
+            using var doc = JsonDocument.Parse(converter.Serialize(root));
+            return doc.RootElement.Clone();
+        }
+
+        [Test]
+        public async Task A_resume_with_no_target_at_the_pause_logs_why_the_refinement_was_skipped() {
+            var id = Guid.NewGuid();
+            var log = new CapturingLogger();
+            var (svc, centering, _) = BuildService(id, bodyBuilder: NoTargetBody, logger: log);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(log.Lines, Has.Some.Contains("skipped").And.Contains("no target was found at the pause"));
+            centering.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public async Task A_resume_with_no_centering_service_wired_logs_why_the_refinement_was_skipped() {
+            var id = Guid.NewGuid();
+            var log = new CapturingLogger();
+            var (svc, _, _) = BuildService(id, logger: log, wireServices: false);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(log.Lines, Has.Some.Contains("skipped").And.Contains("no centering or autofocus service is wired"));
         }
 
         [Test]
