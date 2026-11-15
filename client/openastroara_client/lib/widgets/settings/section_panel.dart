@@ -71,14 +71,12 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
       ? SectionConflictBanner(onReload: loadSections)
       : null;
 
-  /// Save [only] (default: all of this panel's sections), in order. Shows
-  /// "Saved." or the refusal in a snackbar and returns the refusal text, or
-  /// null when everything was saved.
+  /// Save this panel's sections, in order. Shows "Saved." or the refusal in a
+  /// snackbar and returns the refusal text, or null when everything was saved.
   ///
   /// [andThen] saves what the panel still saves the old way, after the
   /// sections and before the message.
   Future<String?> saveSections({
-    List<PanelSection>? only,
     Future<void> Function(ProfileApi api)? andThen,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -89,7 +87,7 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
       error = l10n.deviceChooserNotConnected;
     } else {
       try {
-        for (final s in only ?? sections) {
+        for (final s in sections) {
           await ref.read(s.notifier).save(api);
         }
         await andThen?.call(api);

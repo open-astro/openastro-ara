@@ -25,8 +25,7 @@ void resetMigratedSections(T Function<T>(ProviderListenable<T>) read) {
 }
 
 typedef MigratedSection = ({
-  /// The first path segment under `/api/v1/profile/` that `profile.updated`
-  /// names .
+  /// The first segment after `/api/v1/profile/` that `profile.updated` names.
   String route,
   NotifierProvider<SectionNotifier<Object?>, LoadedSection<Object?>> provider,
 });
