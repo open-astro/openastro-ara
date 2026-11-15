@@ -12,7 +12,7 @@ import 'storage_settings_state.dart';
 /// ADR 0015 — the one reset point: a different rig or a different active
 /// profile sends every migrated section back to not loaded, so no value from
 /// the old rig or profile can be saved over the new one. Add each newly
-/// migrated section to [resetMigratedSections]; panels do not reset on their own.
+/// migrated section to [migratedSections]; panels do not reset on their own.
 ///
 /// [read] is a `ref.read`, so a widget's `WidgetRef` can reset after a wizard
 /// save and a replay: they write sections from this device without a version

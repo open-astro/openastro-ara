@@ -29,8 +29,8 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
     WidgetsBinding.instance.addPostFrameCallback((_) => loadSections());
   }
 
-  /// Load every section again from the rig (also the Retry and Reload action).
-  /// A failure is kept in the section and shown by [sectionGate].
+  /// Load every section again from the rig, dropping their unsaved edits (the
+  /// Retry and Reload action). [sectionGate] shows a failure kept in a section.
   Future<void> loadSections() async {
     final api = ref.read(profileApiProvider);
     if (api == null || !mounted) return;

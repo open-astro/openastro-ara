@@ -464,9 +464,9 @@ class ProfileApi {
     );
   }
 
-  // ADR 0015 — the sections that load before they save. Each pair reads or
-  // writes the same route as its untagged twin above, with the rig's `ETag`
-  // out and the loaded one back as `If-Match`.
+  // ADR 0015 — the sections that load before they save. Each pair reads
+  // `/api/v1/profile/<route>` with the rig's `ETag` and writes it back with
+  // the loaded one as `If-Match`.
   Future<({T value, String? etag})> _getTagged<T>(
     String route,
     T Function(Map<String, dynamic>) parse,
