@@ -3,16 +3,17 @@ import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/settings/diagnostics_mode_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/section_panel.dart';
 
 /// §51 diagnostics mode picker. Phase 12h.6j added the daemon round-
 /// trip. Unlike the other settings panels (which use a Save button),
 /// this picker auto-saves on each radio-button tap — the UX expectation
 /// for single-choice radios is "I tapped it, it's set." A failed PUT
-/// shows a snackbar; local state still reflects the user's choice.
+/// shows a snackbar and the radio goes back to the rig's value; a 412
+/// keeps the choice under the conflict banner (ADR 0015 rule 6).
 class DiagnosticsModePanel extends ConsumerStatefulWidget {
   const DiagnosticsModePanel({super.key});
 
@@ -21,58 +22,38 @@ class DiagnosticsModePanel extends ConsumerStatefulWidget {
       _DiagnosticsModePanelState();
 }
 
-class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
+class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel>
+    with SectionPanel {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
-    try {
-      await ref.read(diagnosticsModeProvider.notifier).hydrateFromServer(api);
-    } catch (_) {
-      // Hydration failures are silent — the user can still pick + save.
-    }
-  }
+  List<PanelSection> get sections => [diagnosticsModeProvider];
 
   Future<void> _selectAndSave(DiagnosticsMode mode) async {
-    ref.read(diagnosticsModeProvider.notifier).setMode(mode);
-    final api = _api();
     final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
+    final l10n = context.l10n;
+    try {
+      await ref.read(diagnosticsModeProvider.notifier).replaceAndSave(mode);
+    } catch (e) {
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Not connected — this choice is saved on this computer for now.',
+            e is SectionNotLoadedException || e is SectionConflictException
+                ? e.toString()
+                : friendlyError(l10n, e, action: l10n.actionSave),
           ),
         ),
       );
-      return;
     }
-    try {
-      await ref.read(diagnosticsModeProvider.notifier).persistToServer(api);
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSave))),
-      );
-    }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
   }
 
   @override
   Widget build(BuildContext context) {
-    final selected = ref.watch(diagnosticsModeProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final selected = ref.watch(diagnosticsModeProvider).value!;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         _ModeOption(
           mode: DiagnosticsMode.notifyOnly,
           label: 'Notify only (default)',
@@ -126,8 +107,8 @@ class _ModeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: label,
-      selected: selected,
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
       button: true,
       child: InkWell(
         onTap: onTap,

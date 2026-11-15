@@ -57,7 +57,7 @@ namespace OpenAstroAra.Server.Services {
     /// </summary>
     public sealed partial class PolarAlignService : IPolarAlignService, IDisposable {
 
-        private readonly GuiderService _guider;
+        private readonly IGuideCapture _guider;
         private readonly ILogger<PolarAlignService> _logger;
         private readonly IWsBroadcaster? _ws;
         private readonly IPolarAlignFrameSolver _solver;
@@ -163,8 +163,8 @@ namespace OpenAstroAra.Server.Services {
         // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
         private GuideCameraCustody.Claim? _claim;
 
-        public PolarAlignService(
-                GuiderService guider,
+        internal PolarAlignService(
+                IGuideCapture guider,
                 ILogger<PolarAlignService> logger,
                 IPolarAlignFrameSolver solver,
                 ITelescopeMediator mount,
@@ -221,14 +221,14 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The preview is best-effort; any fetch failure just means no image this time.")]
         public async Task<byte[]?> GetLiveFrameJpegAsync(CancellationToken ct) {
-            PHD2Guider guiderClient;
+            IGuideCaptureLink guiderClient;
             try {
-                guiderClient = _guider.RequireConnectedGuider();
+                guiderClient = _guider.ConnectedLink();
             } catch (InvalidOperationException ex) {
                 LogLiveFrameUnavailable(ex.Message);
                 return null;
             }
-            var host = guiderClient.ConnectedHost;
+            var host = guiderClient.Host;
             if (string.IsNullOrEmpty(host)) {
                 LogLiveFrameUnavailable("guider connection endpoint unknown");
                 return null;
@@ -236,7 +236,7 @@ namespace OpenAstroAra.Server.Services {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
             try {
-                return await _frameFetcher.FetchLiveFrameJpegAsync(host, guiderClient.ConnectedRpcPort, timeout.Token).ConfigureAwait(false);
+                return await _frameFetcher.FetchLiveFrameJpegAsync(host, guiderClient.RpcPort, timeout.Token).ConfigureAwait(false);
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 throw;
             } catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
@@ -305,10 +305,11 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// Begin the routine: preflight (connected guider, connected mount, a configured site
         /// latitude), acquire the guide-camera PA-session lease, then run the seed + live-adjust
-        /// state machine on a background task. Idempotent — Start on an already-running routine is a
-        /// no-op accept. Throws <see cref="InvalidOperationException"/> on a failed preflight
-        /// (mapped to 409 by the endpoint). The lease is taken through the custody module before the
-        /// guider's capture idles and its loop stops; when either fails, the lease is given back.
+        /// state machine on a background task. Idempotent — Start on an already-running routine is
+        /// a no-op accept. Throws <see cref="InvalidOperationException"/> on a failed preflight
+        /// (mapped to 409 by the endpoint). The lease is taken through the custody module before
+        /// the guider's capture idles and its loop stops; when either fails, the lease is given
+        /// back.
         /// </summary>
         public Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) =>
             StartAsync(stage: null, idempotencyKey, ct);
@@ -343,7 +344,7 @@ namespace OpenAstroAra.Server.Services {
                     await AwaitRunUnwindAsync(priorRun).ConfigureAwait(false);
                 }
                 priorCts?.Dispose();
-                var guiderClient = _guider.RequireConnectedGuider();
+                var guiderClient = _guider.ConnectedLink();
                 var mountInfo = _mount.GetInfo();
                 if (mountInfo?.Connected != true) {
                     throw new InvalidOperationException("mount is not connected");
@@ -380,7 +381,7 @@ namespace OpenAstroAra.Server.Services {
                 };
                 // ADR 0016: the custody module refuses while the Guider is busy, stops guide focus or the live
                 // view if one holds the camera, and takes the guider's lease (a new loop cannot start under it).
-                var claim = await _guider.Custody.TakeAsync(CameraUse.PolarAlign, _guider,
+                var claim = await _guider.TakeCameraAsync(CameraUse.PolarAlign,
                     _ => StopAsync(null, CancellationToken.None), ct).ConfigureAwait(false);
                 try {
                     // #1711: a capture the previous run abandoned may still be exposing; the guider refuses a new one until it ends.
@@ -621,7 +622,7 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
         private async Task RunRoutineAsync(
-                PHD2Guider guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
+                IGuideCaptureLink guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
                 int gen, int startSeq, CancellationToken ct) {
             // Per-run unique dir: an abandoned (zombie) run and its successor must never share
             // files — this run's cleanup deletes only its own directory.
@@ -734,7 +735,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>§45.4 — the guide camera's frame size from the daemon, or null when it has no
         /// answer (older daemon, refused RPC, dropped connection). Never fails the routine.</summary>
-        private async Task<(int Width, int Height)?> ReadGuideFrameSizeAsync(PHD2Guider guiderClient, CancellationToken ct) {
+        private async Task<(int Width, int Height)?> ReadGuideFrameSizeAsync(IGuideCaptureLink guiderClient, CancellationToken ct) {
             try {
                 var size = await guiderClient.GetCameraFrameSizeAsync(ct).ConfigureAwait(false);
                 if (size is null) {
@@ -1000,7 +1001,7 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A corrupt/truncated guider FITS or solver fault is one failed solve, not a routine abort (§45.11); configuration exceptions are deliberately excluded and fail the routine with an actionable message.")]
         private async Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
-                PHD2Guider guiderClient, string workDir, string frameId,
+                IGuideCaptureLink guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, FrameTiming timing, CancellationToken ct) {
             var localPath = Path.Combine(workDir, frameId + ".fits");
             var binning = PolarAlignBinning.Resolve(settings.Binning, _runFrameSize);
@@ -1035,7 +1036,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 tcs.TrySetResult(e);
             }
-            guiderClient.SingleFrameComplete += OnComplete;
+            var subscription = guiderClient.OnFrameComplete(e => OnComplete(guiderClient, e));
             try {
                 // The capture RPC gets the same one-failed-solve treatment as the solver call
                 // below: a daemon-side rejection (camera busy, guiding running) or a dropped
@@ -1045,9 +1046,7 @@ namespace OpenAstroAra.Server.Services {
                 // blaming focus/sky (capture_rejected).
                 try {
                     var exposureMs = Math.Max(1, (int)Math.Round(settings.ExposureSeconds * 1000.0));
-                    await guiderClient.CaptureSolverFrameAsync(
-                        exposureMs: exposureMs, binning: binning > 1 ? binning : null,
-                        gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
+                    await guiderClient.CaptureFrameAsync(exposureMs, binning > 1 ? binning : null, ct).ConfigureAwait(false);
                 } catch (GuiderRpcException ex) {
                     RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
@@ -1083,14 +1082,14 @@ namespace OpenAstroAra.Server.Services {
                 // Fetch the daemon-saved FITS over the guider#77 HTTP capture endpoint into the run's
                 // work dir — the only frame transport that works when the daemon runs on another
                 // machine (and equally fine same-host). A failed download is one failed solve.
-                var host = guiderClient.ConnectedHost;
+                var host = guiderClient.Host;
                 if (string.IsNullOrEmpty(host)) {
                     RecordCaptureFault(gen, frameId, "guider connection endpoint unknown — cannot fetch the saved frame");
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
                 try {
                     await _frameFetcher.FetchAsync(
-                        host, guiderClient.ConnectedRpcPort, filename, localPath, ct).ConfigureAwait(false);
+                        host, guiderClient.RpcPort, filename, localPath, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
@@ -1136,7 +1135,7 @@ namespace OpenAstroAra.Server.Services {
                 RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
-                guiderClient.SingleFrameComplete -= OnComplete;
+                subscription.Dispose();
                 if (timing.KeptFramePath != localPath) {
                     TryDeleteFile(localPath);
                 }

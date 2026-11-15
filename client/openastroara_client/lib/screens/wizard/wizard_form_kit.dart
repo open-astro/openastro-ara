@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -48,7 +49,7 @@ class WizardScreenScaffold extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Stage ${info.stage} — ${info.stageLabel}',
+                  context.l10n.wizardKitStage(info.stage, info.stageLabel),
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: AraColors.textSecondary,
                         letterSpacing: 0.6,
@@ -96,8 +97,7 @@ class _SkippedBanner extends StatelessWidget {
         border: Border.all(color: AraColors.accentBusy),
       ),
       child: Text(
-        'This screen was skipped — defaults will fill in until you review it '
-        'in Settings.',
+        context.l10n.wizardKitSkipped,
         style: Theme.of(context)
             .textTheme
             .bodySmall
@@ -184,7 +184,7 @@ class _WizardTextFieldState extends State<WizardTextField> {
           suffixIcon: widget.onCleared == null
               ? null
               : IconButton(
-                  tooltip: 'Reset to default on Save',
+                  tooltip: context.l10n.wizardKitResetOnSave,
                   icon: const Icon(Icons.settings_backup_restore, size: 18),
                   onPressed: () {
                     _controller.clear();

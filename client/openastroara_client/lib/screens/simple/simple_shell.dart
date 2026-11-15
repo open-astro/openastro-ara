@@ -854,9 +854,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// selection.
   void _imagePick() => setState(() {
     final shown = ref.read(simpleShowingProvider);
+    // From the run alone (#1898): the pick lands on Plan, where build sees the run.
     final runActive =
-        shown == SimpleModeScreen.plan &&
-        (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     // Plan shows already in Preflight's plan step; from any other screen the
     // pick goes to Plan and leaves Preflight.
     if (shown != SimpleModeScreen.plan) {

@@ -16,10 +16,22 @@ import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
-import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf, conditionsOf;
-import 'package:openastroara/models/sequence/instruction_catalog.dart' show parkScopeType, waitForTimeType, flatPanelFlatsType, waitForUserType, switchFilterType;
-import 'package:openastroara/models/sequence/condition_catalog.dart' show timeConditionType, timeProviders;
-import 'package:openastroara/util/tonight_sky_local.dart' show darkStart, nightEnd;
+import 'package:openastroara/models/sequence/nina_dom.dart'
+    show childrenOf, conditionsOf;
+import 'package:openastroara/models/sequence/instruction_catalog.dart'
+    show
+        parkScopeType,
+        waitForTimeType,
+        flatPanelFlatsType,
+        waitForUserType,
+        switchFilterType;
+import 'package:openastroara/models/sequence/condition_catalog.dart'
+    show timeConditionType, timeProviders;
+import 'package:openastroara/util/tonight_sky_local.dart'
+    show darkStart, nightEnd;
+import 'package:openastroara/state/simple_recent_state.dart';
+import 'package:openastroara/state/stats/stats_targets_state.dart';
+import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
@@ -289,19 +301,26 @@ final _rig = <Object>[
   skyModelCalibrationProvider.overrideWith(_NoSkyModel.new),
 ];
 
-Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
-    {PlanetariumSelection? sel = _m31,
-    List<Object> overrides = const [],
-    List<PlanningFilter> filters = _lrgb,
-    List<TonightSkyObject> tonight = const []}) async {
-  final container = ProviderContainer(overrides: [
-    filterWheelProvider.overrideWith(() => _Wheel(true)),
-    ...overrides.cast(),
-    tonightSkyProvider.overrideWith((ref) async => tonight),
-    sequenceApiProvider.overrideWith((ref) => seq),
-    planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
-    filterSetProvider.overrideWith(() => _Filters(filters)),
-  ]);
+Future<ProviderContainer> _pump(
+  WidgetTester tester,
+  _Seq seq,
+  Widget child, {
+  PlanetariumSelection? sel = _m31,
+  List<Object> overrides = const [],
+  List<PlanningFilter> filters = _lrgb,
+  List<TonightSkyObject> tonight = const [],
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      filterWheelProvider.overrideWith(() => _Wheel(true)),
+      ...overrides.cast(),
+      tonightSkyProvider.overrideWith((ref) async => tonight),
+      tonightsBestProvider.overrideWith((ref) async => tonight),
+      sequenceApiProvider.overrideWith((ref) => seq),
+      planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
+      filterSetProvider.overrideWith(() => _Filters(filters)),
+    ],
+  );
   addTearDown(container.dispose);
   // Tall enough for the sheet, tracker and shutter stacked in one column.
   tester.view.physicalSize = const Size(1024, 1100);
@@ -873,6 +892,277 @@ void main() {
       expect(c.read(simpleRunProvider).error, _en.planAlreadyQueued('M31'));
       expect(c.read(simpleMessagesProvider), isEmpty);
     });
+  });
+
+  group('the plan window (#1875 slice 6)', () {
+    // Greenwich night, 20:00 UTC: M31 stands above 30° for hours.
+    const atl = SiteSettings(
+      latitudeDeg: 51.477833,
+      longitudeDeg: -0.0015,
+      twilightDefinition: TwilightDefinition.astronomical,
+    );
+    final night = DateTime.utc(2026, 1, 15, 20);
+    final rig = <Object>[
+      siteSettingsProvider.overrideWith(() => _SiteAt(atl)),
+      clockProvider.overrideWithValue(() => night),
+    ];
+    Widget sheet() =>
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {});
+
+    testWidgets(
+      'the picked target is a card at the top: name, altitude now, hours left above 30°',
+      (tester) async {
+        await _pump(tester, _Seq(), sheet(), overrides: rig);
+        final card = find.byKey(const Key('simple-run-target-card'));
+        expect(card, findsOneWidget);
+        expect(
+          find.descendant(of: card, matching: find.textContaining('M31')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: card,
+            matching: find.textContaining(RegExp(r'\d\.\d h left above 30°')),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester.getTopLeft(card).dy,
+          lessThan(
+            tester.getTopLeft(find.byKey(const Key('simple-run-search'))).dy,
+          ),
+        );
+      },
+    );
+
+    testWidgets('a target that never clears 30° tonight says so on its card', (
+      tester,
+    ) async {
+      const low = PlanetariumSelection(
+        name: 'Sh2-240',
+        kind: 'SNR',
+        raHours: 5.7,
+        decDeg: -60,
+        raJ2000Hours: 5.7,
+        decJ2000Deg: -60,
+        altDeg: -12,
+        maxAltDeg: 5,
+      );
+      await _pump(tester, _Seq(), sheet(), overrides: rig, sel: low);
+      expect(find.textContaining('Not above 30° tonight'), findsOneWidget);
+    });
+
+    testWidgets(
+      'the frames line warns how many fit before 30°/dawn and leaves the typed count',
+      (tester) async {
+        const low = PlanetariumSelection(
+          name: 'Sh2-240',
+          kind: 'SNR',
+          raHours: 5.7,
+          decDeg: -60,
+          raJ2000Hours: 5.7,
+          decJ2000Deg: -60,
+          altDeg: -12,
+          maxAltDeg: 5,
+        );
+        final c = await _pump(
+          tester,
+          _Seq(),
+          sheet(),
+          overrides: rig,
+          sel: low,
+        );
+        expect(find.text('Fits 0 of them before 30°/dawn'), findsOneWidget);
+        expect(
+          simplePlanTotal(c.read(simpleRunPlanProvider)),
+          greaterThan(0),
+          reason: 'the typed count stays',
+        );
+      },
+    );
+
+    testWidgets('no warning while the plan fits', (tester) async {
+      // M31 stays up for hours; the default plan fits.
+      await _pump(tester, _Seq(), sheet(), overrides: rig);
+      expect(find.byKey(const Key('simple-run-frames-fit')), findsNothing);
+    });
+
+    testWidgets(
+      'with no site set (0, 0) the hours are unknown: no hours on the card, no fits warning, no greyed Recent row',
+      (tester) async {
+        await _pump(
+          tester,
+          _Seq(),
+          sheet(),
+          overrides: [
+            siteSettingsProvider.overrideWith(
+              () =>
+                  _SiteAt(const SiteSettings(latitudeDeg: 0, longitudeDeg: 0)),
+            ),
+            clockProvider.overrideWithValue(() => night),
+            simpleRecentProvider.overrideWith(
+              (ref) => [
+                (
+                  name: 'Sh2-240',
+                  raDeg: 85.0,
+                  decDeg: -60.0,
+                  when: DateTime.utc(2026, 1, 9),
+                ),
+              ],
+            ),
+          ],
+        );
+        expect(find.byKey(const Key('simple-run-target-card')), findsOneWidget);
+        expect(find.textContaining('Not above 30°'), findsNothing);
+        expect(find.textContaining('h left above 30°'), findsNothing);
+        expect(find.byKey(const Key('simple-run-frames-fit')), findsNothing);
+        expect(find.textContaining('not up tonight'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'editing a queued target gives no fits warning from the sky pick (another object)',
+      (tester) async {
+        final c = await _pump(tester, _Seq(), sheet(), overrides: rig);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        // Sh2-240 never clears 30° here; the edited target is M31.
+        c
+            .read(planetariumSelectionProvider.notifier)
+            .set(
+              const PlanetariumSelection(
+                name: 'Sh2-240',
+                kind: 'SNR',
+                raHours: 5.7,
+                decDeg: -60,
+                raJ2000Hours: 5.7,
+                decJ2000Deg: -60,
+                altDeg: -12,
+                maxAltDeg: 5,
+              ),
+            );
+        c
+            .read(simpleRunPlanProvider.notifier)
+            .load(c.read(simpleRunProvider).targets[0].steps);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: c,
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: SimpleRunSheet(
+                    editing: 0,
+                    onShowSky: () {},
+                    onPickInSky: () {},
+                    onCreated: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Edit M31'), findsOneWidget);
+        expect(find.byKey(const Key('simple-run-frames-fit')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the card reads at 4.5:1 over a bright frame: the 25% selection tint, the status line in textPrimary',
+      (tester) async {
+        await _pump(tester, _Seq(), sheet(), overrides: rig);
+        final card = find.byKey(const Key('simple-run-target-card'));
+        final box = tester.widget<Container>(card).decoration! as BoxDecoration;
+        expect(box.color, AraColors.selectionTint);
+        final status = tester.widget<Text>(
+          find.descendant(
+            of: card,
+            matching: find.textContaining('h left above 30°'),
+          ),
+        );
+        expect(status.style?.color, AraColors.textPrimary);
+      },
+    );
+
+    testWidgets(
+      'Recent lists the last imaged and searched, newest first; one not up tonight is greyed and says so',
+      (tester) async {
+        final c = await _pump(
+          tester,
+          _Seq(),
+          sheet(),
+          overrides: [
+            ...rig,
+            statsTargetsProvider.overrideWith(
+              () => _Stats([
+                StatsTarget(
+                  targetName: 'M31',
+                  lastImagedUtc: DateTime.utc(2026, 1, 10),
+                ),
+              ]),
+            ),
+            simpleRecentProvider.overrideWith(
+              (ref) => [
+                (
+                  name: 'M31',
+                  raDeg: 10.68,
+                  decDeg: 41.27,
+                  when: DateTime.utc(2026, 1, 10),
+                ),
+                (
+                  name: 'Sh2-240',
+                  raDeg: 85.0,
+                  decDeg: -60.0,
+                  when: DateTime.utc(2026, 1, 9),
+                ),
+              ],
+            ),
+          ],
+          sel: null,
+        );
+        expect(find.text('RECENT'), findsOneWidget);
+        expect(find.byKey(const Key('simple-run-recent-0')), findsOneWidget);
+        final far = find.byKey(const Key('simple-run-recent-1'));
+        expect(
+          find.descendant(
+            of: far,
+            matching: find.textContaining('not up tonight'),
+          ),
+          findsOneWidget,
+        );
+        // Greyed by its title colour, not by opacity: the second line keeps
+        // textSecondary (4.7:1 on a tile).
+        expect(
+          find.descendant(of: far, matching: find.byType(Opacity)),
+          findsNothing,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(of: far, matching: find.text('Sh2-240')),
+              )
+              .style
+              ?.color,
+          AraColors.textSecondary,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byKey(const Key('simple-run-recent-0')),
+                  matching: find.text('M31'),
+                ),
+              )
+              .style
+              ?.color,
+          isNot(AraColors.textSecondary),
+          reason: 'one that is up keeps the normal title',
+        );
+        await tester.tap(find.byKey(const Key('simple-run-recent-0')));
+        await tester.pump();
+        expect(c.read(planetariumSelectionProvider)?.name, 'M31');
+      },
+    );
   });
 
   group('the sheet', () {
@@ -2326,4 +2616,11 @@ void main() {
       await tester.pumpAndSettle();
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
+}
+
+class _Stats extends StatsTargetsNotifier {
+  _Stats(this.rows);
+  final List<StatsTarget> rows;
+  @override
+  Future<List<StatsTarget>?> build() async => rows;
 }

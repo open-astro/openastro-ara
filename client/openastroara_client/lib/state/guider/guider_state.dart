@@ -5,6 +5,7 @@ import '../../models/guider_status.dart';
 import '../../models/server.dart';
 import '../../models/ws_event.dart';
 import '../../services/guider_api.dart';
+import '../equipment/mount_state.dart';
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
@@ -143,6 +144,13 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     if (p['ok'] != false) return null;
     final error = p['error'];
     return GuideStartFailed(error is String && error.isNotEmpty && error != 'refused' ? error : null);
+  }
+
+  /// Simple Mode's start: tracking on first (a Polar Align hands the mount back
+  /// as it found it, #1888), and no guiding while the mount refuses it.
+  Future<void> startGuidingTracked() async {
+    if (!await ref.read(mountProvider.notifier).ensureTracking()) return;
+    await startGuiding();
   }
 
   /// Start guiding by hand — the way back after guiding was stopped, with or

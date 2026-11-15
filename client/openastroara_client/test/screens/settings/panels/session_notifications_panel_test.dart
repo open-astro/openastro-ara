@@ -6,7 +6,12 @@ import 'package:openastroara/settings/registry.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/state/settings/settings_search.dart';
 
+import 'package:openastroara/state/profile_management_state.dart';
+
+import '../../../support/fake_section_rig.dart';
 import '../../../support/storage_fixture.dart';
+
+FakeSectionRig _rig() => FakeSectionRig({'notifications': <String, Object?>{}});
 
 void main() {
   // #1189: nothing shows a banner or posts an OS notification, so both
@@ -29,11 +34,14 @@ void main() {
       };
       addTearDown(() => FlutterError.onError = prior);
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: Scaffold(body: SessionNotificationsPanel())),
+        ProviderScope(
+          overrides: [profileApiProvider.overrideWithValue(_rig().api())],
+          child: const MaterialApp(
+            home: Scaffold(body: SessionNotificationsPanel()),
+          ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
       for (final label in hidden.keys) {
         expect(find.text(label), findsNothing, reason: label);
       }
@@ -75,7 +83,9 @@ void main() {
       if (!d.exceptionAsString().contains('overflowed')) prior?.call(d);
     };
     addTearDown(() => FlutterError.onError = prior);
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [profileApiProvider.overrideWithValue(_rig().api())],
+    );
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -85,7 +95,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Disk space low (threshold in Storage)'), findsOneWidget);
     expect(find.textContaining('GB free'), findsNothing);
 

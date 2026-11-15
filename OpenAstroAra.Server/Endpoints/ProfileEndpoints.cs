@@ -39,7 +39,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// trip — simpler than PATCH for v0.0.1 where every panel "Save" button
 /// already holds the full state client-side.
 /// </summary>
-public static class ProfileEndpoints {
+public static partial class ProfileEndpoints {
     /// <summary>Runs the write, then publishes <c>profile.updated</c> with the section name (the first path segment
     /// under <c>/api/v1/profile/</c>) when it was a 2xx write. Reads, rejected writes (4xx) and thrown errors publish
     /// nothing. A failed publish never fails the write.</summary>
@@ -457,7 +457,7 @@ public static class ProfileEndpoints {
             .WithName("GetOpticsSettings")
             .WithSummary("Get the active profile's optics settings.");
 
-        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store) => {
+        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store, HttpContext http, Microsoft.Extensions.Logging.ILogger<Program> logger) => {
             // reducer_factor multiplies focal length in the pixel-scale formula, so
             // 0 (or negative) would divide-by-zero / invert the FOV. It must stay
             // strictly positive (1.0 = no reducer/barlow).
@@ -474,6 +474,7 @@ public static class ProfileEndpoints {
                     detail: "focal_length_mm, pixel_size_um, aperture_mm and sensor dimensions must be >= 0 (0 = unset).",
                     statusCode: StatusCodes.Status400BadRequest);
             }
+            LogOpticsChange(store.GetOpticsSettings(), body, http, logger);
             store.PutOpticsSettings(body);
             return Results.Ok(body);
         })
@@ -879,4 +880,22 @@ public static class ProfileEndpoints {
     /// <summary>The guider refuses a gain outside 0..100 (percent of the camera's range).</summary>
     internal static string? ValidateGuideCameraGain(Phd2SettingsDto body) =>
         body.GuideCameraGain is < 0 or > 100 ? "guide_camera_gain must be 0..100 (percent of the camera's gain range)." : null;
+
+    /// <summary>A pixel size that went to 0 mid-session on the rig (11-13) left no trace: an optics PUT that
+    /// changes the optics names the client that sent it. An identical PUT logs nothing.</summary>
+    internal static void LogOpticsChange(OpticsSettingsDto before, OpticsSettingsDto after, HttpContext http,
+            Microsoft.Extensions.Logging.ILogger logger) {
+        if (before == after) {
+            return;
+        }
+        var remoteIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var userAgent = http.Request.Headers.UserAgent.ToString();
+        LogOpticsReplaced(logger, remoteIp, userAgent, before, after);
+    }
+
+    [Microsoft.Extensions.Logging.LoggerMessage(EventId = 3730,
+        Level = Microsoft.Extensions.Logging.LogLevel.Information,
+        Message = "Optics replaced by PUT from {RemoteIp} ({UserAgent}): {Before} -> {After}")]
+    private static partial void LogOpticsReplaced(Microsoft.Extensions.Logging.ILogger logger, string remoteIp,
+        string userAgent, OpticsSettingsDto before, OpticsSettingsDto after);
 }

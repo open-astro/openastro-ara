@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
 import 'package:openastroara/services/last_rig_service.dart';
@@ -49,7 +50,7 @@ class _MemLastRig extends LastRigService {
 /// ALP-4890: the scan screen with a remembered rig and a handshake that
 /// answers with the rig's nickname, without a network.
 Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemLastRig last,
-    {bool chooser = false}) async {
+    {bool chooser = false, Locale? locale}) async {
   FlutterSecureStorage.setMockInitialValues({});
   final container = ProviderContainer(overrides: [
     discoveryServiceProvider.overrideWithValue(_FakeDiscovery(rigs)),
@@ -65,7 +66,12 @@ Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemL
   if (chooser) container.read(serverChooserRequestedProvider.notifier).request();
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: FirstRunScreen()),
+    child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const FirstRunScreen(),
+    ),
   ));
   await tester.pump();
   await tester.pump(const Duration(seconds: 1));
@@ -74,6 +80,13 @@ Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemL
 }
 
 void main() {
+  testWidgets('the first-run screen is in Brazilian Portuguese', (tester) async {
+    await _scan(tester, const [], _MemLastRig(), locale: const Locale('pt', 'BR'));
+    expect(find.text('Conectar ao OpenAstro Ara'), findsOneWidget);
+    expect(find.text('Ou adicione manualmente:'), findsOneWidget);
+    expect(find.text('Connect to OpenAstro Ara'), findsNothing);
+  });
+
   test('autoPickRig: the last rig by name, in either spelling, first found wins', () {
     const sweep = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro.lan');
     const mdns = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro-lan');
