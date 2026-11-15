@@ -20,30 +20,45 @@ class _Fixed extends MonitorState {
 }
 
 MonitorSnapshot _snap(MonitorFlip flip, [MonitorNow? now]) => MonitorSnapshot(
-      asOf: DateTime(2026, 11, 11, 23, 52),
-      verdict: const MonitorVerdict(MonitorVerdictKind.noPlan, MonitorStatus.normal),
-      now: now ?? const MonitorNow(status: MonitorStatus.off, word: MonitorNowWord.idle),
-      upNext: const [MonitorUpNext(MonitorUpKind.meridianFlip), MonitorUpNext(MonitorUpKind.park)],
-      flip: flip,
-      lastFrame: const MonitorLastFrame(),
-      night: const MonitorNight(),
-    );
+  asOf: DateTime(2026, 11, 11, 23, 52),
+  verdict: const MonitorVerdict(
+    MonitorVerdictKind.noPlan,
+    MonitorStatus.normal,
+  ),
+  now:
+      now ??
+      const MonitorNow(status: MonitorStatus.off, word: MonitorNowWord.idle),
+  upNext: const [
+    MonitorUpNext(MonitorUpKind.meridianFlip),
+    MonitorUpNext(MonitorUpKind.park),
+  ],
+  flip: flip,
+  lastFrame: const MonitorLastFrame(),
+  night: const MonitorNight(),
+);
 
-Future<void> _pump(WidgetTester tester, MonitorFlip flip, {MonitorNow? now, Size size = const Size(1180, 820)}) async {
+Future<void> _pump(
+  WidgetTester tester,
+  MonitorFlip flip, {
+  MonitorNow? now,
+  Size size = const Size(1180, 820),
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      keepAwakeProvider.overrideWithValue(const _KeepAwake()),
-      monitorProvider.overrideWith(() => _Fixed(_snap(flip, now))),
-    ],
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: SimpleMonitorScreen(onOpen: (_) {}),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        keepAwakeProvider.overrideWithValue(const _KeepAwake()),
+        monitorProvider.overrideWith(() => _Fixed(_snap(flip, now))),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SimpleMonitorScreen(onOpen: (_) {}),
+      ),
     ),
-  ));
+  );
   await tester.pump();
 }
 
