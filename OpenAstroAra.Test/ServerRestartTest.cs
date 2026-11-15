@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using System;
@@ -42,9 +43,27 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.Calls, Is.EqualTo(1));
         }
 
+        private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime {
+            public int StopCalls;
+            public CancellationToken ApplicationStarted => CancellationToken.None;
+            public CancellationToken ApplicationStopping => CancellationToken.None;
+            public CancellationToken ApplicationStopped => CancellationToken.None;
+            public void StopApplication() => StopCalls++;
+        }
+
         [Test]
-        public void ExitDaemonRestarter_uses_a_non_zero_exit_code() {
-            Assert.That(ExitDaemonRestarter.RestartExitCode, Is.Not.EqualTo(0));
+        public void ExitDaemonRestarter_Restart_sets_exit_code_75_and_stops_the_host() {
+            var lifetime = new FakeHostApplicationLifetime();
+            var saved = Environment.ExitCode;
+            try {
+                new ExitDaemonRestarter(lifetime).Restart();
+
+                Assert.That(Environment.ExitCode, Is.EqualTo(ExitDaemonRestarter.RestartExitCode));
+                Assert.That(ExitDaemonRestarter.RestartExitCode, Is.EqualTo(75));
+                Assert.That(lifetime.StopCalls, Is.EqualTo(1));
+            } finally {
+                Environment.ExitCode = saved;
+            }
         }
     }
 }
