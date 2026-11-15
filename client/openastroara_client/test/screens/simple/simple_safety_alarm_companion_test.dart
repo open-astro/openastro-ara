@@ -9,6 +9,8 @@ import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 
+import '../../support/section_load.dart';
+
 class _Pending extends SafetyAlarmController {
   @override
   SafetyAlarmState build() =>
@@ -16,12 +18,13 @@ class _Pending extends SafetyAlarmController {
 }
 
 void main() {
-  Future<void> pump(
+  Future<ProviderContainer> pump(
     WidgetTester tester, {
     required bool companion,
     Locale? locale,
     double textScale = 1,
     bool soundAlert = true,
+    bool loaded = true,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -45,10 +48,23 @@ void main() {
         ),
       ),
     );
-    ProviderScope.containerOf(tester.element(find.byType(SimpleSafetyAlarm)))
-        .read(notificationsSettingsProvider.notifier)
-        .setSoundAlert(soundAlert);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SimpleSafetyAlarm)),
+    );
+    if (loaded) {
+      await tester.runAsync(
+        () => loadSection(
+          container,
+          notificationsSettingsProvider,
+          'notifications',
+        ),
+      );
+      container
+          .read(notificationsSettingsProvider.notifier)
+          .setSoundAlert(soundAlert);
+    }
     await tester.pump();
+    return container;
   }
 
   // The label's own paragraph: find.text matches a cut-off line too.
@@ -142,4 +158,14 @@ void main() {
     // Emergency Abort stays: it is not part of the sound.
     expect(find.byKey(const Key('simple-safety-abort')), findsOneWidget);
   });
+
+  testWidgets(
+    'on a phone with notifications not loaded the alarm shows the sound note',
+    (tester) async {
+      final container = await pump(tester, companion: true, loaded: false);
+      expect(container.read(notificationsSettingsProvider).value, isNull);
+      // Not loaded, the alarm still rings (it fails loud), so the note shows.
+      expect(find.textContaining('sounds and vibrates'), findsOneWidget);
+    },
+  );
 }
