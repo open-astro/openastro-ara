@@ -94,8 +94,11 @@ namespace OpenAstroAra.Test {
                 Events.Enqueue((eventType, payload.Clone()));
                 List<TaskCompletionSource> due;
                 lock (_gate) {
-                    due = _waiters.Where(w => w.Done()).Select(w => w.Signal).ToList();
-                    _waiters.RemoveAll(w => w.Done());
+                    var ready = _waiters.Where(w => w.Done()).ToList();
+                    due = ready.Select(w => w.Signal).ToList();
+                    foreach (var w in ready) {
+                        _waiters.Remove(w);
+                    }
                 }
                 foreach (var signal in due) {
                     signal.TrySetResult();
@@ -831,7 +834,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_start_fails_with_a_busy_message_when_the_guiders_capture_never_ends() {
             // The link gives up on an earlier capture that outlives its exposure and grace (Phd2GuideCaptureLinkTest)
-            // and says so; the routine passes that message on and takes no lease.
+            // and says so; the routine takes the lease, the wait throws that message, and the lease is given back.
             var fake = NewFake(answerCaptures: false);
             fake.CaptureBusy = "the guide camera is still busy with an earlier capture — wait a few seconds and try again";
             using var svc = NewService(fake, new ScriptedSolver());
