@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -201,4 +202,57 @@ void main() {
       );
     }
   }
+
+  testWidgets(
+    'the Now tile shows each short filter name whole at 390x844 at 2x text (#1915)',
+    (tester) async {
+      expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+      await _pump(tester, text: 2);
+      for (final filter in ['L', 'R', 'Ha']) {
+        final name = find.descendant(of: _tile, matching: find.text(filter));
+        expect(name, findsOneWidget);
+        expect(
+          tester.getSize(name).width,
+          greaterThanOrEqualTo(
+            tester
+                .renderObject<RenderParagraph>(name)
+                .getMaxIntrinsicWidth(double.infinity),
+          ),
+          reason: '$filter is cut',
+        );
+      }
+    },
+    skip: skip,
+  );
+
+  testWidgets(
+    'the Now tile keeps each filter name clear of its count at 390x844 at 2x text (#1915)',
+    (tester) async {
+      expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+      await _pump(tester, text: 2);
+      for (final (filter, count) in const [
+        ('L', '20/20'),
+        ('R', '10/10'),
+        ('Ha', '11/40'),
+        ('OIII', '0/40'),
+      ]) {
+        final name = find.descendant(of: _tile, matching: find.text(filter));
+        final box = tester.getRect(name);
+        // One glyph is never elided, so it paints past a box narrower than it.
+        final end = tester
+            .renderObject<RenderParagraph>(name)
+            .getBoxesForSelection(
+              TextSelection(baseOffset: 0, extentOffset: filter.length),
+            )
+            .fold(box.right, (end, g) => math.max(end, box.left + g.right));
+        final label = find.descendant(of: _tile, matching: find.text(count));
+        expect(
+          end,
+          lessThanOrEqualTo(tester.getRect(label).left),
+          reason: '$filter runs into $count',
+        );
+      }
+    },
+    skip: skip,
+  );
 }

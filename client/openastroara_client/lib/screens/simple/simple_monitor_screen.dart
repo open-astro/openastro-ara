@@ -710,14 +710,16 @@ class _NowTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // The count keeps its width, the name gets the rest
-                        // (#1915); a count wider than its cell shrinks to fit.
+                        // The name keeps its width up to half the cell; the
+                        // count gets the rest, after a gap, and shrinks only
+                        // when it does not fit (#1915).
                         Table(
                           columnWidths: const {
-                            1: MinColumnWidth(
+                            0: MinColumnWidth(
                               IntrinsicColumnWidth(),
-                              FractionColumnWidth(1),
+                              FractionColumnWidth(0.5),
                             ),
+                            1: FlexColumnWidth(),
                           },
                           defaultVerticalAlignment:
                               TableCellVerticalAlignment.middle,
@@ -732,13 +734,18 @@ class _NowTile extends StatelessWidget {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    '${f.done}/${f.total}',
-                                    maxLines: 1,
-                                    style: _dim,
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: AraSpace.s4,
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      '${f.done}/${f.total}',
+                                      maxLines: 1,
+                                      style: _dim,
+                                    ),
                                   ),
                                 ),
                               ],
