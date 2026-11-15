@@ -16,7 +16,7 @@ class _Site extends SiteSettingsNotifier {
 
 void main() {
   test(
-    'Tonight\'s Best ranks again on the sky clock tick, from the clock\'s now',
+    "Tonight's Best ranks again on the sky clock tick, from the clock's now",
     () async {
       var now = DateTime.utc(2026, 1, 15, 20);
       final tick = StreamController<int>();
