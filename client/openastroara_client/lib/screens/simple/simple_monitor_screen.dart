@@ -308,7 +308,7 @@ class _Grid extends StatelessWidget {
         padding: EdgeInsets.only(bottom: stop + _kGap),
         children: [
           for (final (tile, height) in [
-            (now, 220.0),
+            (now, 440.0),
             (target, 150.0),
             (flip, 150.0),
             if (safety != null) (safety, strip),
@@ -676,43 +676,101 @@ class _NowTile extends StatelessWidget {
         Text(task, style: kSimpleReading, maxLines: 2, overflow: TextOverflow.ellipsis),
         if (sub != null) Text(sub, style: _dim),
         const SizedBox(height: AraSpace.s8),
+        // A phone (#1915): Up next goes under the state block, so the countdown
+        // and the state word keep the tile's whole width.
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(child: big),
-            const SizedBox(width: AraSpace.s16),
-            SizedBox(width: 190, child: _UpNext(s: s)),
-          ]),
+          child: MediaQuery.sizeOf(context).width < kMonitorMinWidth
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Align(alignment: Alignment.centerLeft, child: big),
+                    ),
+                    const SizedBox(height: AraSpace.s8),
+                    _UpNext(s: s),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: big),
+                    const SizedBox(width: AraSpace.s16),
+                    SizedBox(width: 190, child: _UpNext(s: s)),
+                  ],
+                ),
         ),
         if (n.filters.isNotEmpty) ...[
           const SizedBox(height: AraSpace.s8),
-          Row(children: [
-            for (final f in n.filters)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(f.filter,
-                            maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleText.copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                      Flexible(child: Text('${f.done}/${f.total}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim)),
-                    ]),
-                    const SizedBox(height: 3),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AraRadius.field),
-                      child: LinearProgressIndicator(
-                        value: f.total == 0 ? 0 : f.done / f.total,
-                        minHeight: 6,
-                        // Finished green, in hand blue.
-                        color: f.done >= f.total ? AraColors.accentConnected : AraColors.accentInfo,
-                        backgroundColor: AraColors.bgInput,
-                      ),
+          Row(
+            children: [
+              for (final f in n.filters)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The name keeps its width up to half the cell; the
+                        // count gets the rest, after a gap, and shrinks only
+                        // when it does not fit (#1915).
+                        Table(
+                          columnWidths: const {
+                            0: MinColumnWidth(
+                              IntrinsicColumnWidth(),
+                              FractionColumnWidth(0.5),
+                            ),
+                            1: FlexColumnWidth(),
+                          },
+                          defaultVerticalAlignment:
+                              TableCellVerticalAlignment.middle,
+                          children: [
+                            TableRow(
+                              children: [
+                                Text(
+                                  f.filter,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: kSimpleText.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: AraSpace.s4,
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      '${f.done}/${f.total}',
+                                      maxLines: 1,
+                                      style: _dim,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AraRadius.field),
+                          child: LinearProgressIndicator(
+                            value: f.total == 0 ? 0 : f.done / f.total,
+                            minHeight: 6,
+                            // Finished green, in hand blue.
+                            color: f.done >= f.total
+                                ? AraColors.accentConnected
+                                : AraColors.accentInfo,
+                            backgroundColor: AraColors.bgInput,
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
+                  ),
                 ),
-              ),
-          ]),
+            ],
+          ),
         ],
       ],
     );
