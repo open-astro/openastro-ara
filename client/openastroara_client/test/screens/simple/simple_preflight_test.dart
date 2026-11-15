@@ -8,6 +8,8 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
@@ -73,6 +75,14 @@ class _Plan extends SimpleRunNotifier {
   }
 }
 
+/// A mount that takes the tracking ask: the Guide step turns tracking on first (#1888).
+class _Mount extends MountNotifier {
+  @override
+  Future<MountStatus?> build() async => null;
+  @override
+  Future<bool> setTracking(bool enabled) async => true;
+}
+
 /// A connected guider, stopped until [startGuiding]; records the asks.
 class _Guider extends GuiderStatusNotifier {
   final calls = <String>[];
@@ -110,6 +120,7 @@ Future<(ProviderContainer, _PolarApi)> _container(
   final c = ProviderContainer(
     overrides: [
       if (guider != null) guiderStatusProvider.overrideWith(() => guider),
+      mountProvider.overrideWith(_Mount.new),
       polarAlignLiveProvider.overrideWith(_Live.new),
       nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
       nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),

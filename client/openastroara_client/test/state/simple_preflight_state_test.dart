@@ -7,6 +7,11 @@ import 'package:openastroara/models/polar_align.dart'
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
@@ -94,13 +99,47 @@ class _StatusApi implements PolarAlignClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<ProviderContainer> _container({bool prefs = true}) async {
+/// What the mount and the guider were asked, in order.
+final _asks = <String>[];
+
+class _Mount extends MountNotifier {
+  /// Tracking asks to refuse first; -1 refuses every one.
+  int refuse = 0;
+  @override
+  Future<MountStatus?> build() async => null;
+  @override
+  Future<bool> setTracking(bool enabled) async {
+    _asks.add('tracking:$enabled');
+    if (refuse != 0) {
+      if (refuse > 0) refuse--;
+      throw StateError('Mount is parked');
+    }
+    return true;
+  }
+}
+
+class _Guider extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => GuiderStatus.fromJson({
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {'state': 'stopped'},
+  });
+  @override
+  Future<void> startGuiding() async => _asks.add('startGuiding');
+}
+
+Future<ProviderContainer> _container({bool prefs = true, int refuseTracking = 0}) async {
+  _asks.clear();
   final c = ProviderContainer(
     overrides: [
       polarAlignLiveProvider.overrideWith(_Live.new),
       nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
       nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
       polarAlignApiProvider.overrideWithValue(_PolarApi()),
+      mountProvider.overrideWith(() => _Mount()..refuse = refuseTracking),
+      guiderStatusProvider.overrideWith(_Guider.new),
       simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
       simpleModePrefsProvider.overrideWithValue(_Prefs(prefs)),
       simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(prefs)),
@@ -325,5 +364,36 @@ void main() {
     live.stopped();
     await c.read(polarAlignLastResultProvider.future);
     expect(c.read(nightPolarAlignStateProvider), SetupStepState.pending);
+  });
+
+  // Falsified by: simple_preflight_state.dart _go, call startGuiding instead of startGuidingTracked.
+  test('2026-11-14: the Guide step turns tracking on before it starts the guider', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(guiderStatusProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(simplePreflightProvider.notifier).start();
+    c.read(simplePreflightProvider.notifier).next();
+    await Future<void>.delayed(Duration.zero);
+    expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
+    expect(_asks, ['tracking:true', 'startGuiding']);
+  });
+
+  // Falsified by: mount_state.dart ensureTracking, return true after the last refused try.
+  test('a mount that refuses tracking every time: no guiding, an error pill', () async {
+    final c = await _container(refuseTracking: -1);
+    await c.read(simpleModeProvider.future);
+    await c.read(guiderStatusProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(simplePreflightProvider.notifier).start();
+    c.read(simplePreflightProvider.notifier).next();
+    await Future<void>.delayed(const Duration(seconds: 6));
+    expect(_asks.where((a) => a == 'tracking:true').length, 5);
+    expect(_asks, isNot(contains('startGuiding')));
+    expect(c.read(simpleMessagesProvider), isNotEmpty);
   });
 }

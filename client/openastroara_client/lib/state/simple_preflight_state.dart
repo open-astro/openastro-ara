@@ -284,7 +284,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
         !ref.read(mainCameraTakingFramesProvider)) {
       unawaited(
         _stepAction(
-          ref.read(guiderStatusProvider.notifier).startGuiding,
+          ref.read(guiderStatusProvider.notifier).startGuidingTracked,
           (l) => l.guideActionStart,
           origin: SimpleStatusOrigin.guide,
         ),

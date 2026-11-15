@@ -47,6 +47,24 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   Future<bool> setTracking(bool enabled) =>
       performAction((api) => api.command('tracking', {'enabled': enabled}));
 
+  /// Tracking on, asked again when a settling mount refuses it: up to five
+  /// tries, a second apart (#1485). Throws the last refusal; false when the
+  /// provider went away mid-retry.
+  Future<bool> ensureTracking() async {
+    Object? last;
+    for (var i = 0; i < 5; i++) {
+      if (!ref.mounted) return false;
+      try {
+        if (await setTracking(true)) return true;
+        last = StateError('The mount did not start tracking.');
+      } catch (e) {
+        last = e;
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    throw last!;
+  }
+
   /// The drive rate, by its ASCOM name ("Sidereal", "Lunar", …), one of
   /// [MountCapabilities.trackingRates] (#1649). Tracking on/off is untouched.
   Future<bool> setTrackingRate(String rate) =>
