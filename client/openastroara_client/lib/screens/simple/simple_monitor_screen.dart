@@ -680,16 +680,24 @@ class _NowTile extends StatelessWidget {
         // and the state word keep the tile's whole width.
         Expanded(
           child: MediaQuery.sizeOf(context).width < kMonitorMinWidth
-              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Expanded(child: Align(alignment: Alignment.centerLeft, child: big)),
-                  const SizedBox(height: AraSpace.s8),
-                  _UpNext(s: s),
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  Expanded(child: big),
-                  const SizedBox(width: AraSpace.s16),
-                  SizedBox(width: 190, child: _UpNext(s: s)),
-                ]),
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Align(alignment: Alignment.centerLeft, child: big),
+                    ),
+                    const SizedBox(height: AraSpace.s8),
+                    _UpNext(s: s),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: big),
+                    const SizedBox(width: AraSpace.s16),
+                    SizedBox(width: 190, child: _UpNext(s: s)),
+                  ],
+                ),
         ),
         if (n.filters.isNotEmpty) ...[
           const SizedBox(height: AraSpace.s8),
