@@ -175,6 +175,33 @@ void main() {
     });
   }
 
+  // The PUT reply is the rig's copy too: one without the edited key fails the
+  // Save, which keeps the edit and the loaded tag (no default comes back).
+  const replyDrops = {
+    'camera-electronics': 'read_noise_e',
+    'custom-horizon': 'points',
+    'plate-solve': 'center_after_slew',
+    'unguided': 'guard_enabled',
+  };
+  for (final MapEntry(key: route, value: key) in replyDrops.entries) {
+    final section = migratedSections.firstWhere((s) => s.route == route);
+    test('$route: a save reply missing a key fails the Save and keeps the '
+        'edit', () async {
+      final rig = _rig()..dropFromReply[route] = key;
+      final c = _container(rig);
+      await applyProfileUpdated(c, route);
+      final etag = c.read(section.provider).etag;
+      edits[route]!(c);
+      final edited = c.read(section.provider).value;
+      await expectLater(
+        c.read(section.provider.notifier).save(rig.api()),
+        throwsA(anything),
+      );
+      expect(c.read(section.provider).value, same(edited));
+      expect(c.read(section.provider).etag, etag);
+    });
+  }
+
   // The diagnostics radios save on each tap (replaceAndSave).
   const mode = 'diagnostics-mode', tapped = DiagnosticsMode.abortOnCritical;
 

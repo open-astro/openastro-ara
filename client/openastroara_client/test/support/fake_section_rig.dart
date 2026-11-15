@@ -28,6 +28,9 @@ class FakeSectionRig implements HttpClientAdapter {
   /// Each entry fails one PUT to its section with a 500 (nothing written).
   final List<String> failPut = [];
 
+  /// Section -> a key its PUT reply leaves out (the write still lands).
+  final Map<String, String> dropFromReply = {};
+
   /// Every write that landed, in order.
   final List<LandedPut> puts = [];
 
@@ -82,7 +85,11 @@ class FakeSectionRig implements HttpClientAdapter {
         puts.add((section: section, body: options.data, ifMatch: ifMatch));
         _sections[section] = options.data;
         savedElsewhere(section);
-        return _json(options.data, 200, etag: etagOf(section));
+        final drop = dropFromReply[section];
+        final reply = drop == null
+            ? options.data
+            : ({...options.data as Map}..remove(drop));
+        return _json(reply, 200, etag: etagOf(section));
       default:
         return _json({'title': 'method not allowed'}, 405);
     }
