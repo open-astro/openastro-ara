@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
             Assert.That(captured, Is.Not.Null);
             // The Body that CreateAsync receives should have target_name substituted.
             var bodyText = captured!.Body.GetRawText();
-            Assert.That(bodyText, Does.Contain("\"target\": \"M31\""));
+            Assert.That(bodyText, Does.Contain("LRGB - M31"));
             Assert.That(bodyText, Does.Not.Contain("{{target_name}}"));
         }
 
