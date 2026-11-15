@@ -84,7 +84,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
     if (gate != null) return gate;
     final u = ref.watch(unguidedSettingsProvider).value!;
     final n = ref.read(unguidedSettingsProvider.notifier);
-    final dim = Theme.of(context).textTheme.labelSmall?.copyWith(color: AraColors.textDisabled);
+    final dim = Theme.of(context).textTheme.labelSmall?.copyWith(color: AraColors.textSecondary);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
