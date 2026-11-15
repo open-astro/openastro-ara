@@ -171,33 +171,28 @@ void main() {
     },
   );
 
-  test(
-    'touching one knob before restore keeps the OTHER persisted value',
-    () async {
-      container.dispose();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
-          .save(delaySec: 42, tone: 'chime');
-      container = ProviderContainer(
-        overrides: [
-          wsEventStreamProvider.overrideWith((ref) {
-            stream.connect();
-            return stream;
-          }),
-          safetyAlarmPrefsProvider.overrideWithValue(
-            SafetyAlarmPrefsService(supportDir: () async => prefsDir),
-          ),
-        ],
-      );
-      await loadSection(
-        container,
-        notificationsSettingsProvider,
-        'notifications',
-      );
-      container.listen(safetyAlarmProvider, (prev, next) {});
-      final c = container.read(safetyAlarmProvider.notifier);
-      c.playerFactory = () => player;
-      c.setTone('beeps'); // touch ONLY the tone before restore lands
+  test('touching one knob before restore keeps the OTHER persisted value', () async {
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
+        .save(delaySec: 42, tone: 'chime');
+    container = ProviderContainer(overrides: [
+      wsEventStreamProvider.overrideWith((ref) {
+        stream.connect();
+        return stream;
+      }),
+      safetyAlarmPrefsProvider.overrideWithValue(
+          SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
+    ]);
+    await loadSection(
+      container,
+      notificationsSettingsProvider,
+      'notifications',
+    );
+    container.listen(safetyAlarmProvider, (prev, next) {});
+    final c = container.read(safetyAlarmProvider.notifier);
+    c.playerFactory = () => player;
+    c.setTone('beeps'); // touch ONLY the tone before restore lands
 
     for (var i = 0; i < 40 &&
         container.read(safetyAlarmProvider).delaySec != 42; i++) {
@@ -227,38 +222,33 @@ void main() {
     expect(player.played, hasLength(1), reason: 'no second siren stacked');
   });
 
-  test(
-    'the persisted delay and tone apply even to an event racing app launch',
-    () async {
-      // Drop the setUp container FIRST and let its chained persist flush, or
-      // its deferred write clobbers the seed below.
-      container.dispose();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      // Seed prefs BEFORE a fresh controller builds, and never touch the knobs.
-      await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
-          .save(delaySec: 0, tone: 'chime');
-      container = ProviderContainer(
-        overrides: [
-          wsEventStreamProvider.overrideWith((ref) {
-            stream.connect();
-            return stream;
-          }),
-          safetyAlarmPrefsProvider.overrideWithValue(
-            SafetyAlarmPrefsService(supportDir: () async => prefsDir),
-          ),
-        ],
-      );
-      await loadSection(
-        container,
-        notificationsSettingsProvider,
-        'notifications',
-      );
-      container.listen(safetyAlarmProvider, (prev, next) {});
-      final c = container.read(safetyAlarmProvider.notifier);
-      c.playerFactory = () => player;
-      // Trigger IMMEDIATELY — before the async prefs read can have resolved.
-      c.trigger('launch race');
-      await settle();
+  test('the persisted delay and tone apply even to an event racing app launch', () async {
+    // Drop the setUp container FIRST and let its chained persist flush, or
+    // its deferred write clobbers the seed below.
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // Seed prefs BEFORE a fresh controller builds, and never touch the knobs.
+    await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
+        .save(delaySec: 0, tone: 'chime');
+    container = ProviderContainer(overrides: [
+      wsEventStreamProvider.overrideWith((ref) {
+        stream.connect();
+        return stream;
+      }),
+      safetyAlarmPrefsProvider.overrideWithValue(
+          SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
+    ]);
+    await loadSection(
+      container,
+      notificationsSettingsProvider,
+      'notifications',
+    );
+    container.listen(safetyAlarmProvider, (prev, next) {});
+    final c = container.read(safetyAlarmProvider.notifier);
+    c.playerFactory = () => player;
+    // Trigger IMMEDIATELY — before the async prefs read can have resolved.
+    c.trigger('launch race');
+    await settle();
 
     expect(player.played, ['audio/alarm_chime.wav'],
         reason: 'the ring must use the persisted tone, not the siren default');
