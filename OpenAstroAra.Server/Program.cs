@@ -235,6 +235,7 @@ public partial class Program {
         // Phase 13.7 — placeholder IServerStateService for the §60.4 state
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
+        builder.Services.AddSingleton<IDaemonRestarter, ExitDaemonRestarter>();
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
         // §27 single-client policy — owns the controlling session slot, the takeover
         // dance (connection.request/response over WS), and holder liveness.

@@ -64,8 +64,7 @@ public interface IGuiderProcessSupervisor {
 /// <summary>
 /// <c>systemctl</c>-backed <see cref="IGuiderProcessSupervisor"/>. Linux/Pi only in effect — on a
 /// host without <c>systemctl</c> (dev/CI) every call degrades to a safe no-op
-/// (<see cref="GuiderProcessStatus.Unknown"/> / swallowed restart), mirroring the §13 server
-/// self-restart pattern (<c>PlaceholderServerStateService.TrySpawnSystemctl</c>).
+/// (<see cref="GuiderProcessStatus.Unknown"/> / swallowed restart).
 /// </summary>
 public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSupervisor {
 
