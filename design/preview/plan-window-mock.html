@@ -1,0 +1,241 @@
+<title>Ara Plan Window</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), copied from design/preview/simple-calibration-mock.html.
+     Layout: the iPad scene, the Plan sheet beside the right rail; lists column left of the plan, stacked when narrow. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --stop: #D32F2F; --tint: rgba(66,165,245,.18); --selbg: rgba(25,118,210,.32);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 76ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .ipad { min-height: 820px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(14,14,14,.92); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 4px 2px; }
+  .chip.on { background: var(--sel); color: #fff; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  .shutter b { width: 0; height: 0; border-left: 20px solid #fff; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 6px; }
+  .stop { right: 22px; bottom: 16px; width: 60px; height: 60px; border-radius: 10px; background: var(--stop); color: #fff; font: 700 12px var(--sys); display: grid; place-items: center; position: absolute; }
+
+  .sheet { right: 104px; top: 16px; bottom: 92px; width: min(660px, calc(100% - 120px)); overflow: auto; padding: 14px 16px;
+           display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .sect { color: var(--text2); font-size: 12px; letter-spacing: .06em; display: flex; justify-content: space-between; gap: 8px; }
+  .sect small { letter-spacing: 0; }
+  .card { display: flex; flex-direction: column; gap: 1px; text-align: left; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px;
+          background: var(--tile); color: var(--text); font: 14px var(--sys); cursor: pointer; min-height: 44px; }
+  .card small { color: var(--text2); font-size: 12px; }
+  .card.sel { background: var(--selbg); box-shadow: inset 0 0 0 1.5px var(--link); }
+  .card.sel small { color: #cfe3fb; }
+  .card .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card .hrs { font-variant-numeric: tabular-nums; color: var(--ok); font-size: 13px; white-space: nowrap; }
+  .tag { font-size: 11px; padding: 0 6px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--border); color: var(--text2); white-space: nowrap; }
+  .tag.img { color: var(--ok); box-shadow: inset 0 0 0 1px rgba(76,175,80,.6); }
+
+  .search { display: flex; gap: 8px; }
+  .search input { flex: 1; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--border); background: #111; color: var(--text);
+                  font: 14px var(--sys); padding: 0 12px; }
+  .search input.filled { border-color: var(--link); background: rgba(25,118,210,.12); }
+  .btn { min-height: 44px; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 8px 12px; white-space: nowrap; }
+  .btn.out { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .btn.go { background: #1565C0; color: #fff; }
+  .rowline { color: var(--text2); font-size: 13px; }
+  .rowline b { color: var(--text); font-weight: 600; }
+
+  .hero { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 10px; border-radius: 12px;
+          background: var(--selbg); box-shadow: inset 0 0 0 1.5px var(--link); }
+  .thumb { width: 76px; height: 76px; border-radius: 8px; background:
+           radial-gradient(circle at 50% 50%, rgba(255,140,170,.85) 0 8%, rgba(160,80,200,.45) 22%, transparent 45%),
+           radial-gradient(circle at 30% 30%, #fff 0 1px, transparent 2px), radial-gradient(circle at 75% 65%, #fff 0 1px, transparent 2px),
+           radial-gradient(circle at 60% 20%, #ddd 0 1px, transparent 2px), #0b0d14; }
+  .hero h2 { font-size: 18px; margin: 0; font-weight: 600; line-height: 1.25; }
+  .hero .src { color: #cfe3fb; font-size: 12px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .facts span small { color: #cfe3fb; display: block; font-size: 11px; }
+  .empty { border: 1px dashed var(--border); border-radius: 12px; padding: 14px; color: var(--text2); font-size: 13px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips span { padding: 6px 12px; border-radius: 8px; background: var(--tile); font-size: 13px; }
+  .chips span.on { background: var(--sel); color: #fff; }
+  .frow { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 8px; align-items: center; }
+  .frow .f { font-weight: 600; text-align: center; }
+  .tile { min-height: 44px; border-radius: 10px; background: var(--tile); padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .tile small { color: var(--text2); font-size: 11px; }
+  .tile input { background: transparent; border: 0; color: var(--text); font: 14px var(--sys); width: 100%; padding: 0; font-variant-numeric: tabular-nums; }
+  .tile.typed { box-shadow: inset 0 0 0 1px var(--link); }
+  .prog { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #2a2a2a; padding-top: 8px; }
+  .bar { height: 6px; border-radius: 3px; background: #2a2a2a; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--info); }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 10px; }
+  .legend { color: var(--busy); font-size: 12px; }
+
+  .square { position: absolute; right: 104px; bottom: 16px; width: 72px; height: 100px; border-radius: 10px; background: rgba(14,14,14,.92);
+            box-shadow: inset 0 0 0 1px var(--border); padding: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; text-align: center; }
+  .square b { font-size: 13px; }
+  .square small { color: var(--text2); font-size: 11px; }
+
+  @media (max-width: 760px) {
+    .ipad { min-height: 0; padding: 12px; }
+    .p { position: static; }
+    .rail, .stop, .square { display: none; }
+    .sheet { position: static; width: 100%; grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: no-preference) { .card, .bar i { transition: background .15s, width .4s; } }
+</style>
+
+<div class="page">
+  <h1>Plan window: what is picked, what is best now, what you did before</h1>
+  <p class="note">Example data only. Tonight's log: IC 5148, L 60 s, loop 0 / 240 with 2 lights taken. Dashed amber outlines mark what is new against today's Plan sheet. Tap any target card to pick it. Chosen 14 Nov: A, with the picked target's list card tinted too; Recent shows a fixed 5; a searched target that never clears 30° tonight stays, greyed, "not up tonight"; the "fits N" line stays; narrow windows stack Recent under Tonight's Best.</p>
+  <div class="controls">
+    <span><span class="lbl">Selected target</span><span class="seg" id="variant">
+      <button type="button" aria-pressed="true" data-v="A">A · Target card · chosen</button>
+      <button type="button" aria-pressed="false" data-v="B">B · Search box + tint</button></span></span>
+    <span><span class="lbl">Clock</span><span class="seg" id="clock">
+      <button type="button" aria-pressed="true" data-t="22:05">22:05</button>
+      <button type="button" aria-pressed="false" data-t="01:40">01:40</button></span></span>
+    <span><span class="lbl">Queue</span><span class="seg" id="queue">
+      <button type="button" aria-pressed="false" data-q="0">Not started</button>
+      <button type="button" aria-pressed="true" data-q="1">Imaging</button></span></span>
+    <span class="legend">┄ new</span>
+  </div>
+
+  <div class="ipad">
+    <div class="p rail">
+      <div class="chip">Preview</div><div class="chip">Focus</div><div class="chip">P.A.</div><div class="chip">Guider</div>
+      <div class="chip on">Queue</div><div class="shutter" aria-label="Start the plan"><b></b></div>
+    </div>
+    <div class="stop" aria-label="Emergency stop">STOP</div>
+    <div class="square" id="square"></div>
+
+    <div class="p sheet" id="sheet">
+      <div class="col">
+        <div class="sect new"><span>TONIGHT'S BEST</span><small id="upd">for the rest of tonight · updated 22:05</small></div>
+        <div class="col" id="best"></div>
+        <div class="sect new" style="margin-top:8px"><span>RECENT</span><small>last 5 · imaged and searched</small></div>
+        <div class="col new" id="recent"></div>
+      </div>
+      <div class="col">
+        <div id="picked"></div>
+        <div class="search">
+          <input id="q" type="text" placeholder="Search, or pick in the sky." aria-label="Search targets">
+          <button type="button" class="btn out">Pick in Sky</button>
+        </div>
+        <div id="pickedLine" class="rowline"></div>
+        <div class="sect" style="margin-top:6px"><span>FILTERS</span></div>
+        <div class="chips"><span class="on">L</span><span>R</span><span>G</span><span>B</span><span>Ha</span></div>
+        <div class="frow"><span class="f">L</span>
+          <div class="tile"><small>Exposure</small>60 s</div>
+          <div class="tile typed new"><small>Frames · typed, kept</small><input id="frames" type="number" inputmode="numeric" value="240" min="1" aria-label="Frames for L"></div>
+        </div>
+        <div class="rowline" id="total"></div>
+        <div class="prog new" id="prog"></div>
+        <div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap">
+          <button type="button" class="btn out" style="flex:1">Add to queue</button>
+          <button type="button" class="btn go" style="flex:1">Start now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Example targets. hrsLeft = hours above 30° from the clock until dawn; up = altitude now.
+const T = {
+  "22:05": [
+    { id: "IC 5148", name: "Spare Tyre Nebula", type: "Planetary nebula", hrs: 5.6, up: 71, frame: 0.92 },
+    { id: "NGC 253", name: "Sculptor Galaxy", type: "Galaxy", hrs: 5.2, up: 58, frame: 0.97 },
+    { id: "NGC 7293", name: "Helix Nebula", type: "Planetary nebula", hrs: 3.9, up: 66, frame: 0.95 },
+    { id: "NGC 300", name: "Sculptor Pinwheel", type: "Galaxy", hrs: 3.9, up: 49, frame: 0.88 },
+    { id: "NGC 2070", name: "Tarantula Nebula", type: "Emission nebula", hrs: 6.4, up: 22, frame: 0.9, rises: "above 30° at 23:10" },
+  ],
+  "01:40": [
+    { id: "NGC 2070", name: "Tarantula Nebula", type: "Emission nebula", hrs: 3.1, up: 52, frame: 0.9 },
+    { id: "M42", name: "Orion Nebula", type: "Emission nebula", hrs: 2.6, up: 44, frame: 0.94 },
+    { id: "NGC 253", name: "Sculptor Galaxy", type: "Galaxy", hrs: 1.7, up: 47, frame: 0.97 },
+    { id: "NGC 1365", name: "Great Barred Spiral", type: "Galaxy", hrs: 1.7, up: 61, frame: 0.86 },
+  ],
+};
+const RECENT = [
+  { id: "IC 5148", name: "Spare Tyre Nebula", kind: "img", when: "Tonight", more: "0.1 h so far", hrs: 5.6, up: 71 },
+  { id: "NGC 6744", name: "", kind: "srch", when: "Yesterday", more: "searched", hrs: 0.8, up: 34 },
+  { id: "NGC 7293", name: "Helix Nebula", kind: "img", when: "8 Nov", more: "3.4 h so far", hrs: 3.9, up: 66 },
+  { id: "Sh2-240", name: "Spaghetti Nebula", kind: "srch", when: "6 Nov", more: "searched · not up tonight", hrs: 0, up: -12 },
+  { id: "NGC 300", name: "Sculptor Pinwheel", kind: "img", when: "3 Nov", more: "1.9 h so far", hrs: 3.9, up: 49 },
+];
+const S = { v: "A", t: "22:05", q: 1, sel: T["22:05"][0], src: "Tonight's best" };
+const $ = (id) => document.getElementById(id);
+const fmtH = (h) => h <= 0 ? "not above 30° tonight" : `${h.toFixed(1)} h left above 30°`;
+
+function rank(list) { // hours left first, framing as tie-break
+  return [...list].sort((a, b) => b.hrs - a.hrs || b.frame - a.frame);
+}
+function card(o, src, extra) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "card" + (S.sel.id === o.id ? " sel" : "");
+  b.setAttribute("aria-pressed", S.sel.id === o.id);
+  b.innerHTML = `<span class="top"><span>${o.id}${o.name ? " · " + o.name : ""}</span>${extra || ""}</span>
+    <small>${o.type ? o.type + " · " : ""}${o.up > 0 ? o.up + "° up" : "below the horizon"}${o.rises ? " · " + o.rises : ""}</small>`;
+  b.onclick = () => { S.sel = o; S.src = src; render(); };
+  return b;
+}
+function render() {
+  document.querySelectorAll("#variant button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === S.v));
+  document.querySelectorAll("#clock button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.t === S.t));
+  document.querySelectorAll("#queue button").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.q === S.q));
+  $("upd").textContent = `for the rest of tonight · updated ${S.t}`;
+
+  const best = $("best"); best.replaceChildren();
+  rank(T[S.t]).slice(0, 4).forEach((o) => best.append(card(o, "Tonight's best", `<span class="hrs">${o.hrs.toFixed(1)} h</span>`)));
+  const rec = $("recent"); rec.replaceChildren();
+  RECENT.forEach((o) => rec.append(card(o, o.kind === "img" ? "Recent · imaged" : "Recent · searched",
+    `<span class="tag ${o.kind === "img" ? "img" : ""}">${o.when}</span>`)));
+  rec.querySelectorAll(".card").forEach((c, i) => {
+    c.querySelector("small").textContent = RECENT[i].more + (RECENT[i].up > 0 ? ` · ${RECENT[i].up}° up` : "");
+    if (RECENT[i].hrs <= 0) c.style.opacity = ".5"; // never above 30° tonight: kept, greyed
+  });
+
+  const s = S.sel, q = $("q");
+  if (S.v === "A") {
+    $("picked").className = "new";
+    $("picked").innerHTML = `<div class="hero"><div class="thumb" role="img" aria-label="Album art"></div><div style="min-width:0">
+      <div class="src">Picked · ${S.src}</div><h2>${s.id}${s.name ? " · " + s.name : ""}</h2>
+      <div class="facts"><span><small>Altitude now</small>${s.up > 0 ? s.up + "°" : "Below"}</span>
+      <span><small>Tonight</small>${fmtH(s.hrs)}</span>${s.type ? `<span><small>Type</small>${s.type}</span>` : ""}</div></div></div>`;
+    q.value = ""; q.classList.remove("filled"); $("pickedLine").innerHTML = "";
+  } else {
+    $("picked").className = ""; $("picked").innerHTML = "";
+    q.value = s.id + (s.name ? " · " + s.name : ""); q.classList.add("filled");
+    $("pickedLine").innerHTML = `<b>${s.id}</b> · ${s.up > 0 ? s.up + "° up" : "below the horizon"} · ${fmtH(s.hrs)} <span class="legend">(B: name filled in the search, list card tinted)</span>`;
+  }
+
+  const m = Math.max(1, +$("frames").value || 1);
+  $("total").textContent = `${m} frames · ${Math.floor(m / 60)} h ${m % 60} min · fits ${s.hrs > 0 ? Math.min(m, Math.floor(s.hrs * 60)) : 0} of them before 30°/dawn`;
+  const n = S.q ? 2 : 0;
+  $("prog").innerHTML = `<div class="rowline">${S.q ? "In the queue · from the rig's own count" : "Not started"} · <b>${n} / ${m}</b> lights of ${s.id}</div>
+    <div class="bar"><i style="width:${(n / m) * 100}%"></i></div>`;
+  $("square").innerHTML = `<b>${s.id}</b><span>${n} / ${m}</span><small>L · 60 s</small><small>${S.q ? "3 h 58 min left" : "4 h 00 min"}</small>`;
+}
+document.querySelectorAll("#variant button").forEach((b) => (b.onclick = () => { S.v = b.dataset.v; render(); }));
+document.querySelectorAll("#clock button").forEach((b) => (b.onclick = () => { S.t = b.dataset.t; S.sel = rank(T[S.t])[0]; S.src = "Tonight's best"; render(); }));
+document.querySelectorAll("#queue button").forEach((b) => (b.onclick = () => { S.q = +b.dataset.q; render(); }));
+$("frames").oninput = render;
+render();
+</script>
+

@@ -80,6 +80,23 @@ List<FilterPlanStep> simpleRunDefaultPlan(
 int simplePlanTotal(List<FilterPlanStep> steps) =>
     steps.fold(0, (n, s) => n + s.frameCount);
 
+/// How many of the plan's frames fit in [hoursLeft] (above 30°, before
+/// dawn): each row gets an equal share of the hours, as `planFrameCount`
+/// splits them, and fits `share / sub length` frames, never more than typed.
+/// Pure — unit-tested.
+int simpleFramesThatFit(List<FilterPlanStep> steps, double hoursLeft) {
+  if (steps.isEmpty) return 0;
+  final share = hoursLeft * 3600 / steps.length;
+  return steps.fold(
+    0,
+    (n, s) =>
+        n +
+        (s.exposureSeconds <= 0
+            ? s.frameCount
+            : math.min(s.frameCount, share ~/ s.exposureSeconds)),
+  );
+}
+
 const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
 final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
 

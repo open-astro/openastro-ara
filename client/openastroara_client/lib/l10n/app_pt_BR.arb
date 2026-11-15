@@ -1623,5 +1623,10 @@
   "wizardDiscoveryFailed": "A descoberta falhou",
   "wizardDiscoveryNoDevices": "Nenhum dispositivo encontrado",
   "wizardDiscoveryNoDevicesDetail": "Confirme que o driver está em execução e acessível na sub-rede do Ara; depois procure de novo.",
-  "wizardDiscoveryDeviceLine": "{address} ·  dispositivo nº {number}\nAnunciado — a conectividade é verificada quando você se conecta"
+  "wizardDiscoveryDeviceLine": "{address} ·  dispositivo nº {number}\nAnunciado — a conectividade é verificada quando você se conecta",
+  "planRecent": "RECENTES",
+  "planNotUpTonight": "não aparece esta noite",
+  "planNotAbove30": "Não passa dos 30° esta noite",
+  "planHoursLeft": "{hours} h restantes acima dos 30°",
+  "planFramesFit": "Cabem {fits} deles antes dos 30°/amanhecer"
 }

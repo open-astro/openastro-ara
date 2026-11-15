@@ -5833,6 +5833,25 @@ class AppLocalizationsPt extends AppLocalizations {
   String wizardDiscoveryDeviceLine(String address, int number) {
     return '$address ·  device #$number\nAdvertised — connectivity is verified when you connect';
   }
+
+  @override
+  String get planRecent => 'RECENT';
+
+  @override
+  String get planNotUpTonight => 'not up tonight';
+
+  @override
+  String get planNotAbove30 => 'Not above 30° tonight';
+
+  @override
+  String planHoursLeft(String hours) {
+    return '$hours h left above 30°';
+  }
+
+  @override
+  String planFramesFit(int fits) {
+    return 'Fits $fits of them before 30°/dawn';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -11708,5 +11727,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String wizardDiscoveryDeviceLine(String address, int number) {
     return '$address ·  dispositivo nº $number\nAnunciado — a conectividade é verificada quando você se conecta';
+  }
+
+  @override
+  String get planRecent => 'RECENTES';
+
+  @override
+  String get planNotUpTonight => 'não aparece esta noite';
+
+  @override
+  String get planNotAbove30 => 'Não passa dos 30° esta noite';
+
+  @override
+  String planHoursLeft(String hours) {
+    return '$hours h restantes acima dos 30°';
+  }
+
+  @override
+  String planFramesFit(int fits) {
+    return 'Cabem $fits deles antes dos 30°/amanhecer';
   }
 }

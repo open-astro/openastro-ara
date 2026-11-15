@@ -189,6 +189,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   /// #1176 — hide targets with a catalogued magnitude fainter than this;
   /// null = off. Magnitude-less targets always stay.
   double? magnitudeFloor,
+
+  /// Plan's Tonight's Best: rank for the rest of tonight — hours above
+  /// [kRankMinAltDeg] from now to dawn first, framing then score as
+  /// tie-breaks — rather than by the whole-night score.
+  bool restOfNight = false,
 }) {
   // The curated imaging-regions layer (realistic extents + evocative names for
   // the famous complexes, plus region-scale fields with no catalog anchor)
@@ -211,6 +216,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final lon = site.longitudeDeg;
   final lst0 = _localSiderealTimeDeg(at, lon);
   final fov = _fovArcmin(optics, mosaicTilesX, mosaicTilesY);
+  final span = restOfNight ? restOfNightSpan(site, at) : null;
 
   // The night sample grid, object-independent: LST + is-the-sky-dark at each
   // 5-min sample across ±12 h. The grid is anchored on the NIGHT, not the
@@ -668,6 +674,9 @@ List<TonightSkyObject> computeTonightSkyLocal({
         transitUtc: transitUtc,
         integrationHours: double.parse(integrationHours.toStringAsFixed(2)),
         remainingHours: double.parse(remainingHours.toStringAsFixed(2)),
+        hoursLeft: span == null
+            ? 0
+            : hoursAboveInSpan(span, o.raDeg, o.decDeg, site),
         framing: framing,
         score: double.parse(finalScore.toStringAsFixed(1)),
         // The multiplicative adjustments scale the whole score, so the
@@ -692,6 +701,16 @@ List<TonightSkyObject> computeTonightSkyLocal({
   }
 
   scored.sort((a, b) {
+    if (restOfNight) {
+      // Quarter-hour buckets, so near-equal hours fall through to framing.
+      final h = (b.$2.hoursLeft * 4).round().compareTo(
+        (a.$2.hoursLeft * 4).round(),
+      );
+      if (h != 0) return h;
+      final f = _framingRank(b.$2.framing)
+          .compareTo(_framingRank(a.$2.framing));
+      if (f != 0) return f;
+    }
     final c = b.$1.compareTo(a.$1);
     return c != 0 ? c : a.$2.id.compareTo(b.$2.id);
   });
@@ -700,6 +719,13 @@ List<TonightSkyObject> computeTonightSkyLocal({
       : scored;
   return [for (final s in capped) s.$2];
 }
+
+int _framingRank(TonightFraming f) => switch (f) {
+  TonightFraming.good => 4,
+  TonightFraming.goodFit => 3,
+  TonightFraming.tooSmall || TonightFraming.tooBig => 2,
+  _ => 1,
+};
 
 /// #1176 moon multiplier: 1 − maxPenalty × lit × moonUpFraction × proximity;
 /// proximity = clamp((60 − separation) / 60, 0, 1).
@@ -947,6 +973,49 @@ DateTime? nightEnd(SiteSettings site, DateTime startUtc) {
     if (!dark(t)) return t;
   }
   return null;
+}
+
+/// The lowest altitude Plan's Tonight's Best counts a target as usable at.
+const double kRankMinAltDeg = 30;
+
+/// What is left of tonight at [site]: from the later of now and dark to the
+/// dawn of the site's twilight line (the same dawn the plan stops at, #1560).
+/// Null with no site, or when there is no night to run into.
+({DateTime from, DateTime to})? restOfNightSpan(
+  SiteSettings site,
+  DateTime nowUtc,
+) {
+  final from = darkStart(site, nowUtc) ?? nowUtc.toUtc();
+  final to = nightEnd(site, from);
+  return to == null ? null : (from: from, to: to);
+}
+
+/// Hours in [span] a position stands at or above [kRankMinAltDeg] at [site],
+/// counted in 5-minute slots.
+double hoursAboveInSpan(
+  ({DateTime from, DateTime to}) span,
+  double raDeg,
+  double decDeg,
+  SiteSettings site,
+) {
+  var slots = 0;
+  for (
+    var t = span.from;
+    t.isBefore(span.to);
+    t = t.add(const Duration(minutes: _windowStepMinutes))
+  ) {
+    if (altitudeDegAt(
+          raDeg,
+          decDeg,
+          latitudeDeg: site.latitudeDeg,
+          longitudeDeg: site.longitudeDeg,
+          utc: t,
+        ) >=
+        kRankMinAltDeg) {
+      slots++;
+    }
+  }
+  return slots * _windowStepMinutes / 60.0;
 }
 
 /// #1560 — the dawn a Simple Mode Session starting at [startUtc] stops at, as

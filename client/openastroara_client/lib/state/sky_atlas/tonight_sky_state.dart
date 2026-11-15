@@ -67,7 +67,21 @@ final tonightSkyAtProvider = FutureProvider.autoDispose
       (ref, atUtc) => _rankAt(ref, atUtc),
     );
 
-Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
+/// Plan's Tonight's Best: ranked for the rest of tonight (hours above 30°
+/// from now to dawn, framing as the tie-break) and re-ranked on every
+/// [skyClockProvider] tick (5 min) while something shows it.
+final tonightsBestProvider = FutureProvider.autoDispose<List<TonightSkyObject>>(
+  (ref) {
+    ref.watch(skyClockProvider);
+    return _rankAt(ref, ref.read(clockProvider)().toUtc(), restOfNight: true);
+  },
+);
+
+Future<List<TonightSkyObject>> _rankAt(
+  Ref ref,
+  DateTime atUtc, {
+  bool restOfNight = false,
+}) async {
   // The awaitable variant rather than collapsing a still-loading state to
   // null: that would resolve this provider to data([]) before the servers
   // finished loading and flash the "no site" empty state for a user whose
@@ -132,6 +146,7 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       mosaicTilesX: mosaicTilesX,
       mosaicTilesY: mosaicTilesY,
       skyCalibrationK: skyCalibrationK,
+      restOfNight: restOfNight,
     ),
   );
 }

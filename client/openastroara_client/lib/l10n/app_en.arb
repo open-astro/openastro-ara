@@ -7517,5 +7517,35 @@
         "type": "int"
       }
     }
+  },
+  "planRecent": "RECENT",
+  "@planRecent": {
+    "description": "Plan sheet caption above the last targets imaged or searched (uppercase)"
+  },
+  "planNotUpTonight": "not up tonight",
+  "@planNotUpTonight": {
+    "description": "Recent target that never clears 30° tonight (second line, lower case)"
+  },
+  "planNotAbove30": "Not above 30° tonight",
+  "@planNotAbove30": {
+    "description": "Picked target card: the target never reaches 30° before dawn"
+  },
+  "planHoursLeft": "{hours} h left above 30°",
+  "@planHoursLeft": {
+    "description": "Picked target card: hours from now to dawn the target is above 30°",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "planFramesFit": "Fits {fits} of them before 30°/dawn",
+  "@planFramesFit": {
+    "description": "Plan warning: only this many of the typed frames fit before the target drops below 30° or dawn",
+    "placeholders": {
+      "fits": {
+        "type": "int"
+      }
+    }
   }
 }

@@ -5833,4 +5833,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String wizardDiscoveryDeviceLine(String address, int number) {
     return '$address ·  device #$number\nAdvertised — connectivity is verified when you connect';
   }
+
+  @override
+  String get planRecent => 'RECENT';
+
+  @override
+  String get planNotUpTonight => 'not up tonight';
+
+  @override
+  String get planNotAbove30 => 'Not above 30° tonight';
+
+  @override
+  String planHoursLeft(String hours) {
+    return '$hours h left above 30°';
+  }
+
+  @override
+  String planFramesFit(int fits) {
+    return 'Fits $fits of them before 30°/dawn';
+  }
 }

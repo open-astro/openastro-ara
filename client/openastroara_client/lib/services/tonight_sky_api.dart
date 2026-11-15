@@ -87,6 +87,10 @@ class TonightSkyObject {
   final double integrationHours;
   final double remainingHours;
 
+  /// Hours from now to dawn above 30° (Plan's rest-of-tonight ranking);
+  /// 0 unless the ranker was asked for it.
+  final double hoursLeft;
+
   /// Equipment-aware fit against the active optical train ([TonightFraming]).
   final TonightFraming framing;
 
@@ -165,6 +169,7 @@ class TonightSkyObject {
     this.transitUtc,
     this.integrationHours = 0,
     this.remainingHours = 0,
+    this.hoursLeft = 0,
     this.framing = TonightFraming.unknown,
     this.score,
     this.scoreReasons,
