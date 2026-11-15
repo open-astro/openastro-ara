@@ -20,6 +20,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using NUnit.Framework;
+using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -298,6 +299,28 @@ public class ProfileShareServiceTest {
         newId.Should().Be(repo.CreatedId);
         repo.CreatedSettings.Should().NotBeNull(); // built from the template's (stripped) settings
         repo.CreatedMakeActive.Should().BeFalse(); // imported as non-active; user wizards + selects it
+    }
+
+    [Test]
+    public async Task Import_commit_strips_the_share_table_fields_of_a_hand_made_file() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        // A hand-made file: a valid export whose settings carry the fields export strips.
+        var exported = share!.Manifest.Deserialize(AraJsonSerializerContext.Default.ProfileShareManifest)!;
+        var sent = DonorSnapshot();
+        var handMade = JsonSerializer.SerializeToElement(
+            exported with { Settings = sent }, AraJsonSerializerContext.Default.ProfileShareManifest);
+
+        var preview = await svc.ImportPreviewAsync(handMade, CancellationToken.None);
+        await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
+
+        var expected = ProfileShareService.StripForShare(sent);
+        var stored = repo.CreatedSettings!;
+        stored.PlateSolve.PathOrEndpoint.Should().Be(expected.PlateSolve.PathOrEndpoint);
+        stored.Notifications.PushoverToken.Should().Be(expected.Notifications.PushoverToken);
+        stored.Notifications.TelegramBotToken.Should().Be(expected.Notifications.TelegramBotToken);
+        stored.Storage.SaveDirectory.Should().Be(expected.Storage.SaveDirectory);
     }
 
     [Test]

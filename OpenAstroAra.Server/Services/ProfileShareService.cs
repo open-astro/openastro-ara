@@ -247,10 +247,11 @@ public sealed class ProfileShareService : IProfileShareService {
             return Task.FromException<Guid>(new ProfileShareImportTokenException(
                 "Import token is unknown or expired — preview the share file again."));
         }
-        // Create as a NON-active profile from the template's (already-stripped)
-        // settings, under the name resolved at preview time (PendingImport.Name);
-        // the recipient selects it and wizards their own equipment in.
-        var meta = _repo.Create(pending.Name, pending.Manifest.Settings, makeActive: false);
+        // Create as a NON-active profile from the template's settings, stripped here
+        // by the same table as export (a hand-made share file is not guaranteed to be
+        // pre-stripped, so only judgement fields get stored), under the name
+        // resolved at preview time (PendingImport.Name); the recipient selects it and wizards their own equipment in.
+        var meta = _repo.Create(pending.Name, StripForShare(pending.Manifest.Settings), makeActive: false);
         return Task.FromResult(meta.Id);
     }
 
