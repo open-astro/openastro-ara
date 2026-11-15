@@ -329,6 +329,30 @@ namespace OpenAstroAra.Test {
             Assert.That(Control(cam).GetSessionLiveStackFrame(), Is.Null);
         }
 
+        // Falsified by: a worker that trusts the engine to be at the current generation. Start, Stop, Reset, disconnect and a
+        // restart call the engine after the lock, in no set order, so an older Enable, or a Stop's Disable after a Start's
+        // Enable, can land last: every later light was then dropped and the status stayed empty until the next Reset.
+        [TestCase("enable")]
+        [TestCase("disable")]
+        public async Task A_late_engine_call_from_an_older_generation_does_not_drop_the_next_light(string late) {
+            using var cam = NewCamera();
+            Control(cam).StartSessionLiveStack();
+            await Save(cam, Light(1));
+            await Stacked(cam, 1);
+            if (late == "enable") {
+                var stale = cam.SessionLiveStack.Snapshot.SessionId;
+                Control(cam).ResetSessionLiveStack();
+                cam.SessionLiveStack.Enable(stale); // the older generation's Enable lands after the Reset's
+            } else {
+                Control(cam).StopSessionLiveStack();
+                Control(cam).StartSessionLiveStack();
+                cam.SessionLiveStack.Disable(); // the Stop's Disable lands after the Start's Enable
+            }
+            await Save(cam, Light(2));
+            await Stacked(cam, 1);
+            Assert.That(Control(cam).GetSessionLiveStackStatus().LastOutcome, Is.EqualTo("reference"));
+        }
+
         // Falsified by: a feed that waits for the stacker (inline Add) holds the save worker: FinishPendingSavesAsync
         // would never return while the stacker is blocked; a third light must be counted skipped_busy but still catalogued.
         [Test]

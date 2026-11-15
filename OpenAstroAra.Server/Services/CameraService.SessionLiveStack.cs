@@ -32,8 +32,9 @@ namespace OpenAstroAra.Server.Services;
 /// One long-lived worker stacks one light while one waits (at most two pending); a third is counted
 /// <c>skipped_busy</c> (saved and catalogued all the same). The engine's session argument is the generation: Reset, Stop,
 /// disconnect and a restart-key change bump it, so an older light is dropped and the status reads empty at once.
-/// Lock order: <c>_sessionStackSync</c> is a leaf (fields only); the engine is never called while it, <c>_gate</c> or
-/// <c>_liveViewMutex</c> is held, because Enable/Disable wait for a running AddColour (seconds on a Pi).
+/// Lock order: <c>_sessionStackSync</c> is a leaf (fields and the engine's volatile Snapshot only); Enable, Disable and
+/// AddColour are never called while it, <c>_gate</c> or <c>_liveViewMutex</c> is held, because they wait for a running
+/// AddColour (seconds on a Pi).
 /// </summary>
 public sealed partial class CameraService : ISessionLiveStackControl {
 
@@ -231,6 +232,7 @@ public sealed partial class CameraService : ISessionLiveStackControl {
             var gen = job.Generation;
             var key = (job.TargetName, job.FilterName, job.SessionId, job.Width, job.Height);
             bool restart;
+            bool behind;
             lock (_sessionStackSync) {
                 if (!_sessionStackOn || _sessionStackGeneration != gen) {
                     return; // the stack was reset, stopped or the camera went since this light was fed
@@ -240,8 +242,12 @@ public sealed partial class CameraService : ISessionLiveStackControl {
                     gen = BumpSessionStackLocked();
                 }
                 _sessionStackKey = key;
+                // Control calls reach the engine after this lock in no set order: an older Enable, or a Stop's Disable after a
+                // Start's Enable, can land last and leave the engine behind this generation, dropping every later light.
+                var s = _sessionStack.Snapshot;
+                behind = !s.Enabled || s.SessionId != gen;
             }
-            if (restart) {
+            if (restart || behind) {
                 _sessionStack.Enable(gen);
             }
             var r = _sessionStack.AddColour(job.Pixels, job.Width, job.Height, job.Pattern, gen);
