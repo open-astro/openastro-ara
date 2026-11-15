@@ -7,6 +7,7 @@ import 'package:openastroara/screens/settings/panels/safety_site_panel.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
+import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
@@ -21,16 +22,22 @@ class _NoServers implements SavedServerService {
 }
 
 void main() {
-  Future<ProviderContainer> pumpPanel(WidgetTester tester) async {
+  Future<ProviderContainer> pumpPanel(
+    WidgetTester tester, {
+    FakeSectionRig? rig,
+  }) async {
     // The settings pane is a wide desktop surface; the default 800x600 test
     // viewport overflows the pre-existing editable rows (fixed 280px labels).
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     late ProviderContainer container;
-    final api = FakeSectionRig({
-      'custom-horizon': {'points': []},
-    }).api();
+    final api =
+        (rig ??
+                FakeSectionRig({
+                  'custom-horizon': {'points': []},
+                }))
+            .api();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -111,5 +118,30 @@ void main() {
     await tester.pump();
     expect(container.read(customHorizonProvider).value!, hasLength(1));
     expect(container.read(customHorizonProvider).value!.single.azimuthDeg, 120);
+  });
+
+  testWidgets('Save writes the skyline once and says so when the site fails', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({
+      'custom-horizon': {'points': []},
+      'site': <String, Object?>{},
+    });
+    final container = await pumpPanel(tester, rig: rig);
+    int skylinePuts() =>
+        rig.puts.where((p) => p.section == 'custom-horizon').length;
+
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(skylinePuts(), 1);
+
+    rig.failPut.add('site');
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(skylinePuts(), 2);
+    expect(
+      find.textContaining('skyline was saved, but the site preferences'),
+      findsWidgets,
+    );
   });
 }

@@ -66,21 +66,21 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   @override
   Future<void> panelSave() async {
     setState(() => _lastError = null);
-    // Two sequential PUTs — track which committed so a partial failure
-    // reports honestly ("site saved; skyline failed") instead of implying
+    // Two sequential PUTs: saveSections writes the skyline, then the site in
+    // andThen. A site failure says the skyline was kept instead of implying
     // the whole Save was rolled back (review r2).
-    var siteSaved = false;
+    var skylineSaved = false;
     final error = await saveSections(
       andThen: (api) async {
+        skylineSaved = true;
         await ref.read(siteSettingsProvider.notifier).persistToServer(api);
-        siteSaved = true;
-        await ref.read(customHorizonProvider.notifier).save(api);
       },
     );
     if (!mounted) return;
     setState(
-      () => _lastError = error != null && siteSaved
-          ? 'Site preferences saved, but the horizon skyline was not. $error'
+      () => _lastError = error != null && skylineSaved
+          ? 'The horizon skyline was saved, but the site preferences were not. '
+                '$error'
           : error,
     );
   }
