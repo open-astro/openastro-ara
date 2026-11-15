@@ -30,8 +30,7 @@ const _paths = [
 ];
 
 FakeSectionRig _rig() => FakeSectionRig({
-  for (final p in _paths) p: <String, Object?>{},
-  'custom-horizon': {'points': []},
+  for (final p in _paths) p: rigDefaults[p] ?? <String, Object?>{},
   'storage': {
     'save_directory': '/data',
     'file_format': 'fits',
@@ -140,6 +139,40 @@ void main() {
         expect(c.read(section.provider).conflict, isTrue);
       },
     );
+  }
+
+  // ADR 0015 rule 3: the rig's copy takes no client default. A reply with no
+  // body, or without any one key, fails the load, so Save writes no default.
+  List<Map<String, Object?>> without(Map<String, Object?> m) => [
+    for (final k in m.keys) {...m}..remove(k),
+  ];
+  final partial = <String, List<Object?>>{
+    for (final r in ['camera-electronics', 'plate-solve', 'unguided'])
+      r: [null, ...without(rigDefaults[r]!)],
+    'custom-horizon': [
+      null,
+      <String, Object?>{},
+      for (final p in without({'azimuth_deg': 90, 'altitude_deg': 20}))
+        {
+          'points': [p],
+        },
+    ],
+  };
+  for (final MapEntry(key: route, value: bodies) in partial.entries) {
+    final section = migratedSections.firstWhere((s) => s.route == route);
+    test('$route: a reply missing a key fails the load and Save writes '
+        'nothing', () async {
+      for (final body in bodies) {
+        final rig = FakeSectionRig({route: body});
+        final n = _container(rig).read(section.provider.notifier);
+        expect(await n.load(rig.api()), isFalse, reason: '$body');
+        await expectLater(
+          n.save(rig.api()),
+          throwsA(isA<SectionNotLoadedException>()),
+        );
+        expect(rig.puts, isEmpty, reason: '$body');
+      }
+    });
   }
 
   // The diagnostics radios save on each tap (replaceAndSave).

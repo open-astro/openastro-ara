@@ -20,10 +20,7 @@ import '../../../support/fake_section_rig.dart';
 /// normalises a stock solver path (/usr/bin/astap) to the bundled
 /// /opt/openastroara/astap_cli on write (#1215, #1136).
 class _NormalisingDaemon implements HttpClientAdapter {
-  Map<String, dynamic> stored = {
-    'path_or_endpoint': '/opt/openastroara/astap_cli',
-    'index_download_path': '/var/lib/astap',
-  };
+  Map<String, dynamic> stored = {...rigDefaults['plate-solve']!};
   final List<String> requests = [];
 
   @override
@@ -72,7 +69,7 @@ Future<void> _pump(
       overrides: [
         activeServerProvider.overrideWithValue(null),
         profileApiProvider.overrideWithValue(
-          FakeSectionRig({'plate-solve': <String, Object?>{}}).api(),
+          FakeSectionRig({'plate-solve': rigDefaults['plate-solve']}).api(),
         ),
         plateSolveDatabaseStatusProvider.overrideWith((ref) async => status),
       ],

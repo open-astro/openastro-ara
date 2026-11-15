@@ -73,7 +73,9 @@ void main() {
     await tester.pump();
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
-    final rig = FakeSectionRig({'camera-electronics': <String, Object?>{}});
+    final rig = FakeSectionRig({
+      'camera-electronics': rigDefaults['camera-electronics'],
+    });
     await tester.runAsync(() => n.load(rig.api()));
     await tester.pump();
     expect(find.byType(TextField), findsWidgets);

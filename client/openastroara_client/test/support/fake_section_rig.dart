@@ -98,3 +98,43 @@ class FakeSectionRig implements HttpClientAdapter {
         },
       );
 }
+
+/// The daemon's copy of each section on a fresh profile (its section
+/// defaults), for the sections whose reader takes no client default: every
+/// key is there, so the load succeeds (ADR 0015 rule 3).
+const rigDefaults = <String, Map<String, Object?>>{
+  'camera-electronics': {
+    'sensor_name': '',
+    'read_noise_e': 0,
+    'full_well_e': 0,
+    'electrons_per_adu': 0,
+    'gain': -1,
+    'quantum_efficiency_peak': 0,
+    'auto_captured': false,
+  },
+  'custom-horizon': {'points': []},
+  'plate-solve': {
+    'engine': 'astap',
+    'path_or_endpoint': '/opt/openastroara/astap_cli',
+    'index_download_path': '/var/lib/astap',
+    'search_radius_deg': 30,
+    'downsample_factor': 0,
+    'timeout_seconds': 60,
+    'use_blind_fallback': true,
+    'center_after_slew': true,
+    'sync_to_coordinates': true,
+    'max_iterations': 5,
+    'convergence_tolerance_arcsec': 60,
+  },
+  'unguided': {
+    'guard_enabled': true,
+    'eccentricity_tolerance': 0.5,
+    'good_eccentricity': 0.3,
+    'step_down_after': 2,
+    'step_up_after': 10,
+    'probe_rungs_seconds': null, // the daemon's own ladder
+    'recentre_drift_arcmin': 10,
+    'recentre_solve_every_n': 1,
+    'prior_tolerance_basis': 'max',
+  },
+};

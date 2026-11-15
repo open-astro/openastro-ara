@@ -520,51 +520,117 @@ class ProfileApi {
 
   Future<({CameraElectronics value, String? etag})>
   getCameraElectronicsSection() =>
-      _getTagged('camera-electronics', cameraElectronicsFromJson);
+      _getTagged('camera-electronics', _cameraElectronicsFromRig);
   Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
     CameraElectronics v, {
     String? ifMatch,
   }) => _putTagged(
     'camera-electronics',
     cameraElectronicsToJson(v),
-    cameraElectronicsFromJson,
+    _cameraElectronicsFromRig,
     ifMatch,
   );
 
   Future<({List<CustomHorizonPoint> value, String? etag})>
   getCustomHorizonSection() =>
-      _getTagged('custom-horizon', customHorizonFromJson);
+      _getTagged('custom-horizon', _customHorizonFromRig);
   Future<({List<CustomHorizonPoint> value, String? etag})>
   putCustomHorizonSection(List<CustomHorizonPoint> v, {String? ifMatch}) =>
       _putTagged(
         'custom-horizon',
         customHorizonToJson(v),
-        customHorizonFromJson,
+        _customHorizonFromRig,
         ifMatch,
       );
 
   Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
-      _getTagged('unguided', unguidedSettingsFromJson);
+      _getTagged('unguided', _unguidedSettingsFromRig);
   Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
     UnguidedSettings v, {
     String? ifMatch,
   }) => _putTagged(
     'unguided',
     unguidedSettingsToJson(v),
-    unguidedSettingsFromJson,
+    _unguidedSettingsFromRig,
     ifMatch,
   );
 
   Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
-      _getTagged('plate-solve', _plateSolveSettingsFromJson);
+      _getTagged('plate-solve', _plateSolveSettingsFromRig);
   Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
     PlateSolveSettings v, {
     String? ifMatch,
   }) => _putTagged(
     'plate-solve',
     _plateSolveSettingsToJson(v),
-    _plateSolveSettingsFromJson,
+    _plateSolveSettingsFromRig,
     ifMatch,
+  );
+
+  // The rig's copy takes no client default (ADR 0015 rule 3): a missing or
+  // mistyped key fails the load, so Save cannot write a default back (as
+  // storage does). The lenient readers stay for the offline cache and the
+  // untagged reads.
+  static CameraElectronics _cameraElectronicsFromRig(Map<String, dynamic> j) =>
+      CameraElectronics(
+        sensorName: j['sensor_name'] as String,
+        readNoiseE: (j['read_noise_e'] as num).toDouble(),
+        fullWellE: (j['full_well_e'] as num).toDouble(),
+        electronsPerAdu: (j['electrons_per_adu'] as num).toDouble(),
+        gain: (j['gain'] as num).toInt(),
+        quantumEfficiencyPeak: (j['quantum_efficiency_peak'] as num).toDouble(),
+        autoCaptured: j['auto_captured'] as bool,
+      );
+
+  static List<CustomHorizonPoint> _customHorizonFromRig(
+    Map<String, dynamic> j,
+  ) => [
+    for (final e in j['points'] as List)
+      CustomHorizonPoint(
+        azimuthDeg: ((e as Map)['azimuth_deg'] as num).toDouble(),
+        altitudeDeg: (e['altitude_deg'] as num).toDouble(),
+      ),
+  ];
+
+  static UnguidedSettings _unguidedSettingsFromRig(Map<String, dynamic> j) {
+    if (!j.containsKey('probe_rungs_seconds')) {
+      throw const FormatException('probe_rungs_seconds missing');
+    }
+    // Null or empty is the daemon's own ladder (EffectiveProbeRungsSeconds).
+    final rungs = [
+      for (final r in j['probe_rungs_seconds'] as List? ?? const [])
+        (r as num).toDouble(),
+    ];
+    return UnguidedSettings(
+      guardEnabled: j['guard_enabled'] as bool,
+      eccentricityTolerance: (j['eccentricity_tolerance'] as num).toDouble(),
+      goodEccentricity: (j['good_eccentricity'] as num).toDouble(),
+      stepDownAfter: (j['step_down_after'] as num).toInt(),
+      stepUpAfter: (j['step_up_after'] as num).toInt(),
+      probeRungsSeconds: rungs.isEmpty
+          ? UnguidedSettings.defaultProbeRungsSeconds
+          : rungs,
+      recentreDriftArcmin: (j['recentre_drift_arcmin'] as num).toDouble(),
+      recentreSolveEveryN: (j['recentre_solve_every_n'] as num).toInt(),
+      priorToleranceBasis: j['prior_tolerance_basis'] as String,
+    );
+  }
+
+  static PlateSolveSettings _plateSolveSettingsFromRig(
+    Map<String, dynamic> j,
+  ) => PlateSolveSettings(
+    engine: _plateSolveEngineFromString(j['engine'] as String),
+    pathOrEndpoint: j['path_or_endpoint'] as String,
+    indexDownloadPath: j['index_download_path'] as String,
+    searchRadiusDeg: (j['search_radius_deg'] as num).toDouble(),
+    downsampleFactor: (j['downsample_factor'] as num).toInt(),
+    timeoutSeconds: (j['timeout_seconds'] as num).toInt(),
+    useBlindFallback: j['use_blind_fallback'] as bool,
+    centerAfterSlew: j['center_after_slew'] as bool,
+    syncToCoordinates: j['sync_to_coordinates'] as bool,
+    maxIterations: (j['max_iterations'] as num).toInt(),
+    convergenceToleranceArcsec: (j['convergence_tolerance_arcsec'] as num)
+        .toDouble(),
   );
 
   /// PUT the active profile's storage-settings section.
