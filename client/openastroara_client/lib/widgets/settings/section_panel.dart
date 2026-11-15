@@ -86,7 +86,7 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
     final api = ref.read(profileApiProvider);
     String? error;
     if (api == null) {
-      error = 'Not connected — connect to your rig to save this.';
+      error = l10n.deviceChooserNotConnected;
     } else {
       try {
         for (final s in only ?? sections) {
