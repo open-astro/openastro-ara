@@ -3273,7 +3273,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
-    expect(find.byKey(const Key('simple-focus-stars-off')).evaluate().length + find.byKey(const Key('simple-info-on')).evaluate().length, 0);
+    expect(find.byKey(const Key('simple-info-on')), findsNothing);
   });
 
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {

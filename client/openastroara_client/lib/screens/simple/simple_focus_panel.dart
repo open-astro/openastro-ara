@@ -14,6 +14,9 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
+import '../../state/profile_management_state.dart' show profileApiProvider;
+import '../../state/simple_messages_state.dart'
+    show SimpleStatusOrigin, userNotifier;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../models/focuser_status.dart';
@@ -29,10 +32,8 @@ import '../../widgets/focus/guide_focus_card.dart'
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_preflight_state.dart';
-import 'simple_preview_panel.dart'
-    show SimpleShutterButton, kSimpleText;
-import 'simple_guide_panel.dart'
-    show SimpleToolRow, simpleToolButton;
+import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
+import 'simple_guide_panel.dart' show SimpleToolRow, simpleToolButton;
 import 'simple_device_windows.dart' show simpleCelsius, simpleSigned;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -435,11 +436,9 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         horizontal: AraSpace.s16,
         vertical: AraSpace.s12,
       ),
-      // Scrolls when the exposure row and the Tools rows do not fit the window.
       child: SizedBox(
         width: 400,
-        child: SingleChildScrollView(
-          child: Column(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 4,
@@ -677,9 +676,28 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             ],
           ],
         ),
-        ),
       ),
     );
+  }
+
+  /// Saves the pick to the profile, as the daemon reads the next run's
+  /// exposure from there (it is not sent with the run).
+  Future<void> _setExposure(int seconds) async {
+    final af = ref.read(autofocusSettingsProvider.notifier);
+    af.setExposureSeconds(seconds);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focus);
+    final l10n = context.l10n;
+    try {
+      await af.persistToServer(api);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSaveThat,
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    }
   }
 
   /// Under Autofocus: the next run's exposure (the profile's autofocus
@@ -702,11 +720,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             expand: false,
             options: [for (final s in choices) (s, '$s s', '$s')],
             selected: seconds,
-            onPick: locked
-                ? null
-                : ref
-                      .read(autofocusSettingsProvider.notifier)
-                      .setExposureSeconds,
+            onPick: locked ? null : _setExposure,
           ),
         ],
       ),

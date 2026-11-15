@@ -56,6 +56,10 @@ late _Bahtinov _b;
 
 Future<void> _pump(WidgetTester tester, BahtinovFocusLive live, {Widget child = const SimpleFocusPanel()}) async {
   _b = _Bahtinov(live);
+  // Room for the Back row over the readout: the shell scrolls the panel, this harness does not.
+  tester.view.physicalSize = const Size(800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       mainFocusMethodProvider.overrideWith(_Pick.new),

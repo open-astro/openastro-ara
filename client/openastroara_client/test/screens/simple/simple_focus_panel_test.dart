@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart' show LineChart;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
@@ -13,7 +14,10 @@ import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
@@ -118,15 +122,39 @@ class _PierPrefs extends SimpleModePrefsService {
   Future<void> save(bool enabled) async {}
 }
 
+/// Tall enough for Autofocus and its Tools rows: the shell scrolls the panel, this harness does not.
+void _tall(WidgetTester tester) {
+  if (tester.view.physicalSize != const Size(2400, 1800)) return;
+  tester.view.physicalSize = const Size(800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
+/// The daemon's profile: records each autofocus PUT.
+class _SaveProfile extends ProfileApi {
+  _SaveProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
+  final saved = <AutofocusSettings>[];
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async {
+    saved.add(value);
+    return value;
+  }
+}
+
 Future<(_Focuser, _Live)> _pump(WidgetTester tester,
-    {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle, Uint8List? frame}) async {
+    {FocuserStatus? focuser,
+    AutofocusRun run = AutofocusRun.idle,
+    Uint8List? frame,
+    List<Override> extra = const []}) async {
   final f = _Focuser(focuser);
   final l = _Live(AutofocusLive(run: run, frame: frame));
   _c = ProviderContainer(overrides: [
     focuserProvider.overrideWith(() => f),
     autofocusLiveProvider.overrideWith(() => l),
+    ...extra,
   ]);
   addTearDown(_c.dispose);
+  _tall(tester);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: _c,
     child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
@@ -240,10 +268,6 @@ void main() {
   });
 
   testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
-    // Tall enough for the Tools rows too: the panel scrolls once the window caps it.
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
     double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
     final start = height();
@@ -437,6 +461,14 @@ void main() {
       expect(selected(tester, '10'), isTrue);
     });
 
+    testWidgets('a pick is saved to the profile, where the daemon reads the next run\'s exposure', (tester) async {
+      final api = _SaveProfile();
+      await _pump(tester, focuser: _focuser(), extra: [profileApiProvider.overrideWithValue(api)]);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      expect(api.saved.map((v) => v.exposureSeconds), [10]);
+    });
+
     testWidgets('a profile value outside the four shows as its own chip and is not rewritten', (tester) async {
       await pumpWith(tester, seconds: 3);
       expect(selected(tester, '3'), isTrue);
@@ -476,6 +508,7 @@ void main() {
       );
       addTearDown(_c.dispose);
       await _c.read(simplePermanentPierProvider.future);
+      _tall(tester);
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: _c,
@@ -512,6 +545,7 @@ void main() {
           // Loaded first: a derived provider refreshed after the next pumpWidget
           // drops this container's tree leaves Riverpod's refresh timer pending.
           await c.read(focuserProvider.future);
+          _tall(tester);
           await tester.pumpWidget(
             UncontrolledProviderScope(
               container: c,
@@ -551,6 +585,7 @@ void main() {
       );
       addTearDown(_c.dispose);
       await _c.read(simplePermanentPierProvider.future);
+      _tall(tester);
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: _c,
