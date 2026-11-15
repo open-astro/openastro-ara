@@ -191,6 +191,17 @@ void main() {
     expect(find.byKey(const Key('simple-focus-tool-offsets')), findsNothing);
   });
 
+  testWidgets('the Tools rows: a heading, then each tool with its line, status pill and button', (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(find.text('Tools'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-manual-status')), matching: find.text('Not started')),
+        findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-offsets-status')), matching: find.text('All measured')),
+        findsOneWidget, reason: 'no filter wheel: nothing to measure');
+    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsOneWidget);
+    expect(find.textContaining('Focus shift per filter'), findsOneWidget);
+  });
+
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
     await _pump(tester);
     expect(find.text('Fit the mask, then Start'), findsOneWidget);
@@ -259,6 +270,19 @@ void main() {
         algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7, withinSampledRange: true, curve: []),
   );
 
+  testWidgets('a finished run keeps the Tools heading, pills and buttons; the one-line descriptions go', (tester) async {
+    // Measured 2026-11-15 at 1024x768: with the descriptions, a finished
+    // weak-fit run overflowed the iPad by 41 px even with a 80 px chart and a
+    // one-line note; the board ruled the descriptions may go (finished and
+    // failed runs only).
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.text('Tools'), findsOneWidget);
+    expect(find.byKey(const Key('simple-focus-tool-manual-status')), findsOneWidget);
+    expect(find.byKey(const Key('simple-focus-tool-offsets-status')), findsOneWidget);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget);
+    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing);
+  });
+
   testWidgets('a finished run: best position, stars and fit R², all on view', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     for (final t in ['Best position', '29463', 'Stars', '299', 'Fit R²', '0.55']) {
@@ -267,7 +291,7 @@ void main() {
     expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
   });
 
-  testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
+  testWidgets('Auto keeps one height from start to the last probe; a finished run gives chart height to the Tools rows (#1717)', (tester) async {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
     double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
     final start = height();
@@ -281,31 +305,38 @@ void main() {
         stepSize: 80,
         probes: [_probe(0, 3.1), _probe(1, 2.4)],
       ),
-      weak,
     ]) {
       live.state = AutofocusLive(run: run);
       await tester.pump();
       expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
     }
+    // Board ruling (#1875 slice 4): the finished run's smaller chart pays for
+    // the full Tools rows, so an iPad needs no scroll.
+    live.state = AutofocusLive(run: weak);
+    await tester.pump();
+    expect(height(), lessThan(start), reason: 'finished');
   });
 
   // #1898: the plot resized between steps (axes appearing, the banner and the error taking its room).
-  testWidgets('the HFR plot keeps one size and place from before the first probe to the end, warning and error included (#1898)',
+  testWidgets('the HFR plot keeps one size and place from before the first probe to the end; a finished run and its error share a smaller one (#1898)',
       (tester) async {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
     Rect plot() => tester.getRect(find.byType(LineChart)).shift(-tester.getTopLeft(find.byType(SimpleFocusPanel)));
     final start = plot();
-    for (final (name, l) in [
-      ('probes', AutofocusLive(run: AutofocusRun(
-          state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
-          probes: [_probe(0, 3.1), _probe(1, 2.4)]))),
-      ('weak fit', AutofocusLive(run: weak)),
-      ('error', AutofocusLive(run: weak, error: StateError(List.filled(60, 'the star field drifted').join(' ')))),
-    ]) {
-      live.state = l;
-      await tester.pump();
-      expect(plot(), start, reason: name);
-    }
+    live.state = AutofocusLive(run: AutofocusRun(
+        state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
+        probes: [_probe(0, 3.1), _probe(1, 2.4)]));
+    await tester.pump();
+    expect(plot(), start, reason: 'probes');
+    // Finished: the chart is shorter (room for the Tools rows) and stays put
+    // when the error takes its slot.
+    live.state = AutofocusLive(run: weak);
+    await tester.pump();
+    final done = plot();
+    expect(done.height, lessThan(start.height), reason: 'weak fit');
+    live.state = AutofocusLive(run: weak, error: StateError(List.filled(60, 'the star field drifted').join(' ')));
+    await tester.pump();
+    expect(plot(), done, reason: 'error');
   });
 
   // #1898 review: the warning's slot scales with the text; at 2x the two-line warning still fits.
@@ -738,6 +769,14 @@ void main() {
       await tester.pump();
       return o;
     }
+
+    testWidgets('the Filter offsets pill counts the filters still at offset 0', (tester) async {
+      await offsets(tester);
+      _c.read(simpleFocusOffsetsProvider.notifier).set(false);
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-offsets-status')), matching: find.textContaining(' to measure')),
+          findsOneWidget);
+    });
 
     testWidgets('Offsets is locked while a plan runs, and says why', (tester) async {
       await offsets(tester, plan: true);

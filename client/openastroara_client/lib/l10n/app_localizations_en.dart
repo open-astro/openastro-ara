@@ -2346,6 +2346,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
 
   @override
+  String get focusToolsHeading => 'Tools';
+
+  @override
+  String get focusToolManualWhat =>
+      'Bahtinov mask readout while you turn the focuser.';
+
+  @override
+  String get focusToolManualStatus => 'Not started';
+
+  @override
+  String get focusToolOffsetsWhat =>
+      'Focus shift per filter, so a filter change needs no autofocus.';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count to measure',
+      one: '1 to measure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'All measured';
+
+  @override
   String get focusBackToAutofocus => 'Back to Autofocus';
 
   @override
@@ -2502,7 +2530,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
   }
 
   @override

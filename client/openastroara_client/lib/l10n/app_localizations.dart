@@ -4089,6 +4089,42 @@ abstract class AppLocalizations {
   /// **'Open filter offsets'**
   String get focusToolOffsetsOpenSemantics;
 
+  /// Simple Focus: heading of the Tools rows under Autofocus
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get focusToolsHeading;
+
+  /// Simple Focus tool row: one line on what focus by hand does
+  ///
+  /// In en, this message translates to:
+  /// **'Bahtinov mask readout while you turn the focuser.'**
+  String get focusToolManualWhat;
+
+  /// Simple Focus tool row status: focus by hand is not open
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get focusToolManualStatus;
+
+  /// Simple Focus tool row: one line on what filter offsets do
+  ///
+  /// In en, this message translates to:
+  /// **'Focus shift per filter, so a filter change needs no autofocus.'**
+  String get focusToolOffsetsWhat;
+
+  /// Simple Focus tool row status: filters whose focus offset is still 0
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 to measure} other{{count} to measure}}'**
+  String focusToolOffsetsToMeasure(int count);
+
+  /// Simple Focus tool row status: every filter has a focus offset
+  ///
+  /// In en, this message translates to:
+  /// **'All measured'**
+  String get focusToolOffsetsAllMeasured;
+
   /// Spoken name of the back arrow in Simple Focus's tool views
   ///
   /// In en, this message translates to:
@@ -4362,7 +4398,7 @@ abstract class AppLocalizations {
   /// Simple Focus panel: a finished autofocus whose curve fit was weak, short form
   ///
   /// In en, this message translates to:
-  /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
+  /// **'Weak curve fit (R² {r2}): run again if the sky has settled.'**
   String focusWeakFitShort(String r2);
 
   /// Guide camera live focus: starting

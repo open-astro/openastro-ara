@@ -3278,6 +3278,35 @@
   "@focusToolOffsetsOpenSemantics": {
     "description": "Spoken name of the filter offsets button"
   },
+  "focusToolsHeading": "Tools",
+  "@focusToolsHeading": {
+    "description": "Simple Focus: heading of the Tools rows under Autofocus"
+  },
+  "focusToolManualWhat": "Bahtinov mask readout while you turn the focuser.",
+  "@focusToolManualWhat": {
+    "description": "Simple Focus tool row: one line on what focus by hand does"
+  },
+  "focusToolManualStatus": "Not started",
+  "@focusToolManualStatus": {
+    "description": "Simple Focus tool row status: focus by hand is not open"
+  },
+  "focusToolOffsetsWhat": "Focus shift per filter, so a filter change needs no autofocus.",
+  "@focusToolOffsetsWhat": {
+    "description": "Simple Focus tool row: one line on what filter offsets do"
+  },
+  "focusToolOffsetsToMeasure": "{count, plural, =1{1 to measure} other{{count} to measure}}",
+  "@focusToolOffsetsToMeasure": {
+    "description": "Simple Focus tool row status: filters whose focus offset is still 0",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusToolOffsetsAllMeasured": "All measured",
+  "@focusToolOffsetsAllMeasured": {
+    "description": "Simple Focus tool row status: every filter has a focus offset"
+  },
   "focusBackToAutofocus": "Back to Autofocus",
   "@focusBackToAutofocus": {
     "description": "Spoken name of the back arrow in Simple Focus's tool views"
@@ -3491,7 +3520,7 @@
   "@focusStopBahtinov": {
     "description": "Screen reader label of Focus's shutter on Manual while it reads"
   },
-  "focusWeakFitShort": "Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.",
+  "focusWeakFitShort": "Weak curve fit (R² {r2}): run again if the sky has settled.",
   "@focusWeakFitShort": {
     "description": "Simple Focus panel: a finished autofocus whose curve fit was weak, short form",
     "placeholders": {
