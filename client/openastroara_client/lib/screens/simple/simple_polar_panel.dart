@@ -623,22 +623,25 @@ class _PolarStepper extends StatelessWidget {
     children: [
       for (var i = 0; i < labels.length; i++)
         Expanded(
-          child: Container(
-            key: Key('simple-polar-step-$i'),
-            padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: i == step ? AraColors.accentInfo : AraColors.tileFill,
-              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-            ),
-            child: Text(
-              i < step ? '✓ ${labels[i]}' : labels[i],
-              style: AraText.caption.copyWith(
-                color: i < step
-                    ? AraColors.accentConnected
-                    : i == step
-                    ? AraColors.textPrimary
-                    : AraColors.textSecondary,
+          child: Semantics(
+            selected: i == step,
+            child: Container(
+              key: Key('simple-polar-step-$i'),
+              padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: i == step ? AraColors.accentInfo : AraColors.tileFill,
+                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+              ),
+              child: Text(
+                i < step ? '✓ ${labels[i]}' : labels[i],
+                style: AraText.caption.copyWith(
+                  color: i < step
+                      ? AraColors.accentConnected
+                      : i == step
+                      ? AraColors.textPrimary
+                      : AraColors.textSecondary,
+                ),
               ),
             ),
           ),
