@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/util/optimal_sub.dart' show defaultReadNoiseE;
 import 'package:openastroara/util/optimal_sub_calculator.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 import 'package:openastroara/widgets/sky_atlas/optimal_sub_calculator_dialog.dart';
@@ -59,6 +60,37 @@ String _suggested(WidgetTester tester) =>
     tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
 
 void main() {
+  testWidgets(
+    'camera electronics not loaded: the calculator seeds the generic defaults, never a saved value',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Consumer(
+              builder: (context, ref, _) => ElevatedButton(
+                onPressed: () => showOptimalSubCalculator(context, ref),
+                child: const Text('go'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('go'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<EditableNumberRow>(
+              find.widgetWithText(EditableNumberRow, 'Read noise (e⁻)'),
+            )
+            .currentValue,
+        defaultReadNoiseE.toString(),
+      );
+    },
+  );
+
   testWidgets('#1140 NEXTGEN §5 the calculator recomputes as inputs change', (
     tester,
   ) async {

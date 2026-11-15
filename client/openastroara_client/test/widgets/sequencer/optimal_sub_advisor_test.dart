@@ -260,7 +260,7 @@ void main() {
       String? filterName,
       ({double raDeg, double decDeg})? targetPosition,
       OpticsSettings optics = _rigOptics,
-      CameraElectronics electronics = _rigElectronics,
+      CameraElectronics? electronics = _rigElectronics, // null: not loaded
       FilterSetSettings filterSet = _rigFilters,
       SiteSettings site = _rigSite,
       GuiderStatus? guider,
@@ -275,8 +275,9 @@ void main() {
         planningPrefsProvider.overrideWith(
             () => _SeededPrefs(PlanningPrefs(noiseTolerancePct: noiseTolerancePct))),
         opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
-        cameraElectronicsProvider
-            .overrideWith(() => _SeededElectronics(electronics)),
+        if (electronics != null)
+          cameraElectronicsProvider
+              .overrideWith(() => _SeededElectronics(electronics)),
         filterSetProvider.overrideWith(() => _SeededFilters(filterSet)),
         siteSettingsProvider.overrideWith(() => _SeededSite(site)),
         // #1264 — the rig's guider and stored tracking ceiling, no daemon.
@@ -414,6 +415,13 @@ void main() {
       await pumpAdvisor(tester, electronics: const CameraElectronics());
       expect(find.textContaining('generic defaults for'), findsOneWidget);
       expect(find.textContaining('read noise'), findsWidgets);
+    });
+
+    testWidgets('camera electronics not loaded: the advisor plans with unset electronics, never a saved value',
+        (tester) async {
+      await pumpAdvisor(tester, electronics: null);
+      expect(container.read(cameraElectronicsProvider).value, isNull);
+      expect(find.textContaining('generic defaults for'), findsOneWidget);
     });
 
     testWidgets('a target position renders the local star line',

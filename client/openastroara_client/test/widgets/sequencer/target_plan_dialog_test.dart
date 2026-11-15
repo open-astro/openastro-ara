@@ -207,6 +207,28 @@ void main() {
       expect(fitted['OIII'], spec['OIII'], reason: 'OIII has no fitted k');
     });
 
+    testWidgets('camera electronics not loaded: the plan reads unset electronics, never a saved value', (tester) async {
+      Future<Map<String, double>> exposures(List<Object> electronics) async {
+        final choice = await open(tester, filters: shoSet, overrides: [
+          opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+          siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 5))),
+          ...electronics,
+        ], interact: (t) async {
+          await t.tap(find.text('Narrowband · SHO'));
+          await t.pump();
+          await t.tap(find.text('Create run'));
+        });
+        await tester.pumpWidget(const SizedBox());
+        return {for (final s in choice!.filterPlan!) s.filterName: s.exposureSeconds};
+      }
+      final notLoaded = await exposures(const []);
+      final unset = await exposures([
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics())),
+      ]);
+      expect(notLoaded, unset);
+    });
+
     testWidgets('Basic pick returns no plan; cancel returns null',
         (tester) async {
       final choice = await open(tester, filters: shoSet, interact: (t) async {

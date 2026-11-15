@@ -175,7 +175,7 @@ void main() {
     final c = ProviderContainer(overrides: [
       savedServersProvider.overrideWith(_NoServers.new),
       siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
-            siteName: 'cached', latitudeDeg: 34.0, longitudeDeg: -84.0, bortleClass: 6,
+            siteName: 'cached', latitudeDeg: -33.856784, longitudeDeg: 151.215297, bortleClass: 6,
             defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
       opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
             focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
