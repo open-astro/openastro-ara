@@ -142,13 +142,19 @@ void main() {
   }
 
   // ADR 0015 rule 3: the rig's copy takes no client default. A reply with no
-  // body, or without any one key, fails the load, so Save writes no default.
+  // body, or without any one key (or with an engine the client does not
+  // know), fails the load, so Save writes no default.
   List<Map<String, Object?>> without(Map<String, Object?> m) => [
     for (final k in m.keys) {...m}..remove(k),
   ];
   final partial = <String, List<Object?>>{
-    for (final r in ['camera-electronics', 'plate-solve', 'unguided'])
+    for (final r in ['camera-electronics', 'unguided'])
       r: [null, ...without(rigDefaults[r]!)],
+    'plate-solve': [
+      null,
+      ...without(rigDefaults['plate-solve']!),
+      {...rigDefaults['plate-solve']!, 'engine': 'bogus'},
+    ],
     'custom-horizon': [
       null,
       <String, Object?>{},

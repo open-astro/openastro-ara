@@ -567,10 +567,10 @@ class ProfileApi {
     ifMatch,
   );
 
-  // The rig's copy takes no client default (ADR 0015 rule 3): a missing or
-  // mistyped key fails the load, so Save cannot write a default back (as
-  // storage does). The lenient readers stay for the offline cache and the
-  // untagged reads.
+  // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
+  // rule 3): as with storage, a missing or mistyped key fails the load or the
+  // Save, and so does an unknown engine, so no default is written back. The
+  // lenient readers stay for the offline cache and the untagged reads.
   static CameraElectronics _cameraElectronicsFromRig(Map<String, dynamic> j) =>
       CameraElectronics(
         sensorName: j['sensor_name'] as String,
@@ -615,7 +615,10 @@ class ProfileApi {
   static PlateSolveSettings _plateSolveSettingsFromRig(
     Map<String, dynamic> j,
   ) => PlateSolveSettings(
-    engine: _plateSolveEngineFromString(j['engine'] as String),
+    engine: PlateSolveEngine.values.firstWhere(
+      (e) => _plateSolveEngineToString(e) == j['engine'],
+      orElse: () => throw FormatException('unknown engine', j['engine']),
+    ),
     pathOrEndpoint: j['path_or_endpoint'] as String,
     indexDownloadPath: j['index_download_path'] as String,
     searchRadiusDeg: (j['search_radius_deg'] as num).toDouble(),
