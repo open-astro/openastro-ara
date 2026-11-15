@@ -195,6 +195,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_active_target_coordinates_of_a_paused_Simple_Mode_run_come_from_its_block() {
+            // The §35 safety auto-resume and the star-lost recovery read this; their tests mock the
+            // sequencer, so only this one runs the real finder through the service.
+            var id = Guid.NewGuid();
+            var (svc, _, _) = BuildService(id, bodyBuilder: SimpleModeBody);
+            await PauseAtBoundaryAsync(svc, id);
+
+            var coords = await svc.GetActiveTargetCoordinatesAsync(id, CancellationToken.None);
+
+            Assert.That(coords, Is.Not.Null);
+            Assert.That(coords!.RADegrees, Is.EqualTo(5.5 * 15).Within(1e-6));
+            Assert.That(coords.Dec, Is.EqualTo(-5.0).Within(1e-6));
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: false, Refocus: false), null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task A_Simple_Mode_run_recenters_on_Recenter_and_refocus() {
             var id = Guid.NewGuid();
             var (svc, centering, af) = BuildService(id, bodyBuilder: SimpleModeBody);
