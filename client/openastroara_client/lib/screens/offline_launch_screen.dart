@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../state/launch_gate_state.dart';
 import '../state/profile_cache_state.dart';
 import '../theme/ara_colors.dart';
@@ -43,11 +44,11 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('OpenAstro Ara',
+                  Text(context.l10n.offlineTitle,
                       style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 4),
-                  const Text('Planning offline — no server connected',
-                      style: TextStyle(color: AraColors.textSecondary)),
+                  Text(context.l10n.offlineSubtitle,
+                      style: const TextStyle(color: AraColors.textSecondary)),
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
@@ -74,16 +75,15 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
   // deleted between the gate check and this screen — offline planning without
   // a profile is deliberately NOT offered (maintainer call), only the way back.
   List<Widget> _emptyCache() => [
-        const Text(
-          'No profiles are cached on this device — offline planning needs '
-          'one. Connect to your server once and set up a profile first.',
+        Text(
+          context.l10n.offlineNoProfiles,
           textAlign: TextAlign.center,
-          style: TextStyle(color: AraColors.textSecondary),
+          style: const TextStyle(color: AraColors.textSecondary),
         ),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () => ref.read(offlineModeProvider.notifier).exit(),
-          child: const Text('Back to server setup'),
+          child: Text(context.l10n.offlineBackToSetup),
         ),
       ];
 
@@ -96,7 +96,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
             : cached.profiles.first.id);
     final pick = cached.profiles.firstWhere((p) => p.id == selected);
     return [
-      Text('Plan with profile:', style: Theme.of(context).textTheme.titleSmall),
+      Text(context.l10n.offlinePlanWithProfile, style: Theme.of(context).textTheme.titleSmall),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
         key: ValueKey('offline-profile-dropdown-${cached.activeId}'),
@@ -105,22 +105,21 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
           for (final p in cached.profiles)
             DropdownMenuItem(
                 value: p.id,
-                child: Text(p.name.isEmpty ? '(unnamed profile)' : p.name)),
+                child: Text(
+                    p.name.isEmpty ? context.l10n.offlineUnnamedProfile : p.name)),
         ],
         onChanged: (v) => setState(() => _pickedId = v),
       ),
       if (!pick.hasSections) ...[
         const SizedBox(height: 8),
-        const Text(
-          'This profile\'s gear settings haven\'t been cached yet (it was '
-          'never active while connected) — planning will use defaults.',
-          style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        Text(
+          context.l10n.offlineNotCached,
+          style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
         ),
       ] else if (pick.capturedUtc case final captured?) ...[
         const SizedBox(height: 8),
         Text(
-          'Gear cached ${_relativeAge(captured)} — reconnect to refresh if '
-          'your setup changed.',
+          context.l10n.offlineGearCached(_relativeAge(context.l10n, captured)),
           style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
         ),
       ],
@@ -132,7 +131,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
                 width: 18,
                 height: 18,
                 child: AdaptiveProgressIndicator(strokeWidth: 2))
-            : const Text('Plan'),
+            : Text(context.l10n.offlinePlan),
       ),
     ];
   }
@@ -154,9 +153,9 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
 
 /// "just now" / "N hours ago" / "N days ago" — coarse on purpose; the point
 /// is flagging WEEKS-old gear, not precision.
-String _relativeAge(DateTime utc) {
+String _relativeAge(AppLocalizations l10n, DateTime utc) {
   final age = DateTime.now().toUtc().difference(utc);
-  if (age.inHours < 1) return 'just now';
-  if (age.inHours < 48) return '${age.inHours} h ago';
-  return '${age.inDays} days ago';
+  if (age.inHours < 1) return l10n.offlineAgeJustNow;
+  if (age.inHours < 48) return l10n.offlineAgeHours(age.inHours);
+  return l10n.offlineAgeDays(age.inDays);
 }

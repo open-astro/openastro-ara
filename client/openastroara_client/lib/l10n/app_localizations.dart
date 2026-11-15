@@ -4653,28 +4653,16 @@ abstract class AppLocalizations {
   /// **'stop guiding'**
   String get guideActionStop;
 
-  /// Guide panel headline while the guider is connected and not running (not "Not guiding": it read as a failure)
-  ///
-  /// In en, this message translates to:
-  /// **'Idle'**
-  String get guideIdle;
-
-  /// Guide panel headline with no guider
-  ///
-  /// In en, this message translates to:
-  /// **'Guider not connected'**
-  String get guideNoGuider;
-
   /// Guide panel hint while idle
   ///
   /// In en, this message translates to:
   /// **'Tap the shutter to start guiding. It calibrates first when needed.'**
   String get guideTapShutter;
 
-  /// Guide panel hint with no guider
+  /// Guide panel hint with no guider: the Camera (Guide) row connects it
   ///
   /// In en, this message translates to:
-  /// **'Connect the guider in Settings › Devices.'**
+  /// **'Connect Camera (Guide) in Settings › Devices.'**
   String get guideConnectFirst;
 
   /// The guide camera's device window title
@@ -7938,7 +7926,7 @@ abstract class AppLocalizations {
   /// Calibration panel, Guide Camera: the Guider isn't connected
   ///
   /// In en, this message translates to:
-  /// **'Connect the Guider to build its dark library and bad-pixel map.'**
+  /// **'Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.'**
   String get calibrationGuideNoGuider;
 
   /// Calibration panel, Guide Camera: the Guider's dark library
@@ -8748,7 +8736,7 @@ abstract class AppLocalizations {
   /// Rig setup line: the Guider is not connected, so its calibration cannot be checked
   ///
   /// In en, this message translates to:
-  /// **'Connect the Guider to check its calibration.'**
+  /// **'Connect Camera (Guide) in Settings › Devices to check the guider calibration.'**
   String get rigSetupCalibrationConnect;
 
   /// Rig setup: button that closes the sheet and shows Guider mode
@@ -8984,6 +8972,876 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Emergency Abort'**
   String get safetyAlarmEmergencyAbort;
+
+  /// First-run screen: app bar title
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to OpenAstro Ara'**
+  String get firstRunTitle;
+
+  /// First-run screen: tooltip of the refresh button
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan for servers'**
+  String get firstRunRescanTooltip;
+
+  /// First-run screen: heading above the discovered servers
+  ///
+  /// In en, this message translates to:
+  /// **'Rigs found on your network'**
+  String get firstRunRigsFound;
+
+  /// First-run screen: shown while no server is discovered yet
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for servers… rescanning every few seconds.\nIf yours doesn’t appear, pull down, tap ⟳ (top right) or add it manually below.'**
+  String get firstRunLooking;
+
+  /// First-run screen: heading above the manual host and port fields
+  ///
+  /// In en, this message translates to:
+  /// **'Or add manually:'**
+  String get firstRunAddManually;
+
+  /// First-run screen: manual host field label
+  ///
+  /// In en, this message translates to:
+  /// **'Hostname or IP'**
+  String get firstRunHostLabel;
+
+  /// First-run screen: manual port field label
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get firstRunPortLabel;
+
+  /// First-run screen: button that picks the manually typed server
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get firstRunUse;
+
+  /// First-run screen: button that enters the app without a server
+  ///
+  /// In en, this message translates to:
+  /// **'Plan offline — set up your night without a server'**
+  String get firstRunPlanOffline;
+
+  /// First-run screen: server handshake succeeded
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to {name}'**
+  String firstRunConnectedTo(String name);
+
+  /// First-run screen: server version line
+  ///
+  /// In en, this message translates to:
+  /// **'Server version: {version}'**
+  String firstRunServerVersion(String version);
+
+  /// First-run screen: API version line
+  ///
+  /// In en, this message translates to:
+  /// **'API version: {version}'**
+  String firstRunApiVersion(String version);
+
+  /// First-run screen: server address line
+  ///
+  /// In en, this message translates to:
+  /// **'Address: {address}'**
+  String firstRunAddress(String address);
+
+  /// First-run screen: button that confirms the connected server
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get firstRunContinue;
+
+  /// First-run screen: handshake in progress
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to {address}…'**
+  String firstRunConnecting(String address);
+
+  /// First-run screen: handshake failed
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed: {address}'**
+  String firstRunConnectionFailed(String address);
+
+  /// Launch profile screen: heading (product name)
+  ///
+  /// In en, this message translates to:
+  /// **'OpenAstro Ara'**
+  String get launchTitle;
+
+  /// Launch profile screen: names the chosen rig
+  ///
+  /// In en, this message translates to:
+  /// **'Rig: {name}'**
+  String launchRig(String name);
+
+  /// Launch profile screen: button back to the server chooser
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a different rig'**
+  String get launchChooseRig;
+
+  /// Launch profile screen: reload the profile list
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get launchRetry;
+
+  /// Launch profile screen: divider between the profile list and Add / Import
+  ///
+  /// In en, this message translates to:
+  /// **'or'**
+  String get launchOr;
+
+  /// Launch profile screen: opens the setup wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Add a Profile'**
+  String get launchAddProfile;
+
+  /// Launch profile screen: imports a profile file
+  ///
+  /// In en, this message translates to:
+  /// **'Import Profile'**
+  String get launchImportProfile;
+
+  /// Launch profile screen: shown when the rig has no profile
+  ///
+  /// In en, this message translates to:
+  /// **'No profiles yet — add or import one to get started.'**
+  String get launchNoProfiles;
+
+  /// Launch profile screen: label above the profile dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Active profile:'**
+  String get launchActiveProfile;
+
+  /// Launch profile screen: tooltip of the delete button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"'**
+  String launchDeleteProfile(String name);
+
+  /// Launch profile screen: button that opens the shell with the picked profile
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get launchImage;
+
+  /// Offline launch screen: heading (product name)
+  ///
+  /// In en, this message translates to:
+  /// **'OpenAstro Ara'**
+  String get offlineTitle;
+
+  /// Offline launch screen: subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Planning offline — no server connected'**
+  String get offlineSubtitle;
+
+  /// Offline launch screen: shown when no profile is cached
+  ///
+  /// In en, this message translates to:
+  /// **'No profiles are cached on this device — offline planning needs one. Connect to your server once and set up a profile first.'**
+  String get offlineNoProfiles;
+
+  /// Offline launch screen: button that leaves offline mode
+  ///
+  /// In en, this message translates to:
+  /// **'Back to server setup'**
+  String get offlineBackToSetup;
+
+  /// Offline launch screen: label above the profile dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Plan with profile:'**
+  String get offlinePlanWithProfile;
+
+  /// Offline launch screen: dropdown entry for a profile with an empty name
+  ///
+  /// In en, this message translates to:
+  /// **'(unnamed profile)'**
+  String get offlineUnnamedProfile;
+
+  /// Offline launch screen: the picked profile has no cached gear sections
+  ///
+  /// In en, this message translates to:
+  /// **'This profile\'s gear settings haven\'t been cached yet (it was never active while connected) — planning will use defaults.'**
+  String get offlineNotCached;
+
+  /// Offline launch screen: when the gear settings were cached; age is one of the offlineAge* phrases
+  ///
+  /// In en, this message translates to:
+  /// **'Gear cached {age} — reconnect to refresh if your setup changed.'**
+  String offlineGearCached(String age);
+
+  /// Offline launch screen: cache age under an hour, fills {age}
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get offlineAgeJustNow;
+
+  /// Offline launch screen: cache age in hours, fills {age}
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h ago'**
+  String offlineAgeHours(int hours);
+
+  /// Offline launch screen: cache age in days, fills {age}
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days ago'**
+  String offlineAgeDays(int days);
+
+  /// Offline launch screen: button that enters the shell with the picked profile
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get offlinePlan;
+
+  /// App shell: navigation tab
+  ///
+  /// In en, this message translates to:
+  /// **'Planning'**
+  String get appShellTabPlanning;
+
+  /// App shell: navigation tab
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get appShellTabChecklist;
+
+  /// App shell: navigation tab
+  ///
+  /// In en, this message translates to:
+  /// **'Sequence'**
+  String get appShellTabSequence;
+
+  /// App shell: navigation tab
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get appShellTabLive;
+
+  /// App shell: navigation tab and the top-bar gear
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get appShellTabSettings;
+
+  /// App shell: tooltip of the search button; shortcut is the key combination
+  ///
+  /// In en, this message translates to:
+  /// **'Search settings ({shortcut})'**
+  String appShellSearchSettings(String shortcut);
+
+  /// App shell: tooltip of the night mode button while on
+  ///
+  /// In en, this message translates to:
+  /// **'Night mode on ({shortcut})'**
+  String appShellNightModeOnTip(String shortcut);
+
+  /// App shell: tooltip of the night mode button while off
+  ///
+  /// In en, this message translates to:
+  /// **'Night mode ({shortcut})'**
+  String appShellNightModeTip(String shortcut);
+
+  /// App shell: tooltip of the help button
+  ///
+  /// In en, this message translates to:
+  /// **'Help & report a bug'**
+  String get appShellHelp;
+
+  /// App shell: status bar launcher
+  ///
+  /// In en, this message translates to:
+  /// **'Image Library'**
+  String get appShellLauncherLibrary;
+
+  /// App shell: status bar launcher
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration'**
+  String get appShellLauncherCalibration;
+
+  /// App shell: status bar launcher that returns to the launch screen
+  ///
+  /// In en, this message translates to:
+  /// **'Launchpad'**
+  String get appShellLauncherLaunchpad;
+
+  /// App shell: status bar launcher that opens the profile wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Run profile wizard'**
+  String get appShellLauncherWizard;
+
+  /// Wizard: developer fallback when a step has no screen
+  ///
+  /// In en, this message translates to:
+  /// **'Missing screen builder for step {step}'**
+  String wizardMissingScreen(int step);
+
+  /// Wizard: app bar title
+  ///
+  /// In en, this message translates to:
+  /// **'Set up profile · Step {step} of {total}'**
+  String wizardTitle(int step, int total);
+
+  /// Wizard: app bar button that saves a partial profile and leaves
+  ///
+  /// In en, this message translates to:
+  /// **'Save & Exit'**
+  String get wizardSaveExit;
+
+  /// Wizard: snack bar after saving when some follow-ups degraded; notes are the joined follow-up sentences
+  ///
+  /// In en, this message translates to:
+  /// **'Profile saved. {notes}'**
+  String wizardSavedWithNotes(String notes);
+
+  /// Wizard: snack bar after saving a profile offline
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" is saved on this device. It will be applied to your rig the next time you connect.'**
+  String wizardSavedLocally(String name);
+
+  /// Wizard: last-step button
+  ///
+  /// In en, this message translates to:
+  /// **'Save Profile'**
+  String get wizardSaveProfile;
+
+  /// Wizard: next-step button
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get wizardNext;
+
+  /// Wizard: previous-step button
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get wizardBack;
+
+  /// Wizard: button that skips a step and keeps defaults
+  ///
+  /// In en, this message translates to:
+  /// **'Skip — use defaults'**
+  String get wizardSkipDefaults;
+
+  /// Wizard: tooltip on the disabled Skip button
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve the issue on this screen to continue.'**
+  String get wizardSkipBlocked;
+
+  /// Wizard: tooltip on the disabled Next button
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the highlighted field to continue.'**
+  String get wizardNextBlocked;
+
+  /// Wizard done view: app bar title
+  ///
+  /// In en, this message translates to:
+  /// **'Profile saved'**
+  String get wizardDoneTitle;
+
+  /// Wizard done view: heading
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all set'**
+  String get wizardDoneHeading;
+
+  /// Wizard done view: explains the dark library build
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile is saved and active. The dark library is shooting in the background — it finishes on the server even if you leave now.'**
+  String get wizardDoneBody;
+
+  /// Wizard done view: closes the wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get wizardDoneFinish;
+
+  /// Wizard: stage line above each step; label is the stage name
+  ///
+  /// In en, this message translates to:
+  /// **'Stage {stage} — {label}'**
+  String wizardKitStage(int stage, String label);
+
+  /// Wizard: banner on a skipped step
+  ///
+  /// In en, this message translates to:
+  /// **'This screen was skipped — defaults will fill in until you review it in Settings.'**
+  String get wizardKitSkipped;
+
+  /// Wizard: tooltip of the clear button on an optional field
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default on Save'**
+  String get wizardKitResetOnSave;
+
+  /// Wizard step 1: introduction
+  ///
+  /// In en, this message translates to:
+  /// **'Name this profile and (optionally) set your observing site. Everything here can be changed later in Settings.'**
+  String get wizardBasicsIntro;
+
+  /// Wizard step 1: heads-up about powering on and configuring gear first
+  ///
+  /// In en, this message translates to:
+  /// **'Before you begin: power on your mount and the rest of your gear, make sure they\'re reachable on the same local network as the server, and that every device is already configured in AlpacaBridge — the wizard discovers equipment live in the next steps and can only find what AlpacaBridge exposes.'**
+  String get wizardBasicsBefore;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Profile name'**
+  String get wizardBasicsProfileName;
+
+  /// Wizard step 1: example for the profile name field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Backyard New Mexico'**
+  String get wizardBasicsProfileNameHint;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Site name'**
+  String get wizardBasicsSiteName;
+
+  /// Wizard step 1: example for the site name field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. New Mexico USA'**
+  String get wizardBasicsSiteNameHint;
+
+  /// Wizard step 1: section header
+  ///
+  /// In en, this message translates to:
+  /// **'Location (optional)'**
+  String get wizardBasicsLocation;
+
+  /// Wizard step 1: button that fills the site from a GPS
+  ///
+  /// In en, this message translates to:
+  /// **'Fill from GPS'**
+  String get wizardBasicsFillGps;
+
+  /// Wizard step 1: how to get a GPS fix
+  ///
+  /// In en, this message translates to:
+  /// **'Tip: plug a USB GPS dongle into this computer and turn on Settings → Site → GPS on this computer. No mount GPS needed.'**
+  String get wizardBasicsGpsTip;
+
+  /// Wizard step 1: GPS result discarded because the user typed meanwhile
+  ///
+  /// In en, this message translates to:
+  /// **'A location was found, but you edited the site fields while it was being looked up — not overwritten. Press Fill from GPS again to apply it.'**
+  String get wizardBasicsGpsEdited;
+
+  /// Wizard step 1: GPS fill done; source names where the fix came from
+  ///
+  /// In en, this message translates to:
+  /// **'Filled from {source}.'**
+  String wizardBasicsGpsFilled(String source);
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude (°)'**
+  String get wizardBasicsLatitude;
+
+  /// Wizard step 1: latitude helper
+  ///
+  /// In en, this message translates to:
+  /// **'North positive.'**
+  String get wizardBasicsNorthPositive;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude (°)'**
+  String get wizardBasicsLongitude;
+
+  /// Wizard step 1: longitude helper
+  ///
+  /// In en, this message translates to:
+  /// **'East positive.'**
+  String get wizardBasicsEastPositive;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Altitude (m)'**
+  String get wizardBasicsAltitude;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Bortle class (1-9)'**
+  String get wizardBasicsBortle;
+
+  /// Wizard step 1: Bortle helper
+  ///
+  /// In en, this message translates to:
+  /// **'Sky darkness: 1 darkest, 9 inner city.'**
+  String get wizardBasicsBortleHelper;
+
+  /// Wizard step 1: Bortle validation error
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number from 1 to 9.'**
+  String get wizardBasicsBortleError;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'SQM reading (mag/arcsec²), optional'**
+  String get wizardBasicsSqm;
+
+  /// Wizard step 1: SQM helper
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty if not measured (Bortle is used). 16 to 22.5.'**
+  String get wizardBasicsSqmHelper;
+
+  /// Wizard step 1: SQM validation error
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value from 16 to 22.5, or leave empty.'**
+  String get wizardBasicsSqmError;
+
+  /// Wizard step 1: field label
+  ///
+  /// In en, this message translates to:
+  /// **'Timezone'**
+  String get wizardBasicsTimezone;
+
+  /// Wizard step 1: example for the timezone field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. America/Denver'**
+  String get wizardBasicsTimezoneHint;
+
+  /// Wizard step 1: timezone helper
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in automatically from the coordinates — only change it to view a remote rig in another zone.'**
+  String get wizardBasicsTimezoneHelper;
+
+  /// Wizard step 5: introduction
+  ///
+  /// In en, this message translates to:
+  /// **'Review your profile. Tap Edit on any section to jump back and change it, then choose Save Profile below to finish. Anything left \"Not set\" keeps the built-in default — you can adjust it later in Settings.'**
+  String get wizardReviewIntro;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Profile basics'**
+  String get wizardReviewSecBasics;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Connection'**
+  String get wizardReviewSecConnection;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Equipment'**
+  String get wizardReviewSecEquipment;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Telescope'**
+  String get wizardReviewSecTelescope;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get wizardReviewSecCamera;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Filter wheel'**
+  String get wizardReviewSecFilterWheel;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser'**
+  String get wizardReviewSecFocuser;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Mount'**
+  String get wizardReviewSecMount;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Rotator'**
+  String get wizardReviewSecRotator;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'OpenAstro Guider'**
+  String get wizardReviewSecGuider;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Plate solving'**
+  String get wizardReviewSecPlateSolving;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus'**
+  String get wizardReviewSecAutofocus;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'File saving'**
+  String get wizardReviewSecFileSaving;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging defaults'**
+  String get wizardReviewSecImaging;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Safety'**
+  String get wizardReviewSecSafety;
+
+  /// Wizard step 5: review section title
+  ///
+  /// In en, this message translates to:
+  /// **'Site preferences'**
+  String get wizardReviewSecSite;
+
+  /// Wizard step 5: button that jumps back to a section
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get wizardReviewEdit;
+
+  /// Wizard step 5: shown instead of Edit for sections with no wizard screen
+  ///
+  /// In en, this message translates to:
+  /// **'Defaults · edit later in Settings'**
+  String get wizardReviewDefaultsLater;
+
+  /// Wizard step 5: a skipped section
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped — defaults will apply.'**
+  String get wizardReviewSkipped;
+
+  /// Wizard step 5: solver database block title
+  ///
+  /// In en, this message translates to:
+  /// **'Plate-solver star database'**
+  String get wizardReviewSolverTitle;
+
+  /// Wizard step 5: reloads the solver database recommendation
+  ///
+  /// In en, this message translates to:
+  /// **'Recheck'**
+  String get wizardReviewRecheck;
+
+  /// Wizard step 5: solver database loading
+  ///
+  /// In en, this message translates to:
+  /// **'Working out the field of view…'**
+  String get wizardReviewSolverWorking;
+
+  /// Wizard step 5: checkbox to queue the solver database download
+  ///
+  /// In en, this message translates to:
+  /// **'Download after setup ({size}, the rig needs internet once)'**
+  String wizardReviewSolverDownload(String size);
+
+  /// Wizard step 5: explains the solver database download
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the rig in the background; progress in Settings → Sky data.'**
+  String get wizardReviewSolverDownloadNote;
+
+  /// Wizard step 5: a camera whose field is too narrow; field is the field-of-view phrase, reason comes from the server
+  ///
+  /// In en, this message translates to:
+  /// **'{field} — cannot plate-solve. {reason}'**
+  String wizardReviewSolverTooNarrow(String field, String reason);
+
+  /// Wizard step 5: solver database row role
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera'**
+  String get wizardReviewRoleGuideCamera;
+
+  /// Wizard step 5: solver database row role
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get wizardReviewRoleCamera;
+
+  /// Wizard step 5: solver database row field of view; band is the server's band name
+  ///
+  /// In en, this message translates to:
+  /// **'{role}: {fov}° field ({band})'**
+  String wizardReviewSolverField(String role, String fov, String band);
+
+  /// Wizard step 5: the solver database package is installed
+  ///
+  /// In en, this message translates to:
+  /// **'already on the rig'**
+  String get wizardReviewAlreadyOnRig;
+
+  /// Wizard step 2: introduction
+  ///
+  /// In en, this message translates to:
+  /// **'ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through a bridge (AlpacaPi, INDIGO Sky\'s -A Alpaca server). Leave the address blank to let Ara auto-discover devices over UDP.'**
+  String get wizardDiscoveryIntro;
+
+  /// Wizard step 2: field label
+  ///
+  /// In en, this message translates to:
+  /// **'AlpacaBridge address'**
+  String get wizardDiscoveryAddressLabel;
+
+  /// Wizard step 2: hint of the address field
+  ///
+  /// In en, this message translates to:
+  /// **'auto-discover (UDP 32227) — or host:port to override'**
+  String get wizardDiscoveryAddressHint;
+
+  /// Wizard step 2: button label while detecting
+  ///
+  /// In en, this message translates to:
+  /// **'Detecting…'**
+  String get wizardDiscoveryDetecting;
+
+  /// Wizard step 2: button that runs the detection again
+  ///
+  /// In en, this message translates to:
+  /// **'Retry detection'**
+  String get wizardDiscoveryRetryDetection;
+
+  /// Wizard step 2: failure heading
+  ///
+  /// In en, this message translates to:
+  /// **'AlpacaBridge not detected.'**
+  String get wizardDiscoveryNotDetected;
+
+  /// Wizard step 2: failure explanation, followed by an install command
+  ///
+  /// In en, this message translates to:
+  /// **'AlpacaBridge is ARA\'s equipment hub. It should have been installed alongside ARA Core via apt. If it wasn\'t, install it on Ara host, then retry:'**
+  String get wizardDiscoveryNotDetectedBody;
+
+  /// Wizard step 2: raw detection result
+  ///
+  /// In en, this message translates to:
+  /// **'Details: {details}'**
+  String wizardDiscoveryDetails(String details);
+
+  /// Wizard step 2: tooltip of the skip button when an address is typed
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with the address above; detection is skipped.'**
+  String get wizardDiscoverySkipTipOn;
+
+  /// Wizard step 2: tooltip of the skip button when no address is typed
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your bridge\'s host:port above to enable.'**
+  String get wizardDiscoverySkipTipOff;
+
+  /// Wizard step 2: skip button label after the skip
+  ///
+  /// In en, this message translates to:
+  /// **'Continuing with the address override.'**
+  String get wizardDiscoverySkipped;
+
+  /// Wizard step 2: skip button label
+  ///
+  /// In en, this message translates to:
+  /// **'Skip — I\'m using a non-standard bridge address'**
+  String get wizardDiscoverySkip;
+
+  /// Device sheet: title; slot is the device type name
+  ///
+  /// In en, this message translates to:
+  /// **'Choose {slot}'**
+  String wizardDiscoveryChoose(String slot);
+
+  /// Device sheet: refresh button
+  ///
+  /// In en, this message translates to:
+  /// **'Re-scan'**
+  String get wizardDiscoveryRescan;
+
+  /// Device sheet: entry that clears the device
+  ///
+  /// In en, this message translates to:
+  /// **'— None'**
+  String get wizardDiscoveryNone;
+
+  /// Device sheet: explains the None entry
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t use this device type'**
+  String get wizardDiscoveryNoneNote;
+
+  /// Device sheet: error title
+  ///
+  /// In en, this message translates to:
+  /// **'Discovery failed'**
+  String get wizardDiscoveryFailed;
+
+  /// Device sheet: empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found'**
+  String get wizardDiscoveryNoDevices;
+
+  /// Device sheet: empty explanation
+  ///
+  /// In en, this message translates to:
+  /// **'Make sure the driver is running and reachable on Ara\'s subnet, then re-scan.'**
+  String get wizardDiscoveryNoDevicesDetail;
+
+  /// Device sheet: second line of a discovered device; address is scheme://host:port
+  ///
+  /// In en, this message translates to:
+  /// **'{address} ·  device #{number}\nAdvertised — connectivity is verified when you connect'**
+  String wizardDiscoveryDeviceLine(String address, int number);
 }
 
 class _AppLocalizationsDelegate
