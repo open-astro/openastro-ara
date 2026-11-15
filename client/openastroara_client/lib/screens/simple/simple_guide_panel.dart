@@ -18,7 +18,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/status_indicator.dart'
-    show StatusBlink, StatusDot, StatusLevel;
+    show StatusBlink, StatusDot;
 import '../../util/friendly_error.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
@@ -182,9 +182,6 @@ class SimpleGuidePanel extends ConsumerWidget {
     final guiding = g?.isCorrecting ?? false;
     final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
-    final colour = pending != null
-        ? AraColors.accentInfo
-        : simpleGuiderColour(g);
     final phd2 = ref.watch(phd2SettingsProvider);
     final tab = ref.watch(simpleGuiderTabProvider);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
@@ -209,33 +206,6 @@ class SimpleGuidePanel extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 4,
           children: [
-            Row(
-              spacing: AraSpace.s8,
-              children: [
-                StatusBlink(
-                  on: pending == null && guiding,
-                  child: StatusDot(
-                    color: colour,
-                    ring:
-                        pending != null ||
-                        (connected &&
-                            guiderStatusLevel(g) == StatusLevel.changing),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    !connected
-                        ? l10n.guideNoGuider
-                        : pending != null
-                        ? (pending ? l10n.guideStarting : l10n.guideStopping)
-                        : active
-                        ? g.runtimeSummary(l10n)
-                        : l10n.guideIdle,
-                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
             if (connected && !active && pending == null)
               Text(g.outOfStepReason ?? l10n.guideTapShutter, style: AraText.caption),
             if (!connected)

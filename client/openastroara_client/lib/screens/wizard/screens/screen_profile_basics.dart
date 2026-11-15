@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import '../../../l10n/l10n.dart';
 import '../../../models/profile_draft.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../state/wizard_state.dart';
@@ -48,6 +49,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
     final beforeLng = _draft.longitudeDeg;
     final beforeAlt = _draft.altitudeMeters;
     final beforeTz = _draft.timezone;
+    final l = context.l10n;
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
@@ -60,10 +62,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
             beforeLng != _draft.longitudeDeg ||
             beforeAlt != _draft.altitudeMeters ||
             beforeTz != _draft.timezone) {
-          setState(() => _gpsStatus =
-              'A location was found, but you edited the site fields while it '
-              'was being looked up — not overwritten. Press Fill from GPS '
-              'again to apply it.');
+          setState(() => _gpsStatus = l.wizardBasicsGpsEdited);
           return;
         }
         setState(() {
@@ -79,7 +78,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           _draft.timezone = tz_map.latLngToTimezoneString(result.lat, result.lng);
           _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
           _gpsFill++; // remount the fields so the fill is visible
-          _gpsStatus = 'Filled from ${result.sourceLabel}.';
+          _gpsStatus = l.wizardBasicsGpsFilled(result.sourceLabel);
         });
       } else {
         setState(() => _gpsStatus = result.message);
@@ -135,8 +134,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 1,
-      intro: 'Name this profile and (optionally) set your observing site. '
-          'Everything here can be changed later in Settings.',
+      intro: context.l10n.wizardBasicsIntro,
       children: [
         // Equipment discovery (steps 2–3) probes the rig over Alpaca — gear
         // that's off or on another network simply won't show up, which reads
@@ -149,40 +147,35 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AraColors.border),
           ),
-          child: const Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.power_settings_new,
+              const Icon(Icons.power_settings_new,
                   size: 20, color: AraColors.accentInfo),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Before you begin: power on your mount and the rest of your '
-                  'gear, make sure they\'re reachable on the same local '
-                  'network as the server, and that every device is already '
-                  'configured in AlpacaBridge — the wizard discovers '
-                  'equipment live in the next steps and can only find what '
-                  'AlpacaBridge exposes.',
-                  style: TextStyle(color: AraColors.textSecondary),
+                  context.l10n.wizardBasicsBefore,
+                  style: const TextStyle(color: AraColors.textSecondary),
                 ),
               ),
             ],
           ),
         ),
         WizardTextField(
-          label: 'Profile name',
+          label: context.l10n.wizardBasicsProfileName,
           required: true,
           initialValue: _draft.profileName,
-          hint: 'e.g. Backyard New Mexico',
+          hint: context.l10n.wizardBasicsProfileNameHint,
           onChanged: (v) => _draft.profileName = v.trim().isEmpty ? null : v.trim(),
         ),
         WizardTextField(
-          label: 'Site name',
+          label: context.l10n.wizardBasicsSiteName,
           initialValue: _draft.siteName,
-          hint: 'e.g. New Mexico USA',
+          hint: context.l10n.wizardBasicsSiteNameHint,
           onChanged: (v) => _draft.siteName = v.trim().isEmpty ? null : v.trim(),
         ),
-        const WizardSectionHeader('Location (optional)'),
+        WizardSectionHeader(context.l10n.wizardBasicsLocation),
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Column(
@@ -195,14 +188,12 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
                         width: 16, height: 16,
                         child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.gps_fixed, size: 18),
-                label: const Text('Fill from GPS'),
+                label: Text(context.l10n.wizardBasicsFillGps),
               ),
               const SizedBox(height: 4),
               Text(
                 _gpsStatus ??
-                    'Tip: plug a USB GPS dongle into this computer and turn '
-                        'on Settings → Site → GPS on this computer. No mount '
-                        'GPS needed.',
+                    context.l10n.wizardBasicsGpsTip,
                 style:
                     const TextStyle(color: AraColors.textSecondary, fontSize: 12),
               ),
@@ -211,12 +202,12 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         ),
         WizardTextField(
           key: ValueKey('wiz-lat-$_gpsFill'),
-          label: 'Latitude (°)',
+          label: context.l10n.wizardBasicsLatitude,
           initialValue: _draft.latitudeDeg?.toString(),
           keyboardType: const TextInputType.numberWithOptions(
               signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
-          helperText: 'North positive.',
+          helperText: context.l10n.wizardBasicsNorthPositive,
           onChanged: (v) => _setDouble(v, (d) {
             _draft.latitudeDeg = d;
             _deriveTimezoneFromCoords();
@@ -224,12 +215,12 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         ),
         WizardTextField(
           key: ValueKey('wiz-lng-$_gpsFill'),
-          label: 'Longitude (°)',
+          label: context.l10n.wizardBasicsLongitude,
           initialValue: _draft.longitudeDeg?.toString(),
           keyboardType: const TextInputType.numberWithOptions(
               signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
-          helperText: 'East positive.',
+          helperText: context.l10n.wizardBasicsEastPositive,
           onChanged: (v) => _setDouble(v, (d) {
             _draft.longitudeDeg = d;
             _deriveTimezoneFromCoords();
@@ -237,7 +228,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         ),
         WizardTextField(
           key: ValueKey('wiz-alt-$_gpsFill'),
-          label: 'Altitude (m)',
+          label: context.l10n.wizardBasicsAltitude,
           initialValue: _draft.altitudeMeters?.toString(),
           keyboardType:
               const TextInputType.numberWithOptions(signed: true, decimal: true),
@@ -246,18 +237,18 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         ),
         WizardTextField(
           key: const ValueKey('wiz-bortle'),
-          label: 'Bortle class (1-9)',
+          label: context.l10n.wizardBasicsBortle,
           initialValue: (_draft.site.bortleClass ??
                   ref.read(siteSettingsProvider).bortleClass)
               .toString(),
           keyboardType: TextInputType.number,
           inputFormatters: WizardInput.unsignedInt,
           errorText: _bortleError,
-          helperText: 'Sky darkness: 1 darkest, 9 inner city.',
+          helperText: context.l10n.wizardBasicsBortleHelper,
           onChanged: (v) => setState(() {
             final n = int.tryParse(v.trim());
             _bortleError = n != null && !SiteSettingsNotifier.isValidBortle(n)
-                ? 'Enter a whole number from 1 to 9.'
+                ? context.l10n.wizardBasicsBortleError
                 : null;
             // Blank or out-of-range is never saved (null keeps the base).
             _draft.site.bortleClass = _bortleError == null ? n : null;
@@ -265,7 +256,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         ),
         WizardTextField(
           key: const ValueKey('wiz-sqm'),
-          label: 'SQM reading (mag/arcsec²), optional',
+          label: context.l10n.wizardBasicsSqm,
           initialValue: () {
             final v = _draft.site.sqmMagPerArcsec2 ??
                 ref.read(siteSettingsProvider).sqmMagPerArcsec2;
@@ -274,23 +265,22 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
           errorText: _sqmError,
-          helperText: 'Leave empty if not measured (Bortle is used). 16 to 22.5.',
+          helperText: context.l10n.wizardBasicsSqmHelper,
           onChanged: (v) => setState(() {
             final t = v.trim();
             final n = t.isEmpty ? 0.0 : double.tryParse(t);
             _sqmError = n != null && !SiteSettingsNotifier.isValidSqm(n)
-                ? 'Enter a value from 16 to 22.5, or leave empty.'
+                ? context.l10n.wizardBasicsSqmError
                 : null;
             _draft.site.sqmMagPerArcsec2 = _sqmError == null ? n : null;
           }),
         ),
         WizardTextField(
           key: ValueKey('wiz-tz-$_gpsFill-$_tzFill'),
-          label: 'Timezone',
+          label: context.l10n.wizardBasicsTimezone,
           initialValue: _draft.timezone,
-          hint: 'e.g. America/Denver',
-          helperText: 'Filled in automatically from the coordinates — only '
-              'change it to view a remote rig in another zone.',
+          hint: context.l10n.wizardBasicsTimezoneHint,
+          helperText: context.l10n.wizardBasicsTimezoneHelper,
           onChanged: (v) {
             final t = v.trim();
             // Clearing the field re-arms derivation; typing a zone pins it.

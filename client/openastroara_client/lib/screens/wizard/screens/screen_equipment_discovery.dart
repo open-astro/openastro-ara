@@ -219,14 +219,12 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     final noServer = _result != null && !_testing && _noServer;
     return WizardScreenScaffold(
       step: 2,
-      intro: 'ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through '
-          'a bridge (AlpacaPi, INDIGO Sky\'s -A Alpaca server). Leave the '
-          'address blank to let Ara auto-discover devices over UDP.',
+      intro: context.l10n.wizardDiscoveryIntro,
       children: [
         WizardTextField(
-          label: 'AlpacaBridge address',
+          label: context.l10n.wizardDiscoveryAddressLabel,
           initialValue: _draft.alpacaBridgeAddress,
-          hint: 'auto-discover (UDP 32227) — or host:port to override',
+          hint: context.l10n.wizardDiscoveryAddressHint,
           // setState so the skip button's enablement tracks the override text.
           onChanged: (v) => setState(() {
             _draft.alpacaBridgeAddress = v.trim().isEmpty ? null : v.trim();
@@ -250,7 +248,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                     child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering, size: 18),
-            label: Text(_testing ? 'Detecting…' : 'Retry detection'),
+            label: Text(_testing ? context.l10n.wizardDiscoveryDetecting : context.l10n.wizardDiscoveryRetryDetection),
           ),
         ),
         if (_ok && _result != null) ...[
@@ -321,7 +319,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                     const Icon(Icons.error_outline,
                         size: 18, color: AraColors.accentError),
                     const SizedBox(width: 8),
-                    Text('AlpacaBridge not detected.',
+                    Text(context.l10n.wizardDiscoveryNotDetected,
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
@@ -330,9 +328,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'AlpacaBridge is ARA\'s equipment hub. It should have been '
-                  'installed alongside ARA Core via apt. If it wasn\'t, install '
-                  'it on Ara host, then retry:',
+                  context.l10n.wizardDiscoveryNotDetectedBody,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -344,14 +340,14 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                     color: AraColors.bgPrimary,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text('sudo apt install alpaca-bridge',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(fontFamily: 'monospace')),
+                  child: Text(
+                    'sudo apt install alpaca-bridge', // l10n-ok
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontFamily: 'monospace'),
+                  ),
                 ),
                 const SizedBox(height: 6),
-                Text('Details: $_result',
+                Text(context.l10n.wizardDiscoveryDetails('$_result'),
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -363,14 +359,14 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                   alignment: Alignment.centerLeft,
                   child: Tooltip(
                     message: _hasAddressOverride
-                        ? 'Continue with the address above; detection is skipped.'
-                        : 'Enter your bridge\'s host:port above to enable.',
+                        ? context.l10n.wizardDiscoverySkipTipOn
+                        : context.l10n.wizardDiscoverySkipTipOff,
                     child: TextButton(
                       onPressed:
                           _hasAddressOverride && !_skipped ? _skip : null,
                       child: Text(_skipped
-                          ? 'Continuing with the address override.'
-                          : 'Skip — I\'m using a non-standard bridge address'),
+                          ? context.l10n.wizardDiscoverySkipped
+                          : context.l10n.wizardDiscoverySkip),
                     ),
                   ),
                 ),
@@ -449,11 +445,11 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
           children: [
             Row(
               children: [
-                Text('Choose ${widget.slotLabel}',
+                Text(context.l10n.wizardDiscoveryChoose(widget.slotLabel),
                     style: Theme.of(context).textTheme.titleMedium),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Re-scan',
+                  tooltip: context.l10n.wizardDiscoveryRescan,
                   onPressed: _rescan,
                   icon: const Icon(Icons.refresh),
                 ),
@@ -462,8 +458,8 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
             const SizedBox(height: 8),
             ListTile(
               leading: const Icon(Icons.block, color: AraColors.textSecondary),
-              title: const Text('— None'),
-              subtitle: const Text('Don\'t use this device type'),
+              title: Text(context.l10n.wizardDiscoveryNone),
+              subtitle: Text(context.l10n.wizardDiscoveryNoneNote),
               onTap: () => Navigator.of(context).pop(const DeviceChoice(null)),
             ),
             const Divider(height: 1, color: AraColors.border),
@@ -479,7 +475,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                     return _SheetMessage(
                       icon: Icons.error_outline,
                       color: AraColors.accentError,
-                      title: 'Discovery failed',
+                      title: context.l10n.wizardDiscoveryFailed,
                       detail: _describe(snap.error),
                       onRetry: _rescan,
                     );
@@ -489,9 +485,8 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                     return _SheetMessage(
                       icon: Icons.search_off,
                       color: AraColors.textDisabled,
-                      title: 'No devices found',
-                      detail: 'Make sure the driver is running and reachable on '
-                          'Ara\'s subnet, then re-scan.',
+                      title: context.l10n.wizardDiscoveryNoDevices,
+                      detail: context.l10n.wizardDiscoveryNoDevicesDetail,
                       onRetry: _rescan,
                     );
                   }
@@ -507,9 +502,10 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                       return ListTile(
                         title: Text(d.name),
                         subtitle: Text(
-                          '$scheme://$host:${d.ipPort} ·  '
-                          'device #${d.alpacaDeviceNumber}\n'
-                          'Advertised — connectivity is verified when you connect',
+                          context.l10n.wizardDiscoveryDeviceLine(
+                            '$scheme://$host:${d.ipPort}',
+                            d.alpacaDeviceNumber,
+                          ),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AraColors.textSecondary,
                               ),
@@ -574,7 +570,7 @@ class _SheetMessage extends StatelessWidget {
           TextButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Re-scan'),
+            label: Text(context.l10n.wizardDiscoveryRescan),
           ),
         ],
       ),
