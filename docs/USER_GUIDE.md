@@ -220,7 +220,7 @@ framing/focus loop when you need to point or focus by eye.
   the big moves. The main camera's frames take a few seconds each. Tap **Next: fine** when you are
   within a few arcminutes. *Fine*: the mount goes Home again and the guide camera measures the axis
   the same way, a frame a second, then guides the knobs live, as before. *Check*: once inside the
-  tolerance, **Check it** sends the mount Home again and takes three solves (30° apart by default); the result is
+  tolerance, **Verify** sends the mount Home again and takes three solves (30° apart by default); the result is
   measured on its own, not read off the loop, so it says how good the alignment really is and how far
   it disagrees with the fine readout. **Done** skips the check. The Start card also offers *Skip the
   rough step* (a permanent pier) and *Check only*.

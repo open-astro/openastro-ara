@@ -1391,7 +1391,7 @@
   "@polarActionNextFine": {
     "description": "Completes \"Couldn't …\" for the Next: fine button"
   },
-  "polarCheck": "Check it",
+  "polarCheck": "Verify",
   "@polarCheck": {
     "description": "Simple Mode Polar align panel: button from the fine stage to the three-point check"
   },
@@ -7547,5 +7547,71 @@
         "type": "int"
       }
     }
+  },
+  "polarStepRough": "Rough",
+  "@polarStepRough": {
+    "description": "Simple Mode Polar align stepper: the rough step"
+  },
+  "polarStepFine": "Fine",
+  "@polarStepFine": {
+    "description": "Simple Mode Polar align stepper: the fine step"
+  },
+  "polarStepVerify": "Verify",
+  "@polarStepVerify": {
+    "description": "Simple Mode Polar align stepper: the verify step"
+  },
+  "polarSetup": "Setup",
+  "@polarSetup": {
+    "description": "Simple Mode Polar align panel: heading over the routine's settings"
+  },
+  "polarErrorHeading": "Error",
+  "@polarErrorHeading": {
+    "description": "Simple Mode Polar align panel: heading over the bullseye and the turns"
+  },
+  "polarInsideTolerance": "Inside your {tolerance}′ tolerance. Done keeps this alignment; Next: fine refines it.",
+  "@polarInsideTolerance": {
+    "description": "Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance",
+    "placeholders": {
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarOutsideTolerance": "Outside your {tolerance}′ tolerance: refine it, or stop with the shutter.",
+  "@polarOutsideTolerance": {
+    "description": "Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance",
+    "placeholders": {
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarVerifyCaption": "Verify moves the mount and takes three frames to confirm the alignment.",
+  "@polarVerifyCaption": {
+    "description": "Simple Mode Polar align fine step: caption under the Verify button"
+  },
+  "polarKnobToleranceHint": "Done turns on once the error is inside it",
+  "@polarKnobToleranceHint": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobUseHome": "Send the mount Home first",
+  "@polarKnobUseHome": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobUseHomeOn": "Every stage starts from Home",
+  "@polarKnobUseHomeOn": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobUseHomeOff": "Off: where the mount points now counts as Home",
+  "@polarKnobUseHomeOff": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobTurnHint": "Kept between 5° and 120°",
+  "@polarKnobTurnHint": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobVerifyStepHint": "Kept between 5° and 60°",
+  "@polarKnobVerifyStepHint": {
+    "description": "Imaging > Polar align settings panel hint"
   }
 }

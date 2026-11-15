@@ -19,6 +19,7 @@ import 'panels/equipment_switch_panel.dart';
 import 'panels/equipment_weather_panel.dart';
 import 'panels/generic_placeholder_panel.dart';
 import 'panels/imaging_autofocus_panel.dart';
+import 'panels/imaging_polar_panel.dart';
 import 'panels/imaging_unguided_panel.dart';
 import 'panels/imaging_defaults_panel.dart';
 import 'panels/imaging_plate_solve_panel.dart';
@@ -69,9 +70,7 @@ class SettingsShell extends ConsumerWidget {
             child: _SettingsTree(
               selectedId: selectedId,
               companion: companion,
-              onSelect: ref
-                  .read(selectedSettingsPanelProvider.notifier)
-                  .select,
+              onSelect: ref.read(selectedSettingsPanelProvider.notifier).select,
             ),
           ),
         ),
@@ -116,9 +115,9 @@ class _SettingsTree extends StatelessWidget {
             child: Text(
               group.label,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AraColors.textSecondary,
-                    letterSpacing: 0.5,
-                  ),
+                color: AraColors.textSecondary,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
           for (final panel in group.panels)
@@ -161,8 +160,11 @@ class _PanelRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.chevron_right,
-                  size: 16, color: AraColors.textSecondary),
+              const Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: AraColors.textSecondary,
+              ),
           ],
         ),
       ),
@@ -208,8 +210,10 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
       ),
       child: Row(
         children: [
-          Text(widget.info?.label ?? 'Settings',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            widget.info?.label ?? 'Settings',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const Spacer(),
           if (saveAction != null) ...[
             FilledButton.icon(
@@ -233,8 +237,8 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
             builder: (context) {
               final shortcutLabel =
                   Theme.of(context).platform == TargetPlatform.macOS
-                      ? '⌘K'
-                      : 'Ctrl+K';
+                  ? '⌘K'
+                  : 'Ctrl+K';
               return TextButton.icon(
                 onPressed: () => showCommandPalette(context),
                 icon: const Icon(Icons.search, size: 16),
@@ -273,6 +277,7 @@ class _PanelBody extends StatelessWidget {
       'img.autofocus' => const ImagingAutofocusPanel(),
       'img.platesolve' => const ImagingPlateSolvePanel(),
       'img.unguided' => const ImagingUnguidedPanel(),
+      'img.polar' => const ImagingPolarPanel(),
       'session.storage' => const StoragePanel(),
       'session.filenames' => const SessionFilenamesPanel(),
       'session.notifications' => const SessionNotificationsPanel(),
@@ -288,11 +293,10 @@ class _PanelBody extends StatelessWidget {
       'app.changelog' => const AboutPanel(),
       'support.logs' => const SupportTab(),
       _ => GenericPlaceholderPanel(
-          panelId: panelId,
-          label: findPanelInfo(panelId)?.label ?? panelId,
-          note:
-              'This section is not available yet.',
-        ),
+        panelId: panelId,
+        label: findPanelInfo(panelId)?.label ?? panelId,
+        note: 'This section is not available yet.',
+      ),
     };
   }
 }

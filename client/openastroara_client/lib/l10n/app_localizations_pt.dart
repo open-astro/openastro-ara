@@ -1025,7 +1025,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarActionNextFine => 'move on to the fine step';
 
   @override
-  String get polarCheck => 'Check it';
+  String get polarCheck => 'Verify';
 
   @override
   String get polarActionCheck => 'start the check';
@@ -5852,6 +5852,55 @@ class AppLocalizationsPt extends AppLocalizations {
   String planFramesFit(int fits) {
     return 'Fits $fits of them before 30°/dawn';
   }
+
+  @override
+  String get polarStepRough => 'Rough';
+
+  @override
+  String get polarStepFine => 'Fine';
+
+  @override
+  String get polarStepVerify => 'Verify';
+
+  @override
+  String get polarSetup => 'Setup';
+
+  @override
+  String get polarErrorHeading => 'Error';
+
+  @override
+  String polarInsideTolerance(String tolerance) {
+    return 'Inside your $tolerance′ tolerance. Done keeps this alignment; Next: fine refines it.';
+  }
+
+  @override
+  String polarOutsideTolerance(String tolerance) {
+    return 'Outside your $tolerance′ tolerance: refine it, or stop with the shutter.';
+  }
+
+  @override
+  String get polarVerifyCaption =>
+      'Verify moves the mount and takes three frames to confirm the alignment.';
+
+  @override
+  String get polarKnobToleranceHint =>
+      'Done turns on once the error is inside it';
+
+  @override
+  String get polarKnobUseHome => 'Send the mount Home first';
+
+  @override
+  String get polarKnobUseHomeOn => 'Every stage starts from Home';
+
+  @override
+  String get polarKnobUseHomeOff =>
+      'Off: where the mount points now counts as Home';
+
+  @override
+  String get polarKnobTurnHint => 'Kept between 5° and 120°';
+
+  @override
+  String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -11747,4 +11796,53 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planFramesFit(int fits) {
     return 'Cabem $fits deles antes dos 30°/amanhecer';
   }
+
+  @override
+  String get polarStepRough => 'Grosso';
+
+  @override
+  String get polarStepFine => 'Fino';
+
+  @override
+  String get polarStepVerify => 'Verificar';
+
+  @override
+  String get polarSetup => 'Ajustes';
+
+  @override
+  String get polarErrorHeading => 'Erro';
+
+  @override
+  String polarInsideTolerance(String tolerance) {
+    return 'Dentro da sua tolerância de $tolerance′. Concluir mantém este alinhamento; Próximo: fino o refina.';
+  }
+
+  @override
+  String polarOutsideTolerance(String tolerance) {
+    return 'Fora da sua tolerância de $tolerance′: refine, ou pare com o obturador.';
+  }
+
+  @override
+  String get polarVerifyCaption =>
+      'Verificar move a montagem e tira três quadros para confirmar o alinhamento.';
+
+  @override
+  String get polarKnobToleranceHint =>
+      'O Concluir liga quando o erro fica dentro dela';
+
+  @override
+  String get polarKnobUseHome => 'Enviar a montagem para Home antes';
+
+  @override
+  String get polarKnobUseHomeOn => 'Todas as etapas começam em Home';
+
+  @override
+  String get polarKnobUseHomeOff =>
+      'Desligado: onde a montagem aponta agora conta como Home';
+
+  @override
+  String get polarKnobTurnHint => 'Mantido entre 5° e 120°';
+
+  @override
+  String get polarKnobVerifyStepHint => 'Mantido entre 5° e 60°';
 }

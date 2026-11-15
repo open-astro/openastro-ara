@@ -1025,7 +1025,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarActionNextFine => 'move on to the fine step';
 
   @override
-  String get polarCheck => 'Check it';
+  String get polarCheck => 'Verify';
 
   @override
   String get polarActionCheck => 'start the check';
@@ -5852,4 +5852,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String planFramesFit(int fits) {
     return 'Fits $fits of them before 30°/dawn';
   }
+
+  @override
+  String get polarStepRough => 'Rough';
+
+  @override
+  String get polarStepFine => 'Fine';
+
+  @override
+  String get polarStepVerify => 'Verify';
+
+  @override
+  String get polarSetup => 'Setup';
+
+  @override
+  String get polarErrorHeading => 'Error';
+
+  @override
+  String polarInsideTolerance(String tolerance) {
+    return 'Inside your $tolerance′ tolerance. Done keeps this alignment; Next: fine refines it.';
+  }
+
+  @override
+  String polarOutsideTolerance(String tolerance) {
+    return 'Outside your $tolerance′ tolerance: refine it, or stop with the shutter.';
+  }
+
+  @override
+  String get polarVerifyCaption =>
+      'Verify moves the mount and takes three frames to confirm the alignment.';
+
+  @override
+  String get polarKnobToleranceHint =>
+      'Done turns on once the error is inside it';
+
+  @override
+  String get polarKnobUseHome => 'Send the mount Home first';
+
+  @override
+  String get polarKnobUseHomeOn => 'Every stage starts from Home';
+
+  @override
+  String get polarKnobUseHomeOff =>
+      'Off: where the mount points now counts as Home';
+
+  @override
+  String get polarKnobTurnHint => 'Kept between 5° and 120°';
+
+  @override
+  String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
 }
