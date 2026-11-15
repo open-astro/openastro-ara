@@ -9921,6 +9921,42 @@ abstract class AppLocalizations {
   /// **'Verify moves the mount and takes three frames to confirm the alignment.'**
   String get polarVerifyCaption;
 
+  /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get polarStepDone;
+
+  /// Settings → Imaging → Polar align: section heading over the routine's knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align'**
+  String get polarKnobSection;
+
+  /// Settings → Imaging → Polar align: tolerance field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Tolerance (arcmin, 0.1 to 10)'**
+  String get polarKnobTolerance;
+
+  /// Settings → Imaging → Polar align: RA turn field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Turn (°, 5 to 120)'**
+  String get polarKnobTurn;
+
+  /// Settings → Imaging → Polar align: Verify step field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Verify step (°, 5 to 60)'**
+  String get polarKnobVerifyStep;
+
+  /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Rough step exposure (s, 0.1 to 60)'**
+  String get polarKnobRoughExposure;
+
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:

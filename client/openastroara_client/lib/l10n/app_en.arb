@@ -7590,6 +7590,30 @@
   "@polarVerifyCaption": {
     "description": "Simple Mode Polar align fine step: caption under the Verify button"
   },
+  "polarStepDone": "Done",
+  "@polarStepDone": {
+    "description": "Simple Mode Polar align stepper: what a screen reader says for a step with a tick"
+  },
+  "polarKnobSection": "Polar align",
+  "@polarKnobSection": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: section heading over the routine's knobs"
+  },
+  "polarKnobTolerance": "Tolerance (arcmin, 0.1 to 10)",
+  "@polarKnobTolerance": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: tolerance field label with its accepted range"
+  },
+  "polarKnobTurn": "Turn (°, 5 to 120)",
+  "@polarKnobTurn": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: RA turn field label with its accepted range"
+  },
+  "polarKnobVerifyStep": "Verify step (°, 5 to 60)",
+  "@polarKnobVerifyStep": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
+  },
+  "polarKnobRoughExposure": "Rough step exposure (s, 0.1 to 60)",
+  "@polarKnobRoughExposure": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: rough step exposure field label with its accepted range"
+  },
   "polarKnobToleranceHint": "Done turns on once the error is inside it",
   "@polarKnobToleranceHint": {
     "description": "Imaging > Polar align settings panel hint"

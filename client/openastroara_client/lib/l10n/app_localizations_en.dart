@@ -5883,6 +5883,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Verify moves the mount and takes three frames to confirm the alignment.';
 
   @override
+  String get polarStepDone => 'Done';
+
+  @override
+  String get polarKnobSection => 'Polar align';
+
+  @override
+  String get polarKnobTolerance => 'Tolerance (arcmin, 0.1 to 10)';
+
+  @override
+  String get polarKnobTurn => 'Turn (°, 5 to 120)';
+
+  @override
+  String get polarKnobVerifyStep => 'Verify step (°, 5 to 60)';
+
+  @override
+  String get polarKnobRoughExposure => 'Rough step exposure (s, 0.1 to 60)';
+
+  @override
   String get polarKnobToleranceHint =>
       'Done turns on once the error is inside it';
 

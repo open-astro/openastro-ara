@@ -5,4 +5,4 @@
 
 ### Added (Settings)
 
-- **Imaging › Polar align settings** (#1736): tolerance, Send the mount Home first, the turn, the Verify step and the rough exposure are now settings, each saved at once.
+- **Imaging › Polar align settings** (#1736): tolerance, Send the mount Home first, the turn, the Verify step and the rough exposure are now settings, each saved at once. Each label names its range, and a value outside it is refused and not saved. Until the rig's settings have loaded, the panel says so and offers Retry. No polar-align panel saves before then, so a failed load can no longer write defaults over the rig's values.

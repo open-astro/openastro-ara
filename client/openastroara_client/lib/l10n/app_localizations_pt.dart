@@ -5883,6 +5883,24 @@ class AppLocalizationsPt extends AppLocalizations {
       'Verify moves the mount and takes three frames to confirm the alignment.';
 
   @override
+  String get polarStepDone => 'Done';
+
+  @override
+  String get polarKnobSection => 'Polar align';
+
+  @override
+  String get polarKnobTolerance => 'Tolerance (arcmin, 0.1 to 10)';
+
+  @override
+  String get polarKnobTurn => 'Turn (°, 5 to 120)';
+
+  @override
+  String get polarKnobVerifyStep => 'Verify step (°, 5 to 60)';
+
+  @override
+  String get polarKnobRoughExposure => 'Rough step exposure (s, 0.1 to 60)';
+
+  @override
   String get polarKnobToleranceHint =>
       'Done turns on once the error is inside it';
 
@@ -11825,6 +11843,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarVerifyCaption =>
       'Verificar move a montagem e tira três quadros para confirmar o alinhamento.';
+
+  @override
+  String get polarStepDone => 'Concluído';
+
+  @override
+  String get polarKnobSection => 'Alinhamento polar';
+
+  @override
+  String get polarKnobTolerance => 'Tolerância (arcmin, 0,1 a 10)';
+
+  @override
+  String get polarKnobTurn => 'Giro (°, 5 a 120)';
+
+  @override
+  String get polarKnobVerifyStep => 'Passo do Verificar (°, 5 a 60)';
+
+  @override
+  String get polarKnobRoughExposure =>
+      'Exposição da etapa grossa (s, 0,1 a 60)';
 
   @override
   String get polarKnobToleranceHint =>
