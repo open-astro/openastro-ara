@@ -86,6 +86,7 @@ import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/screens/simple/simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'package:openastroara/state/diagnostics/diagnostics_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
@@ -2051,6 +2052,29 @@ void main() {
     expect(sel.decJ2000Deg, 41.27);
     expect(find.text('M 31 (Andromeda Galaxy)'), findsOneWidget, reason: "the plan names the card's label, not NGC 224");
     expect(container.read(simpleRunProvider).targets, isEmpty, reason: 'nothing queued');
+  });
+
+  // #1898: over a run, Image this from the sky (not Plan) landed on Plan with no sheet.
+  testWidgets('Image this from the sky over a running plan opens the sheet to add to the queue (#1898)',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running));
+    await _frame(tester, container);
+    expect(container.read(simpleShowingProvider), isNot(SimpleModeScreen.plan));
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+        altDeg: 62.4, maxAltDeg: 74.2));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
+    await tester.pump();
+    expect(container.read(simpleShowingProvider), SimpleModeScreen.plan);
+    expect(container.read(simpleQueueSheetProvider).adding, isTrue, reason: 'over a run the pick adds to the queue');
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet opens, not a bare Plan');
   });
 
   // Falsified by: simple_shell.dart _SkyPick onImage, pick(plan) unconditionally (the old `_mode = plan`).
@@ -8150,7 +8174,7 @@ void main() {
         );
         await pumpSetup(tester, facts);
         expect(
-          find.text('Connect the Guider to check its calibration.'),
+          find.text('Connect Camera (Guide) in Settings › Devices to check the guider calibration.'),
           findsOneWidget,
         );
         expect(

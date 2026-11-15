@@ -6280,6 +6280,11 @@ paths:
         - Profile
       summary: Replace the active profile's imaging defaults.
       operationId: PutImagingDefaults
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6293,6 +6298,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImagingDefaultsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/storage:
     get:
       tags:
@@ -6359,6 +6370,11 @@ paths:
         - Profile
       summary: Replace the active profile's notifications settings.
       operationId: PutNotificationsSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6372,6 +6388,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationsSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/site:
     get:
       tags:
@@ -6390,6 +6412,11 @@ paths:
         - Profile
       summary: Replace the active profile's site preferences.
       operationId: PutSiteSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6403,6 +6430,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SiteSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/custom-horizon:
     get:
       tags:
@@ -6421,6 +6454,11 @@ paths:
         - Profile
       summary: 'Replace the active profile''s custom terrain horizon (points are sorted by azimuth; azimuth 0-360, altitude -10..90, max 361 points).'
       operationId: PutCustomHorizon
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6436,6 +6474,12 @@ paths:
                 $ref: '#/components/schemas/CustomHorizonDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6471,6 +6515,11 @@ paths:
         - Profile
       summary: Replace the active profile's recent and saved targets (newest first; one entry per name; at most 200; finite J2000 positions).
       operationId: PutSavedTargets
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6486,6 +6535,12 @@ paths:
                 $ref: '#/components/schemas/SavedTargetsDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6521,6 +6576,11 @@ paths:
         - Profile
       summary: Replace the active profile's filenames settings.
       operationId: PutFilenamesSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6534,6 +6594,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilenamesSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/safety:
     get:
       tags:
@@ -6552,6 +6618,11 @@ paths:
         - Profile
       summary: Replace the active profile's safety policies. first_flip_confirmed is daemon-owned and ignored on PUT (the stored value is preserved and echoed) — use POST /safety/first-flip/rearm to re-arm the §58.8 announce.
       operationId: PutSafetyPolicies
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6565,6 +6636,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/safety/first-flip/rearm:
     post:
       tags:
@@ -6596,6 +6673,11 @@ paths:
         - Profile
       summary: Replace the active profile's autofocus settings.
       operationId: PutAutofocusSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6609,6 +6691,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AutofocusSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/polar-align:
     get:
       tags:
@@ -6627,6 +6715,11 @@ paths:
         - Profile
       summary: Replace the active profile's §45 polar-alignment settings.
       operationId: PutPolarAlignSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6642,6 +6735,12 @@ paths:
                 $ref: '#/components/schemas/PolarAlignSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6664,6 +6763,11 @@ paths:
         - Profile
       summary: Replace the active profile's unguided-imaging settings.
       operationId: PutUnguidedSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6679,6 +6783,12 @@ paths:
                 $ref: '#/components/schemas/UnguidedSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6701,6 +6811,11 @@ paths:
         - Profile
       summary: Replace the active profile's guider-advanced settings.
       operationId: PutGuiderAdvancedSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6716,6 +6831,12 @@ paths:
                 $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6738,6 +6859,11 @@ paths:
         - Profile
       summary: Replace the active profile's plate-solve settings.
       operationId: PutPlateSolveSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6751,6 +6877,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlateSolveSettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/diagnostics-mode:
     get:
       tags:
@@ -6769,6 +6901,11 @@ paths:
         - Profile
       summary: Replace the active profile's diagnostics mode.
       operationId: PutDiagnosticsMode
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6782,6 +6919,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DiagnosticsModeDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/phd2:
     get:
       tags:
@@ -6800,6 +6943,11 @@ paths:
         - Profile
       summary: Replace the active profile's PHD2 settings.
       operationId: PutPhd2Settings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6813,6 +6961,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Phd2SettingsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/optics:
     get:
       tags:
@@ -6831,6 +6985,11 @@ paths:
         - Profile
       summary: Replace the active profile's optics settings.
       operationId: PutOpticsSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6846,6 +7005,12 @@ paths:
                 $ref: '#/components/schemas/OpticsSettingsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6868,6 +7033,11 @@ paths:
         - Profile
       summary: Replace the active profile's camera electronics.
       operationId: PutCameraElectronics
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6883,6 +7053,12 @@ paths:
                 $ref: '#/components/schemas/CameraElectronicsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6905,6 +7081,11 @@ paths:
         - Profile
       summary: Replace the active profile's planning filter set.
       operationId: PutFilterSet
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6920,6 +7101,12 @@ paths:
                 $ref: '#/components/schemas/FilterSetDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6942,6 +7129,11 @@ paths:
         - Profile
       summary: Replace the active profile's filter-wheel slot labels.
       operationId: PutFilterWheelLabels
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6957,6 +7149,12 @@ paths:
                 $ref: '#/components/schemas/FilterWheelLabelsDto'
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -6979,6 +7177,11 @@ paths:
         - Profile
       summary: Replace the active profile's filter-wheel policy.
       operationId: PutFilterWheelPolicy
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -6992,6 +7195,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterWheelPolicyDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/cooling-fan:
     get:
       tags:
@@ -7010,6 +7219,11 @@ paths:
         - Profile
       summary: 'Designate the active profile''s cooling fan: a switch''s device_id and port_id, or both null for none.'
       operationId: PutCoolingFan
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -7025,6 +7239,12 @@ paths:
                 $ref: '#/components/schemas/CoolingFanDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -7047,6 +7267,11 @@ paths:
         - Profile
       summary: Replace the active profile's dome geometry and tolerances (follow_mount is kept; POST /equipment/dome/follow changes it); a scope outside the dome radius is refused with a reason.
       operationId: PutDomeSettings
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -7062,6 +7287,12 @@ paths:
                 $ref: '#/components/schemas/DomeSettingsDto'
         '422':
           description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '412':
+          description: Precondition Failed
           content:
             application/problem+json:
               schema:
@@ -7084,6 +7315,11 @@ paths:
         - Profile
       summary: Replace the active profile's equipment auto-connect bools.
       operationId: PutEquipmentConnection
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -7097,6 +7333,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EquipmentConnectionDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/stretch-defaults:
     get:
       tags:
@@ -7115,6 +7357,11 @@ paths:
         - Profile
       summary: Replace the active profile's stretch defaults.
       operationId: PutStretchDefaults
+      parameters:
+        - name: If-Match
+          in: header
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -7128,6 +7375,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StretchDefaultsDto'
+        '412':
+          description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profiles:
     get:
       tags:

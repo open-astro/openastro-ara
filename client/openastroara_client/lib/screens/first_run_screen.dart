@@ -98,11 +98,11 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Connect to OpenAstro Ara'),
+        title: Text(context.l10n.firstRunTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rescan for servers',
+            tooltip: context.l10n.firstRunRescanTooltip,
             onPressed: _rescan,
           ),
         ],
@@ -113,7 +113,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Rigs found on your network',
+              context.l10n.firstRunRigsFound,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -137,13 +137,11 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                 },
                 slivers: [
                   if (_discovered.isEmpty)
-                    const SliverToBoxAdapter(
+                    SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         child: Text(
-                          'Looking for servers… rescanning every few seconds.\n'
-                          'If yours doesn’t appear, pull down, tap ⟳ (top right) '
-                          'or add it manually below.',
+                          context.l10n.firstRunLooking,
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -171,7 +169,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             ),
             const Divider(),
             Text(
-              'Or add manually:',
+              context.l10n.firstRunAddManually,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -180,8 +178,8 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                 Expanded(
                   child: TextField(
                     controller: _manualHostCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Hostname or IP',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.firstRunHostLabel,
                     ),
                   ),
                 ),
@@ -190,12 +188,13 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                   width: 100,
                   child: TextField(
                     controller: _manualPortCtrl,
-                    decoration: const InputDecoration(labelText: 'Port'),
+                    decoration:
+                        InputDecoration(labelText: context.l10n.firstRunPortLabel),
                     keyboardType: TextInputType.number,
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(onPressed: _addManual, child: const Text('Use')),
+                FilledButton(onPressed: _addManual, child: Text(context.l10n.firstRunUse)),
               ],
             ),
             const SizedBox(height: 16),
@@ -203,10 +202,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             // enter the shell with no server to build the night's plan; drafts
             // push to a daemon once one is connected. Self-gated: disabled
             // until a profile has been cached from a connected session.
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: PlanOfflineButton(
-                label: 'Plan offline — set up your night without a server',
+                label: context.l10n.firstRunPlanOffline,
               ),
             ),
             const SizedBox(height: 8),
@@ -293,17 +292,17 @@ class _HandshakePanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Connected to ${info.name}',
+                      context.l10n.firstRunConnectedTo(info.name),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    Text('Server version: ${info.version}'),
-                    Text('API version: ${info.apiVersion}'),
-                    Text('Address: ${server.baseUrl}'),
+                    Text(context.l10n.firstRunServerVersion(info.version)),
+                    Text(context.l10n.firstRunApiVersion(info.apiVersion)),
+                    Text(context.l10n.firstRunAddress(server.baseUrl)),
                     const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: onConfirm,
                       icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Continue'),
+                      label: Text(context.l10n.firstRunContinue),
                     ),
                   ],
                 ),
@@ -315,14 +314,14 @@ class _HandshakePanel extends StatelessWidget {
                 child: AdaptiveProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 12),
-              Text('Connecting to ${server.baseUrl}…'),
+              Text(context.l10n.firstRunConnecting(server.baseUrl)),
             ],
           ),
           error: (e, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Connection failed: ${server.baseUrl}',
+                context.l10n.firstRunConnectionFailed(server.baseUrl),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               Text(
