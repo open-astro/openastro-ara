@@ -1671,7 +1671,7 @@ class _TargetCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                 gradient: const RadialGradient(
-                  colors: [Color(0xFF3A4A66), Color(0xFF0E1118)],
+                  colors: [AraColors.targetArtGlow, AraColors.targetArtNight],
                 ),
               ),
               child: const Icon(Icons.auto_awesome, size: 20),

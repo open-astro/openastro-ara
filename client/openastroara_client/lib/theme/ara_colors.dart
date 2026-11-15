@@ -138,6 +138,10 @@ class AraColors {
   static const thumbnailTickShade = Color(0x66000000);
   static const thumbnailHover = Color(0x14FFFFFF);
 
+  /// The Plan window target card's placeholder art: a glow fading to night.
+  static const targetArtGlow = Color(0xFF3A4A66);
+  static const targetArtNight = Color(0xFF0E1118);
+
   /// The notification centre's drop shadow.
   static const panelShadow = Color(0x66000000);
 
