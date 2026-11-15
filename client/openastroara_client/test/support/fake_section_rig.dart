@@ -12,8 +12,8 @@ typedef LandedPut = ({String section, Object? body, String? ifMatch});
 /// section under `/api/v1/profile/<section>` with an `ETag`, refuses a PUT
 /// whose `If-Match` names another copy with a 412 (nothing written), and still
 /// takes a PUT with no `If-Match`, as the daemon does until a version is
-/// required. The tests assert on [puts] only, so they hold whatever shape the
-/// client's section notifiers take.
+/// required. [puts] holds only the writes that landed, so a test can check the
+/// rig's side whatever shape the client's section notifiers take.
 class FakeSectionRig implements HttpClientAdapter {
   FakeSectionRig(Map<String, Object?> sections) : _sections = {...sections};
 
@@ -24,6 +24,9 @@ class FakeSectionRig implements HttpClientAdapter {
 
   /// Sections whose GET fails as an unreachable rig does.
   final Set<String> failGet = {};
+
+  /// Sections whose next PUT fails with a server error (nothing written).
+  final Set<String> failPut = {};
 
   /// Every write that landed, in order.
   final List<LandedPut> puts = [];
@@ -72,6 +75,7 @@ class FakeSectionRig implements HttpClientAdapter {
       case 'PUT':
         final ifMatch = _header(options, 'if-match');
         ifMatches.add(ifMatch);
+        if (failPut.remove(section)) return _json({'title': 'rig error'}, 500);
         if (ifMatch != null && ifMatch != '*' && ifMatch != etagOf(section)) {
           return _json({'title': 'Precondition Failed'}, 412);
         }

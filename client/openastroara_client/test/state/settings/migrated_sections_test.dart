@@ -128,4 +128,51 @@ void main() {
       },
     );
   }
+
+  // The diagnostics radios save on each tap (replaceAndSave).
+  const mode = 'diagnostics-mode', tapped = DiagnosticsMode.abortOnCritical;
+
+  test('diagnostics-mode: a failed radio tap writes nothing and shows the '
+      'loaded mode again', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await expectLater(
+      n.replaceAndSave(tapped),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    await n.load(rig.api());
+    rig.failPut.add(mode);
+    await expectLater(n.replaceAndSave(tapped), throwsException);
+    expect(c.read(diagnosticsModeProvider).value, DiagnosticsMode.notifyOnly);
+    expect(rig.puts, isEmpty);
+  });
+
+  test('diagnostics-mode: a radio tap refused as stale keeps the choice and '
+      'flags the conflict', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await c.read(diagnosticsModeProvider.notifier).load(rig.api());
+    rig.savedElsewhere(mode);
+    await expectLater(
+      c.read(diagnosticsModeProvider.notifier).replaceAndSave(tapped),
+      throwsA(isA<SectionConflictException>()),
+    );
+    expect(c.read(diagnosticsModeProvider).value, tapped);
+    expect(c.read(diagnosticsModeProvider).conflict, isTrue);
+  });
+
+  test('diagnostics-mode: a quick second tap is saved when the first one '
+      'fails', () async {
+    final rig = _rig()..failPut.add(mode);
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    final first = n.replaceAndSave(DiagnosticsMode.pauseOnCritical);
+    final second = n.replaceAndSave(tapped);
+    await expectLater(first, throwsException);
+    await second;
+    expect(c.read(diagnosticsModeProvider).value, tapped);
+    expect(rig.puts.single.body, {'mode': 'abort_on_critical'});
+  });
 }

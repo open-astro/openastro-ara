@@ -119,14 +119,17 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
       ref.read(profileApiProvider) ??
       (throw StateError('Not connected — connect to your rig to save this.'));
 
-  /// Save [next] whole (a picker, a form): the old value stays when the rig
-  /// refuses, so the screen never shows a copy the rig does not hold.
+  /// Save [next] whole (a picker, a form). A 412 keeps [next] and flags the
+  /// conflict (ADR 0015 rule 6). Any other failure puts the old value back,
+  /// unless a later edit already replaced [next]: that edit's save decides.
   Future<void> replaceAndSave(T next) async {
     final before = state.value;
     try {
       await editAndSave((_) => next);
+    } on SectionConflictException {
+      rethrow;
     } catch (_) {
-      if (before != null) edit((_) => before);
+      if (before != null && identical(state.value, next)) edit((_) => before);
       rethrow;
     }
   }

@@ -12,7 +12,8 @@ import '../../../widgets/settings/section_panel.dart';
 /// trip. Unlike the other settings panels (which use a Save button),
 /// this picker auto-saves on each radio-button tap — the UX expectation
 /// for single-choice radios is "I tapped it, it's set." A failed PUT
-/// shows a snackbar and the radio stays on the rig's value (ADR 0015).
+/// shows a snackbar and the radio goes back to the rig's value; a 412
+/// keeps the choice under the conflict banner (ADR 0015 rule 6).
 class DiagnosticsModePanel extends ConsumerStatefulWidget {
   const DiagnosticsModePanel({super.key});
 
