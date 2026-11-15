@@ -78,7 +78,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     internal const int MaxConsecutiveFailures = 5;
     internal const int RecentWindow = 240;
 
-    private readonly GuiderService _guider;
+    /// <summary>The pause after a failed frame, so a dropped camera isn't hammered at the RPC rate. Settable for tests.</summary>
+    internal TimeSpan FailureBackoff { get; set; } = TimeSpan.FromSeconds(1);
+
+    private readonly IGuideCapture _guider;
     private readonly IPolarAlignFrameFetcher _fetcher;
     private readonly IGuideFrameDecoder _decoder;
     private readonly ILogger<GuideFocusService> _logger;
@@ -107,8 +110,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private Task? _loop;
     private bool _disposed;
 
-    public GuideFocusService(
-            GuiderService guider,
+    internal GuideFocusService(
+            IGuideCapture guider,
             IPolarAlignFrameFetcher fetcher,
             IGuideFrameDecoder? decoder = null,
             ILogger<GuideFocusService>? logger = null,
@@ -201,14 +204,14 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             if (IsActive) {
                 throw new InvalidOperationException("the guide-camera focus loop is already running");
             }
-            PHD2Guider? guider = null;
+            IGuideCaptureLink? guider = null;
             GuideCameraCustody.Claim? claim = null;
             if (_syntheticFrames is null) {
-                guider = _guider.RequireConnectedGuider(); // "guider is not connected" → 409
+                guider = _guider.ConnectedLink(); // "guider is not connected" → 409
                 _guider.ThrowIfOutOfStep("The guide-camera focus loop"); // → 409, with the reason
                 // ADR 0016: refused while the Guider is busy, takes the camera (and stops a running polar
                 // alignment or live view) and takes the daemon's single-client lease.
-                claim = await _guider.Custody.TakeAsync(CameraUse.GuideFocus, _guider, _ => StopAsync(), ct).ConfigureAwait(false);
+                claim = await _guider.TakeCameraAsync(CameraUse.GuideFocus, _ => StopAsync(), ct).ConfigureAwait(false);
                 try {
                     // #1711: a capture an earlier polar-align run abandoned may still be exposing.
                     await guider.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
@@ -317,7 +320,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Loop boundary: a capture, download, decode or detector fault is one failed frame (counted; the loop ends in `error` after MaxConsecutiveFailures), never a faulted background task.")]
-    private async Task RunLoopAsync(PHD2Guider? guider, GuideCameraCustody.Claim? claim, GuideFocusStartRequestDto request, CancellationToken ct) {
+    private async Task RunLoopAsync(IGuideCaptureLink? guider, GuideCameraCustody.Claim? claim, GuideFocusStartRequestDto request, CancellationToken ct) {
         var workDir = Path.Combine(Path.GetTempPath(), "ara-guide-focus", Guid.NewGuid().ToString("N"));
         try {
             Directory.CreateDirectory(workDir);
@@ -355,7 +358,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                         return;
                     }
                     // Back off a little so a dropped camera isn't hammered at the RPC rate.
-                    await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+                    await Task.Delay(FailureBackoff, ct).ConfigureAwait(false);
                 }
             }
         } catch (OperationCanceledException) {
@@ -385,16 +388,14 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     }
 
     private async Task<(GuideFocusSampleDto Sample, byte[]? Jpeg)> CaptureAndMeasureAsync(
-            PHD2Guider guider, GuideFocusStartRequestDto request, string workDir, CancellationToken ct) {
+            IGuideCaptureLink guider, GuideFocusStartRequestDto request, string workDir, CancellationToken ct) {
         var tcs = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnComplete(object? sender, SingleFrameCompleteEventArgs e) => tcs.TrySetResult(e);
-        guider.SingleFrameComplete += OnComplete;
+        using var subscription = guider.OnFrameComplete(e => OnComplete(guider, e));
         string? localPath = null;
         try {
             var exposureMs = Math.Max(1, (int)Math.Round(request.ExposureSec * 1000.0));
-            await guider.CaptureSolverFrameAsync(
-                exposureMs: exposureMs, binning: request.Binning is > 1 ? request.Binning : null,
-                gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
+            await guider.CaptureFrameAsync(exposureMs, request.Binning is > 1 ? request.Binning : null, ct).ConfigureAwait(false);
             // Not cancellable mid-exposure on purpose (see StopAsync): the daemon owes exactly one event.
             var completed = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(request.ExposureSec + 30), CancellationToken.None).ConfigureAwait(false);
             // Only the bare name: an absolute or ../ value from the guider must not place the download (or the
@@ -403,12 +404,12 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             if (!completed.Success || string.IsNullOrEmpty(filename)) {
                 throw new InvalidOperationException(completed.Error ?? "the guider saved no frame");
             }
-            var host = guider.ConnectedHost;
+            var host = guider.Host;
             if (string.IsNullOrEmpty(host)) {
                 throw new InvalidOperationException("guider connection endpoint unknown — cannot fetch the saved frame");
             }
             localPath = Path.Combine(workDir, filename);
-            await _fetcher.FetchAsync(host, guider.ConnectedRpcPort, filename, localPath, CancellationToken.None).ConfigureAwait(false);
+            await _fetcher.FetchAsync(host, guider.RpcPort, filename, localPath, CancellationToken.None).ConfigureAwait(false);
             var (pixels, width, height) = _decoder.Decode(localPath);
             byte[]? jpeg = null;
             if (width >= 16 && height >= 16) {
@@ -419,7 +420,6 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             var sample = Measure(pixels, width, height, NextSeq(), DateTimeOffset.UtcNow);
             return (sample, jpeg);
         } finally {
-            guider.SingleFrameComplete -= OnComplete;
             if (localPath is not null) {
                 try { File.Delete(localPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }

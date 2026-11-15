@@ -2680,17 +2680,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideActionStop => 'stop guiding';
 
   @override
-  String get guideIdle => 'Idle';
-
-  @override
-  String get guideNoGuider => 'Guider not connected';
-
-  @override
   String get guideTapShutter =>
       'Tap the shutter to start guiding. It calibrates first when needed.';
 
   @override
-  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+  String get guideConnectFirst =>
+      'Connect Camera (Guide) in Settings › Devices.';
 
   @override
   String get deviceGuiderCamera => 'Camera (Guide)';
@@ -4647,7 +4642,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationGuideNoGuider =>
-      'Connect the Guider to build its dark library and bad-pixel map.';
+      'Connect Camera (Guide) in Settings › Devices to build its dark library and bad-pixel map.';
 
   @override
   String get calibrationGuideDarks => 'Dark library';
@@ -5188,7 +5183,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rigSetupCalibrationConnect =>
-      'Connect the Guider to check its calibration.';
+      'Connect Camera (Guide) in Settings › Devices to check the guider calibration.';
 
   @override
   String get rigSetupCalibrationAction => 'Open Guider mode';
@@ -5303,6 +5298,541 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSectionReload => 'Reload';
+
+  @override
+  String get companionTimeOfferQuestion =>
+      'The rig has no clock or site yet. Send this phone\'s location and time?';
+
+  @override
+  String get companionTimeOfferNotNow => 'Not now';
+
+  @override
+  String get companionTimeOfferSend => 'Send';
+
+  @override
+  String get companionTimeOfferSent => 'Sent this phone\'s location and time';
+
+  @override
+  String get companionTimeOfferNoGps => 'Couldn\'t get this phone\'s location';
+
+  @override
+  String get safetyAlarmPhoneNote =>
+      'This phone sounds and vibrates until you silence the alarm.';
+
+  @override
+  String get safetyAlarmEmergencyAbort => 'Emergency Abort';
+
+  @override
+  String get firstRunTitle => 'Connect to OpenAstro Ara';
+
+  @override
+  String get firstRunRescanTooltip => 'Rescan for servers';
+
+  @override
+  String get firstRunRigsFound => 'Rigs found on your network';
+
+  @override
+  String get firstRunLooking =>
+      'Looking for servers… rescanning every few seconds.\nIf yours doesn’t appear, pull down, tap ⟳ (top right) or add it manually below.';
+
+  @override
+  String get firstRunAddManually => 'Or add manually:';
+
+  @override
+  String get firstRunHostLabel => 'Hostname or IP';
+
+  @override
+  String get firstRunPortLabel => 'Port';
+
+  @override
+  String get firstRunUse => 'Use';
+
+  @override
+  String get firstRunPlanOffline =>
+      'Plan offline — set up your night without a server';
+
+  @override
+  String firstRunConnectedTo(String name) {
+    return 'Connected to $name';
+  }
+
+  @override
+  String firstRunServerVersion(String version) {
+    return 'Server version: $version';
+  }
+
+  @override
+  String firstRunApiVersion(String version) {
+    return 'API version: $version';
+  }
+
+  @override
+  String firstRunAddress(String address) {
+    return 'Address: $address';
+  }
+
+  @override
+  String get firstRunContinue => 'Continue';
+
+  @override
+  String firstRunConnecting(String address) {
+    return 'Connecting to $address…';
+  }
+
+  @override
+  String firstRunConnectionFailed(String address) {
+    return 'Connection failed: $address';
+  }
+
+  @override
+  String get launchTitle => 'OpenAstro Ara';
+
+  @override
+  String launchRig(String name) {
+    return 'Rig: $name';
+  }
+
+  @override
+  String get launchChooseRig => 'Choose a different rig';
+
+  @override
+  String get launchRetry => 'Retry';
+
+  @override
+  String get launchOr => 'or';
+
+  @override
+  String get launchAddProfile => 'Add a Profile';
+
+  @override
+  String get launchImportProfile => 'Import Profile';
+
+  @override
+  String get launchNoProfiles =>
+      'No profiles yet — add or import one to get started.';
+
+  @override
+  String get launchActiveProfile => 'Active profile:';
+
+  @override
+  String launchDeleteProfile(String name) {
+    return 'Delete \"$name\"';
+  }
+
+  @override
+  String get launchImage => 'Image';
+
+  @override
+  String get offlineTitle => 'OpenAstro Ara';
+
+  @override
+  String get offlineSubtitle => 'Planning offline — no server connected';
+
+  @override
+  String get offlineNoProfiles =>
+      'No profiles are cached on this device — offline planning needs one. Connect to your server once and set up a profile first.';
+
+  @override
+  String get offlineBackToSetup => 'Back to server setup';
+
+  @override
+  String get offlinePlanWithProfile => 'Plan with profile:';
+
+  @override
+  String get offlineUnnamedProfile => '(unnamed profile)';
+
+  @override
+  String get offlineNotCached =>
+      'This profile\'s gear settings haven\'t been cached yet (it was never active while connected) — planning will use defaults.';
+
+  @override
+  String offlineGearCached(String age) {
+    return 'Gear cached $age — reconnect to refresh if your setup changed.';
+  }
+
+  @override
+  String get offlineAgeJustNow => 'just now';
+
+  @override
+  String offlineAgeHours(int hours) {
+    return '$hours h ago';
+  }
+
+  @override
+  String offlineAgeDays(int days) {
+    return '$days days ago';
+  }
+
+  @override
+  String get offlinePlan => 'Plan';
+
+  @override
+  String get appShellTabPlanning => 'Planning';
+
+  @override
+  String get appShellTabChecklist => 'Checklist';
+
+  @override
+  String get appShellTabSequence => 'Sequence';
+
+  @override
+  String get appShellTabLive => 'Live';
+
+  @override
+  String get appShellTabSettings => 'Settings';
+
+  @override
+  String appShellSearchSettings(String shortcut) {
+    return 'Search settings ($shortcut)';
+  }
+
+  @override
+  String appShellNightModeOnTip(String shortcut) {
+    return 'Night mode on ($shortcut)';
+  }
+
+  @override
+  String appShellNightModeTip(String shortcut) {
+    return 'Night mode ($shortcut)';
+  }
+
+  @override
+  String get appShellHelp => 'Help & report a bug';
+
+  @override
+  String get appShellLauncherLibrary => 'Image Library';
+
+  @override
+  String get appShellLauncherCalibration => 'Calibration';
+
+  @override
+  String get appShellLauncherLaunchpad => 'Launchpad';
+
+  @override
+  String get appShellLauncherWizard => 'Run profile wizard';
+
+  @override
+  String wizardMissingScreen(int step) {
+    return 'Missing screen builder for step $step';
+  }
+
+  @override
+  String wizardTitle(int step, int total) {
+    return 'Set up profile · Step $step of $total';
+  }
+
+  @override
+  String get wizardSaveExit => 'Save & Exit';
+
+  @override
+  String wizardSavedWithNotes(String notes) {
+    return 'Profile saved. $notes';
+  }
+
+  @override
+  String wizardSavedLocally(String name) {
+    return '\"$name\" is saved on this device. It will be applied to your rig the next time you connect.';
+  }
+
+  @override
+  String get wizardSaveProfile => 'Save Profile';
+
+  @override
+  String get wizardNext => 'Next';
+
+  @override
+  String get wizardBack => 'Back';
+
+  @override
+  String get wizardSkipDefaults => 'Skip — use defaults';
+
+  @override
+  String get wizardSkipBlocked =>
+      'Resolve the issue on this screen to continue.';
+
+  @override
+  String get wizardNextBlocked => 'Fix the highlighted field to continue.';
+
+  @override
+  String get wizardDoneTitle => 'Profile saved';
+
+  @override
+  String get wizardDoneHeading => 'You\'re all set';
+
+  @override
+  String get wizardDoneBody =>
+      'Your profile is saved and active. The dark library is shooting in the background — it finishes on the server even if you leave now.';
+
+  @override
+  String get wizardDoneFinish => 'Finish';
+
+  @override
+  String wizardKitStage(int stage, String label) {
+    return 'Stage $stage — $label';
+  }
+
+  @override
+  String get wizardKitSkipped =>
+      'This screen was skipped — defaults will fill in until you review it in Settings.';
+
+  @override
+  String get wizardKitResetOnSave => 'Reset to default on Save';
+
+  @override
+  String get wizardBasicsIntro =>
+      'Name this profile and (optionally) set your observing site. Everything here can be changed later in Settings.';
+
+  @override
+  String get wizardBasicsBefore =>
+      'Before you begin: power on your mount and the rest of your gear, make sure they\'re reachable on the same local network as the server, and that every device is already configured in AlpacaBridge — the wizard discovers equipment live in the next steps and can only find what AlpacaBridge exposes.';
+
+  @override
+  String get wizardBasicsProfileName => 'Profile name';
+
+  @override
+  String get wizardBasicsProfileNameHint => 'e.g. Backyard New Mexico';
+
+  @override
+  String get wizardBasicsSiteName => 'Site name';
+
+  @override
+  String get wizardBasicsSiteNameHint => 'e.g. New Mexico USA';
+
+  @override
+  String get wizardBasicsLocation => 'Location (optional)';
+
+  @override
+  String get wizardBasicsFillGps => 'Fill from GPS';
+
+  @override
+  String get wizardBasicsGpsTip =>
+      'Tip: plug a USB GPS dongle into this computer and turn on Settings → Site → GPS on this computer. No mount GPS needed.';
+
+  @override
+  String get wizardBasicsGpsEdited =>
+      'A location was found, but you edited the site fields while it was being looked up — not overwritten. Press Fill from GPS again to apply it.';
+
+  @override
+  String wizardBasicsGpsFilled(String source) {
+    return 'Filled from $source.';
+  }
+
+  @override
+  String get wizardBasicsLatitude => 'Latitude (°)';
+
+  @override
+  String get wizardBasicsNorthPositive => 'North positive.';
+
+  @override
+  String get wizardBasicsLongitude => 'Longitude (°)';
+
+  @override
+  String get wizardBasicsEastPositive => 'East positive.';
+
+  @override
+  String get wizardBasicsAltitude => 'Altitude (m)';
+
+  @override
+  String get wizardBasicsBortle => 'Bortle class (1-9)';
+
+  @override
+  String get wizardBasicsBortleHelper =>
+      'Sky darkness: 1 darkest, 9 inner city.';
+
+  @override
+  String get wizardBasicsBortleError => 'Enter a whole number from 1 to 9.';
+
+  @override
+  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²), optional';
+
+  @override
+  String get wizardBasicsSqmHelper =>
+      'Leave empty if not measured (Bortle is used). 16 to 22.5.';
+
+  @override
+  String get wizardBasicsSqmError =>
+      'Enter a value from 16 to 22.5, or leave empty.';
+
+  @override
+  String get wizardBasicsTimezone => 'Timezone';
+
+  @override
+  String get wizardBasicsTimezoneHint => 'e.g. America/Denver';
+
+  @override
+  String get wizardBasicsTimezoneHelper =>
+      'Filled in automatically from the coordinates — only change it to view a remote rig in another zone.';
+
+  @override
+  String get wizardReviewIntro =>
+      'Review your profile. Tap Edit on any section to jump back and change it, then choose Save Profile below to finish. Anything left \"Not set\" keeps the built-in default — you can adjust it later in Settings.';
+
+  @override
+  String get wizardReviewSecBasics => 'Profile basics';
+
+  @override
+  String get wizardReviewSecConnection => 'Connection';
+
+  @override
+  String get wizardReviewSecEquipment => 'Equipment';
+
+  @override
+  String get wizardReviewSecTelescope => 'Telescope';
+
+  @override
+  String get wizardReviewSecCamera => 'Camera';
+
+  @override
+  String get wizardReviewSecFilterWheel => 'Filter wheel';
+
+  @override
+  String get wizardReviewSecFocuser => 'Focuser';
+
+  @override
+  String get wizardReviewSecMount => 'Mount';
+
+  @override
+  String get wizardReviewSecRotator => 'Rotator';
+
+  @override
+  String get wizardReviewSecGuider => 'OpenAstro Guider';
+
+  @override
+  String get wizardReviewSecPlateSolving => 'Plate solving';
+
+  @override
+  String get wizardReviewSecAutofocus => 'Autofocus';
+
+  @override
+  String get wizardReviewSecFileSaving => 'File saving';
+
+  @override
+  String get wizardReviewSecImaging => 'Imaging defaults';
+
+  @override
+  String get wizardReviewSecSafety => 'Safety';
+
+  @override
+  String get wizardReviewSecSite => 'Site preferences';
+
+  @override
+  String get wizardReviewEdit => 'Edit';
+
+  @override
+  String get wizardReviewDefaultsLater => 'Defaults · edit later in Settings';
+
+  @override
+  String get wizardReviewSkipped => 'Skipped — defaults will apply.';
+
+  @override
+  String get wizardReviewSolverTitle => 'Plate-solver star database';
+
+  @override
+  String get wizardReviewRecheck => 'Recheck';
+
+  @override
+  String get wizardReviewSolverWorking => 'Working out the field of view…';
+
+  @override
+  String wizardReviewSolverDownload(String size) {
+    return 'Download after setup ($size, the rig needs internet once)';
+  }
+
+  @override
+  String get wizardReviewSolverDownloadNote =>
+      'Runs on the rig in the background; progress in Settings → Sky data.';
+
+  @override
+  String wizardReviewSolverTooNarrow(String field, String reason) {
+    return '$field — cannot plate-solve. $reason';
+  }
+
+  @override
+  String get wizardReviewRoleGuideCamera => 'Guide camera';
+
+  @override
+  String get wizardReviewRoleCamera => 'Camera';
+
+  @override
+  String wizardReviewSolverField(String role, String fov, String band) {
+    return '$role: $fov° field ($band)';
+  }
+
+  @override
+  String get wizardReviewAlreadyOnRig => 'already on the rig';
+
+  @override
+  String get wizardDiscoveryIntro =>
+      'ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through a bridge (AlpacaPi, INDIGO Sky\'s -A Alpaca server). Leave the address blank to let Ara auto-discover devices over UDP.';
+
+  @override
+  String get wizardDiscoveryAddressLabel => 'AlpacaBridge address';
+
+  @override
+  String get wizardDiscoveryAddressHint =>
+      'auto-discover (UDP 32227) — or host:port to override';
+
+  @override
+  String get wizardDiscoveryDetecting => 'Detecting…';
+
+  @override
+  String get wizardDiscoveryRetryDetection => 'Retry detection';
+
+  @override
+  String get wizardDiscoveryNotDetected => 'AlpacaBridge not detected.';
+
+  @override
+  String get wizardDiscoveryNotDetectedBody =>
+      'AlpacaBridge is ARA\'s equipment hub. It should have been installed alongside ARA Core via apt. If it wasn\'t, install it on Ara host, then retry:';
+
+  @override
+  String wizardDiscoveryDetails(String details) {
+    return 'Details: $details';
+  }
+
+  @override
+  String get wizardDiscoverySkipTipOn =>
+      'Continue with the address above; detection is skipped.';
+
+  @override
+  String get wizardDiscoverySkipTipOff =>
+      'Enter your bridge\'s host:port above to enable.';
+
+  @override
+  String get wizardDiscoverySkipped => 'Continuing with the address override.';
+
+  @override
+  String get wizardDiscoverySkip =>
+      'Skip — I\'m using a non-standard bridge address';
+
+  @override
+  String wizardDiscoveryChoose(String slot) {
+    return 'Choose $slot';
+  }
+
+  @override
+  String get wizardDiscoveryRescan => 'Re-scan';
+
+  @override
+  String get wizardDiscoveryNone => '— None';
+
+  @override
+  String get wizardDiscoveryNoneNote => 'Don\'t use this device type';
+
+  @override
+  String get wizardDiscoveryFailed => 'Discovery failed';
+
+  @override
+  String get wizardDiscoveryNoDevices => 'No devices found';
+
+  @override
+  String get wizardDiscoveryNoDevicesDetail =>
+      'Make sure the driver is running and reachable on Ara\'s subnet, then re-scan.';
+
+  @override
+  String wizardDiscoveryDeviceLine(String address, int number) {
+    return '$address ·  device #$number\nAdvertised — connectivity is verified when you connect';
+  }
 
   @override
   String get planRecent => 'RECENT';

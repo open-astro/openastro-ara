@@ -490,6 +490,13 @@ Map<String, dynamic> buildTargetBlock({
     ..['Center'] = false
     ..['ErrorBehavior'] = skipInstructionSetOnError;
 
+  // #1892 - a focus that still fails (not wired, no pause gate) must not let
+  // the plan image out of focus: skip the target's instruction set, as a
+  // failed slew does.
+  // The daemon retries and parks the run for the user before it ever fails.
+  Map<String, dynamic> focusItem() =>
+      _item(runAutofocusType)..['ErrorBehavior'] = skipInstructionSetOnError;
+
   final children = <Map<String, dynamic>>[
     // A framing angle on a rig WITHOUT a rotator is the user's job before the
     // run: the Plan screen's "Rotate camera" panel plate-solves the camera
@@ -511,12 +518,12 @@ Map<String, dynamic> buildTargetBlock({
       _item(coolCameraType)
         ..['Temperature'] = coolToC
         ..['Duration'] = 0.0,
-    if (focusFirst) ...[_item(runAutofocusType), goToTarget],
+    if (focusFirst) ...[focusItem(), goToTarget],
     if (guide)
       recalibrateGuider
           ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
           : _item(startGuidingType),
-    if (afAtStart && guide) _item(runAutofocusType),
+    if (afAtStart && guide) focusItem(),
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.
     if (unguided) trackingProbe(),

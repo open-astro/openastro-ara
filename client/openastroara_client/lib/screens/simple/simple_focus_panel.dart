@@ -585,15 +585,18 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ),
               ]),
               ?preflightDone,
-              // There from the start, with its waiting text; a warning or an
-              // error takes its room from the chart.
+              // There from the start, with its waiting text; one size for the
+              // whole run (#1898).
               SizedBox(
                 height: _kFocusChartHeight,
+                child: VCurveChart(run: run, simple: true),
+              ),
+              // A warning or an error: a slot of their own under the chart.
+              SizedBox(
+                height: MediaQuery.textScalerOf(context).scale(_kFocusNoteHeight),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 4,
                   children: [
-                    Expanded(child: VCurveChart(run: run)),
                     // Icon + colour + text (DESIGN.md): the tint alone all but
                     // vanishes in night mode.
                     if (weak != null && error == null)
@@ -626,12 +629,9 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                           ],
                         ),
                       ),
-                    // Whole, however long: up to half the slot, then it scrolls.
+                    // Whole, however long: it scrolls in the slot.
                     if (error != null)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxHeight: _kFocusChartHeight / 2,
-                        ),
+                      Expanded(
                         child: SingleChildScrollView(
                           child: Text(
                             error,
@@ -702,7 +702,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ),
         SizedBox(
           height: _kFocusChartHeight,
-          child: VCurveChart(run: run),
+          child: VCurveChart(run: run, simple: true),
         ),
         ?errorText,
       ];
@@ -1156,6 +1156,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 // what changes. Heights at 1.0x text; the slot scales with it.
 const double _kFocusReadoutHeight = 72;
 const double _kFocusChartHeight = 160;
+const double _kFocusNoteHeight = 52;
 const double _kFocusManualReadoutHeight = 124;
 const double _kFocusGuideReadoutHeight = 132;
 

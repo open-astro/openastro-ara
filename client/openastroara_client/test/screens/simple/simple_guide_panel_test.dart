@@ -732,26 +732,35 @@ void main() {
     expect(find.textContaining('Tap the shutter to start guiding'), findsNothing);
   });
 
-  testWidgets('the Guide panel: what it is doing and its RMS, in arcseconds', (tester) async {
+  testWidgets('the Guide panel: its RMS, in arcseconds', (tester) async {
     await _pump(tester, _wire());
-    expect(find.text('Guiding'), findsOneWidget);
     expect(find.text('0.62″'), findsOneWidget);
     expect(find.text('RA 0.41″ · Dec 0.47″'), findsOneWidget);
   });
 
-  testWidgets('idle: Idle, not Not guiding or Stopped (both read as a failure, user 2026-11-04), and how to start',
-      (tester) async {
+  // #1898: the panel's top line repeated the guide status pill; the pill is the one place the status shows.
+  for (final (name, wire, status) in [
+    ('guiding', _wire(), 'Guiding'),
+    ('idle', _wire(runtime: 'stopped'), 'Idle'),
+    ('not connected', _wire(state: 'disconnected', runtime: 'stopped'), 'Guider not connected'),
+  ]) {
+    testWidgets('$name: the Guide panel has no status line of its own, the pill shows it (#1898)', (tester) async {
+      await _pump(tester, wire);
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      expect(find.descendant(of: panel, matching: find.text(status)), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byType(StatusDot)), findsNothing, reason: "the status line's dot");
+    });
+  }
+
+  testWidgets('idle: how to start, and no RMS', (tester) async {
     await _pump(tester, _wire(runtime: 'stopped'));
-    expect(find.text('Idle'), findsOneWidget);
-    expect(find.text('Not guiding'), findsNothing);
-    expect(find.text('Stopped'), findsNothing);
     expect(find.textContaining('Tap the shutter to start guiding'), findsOneWidget);
     expect(find.text('—'), findsOneWidget, reason: 'no RMS while idle');
   });
 
   testWidgets('no guider: says to connect it', (tester) async {
     await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'));
-    expect(find.text('Guider not connected'), findsOneWidget);
+    expect(find.text('Connect Camera (Guide) in Settings › Devices.'), findsOneWidget);
   });
 
   testWidgets("Guide's shutter starts the guider's routine", (tester) async {
@@ -772,16 +781,10 @@ void main() {
     expect(_g.calls, ['stop']);
   });
 
-  testWidgets('a lost star is the same colour in the panel as in the top bar and the pill: amber, a warning',
-      (tester) async {
-    await _pump(tester, _wire(runtime: 'star_lost'));
-    final dot = find.descendant(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Container)).evaluate()
-        .map((e) => (e.widget as Container).decoration)
-        .whereType<BoxDecoration>()
-        .where((d) => d.shape == BoxShape.circle)
-        .single;
-    expect(dot.color, guiderStatusLevel(GuiderStatus.fromJson(_wire(runtime: 'star_lost'))).color);
-    expect(dot.color, StatusLevel.busy.color, reason: 'DESIGN.md status rule: a lost star still searching is a warning');
+  test('a lost star is the same colour in the pill as in the top bar: amber, a warning', () {
+    final g = GuiderStatus.fromJson(_wire(runtime: 'star_lost'));
+    expect(simpleGuiderColour(g), guiderStatusLevel(g).color);
+    expect(simpleGuiderColour(g), StatusLevel.busy.color, reason: 'DESIGN.md status rule: a lost star still searching is a warning');
   });
 
   testWidgets('a tap says Starting… at once, before the guider answers (iPad, 2026-11-04: feedback was slow)',
@@ -790,11 +793,11 @@ void main() {
         child: const Column(mainAxisSize: MainAxisSize.min, children: [SimpleGuidePanel(), SimpleGuideShutter()]));
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
-    expect(find.text('Starting…'), findsOneWidget);
+    expect(find.bySemanticsLabel('Starting…'), findsOneWidget);
     expect(find.bySemanticsLabel('Stop guiding'), findsNothing, reason: 'no second tap while the ask is out');
     await tester.pump(const Duration(seconds: 11)); // the guider never answered: back to what it says
-    expect(find.text('Starting…'), findsNothing);
-    expect(find.text('Idle'), findsOneWidget);
+    expect(find.bySemanticsLabel('Starting…'), findsNothing);
+    expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
   });
 
   testWidgets('a mode change mid-ask: the shutter leaves, and Starting… still clears (review, #1490)',
@@ -875,7 +878,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-shutter')));
     await tester.pump();
     expect(_g.calls, isEmpty);
-    expect(c.read(simpleMessagesProvider).single.title, 'Connect the guider in Settings › Devices.');
+    expect(c.read(simpleMessagesProvider).single.title, 'Connect Camera (Guide) in Settings › Devices.');
     await tester.pump(const Duration(seconds: 11));
   });
 

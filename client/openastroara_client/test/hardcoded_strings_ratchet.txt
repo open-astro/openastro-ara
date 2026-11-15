@@ -5,13 +5,9 @@ lib/main.dart 2
 lib/models/sequence/condition_catalog.dart 5
 lib/models/sequence/instruction_catalog.dart 30
 lib/models/sequence/trigger_catalog.dart 10
-lib/screens/app_shell.dart 12
 lib/screens/calibration/calibration_screen.dart 60
-lib/screens/first_run_screen.dart 18
-lib/screens/launch_profile_screen.dart 11
 lib/screens/library/image_library_screen.dart 25
 lib/screens/library/live_frame_viewer_screen.dart 5
-lib/screens/offline_launch_screen.dart 12
 lib/screens/settings/panels/about_panel.dart 15
 lib/screens/settings/panels/camera_electronics_panel.dart 17
 lib/screens/settings/panels/diagnostics_mode_panel.dart 13
@@ -54,13 +50,8 @@ lib/screens/tabs/imaging_tab.dart 1
 lib/screens/tabs/sequencer_tab.dart 9
 lib/screens/tabs/setup_tab.dart 36
 lib/screens/tabs/support_tab.dart 10
-lib/screens/wizard/screens/screen_data_and_review.dart 26
-lib/screens/wizard/screens/screen_equipment_discovery.dart 23
 lib/screens/wizard/screens/screen_guiding.dart 41
-lib/screens/wizard/screens/screen_profile_basics.dart 27
 lib/screens/wizard/screens/screen_your_equipment.dart 49
-lib/screens/wizard/wizard_form_kit.dart 4
-lib/screens/wizard/wizard_shell.dart 19
 lib/services/target_resolve_api.dart 1
 lib/settings/registry.dart 380
 lib/state/diagnostics/diagnostics_state.dart 2

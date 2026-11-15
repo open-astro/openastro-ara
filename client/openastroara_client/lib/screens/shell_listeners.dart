@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/auto_flats_prompt_listener.dart';
+import '../widgets/companion_resume_refresh_listener.dart';
+import '../widgets/companion_time_offer_listener.dart';
 import '../widgets/connection_policy_listener.dart';
 import '../widgets/cooling_fan_prompt_listener.dart';
 import '../widgets/manual_filter_swap_listener.dart';
@@ -46,21 +48,27 @@ class ShellListeners extends StatelessWidget {
               // connected (no-ops when the daemon already holds a fresh,
               // trustworthy sync).
               child: TimeSyncOnConnectListener(
-                child: AutoFlatsPromptListener(
-                  // §35.5 — the audible safety alarm's modal (safety.unsafe /
-                  // safety.emergency_stop) must fire no matter which tab is
-                  // showing.
-                  // Simple Mode draws its own, full screen (SimpleSafetyAlarm).
-                  child: SafetyAlarmListener(
-                    quiet: quiet,
-                    // §57 — the Stop Mount panic overlay surfaces over every
-                    // tab while the daemon reports an autonomous slew.
-                    child: StopMountListener(
-                      quiet: quiet,
-                      child: CoolingFanPromptListener(
+                // §41.1 / §41.3 — Companion Mode only: the phone's location and
+                // time offer, and the REST snapshot re-read on resume.
+                child: CompanionTimeOfferListener(
+                  child: CompanionResumeRefreshListener(
+                    child: AutoFlatsPromptListener(
+                      // §35.5 — the audible safety alarm's modal (safety.unsafe /
+                      // safety.emergency_stop) must fire no matter which tab is
+                      // showing.
+                      // Simple Mode draws its own, full screen (SimpleSafetyAlarm).
+                      child: SafetyAlarmListener(
                         quiet: quiet,
-                        // #1644 — keeps multi-device preference sync alive.
-                        child: PreferenceSyncListener(child: child),
+                        // §57 — the Stop Mount panic overlay surfaces over every
+                        // tab while the daemon reports an autonomous slew.
+                        child: StopMountListener(
+                          quiet: quiet,
+                          child: CoolingFanPromptListener(
+                            quiet: quiet,
+                            // #1644 — keeps multi-device preference sync alive.
+                            child: PreferenceSyncListener(child: child),
+                          ),
+                        ),
                       ),
                     ),
                   ),

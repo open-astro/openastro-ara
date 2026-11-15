@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderFlex;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/backup/backup_stream_state.dart';
@@ -37,6 +38,7 @@ Future<List<String>> _pumpAt(
   WidgetTester tester,
   double width, {
   double scale = 0.5,
+  Locale? locale,
 }) async {
   tester.view.physicalSize = Size(width, 800);
   tester.view.devicePixelRatio = 1;
@@ -64,7 +66,12 @@ Future<List<String>> _pumpAt(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: AppShell()),
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const AppShell(),
+      ),
     ),
   );
   await tester.pump();
@@ -130,7 +137,7 @@ void main() {
           for (final name in hidden) {
             expect(
               find.descendant(
-                of: find.byType(PopupMenuItem<String>),
+                of: find.byType(PopupMenuItem<int>),
                 matching: find.text(name),
               ),
               findsOneWidget,
@@ -141,6 +148,21 @@ void main() {
       },
     );
   }
+
+  testWidgets('the shell tabs and status bar are in Brazilian Portuguese', (
+    tester,
+  ) async {
+    await _pumpAt(tester, 1470, locale: const Locale('pt', 'BR'));
+    for (final label in [
+      'Biblioteca de imagens',
+      'Calibração',
+      'Planejamento',
+    ]) {
+      expect(find.text(label), findsWidgets, reason: label);
+    }
+    expect(find.byTooltip('Ajuda e relatar um problema'), findsOneWidget);
+    expect(find.text('Image Library'), findsNothing);
+  });
 
   testWidgets(
     'status bar at 1470 pt keeps the five labelled launchers and the two icon buttons',

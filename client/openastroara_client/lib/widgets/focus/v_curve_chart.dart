@@ -12,27 +12,24 @@ import '../../theme/ara_colors.dart';
 /// on the chart, so a bad night reads as a bad night, not a tidy parabola.
 class VCurveChart extends StatelessWidget {
   final AutofocusRun run;
-  const VCurveChart({super.key, required this.run});
+
+  /// Simple Mode (#1898): the axes hold their room before the first probe,
+  /// and the padded ends get no label. Advanced Mode stays as it was.
+  final bool simple;
+  const VCurveChart({super.key, required this.run, this.simple = false});
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final sweep = run.sweepProbes;
     final coarse = run.coarseProbes;
-    final fit = run.fit;
-    if (sweep.isEmpty && coarse.isEmpty) {
-      return Center(
-        child: Text(
-          run.isRunning ? l10n.focusChartFirstProbe : l10n.focusChartEmpty,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
-        ),
-      );
-    }
+    final empty = sweep.isEmpty && coarse.isEmpty;
+    // Nothing measured: the empty frame draws no fit or Focus line either.
+    final fit = empty ? null : run.fit;
+    final finalPosition = empty ? null : run.finalPosition;
+    if (empty && !simple) return _emptyText(context);
 
-    final xs = <double>[];
+    final xs = <double>[if (empty) ...[0, 1]];
     final ys = <double>[];
     void include(double x, double y) {
       xs.add(x);
@@ -64,7 +61,7 @@ class VCurveChart extends StatelessWidget {
       }
       if (fit.bestPosition > 0) xs.add(fit.bestPosition);
     }
-    if (run.finalPosition != null) xs.add(run.finalPosition!.toDouble());
+    if (finalPosition != null) xs.add(finalPosition.toDouble());
 
     var minX = xs.reduce((a, b) => a < b ? a : b);
     var maxX = xs.reduce((a, b) => a > b ? a : b);
@@ -128,21 +125,21 @@ class VCurveChart extends StatelessWidget {
         ),
       ));
     }
-    if (run.finalPosition != null && run.isComplete) {
+    if (finalPosition != null && run.isComplete) {
       verticals.add(VerticalLine(
-        x: run.finalPosition!.toDouble(),
+        x: finalPosition.toDouble(),
         color: AraColors.accentConnected,
         strokeWidth: 1.5,
         label: VerticalLineLabel(
           show: true,
           alignment: Alignment.bottomRight,
           style: const TextStyle(fontSize: 10, color: AraColors.accentConnected),
-          labelResolver: (_) => l10n.focusChartFocus(run.finalPosition!),
+          labelResolver: (_) => l10n.focusChartFocus(finalPosition),
         ),
       ));
     }
 
-    return Padding(
+    final chart = Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
       child: LineChart(
         LineChartData(
@@ -163,9 +160,13 @@ class VCurveChart extends StatelessWidget {
                 const FlLine(color: AraColors.border, strokeWidth: 0.5),
           ),
           titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(
-              axisNameWidget: Text('HFR (px)', style: TextStyle(fontSize: 11)),
-              sideTitles: SideTitles(showTitles: true, reservedSize: 36),
+            leftTitles: AxisTitles(
+              axisNameWidget: const Text('HFR (px)', style: TextStyle(fontSize: 11)),
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 36,
+                getTitlesWidget: empty ? (_, _) => const SizedBox.shrink() : defaultGetTitle,
+              ),
             ),
             bottomTitles: AxisTitles(
               axisNameWidget: Text(l10n.focusChartPosition, style: const TextStyle(fontSize: 11)),
@@ -173,10 +174,13 @@ class VCurveChart extends StatelessWidget {
                 showTitles: true,
                 reservedSize: 26,
                 interval: _niceInterval(maxX - minX),
+                // The padded ends sit a fraction of a step from a tick: labelled, the two collide.
+                minIncluded: !simple,
+                maxIncluded: !simple,
                 getTitlesWidget: (v, meta) => Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    v.round().toString(),
+                    empty ? '' : v.round().toString(),
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
@@ -201,7 +205,25 @@ class VCurveChart extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
       ),
     );
+    if (!empty) return chart;
+    // Empty, the axes still hold their room: the plot keeps one size from the first probe.
+    return Stack(
+      children: [
+        Positioned.fill(child: chart),
+        _emptyText(context),
+      ],
+    );
   }
+
+  Widget _emptyText(BuildContext context) => Center(
+        child: Text(
+          run.isRunning ? context.l10n.focusChartFirstProbe : context.l10n.focusChartEmpty,
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: AraColors.textSecondary),
+        ),
+      );
 
   /// A touched point's tooltip: position and HFR, plus the probe's rim-vs-core
   /// asymmetry when the point is a probe that carries one (#1139) — which side
