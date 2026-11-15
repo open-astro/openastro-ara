@@ -216,6 +216,8 @@ void main() {
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
                 (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
+            tonightsBestProvider.overrideWith(
+                (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
             simpleRunProvider.overrideWith(_Queue.new),
           ],
         ]);

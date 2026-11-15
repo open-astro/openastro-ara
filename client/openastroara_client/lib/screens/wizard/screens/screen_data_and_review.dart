@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/l10n.dart';
 import '../../../models/profile_draft.dart';
 import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
 import '../../../state/sky_atlas/data_manager_state.dart';
 import '../../../models/solver_recommendation.dart';
 import '../../../state/wizard_state.dart';
@@ -97,6 +97,7 @@ class ScreenReview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
     final draft = ref.watch(wizardControllerProvider).draft;
     void edit(int step) =>
         ref.read(wizardControllerProvider.notifier).jumpTo(step);
@@ -121,12 +122,9 @@ class ScreenReview extends ConsumerWidget {
 
     return WizardScreenScaffold(
       step: 5,
-      intro: 'Review your profile. Tap Edit on any section to jump back and '
-          'change it, then choose Save Profile below to finish. Anything left '
-          '"Not set" keeps the built-in default — you can adjust it later in '
-          'Settings.',
+      intro: l.wizardReviewIntro,
       children: [
-        _ReviewSection(title: 'Profile basics', step: 1, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecBasics, step: 1, onEdit: edit, rows: [
           ('Name', reviewValue(draft.profileName)),
           ('Site name', reviewValue(draft.siteName)),
           ('Latitude', _deg(draft.latitudeDeg)),
@@ -137,13 +135,13 @@ class ScreenReview extends ConsumerWidget {
         // AlpacaBridge address is set on step 2 (connect); device assignment on
         // step 3 — keep them as separate Edit targets so each jumps to its own
         // screen.
-        _ReviewSection(title: 'Connection', step: 2, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecConnection, step: 2, onEdit: edit, rows: [
           ('AlpacaBridge', reviewValue(draft.alpacaBridgeAddress)),
         ]),
-        _ReviewSection(title: 'Equipment', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecEquipment, step: 3, onEdit: edit, rows: [
           ('Assigned', assignedEquipment(draft.equipment)),
         ]),
-        _ReviewSection(title: 'Telescope', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecTelescope, step: 3, onEdit: edit, rows: [
           ('Name', reviewValue(t.name)),
           ('Focal length', _unit(t.focalLengthMm, 'mm')),
           ('Aperture', _unit(t.apertureMm, 'mm')),
@@ -152,7 +150,7 @@ class ScreenReview extends ConsumerWidget {
           ('Reducer / Barlow', t.reducerFactor == null ? "Profile's value (not set here)" : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm'),
           ('Focal ratio', fr),
         ]),
-        _ReviewSection(title: 'Camera', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecCamera, step: 3, onEdit: edit, rows: [
           ('Cooling target', _unit(c.coolingTargetC, '°C')),
           ('Warmup', switch (c.warmupMode) {
             CoolerWarmupMode.off => 'Off',
@@ -166,18 +164,18 @@ class ScreenReview extends ConsumerWidget {
           ('Read noise', _unit(c.readNoiseE, 'e⁻')),
           ('Peak QE', _unit(c.qePeakPct, '%')),
         ]),
-        _ReviewSection(title: 'Filter wheel', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecFilterWheel, step: 3, onEdit: edit, rows: [
           ('Filters', draft.filterWheel.filters.isEmpty
               ? 'None defined'
               : '${draft.filterWheel.filters.length} defined'),
         ]),
-        _ReviewSection(title: 'Focuser', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecFocuser, step: 3, onEdit: edit, rows: [
           ('Step size', _unit(f.stepSizeMicrons, 'µm')),
           ('Backlash in/out',
               '${reviewValue(f.backlashInSteps)} / ${reviewValue(f.backlashOutSteps)}'),
           ('Temp. compensation', reviewValue(f.temperatureCompensationEnabled)),
         ]),
-        _ReviewSection(title: 'Mount', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecMount, step: 3, onEdit: edit, rows: [
           ('Name', reviewValue(m.name)),
           ('Slew rate', _unit(m.slewRateDegPerSec, '°/s')),
           ('Meridian flip', switch (m.meridianFlip) {
@@ -187,7 +185,7 @@ class ScreenReview extends ConsumerWidget {
           }),
           ('Settle time', formatDuration(m.settleTimeAfterSlew)),
         ]),
-        _ReviewSection(title: 'Rotator', step: 3, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecRotator, step: 3, onEdit: edit, rows: [
           // A range needs both ends — if either is unset, fall back to "Not set"
           // rather than rendering a half-filled "Not set – 45.0°".
           ('Range', (r.minAngleDeg == null || r.maxAngleDeg == null)
@@ -200,7 +198,7 @@ class ScreenReview extends ConsumerWidget {
         // show a value (never "Not set"); routing them through the same
         // formatters as every other row keeps display consistent. The section's
         // skipped banner conveys when the user didn't customise them.
-        _ReviewSection(title: 'OpenAstro Guider', step: 4, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecGuider, step: 4, onEdit: edit, rows: [
           ('Host:port', reviewValue(g.hostPort)),
           ('Dither', _unit(g.ditherPixels, 'px')),
           ('Settle threshold', _unit(g.settleThresholdPx, 'px')),
@@ -214,13 +212,13 @@ class ScreenReview extends ConsumerWidget {
         // (and the guide camera, which solves polar-alignment frames). Chosen
         // here and downloaded on the rig after Save, so setup stays 5 screens.
         const _SolverDatabaseSection(),
-        _ReviewSection(title: 'Plate solving', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecPlateSolving, step: null, onEdit: edit, rows: [
           ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
           ('Star database', reviewValue(ps.starDatabasePath)),
           ('Search radius', _deg(ps.searchRadiusDeg)),
           ('Downsample', reviewValue(ps.downsampleFactor)),
         ]),
-        _ReviewSection(title: 'Autofocus', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecAutofocus, step: null, onEdit: edit, rows: [
           ('Exposure', af.exposureSeconds == null
               ? _notSet
               : '${af.exposureSeconds} s'),
@@ -228,7 +226,7 @@ class ScreenReview extends ConsumerWidget {
           ('Step size', reviewValue(af.stepSize)),
           ('After filter change', reviewValue(af.runAfterFilterChange)),
         ]),
-        _ReviewSection(title: 'File saving', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecFileSaving, step: null, onEdit: edit, rows: [
           ('Directory', reviewValue(fs.saveDirectory)),
           ('Format', switch (fs.format) {
             ImageFormat.fits => 'FITS',
@@ -238,7 +236,7 @@ class ScreenReview extends ConsumerWidget {
           ('Compress', reviewValue(fs.compress)),
           ('Filename template', reviewValue(fs.filenameTemplate)),
         ]),
-        _ReviewSection(title: 'Imaging defaults', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecImaging, step: null, onEdit: edit, rows: [
           ('Exposure', formatDuration(id.exposure)),
           ('Frame type', switch (id.frameType) {
             FrameType.light => 'Light',
@@ -248,7 +246,7 @@ class ScreenReview extends ConsumerWidget {
             null => _notSet,
           }),
         ]),
-        _ReviewSection(title: 'Safety', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecSafety, step: null, onEdit: edit, rows: [
           ('When unsafe', switch (sf.onUnsafe) {
             UnsafeConditionAction.pauseAndPark => 'Pause & park',
             UnsafeConditionAction.parkOnly => 'Park only',
@@ -261,7 +259,7 @@ class ScreenReview extends ConsumerWidget {
               ? _notSet
               : '${sf.resumeDelayMin} min'),
         ]),
-        _ReviewSection(title: 'Site preferences', step: null, onEdit: edit, rows: [
+        _ReviewSection(title: l.wizardReviewSecSite, step: null, onEdit: edit, rows: [
           ('Horizon floor', _deg(si.hardMinAltitudeDeg)),
           ('Twilight', switch (si.twilight) {
             TwilightOption.civil => 'Civil',
@@ -311,10 +309,10 @@ class _ReviewSection extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: () => onEdit(step!),
                   icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Edit'),
+                  label: Text(context.l10n.wizardReviewEdit),
                 )
               else
-                Text('Defaults · edit later in Settings',
+                Text(context.l10n.wizardReviewDefaultsLater,
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -322,10 +320,10 @@ class _ReviewSection extends ConsumerWidget {
             ],
           ),
           if (wasSkipped)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 4),
-              child: Text('Skipped — defaults will apply.',
-                  style: TextStyle(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(context.l10n.wizardReviewSkipped,
+                  style: const TextStyle(
                       color: AraColors.accentBusy, fontSize: 12)),
             ),
           const Divider(height: 8),
@@ -443,23 +441,23 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
           Row(
             children: [
               Expanded(
-                child: Text('Plate-solver star database', style: theme.textTheme.titleMedium),
+                child: Text(context.l10n.wizardReviewSolverTitle, style: theme.textTheme.titleMedium),
               ),
               TextButton.icon(
                 onPressed: _loading ? null : _load,
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Recheck'),
+                label: Text(context.l10n.wizardReviewRecheck),
               ),
             ],
           ),
           const SizedBox(height: 4),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(children: [
-                SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
-                SizedBox(width: 8),
-                Text('Working out the field of view…'),
+                const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 8),
+                Text(context.l10n.wizardReviewSolverWorking),
               ]),
             )
           else if (_error != null)
@@ -477,10 +475,11 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
                 value: draft.plateSolve.downloadSolverDatabase,
                 onChanged: (v) => setState(() => draft.plateSolve.downloadSolverDatabase = v ?? true),
                 title: Text(
-                  'Download after setup (${formatBytes(rec.packages.where((p) => p.packageId != null && !p.isInstalled).fold<int>(0, (s, p) => s + p.sizeBytes))}, '
-                  'the rig needs internet once)',
+                  context.l10n.wizardReviewSolverDownload(
+                    formatBytes(rec.packages.where((p) => p.packageId != null && !p.isInstalled).fold<int>(0, (s, p) => s + p.sizeBytes)),
+                  ),
                 ),
-                subtitle: const Text('Runs on the rig in the background; progress in Settings → Sky data.'),
+                subtitle: Text(context.l10n.wizardReviewSolverDownloadNote),
               ),
           ],
         ],
@@ -490,8 +489,9 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
 
   Widget _pickRow(BuildContext context, SolverDatabasePick p) {
     final theme = Theme.of(context);
-    final role = p.role == 'guide camera' ? 'Guide camera' : 'Camera';
-    final field = '$role: ${p.fovDeg.toStringAsFixed(2)}° field (${p.band})';
+    final l = context.l10n;
+    final role = p.role == 'guide camera' ? l.wizardReviewRoleGuideCamera : l.wizardReviewRoleCamera;
+    final field = l.wizardReviewSolverField(role, p.fovDeg.toStringAsFixed(2), p.band);
     if (p.tooNarrow) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -499,13 +499,13 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
           Icon(Icons.warning_amber_rounded, size: 18, color: theme.colorScheme.error),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('$field — cannot plate-solve. ${p.reason}',
+            child: Text(l.wizardReviewSolverTooNarrow(field, p.reason),
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
           ),
         ]),
       );
     }
-    final status = p.isInstalled ? 'already on the rig' : formatBytes(p.sizeBytes);
+    final status = p.isInstalled ? l.wizardReviewAlreadyOnRig : formatBytes(p.sizeBytes);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

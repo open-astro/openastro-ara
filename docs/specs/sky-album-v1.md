@@ -41,7 +41,7 @@ Added with `AddColumnIfMissingAsync` next to the existing additive columns in `S
 |---|---|---|
 | `ra_deg` | REAL NULL | capture when J2000; backfill |
 | `dec_deg` | REAL NULL | capture when J2000; backfill |
-| `pixel_scale_arcsec` | REAL NULL | arcsec per stored pixel, for the binned image `width`/`height` describe. Capture: `206.265 x pixel_um x applied bin / effective focal_mm` from the profile optics. Backfill and rescan: `206.265 x XPIXSZ_um / FOCALLEN_mm`, where `XPIXSZ` is already multiplied by bin. The header writer bins `XPIXSZ` by the requested bin, so the two differ when a driver coerces the bin; the capture value is the right one |
+| `pixel_scale_arcsec` | REAL NULL | arcsec per stored pixel, for the binned image `width`/`height` describe. Capture: `206.265 x pixel_um x applied bin / effective focal_mm` from the profile optics; when the profile's pixel size is 0, `pixel_um` is the connected camera's (the XPIXSZ header follows the same rule). Backfill and rescan: `206.265 x XPIXSZ_um / FOCALLEN_mm`, where `XPIXSZ` is already multiplied by bin. The header writer bins `XPIXSZ` by the requested bin, so the two differ when a driver coerces the bin; the capture value is the right one |
 | `updated_utc` | TEXT NULL | insert and every backfill write |
 | `pointing_probed_utc` | TEXT NULL | capture (an Ara capture never needs its lossier header re-read), rescan recovery, and backfill whether or not the file had the cards |
 | `captured_by_ara` | INTEGER NULL | 1 at capture; backfill sets 1 when `SWCREATE` starts with `OpenAstro Ara` (the XISF writer appends a version), else 0 |
@@ -177,7 +177,7 @@ Each slice is one PR against `master`, in this order; each lists the spec sectio
 
 ## Known limits
 
-- Frames captured with optics unset in the profile have no pixel scale and rely on the alias fallback.
+- Frames captured with no focal length in the profile, or with no pixel size in the profile and none reported by the camera, have no pixel scale and rely on the alias fallback.
 - Gold at 5 h is fixed regardless of focal length; wide-field rigs reach it faster.
 - The collection cache has no reset in v1; a wrongly credited Card stays until app data is cleared.
 - Distance and the "Did you know?" line are curated by hand per Card, so they are only as current as the manifest.

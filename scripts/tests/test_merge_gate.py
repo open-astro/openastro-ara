@@ -120,6 +120,21 @@ class MergeGateTest(unittest.TestCase):
         self.assertFails(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "pending"}]),
                          "did not finish")
 
+    def test_a_run_with_a_conclusion_is_finished_even_if_its_status_still_reads_in_progress(self):
+        # 2026-11-14: GitHub served "Changed paths" on #1886's head as status in_progress with
+        # conclusion success and a completed_at; the gate waited its 50 minutes twice and failed.
+        stuck = {**run("Changed paths"), "status": "in_progress", "completed_at": "2026-11-14T09:52:06Z"}
+        self.assertPasses(self.gate([stuck, review()], [APPROVED]))
+        red = {**run("Changed paths", "failure"), "status": "in_progress", "completed_at": "2026-11-14T09:52:06Z"}
+        self.assertFails(self.gate([red, review()], [APPROVED]), "Changed paths: failure")
+
+    def test_a_head_with_many_large_check_runs_is_judged_not_crashed(self):
+        # 2026-11-14, #1896 in the queue: "scripts/merge-gate.sh: line 41: /usr/bin/jq: Argument list too
+        # long". The head carried ~37 check runs, each with its full `output` text, and the gate passed the
+        # whole list to jq as one --argjson argument, past the kernel's per-argument limit.
+        big = [{**run(f"Check {i}", id_=i), "output": {"text": "x" * 40_000}} for i in range(1, 41)]
+        self.assertPasses(self.gate([*big, review()], [APPROVED]))
+
     def test_a_failed_commit_status_fails(self):
         self.assertPasses(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "success"}]))
         self.assertFails(self.gate([review()], [APPROVED], statuses=[{"context": "adr", "state": "failure"}]),

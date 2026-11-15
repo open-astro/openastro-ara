@@ -39,6 +39,26 @@ final timeSyncOnConnectProvider = Provider<TimeSyncOnConnect>(
   (ref) => TimeSyncOnConnect(ref),
 );
 
+/// What the on-connect check read from the rig BEFORE its own push. A new
+/// instance per check (no `==`), so a reconnect with the same answer still
+/// notifies. The Companion time offer reads this, never a second `getState()`
+/// that would race the push and see the clock it just set.
+class TimeSyncCheck {
+  const TimeSyncCheck({required this.synced});
+  final bool synced;
+}
+
+final timeSyncCheckProvider =
+    NotifierProvider<_TimeSyncCheckNotifier, TimeSyncCheck?>(
+      _TimeSyncCheckNotifier.new,
+    );
+
+class _TimeSyncCheckNotifier extends Notifier<TimeSyncCheck?> {
+  @override
+  TimeSyncCheck? build() => null;
+  void record(bool synced) => state = TimeSyncCheck(synced: synced);
+}
+
 class TimeSyncOnConnect {
   final Ref _ref;
 
@@ -52,6 +72,7 @@ class TimeSyncOnConnect {
     if (api == null) return;
     try {
       final state = await api.getState();
+      _ref.read(timeSyncCheckProvider.notifier).record(state.synced);
       if (state.synced) {
         return; // fresh + trustworthy — nothing to do (§31.1 top branch)
       }

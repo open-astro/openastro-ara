@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../state/app_shell_state.dart';
 import '../state/night_mode_state.dart';
 import '../state/settings/settings_nav.dart';
@@ -14,7 +15,9 @@ import '../widgets/command_palette.dart';
 import '../widgets/emergency_stop_button.dart';
 import 'shell_listeners.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
+
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+
 import '../services/notch_side.dart';
 import '../widgets/equipment_chip.dart'
     show EquipmentChipCompact, kEquipmentChipCompactWidth, kEquipmentChipWidth;
@@ -52,16 +55,38 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _tabs = <_TabSpec>[
-    _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
-    _TabSpec(icon: Icons.checklist, label: 'Checklist', body: SetupTab()),
+  // `name` is the English id the asserts below pin; the shown text is `label`.
+  static final _tabs = <_TabSpec>[
     _TabSpec(
-      icon: Icons.play_circle_outline,
-      label: 'Sequence',
-      body: SequencerTab(),
+      name: 'Planning',
+      icon: Icons.public,
+      label: (l) => l.appShellTabPlanning,
+      body: const PlanningTab(),
     ),
-    _TabSpec(icon: Icons.camera_alt, label: 'Live', body: ImagingTab()),
-    _TabSpec(icon: Icons.settings, label: 'Settings', body: OptionsTab()),
+    _TabSpec(
+      name: 'Checklist',
+      icon: Icons.checklist,
+      label: (l) => l.appShellTabChecklist,
+      body: const SetupTab(),
+    ),
+    _TabSpec(
+      name: 'Sequence',
+      icon: Icons.play_circle_outline,
+      label: (l) => l.appShellTabSequence,
+      body: const SequencerTab(),
+    ),
+    _TabSpec(
+      name: 'Live',
+      icon: Icons.camera_alt,
+      label: (l) => l.appShellTabLive,
+      body: const ImagingTab(),
+    ),
+    _TabSpec(
+      name: 'Settings',
+      icon: Icons.settings,
+      label: (l) => l.appShellTabSettings,
+      body: const OptionsTab(),
+    ),
   ];
 
   // §61 — the shell's shortcuts only see keys when focus is inside it. The
@@ -102,24 +127,24 @@ class _AppShellState extends ConsumerState<AppShell> {
     // to update the constant trips this in debug instead of silently navigating
     // to the wrong tab.
     assert(
-      _tabs[kOptionsTabIndex].label == 'Settings' &&
+      _tabs[kOptionsTabIndex].name == 'Settings' &&
           kOptionsTabIndex == _tabs.length - 1,
       'kOptionsTabIndex must point at the Settings tab, the last one (the rail lists the tabs before it).',
     );
     assert(
-      _tabs[kRunTabIndex].label == 'Sequence',
+      _tabs[kRunTabIndex].name == 'Sequence',
       'kRunTabIndex must point at the Sequence tab — update it if _tabs is reordered.',
     );
     assert(
-      _tabs[kPlanningTabIndex].label == 'Planning',
+      _tabs[kPlanningTabIndex].name == 'Planning',
       'kPlanningTabIndex must point at the Planning tab — update it if _tabs is reordered.',
     );
     assert(
-      _tabs[kSetupTabIndex].label == 'Checklist',
+      _tabs[kSetupTabIndex].name == 'Checklist',
       'kSetupTabIndex must point at the Checklist tab — update it if _tabs is reordered.',
     );
     assert(
-      _tabs[kLiveTabIndex].label == 'Live',
+      _tabs[kLiveTabIndex].name == 'Live',
       'kLiveTabIndex must point at the Live tab — update it if _tabs is reordered.',
     );
     return Scaffold(
@@ -177,7 +202,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                               for (final t in _tabs.take(kOptionsTabIndex))
                                 NavigationRailDestination(
                                   icon: Icon(t.icon),
-                                  label: Text(t.label),
+                                  label: Text(t.label(context.l10n)),
                                 ),
                             ],
                           ),
@@ -226,7 +251,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                         for (final t in _tabs.take(kOptionsTabIndex))
                           NavigationDestination(
                             icon: Icon(t.icon),
-                            label: t.label,
+                            label: t.label(context.l10n),
                           ),
                       ],
                     ),
@@ -261,9 +286,15 @@ Widget buildTabStack({
 
 class _TabSpec {
   final IconData icon;
-  final String label;
+  final String name;
+  final String Function(AppLocalizations) label;
   final Widget body;
-  const _TabSpec({required this.icon, required this.label, required this.body});
+  const _TabSpec({
+    required this.name,
+    required this.icon,
+    required this.label,
+    required this.body,
+  });
 }
 
 class _TopEquipmentBar extends StatelessWidget {
@@ -315,7 +346,7 @@ class _TopEquipmentBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: IconButton(
               icon: const Icon(Icons.search, size: 22),
-              tooltip: 'Search settings ($shortcutLabel)',
+              tooltip: context.l10n.appShellSearchSettings(shortcutLabel),
               onPressed: () => showCommandPalette(context),
             ),
           ),
@@ -329,6 +360,7 @@ class _TopEquipmentBar extends StatelessWidget {
                   AsyncData(:final value) => value,
                   _ => false,
                 };
+                final nightKey = '${Platform.isMacOS ? '⌘' : 'Ctrl+'}N';
                 return IconButton(
                   icon: Icon(
                     night ? Icons.nights_stay : Icons.nights_stay_outlined,
@@ -336,8 +368,8 @@ class _TopEquipmentBar extends StatelessWidget {
                     color: night ? AraColors.accentInfo : null,
                   ),
                   tooltip: night
-                      ? 'Night mode on (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)'
-                      : 'Night mode (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)',
+                      ? context.l10n.appShellNightModeOnTip(nightKey)
+                      : context.l10n.appShellNightModeTip(nightKey),
                   onPressed: () =>
                       ref.read(nightModeProvider.notifier).set(!night),
                 );
@@ -434,7 +466,7 @@ class _DeviceColumn extends StatelessWidget {
 /// One status-bar launcher: a full-screen route or an action.
 class _Launcher {
   const _Launcher(this.label, this.icon, this.open);
-  final String label;
+  final String Function(AppLocalizations) label;
   final IconData icon;
   final void Function(BuildContext, WidgetRef) open;
 }
@@ -454,23 +486,27 @@ final _launchers = <_Launcher>[
   // Image Library (§40), Calibration (§39.10), Stats dashboard (§50),
   // back to the launchpad (§30), profile wizard (§37).
   _Launcher(
-    'Image Library',
+    (l) => l.appShellLauncherLibrary,
     Icons.photo_library_outlined,
     (c, _) => _push(c, const ImageLibraryScreen()),
   ),
   _Launcher(
-    'Calibration',
+    (l) => l.appShellLauncherCalibration,
     Icons.flare_outlined,
     (c, _) => _push(c, const CalibrationScreen()),
   ),
   _Launcher(
-    'Stats',
+    (l) => l.shellStats,
     Icons.insights,
     (c, _) => _push(c, const StatsDashboardScreen()),
   ),
-  _Launcher('Launchpad', Icons.rocket_launch_outlined, backToLaunchpad),
   _Launcher(
-    'Run profile wizard',
+    (l) => l.appShellLauncherLaunchpad,
+    Icons.rocket_launch_outlined,
+    backToLaunchpad,
+  ),
+  _Launcher(
+    (l) => l.appShellLauncherWizard,
     Icons.tune,
     (c, _) => _push(c, const WizardShell(), fullscreenDialog: true),
   ),
@@ -534,7 +570,7 @@ class _BottomStatusBar extends ConsumerWidget {
     final style = Theme.of(context).textTheme.bodySmall;
     final labelsWidth = _launchers.fold<double>(0, (sum, l) {
       final painter = TextPainter(
-        text: TextSpan(text: l.label, style: style),
+        text: TextSpan(text: l.label(context.l10n), style: style),
         textDirection: TextDirection.ltr,
         textScaler: MediaQuery.textScalerOf(context),
       )..layout();
@@ -561,7 +597,7 @@ class _BottomStatusBar extends ConsumerWidget {
               ? TextButton.icon(
                   onPressed: () => l.open(context, ref),
                   icon: Icon(l.icon, size: 16),
-                  label: Text(l.label),
+                  label: Text(l.label(context.l10n)),
                   style: TextButton.styleFrom(
                     foregroundColor: AraColors.textSecondary,
                     textStyle: style,
@@ -569,26 +605,25 @@ class _BottomStatusBar extends ConsumerWidget {
                 )
               : IconButton(
                   icon: Icon(l.icon, size: 16),
-                  tooltip: l.label,
+                  tooltip: l.label(context.l10n),
                   visualDensity: VisualDensity.compact,
                   color: AraColors.textSecondary,
                   onPressed: () => l.open(context, ref),
                 ),
         if (overflow.isNotEmpty)
-          PopupMenuButton<String>(
-            tooltip: 'More',
+          PopupMenuButton<int>(
+            tooltip: context.l10n.deviceMore,
             icon: const Icon(Icons.more_horiz, size: 18),
-            onSelected: (label) =>
-                overflow.firstWhere((l) => l.label == label).open(context, ref),
+            onSelected: (i) => overflow[i].open(context, ref),
             itemBuilder: (_) => [
-              for (final l in overflow)
-                PopupMenuItem<String>(
-                  value: l.label,
+              for (final (i, l) in overflow.indexed)
+                PopupMenuItem<int>(
+                  value: i,
                   child: Row(
                     children: [
                       Icon(l.icon, size: 16),
                       const SizedBox(width: 8),
-                      Text(l.label),
+                      Text(l.label(context.l10n)),
                     ],
                   ),
                 ),
@@ -599,7 +634,7 @@ class _BottomStatusBar extends ConsumerWidget {
         // Bug-report entry (§54) — wired in a Phase 12a follow-up.
         IconButton(
           icon: const Icon(Icons.help_outline, size: 18),
-          tooltip: 'Help & report a bug',
+          tooltip: context.l10n.appShellHelp,
           onPressed: () => showHelpDialog(context),
         ),
         const SizedBox(width: 4),

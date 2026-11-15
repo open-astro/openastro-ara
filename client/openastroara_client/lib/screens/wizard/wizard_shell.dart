@@ -18,6 +18,7 @@ import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import 'wizard_equipment_apply.dart';
+import '../../state/settings/migrated_sections.dart';
 import 'wizard_save.dart';
 import 'wizard_screens.dart';
 import '../../widgets/adaptive_controls.dart';
@@ -71,16 +72,16 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     final stepValid = ref.watch(wizardStepValidProvider);
     final info = ProfileWizard.steps[state.step]!;
     final body = wizardScreenBuilders[state.step]?.call(context) ??
-        Center(child: Text('Missing screen builder for step ${state.step}'));
+        Center(child: Text(context.l10n.wizardMissingScreen(state.step)));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Set up profile · Step ${state.step} of ${ProfileWizard.totalSteps}'),
+        title: Text(context.l10n.wizardTitle(state.step, ProfileWizard.totalSteps)),
         actions: [
           TextButton.icon(
             onPressed: () => _saveAndExit(controller),
             icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Save & Exit'),
+            label: Text(context.l10n.wizardSaveExit),
           ),
           const SizedBox(width: 8),
         ],
@@ -139,9 +140,10 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // draft.savedProfileId on the first attempt so a retry re-uses the same
     // profile instead of orphaning a new one.
     final draft = controller.liveDraft();
-    // Capture the Navigator + Messenger BEFORE the async gap so a pop/snackbar is
-    // safe even if the widget unmounts mid-save (otherwise an early
-    // `!context.mounted` return would strand the non-dismissible spinner forever).
+    // Capture the Navigator, Messenger and strings BEFORE the async gap so a
+    // pop/snackbar is safe even if the widget unmounts mid-save (otherwise an
+    // early `!context.mounted` return would strand the non-dismissible spinner
+    // forever, and State.context throws once the widget is gone).
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final l = context.l10n;
@@ -153,7 +155,14 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // The guard covers the file write: a second tap must not store a second
       // draft that the replay would turn into two profiles.
       setState(() => _isSaving = true);
-      await _saveLocallyGuarded(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
+      await _saveLocallyGuarded(
+        draft,
+        server: null,
+        finalSave: finalSave,
+        nav: nav,
+        messenger: messenger,
+        l: l,
+      );
       return;
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);
@@ -182,13 +191,21 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     String? error;
     try {
       await saveWizardProfile(api, draft);
+      resetMigratedSections(ref.read);
     } on ProfileSaveTransportFailure {
       // #1137 — the profile may already exist on this server (savedProfileId):
       // keep the draft pinned to it and replay the sections on reconnect.
       if (nav.mounted) nav.pop(); // the spinner
       // _isSaving stays set until the file write is done: a second tap while
       // the wizard is still open must not start another network save.
-      await _saveLocallyGuarded(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+      await _saveLocallyGuarded(
+        draft,
+        server: server,
+        finalSave: finalSave,
+        nav: nav,
+        messenger: messenger,
+        l: l,
+      );
       return;
     } on DioException catch (e) {
       if (e.response == null) {
@@ -196,7 +213,14 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         // transport failure, not a rejection. Keep the draft on this device
         // and replay it on reconnect, exactly like the no-server path.
         if (nav.mounted) nav.pop(); // the spinner
-        await _saveLocallyGuarded(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+        await _saveLocallyGuarded(
+          draft,
+          server: server,
+          finalSave: finalSave,
+          nav: nav,
+          messenger: messenger,
+          l: l,
+        );
         return;
       }
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
@@ -326,7 +350,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // guider push, darks) — tell the user which, with where to finish them.
     if (finishNotes.isNotEmpty) {
       messenger.showSnackBar(SnackBar(
-        content: Text('Profile saved. ${finishNotes.join(' ')}'),
+        content: Text(l.wizardSavedWithNotes(finishNotes.join(' '))),
         duration: const Duration(seconds: 8),
       ));
     }
@@ -344,9 +368,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     required bool finalSave,
     required NavigatorState nav,
     required ScaffoldMessengerState messenger,
+    required AppLocalizations l,
   }) async {
     try {
-      await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+      await _saveLocally(
+        draft,
+        server: server,
+        finalSave: finalSave,
+        nav: nav,
+        messenger: messenger,
+        l: l,
+      );
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -362,6 +394,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     required bool finalSave,
     required NavigatorState nav,
     required ScaffoldMessengerState messenger,
+    required AppLocalizations l,
   }) async {
     final name = (draft.profileName?.trim().isNotEmpty ?? false)
         ? draft.profileName!.trim()
@@ -385,8 +418,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     }
     if (nav.mounted) nav.pop(); // exit the wizard
     messenger.showSnackBar(SnackBar(
-      content: Text('"$name" is saved on this device. It will be applied to your rig '
-          'the next time you connect.'),
+      content: Text(l.wizardSavedLocally(name)),
       duration: const Duration(seconds: 6),
     ));
     widget.onComplete?.call(ProfileDraftSnapshot(draft));
@@ -439,7 +471,13 @@ class _BottomNavBar extends StatelessWidget {
     final nextButton = FilledButton.icon(
       onPressed: canAdvance ? onNext : null,
       icon: Icon(isLast ? Icons.check : Icons.chevron_right),
-      label: Text(isLast ? 'Save Profile' : 'Next'),
+      label: Text(
+        isLast ? context.l10n.wizardSaveProfile : context.l10n.wizardNext,
+      ),
+    );
+    final skipText = Text(
+      context.l10n.wizardSkipDefaults,
+      overflow: TextOverflow.ellipsis,
     );
     return Container(
       decoration: const BoxDecoration(
@@ -452,38 +490,39 @@ class _BottomNavBar extends StatelessWidget {
           TextButton.icon(
             onPressed: onBack,
             icon: const Icon(Icons.chevron_left),
-            label: const Text('Back'),
+            label: Text(context.l10n.wizardBack),
           ),
           const SizedBox(width: 8),
           // Gated like Next (see canAdvance) — a skippable gate is no gate.
-          if (canAdvance)
-            TextButton(
-              onPressed: onSkip,
-              child: const Text('Skip — use defaults'),
-            )
-          else
-            Tooltip(
-              message: 'Resolve the issue on this screen to continue.',
-              child: const TextButton(
-                onPressed: null,
-                child: Text('Skip — use defaults'),
-              ),
+          // Expanded (tight) takes all free space, so Next stays on the right
+          // edge; Skip ellipsizes only when the footer is really narrow.
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: canAdvance
+                  ? TextButton(onPressed: onSkip, child: skipText)
+                  : Tooltip(
+                      message: context.l10n.wizardSkipBlocked,
+                      child: TextButton(onPressed: null, child: skipText),
+                    ),
             ),
-          const Spacer(),
-          Text(stageLabel,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-          const SizedBox(width: 16),
+          ),
+          // A phone already shows the stage above the form and the step in
+          // the app bar; the footer label would squeeze Skip off the row.
+          if (MediaQuery.sizeOf(context).width >= 600) ...[
+            Text(
+              stageLabel,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
+            const SizedBox(width: 16),
+          ],
           // Only wrap in a Tooltip when disabled — an empty-message Tooltip on the
           // enabled button can flash a blank popup on hover on some platforms.
           if (canAdvance)
             nextButton
           else
-            Tooltip(
-              message: 'Fix the highlighted field to continue.',
-              child: nextButton,
-            ),
+            Tooltip(message: context.l10n.wizardNextBlocked, child: nextButton),
         ],
       ),
     );
@@ -521,7 +560,7 @@ class WizardDoneView extends ConsumerWidget {
       progressLine = 'Building dark library…';
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile saved')),
+      appBar: AppBar(title: Text(context.l10n.wizardDoneTitle)),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -534,13 +573,11 @@ class WizardDoneView extends ConsumerWidget {
                 const Icon(Icons.check_circle,
                     size: 44, color: AraColors.accentConnected),
                 const SizedBox(height: 12),
-                Text('You\'re all set',
+                Text(context.l10n.wizardDoneHeading,
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 Text(
-                  'Your profile is saved and active. The dark library is '
-                  'shooting in the background — it finishes on the server '
-                  'even if you leave now.',
+                  context.l10n.wizardDoneBody,
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
@@ -588,7 +625,7 @@ class WizardDoneView extends ConsumerWidget {
                   child: FilledButton.icon(
                     onPressed: onFinish,
                     icon: const Icon(Icons.check),
-                    label: const Text('Finish'),
+                    label: Text(context.l10n.wizardDoneFinish),
                   ),
                 ),
               ],

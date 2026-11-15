@@ -26,6 +26,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-15 — #1859 a template that fails the schema check answers 422: `POST /sequences/templates/{name}/instantiate`
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
+
+**Decision:** after the `{{token}}` substitution the body is checked with `SequenceSchemaValidator` (`requireCapturableInstruction: false`) before it is stored. A body that fails answers `422 {error}` with the validator's reason, and no sequence is created. An unknown template stays a 404.
+
+**Reasoning:** the create route already refuses a body that fails the schema check with the same 422 (ADR 0018); instantiate stored whatever a disk template held, so a bad template became a stored sequence the engine could not load. The same status and `{error}` shape keeps one client error path. The capturable-instruction level stays off because a template may be a skeleton the user completes.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1sequences~1templates~1{name}~1instantiate`
+
+**Related:** #1859
+
+---
+
+## 2026-11-14 — A version on every profile section: `ETag` and `If-Match` on the 24 section routes (#1807)
+
+**Endpoint(s) or area:** the GET and PUT of the 24 client-writable profile sections under `/api/v1/profile/` (imaging-defaults, storage, notifications, site, custom-horizon, saved-targets, filenames, safety, autofocus, polar-align, unguided, guider-advanced, plate-solve, diagnostics-mode, phd2, optics, camera-electronics, filter-set, filter-wheel/labels, filter-wheel/policy, cooling-fan, dome, equipment-connection, stretch-defaults). Not the six sections only the daemon writes.
+
+**Decision:** a 2xx GET or PUT answers a strong `ETag`, the SHA-256 of the stored section's JSON. A PUT may send `If-Match`: `*` or the tag it loaded passes; any other tag is a 412 problem, nothing is written and no `profile.updated` goes out. A PUT with no `If-Match` is still accepted until slice 4 makes it required. `PUT /profile/storage` moves onto the same check, so its tags change once (the hash now comes from the serializer context, not the reflection one) and its 400 rules are unchanged.
+
+**Reasoning:** two clients or panels saving a whole section over each other silently drop the other's edit (ADR 0015). A tag of the stored content, not a write counter, gives equal content an equal tag. A write by the daemon itself moves the tag too, so an open panel's next save is a 412 and the client reloads. A live-sync load (#1644) throws away open edits, so a 412 comes only when the event was missed or the daemon wrote the section.
+
+**Spec ref:** `Endpoints/ProfileEndpoints.cs` (`WithSection`, `CheckSectionVersion`), `Services/ProfileSections.cs` (`ProfileSection.Read`), `Program.cs` (the `If-Match` parameter).
+
+**Related:** #1807; ADR 0015; test `ProfileSectionVersionTest`.
+
+---
+
 ## 2026-11-14 — #1875 the daemon serves the queued plan: `GET /sequences/{id}/plan`
 
 **Endpoint(s) or area:** `GET /api/v1/sequences/{id}/plan` (`SequencePlanDto`, `SequencePlanTargetDto`, `SequencePlanRowDto`); `SequenceRunStateDto.plan_frames_done` and `.current_block_name`; the same two keys on the `sequence.progress` WebSocket payload.
@@ -127,7 +155,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/{id}/pause`, and the daemon's own safety pause.
 
-**Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item), a flat set (`FlatPanelFlats`, `SkyFlats`, which take their frames inside one instruction) and a meridian flip still finish first. An instruction's own wait for the user (a failed settle, a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
+**Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item), a flat set (`FlatPanelFlats`, `SkyFlats`, which take their frames inside one instruction) and a meridian flip still finish first. An instruction's own wait for the user (a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
 
 **Reasoning:** with NINA's semantics (the current instruction always finishes) a paused plan kept focusing for minutes, which reads as a pause that did nothing (user, 2026-11-11). A frame keeps "Pause after this frame"; a flip is never cut short with the mount mid-move.
 

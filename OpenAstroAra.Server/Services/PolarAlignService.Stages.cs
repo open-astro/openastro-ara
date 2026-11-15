@@ -121,7 +121,7 @@ namespace OpenAstroAra.Server.Services {
         /// <c>needs_home</c> wait), as in the other stages; <c>use_home: false</c> starts from where the
         /// user put it.</param>
         private async Task RunFineStageAsync(
-                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst,
+                IGuideCaptureLink guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst,
                 (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {
             var manualHome = false;
             if (homeFirst) {
@@ -231,7 +231,7 @@ namespace OpenAstroAra.Server.Services {
         // ── check ────────────────────────────────────────────────────────────────────────────
 
         private async Task RunCheckStageAsync(
-                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
+                IGuideCaptureLink guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
             await SetStageAsync(gen, PolarAlignStages.Check, settings.UseHome ? "homing" : "checking").ConfigureAwait(false);

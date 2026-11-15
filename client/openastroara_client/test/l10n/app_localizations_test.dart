@@ -10,6 +10,17 @@ import 'package:openastroara/util/friendly_error.dart';
 void main() {
   final en = lookupAppLocalizations(const Locale('en'));
 
+  // #1898: Settings › Devices has no "Guider" row; the guider connects on Camera (Guide).
+  test('every no-guider hint names the Camera (Guide) row in Settings › Devices, in both languages (#1898)', () {
+    for (final l in [en, lookupAppLocalizations(const Locale('pt', 'BR'))]) {
+      final row = l.shellSectionGuider;
+      final where = '${l.shellSettings} › ${l.shellSectionDevices}';
+      for (final hint in [l.guideConnectFirst, l.calibrationGuideNoGuider, l.rigSetupCalibrationConnect]) {
+        expect(hint, allOf(contains(row), contains(where)), reason: l.localeName);
+      }
+    }
+  });
+
   test('one hidden message is one message to a screen reader', () {
     expect(en.pillsMoreSemantics(1), '1 more message');
     expect(en.pillsMoreSemantics(3), '3 more messages');

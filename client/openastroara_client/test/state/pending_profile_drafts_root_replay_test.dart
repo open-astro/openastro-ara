@@ -8,7 +8,6 @@ import 'package:openastroara/models/profile_draft.dart' show ProfileDraft;
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/pending_profile_draft_service.dart';
-import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/pending_profile_drafts_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
@@ -37,8 +36,7 @@ class _MemStore extends PendingProfileDraftService {
   Future<void> delete(String id) async => store.remove(id);
 }
 
-class _Api extends ProfileApi {
-  _Api() : super(const AraServer(hostname: 'test', port: 1));
+class _Api extends FakeStorageApi {
   final created = <String>[];
   @override
   Future<ProfileMeta> createProfile(String name) async {
@@ -87,8 +85,10 @@ class _Api extends ProfileApi {
   Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
   @override
   Future<StorageSettings> getStorageSettings() async => kTestStorage;
+  // The wizard writes Storage with no tag; the rig takes it and its tag moves.
   @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
+  Future<StorageSettings> putStorageSettings(StorageSettings v) async =>
+      (await putStorageSection(v)).value;
   @override
   Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
   @override
@@ -162,4 +162,42 @@ void main() {
       expect(container.read(pendingProfileReplayNoticeProvider), isNull);
     },
   );
+
+  test('an applied draft sends a loaded section back to not loaded, so its '
+      'next Save is not refused', () async {
+    final store = _MemStore();
+    await store.save(
+      PendingProfileDraft(
+        id: 'd1',
+        name: 'Dark site rig',
+        savedUtc: DateTime.utc(2026, 10, 12),
+        draft: ProfileDraft()..profileName = 'Dark site rig',
+        finalSave: true,
+      ),
+    );
+    final api = _Api();
+    final link = StreamController<WsConnectionState>.broadcast();
+    final container = ProviderContainer(
+      overrides: [
+        pendingProfileDraftServiceProvider.overrideWithValue(store),
+        profileApiProvider.overrideWithValue(api),
+        activeServerProvider.overrideWithValue(
+          const AraServer(hostname: 'test', port: 1),
+        ),
+        wsConnectionStateProvider.overrideWith((ref) => link.stream),
+      ],
+    );
+    addTearDown(container.dispose);
+    addTearDown(link.close);
+    final storage = container.read(storageSettingsProvider.notifier);
+    await storage.load(api);
+    container.listen(pendingProfileDraftReplayProvider, (_, _) {});
+    link.add(WsConnectionState.connected);
+    for (var i = 0; i < 20 && store.store.isNotEmpty; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(container.read(storageSettingsProvider).value, isNull);
+    await storage.save(api);
+    expect(api.ifMatches, [null, '"v2"'], reason: 'the replay wrote untagged');
+  });
 }

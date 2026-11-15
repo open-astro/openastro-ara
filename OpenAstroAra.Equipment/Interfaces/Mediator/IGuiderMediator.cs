@@ -31,9 +31,9 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
         /// it did not ("refused" when it was not guiding or not connected; "the guider is calibrating" or
         /// "the guider is paused" when it was busy with one of those, which the Dither instruction parks on
         /// instead of restarting guiding; the guider's own message when it rejected the dither RPC; its
-        /// settle error; or "cancelled"). The Dither
-        /// instruction reads it so a frame never starts on a star still swinging from a failed settle
-        /// (2026-10-16: two settle timeouts, two trailed frames).</summary>
+        /// settle error; or "cancelled"). The Dither instruction reads it: a settle error only logs a
+        /// warning and the next frame starts (#1894); "refused" from a guider that is not guiding restarts
+        /// guiding and parks the run only when that fails; any other refusal parks the run.</summary>
         string? LastDitherError { get; }
 
         /// <summary>When the guider last reported guiding stopped (its <c>guiding_stopped</c> marker),

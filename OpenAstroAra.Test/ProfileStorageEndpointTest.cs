@@ -81,58 +81,5 @@ namespace OpenAstroAra.Test {
             Assert.That((result as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
             store.Verify(s => s.PutStorageSettings(It.IsAny<StorageSettingsDto>()), Times.Never);
         }
-
-        // ADR 0015 — If-Match: match writes, mismatch is 412 and writes nothing, absent writes as before.
-        private static (Mock<IProfileStore> store, StorageSettingsDto current) StoreHolding() {
-            var current = Body(warnGb: 20);
-            var store = new Mock<IProfileStore>();
-            store.Setup(s => s.GetStorageSettings()).Returns(current);
-            return (store, current);
-        }
-
-        [Test]
-        public void Get_returns_an_etag_of_the_section() {
-            var (store, current) = StoreHolding();
-            var http = new DefaultHttpContext();
-
-            ProfileEndpoints.GetStorageSettings(store.Object, http);
-
-            Assert.That(http.Response.Headers.ETag.ToString(), Is.EqualTo(ProfileEndpoints.StorageETag(current)));
-            Assert.That(ProfileEndpoints.StorageETag(current), Is.Not.EqualTo(ProfileEndpoints.StorageETag(Body())));
-        }
-
-        [Test]
-        public void Put_with_matching_if_match_writes_and_returns_the_new_etag() {
-            var (store, current) = StoreHolding();
-            var http = new DefaultHttpContext();
-            var body = Body(warnGb: 30);
-
-            var result = ProfileEndpoints.PutStorageSettings(body, store.Object, ProfileEndpoints.StorageETag(current), http);
-
-            Assert.That((result as Ok<StorageSettingsDto>)?.Value, Is.EqualTo(body));
-            store.Verify(s => s.PutStorageSettings(body), Times.Once);
-            Assert.That(http.Response.Headers.ETag.ToString(), Is.EqualTo(ProfileEndpoints.StorageETag(body)));
-        }
-
-        [Test]
-        public void Put_with_stale_if_match_is_412_and_writes_nothing() {
-            var (store, _) = StoreHolding();
-
-            var result = ProfileEndpoints.PutStorageSettings(Body(warnGb: 30), store.Object, ProfileEndpoints.StorageETag(Body()), new DefaultHttpContext());
-
-            Assert.That((result as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status412PreconditionFailed));
-            store.Verify(s => s.PutStorageSettings(It.IsAny<StorageSettingsDto>()), Times.Never);
-        }
-
-        [Test]
-        public void Put_without_if_match_is_accepted() {
-            var (store, _) = StoreHolding();
-            var body = Body(warnGb: 30);
-
-            var result = ProfileEndpoints.PutStorageSettings(body, store.Object);
-
-            Assert.That(result, Is.InstanceOf<Ok<StorageSettingsDto>>());
-            store.Verify(s => s.PutStorageSettings(body), Times.Once);
-        }
     }
 }

@@ -188,7 +188,9 @@ class _ReferenceDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final live = _liveValues(ref);
-    final fs = ref.watch(filenamesSettingsProvider);
+    // Not loaded from the rig yet: show the groups as the daemon defaults them.
+    final fs =
+        ref.watch(filenamesSettingsProvider).value ?? const FilenamesSettings();
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),

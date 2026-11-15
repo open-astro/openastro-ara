@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
@@ -67,31 +67,34 @@ class FilenamesSettings {
       );
 }
 
-class FilenamesSettingsNotifier extends Notifier<FilenamesSettings>
-    with SettingsSyncMixin<FilenamesSettings> {
-  @override
-  FilenamesSettings build() => const FilenamesSettings();
-
+class FilenamesSettingsNotifier extends SectionNotifier<FilenamesSettings> {
   void setDateSeparator(DateSeparator d) =>
-      state = state.copyWith(dateSeparator: d);
+      edit((c) => c.copyWith(dateSeparator: d));
   void setCompressDarksAndBias(bool v) =>
-      state = state.copyWith(compressDarksAndBias: v);
-  void setHeaderIdentity(bool v) => state = state.copyWith(headerIdentity: v);
-  void setHeaderSite(bool v) => state = state.copyWith(headerSite: v);
-  void setHeaderOptics(bool v) => state = state.copyWith(headerOptics: v);
+      edit((c) => c.copyWith(compressDarksAndBias: v));
+  void setHeaderIdentity(bool v) => edit((c) => c.copyWith(headerIdentity: v));
+  void setHeaderSite(bool v) => edit((c) => c.copyWith(headerSite: v));
+  void setHeaderOptics(bool v) => edit((c) => c.copyWith(headerOptics: v));
   void setHeaderTemperature(bool v) =>
-      state = state.copyWith(headerTemperature: v);
-  void setHeaderWeather(bool v) => state = state.copyWith(headerWeather: v);
+      edit((c) => c.copyWith(headerTemperature: v));
+  void setHeaderWeather(bool v) => edit((c) => c.copyWith(headerWeather: v));
   void setHeaderEphemeris(bool v) =>
-      state = state.copyWith(headerEphemeris: v);
+      edit((c) => c.copyWith(headerEphemeris: v));
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getFilenamesSettings());
+  @override
+  Future<Tagged<FilenamesSettings>> fetch(ProfileApi api) =>
+      api.getFilenamesSection();
 
-  Future<FilenamesSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putFilenamesSettings(sent));
+  @override
+  Future<Tagged<FilenamesSettings>> send(
+    ProfileApi api,
+    FilenamesSettings value,
+    String? etag,
+  ) => api.putFilenamesSection(value, ifMatch: etag);
 }
 
 final filenamesSettingsProvider =
-    NotifierProvider<FilenamesSettingsNotifier, FilenamesSettings>(
-        FilenamesSettingsNotifier.new);
+    NotifierProvider<
+      FilenamesSettingsNotifier,
+      LoadedSection<FilenamesSettings>
+    >(FilenamesSettingsNotifier.new);
