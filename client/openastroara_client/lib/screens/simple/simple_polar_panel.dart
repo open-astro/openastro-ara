@@ -58,18 +58,12 @@ class SimplePolarShutter extends ConsumerWidget {
     final action = ref.read(polarAlignActionProvider.notifier);
     // #1764 — through the shared module (ADR 0013 rule 3). Its failure goes to
     // a pill only: the panel's line would say it a second time.
-    Future<void> run(
-      String verb,
-      Future<void> Function(PolarAlignClient api) op,
-    ) async {
+    Future<void> run(String verb, Future<void> Function(PolarAlignClient api) op) async {
       String? failure;
-      await action.run(
-        op,
-        describe: (e) {
-          failure = friendlyError(l10n, e, action: verb);
-          return null;
-        },
-      );
+      await action.run(op, describe: (e) {
+        failure = friendlyError(l10n, e, action: verb);
+        return null;
+      });
       if (failure != null) notify(failure!, error: true, snackBarRed: false);
     }
 
@@ -77,13 +71,9 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
-      whyOff: api == null
-          ? l10n.shellRigNotConnected
-          : l10n.shellMainCameraBusy,
+      whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed:
-          api == null ||
-              (!active && (busy || ref.watch(mainCameraBusyProvider)))
+      onPressed: api == null || (!active && (busy || ref.watch(mainCameraBusyProvider)))
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
@@ -95,18 +85,14 @@ class SimplePolarShutter extends ConsumerWidget {
 /// The phase in words. Pure — unit-tested.
 String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
     switch (live.phase) {
-      PolarAlignStates.homing when live.waitingForHome =>
-        l10n.polarPhaseNeedsHome,
+      PolarAlignStates.homing when live.waitingForHome => l10n.polarPhaseNeedsHome,
       PolarAlignStates.homing => l10n.polarPhaseHoming,
       PolarAlignStates.seeding => l10n.polarPhaseSeeding,
       PolarAlignStates.adjusting when live.stage == PolarAlignStages.coarse =>
         l10n.polarPhaseRough,
       PolarAlignStates.adjusting => l10n.polarPhaseAdjusting,
       PolarAlignStates.paused => l10n.polarPhasePaused,
-      PolarAlignStates.checking => l10n.polarPhaseChecking(
-        live.checkSolvesDone,
-        live.checkSolvesTotal,
-      ),
+      PolarAlignStates.checking => l10n.polarPhaseChecking(live.checkSolvesDone, live.checkSolvesTotal),
       PolarAlignStates.checked => l10n.polarPhaseChecked,
       PolarAlignStates.failed => l10n.polarPhaseFailed,
       _ => l10n.polarPhaseReady,
@@ -136,9 +122,7 @@ String? simplePolarSideText(PolarAlignLive live, AppLocalizations l10n) =>
 /// The checked verdict's word in the user's language: the daemon's own verdict
 /// token, or the local bands on the total for a token this build does not know.
 String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
-  final token = polarRatingForVerdict(r.verdict) == null
-      ? polarVerdictFor(r.totalErrorArcmin)
-      : r.verdict;
+  final token = polarRatingForVerdict(r.verdict) == null ? polarVerdictFor(r.totalErrorArcmin) : r.verdict;
   return switch (token) {
     'excellent' => l10n.polarVerdictExcellent,
     'very_good' => l10n.polarVerdictVeryGood,
@@ -217,8 +201,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final inSimplePreflight =
-        ref.watch(simplePreflightProvider) == SimplePreflightStep.polarAlign;
+    final inSimplePreflight = ref.watch(simplePreflightProvider) == SimplePreflightStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
     ref.listen(
       polarAlignLiveProvider,
@@ -328,9 +311,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
           spacing: AraSpace.s8,
           children: [
             // The phase and the total error on one line.
-            if (active ||
-                live.phase == PolarAlignStates.failed ||
-                live.phase == PolarAlignStates.checked)
+            if (active || live.phase == PolarAlignStates.failed || live.phase == PolarAlignStates.checked)
               Row(
                 spacing: AraSpace.s8,
                 children: [
@@ -340,8 +321,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       style: kSimpleText,
                     ),
                   ),
-                  if ((active || live.phase == PolarAlignStates.checked) &&
-                      total != null) ...[
+                  if ((active || live.phase == PolarAlignStates.checked) && total != null) ...[
                     Icon(Icons.circle, size: 12, color: color),
                     Text(
                       '${total.toStringAsFixed(1)}′',
@@ -380,13 +360,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
               ),
             // The check's verdict beside the fine readout.
-            if (live.phase == PolarAlignStates.checked &&
-                live.checkResult != null)
+            if (live.phase == PolarAlignStates.checked && live.checkResult != null)
               Text(
                 live.checkResult!.fineDeltaArcmin == null
-                    ? l10n.polarCheckedLine(
-                        simplePolarVerdictLabel(live.checkResult!, l10n),
-                      )
+                    ? l10n.polarCheckedLine(simplePolarVerdictLabel(live.checkResult!, l10n))
                     : l10n.polarCheckedVsFine(
                         simplePolarVerdictLabel(live.checkResult!, l10n),
                         live.checkResult!.fineDeltaArcmin!.toStringAsFixed(1),
@@ -552,8 +529,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             // A null stage is an older daemon's one-stage routine: the fine buttons.
             if (active &&
                 live.stage != PolarAlignStages.coarse &&
-                (live.phase == PolarAlignStates.adjusting ||
-                    live.phase == PolarAlignStates.paused))
+                (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused))
               Row(
                 spacing: AraSpace.s8,
                 children: [
