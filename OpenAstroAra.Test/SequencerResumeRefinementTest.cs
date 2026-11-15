@@ -268,6 +268,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_Simple_Mode_finder_skips_a_disabled_block_between_a_finished_and_a_created_one() {
+            var root = new SequentialContainer { Name = "root" };
+            var a = SimpleBlock("A", 1, 10);
+            var b = SimpleBlock("B", 2, 20);
+            var c = SimpleBlock("C", 3, 30);
+            root.Items.Add(a);
+            root.Items.Add(b);
+            root.Items.Add(c);
+            a.Status = SequenceEntityStatus.FINISHED;
+            b.Status = SequenceEntityStatus.DISABLED;
+            c.Status = SequenceEntityStatus.CREATED;
+
+            Assert.That(SequencerService.FindActiveTarget(root), Is.SameAs(c),
+                "a disabled block never runs, so a resume must not re-center on it");
+        }
+
+        [Test]
         public void A_Simple_Mode_block_without_a_slew_takes_its_coordinates_from_the_AboveHorizonCondition() {
             var block = new SequentialContainer { Name = "framed" };
             block.Items.Add(new CenterAndRotate());
