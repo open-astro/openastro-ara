@@ -490,8 +490,9 @@ Map<String, dynamic> buildTargetBlock({
     ..['Center'] = false
     ..['ErrorBehavior'] = skipInstructionSetOnError;
 
-  // #1892 - a focus that still fails (not wired, no pause gate) must not let the
-  // plan image out of focus: skip the target's instruction set, as a failed slew does.
+  // #1892 - a focus that still fails (not wired, no pause gate) must not let
+  // the plan image out of focus: skip the target's instruction set, as a
+  // failed slew does.
   // The daemon retries and parks the run for the user before it ever fails.
   Map<String, dynamic> focusItem() =>
       _item(runAutofocusType)..['ErrorBehavior'] = skipInstructionSetOnError;

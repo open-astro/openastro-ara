@@ -73,7 +73,8 @@ void main() {
       // Waits for the session's cool, which ran during the slew; focus needs it cold (#1875).
       expect(targetTypes[1], contains('.Camera.CoolCamera'));
       expect(targetTypes[2], contains('.Autofocus.RunAutofocus'));
-      // #1892: a focus that still fails must skip the target, not image on out of focus.
+      // #1892: a focus that still fails must skip the target,
+      // not image on out of focus.
       expect(childrenOf(target)[2]['ErrorBehavior'], skipInstructionSetOnError);
       expect(targetTypes[3], contains('.Telescope.SlewScopeToRaDec')); // centres on focused stars
       expect(targetTypes[4], contains('.Container.SequentialContainer'));
@@ -465,9 +466,11 @@ void main() {
         reason: 'one autofocus per plan',
       );
       expect(
-        steps.where((c) => c[r'$type'] == runAutofocusType).single['ErrorBehavior'],
+        steps
+            .where((c) => c[r'$type'] == runAutofocusType)
+            .single['ErrorBehavior'],
         skipInstructionSetOnError,
-        reason: '#1892: a failed focus skips the target instead of imaging out of focus',
+        reason: '#1892: a failed focus skips the target, not images on',
       );
       expect(
         types.where((t) => t == slewScopeToRaDecType),
