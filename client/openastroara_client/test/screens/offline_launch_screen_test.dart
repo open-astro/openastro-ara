@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/screens/offline_launch_screen.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
@@ -38,18 +39,31 @@ void main() {
     cache = _MemCache();
   });
 
-  Future<ProviderContainer> pump(WidgetTester tester) async {
+  Future<ProviderContainer> pump(WidgetTester tester, {Locale? locale}) async {
     final container = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: OfflineLaunchScreen()),
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const OfflineLaunchScreen(),
+      ),
     ));
     await tester.pumpAndSettle();
     return container;
   }
+
+  testWidgets('the offline launch screen is in Brazilian Portuguese',
+      (tester) async {
+    await pump(tester, locale: const Locale('pt', 'BR'));
+    expect(find.text('Planejando offline — nenhum servidor conectado'),
+        findsOneWidget);
+    expect(find.text('Planning offline — no server connected'), findsNothing);
+  });
 
   testWidgets(
       'empty cache: no defaults path — only the way back to server setup',

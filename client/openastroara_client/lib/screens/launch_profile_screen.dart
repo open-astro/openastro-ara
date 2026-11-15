@@ -11,6 +11,7 @@ import '../theme/ara_colors.dart';
 import '../widgets/plan_offline_button.dart';
 import '../widgets/profile/delete_profile_dialog.dart';
 import '../widgets/profile/profile_import_flow.dart';
+import '../l10n/l10n.dart';
 import 'wizard/wizard_shell.dart';
 import '../widgets/adaptive_controls.dart';
 
@@ -58,7 +59,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('OpenAstro Ara',
+                  Text(context.l10n.launchTitle,
                       style: Theme.of(context).textTheme.headlineSmall),
                   if (serverLabel != null) ...[
                     const SizedBox(height: 4),
@@ -68,7 +69,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text('Rig: $serverLabel',
+                          child: Text(context.l10n.launchRig(serverLabel),
                               style: const TextStyle(
                                   color: AraColors.textSecondary)),
                         ),
@@ -80,7 +81,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                           onPressed: () => ref
                               .read(serverChooserRequestedProvider.notifier)
                               .request(),
-                          child: const Text('Choose a different rig'),
+                          child: Text(context.l10n.launchChooseRig),
                         ),
                       ],
                     ),
@@ -102,7 +103,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                         onPressed: () =>
                             ref.invalidate(profileManagementProvider),
                         icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Retry'),
+                        label: Text(context.l10n.launchRetry),
                       ),
                       const SizedBox(height: 8),
                       // §2 — the daemon being down must not block planning:
@@ -113,14 +114,14 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                     data: (list) => _profileControls(list),
                   ),
                   const SizedBox(height: 24),
-                  const Row(children: [
-                    Expanded(child: Divider()),
+                  Row(children: [
+                    const Expanded(child: Divider()),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('or',
-                          style: TextStyle(color: AraColors.textSecondary)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(context.l10n.launchOr,
+                          style: const TextStyle(color: AraColors.textSecondary)),
                     ),
-                    Expanded(child: Divider()),
+                    const Expanded(child: Divider()),
                   ]),
                   const SizedBox(height: 16),
                   // §30.2: Add / Import are ALWAYS visible — never gated behind
@@ -130,7 +131,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _addProfile,
                         icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add a Profile'),
+                        label: Text(context.l10n.launchAddProfile),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -139,7 +140,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                         onPressed: () =>
                             unawaited(runProfileImportFlow(context, ref)),
                         icon: const Icon(Icons.file_download_outlined, size: 18),
-                        label: const Text('Import Profile'),
+                        label: Text(context.l10n.launchImportProfile),
                       ),
                     ),
                   ]),
@@ -157,10 +158,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   /// no profiles exist yet (§30.2: Add / Import are then the only actions).
   List<Widget> _profileControls(ProfileList list) {
     if (list.profiles.isEmpty) {
-      return const [
-        Text('No profiles yet — add or import one to get started.',
+      return [
+        Text(context.l10n.launchNoProfiles,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AraColors.textSecondary)),
+            style: const TextStyle(color: AraColors.textSecondary)),
       ];
     }
     // Follow the daemon's active profile unless the user picked another entry
@@ -181,7 +182,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
     final selectedName =
         list.profiles.firstWhere((p) => p.id == selected).name;
     return [
-      Text('Active profile:',
+      Text(context.l10n.launchActiveProfile,
           style: Theme.of(context).textTheme.titleSmall),
       const SizedBox(height: 8),
       Row(children: [
@@ -203,7 +204,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         const SizedBox(width: 4),
         IconButton(
           icon: const Icon(Icons.delete_outline, size: 20),
-          tooltip: 'Delete "$selectedName"',
+          tooltip: context.l10n.launchDeleteProfile(selectedName),
           onPressed: _entering
               ? null
               : () => unawaited(_deleteProfile(selected, selectedName,
@@ -217,7 +218,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
             ? const SizedBox(
                 width: 18, height: 18,
                 child: AdaptiveProgressIndicator(strokeWidth: 2))
-            : const Text('Image'),
+            : Text(context.l10n.launchImage),
       ),
     ];
   }

@@ -1,0 +1,3 @@
+### Fixed
+
+- **A failed autofocus no longer lets the plan image on out of focus** - sequencer (#1892). Run Autofocus now retries a failed sweep, up to 3 attempts in all, then parks the run awaiting the user (Resume tries again), at the start of the plan and from the "Autofocus After Exposures" and temperature triggers alike. The pause text says what failed, and tells the user to re-zero the focuser or move it out when the best focus sat at the focuser's travel limit. A cancelled sweep is not retried. Plans the client builds now skip the target when the autofocus step still fails (not wired, or no pause gate).
