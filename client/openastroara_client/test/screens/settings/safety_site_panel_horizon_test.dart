@@ -135,14 +135,18 @@ void main() {
     await tester.runAsync(container.read(panelSaveActionProvider)!);
     await tester.pumpAndSettle();
     expect(skylinePuts(), 1);
+    await tester.pumpAndSettle(const Duration(seconds: 5)); // "Saved." leaves
 
     rig.failPut.add('site');
     await tester.runAsync(container.read(panelSaveActionProvider)!);
     await tester.pumpAndSettle();
     expect(skylinePuts(), 2);
     expect(
-      find.textContaining('skyline was saved, but the site preferences'),
-      findsWidgets,
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.textContaining('skyline was saved, but the site'),
+      ),
+      findsOneWidget,
     );
   });
 

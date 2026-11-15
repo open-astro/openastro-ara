@@ -69,20 +69,12 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     // Two sequential PUTs: saveSections writes the skyline, then the site in
     // andThen. A site failure says the skyline was kept instead of implying
     // the whole Save was rolled back (review r2).
-    var skylineSaved = false;
     final error = await saveSections(
-      andThen: (api) async {
-        skylineSaved = true;
-        await ref.read(siteSettingsProvider.notifier).persistToServer(api);
-      },
+      andThen: ref.read(siteSettingsProvider.notifier).persistToServer,
+      andThenFailed:
+          'The horizon skyline was saved, but the site preferences were not. ',
     );
-    if (!mounted) return;
-    setState(
-      () => _lastError = error != null && skylineSaved
-          ? 'The horizon skyline was saved, but the site preferences were not. '
-                '$error'
-          : error,
-    );
+    if (mounted) setState(() => _lastError = error);
   }
 
   /// Fill the observing site from GPS (§31.3). Preferred: a USB GPS dongle on
