@@ -1925,7 +1925,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_Stop_in_the_coarse_stage_records_no_last_result() {
-            // The rough readout is not an alignment (Done is refused there), so Night Setup must not count it.
+            // The rough readout is not an alignment (Stop there records nothing), so Night Setup must not count it.
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
@@ -2388,22 +2388,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Done_is_refused_during_the_coarse_stage() {
-            // A stage-unaware client's Done on the rough readout would write a "complete" row the guiding
-            // and "last night" readouts trust; the rough step offers Next and Stop only.
+        public async Task Done_is_refused_during_the_coarse_stage_while_the_error_is_outside_the_tolerance() {
+            // A stage-unaware client's Done on a rough readout still off the profile's tolerance would write a
+            // "complete" row the guiding and "last night" readouts trust.
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             var log = new RecordingLog();
-            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), store: NewHomeStore(), log: log, mainCamera: new FakeMainCamera());
+            var store = NewHomeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { TargetToleranceArcmin = 0.001 });
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), store: store, log: log, mainCamera: new FakeMainCamera());
 
             await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).Stage, Is.EqualTo(PolarAlignStages.Coarse));
 
             await AssertThrowsAsync<InvalidOperationException>(() => svc.CompleteAsync(null, CancellationToken.None)).ConfigureAwait(false);
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("adjusting"), "still running");
-            Assert.That(log.Rows, Is.Empty, "no complete row from the rough step");
+            Assert.That(log.Rows, Is.Empty, "no complete row from an out-of-tolerance rough step");
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Done_in_the_coarse_stage_inside_the_tolerance_completes_and_records_the_result() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var log = new RecordingLog();
+            var store = NewHomeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { TargetToleranceArcmin = 100000 });
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), store: store, log: log, mainCamera: new FakeMainCamera());
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).Stage, Is.EqualTo(PolarAlignStages.Coarse));
+
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"));
+            Assert.That(status.LastResult, Is.Not.Null, "Done in the rough step is an alignment");
+            Assert.That(log.Rows.Count, Is.EqualTo(1));
+            Assert.That(log.Rows.TryPeek(out var row) && row.Outcome == "complete", Is.True);
         }
 
         [Test]

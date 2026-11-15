@@ -160,6 +160,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Unguided',
         groupId: 'imaging',
       ),
+      SettingsPanelInfo(
+        id: 'img.polar',
+        label: 'Polar align',
+        groupId: 'imaging',
+      ),
     ],
   ),
   SettingsGroup(

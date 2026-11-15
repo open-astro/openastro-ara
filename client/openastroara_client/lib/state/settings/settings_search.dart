@@ -146,6 +146,7 @@ const Map<String, List<String>> _panelKeywords = {
     'trigger',
     'recalibrate',
   ],
+  'img.polar': ['polar', 'alignment', 'pole', 'tolerance', 'home', 'verify'],
   'img.unguided': [
     'unguided',
     'tracking',

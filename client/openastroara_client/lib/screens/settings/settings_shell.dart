@@ -19,6 +19,7 @@ import 'panels/equipment_switch_panel.dart';
 import 'panels/equipment_weather_panel.dart';
 import 'panels/generic_placeholder_panel.dart';
 import 'panels/imaging_autofocus_panel.dart';
+import 'panels/imaging_polar_panel.dart';
 import 'panels/imaging_unguided_panel.dart';
 import 'panels/imaging_defaults_panel.dart';
 import 'panels/imaging_plate_solve_panel.dart';
@@ -273,6 +274,7 @@ class _PanelBody extends StatelessWidget {
       'img.autofocus' => const ImagingAutofocusPanel(),
       'img.platesolve' => const ImagingPlateSolvePanel(),
       'img.unguided' => const ImagingUnguidedPanel(),
+      'img.polar' => const ImagingPolarPanel(),
       'session.storage' => const StoragePanel(),
       'session.filenames' => const SessionFilenamesPanel(),
       'session.notifications' => const SessionNotificationsPanel(),

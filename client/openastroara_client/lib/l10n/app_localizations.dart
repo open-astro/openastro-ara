@@ -1824,7 +1824,7 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align panel: button from the fine stage to the three-point check
   ///
   /// In en, this message translates to:
-  /// **'Check it'**
+  /// **'Verify'**
   String get polarCheck;
 
   /// Completes "Couldn't …" for the Check it button
@@ -9872,6 +9872,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fits {fits} of them before 30°/dawn'**
   String planFramesFit(int fits);
+
+  /// Simple Mode Polar align stepper: the rough step
+  ///
+  /// In en, this message translates to:
+  /// **'Rough'**
+  String get polarStepRough;
+
+  /// Simple Mode Polar align stepper: the fine step
+  ///
+  /// In en, this message translates to:
+  /// **'Fine'**
+  String get polarStepFine;
+
+  /// Simple Mode Polar align stepper: the verify step
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get polarStepVerify;
+
+  /// Simple Mode Polar align panel: heading over the routine's settings
+  ///
+  /// In en, this message translates to:
+  /// **'Setup'**
+  String get polarSetup;
+
+  /// Simple Mode Polar align panel: heading over the bullseye and the turns
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get polarErrorHeading;
+
+  /// Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance
+  ///
+  /// In en, this message translates to:
+  /// **'Inside your {tolerance}′ tolerance. Done keeps this alignment; Next: fine refines it.'**
+  String polarInsideTolerance(String tolerance);
+
+  /// Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance
+  ///
+  /// In en, this message translates to:
+  /// **'Outside your {tolerance}′ tolerance: refine it, or stop with the shutter.'**
+  String polarOutsideTolerance(String tolerance);
+
+  /// Simple Mode Polar align fine step: caption under the Verify button
+  ///
+  /// In en, this message translates to:
+  /// **'Verify moves the mount and takes three frames to confirm the alignment.'**
+  String get polarVerifyCaption;
+
+  /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get polarStepDone;
+
+  /// Settings → Imaging → Polar align: section heading over the routine's knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align'**
+  String get polarKnobSection;
+
+  /// Settings → Imaging → Polar align: tolerance field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Tolerance (arcmin, 0.1 to 10)'**
+  String get polarKnobTolerance;
+
+  /// Settings → Imaging → Polar align: RA turn field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Turn (°, 5 to 120)'**
+  String get polarKnobTurn;
+
+  /// Settings → Imaging → Polar align: Verify step field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Verify step (°, 5 to 60)'**
+  String get polarKnobVerifyStep;
+
+  /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Rough step exposure (s, 0.1 to 60)'**
+  String get polarKnobRoughExposure;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Done turns on once the error is inside it'**
+  String get polarKnobToleranceHint;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Send the mount Home first'**
+  String get polarKnobUseHome;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Every stage starts from Home'**
+  String get polarKnobUseHomeOn;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Off: where the mount points now counts as Home'**
+  String get polarKnobUseHomeOff;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Kept between 5° and 120°'**
+  String get polarKnobTurnHint;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Kept between 5° and 60°'**
+  String get polarKnobVerifyStepHint;
 }
 
 class _AppLocalizationsDelegate

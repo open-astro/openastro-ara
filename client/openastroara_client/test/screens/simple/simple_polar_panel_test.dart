@@ -136,59 +136,125 @@ void main() {
     expect(simplePolarPhase(const PolarAlignLive(phase: PolarAlignStates.failed), en), 'Polar alignment failed');
   });
 
-  testWidgets('idle: only the settings, no Ready and no Start (the shutter starts it)', (tester) async {
-    final api = await _pump(tester, const PolarAlignLive());
-    expect(find.text('Ready'), findsNothing);
-    expect(find.text('Start'), findsNothing);
-    expect(find.text('1 s'), findsOneWidget);
-    await tester.tap(find.text('Single'));
-    await tester.pumpAndSettle();
-    expect(api!.calls, ['save 1.0 single']);
-  });
+  testWidgets(
+    'idle: only the settings, no Ready and no Start (the shutter starts it)',
+    (tester) async {
+      final api = await _pump(tester, const PolarAlignLive());
+      expect(find.text('Ready'), findsNothing);
+      expect(find.text('Start'), findsNothing);
+      expect(find.text('1 s'), findsOneWidget);
+      await tester.tap(find.text('Single'));
+      await tester.pumpAndSettle();
+      expect(api!.calls, ['save 1.0 single']);
+    },
+  );
 
-  testWidgets('adjusting: the error, the turns, no Stop (the shutter stops it); Done waits for the tolerance', (tester) async {
-    final api = await _pump(tester, _adjusting);
-    expect(find.text('14.4′'), findsOneWidget);
-    expect(find.text('Lower 3.2′'), findsOneWidget);
-    expect(find.text('Move west 14.1′'), findsOneWidget);
-    expect(find.text('1 s'), findsOneWidget, reason: 'the settings stay, for the next frame');
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).style?.backgroundColor?.resolve({}),
-        AraColors.accentConnected, reason: 'Done is green');
-    expect(find.byKey(const Key('simple-polar-stop')), findsNothing);
-    expect(find.byKey(const Key('simple-polar-capture')), findsNothing, reason: 'Loop shoots on its own');
-    expect(api!.calls, isEmpty);
-  });
+  testWidgets(
+    'adjusting: the error, the turns, no Stop (the shutter stops it); Done waits for the tolerance',
+    (tester) async {
+      final api = await _pump(tester, _adjusting);
+      expect(find.text('14.4′'), findsOneWidget);
+      expect(find.text('Lower 3.2′'), findsOneWidget);
+      expect(find.text('Move west 14.1′'), findsOneWidget);
+      expect(
+        find.text('1 s'),
+        findsOneWidget,
+        reason: 'the settings stay, for the next frame',
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('simple-polar-done')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('simple-polar-done')))
+            .style
+            ?.backgroundColor
+            ?.resolve({}),
+        AraColors.accentConnected,
+        reason: 'Done is green',
+      );
+      expect(find.byKey(const Key('simple-polar-stop')), findsNothing);
+      expect(
+        find.byKey(const Key('simple-polar-capture')),
+        findsNothing,
+        reason: 'Loop shoots on its own',
+      );
+      expect(api!.calls, isEmpty);
+    },
+  );
 
-  testWidgets('the turns read at a glance: big arrows beside a big bullseye, like the full UI', (tester) async {
-    await _pump(tester, _adjusting);
-    for (final axis in ['alt', 'az']) {
-      final arrow = find.descendant(of: find.byKey(Key('simple-polar-turn-$axis')), matching: find.byType(Icon));
-      expect(tester.widget<Icon>(arrow).size, greaterThanOrEqualTo(40), reason: axis);
-    }
-    final bullseye = find.byKey(const Key('simple-polar-bullseye'));
-    expect(tester.getSize(bullseye).width, greaterThanOrEqualTo(180));
-  });
+  testWidgets(
+    'the turns read at a glance: big arrows beside a big bullseye, like the full UI',
+    (tester) async {
+      await _pump(tester, _adjusting);
+      for (final axis in ['alt', 'az']) {
+        final arrow = find.descendant(
+          of: find.byKey(Key('simple-polar-turn-$axis')),
+          matching: find.byType(Icon),
+        );
+        expect(
+          tester.widget<Icon>(arrow).size,
+          greaterThanOrEqualTo(40),
+          reason: axis,
+        );
+      }
+      final bullseye = find.byKey(const Key('simple-polar-bullseye'));
+      expect(tester.getSize(bullseye).width, greaterThanOrEqualTo(180));
+    },
+  );
 
-  testWidgets('the arrows fill their tiles and the bullseye fills the two tiles\' height (#1721)', (tester) async {
-    await _pump(tester, _adjusting);
-    final alt = find.byKey(const Key('simple-polar-turn-alt'));
-    final az = find.byKey(const Key('simple-polar-turn-az'));
-    for (final tile in [alt, az]) {
-      expect(tester.getSize(find.descendant(of: tile, matching: find.byType(Icon))).height, 70);
-      expect(tester.getSize(tile).height, 86, reason: 'the tile keeps its size');
-    }
-    final bullseye = find.byKey(const Key('simple-polar-bullseye'));
-    final painter = tester.widget<CustomPaint>(find.descendant(of: bullseye, matching: find.byType(CustomPaint))).painter!
-        as BullseyePainter;
-    final tiles = tester.getBottomLeft(az).dy - tester.getTopLeft(alt).dy;
-    expect(painter.ringRadius(tester.getSize(bullseye)) * 2, closeTo(tiles, 2));
-  });
+  testWidgets(
+    'the arrows fill their tiles and the bullseye fills the two tiles\' height (#1721)',
+    (tester) async {
+      await _pump(tester, _adjusting);
+      final alt = find.byKey(const Key('simple-polar-turn-alt'));
+      final az = find.byKey(const Key('simple-polar-turn-az'));
+      for (final tile in [alt, az]) {
+        expect(
+          tester
+              .getSize(find.descendant(of: tile, matching: find.byType(Icon)))
+              .height,
+          70,
+        );
+        expect(
+          tester.getSize(tile).height,
+          86,
+          reason: 'the tile keeps its size',
+        );
+      }
+      final bullseye = find.byKey(const Key('simple-polar-bullseye'));
+      final painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: bullseye,
+                      matching: find.byType(CustomPaint),
+                    ),
+                  )
+                  .painter!
+              as BullseyePainter;
+      final tiles = tester.getBottomLeft(az).dy - tester.getTopLeft(alt).dy;
+      expect(
+        painter.ringRadius(tester.getSize(bullseye)) * 2,
+        closeTo(tiles, 2),
+      );
+    },
+  );
 
-  testWidgets('while it runs, the whole panel fits the room beside the rail on an iPad (388 pt)', (tester) async {
-    await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
-    expect(tester.getSize(find.byType(SimplePolarPanel)).height, lessThanOrEqualTo(388));
-  });
+  testWidgets(
+    'while it runs, the panel stays within 520 pt: the stepper, headings and caption of #1875 make it scroll on an iPad (388 pt)',
+    (tester) async {
+      // The shell scrolls a panel taller than its room; the chosen mock accepts it. 520 stops it growing further.
+      await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
+      expect(
+        tester.getSize(find.byType(SimplePolarPanel)).height,
+        lessThanOrEqualTo(520),
+      );
+    },
+  );
 
   testWidgets('Single running: Take frame takes the next one', (tester) async {
     final api = await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
@@ -222,46 +288,353 @@ void main() {
     expect(api!.calls, ['next']);
   });
 
-  testWidgets('fine stage: a hair above the tolerance, Check and Done stay off', (tester) async {
-    final api = await _pump(
+  testWidgets(
+    'rough stage outside the tolerance: no Done, and the caption says so (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          altErrorArcmin: 5,
+          azErrorArcmin: 9,
+          totalErrorArcmin: 11.0,
+          zone: 'red',
+        ),
+        tolerance: 2.0,
+      );
+      expect(find.byKey(const Key('simple-polar-done-rough')), findsNothing);
+      expect(
+        find.text(
+          'Outside your 2′ tolerance: refine it, or stop with the shutter.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'rough stage inside the tolerance: Done is outlined, Next: fine stays the green primary (#1875)',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 1.4,
+          totalErrorArcmin: 1.5,
+          zone: 'green',
+        ),
+        tolerance: 2.0,
+      );
+      expect(
+        find.text(
+          'Inside your 2′ tolerance. Done keeps this alignment; Next: fine refines it.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(OutlinedButton), findsOneWidget);
+      expect(
+        find
+            .byKey(const Key('simple-polar-next-fine'))
+            .evaluate()
+            .single
+            .widget,
+        isA<FilledButton>(),
+      );
+      await tester.tap(find.byKey(const Key('simple-polar-done-rough')));
+      await tester.pump();
+      expect(api!.calls, ['complete']);
+    },
+  );
+
+  testWidgets('the stepper marks Rough and the steps behind it (#1875)', (
+    tester,
+  ) async {
+    await _pump(
       tester,
       const PolarAlignLive(
-          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
-          altErrorArcmin: 0.7, azErrorArcmin: 0.75, totalErrorArcmin: 1.01, zone: 'yellow'),
-      tolerance: 1.0,
+        phase: PolarAlignStates.adjusting,
+        stage: PolarAlignStages.coarse,
+        totalErrorArcmin: 9,
+      ),
     );
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNull);
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
-    expect(api!.calls, isEmpty);
+    expect(find.text('Rough'), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsNothing);
+    expect(find.text('Fine'), findsOneWidget);
+    expect(find.text('Verify'), findsOneWidget);
   });
 
-  testWidgets('fine stage: at the tolerance exactly, Check asks the daemon for the check', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(
-          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
-          altErrorArcmin: 0.6, azErrorArcmin: 0.8, totalErrorArcmin: 1.0, zone: 'green'),
-      tolerance: 1.0,
-    );
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNotNull,
-        reason: 'enabled at the tolerance exactly (<=), not only below it');
-    await tester.tap(find.byKey(const Key('simple-polar-check')));
-    await tester.pump();
-    expect(api!.calls, ['next']);
+  testWidgets(
+    'the current step is selectionBg with white text: 4.6:1, not the brightest block at night (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          totalErrorArcmin: 9,
+        ),
+      );
+      final box =
+          tester
+                  .widget<Container>(
+                    find.byKey(const Key('simple-polar-step-0')),
+                  )
+                  .decoration!
+              as BoxDecoration;
+      expect(box.color, AraColors.selectionBg);
+      expect(
+        tester.widget<Text>(find.text('Rough')).style!.color,
+        AraColors.selectionFg,
+      );
+    },
+  );
+
+  testWidgets(
+    'the stepper ticks Rough once the routine is in the fine step (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          totalErrorArcmin: 9,
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('simple-polar-step-0')),
+          matching: find.byIcon(Icons.check),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.check)).semanticLabel,
+        'Done',
+        reason: 'a screen reader hears the tick',
+      );
+      expect(find.text('Rough'), findsOneWidget);
+      expect(find.text('Fine'), findsOneWidget);
+    },
+  );
+
+  testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
+    await _pump(tester, const PolarAlignLive());
+    expect(find.byKey(const Key('simple-polar-stepper')), findsNothing);
   });
 
-  testWidgets('checked: Done completes the routine and leaves the verdict alone', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(
-          phase: PolarAlignStates.checked, stage: PolarAlignStages.check,
-          altErrorArcmin: 0.3, azErrorArcmin: 0.2, totalErrorArcmin: 0.36, zone: 'green'),
+  test('simplePolarStep: verifying and the verdict are the Verify step', () {
+    expect(
+      simplePolarStep(
+        const PolarAlignLive(
+          phase: PolarAlignStates.checking,
+          stage: PolarAlignStages.check,
+        ),
+      ),
+      2,
     );
-    expect(find.byKey(const Key('simple-polar-check')), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-polar-done')));
-    await tester.pump();
-    expect(api!.calls, ['complete']);
+    expect(
+      simplePolarStep(
+        const PolarAlignLive(
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+        ),
+      ),
+      2,
+    );
+    expect(
+      simplePolarStep(
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+        ),
+      ),
+      0,
+    );
+    expect(
+      simplePolarStep(const PolarAlignLive(phase: PolarAlignStates.adjusting)),
+      1,
+      reason: 'an older daemon: one fine stage',
+    );
+    expect(simplePolarStep(const PolarAlignLive()), isNull);
   });
+
+  testWidgets(
+    'fine stage: Verify carries its caption and the groups sit under Setup and Error (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 0.8,
+          totalErrorArcmin: 1.0,
+          zone: 'green',
+        ),
+      );
+      expect(
+        find.text(
+          'Verify moves the mount and takes three frames to confirm the alignment.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Verify'),
+        findsNWidgets(2),
+        reason: 'the stepper step and the button',
+      );
+      expect(find.text('Setup'), findsOneWidget);
+      expect(find.text('Error'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Layout A order: Setup above Error, the Verify caption above the fine buttons (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 0.8,
+          totalErrorArcmin: 1.0,
+          zone: 'green',
+        ),
+      );
+      double top(Finder f) => tester.getTopLeft(f).dy;
+      expect(top(find.text('Setup')), lessThan(top(find.text('Error'))));
+      expect(
+        top(find.byKey(const Key('simple-polar-verify-caption'))),
+        lessThan(top(find.byKey(const Key('simple-polar-check')))),
+      );
+    },
+  );
+
+  testWidgets(
+    'verifying shows only the phase line: no bullseye, no settings (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.checking,
+          stage: PolarAlignStages.check,
+          checkSolvesDone: 1,
+          checkSolvesTotal: 3,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 0.8,
+          totalErrorArcmin: 1.0,
+          zone: 'green',
+        ),
+      );
+      expect(find.byKey(const Key('simple-polar-bullseye')), findsNothing);
+      expect(find.byKey(const Key('simple-polar-setup')), findsNothing);
+      expect(find.text('Setup'), findsNothing);
+      expect(find.text('Error'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'verified shows only the verdict: no bullseye, no settings (#1875)',
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.2,
+          totalErrorArcmin: 0.36,
+          zone: 'green',
+        ),
+      );
+      expect(find.byKey(const Key('simple-polar-bullseye')), findsNothing);
+      expect(find.byKey(const Key('simple-polar-setup')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'fine stage: a hair above the tolerance, Check and Done stay off',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.7,
+          azErrorArcmin: 0.75,
+          totalErrorArcmin: 1.01,
+          zone: 'yellow',
+        ),
+        tolerance: 1.0,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(const Key('simple-polar-check')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('simple-polar-done')))
+            .onPressed,
+        isNull,
+      );
+      expect(api!.calls, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'fine stage: at the tolerance exactly, Check asks the daemon for the check',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 0.8,
+          totalErrorArcmin: 1.0,
+          zone: 'green',
+        ),
+        tolerance: 1.0,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(const Key('simple-polar-check')))
+            .onPressed,
+        isNotNull,
+        reason: 'enabled at the tolerance exactly (<=), not only below it',
+      );
+      await tester.tap(find.byKey(const Key('simple-polar-check')));
+      await tester.pump();
+      expect(api!.calls, ['next']);
+    },
+  );
+
+  testWidgets(
+    'checked: Done completes the routine and leaves the verdict alone',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.2,
+          totalErrorArcmin: 0.36,
+          zone: 'green',
+        ),
+      );
+      expect(find.byKey(const Key('simple-polar-check')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-polar-done')));
+      await tester.pump();
+      expect(api!.calls, ['complete']);
+    },
+  );
 
   testWidgets('inside the tolerance Done completes it', (tester) async {
     final api = await _pump(
