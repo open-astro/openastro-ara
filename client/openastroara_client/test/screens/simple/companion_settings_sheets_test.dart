@@ -25,7 +25,7 @@ import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
-    show clockProvider, tonightSkyProvider;
+    show clockProvider, tonightSkyProvider, tonightsBestProvider;
 import 'package:openastroara/state/ws/ws_providers.dart';
 
 import '../../support/storage_fixture.dart';
@@ -292,27 +292,29 @@ void main() {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         const best = ['M31', 'NGC 7000', 'M33', 'M45'];
+        final tonight = [
+          for (final n in best)
+            TonightSkyObject(
+              id: n,
+              name: n,
+              type: 'Galaxy',
+              magnitude: 5,
+              raDeg: 10,
+              decDeg: 40,
+              altitudeDeg: 55,
+              maxAltitudeDeg: 70,
+            ),
+        ];
         await _pump(
           tester,
           _portrait,
           locale: locale,
           overrides: [
             bundledCatalogProvider.overrideWith((ref) async => catalog),
-            tonightSkyProvider.overrideWith(
-              (ref) async => [
-                for (final n in best)
-                  TonightSkyObject(
-                    id: n,
-                    name: n,
-                    type: 'Galaxy',
-                    magnitude: 5,
-                    raDeg: 10,
-                    decDeg: 40,
-                    altitudeDeg: 55,
-                    maxAltitudeDeg: 70,
-                  ),
-              ],
-            ),
+            // Plan lists tonightsBestProvider, which ranks from the clock; a
+            // pick reads tonightSkyProvider. Both fixed, as in the Plan tests.
+            tonightSkyProvider.overrideWith((ref) async => tonight),
+            tonightsBestProvider.overrideWith((ref) async => tonight),
           ],
         );
         // The section row swipes: past 1x text Plan starts off screen.
