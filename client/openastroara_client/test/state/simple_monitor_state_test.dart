@@ -347,6 +347,8 @@ void main() {
       expect(r.read().verdict.kind, MonitorVerdictKind.waitingForFlip);
       expect(r.read().now.word, MonitorNowWord.waitingForFlip);
       expect(r.read().flip.step, isNull, reason: 'no step text under a wait');
+      expect(r.read().flip.state, 'waiting_for_meridian');
+      expect(r.read().flip.at, _t0.add(const Duration(seconds: 182)));
     });
 
     test('once the countdown clears, a flipping state is the flip again (#1897)', () async {

@@ -945,7 +945,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       target: targetTile,
       flip: MonitorFlip(
         state: flipInfo?.state == 'flipping' && waitLeft != null ? 'waiting_for_meridian' : flipInfo?.state,
-        at: flipInfo?.expectedUtc?.toLocal(),
+        // The wait counts down on its own; the daemon sends no expected time while it runs.
+        at: waitLeft != null && flipInfo?.state == 'flipping' ? now.add(Duration(seconds: waitLeft)) : flipInfo?.expectedUtc?.toLocal(),
         step: flipping ? info?.currentInstructionDescription : null,
       ),
       safety: safety,
