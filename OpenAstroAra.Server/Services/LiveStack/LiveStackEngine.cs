@@ -23,7 +23,11 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services.LiveStack;
 
 /// <summary>What one <see cref="LiveStackEngine.Add"/> did with a frame.</summary>
-public enum StackAddOutcome { Reference, Stacked, Unregistered, WrongSize, TooLarge, Dropped }
+public enum StackAddOutcome {
+    Reference, Stacked, Unregistered, WrongSize, TooLarge, Dropped,
+    /// <summary>Colour mode only: registered after a 180-degree turn (a meridian flip) and stacked.</summary>
+    Flipped
+}
 
 /// <summary>Result of one Add. Offsets follow the engine convention: a frame's stars sit at
 /// <c>R(rot)·(p − centre) + centre + (dx, dy)</c> relative to the reference (centre = width/2, height/2).</summary>
@@ -105,6 +109,10 @@ public sealed class LiveStackEngine {
     private int _framesStacked, _framesUnregistered, _consecutiveUnregistered;
     private long _rejected, _seq;
     private byte[]? _jpeg;
+    // Colour mode (↑ara#1787): R, G, B planes on the superpixel grid, each with its own Welford state. Null in mono mode.
+    private float[][]? _cMean;
+    private float[][]? _cM2;
+    private ushort[][]? _cN;
 
     private volatile StackSnapshot _snapshot;
 
@@ -114,6 +122,9 @@ public sealed class LiveStackEngine {
     }
 
     internal StackSnapshot Snapshot => _snapshot;
+
+    /// <summary>Test seam: runs inside the engine lock at the start of <see cref="AddColour"/>, to hold a stack busy.</summary>
+    internal Action? InsideAddForTest { get; set; }
     public int FramesStacked => _snapshot.FramesStacked;
     public int FramesUnregistered => _snapshot.FramesUnregistered;
     public long RejectedSamples => _snapshot.RejectedSamples;
@@ -155,6 +166,14 @@ public sealed class LiveStackEngine {
         lock (_sync) {
             width = _w; height = _h;
             return _mean is null ? null : (float[])_mean.Clone();
+        }
+    }
+
+    /// <summary>The colour stack's R, G, B means as copies (superpixel grid), or null when no colour stack exists.</summary>
+    public float[][]? SnapshotColourMean(out int width, out int height) {
+        lock (_sync) {
+            width = _w; height = _h;
+            return _cMean?.Select(p => (float[])p.Clone()).ToArray();
         }
     }
 
@@ -203,14 +222,97 @@ public sealed class LiveStackEngine {
 
             _consecutiveUnregistered = 0;
             var (rot, dx, dy) = reg.Value;
-            Accumulate(pixels, width, height, rot, dx, dy);
+            _rejected += AccumulatePlane(pixels, width, height, rot, dx, dy, _mean!, _m2!, _n!);
             _framesStacked++;
             return Finish(new StackAddResult(StackAddOutcome.Stacked, dx, dy, rot * 180 / Math.PI));
         }
     }
 
+    /// <summary>
+    /// Colour mode (↑ara#1787): stacks a raw one-shot-colour mosaic on its superpixel grid (<paramref name="width"/>/2 x
+    /// <paramref name="height"/>/2). Stars are registered on the luminance (R+G+B)/3 as in <see cref="Add"/>; when that fails the
+    /// frame's stars are turned 180 degrees about the centre and tried once more (<see cref="StackAddOutcome.Flipped"/>, a
+    /// meridian flip). The one transform resamples all three channels, each with its own Welford state and sigma clip.
+    /// The pixel cap counts the grid, not the sensor.
+    /// </summary>
+    public StackAddResult AddColour(ushort[] mosaic, int width, int height, BayerPattern pattern, long session = 0) {
+        ArgumentNullException.ThrowIfNull(mosaic);
+        if (width < 2 || height < 2 || mosaic.Length != (long)width * height) {
+            throw new ArgumentException("mosaic length must equal width * height.", nameof(mosaic));
+        }
+        lock (_sync) {
+            InsideAddForTest?.Invoke();
+            if (!_enabled || session != _session) {
+                return new StackAddResult(StackAddOutcome.Dropped);
+            }
+            int gw = width / 2, gh = height / 2;
+            if ((long)gw * gh > _maxPixels) {
+                return Finish(new StackAddResult(StackAddOutcome.TooLarge));
+            }
+            if (_cMean is not null && (gw != _w || gh != _h)) {
+                return Finish(new StackAddResult(StackAddOutcome.WrongSize));
+            }
+
+            var (r, g, b, _, _) = Debayer.SuperPixel(mosaic, width, height, pattern);
+            var lum = new ushort[r.Length];
+            for (int i = 0; i < lum.Length; i++) { lum[i] = (ushort)((r[i] + g[i] + b[i]) / 3); }
+            var stars = DetectStars(lum, gw, gh, out var detected);
+            if (_cMean is null) {
+                if (detected < MinReferenceStars) {
+                    _framesUnregistered++;
+                    return Finish(new StackAddResult(StackAddOutcome.Unregistered));
+                }
+                return Finish(StartColourReference(new[] { r, g, b }, gw, gh, stars, detected));
+            }
+
+            double cx = gw / 2.0, cy = gh / 2.0;
+            var flipped = false;
+            var reg = Register(_refStars!, stars, cx, cy);
+            if (reg is null) {
+                // Seen from the other side of the meridian the field is turned 180 degrees about the centre.
+                var turned = stars.Select(s => (X: 2 * cx - s.X, Y: 2 * cy - s.Y)).ToArray();
+                if (Register(_refStars!, turned, cx, cy) is { } t) {
+                    reg = (t.Rot + Math.PI, -t.Dx, -t.Dy);
+                    flipped = true;
+                }
+            }
+            if (reg is null) {
+                _framesUnregistered++;
+                if (++_consecutiveUnregistered >= RestartAfterUnregistered) {
+                    ClearStack();
+                    if (detected >= MinReferenceStars) {
+                        return Finish(StartColourReference(new[] { r, g, b }, gw, gh, stars, detected));
+                    }
+                }
+                return Finish(new StackAddResult(StackAddOutcome.Unregistered));
+            }
+
+            _consecutiveUnregistered = 0;
+            var (rot, dx, dy) = reg.Value;
+            var planes = new[] { r, g, b };
+            for (int c = 0; c < 3; c++) {
+                _rejected += AccumulatePlane(planes[c], gw, gh, rot, dx, dy, _cMean[c], _cM2![c], _cN![c]);
+            }
+            _framesStacked++;
+            return Finish(new StackAddResult(flipped ? StackAddOutcome.Flipped : StackAddOutcome.Stacked, dx, dy, rot * 180 / Math.PI));
+        }
+    }
+
+    private StackAddResult StartColourReference(ushort[][] planes, int gw, int gh, (double X, double Y)[] stars, int detected) {
+        _w = gw; _h = gh;
+        _cMean = planes.Select(p => Array.ConvertAll(p, v => (float)v)).ToArray();
+        _cM2 = planes.Select(p => new float[p.Length]).ToArray();
+        _cN = planes.Select(p => { var n = new ushort[p.Length]; Array.Fill(n, (ushort)1); return n; }).ToArray();
+        _refStars = stars;
+        _refStarCount = detected;
+        _framesStacked = 1;
+        _consecutiveUnregistered = 0;
+        return new StackAddResult(StackAddOutcome.Reference);
+    }
+
     private void ClearStack() {
         _mean = null; _m2 = null; _n = null; _w = _h = 0;
+        _cMean = null; _cM2 = null; _cN = null;
         _refStars = null; _refStarCount = 0;
         _framesStacked = _framesUnregistered = _consecutiveUnregistered = 0;
         _rejected = 0;
@@ -234,7 +336,7 @@ public sealed class LiveStackEngine {
 
     // Records the outcome in the published snapshot (and a fresh preview when a frame was added).
     private StackAddResult Finish(StackAddResult r) {
-        bool added = r.Outcome is StackAddOutcome.Reference or StackAddOutcome.Stacked;
+        bool added = r.Outcome is StackAddOutcome.Reference or StackAddOutcome.Stacked or StackAddOutcome.Flipped;
         if (added) {
             _seq++;
             _jpeg = RenderJpeg();
@@ -245,11 +347,11 @@ public sealed class LiveStackEngine {
 
     // Always called with _sync held. A non-added outcome keeps the previous JPEG; Reset/Disable/Enable cleared it.
     private void Publish(StackAddOutcome? outcome, double offX, double offY, double rotDeg, DateTimeOffset? frameAt) {
-        bool registered = outcome is StackAddOutcome.Stacked;
+        bool registered = outcome is StackAddOutcome.Stacked or StackAddOutcome.Flipped;
         var prev = _snapshot;
         _snapshot = new StackSnapshot(
             _enabled, _session, _seq, _framesStacked, _framesUnregistered, _rejected,
-            _mean is null ? null : _refStarCount, _mean is null ? null : _w, _mean is null ? null : _h,
+            _mean is null && _cMean is null ? null : _refStarCount, _mean is null && _cMean is null ? null : _w, _mean is null && _cMean is null ? null : _h,
             registered ? offX : (outcome is null ? null : prev.LastOffsetX),
             registered ? offY : (outcome is null ? null : prev.LastOffsetY),
             registered ? rotDeg : (outcome is null ? null : prev.LastRotationDeg),
@@ -257,6 +359,16 @@ public sealed class LiveStackEngine {
     }
 
     private byte[] RenderJpeg() {
+        if (_cMean is { } planes) {
+            var rgb = new byte[_w * _h * 3];
+            for (int c = 0; c < 3; c++) {
+                var plane = new ushort[planes[c].Length];
+                for (int i = 0; i < plane.Length; i++) { plane[i] = (ushort)Math.Clamp(planes[c][i] + 0.5f, 0f, 65535f); }
+                var stretchedPlane = Stretcher.Apply(StretchAlgorithm.AutoStf, plane);
+                for (int i = 0, d = c; i < stretchedPlane.Length; i++, d += 3) { rgb[d] = stretchedPlane[i]; }
+            }
+            return JpegEncoder.EncodeColor(rgb, _w, _h, maxDim: PreviewMaxDim);
+        }
         var mean = _mean!;
         var u = new ushort[mean.Length];
         for (int i = 0; i < u.Length; i++) { u[i] = (ushort)Math.Clamp(mean[i] + 0.5f, 0f, 65535f); }
@@ -381,8 +493,7 @@ public sealed class LiveStackEngine {
 
     // Resamples the frame into the reference grid (bilinear; frame position = R(rot)(q − centre) + centre + (dx, dy))
     // and folds each sample into the per-pixel Welford state with a one-pass sigma clip against the prior estimate.
-    private void Accumulate(ushort[] pixels, int w, int h, double rot, double dx, double dy) {
-        var mean = _mean!; var m2 = _m2!; var nArr = _n!;
+    private long AccumulatePlane(ushort[] pixels, int w, int h, double rot, double dx, double dy, float[] mean, float[] m2, ushort[] nArr) {
         double floor = SigmaFloor(m2, nArr);
         double c = Math.Cos(rot), s = Math.Sin(rot), cx = w / 2.0, cy = h / 2.0;
         int warm = _warmUp; double k = _sigma;
@@ -413,7 +524,7 @@ public sealed class LiveStackEngine {
             }
             if (rowRejected != 0) { Interlocked.Add(ref rejected, rowRejected); }
         });
-        _rejected += rejected;
+        return rejected;
     }
 
     // Median per-pixel sigma over a regular grid of about 4096 pixels with n >= 2 (so a pixel whose few early samples

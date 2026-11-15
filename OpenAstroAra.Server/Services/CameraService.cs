@@ -984,6 +984,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             QueueFrameAnalysis(job.FrameId, job.Pixels, job.Width, job.Height,
                 string.IsNullOrWhiteSpace(job.Request.FilterName) ? null : job.Request.FilterName, job.Request.ExposureSec);
         }
+        FeedSessionLiveStack(job);
         FrameSavedHook?.Invoke(job.FrameId);
     }
 
@@ -1976,6 +1977,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         _runtime = IdleRuntime;     // don't serve a prior device's runtime
         _coolingDrift.Reset();      // §42.2 — no drift accumulation carries across sessions
         _heatSink.Reset();          // a new driver may implement HeatSinkTemperature (#1185)
+        ClearSessionStackForNewSession(); // ↑ara#1787 — the old camera's session stack (the switch stays on)
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -2317,6 +2319,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // Stop accepting analysis jobs and let the worker drain what it holds; analysis
         // pending at shutdown is acceptable loss (the frames themselves are safe on disk).
         _analysisQueue.Writer.TryComplete();
+        _sessionStackQueue.Writer.TryComplete();
         CancelLiveViewForDispose();
         GC.SuppressFinalize(this);
     }

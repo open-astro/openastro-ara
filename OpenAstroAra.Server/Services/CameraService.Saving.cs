@@ -56,6 +56,8 @@ internal sealed class FrameSaveJob {
     public Guid? SessionId { get; init; }
     public string? FilePath { get; set; }
     public bool Registered { get; set; }
+    // Set by EnqueueSaveAsync (the sequencer's background save): only these lights feed the Session Live Stack.
+    public bool Background { get; set; }
     // Completes once the frame is in the catalog; faults when it is never saved. The solve feed
     // waits on it, so a light recorded at hand-off is never solved before its file exists.
     public TaskCompletionSource Saved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -158,6 +160,7 @@ public sealed partial class CameraService {
                 // A held (failed) frame never frees its slot on its own; the next capture's retry
                 // deals with it, so this frame joins the queue behind it.
                 if (_saveQueue.Count < SaveQueueCapacity || _saveFault is not null || ct.IsCancellationRequested) {
+                    job.Background = true;
                     _saveQueue.Add(job);
                     if (_saveFault is null) {
                         StartSaveWorkerLocked();

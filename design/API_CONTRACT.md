@@ -237,6 +237,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-14 — Session Live Stack: `POST/GET /equipment/camera/live-stack…` (#1787)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/live-stack/start`, `POST …/live-stack/reset`, `POST …/live-stack/stop`, `GET …/live-stack`, `GET …/live-stack/frame`.
+
+**Decision:** a colour stack of the sequencer's saved lights, apart from the Live View stack (own engine, own routes, no shared state). `start` is 202 and idempotent (a stack that already holds lights keeps them); `reset` empties the stack and keeps the switch on, `stop` switches off and empties it; both 204, idempotent. The switch is in memory, off at daemon start, and survives Sessions and a camera disconnect. **Known limit:** on a camera disconnect (or a connect that replaces it) the stack clears and the switch stays on, so a reconnect mid-night resumes stacking; there is no event for it. Only lights saved by the sequencer's background save are fed (never a manual capture, dark, flat or bias). A light restarts the stack when its target name, filter name, catalogue Session or frame size differs from the previous one. A light is stacked only when the camera reports a Bayer pattern and the light was taken at 1×1 binning; otherwise `last_outcome` is `not_colour`. The cap is 12 MP counted on the superpixel grid (width/2 × height/2). One stacker works while one light waits; a third is `skipped_busy` (still saved and catalogued), counted only while the switch is on. A light that does not match the reference is retried turned 180° (a meridian flip) and reads `flipped`. `GET …/live-stack` returns `SessionLiveStackStatusDto { enabled, unsupported, session_id, target_name, filter_name, stack_seq, lights_stacked, lights_unregistered, lights_skipped_busy, rejected_samples, width, height, last_outcome: reference|stacked|flipped|unregistered|wrong_size|too_large|not_colour|skipped_busy|dropped, last_light_at_utc }`. `unsupported` is additive and computed from the camera capabilities only: `no_camera`, `not_colour` or `too_large`, else null. `lights_stacked` counts the reference light; `stack_seq` never goes back. `GET …/live-stack/frame` is the colour stack as `image/jpeg` (≤ 1024 px), headers `Cache-Control: no-store`, `X-Stack-Seq`, `X-Stack-Lights`, 204 until a light is stacked. A camera service without the capability answers 501 `not-implemented`.
+
+**Reasoning:** the stack follows the Session's lights, not Live View's loop, so it needs its own switch and status. The reason a camera cannot stack is decided once on the server from the capabilities, so an offline colour camera never reads as mono.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1camera~1live-stack`; `Endpoints/SessionLiveStackEndpoints.cs`, `Services/CameraService.SessionLiveStack.cs`, `Services/LiveStack/LiveStackEngine.cs` (`AddColour`), `Contracts/SessionLiveStackDtos.cs`.
+
+**Related:** #1787, #1169; tests `CameraServiceSessionLiveStackTest`, `LiveStackEngineColourTest`, `SessionLiveStackEndpointsTest`.
+
 ### 2026-11-13 — Storage settings carry an `ETag`; `PUT` honours `If-Match` (#1807)
 
 **Endpoint(s) or area:** `GET /api/v1/profile/storage` and `PUT /api/v1/profile/storage` (`storage` profile section).

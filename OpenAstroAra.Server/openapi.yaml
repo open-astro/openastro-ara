@@ -412,6 +412,41 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/camera/live-stack/start:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/live-stack/reset:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/live-stack/stop:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/live-stack:
+    get:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/live-stack/frame:
+    get:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/camera/reconnect:
     post:
       tags:
