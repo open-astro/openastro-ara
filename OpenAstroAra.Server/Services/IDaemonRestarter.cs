@@ -17,7 +17,7 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// How the daemon restarts itself. The packaged unit has no polkit rule for
 /// <c>systemctl restart</c> (ADR 0017), so the daemon stops itself with a failure exit code and
-/// <c>Restart=on-failure</c> brings it back (design/PORT_PLAYBOOK.md §33.7).
+/// <c>Restart=on-failure</c> brings it back (design/PORT_PLAYBOOK.md §34.7).
 /// </summary>
 public interface IDaemonRestarter {
     void Restart();

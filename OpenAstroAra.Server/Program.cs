@@ -53,6 +53,7 @@ public partial class Program {
 
     public static void Main(string[] args) {
         var app = BuildApp(args);
+        // Main returns void, so Environment.ExitCode (75 after a restart request) is the process exit status.
         try {
             app.Run();
         } finally {
@@ -233,8 +234,9 @@ public partial class Program {
         // orchestrator persists those columns.
         builder.Services.AddSingleton<IStatsService, SqliteStatsService>();
         // Phase 13.7 — placeholder IServerStateService for the §60.4 state
-        // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
-        // throw (§13 systemd-watchdog work needed).
+        // snapshot + §33.2.1 versions + §54 release notes. Restart exits the
+        // daemon with code 75 and systemd's Restart=on-failure brings it back
+        // (§34.7); restart-on-idle is still a placeholder.
         builder.Services.AddSingleton<IDaemonRestarter, ExitDaemonRestarter>();
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
         // §27 single-client policy — owns the controlling session slot, the takeover
