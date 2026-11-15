@@ -73,7 +73,7 @@ class FakeSectionRig implements HttpClientAdapter {
         }
         return _json(_sections[section], 200, etag: etagOf(section));
       case 'PUT':
-        final ifMatch = _header(options, 'if-match');
+        final ifMatch = options.headers['if-match'] as String?;
         ifMatches.add(ifMatch);
         if (failPut.remove(section)) return _json({'title': 'rig error'}, 500);
         if (ifMatch != null && ifMatch != '*' && ifMatch != etagOf(section)) {
@@ -88,13 +88,6 @@ class FakeSectionRig implements HttpClientAdapter {
     }
   }
 
-  static String? _header(RequestOptions o, String name) {
-    for (final e in o.headers.entries) {
-      if (e.key.toLowerCase() == name && e.value != null) return '${e.value}';
-    }
-    return null;
-  }
-
   static ResponseBody _json(Object? body, int status, {String? etag}) =>
       ResponseBody.fromString(
         jsonEncode(body),
@@ -104,12 +97,4 @@ class FakeSectionRig implements HttpClientAdapter {
           if (etag != null) 'etag': [etag],
         },
       );
-}
-
-/// Wait (real time, at most 2 s) until [done]: the notifiers load on their
-/// own, over a client that answers on later event-loop turns.
-Future<void> settle(bool Function() done) async {
-  for (var i = 0; i < 200 && !done(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
 }

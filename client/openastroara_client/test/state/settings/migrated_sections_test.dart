@@ -74,29 +74,19 @@ void main() {
   });
 
   // One edit per section, made on a copy the rig served.
-  final edits = <String, (MigratedSection, void Function(ProviderContainer))>{
-    'notifications': (
-      migratedSections.firstWhere((s) => s.route == 'notifications'),
-      (c) => c
-          .read(notificationsSettingsProvider.notifier)
-          .setPushoverToken('mine'),
-    ),
-    'filenames': (
-      migratedSections.firstWhere((s) => s.route == 'filenames'),
-      (c) => c
-          .read(filenamesSettingsProvider.notifier)
-          .setCompressDarksAndBias(false),
-    ),
-    'diagnostics-mode': (
-      migratedSections.firstWhere((s) => s.route == 'diagnostics-mode'),
-      (c) => c
-          .read(diagnosticsModeProvider.notifier)
-          .edit((_) => DiagnosticsMode.values.last),
-    ),
+  final edits = <String, void Function(ProviderContainer)>{
+    'notifications': (c) =>
+        c.read(notificationsSettingsProvider.notifier).setPushoverToken('mine'),
+    'filenames': (c) => c
+        .read(filenamesSettingsProvider.notifier)
+        .setCompressDarksAndBias(false),
+    'diagnostics-mode': (c) => c
+        .read(diagnosticsModeProvider.notifier)
+        .edit((_) => DiagnosticsMode.values.last),
   };
 
-  for (final route in edits.keys) {
-    final (section, edit) = edits[route]!;
+  for (final MapEntry(key: route, value: edit) in edits.entries) {
+    final section = migratedSections.firstWhere((s) => s.route == route);
 
     test(
       '$route: Save after a failed load writes nothing to the rig',

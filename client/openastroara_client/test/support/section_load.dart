@@ -3,17 +3,16 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 
 import 'fake_section_rig.dart';
 
-/// Load [provider]'s section from a rig that serves [body] (an empty object
-/// reads as the section's defaults), so a test edits a value that came from
-/// the rig, as ADR 0015 requires before an edit counts.
+/// Load [provider]'s section from a rig that serves an empty object (it reads
+/// as the section's defaults), so a test edits a value that came from the rig,
+/// as ADR 0015 requires before an edit counts.
 Future<void> loadSection<N extends SectionNotifier<T>, T>(
   ProviderContainer container,
   NotifierProvider<N, LoadedSection<T>> provider,
-  String section, [
-  Object? body = const <String, Object?>{},
-]) async {
+  String section,
+) async {
   final ok = await container
       .read(provider.notifier)
-      .load(FakeSectionRig({section: body}).api());
+      .load(FakeSectionRig({section: <String, Object?>{}}).api());
   if (!ok) throw StateError('test rig did not serve $section');
 }
