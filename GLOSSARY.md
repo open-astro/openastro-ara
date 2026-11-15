@@ -10,6 +10,10 @@ A headless daemon on the rig runs a night of deep-sky imaging unattended, and an
 One night of imaging on the rig, from the first frame to the parked mount.
 _Avoid_: imaging night, client session (for a client's connection)
 
+**Live Stack**:
+The running colour picture of the Session's saved lights, stacked as they arrive while the Queue runs. A switch the person turns on; it is not the Live View stack that helps with focus.
+_Avoid_: session stack (in person-facing text), preview
+
 **Target**:
 The sky object an imaging plan points the telescope at. Setpoints such as Target ADU or Cooler Target use the word only inside their full control name, never on its own.
 _Avoid_: object (when the imaging subject is meant), bare "target" for a setpoint
