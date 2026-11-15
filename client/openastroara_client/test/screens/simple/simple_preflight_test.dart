@@ -8,6 +8,8 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
@@ -73,6 +75,19 @@ class _Plan extends SimpleRunNotifier {
   }
 }
 
+/// A mount that takes the tracking ask: the Guide step turns tracking on first (#1888).
+class _Mount extends MountNotifier {
+  @override
+  Future<MountStatus?> build() async => MountStatus.fromJson({
+    'device_id': 'm',
+    'name': 'EQ6-R',
+    'state': 'connected',
+    'capabilities': {'can_set_tracking': true},
+  });
+  @override
+  Future<bool> setTracking(bool enabled) async => true;
+}
+
 /// A connected guider, stopped until [startGuiding]; records the asks.
 class _Guider extends GuiderStatusNotifier {
   final calls = <String>[];
@@ -110,6 +125,7 @@ Future<(ProviderContainer, _PolarApi)> _container(
   final c = ProviderContainer(
     overrides: [
       if (guider != null) guiderStatusProvider.overrideWith(() => guider),
+      mountProvider.overrideWith(_Mount.new),
       polarAlignLiveProvider.overrideWith(_Live.new),
       nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
       nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
@@ -189,7 +205,7 @@ void main() {
       c.read(_aligned.notifier).set(SetupStepState.done);
       pilot.next();
       expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-      await Future<void>.value();
+      await Future<void>.delayed(Duration.zero); // the mount status read, then the start
       expect(guider.calls, starts ? ['start'] : isEmpty, reason: '$queue');
     }
   });
@@ -206,7 +222,7 @@ void main() {
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     pilot.next(); // polar align's Done (or Skip)
     expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-    await Future<void>.value();
+    await Future<void>.delayed(Duration.zero); // the mount status read, then the start
     expect(guider.calls, ['start'], reason: 'entering Guide starts the routine (calibrating when needed)');
     guider.guiding();
     pilot.next(); // Guide's Done · Start imaging

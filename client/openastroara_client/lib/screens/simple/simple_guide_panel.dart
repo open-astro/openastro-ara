@@ -131,7 +131,7 @@ Future<void> simpleGuideRun(
   final pending = container.read(simpleGuiderPendingProvider.notifier);
   pending.set(start);
   try {
-    await (start ? guider.startGuiding() : guider.stopGuiding());
+    await (start ? guider.startGuidingTracked() : guider.stopGuiding());
     // The guider answers the ask at once and acts a moment later: read again
     // every half second until it shows, 10 s at most.
     for (var i = 0; i < 20; i++) {
