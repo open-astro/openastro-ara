@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart';
+import '../settings/loaded_section.dart' show SectionNotLoadedException;
 import 'polar_align_state.dart';
 
 /// The Polar Align Routine both presentations render (ADR 0013 rule 3): the
@@ -19,22 +20,30 @@ bool polarExposureValid(double? seconds) =>
 /// The profile's polar-align settings (exposure, Loop/Single, tolerance). The
 /// running routine re-reads them before every frame, so a save applies to the
 /// next one; a failed save rolls back, so a panel never shows an exposure or
-/// mode the rig is not using.
+/// mode the rig is not using. A failed read is an error, never defaults, and
+/// nothing is saved until a read succeeded (ADR 0015 rule 1, #1736).
 class PolarAlignSettingsNotifier extends AsyncNotifier<PolarAlignSettings> {
   @override
   Future<PolarAlignSettings> build() async {
     final api = ref.watch(polarAlignApiProvider);
     if (api == null) return const PolarAlignSettings();
-    try {
-      return await api.getSettings();
-    } catch (_) {
-      return const PolarAlignSettings();
-    }
+    return api.getSettings();
   }
 
+  /// Not loaded from the rig: load once more and write nothing, as [next] was
+  /// built on no loaded copy and would put defaults over the rig's other knobs.
   Future<void> save(PolarAlignSettings next) async {
     final api = ref.read(polarAlignApiProvider);
-    final previous = state.value ?? const PolarAlignSettings();
+    if (api != null && !state.hasValue) {
+      try {
+        state = AsyncData(await api.getSettings());
+      } catch (e, st) {
+        state = AsyncError(e, st);
+        throw SectionNotLoadedException(e);
+      }
+      throw const SectionNotLoadedException(null);
+    }
+    final previous = state.requireValue;
     state = AsyncData(next);
     if (api == null) return;
     try {

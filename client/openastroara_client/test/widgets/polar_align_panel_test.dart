@@ -357,7 +357,34 @@ void main() {
       expect(api.calls, contains('next'));
     });
 
-    testWidgets('the fine stage offers Check it once inside the tolerance', (tester) async {
+    testWidgets(
+      'the rough stage offers Done once inside the tolerance (#1875)',
+      (tester) async {
+        final api = _FakePolarAlignClient();
+        await tester.pumpWidget(
+          _harness(
+            api,
+            const PolarAlignLive(
+              phase: PolarAlignStates.adjusting,
+              stage: PolarAlignStages.coarse,
+              iteration: 2,
+              altErrorArcmin: 0.3,
+              azErrorArcmin: -0.2,
+              totalErrorArcmin: 0.36,
+              zone: 'green',
+            ),
+          ),
+        );
+        await _expand(tester);
+        await tester.tap(find.byKey(const Key('polar-align-done-rough')));
+        await tester.pumpAndSettle();
+        expect(api.calls, contains('complete'));
+      },
+    );
+
+    testWidgets('the fine stage offers Verify once inside the tolerance', (
+      tester,
+    ) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive(
         phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,

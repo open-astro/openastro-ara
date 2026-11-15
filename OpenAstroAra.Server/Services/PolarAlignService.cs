@@ -208,9 +208,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Caller holds _gate. Records the run's final error when it has one (a stop before the first solve has none).
-        // A Stop in the rough stage records nothing: its readout is not an alignment (CompleteAsync refuses Done there).
-        private void RecordLastResultLocked() {
-            if (_stage != PolarAlignStages.Coarse && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
+        // A Stop in the rough stage records nothing: its readout is not an alignment; only a Done there (which
+        // CompleteAsync lets through inside the tolerance) is.
+        private void RecordLastResultLocked(bool complete) {
+            if ((complete || _stage != PolarAlignStages.Coarse) && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
                 _lastResult = new PolarAlignLastResultDto(Math.Sqrt(alt * alt + az * az), DateTimeOffset.UtcNow);
             }
         }
@@ -456,14 +457,17 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// §45 step 9 — the user is satisfied: same unwind as Stop, but the §45.13 session row records
         /// <c>complete</c> with the achieved error. Accepted (without a log row) when no routine is
-        /// active, mirroring Stop's idempotency.
+        /// active, mirroring Stop's idempotency. In the rough step it is accepted once the readout is inside
+        /// the profile's tolerance (#1875): a rough alignment that already good needs no fine step.
         /// </summary>
         public Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct) {
+            var tolerance = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings()).TargetToleranceArcmin;
             lock (_gate) {
-                // The rough readout is not an alignment to record as "complete" (a stage-unaware client's
-                // Done would otherwise write the §45.13 row the guiding and "last night" readouts trust).
-                if (_active && _stage == PolarAlignStages.Coarse) {
-                    throw new InvalidOperationException("Done is not available in the rough step — tap Next: fine to refine it, or Stop");
+                // A rough readout outside the tolerance is not an alignment to record as "complete" (a stage-unaware
+                // client's Done would otherwise write the §45.13 row the guiding and "last night" readouts trust).
+                if (_active && _stage == PolarAlignStages.Coarse
+                    && !(_altErrorArcmin is double alt && _azErrorArcmin is double az && Math.Sqrt(alt * alt + az * az) <= tolerance)) {
+                    throw new InvalidOperationException("Done is not available in the rough step until the error is inside your tolerance — tap Next: fine to refine it, or Stop");
                 }
             }
             return EndRoutineAsync("polar-align.complete", outcome: "complete", idempotencyKey, ct);
@@ -497,7 +501,7 @@ namespace OpenAstroAra.Server.Services {
                     wasActive = _active;
                     _active = false;
                     if (wasActive) {
-                        RecordLastResultLocked();
+                        RecordLastResultLocked(outcome == "complete");
                     }
                     // The run's own gen-fenced resets are no-ops once the generation moved on above.
                     _waitingForHome = false;

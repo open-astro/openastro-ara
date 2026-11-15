@@ -1121,7 +1121,7 @@ const Map<String, Help> helpRegistry = {
     body:
         '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), slews a few degrees off the axis and turns in RA by the profile\'s seed turn (60° for a new profile) with the *main camera* solving a frame at each end; that measures where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
         '* **Fine** — the mount goes Home again, and the *guide camera* takes two solved frames around the same turn in RA (from Home the mount first slews a few degrees off the axis, where the turn draws a circle the fit can use), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
-        '* **Check** — once inside the tolerance, **Check it** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
+        '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
         '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
@@ -2400,6 +2400,23 @@ const Map<String, Help> helpRegistry = {
         'after a run of round lights it steps back up, never past the planned sub. Turn it off to keep the '
         'Tracking Probe\'s ceiling for the whole loop — the probe and the re-centre stay.',
     relatedSettings: ['img.unguided.guard_enabled', 'img.unguided.step_down_after', 'img.unguided.step_up_after'],
+  ),
+  'img.polar.knobs': Help(
+    key: 'img.polar.knobs',
+    title: 'Polar align settings',
+    body:
+        'The **tolerance** is how close to the pole counts as aligned: Done turns on inside it, in the rough step too. '
+        '**Send the mount Home first** off uses where the mount points now as Home (a mount whose Home is not on the pole, '
+        'or whose Find Home is unreliable). The **turn** is how far the mount turns in RA to measure its axis, and the '
+        '**Verify step** is the turn between Verify\'s three frames: smaller turns suit a mount with limited RA travel. '
+        'The **rough exposure** is the main camera\'s: longer for a slow camera.',
+    relatedSettings: [
+      'img.polar.target_tolerance_arcmin',
+      'img.polar.use_home',
+      'img.polar.seed_rotation_deg',
+      'img.polar.check_step_deg',
+      'img.polar.coarse_exposure_seconds',
+    ],
   ),
   'img.unguided.eccentricity': Help(
     key: 'img.unguided.eccentricity',

@@ -865,6 +865,19 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Frame'),
                   ),
+                if (coarse && inTolerance)
+                  // #1875: the rough alignment may already be inside the tolerance.
+                  OutlinedButton.icon(
+                    key: const Key('polar-align-done-rough'),
+                    onPressed: _busy
+                        ? null
+                        : () => _run(
+                            'complete polar alignment',
+                            (api) => api.complete(),
+                          ),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Done'),
+                  ),
                 if (coarse)
                   FilledButton.icon(
                     key: const Key('polar-align-next-fine'),
@@ -896,7 +909,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       key: const Key('polar-align-next-check'),
                       onPressed: _busy || !inTolerance ? null : () => _next('start the check'),
                       icon: const Icon(Icons.fact_check_outlined),
-                      label: const Text('Check it'),
+                      label: const Text('Verify'),
                     ),
                   ),
                 ],

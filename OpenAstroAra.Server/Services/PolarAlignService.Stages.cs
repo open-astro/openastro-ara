@@ -327,7 +327,7 @@ namespace OpenAstroAra.Server.Services {
                 _checkResult = result;
                 _altErrorArcmin = result.AltitudeErrorArcmin;
                 _azErrorArcmin = result.AzimuthErrorArcmin;
-                RecordLastResultLocked();
+                RecordLastResultLocked(complete: false);
             }
             await PublishAsync(WsEventCatalog.PolarAlignChecked, new JsonObject {
                 ["altitude_error_arcmin"] = result.AltitudeErrorArcmin,

@@ -1,0 +1,216 @@
+<title>Ara Polar Align Panel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart, copied from design/preview/simple-calibration-mock.html.
+     Layout: the iPad scene, the Polar align panel left of the right rail; controls above, decisions below. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --hair: #2a2a2a; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --err: #FF8A80; --stop: #D32F2F; --go: #2E7D32; --tint: rgba(66,165,245,.18);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 76ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .ipad { height: 860px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(14,14,14,.9); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 4px 2px; }
+  .chip small { display: block; color: var(--text2); font-size: 11px; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  .shutter b { width: 0; height: 0; border-left: 20px solid #fff; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 6px; }
+  .shutter.run b { width: 24px; height: 24px; border: 0; border-radius: 4px; background: var(--stop); margin: 0; }
+  .panel { right: 104px; top: 16px; width: min(420px, calc(100% - 120px)); max-height: calc(100% - 32px); overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; min-height: 32px; }
+  .head .tot { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .sect { color: var(--text2); font-size: 12px; margin-top: 8px; }
+  .rows { display: flex; flex-direction: column; }
+  .r { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; border-top: 1px solid var(--hair); }
+  .rows .r:first-child { border-top: 0; }
+  .r .l { flex: 1; min-width: 0; }
+  .r .l small { display: block; color: var(--text2); font-size: 12px; }
+  .r.cur .l { font-weight: 600; }
+  .st { font-size: 12px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .st.ok { color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+  .st.busy { color: var(--busy); box-shadow: inset 0 0 0 1px var(--busy); }
+  .st.info { color: var(--info); box-shadow: inset 0 0 0 1px var(--info); }
+  .st.err { color: var(--err); box-shadow: inset 0 0 0 1px var(--err); }
+  .st.dim { color: var(--text2); box-shadow: inset 0 0 0 1px var(--border); }
+  .stepper { display: flex; gap: 4px; margin: 2px 0; }
+  .stepper span { flex: 1; text-align: center; font-size: 12px; padding: 6px 2px; border-radius: 8px; background: var(--tile); color: var(--text2); }
+  .stepper span.done { color: var(--ok); }
+  .stepper span.cur { background: var(--sel); color: #fff; }
+  .setrow { display: flex; gap: 8px; }
+  .tile { flex: 1; min-height: 44px; border-radius: 10px; background: var(--tile); padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; }
+  .tile small { color: var(--text2); font-size: 11px; }
+  .segrow { flex: 1; display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .segrow span { flex: 1; text-align: center; padding: 10px 4px; font-size: 13px; }
+  .segrow span.on { background: var(--sel); color: #fff; }
+  .bwrap { display: flex; gap: 10px; align-items: stretch; }
+  .bull { flex: 0 0 180px; height: 180px; display: grid; place-items: center; }
+  .axes { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .ax { flex: 1; border-radius: 10px; background: var(--tile); display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+  .ax small { display: block; color: var(--text2); font-size: 11px; }
+  .ax b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ax.ok b { color: var(--ok); }
+  .line { font-size: 13px; margin: 2px 0; }
+  .line.warn { color: var(--busy); }
+  .line.err { color: var(--err); }
+  .line.dim { color: var(--text2); }
+  .act { min-height: 44px; flex: 1; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 8px 12px; }
+  .act.out { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .act.go { background: var(--go); color: #fff; }
+  .act[disabled] { opacity: .4; cursor: default; }
+  .acts { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .cap { color: var(--text2); font-size: 12px; margin: 0; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 2px; border-radius: 10px; }
+  .pills { position: absolute; left: 16px; top: 16px; max-width: 360px; }
+  .pill { padding: 10px 14px; border-radius: 10px; background: rgba(14,14,14,.9); box-shadow: inset 0 0 0 1px var(--border); display: flex; gap: 10px; align-items: center; }
+  .decide { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text2); font-size: 13px; }
+  .decide b { color: var(--text); font-weight: 600; }
+  .decide ul { margin: 6px 0 0; padding-left: 18px; }
+  @media (max-width: 720px) { .pills { display: none; } .ipad { height: 1000px; } .panel { right: 96px; width: calc(100% - 108px); padding: 12px; } .bull { flex-basis: 140px; height: 140px; } .bull svg { width: 140px; height: 140px; } }
+  @media (prefers-reduced-motion: no-preference) { .blink { animation: bl 1.2s infinite; } @keyframes bl { 50% { opacity: .35; } } }
+</style>
+
+<div class="page">
+  <h1>Polar align panel, redesign round 1</h1>
+  <p class="note">Brings Polar align in line with Guider and Calibration: a dim heading per section, hairline rows, outlined state pills. Done appears in the rough step once the error is inside the profile's tolerance (2′ here). Check it becomes Verify with a one-line caption. Dashed amber marks what changed from today. Numbers are from the 13 Nov rig night (rough 11.0′, final 0.74′).</p>
+
+  <div class="controls">
+    <span><span class="lbl">Layout</span><span class="seg" id="layout">
+      <button aria-pressed="true" data-v="A">A · stepper on top · chosen</button><button data-v="B">B · stages as rows</button>
+    </span></span>
+  </div>
+  <div class="controls">
+    <span><span class="lbl">State</span><span class="seg" id="state">
+      <button data-v="home">Waiting for Home</button><button aria-pressed="true" data-v="roughOut">Rough · outside</button><button data-v="roughIn">Rough · inside</button><button data-v="fine">Fine · adjusting</button><button data-v="checking">Verifying</button><button data-v="checked">Verified</button><button data-v="failed">Failed</button>
+    </span></span>
+    <span><span class="lbl">Mode</span><span class="seg" id="mode">
+      <button aria-pressed="true" data-v="single">Single</button><button data-v="loop">Loop</button>
+    </span></span>
+  </div>
+
+  <div class="ipad" id="ipad" role="img" aria-label="iPad scene with the Polar align panel"></div>
+  <div class="decide" id="decide"></div>
+</div>
+
+<script>
+const S = { layout: 'A', state: 'roughOut', mode: 'single' };
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  S[seg.id] = b.dataset.v; render();
+}));
+
+const TOL = 2;
+// Per state: stage, phase text, total ′, alt ′, az ′, zone colour.
+const D = {
+  home:     { stage: 'rough', phase: 'Put the mount at Home', total: null },
+  roughOut: { stage: 'rough', phase: 'Rough step', total: 11.0, alt: -5.52, az: -9.55 },
+  roughIn:  { stage: 'rough', phase: 'Rough step', total: 1.6, alt: -0.62, az: -1.48 },
+  fine:     { stage: 'fine', phase: 'Adjusting', total: 0.74, alt: -0.21, az: -0.71 },
+  checking: { stage: 'verify', phase: 'Checking 2 of 3', total: 0.74, alt: -0.21, az: -0.71 },
+  checked:  { stage: 'verify', phase: 'Verified', total: 0.74, alt: -0.21, az: -0.71 },
+  failed:   { stage: 'fine', phase: 'Polar alignment failed', total: null },
+};
+const zone = t => t == null ? 'var(--text2)' : t < 10 ? 'var(--ok)' : t < 60 ? 'var(--busy)' : 'var(--err)';
+const arrow = (size, rot) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${rot}deg);flex:none"><path fill="#E0E0E0" d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`;
+function bull(alt, az) {
+  // shortcut: linear scale, 5′ at the outer ring; the real bullseye is Advanced Mode's (180 pt).
+  const k = 80 / 5, cl = v => Math.max(-80, Math.min(80, v * k));
+  const x = 90 + cl(az), y = 90 - cl(alt);
+  return `<svg width="180" height="180" viewBox="0 0 180 180" aria-label="Bullseye">
+    ${[80, 53, 27].map((r, i) => `<circle cx="90" cy="90" r="${r}" fill="none" stroke="${i === 2 ? '#4CAF50' : '#555'}" stroke-width="1.5"/>`).join('')}
+    <line x1="10" y1="90" x2="170" y2="90" stroke="#333"/><line x1="90" y1="10" x2="90" y2="170" stroke="#333"/>
+    <circle cx="${x}" cy="${y}" r="7" fill="#E0E0E0"/></svg>`;
+}
+function axes(d) {
+  const t = (name, v, pos, neg, rot) => {
+    const on = Math.abs(v) < 0.1;
+    return `<div class="ax ${on ? 'ok' : ''}">${on ? '' : arrow(70, v < 0 ? rot[0] : rot[1])}<div><small>${name}</small><b>${on ? 'On target' : `${v < 0 ? pos : neg} ${Math.abs(v).toFixed(1)}′`}</b></div></div>`;
+  };
+  return `<div class="axes">${t('Altitude', d.alt, 'Raise', 'Lower', [-90, 90])}${t('Azimuth', d.az, 'Move east', 'Move west', [0, 180])}</div>`;
+}
+
+const pill = (cls, t) => `<span class="st ${cls}">${t}</span>`;
+function stageRows(d) {
+  const s = S.state, inTol = d.total != null && d.total <= TOL;
+  const rough = s === 'home' ? pill('info', 'Waiting') : d.stage === 'rough' ? pill(inTol ? 'ok' : 'busy', `${d.total.toFixed(1)}′`) : pill('ok', 'Done · 11.0′');
+  const fine = d.stage === 'rough' ? pill('dim', 'Next') : s === 'failed' ? pill('err', 'Failed') : d.stage === 'fine' ? pill(inTol ? 'ok' : 'busy', `${d.total.toFixed(2)}′`) : pill('ok', `Done · ${d.total.toFixed(2)}′`);
+  const ver = s === 'checking' ? pill('info', '2 of 3') : s === 'checked' ? pill('ok', 'Good') : pill('dim', 'Optional');
+  const row = (cur, n, w, p) => `<div class="r ${cur ? 'cur' : ''}"><div class="l">${n}<small>${w}</small></div>${p}</div>`;
+  return `<div class="sect">Steps</div><div class="rows new">
+    ${row(d.stage === 'rough', 'Rough', 'Main camera, one turn in RA', rough)}
+    ${row(d.stage === 'fine', 'Fine', 'Follows your knob turns frame by frame', fine)}
+    ${row(d.stage === 'verify', 'Verify', 'Three frames 30° apart', ver)}</div>`;
+}
+function stepper(d) {
+  const order = ['rough', 'fine', 'verify'], i = order.indexOf(d.stage);
+  const names = { rough: 'Rough', fine: 'Fine', verify: 'Verify' };
+  return `<div class="stepper new">${order.map((k, j) => `<span class="${j < i ? 'done' : j === i ? 'cur' : ''}">${j < i ? '✓ ' : ''}${names[k]}</span>`).join('')}</div>`;
+}
+
+function body(d) {
+  const s = S.state, inTol = d.total != null && d.total <= TOL;
+  const setup = `<div class="sect">Setup</div><div class="setrow"><div class="tile"><small>Exposure</small>3 s</div>
+    <div class="segrow"><span class="${S.mode === 'loop' ? 'on' : ''}">Loop</span><span class="${S.mode === 'single' ? 'on' : ''}">Single</span></div></div>`;
+  if (s === 'home') return `${setup}<div class="sect">Now</div>
+    <p class="line">This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.</p>
+    <div class="acts"><button class="act go">Continue</button></div>`;
+  if (s === 'failed') return `${setup}<div class="sect">Now</div>
+    <p class="line err">No solve (5 in a row). Check the sky.</p>
+    <p class="cap">Tap the shutter to start again.</p>`;
+  const take = S.mode === 'single' && s !== 'checking' && s !== 'checked' ? `<button class="act out">Take frame</button>` : '';
+  let acts = '', lines = '';
+  if (d.stage === 'rough') {
+    acts = `${inTol ? `<button class="act out new">Done</button>` : ''}<button class="act ${inTol ? 'go' : ''}">Next: fine</button>`;
+    lines = inTol ? `<p class="cap new">Inside your 2′ tolerance. Done keeps this alignment; Next: fine refines it.</p>`
+                  : `<p class="cap">Outside your 2′ tolerance: refine it, or stop with the shutter.</p>`;
+  } else if (s === 'fine') {
+    acts = `${take}<button class="act out new">Verify</button><button class="act go">Done</button>`;
+    lines = `<p class="cap new">Verify moves the mount and takes three frames to confirm the alignment.</p>`;
+  } else if (s === 'checking') {
+    lines = `<p class="line dim blink">Moving 30° in RA and taking frame 2 of 3…</p>`;
+  } else {
+    acts = `<button class="act go">Done</button>`;
+    lines = `<p class="line" style="color:var(--ok)">Three-point check: good, 0.4′ from the fine readout</p>`;
+  }
+  // Verifying and Verified show only the phase line and the verdict (Diego, 14 Nov).
+  const readout = s === 'checking' || s === 'checked' ? '' : `<div class="sect">Error</div><div class="bwrap">${`<div class="bull">${bull(d.alt, d.az)}</div>`}${axes(d)}</div>`;
+  return `${s === 'checking' || s === 'checked' ? '' : setup}${readout}${lines}${acts ? `<div class="acts">${take && d.stage === 'rough' ? take : ''}${acts}</div>` : ''}`;
+}
+
+function render() {
+  const d = D[S.state];
+  const running = S.state !== 'failed' && S.state !== 'checked';
+  const head = `<div class="head">Polar align<span class="tot">${d.total != null ? `<i class="dot" style="background:${zone(d.total)}"></i>${d.total.toFixed(d.total < 1 ? 2 : 1)}′` : ''}</span></div>
+    <p class="line ${S.state === 'failed' ? 'err' : 'dim'}">${d.phase}</p>`;
+  const panel = S.layout === 'A' ? `${head}${stepper(d)}${body(d)}` : `${head}${stageRows(d)}${body(d)}`;
+  document.getElementById('ipad').innerHTML = `
+    <div class="pills"><div class="pill"><i class="dot" style="background:${zone(d.total)}"></i><div>Polar align · ${d.phase}${d.total != null ? ` · ${d.total.toFixed(d.total < 1 ? 2 : 1)}′` : ''}</div></div></div>
+    <div class="p rail"><div class="chip">P.A.</div><div class="chip">3 s<small>${S.mode === 'loop' ? 'Loop' : 'Single'}</small></div><div class="shutter ${running ? 'run' : ''}"><b></b></div></div>
+    <div class="p panel">${panel}</div>`;
+  document.getElementById('decide').innerHTML = S.layout === 'A'
+    ? `<b>A · stepper on top (chosen, 14 Nov).</b> One strip says where you are (Rough → Fine → Verify); the panel below is today's, regrouped under Setup and Error headings. Least change from today.
+       <ul><li>Done in the rough step only inside the profile's tolerance (Diego, 13 Nov), outlined; Next: fine stays the green primary. The caption names the tolerance. The daemon refuses Done there today (PolarAlignService.cs:459, #1729), so this needs a server change.</li><li>Check it → Verify, with the caption under the buttons.</li><li>While verifying and after it, the bullseye and arrows give way to the phase line and the verdict.</li></ul>`
+    : `<b>B · stages as rows.</b> Each stage is a hairline row with an outlined state pill, as Calibration lists its sets. The rows double as a history: Rough keeps its 11.0′ after you move on.
+       <ul><li>Takes about 130 pt more height than A; on an iPad in landscape the panel scrolls in the fine step.</li><li>Verify reads "Optional" until it runs, so it is clear you can stop at Done.</li></ul>`;
+}
+render();
+</script>
+
