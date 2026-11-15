@@ -53,7 +53,8 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             IEquipmentSelectionStore? selections = null,
             IAlpacaManagementClient? alpaca = null,
             IProfileStore? profiles = null,
-            IDaemonRestarter? restarter = null) {
+            IDaemonRestarter? restarter = null,
+            ActiveRunSessionRegistry? runs = null) {
         _restarter = restarter;
         _broadcaster = broadcaster;
         _diagnostics = diagnostics;

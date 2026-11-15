@@ -39,6 +39,51 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.Calls, Is.EqualTo(1));
         }
 
+        private sealed class RecordingBroadcaster : IWsBroadcaster {
+            public readonly List<(string Type, string Payload)> Events = [];
+            public long CurrentSequence => Events.Count;
+            public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+                lock (Events) { Events.Add((eventType.Token, payload.GetRawText())); }
+                return Task.CompletedTask;
+            }
+            public bool Has(string type) { lock (Events) { return Events.Any(e => e.Type == type); } }
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_with_no_run_restarts_at_once_through_the_seam() {
+            var fake = new FakeRestarter();
+            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry());
+
+            await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_with_a_run_waits_says_pending_and_restarts_once_when_the_run_ends() {
+            var fake = new FakeRestarter();
+            var ws = new RecordingBroadcaster();
+            var runs = new ActiveRunSessionRegistry();
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs);
+            var run = Guid.NewGuid();
+            runs.Enter(run);
+
+            await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+            await svc.RestartOnIdleAsync("again", null, CancellationToken.None);
+
+            await Task.Delay(2500);
+            Assert.That(fake.Calls, Is.EqualTo(0), "must not restart while a run is active");
+            Assert.That(ws.Has("server.restart_pending"), Is.True);
+            Assert.That(ws.Events.Count(e => e.Type == "server.restart_pending"), Is.EqualTo(1), "a second request adds no second pending notice");
+
+            runs.Exit(run);
+
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+            await Task.Delay(2500);
+            Assert.That(fake.Calls, Is.EqualTo(1));
+            Assert.That(ws.Has("server.restart_imminent"), Is.True);
+        }
+
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime {
             public int StopCalls;
             public CancellationToken ApplicationStarted => CancellationToken.None;
