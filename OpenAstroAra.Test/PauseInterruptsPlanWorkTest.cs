@@ -176,6 +176,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_star_lost_pause_stops_the_frame_in_progress_and_resume_takes_it_again() {
+            // The daemon's star-lost pause: a light on a lost star is worthless, so it is stopped, not filed.
+            var frame = new SlowExposure();
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await frame.Started.Task.WaitAsync(Soon);
+            gate.RequestPause(interruptFrames: true);
+
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.Finished, after.Ran), Is.EqualTo((false, false)), "the frame was stopped, not left to finish");
+
+            gate.Resume();
+            Assert.That(gate.FrameInterruptToken.IsCancellationRequested, Is.False, "Resume clears the frame interrupt");
+            await run.WaitAsync(Soon);
+            Assert.That((frame.Starts, frame.Finished, after.Ran), Is.EqualTo((2, true, true)), "the frame ran again after the resume");
+        }
+
+        [Test]
         public async Task A_pause_lets_a_meridian_flip_finish() {
             var after = new AfterItem();
             var (block, gate, entered) = Plan(after);

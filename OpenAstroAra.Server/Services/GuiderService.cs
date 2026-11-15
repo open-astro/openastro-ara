@@ -681,7 +681,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, ID
             if (step is PhdEventGuideStep phd) {
                 _latestStarStats = (phd.SNR, phd.StarMass);
             }
-            NoteGuideStepLocked(); // a guide step means the guider has its star: the star-lost watch stands down
+            NoteGuideStepLocked(step); // settled guide steps mean the guider has its star: the star-lost watch stands down
             guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
             pixelScale = guider.PixelScale;
         }

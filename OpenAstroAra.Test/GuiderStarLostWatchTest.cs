@@ -61,6 +61,8 @@ namespace OpenAstroAra.Test {
             public GuiderService Service = null!;
 
             public Rig(bool runActive, TimeSpan? grace = null, TimeSpan? recoverAfter = null) {
+                // The profile default (10 s) would make every resume here wait 10 s; the settle tests set their own.
+                Profile.ActiveProfile.GuiderSettings.SettleTime = 0;
                 var profiles = Profiles;
                 profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                     OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,

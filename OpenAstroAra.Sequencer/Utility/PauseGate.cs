@@ -28,7 +28,7 @@ namespace OpenAstroAra.Sequencer.Utility {
     ///  * <see cref="RequestPause"/> arms the gate. A <see cref="PauseKind.User"/>
     ///    pause also cancels <see cref="InterruptToken"/>, so the instruction or
     ///    trigger in progress stops and runs again on Resume (a frame, flat set or
-    ///    container finishes first); the strategy then suspends at that boundary.
+    ///    container finishes first, unless the pause asked for <see cref="FrameInterruptToken"/>); the strategy then suspends at that boundary.
     ///  * <see cref="PauseEntered"/> fires (on the engine thread) when a wait
     ///    actually blocks, so the owner can flip run state to Paused / notify only
     ///    for a suspension that really happened.
@@ -52,12 +52,20 @@ namespace OpenAstroAra.Sequencer.Utility {
         // Set when a user's pause has handed _interrupt to a Cancel that runs outside the lock: a
         // Resume in that gap must still swap it, or the token stays cancelled on an unarmed gate.
         private bool _interruptHandedOut;
+        private CancellationTokenSource _frameInterrupt = new();
 
         /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
         /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
         /// instruction's own wait for the user (a failed settle, a prompt) leaves it alone.</summary>
         public CancellationToken InterruptToken {
             get { lock (_lock) { return _interrupt.Token; } }
+        }
+
+        /// <summary>Cancelled only by a pause that asked to interrupt frames, and new again on Resume:
+        /// the frame in progress stops and is taken again. Only the daemon's star-lost pause asks for it
+        /// (a light on a lost star is worthless); a person's pause lets the frame finish.</summary>
+        public CancellationToken FrameInterruptToken {
+            get { lock (_lock) { return _frameInterrupt.Token; } }
         }
 
         /// <summary>
@@ -87,9 +95,13 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// only ever escalates (a user pause request cannot downgrade an armed
         /// <see cref="PauseKind.AwaitingUser"/> back to an ordinary pause).
         /// </summary>
-        public void RequestPause(PauseKind kind = PauseKind.User) {
+        public void RequestPause(PauseKind kind = PauseKind.User, bool interruptFrames = false) {
             CancellationTokenSource? interrupt = null;
+            CancellationTokenSource? frameInterrupt = null;
             lock (_lock) {
+                if (interruptFrames) {
+                    frameInterrupt = _frameInterrupt;
+                }
                 _resume ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (kind > _kind) {
                     _kind = kind;
@@ -101,6 +113,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             }
             // Outside the lock: cancellation runs the work's callbacks inline.
             interrupt?.Cancel();
+            frameInterrupt?.Cancel();
         }
 
         /// <summary>Release all waiters and disarm. Harmless when not paused.</summary>
@@ -110,6 +123,9 @@ namespace OpenAstroAra.Sequencer.Utility {
                 toComplete = _resume;
                 _resume = null;
                 _kind = PauseKind.User;
+                if (_frameInterrupt.IsCancellationRequested) {
+                    _frameInterrupt = new CancellationTokenSource();
+                }
                 if (_interruptHandedOut || _interrupt.IsCancellationRequested) {
                     _interrupt = new CancellationTokenSource();
                     _interruptHandedOut = false;

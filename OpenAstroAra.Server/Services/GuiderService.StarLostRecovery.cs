@@ -25,7 +25,7 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §42.2 "Guider (PHD2): loses guide star", the long-outage half. The star-lost watch pauses the run
-/// and waits for the guider's next guide step. That is right for a short cloud: the guider keeps
+/// and waits for the guider to guide settled again (#1891). That is right for a short cloud: the guider keeps
 /// hunting near its lock position and locks again. On a long one the mount drifts on tracking alone,
 /// the star comes back outside the guider's search box, the guider never relocks, and without this
 /// the run sat paused all night under a clear sky. So after <see cref="StarLostRecoverAfter"/> the
@@ -332,8 +332,14 @@ public sealed partial class GuiderService {
             return await OnAttemptFailedAsync(guider, "guiding did not restart").ConfigureAwait(false);
         }
 
-        // 4. Resume exactly the runs this episode parked — once. A guide step from the restarted
-        // guider leaves the resume to us (NoteGuideStepLocked checks _recoveryStoppedGuiding).
+        // 4. Resume exactly the runs this episode parked — once, and only when guiding has settled
+        // (the error inside the profile's settle distance for its settle time, as for a relock). A
+        // guide step from the restarted guider leaves the resume to us (NoteGuideStepLocked checks
+        // _recoveryStoppedGuiding). A guider that never settles fails the attempt: it is left
+        // guiding and its relock resumes the run once it settles.
+        if (!await WaitForGuidingSettledAsync(StarLostRecenterTimeout, ct).ConfigureAwait(false)) {
+            return await OnAttemptFailedAsync(guider, "guiding did not settle").ConfigureAwait(false);
+        }
         lock (_gate) {
             if (!_starLostReacted) {
                 return null; // released by another path meanwhile
@@ -363,6 +369,21 @@ public sealed partial class GuiderService {
                 : "Ara re-centered the target by plate solve and restarted guiding. The run it had paused was not released by this (it had already been resumed, is stopped, or waits on you).")
             .ConfigureAwait(false);
         return null;
+    }
+
+    private async Task<bool> WaitForGuidingSettledAsync(TimeSpan timeout, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + timeout;
+        while (true) {
+            lock (_gate) {
+                if (GuidingSettledLocked()) {
+                    return true;
+                }
+            }
+            if (DateTime.UtcNow >= deadline) {
+                return false;
+            }
+            await Task.Delay(100, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>A failed attempt: the run stays paused, the guider goes back to looping so the next
