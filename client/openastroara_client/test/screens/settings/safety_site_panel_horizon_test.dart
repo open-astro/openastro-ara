@@ -25,6 +25,7 @@ void main() {
   Future<ProviderContainer> pumpPanel(
     WidgetTester tester, {
     FakeSectionRig? rig,
+    bool offline = false,
   }) async {
     // The settings pane is a wide desktop surface; the default 800x600 test
     // viewport overflows the pre-existing editable rows (fixed 280px labels).
@@ -42,7 +43,7 @@ void main() {
       ProviderScope(
         overrides: [
           savedServerServiceProvider.overrideWithValue(_NoServers()),
-          profileApiProvider.overrideWithValue(api),
+          profileApiProvider.overrideWithValue(offline ? null : api),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -143,5 +144,18 @@ void main() {
       find.textContaining('skyline was saved, but the site preferences'),
       findsWidgets,
     );
+  });
+
+  testWidgets('no rig: a cached skyline says not loaded, not the editor', (
+    tester,
+  ) async {
+    final container = await pumpPanel(tester, offline: true);
+    container.read(customHorizonProvider.notifier).seed(const [
+      CustomHorizonPoint(azimuthDeg: 90, altitudeDeg: 20),
+    ]);
+    container.read(siteSettingsProvider.notifier).setUseCustomHorizon(true);
+    await tester.pump();
+    expect(find.text('Rig not connected'), findsOneWidget);
+    expect(find.byKey(const ValueKey('horizon_point_0')), findsNothing);
   });
 }

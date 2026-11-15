@@ -425,10 +425,10 @@ class _CustomHorizonEditor extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final section = ref.watch(customHorizonProvider);
-    final points = section.value;
-    if (points == null) {
+    if (!section.canSave) {
       return SectionNotLoaded(section: section, onRetry: onRetry);
     }
+    final points = section.value!;
     final n = ref.read(customHorizonProvider.notifier);
     final theme = Theme.of(context);
 

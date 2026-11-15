@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/settings/panels/camera_electronics_panel.dart';
 import 'package:openastroara/screens/settings/panels/diagnostics_mode_panel.dart';
 import 'package:openastroara/screens/settings/panels/session_notifications_panel.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 
 import '../../support/fake_section_rig.dart';
 
 // The shared panel scaffold (SectionPanel) on a fake rig, exercised through
-// the notifications panel; the last case checks the diagnostics panel's radios.
+// the notifications panel; the cached-copy case uses the camera electronics
+// panel and the last case checks the diagnostics panel's radios.
 
 const _section = 'notifications';
 
@@ -60,6 +63,20 @@ void main() {
     await _pump(tester, null);
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byKey(const Key('section-retry')), findsNothing);
+  });
+
+  testWidgets('no rig: a cached copy says not loaded and shows no fields '
+      'until the rig loads', (tester) async {
+    final c = await _pump(tester, null, const CameraElectronicsPanel());
+    final n = c.read(cameraElectronicsProvider.notifier);
+    n.seed(const CameraElectronics(readNoiseE: 1.5));
+    await tester.pump();
+    expect(find.text('Rig not connected'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    final rig = FakeSectionRig({'camera-electronics': <String, Object?>{}});
+    await tester.runAsync(() => n.load(rig.api()));
+    await tester.pump();
+    expect(find.byType(TextField), findsWidgets);
   });
 
   testWidgets('412 on Save keeps the edits and shows the banner; Reload '

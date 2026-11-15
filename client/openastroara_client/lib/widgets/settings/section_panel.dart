@@ -15,8 +15,8 @@ typedef PanelSection =
 
 /// ADR 0015 — what every settings panel does with the sections it edits: load
 /// them when it opens (and again when one goes back to not loaded, as after a
-/// rig or profile change), show [SectionNotLoaded] in place of fields that hold
-/// no value, show [SectionConflictBanner] after a 412, and save with one
+/// rig or profile change), show [SectionNotLoaded] in place of fields with no
+/// copy from the rig, [SectionConflictBanner] after a 412, and save with one
 /// refusal message. A panel with sections of its own name them in [sections];
 /// a section it still saves the old way stays out of the list.
 mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
@@ -54,12 +54,13 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
   }
 
   /// Call first in `build`. Returns what to show instead of the fields while a
-  /// section holds no value, or null when every section is loaded.
+  /// section holds no copy from the rig (an offline cache copy is not
+  /// editable), or null when every section is loaded.
   Widget? sectionGate() {
     reloadWhenReset();
     for (final s in sections) {
       final v = ref.watch(s);
-      if (v.value == null) {
+      if (!v.canSave) {
         return SectionNotLoaded(section: v, onRetry: loadSections);
       }
     }
