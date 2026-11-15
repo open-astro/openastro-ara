@@ -134,6 +134,18 @@ void main() {
     expect(p1.containsKey('unguided'), isFalse);
   });
 
+  test('a snapshot without camera electronics leaves the section not loaded, never defaults', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    final c = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(cameraElectronicsProvider).value, isNull);
+    expect(c.read(cameraElectronicsProvider).canSave, isFalse);
+  });
+
   test('#1264: a snapshot without an unguided section leaves a staged knob alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
