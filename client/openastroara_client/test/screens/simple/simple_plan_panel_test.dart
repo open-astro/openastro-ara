@@ -895,13 +895,13 @@ void main() {
   });
 
   group('the plan window (#1875 slice 6)', () {
-    // Atlanta-ish night, 22:00 local: M31 stands above 30° for hours.
+    // Greenwich night, 20:00 UTC: M31 stands above 30° for hours.
     const atl = SiteSettings(
-      latitudeDeg: 34.0,
-      longitudeDeg: -84.0,
+      latitudeDeg: 51.477833,
+      longitudeDeg: -0.0015,
       twilightDefinition: TwilightDefinition.astronomical,
     );
-    final night = DateTime.utc(2026, 1, 15, 3);
+    final night = DateTime.utc(2026, 1, 15, 20);
     final rig = <Object>[
       siteSettingsProvider.overrideWith(() => _SiteAt(atl)),
       clockProvider.overrideWithValue(() => night),

@@ -1571,7 +1571,7 @@ class _ListTile extends StatelessWidget {
       child: SizedBox(
         width: width,
         child: Opacity(
-          opacity: greyed && !selected ? 0.55 : 1,
+          opacity: greyed && !selected ? 0.7 : 1,
           child: Material(
             color: selected ? AraColors.selectionBg : AraColors.tileFill,
             borderRadius: BorderRadius.circular(AraRadius.simplePanel),

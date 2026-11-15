@@ -11,14 +11,14 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 class _Site extends SiteSettingsNotifier {
   @override
   SiteSettings build() =>
-      const SiteSettings(latitudeDeg: 34.0, longitudeDeg: -84.0);
+      const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015);
 }
 
 void main() {
   test(
     'Tonight\'s Best ranks again on the sky clock tick, from the clock\'s now',
     () async {
-      var now = DateTime.utc(2026, 1, 15, 3);
+      var now = DateTime.utc(2026, 1, 15, 20);
       final tick = StreamController<int>();
       final c = ProviderContainer(
         overrides: [
