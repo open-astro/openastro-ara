@@ -24,6 +24,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/util/common_names.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 import 'package:openastroara/widgets/album/album_card.dart';
@@ -388,6 +389,19 @@ void main() {
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('Silver')), findsOneWidget);
+  });
+
+  testWidgets('a new IC Card shows its #1887 nickname on the front and the back', (tester) async {
+    final heart = applyCommonNames([_dso('IC1805', 'IC1805', aliases: ['LBN 654'])]).single;
+    await _pump(tester, catalog: [heart], frames: [
+      AlbumFrame(frameId: 'h', targetName: 'IC 1805', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ]);
+    Finder inFront(String t) => find.descendant(of: find.byType(AlbumCardFront), matching: find.text(t));
+    expect(inFront('Heart Nebula'), findsOneWidget);
+    expect(inFront('IC 1805'), findsOneWidget);
+    await tester.tap(find.text('Heart Nebula'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('HEART NEBULA')), findsOneWidget);
   });
 
   testWidgets('the flip keeps one image provider for the front art', (tester) async {

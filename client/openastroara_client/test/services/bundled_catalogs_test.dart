@@ -362,8 +362,9 @@ void main() {
     test('every common-names key names a row in the bundle, and a new nickname finds its object (#1887)', () {
       final ids = {for (final d in bundle) d.id};
       expect([for (final k in commonNames.keys) if (!ids.contains(k)) k], isEmpty);
-      expect(findCatalogObject(bundle, 'Seagull Nebula')!.id, 'Sh2-292');
-      expect(searchSuggestions(bundle, 'Seagull Nebula').first.dso.id, 'Sh2-292');
+      expect(searchSuggestions(bundle, 'Seagull Nebula').map((s) => s.dso.id), containsAll(['Sh2-292', 'IC2177']));
+      expect(searchSuggestions(bundle, 'Flying Bat').first.dso.id, 'Sh2-129');
+      expect(findCatalogObject(bundle, 'Heart Nebula')!.id, 'IC1805');
     });
 
     test('the Catalogs overlay lists RCW next to Sharpless (#1629)', () {
