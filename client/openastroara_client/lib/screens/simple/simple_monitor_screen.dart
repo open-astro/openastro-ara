@@ -1549,9 +1549,11 @@ void _line(Canvas canvas, Offset a, Offset b, Paint paint, {bool dashed = false}
 
 /// Axis text at Simple Mode's caption size, scaled with the user's text:
 /// [at] is its left, centre or right edge, by [align]; its top, or its middle
-/// when [middle].
+/// when [middle]. Left out when it would not fit inside [size]'s height, so
+/// large text on a short canvas never paints over the tile's other text.
 void _text(
   Canvas canvas,
+  Size size,
   String t,
   Offset at,
   TextScaler scaler, {
@@ -1564,7 +1566,8 @@ void _text(
     TextAlign.center => at.dx - tp.width / 2,
     _ => at.dx,
   };
-  tp.paint(canvas, Offset(x, middle ? at.dy - tp.height / 2 : at.dy));
+  final y = middle ? at.dy - tp.height / 2 : at.dy;
+  if (y >= 0 && y + tp.height <= size.height) tp.paint(canvas, Offset(x, y));
   tp.dispose();
 }
 
@@ -1605,7 +1608,7 @@ class _NightPainter extends CustomPainter {
     final firstHour = DateTime(start.year, start.month, start.day, start.hour).add(const Duration(hours: 1));
     for (var t = firstHour; t.isBefore(end); t = t.add(const Duration(hours: 1))) {
       canvas.drawLine(Offset(x(t), top + h), Offset(x(t), top + h + 3), Paint()..color = AraColors.textSecondary);
-      _text(canvas, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), scaler, align: TextAlign.center);
+      _text(canvas, size, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), scaler, align: TextAlign.center);
     }
     for (final b in n.blocks) {
       final r = Rect.fromLTRB(x(b.start), top, math.max(x(b.start) + 2, x(b.end) - 2), top + h);
@@ -1655,7 +1658,7 @@ class _NightPainter extends CustomPainter {
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       glyph.dispose();
       if (label != null) {
-        _text(canvas, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), scaler, align: TextAlign.center);
+        _text(canvas, size, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), scaler, align: TextAlign.center);
       }
     }
     canvas.drawRect(Rect.fromLTWH(x(now) - 1, top - 4, 2, h + 8), Paint()..color = AraColors.textPrimary);
@@ -1699,6 +1702,7 @@ class _SeriesPainter extends CustomPainter {
     final axis = lastLabel == null ? 0.0 : _textSize('1', scaler).height;
     final left = [30.0, for (final t in ticks) _textSize(t.toStringAsFixed(decimals), scaler).width + 6].reduce(math.max);
     final ph = size.height - axis, pw = size.width - left;
+    if (ph <= 0) return;
     final all = [...values, ?guide];
     final dataLo = all.reduce(math.min), dataHi = all.reduce(math.max);
     final mid = (dataHi + dataLo) / 2;
@@ -1709,7 +1713,7 @@ class _SeriesPainter extends CustomPainter {
     final grid = Paint()..color = AraColors.border;
     for (final t in ticks.where((t) => t > l && t < h)) {
       canvas.drawLine(Offset(left, y(t)), Offset(size.width, y(t)), grid);
-      _text(canvas, t.toStringAsFixed(decimals), Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+      _text(canvas, size, t.toStringAsFixed(decimals), Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     if (guide != null) {
       _line(
@@ -1753,8 +1757,8 @@ class _SeriesPainter extends CustomPainter {
     );
     canvas.drawCircle(at(values.length - 1, values.last, values.length), 3.5, Paint()..color = colour);
     if (lastLabel != null) {
-      _text(canvas, '1', Offset(left, ph), scaler);
-      _text(canvas, lastLabel!, Offset(size.width, ph), scaler, align: TextAlign.right);
+      _text(canvas, size, '1', Offset(left, ph), scaler);
+      _text(canvas, size, lastLabel!, Offset(size.width, ph), scaler, align: TextAlign.right);
     }
   }
 
@@ -1786,7 +1790,7 @@ class _TracePainter extends CustomPainter {
         Offset(size.width, y(t)),
         Paint()..color = AraColors.border.withValues(alpha: 0.5),
       );
-      _text(canvas, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+      _text(canvas, size, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     canvas.drawLine(Offset(left, mid), Offset(size.width, mid), grid);
     if (trace.length < 2) return;
@@ -1837,6 +1841,8 @@ class _AltitudePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final left = math.max(28.0, _textSize('90°', scaler).width + 6), axis = _textSize('0', scaler).height;
     final ph = size.height - axis, pw = size.width - left;
+    // No room left for the curve under the time labels (large text).
+    if (ph <= 0) return;
     final total = math.max(1, end.difference(start).inSeconds);
     double frac(DateTime t) => (t.difference(start).inSeconds / total).clamp(0.0, 1.0);
     double x(DateTime t) => left + frac(t) * pw;
@@ -1858,7 +1864,7 @@ class _AltitudePainter extends CustomPainter {
       canvas.restore();
     }
     for (final t in const [30.0, 60.0, 90.0]) {
-      _text(canvas, '${t.round()}°', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+      _text(canvas, size, '${t.round()}°', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     _line(
       canvas,
@@ -1890,6 +1896,7 @@ class _AltitudePainter extends CustomPainter {
     ]) {
       _text(
         canvas,
+        size,
         simpleClockTime(t),
         Offset(
           align == TextAlign.left

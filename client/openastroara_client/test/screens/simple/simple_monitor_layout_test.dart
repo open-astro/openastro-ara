@@ -137,14 +137,50 @@ Future<void> _pump(
   await tester.pump();
 }
 
-/// Records each painted paragraph's height while it is still alive.
-class _Heights implements Canvas {
-  final heights = <double>[];
+/// Records where each painted paragraph (while it is still alive), line and
+/// path lands.
+class _Painted implements Canvas {
+  final text = <Rect>[], marks = <Rect>[];
   @override
   void drawParagraph(ui.Paragraph paragraph, Offset offset) =>
-      heights.add(paragraph.height);
+      text.add(offset & Size(0, paragraph.height));
+  @override
+  void drawLine(Offset p1, Offset p2, Paint paint) =>
+      marks.add(Rect.fromPoints(p1, p2));
+  @override
+  void drawPath(Path path, Paint paint) => marks.add(path.getBounds());
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+/// At 2x text and 1280x800, paints each graph in [ids] as laid out, on a
+/// canvas shorter than one label and on a tall one: nothing lands outside
+/// the canvas, and the tall one still has its labels.
+Future<void> _inside(WidgetTester tester, List<String> ids) async {
+  tester.platformDispatcher.textScaleFactorTestValue = 2;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  await _pump(
+    tester,
+    _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
+    size: const Size(1280, 800),
+  );
+  for (final id in ids) {
+    final f = _k(id);
+    for (final size in [
+      tester.getSize(f),
+      const Size(240, 20),
+      const Size(240, 160),
+    ]) {
+      final canvas = _Painted();
+      tester.widget<CustomPaint>(f).painter!.paint(canvas, size);
+      final outside = [
+        for (final r in [...canvas.text, ...canvas.marks])
+          if (r.top < -0.01 || r.bottom > size.height + 0.01) r,
+      ];
+      expect(outside, isEmpty, reason: '$id at $size');
+      if (size.height == 160) expect(canvas.text, isNotEmpty, reason: id);
+    }
+  }
 }
 
 Finder _k(String id) => find.byKey(Key('simple-monitor-$id'));
@@ -252,15 +288,32 @@ void main() {
       final paint = tester.widget<CustomPaint>(
         find.byKey(const Key('simple-monitor-timeline')),
       );
-      final canvas = _Heights();
+      final canvas = _Painted();
+      // Tall enough for every label: at 2x the tile has no room for the
+      // hour marks, which are then left out.
       paint.painter!.paint(
         canvas,
-        tester.getSize(find.byKey(const Key('simple-monitor-timeline'))),
+        Size(tester.getSize(_k('timeline')).width, 120),
       );
-      final heights = canvas.heights;
+      final heights = [for (final r in canvas.text) r.height];
       // No plan blocks here: each paragraph is an hour mark, a time or a glyph.
       final tall = heights.where((h) => h >= 2 * AraFontSize.simpleCaption);
       expect(tall.length, greaterThanOrEqualTo(3), reason: '$heights');
     },
+  );
+
+  testWidgets(
+    'at 2x text the altitude graph paints nothing outside its canvas',
+    (tester) => _inside(tester, ['altitude']),
+  );
+
+  testWidgets(
+    'at 2x text the guide trace paints nothing outside its canvas',
+    (tester) => _inside(tester, ['trace']),
+  );
+
+  testWidgets(
+    'at 2x text the per-frame graphs paint nothing outside their canvas',
+    (tester) => _inside(tester, ['hfr-chart', 'stars-chart', 'rms-chart']),
   );
 }
