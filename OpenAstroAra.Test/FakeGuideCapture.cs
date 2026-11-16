@@ -46,11 +46,13 @@ namespace OpenAstroAra.Test {
         private readonly List<(int ExposureMs, int? Binning)> _captures = new();
         private readonly List<string> _leaseCalls = new();
         private readonly List<(int Count, TaskCompletionSource Done)> _captureWaiters = new();
+        private readonly List<(int Count, TaskCompletionSource Done)> _leaseWaiters = new();
         private readonly TaskCompletionSource _leaseReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Port _port;
         private string? _host = "192.0.2.10";
         private int _idleWaits;
         private int _loopStopCalls;
+        private int _frameSizeReads;
 
         public FakeGuideCapture() {
             _port = new Port(this);
@@ -118,6 +120,18 @@ namespace OpenAstroAra.Test {
 
         public int LoopStopCalls => Volatile.Read(ref _loopStopCalls);
 
+        /// <summary>How many times the camera frame size was asked for.</summary>
+        public int FrameSizeReads => Volatile.Read(ref _frameSizeReads);
+
+        /// <summary>Awaited at the start of every lease call, with whether it acquires or releases: a test holds a
+        /// call here (on a <see cref="TaskCompletionSource"/>) to keep a Start or a release in flight. The call is
+        /// recorded once the gate opens, so the recorded order is the order the guider would see.</summary>
+        public Func<bool, Task>? LeaseGate { get; set; }
+
+        /// <summary>When set, every lease acquire after the first (a renewal) is recorded, signalled and then
+        /// refused with a <see cref="GuiderRpcException"/>, as a daemon answering a renewal with no result does.</summary>
+        public bool RenewalsFail { get; set; }
+
         /// <summary>Completes once <paramref name="count"/> captures have been recorded (and their completions raised).</summary>
         public Task WhenCapturedAsync(int count) {
             lock (_gate) {
@@ -126,6 +140,18 @@ namespace OpenAstroAra.Test {
                 }
                 var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _captureWaiters.Add((count, done));
+                return done.Task;
+            }
+        }
+
+        /// <summary>Completes once <paramref name="count"/> lease calls (acquire, renew or release) have been recorded.</summary>
+        public Task WhenLeaseCallsAsync(int count) {
+            lock (_gate) {
+                if (_leaseCalls.Count >= count) {
+                    return Task.CompletedTask;
+                }
+                var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _leaseWaiters.Add((count, done));
                 return done.Task;
             }
         }
@@ -168,7 +194,10 @@ namespace OpenAstroAra.Test {
             return Task.FromResult(LoopStops);
         }
 
-        public Task<(int Width, int Height)?> GetCameraFrameSizeAsync(CancellationToken ct) => Task.FromResult(FrameSize);
+        public Task<(int Width, int Height)?> GetCameraFrameSizeAsync(CancellationToken ct) {
+            Interlocked.Increment(ref _frameSizeReads);
+            return Task.FromResult(FrameSize);
+        }
 
         public Task CaptureFrameAsync(int exposureMs, int? binning, CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
@@ -240,14 +269,29 @@ namespace OpenAstroAra.Test {
                 }
             }
 
-            public Task SetLeaseAsync(bool active, int? timeoutS, CancellationToken ct) {
+            public async Task SetLeaseAsync(bool active, int? timeoutS, CancellationToken ct) {
+                if (owner.LeaseGate is { } gate) {
+                    await gate(active).ConfigureAwait(false);
+                }
+                List<TaskCompletionSource> due;
+                bool refused;
                 lock (owner._gate) {
                     owner._leaseCalls.Add(active ? $"on:{timeoutS}" : "off");
+                    var n = owner._leaseCalls.Count;
+                    refused = active && n > 1 && owner.RenewalsFail;
+                    due = owner._leaseWaiters.Where(w => w.Count <= n).Select(w => w.Done).ToList();
+                    owner._leaseWaiters.RemoveAll(w => w.Count <= n);
+                }
+                foreach (var d in due) {
+                    d.TrySetResult();
                 }
                 if (!active) {
                     owner._leaseReleased.TrySetResult();
                 }
-                return Task.CompletedTask;
+                if (refused) {
+                    // After the waiters are signalled: a test counting renewals sees the refused one too.
+                    throw new GuiderRpcException("set_pa_session", -1, "the renewal was refused");
+                }
             }
         }
     }
