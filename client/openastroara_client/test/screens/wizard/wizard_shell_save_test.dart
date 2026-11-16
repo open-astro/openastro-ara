@@ -5,10 +5,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_shell.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
@@ -101,12 +103,20 @@ class _FakeProfileApi extends FakeStorageApi {
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
 
+/// The wizard's reset builds the filter wheel labels, which watch the wheel's
+/// status: a wheel with no stream, so no reconnect timer outlives the test.
+class _NoWheel extends FilterWheelNotifier {
+  @override
+  Future<FilterWheelStatus?> build() async => null;
+}
+
 Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {
   return ProviderScope(
     overrides: [
       activeServerProvider.overrideWithValue(
         const AraServer(hostname: 'daemon', port: 5555),
       ),
+      filterWheelProvider.overrideWith(_NoWheel.new),
     ],
     child: MaterialApp(
       home: WizardShell(createApi: (_) => api, onComplete: (_) => onComplete()),
@@ -209,6 +219,7 @@ void main() {
           // The list provider reads the API through profileApiProvider — point it at
           // the same fake so we can count list re-fetches.
           profileApiProvider.overrideWithValue(api),
+          filterWheelProvider.overrideWith(_NoWheel.new),
         ],
       );
       addTearDown(container.dispose);
@@ -250,6 +261,7 @@ void main() {
               const AraServer(hostname: 'daemon', port: 5555),
             ),
             dataManagerApiProvider.overrideWithValue(dm),
+            filterWheelProvider.overrideWith(_NoWheel.new),
           ],
         );
         addTearDown(container.dispose);

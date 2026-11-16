@@ -8,15 +8,18 @@ import '../../../models/filter_offset_calibration.dart';
 import '../../../models/filter_wheel_status.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/focus/filter_offset_calibration_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/filter_wheel_policy_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../theme/ara_metrics.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../simple/simple_device_windows.dart' show simpleSigned;
 import '../../../util/friendly_error.dart';
@@ -31,13 +34,16 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final connN = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(filterWheelProvider);
     final notifier = ref.read(filterWheelProvider.notifier);
-    final labels = ref.watch(filterWheelLabelsProvider);
+    final connection = ref.watch(equipmentConnectionProvider);
+    final connN = ref.read(equipmentConnectionProvider.notifier);
+    final labelsSection = ref.watch(filterWheelLabelsProvider);
+    // A cache copy is for planning: only a copy from the rig is editable.
+    final labels = labelsSection.canSave ? labelsSection.value : null;
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
-    final policy = ref.watch(filterWheelPolicyProvider);
+    final policySection = ref.watch(filterWheelPolicyProvider);
+    final policy = policySection.canSave ? policySection.value : null;
     final policyN = ref.read(filterWheelPolicyProvider.notifier);
     // While a wheel is connected its own driver slot names are authoritative and
     // shown live above, so the local "Slot labels" section is pure duplication —
@@ -79,22 +85,35 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           onChanged: (v) =>
               connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),
         ),
-        // #1075 — the daemon's first-connect home (#1066) is a profile policy
-        // the user can turn off; the daemon reads it at connect time.
-        // Nothing to park on a wheel you turn by hand.
-        if (!manual)
+        if (policy == null)
+          SectionNotLoaded(
+            section: policySection,
+            onRetry: _reload(ref, filterWheelPolicyProvider),
+          )
+        else ...[
+          if (policySection.conflict)
+            SectionConflictBanner(
+              onReload: _reload(ref, filterWheelPolicyProvider),
+            ),
+          // #1075 — the daemon's first-connect home (#1066) is a profile policy
+          // the user can turn off; the daemon reads it at connect time.
+          // Nothing to park on a wheel you turn by hand.
+          if (!manual)
+            SettingsSwitchRow(
+              label: 'Park on slot 0 on first connect',
+              helpKey: 'eq.filterwheel.home_on_first_connect',
+              value: policy.homeOnFirstConnect,
+              onChanged: (v) =>
+                  _autoSave(context, () => policyN.setHomeOnFirstConnect(v)),
+            ),
           SettingsSwitchRow(
-            label: 'Park on slot 0 on first connect',
-            helpKey: 'eq.filterwheel.home_on_first_connect',
-            value: policy.homeOnFirstConnect,
-            onChanged: policyN.setHomeOnFirstConnect,
+            label: 'Move the focuser by each filter\'s offset',
+            helpKey: 'eq.filterwheel.use_focus_offsets',
+            value: policy.useFilterWheelOffsets,
+            onChanged: (v) =>
+                _autoSave(context, () => policyN.setUseFilterWheelOffsets(v)),
           ),
-        SettingsSwitchRow(
-          label: 'Move the focuser by each filter\'s offset',
-          helpKey: 'eq.filterwheel.use_focus_offsets',
-          value: policy.useFilterWheelOffsets,
-          onChanged: policyN.setUseFilterWheelOffsets,
-        ),
+        ],
         // #1675: measure the offsets that switch uses (Simple Mode's Focus ›
         // Offsets drives the same daemon routine; ADR 0009 rule 1).
         if (status.value case final s? when s.isConnected && !s.manual)
@@ -105,27 +124,42 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // while a wheel is connected (its driver names take over) to avoid duplication.
         if (showSlotLabels) ...[
           SettingsSectionHeader(
-              manual ? 'Filters (manual filter wheel)' : 'Slot labels (for sequences)'),
-          for (var slot = 1; slot <= labels.slotCount; slot++)
-            EditableTextRow(
-              label: 'Slot $slot',
-              helpKey: slot == 1
-                  ? (manual
-                      ? 'eq.filterwheel.manual_filters'
-                      : 'eq.filterwheel.slot_labels')
-                  : null,
-              currentValue: labels.labelAt(slot),
-              getCanonical: () =>
-                  ref.read(filterWheelLabelsProvider).labelAt(slot),
-              // Each committed row persists to the daemon (12h.2b round-trip);
-              // a failure keeps the local edit and says so — offline authoring
-              // still works, the labels just won't survive a daemon-side reload.
-              parse: (s) {
-                labelsN.setLabel(slot, s);
-                unawaited(_persistLabels(context, ref));
-              },
-              hint: 'Empty = unused',
-            ),
+            manual
+                ? 'Filters (manual filter wheel)'
+                : 'Slot labels (for sequences)',
+          ),
+          if (labels == null)
+            SectionNotLoaded(
+              section: labelsSection,
+              onRetry: _reload(ref, filterWheelLabelsProvider),
+            )
+          else ...[
+            if (labelsSection.conflict)
+              SectionConflictBanner(
+                onReload: _reload(ref, filterWheelLabelsProvider),
+              ),
+            for (var slot = 1; slot <= labels.slotCount; slot++)
+              EditableTextRow(
+                label: 'Slot $slot',
+                helpKey: slot == 1
+                    ? (manual
+                          ? 'eq.filterwheel.manual_filters'
+                          : 'eq.filterwheel.slot_labels')
+                    : null,
+                currentValue: labels.labelAt(slot),
+                getCanonical: () =>
+                    ref.read(filterWheelLabelsProvider).value?.labelAt(slot) ??
+                    '',
+                // Each committed row persists to the daemon (12h.2b round-trip);
+                // a failure keeps the local edit and says so — offline authoring
+                // still works, the labels just won't survive a daemon-side reload.
+                parse: (s) {
+                  labelsN.setLabel(slot, s);
+                  unawaited(_persistLabels(context, ref));
+                },
+                hint: 'Empty = unused',
+              ),
+          ],
         ],
       ],
     );
@@ -439,8 +473,39 @@ class _SlotRow extends StatelessWidget {
   }
 }
 
+VoidCallback _reload(
+  WidgetRef ref,
+  NotifierProvider<SectionNotifier<Object?>, LoadedSection<Object?>> section,
+) => () {
+  final api = ref.read(profileApiProvider);
+  if (api != null) ref.read(section.notifier).load(api);
+};
+
+/// A switch that saves on change: a refusal shows in a SnackBar and the switch
+/// stays on the rig's value.
+Future<void> _autoSave(
+  BuildContext context,
+  Future<void> Function() save,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final l10n = context.l10n;
+  try {
+    await save();
+  } catch (e) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : friendlyError(l10n, e, action: l10n.actionSave),
+        ),
+      ),
+    );
+  }
+}
+
 /// Persist the slot labels to the daemon, surfacing a failure as a SnackBar
-/// (the local edit is kept either way — offline authoring keeps working).
+/// (the edit stays on screen so a 412 can be reloaded).
 Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
   try {
     await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
@@ -452,9 +517,19 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSaveSlotLabels))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is SectionNotLoadedException || e is SectionConflictException
+                ? e.toString()
+                : friendlyError(
+                    context.l10n,
+                    e,
+                    action: context.l10n.actionSaveSlotLabels,
+                  ),
+          ),
+        ),
+      );
     }
   }
 }

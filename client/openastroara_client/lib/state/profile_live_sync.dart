@@ -11,9 +11,6 @@ import 'settings/autofocus_settings_state.dart';
 import 'settings/cooling_fan_state.dart';
 import 'settings/dome_settings_state.dart';
 import 'settings/equipment_connection_state.dart';
-import 'settings/filter_set_state.dart';
-import 'settings/filter_wheel_labels_state.dart';
-import 'settings/filter_wheel_policy_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/migrated_sections.dart';
 import 'settings/optics_settings_state.dart';
@@ -66,13 +63,6 @@ final Map<String, _Hydrate> _hydrators = {
       c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
   'autofocus': (c, api) =>
       c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
-  'filter-set': (c, api) =>
-      c.read(filterSetProvider.notifier).hydrateFromServer(api),
-  // One section, two routes: filter-wheel/labels and filter-wheel/policy.
-  'filter-wheel': (c, api) async {
-    await c.read(filterWheelPolicyProvider.notifier).hydrateFromServer(api);
-    await c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api);
-  },
   'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
   'dome': (c, _) async => c.invalidate(domeSettingsProvider),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),

@@ -2,11 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
+import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/sequencer/target_plan_dialog.dart';
@@ -23,6 +24,22 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   final CameraElectronics _v;
   @override
   LoadedSection<CameraElectronics> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
+}
+
+class _SeededFilters extends FilterSetNotifier {
+  _SeededFilters(this._v);
+  final FilterSetSettings _v;
+  @override
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
+}
+
+class _SeededLabels extends FilterWheelLabelsNotifier {
+  _SeededLabels(this._v);
+  final FilterWheelLabels _v;
+  @override
+  LoadedSection<FilterWheelLabels> build() =>
       LoadedSection(value: _v, source: SectionSource.rig);
 }
 
@@ -70,39 +87,46 @@ void main() {
   group('showTargetPlanDialog', () {
     Future<TargetPlanChoice?> open(
       WidgetTester tester, {
-      required List<PlanningFilter> filters,
+      required List<PlanningFilter>? filters,
       required Future<void> Function(WidgetTester) interact,
       bool guider = true,
       List<Object> overrides = const [],
     }) async {
       TargetPlanChoice? result;
-      final container = ProviderContainer(overrides: overrides.cast());
+      final container = ProviderContainer(
+        overrides: [
+          if (filters != null)
+            filterSetProvider.overrideWith(
+              () => _SeededFilters(FilterSetSettings(filters: filters)),
+            ),
+          ...overrides.cast(),
+        ],
+      );
       addTearDown(container.dispose);
-      for (final f in filters) {
-        container.read(filterSetProvider.notifier).addFilter(f);
-      }
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Builder(
-            builder: (context) => Center(
-              child: ElevatedButton(
-                onPressed: () async {
-                  result = await showTargetPlanDialog(
-                    context,
-                    targetName: 'Veil',
-                    raDeg: 311.0,
-                    decDeg: 31.7,
-                    remainingDarkHours: 6,
-                    guiderAvailable: guider,
-                  );
-                },
-                child: const Text('go'),
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showTargetPlanDialog(
+                      context,
+                      targetName: 'Veil',
+                      raDeg: 311.0,
+                      decDeg: 31.7,
+                      remainingDarkHours: 6,
+                      guiderAvailable: guider,
+                    );
+                  },
+                  child: const Text('go'),
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
       await tester.tap(find.text('go'));
       await tester.pumpAndSettle();
       await interact(tester);
@@ -227,6 +251,41 @@ void main() {
         cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics())),
       ]);
       expect(notLoaded, unset);
+    });
+
+    testWidgets('filter set not loaded: only Basic is offered, and it returns '
+        'no plan', (tester) async {
+      final choice = await open(tester, filters: null, interact: (t) async {
+        expect(find.text('Basic'), findsOneWidget);
+        expect(find.textContaining('Narrowband'), findsNothing);
+        expect(find.textContaining('Broadband'), findsNothing);
+        await t.tap(find.text('Create run'));
+      });
+      expect(choice!.filterPlan, isNull);
+    });
+
+    testWidgets('filter wheel labels not loaded: no manual filter swap is '
+        'assumed; blank labels loaded from the rig mean a manual swap', (
+      tester,
+    ) async {
+      Future<bool> manualSwap(List<Object> labels) async {
+        final choice = await open(tester, filters: shoSet, overrides: labels,
+            interact: (t) async {
+          await t.tap(find.text('Create run'));
+        });
+        await tester.pumpWidget(const SizedBox());
+        return choice!.manualFilterSwap;
+      }
+
+      expect(await manualSwap(const []), isFalse);
+      expect(
+        await manualSwap([
+          filterWheelLabelsProvider.overrideWith(
+            () => _SeededLabels(FilterWheelLabels(labels: const ['', ''])),
+          ),
+        ]),
+        isTrue,
+      );
     });
 
     testWidgets('Basic pick returns no plan; cancel returns null',

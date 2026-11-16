@@ -1,34 +1,59 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:openastroara/state/profile_management_state.dart';
+
+import '../../support/fake_section_rig.dart';
+
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 
 void main() {
   group('FilterWheelPolicyNotifier (#1075)', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      final rig = FakeSectionRig({
+        'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+      });
+      container = ProviderContainer(
+        overrides: [profileApiProvider.overrideWithValue(rig.api())],
+      );
+      // Self-loading: wait for the rig's copy.
+      container.read(filterWheelPolicyProvider);
+      await settle(() => container.read(filterWheelPolicyProvider).canSave);
+    });
     tearDown(() => container.dispose());
 
-    test('defaults to home on first connect (the #1066 behaviour)', () {
-      expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isTrue);
+    test("the rig's copy has home on first connect (the #1066 behaviour)", () {
+      expect(
+        container.read(filterWheelPolicyProvider).value!.homeOnFirstConnect,
+        isTrue,
+      );
     });
 
-    test('setHomeOnFirstConnect updates the local state optimistically', () {
-      container.read(filterWheelPolicyProvider.notifier).setHomeOnFirstConnect(false);
-      expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isFalse);
-    });
+    test(
+      'setHomeOnFirstConnect updates the local state optimistically',
+      () async {
+        await container
+            .read(filterWheelPolicyProvider.notifier)
+            .setHomeOnFirstConnect(false);
+        expect(
+          container.read(filterWheelPolicyProvider).value!.homeOnFirstConnect,
+          isFalse,
+        );
+      },
+    );
 
-    test('wire shape is home_on_first_connect, absent → default on', () {
-      expect(FilterWheelPolicy.fromJson(const {'home_on_first_connect': false}).homeOnFirstConnect, isFalse);
-      expect(FilterWheelPolicy.fromJson(const {}).homeOnFirstConnect, isTrue);
-      expect(const FilterWheelPolicy(homeOnFirstConnect: false).toJson(), {
-        'home_on_first_connect': false,
-        'use_filter_wheel_offsets': false,
-      });
-    });
+    test(
+      'wire shape is home_on_first_connect and use_filter_wheel_offsets',
+      () {
+        expect(const FilterWheelPolicy(homeOnFirstConnect: false).toJson(), {
+          'home_on_first_connect': false,
+          'use_filter_wheel_offsets': false,
+        });
+      },
+    );
 
-    test('per-filter focus offsets default off, read and write through the policy', () {
-      expect(FilterWheelPolicy.fromJson(const {}).useFilterWheelOffsets, isFalse);
-      expect(FilterWheelPolicy.fromJson(const {'use_filter_wheel_offsets': true}).useFilterWheelOffsets, isTrue);
+    test('per-filter focus offsets write through the policy', () {
       expect(const FilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
     });
   });

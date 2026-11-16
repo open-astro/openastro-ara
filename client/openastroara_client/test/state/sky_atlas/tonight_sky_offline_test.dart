@@ -48,7 +48,8 @@ class _SeededFilters extends FilterSetNotifier {
   _SeededFilters(this._v);
   final FilterSetSettings _v;
   @override
-  FilterSetSettings build() => _v;
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -189,7 +190,72 @@ void main() {
     addTearDown(keep.close);
     final list = await c.read(tonightSkyProvider.future);
     expect(list, isNotEmpty, reason: 'planning still ranks');
-    expect(list.where((o) => o.optimalSubS != null), isEmpty,
-        reason: 'no electronics loaded: no optimal sub is invented');
+    expect(
+      list.where((o) => o.optimalSubS != null),
+      isEmpty,
+      reason: 'no electronics loaded: no optimal sub is invented',
+    );
+  });
+
+  test('filter set not loaded: ranks as with an empty set, and a saved set '
+      'is never assumed', () async {
+    Future<List<TonightSkyObject>> rank({bool loaded = false}) async {
+      final c = ProviderContainer(
+        overrides: [
+          savedServersProvider.overrideWith(_NoServers.new),
+          siteSettingsProvider.overrideWith(
+            () => _SeededSite(
+              const SiteSettings(
+                siteName: 'cached',
+                latitudeDeg: -33.856784,
+                longitudeDeg: 151.215297,
+                bortleClass: 6,
+                defaultHorizonAltitudeDeg: 20,
+                twilightDefinition: TwilightDefinition.astronomical,
+              ),
+            ),
+          ),
+          opticsSettingsProvider.overrideWith(
+            () => _SeededOptics(
+              const OpticsSettings(
+                focalLengthMm: 447,
+                reducerFactor: 1.0,
+                sensorWidthPx: 6248,
+                sensorHeightPx: 4176,
+                pixelSizeUm: 3.76,
+                apertureMm: 91,
+              ),
+            ),
+          ),
+          cameraElectronicsProvider.overrideWith(
+            () => _SeededElectronics(
+              const CameraElectronics(
+                readNoiseE: 1.5,
+                fullWellE: 50000,
+                electronsPerAdu: 0.8,
+                quantumEfficiencyPeak: 0.8,
+              ),
+            ),
+          ),
+          if (loaded)
+            filterSetProvider.overrideWith(
+              () => _SeededFilters(const FilterSetSettings()),
+            ),
+        ],
+      );
+      addTearDown(c.dispose);
+      if (!loaded) expect(c.read(filterSetProvider).value, isNull);
+      final keep = c.listen(tonightSkyProvider, (_, _) {});
+      addTearDown(keep.close);
+      return c.read(tonightSkyProvider.future);
+    }
+
+    final notLoaded = await rank();
+    final empty = await rank(loaded: true);
+    expect(notLoaded, isNotEmpty, reason: 'planning still ranks');
+    expect(
+      notLoaded.map((o) => (o.id, o.optimalSubS)),
+      empty.map((o) => (o.id, o.optimalSubS)),
+    );
   });
 }

@@ -2143,7 +2143,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.complex(),
-    defaultValue: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+    defaultValue: null,
     profilePath: 'filterwheel.slot_labels',
   ),
 
@@ -2166,7 +2166,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.home_on_first_connect',
   ),
   Setting(
@@ -2184,7 +2184,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.use_filter_wheel_offsets',
   ),
 

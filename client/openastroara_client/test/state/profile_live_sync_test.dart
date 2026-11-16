@@ -230,7 +230,7 @@ void main() {
       final c = _container(rig);
       // A screen holds them; wait for their first read from the rig.
       await _until(
-        () => c.read(filterWheelLabelsProvider).labelAt(2) == 'OIII',
+        () => c.read(filterWheelLabelsProvider).value?.labelAt(2) == 'OIII',
       );
       rig.stored[labels] = {
         'labels': ['Ha', 'Sulphur', 'SII'],
@@ -238,7 +238,7 @@ void main() {
 
       await applyProfileUpdated(c, 'filter-wheel');
 
-      expect(c.read(filterWheelLabelsProvider).labelAt(2), 'Sulphur');
+      expect(c.read(filterWheelLabelsProvider).value!.labelAt(2), 'Sulphur');
     },
   );
 

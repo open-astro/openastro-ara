@@ -155,7 +155,8 @@ class _SeededFilters extends FilterSetNotifier {
   _SeededFilters(this._v);
   final FilterSetSettings _v;
   @override
-  FilterSetSettings build() => _v;
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSkyModel extends SkyModelCalibrationNotifier {

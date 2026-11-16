@@ -126,6 +126,10 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     state = LoadedSection(value: value, source: SectionSource.cache);
   }
 
+  /// Entry point of the pre-ADR 0015 notifiers: the same as [save]. No [api]:
+  /// the active rig's.
+  Future<void> persistToServer([ProfileApi? api]) => save(api ?? _activeApi());
+
   ProfileApi _activeApi() =>
       ref.read(profileApiProvider) ??
       (throw StateError('Not connected — connect to your rig to save this.'));
@@ -198,5 +202,28 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     });
     _saveChain = run;
     return run;
+  }
+}
+
+/// A section read outside Settings (no panel opens it first): loads itself
+/// once the notifier is built and whenever it is back to not loaded with no
+/// failure, such as after the reset point (migrated_sections.dart) or when the
+/// rig connects. A failed load stays failed until Retry or the next Save.
+abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
+  @override
+  LoadedSection<T> build() {
+    listenSelf((_, next) => _loadIfDue(next));
+    ref.listen(profileApiProvider, (_, _) => _loadIfDue(state));
+    Future.microtask(() => ref.mounted ? _loadIfDue(state) : null);
+    return const LoadedSection();
+  }
+
+  void _loadIfDue(LoadedSection<T> now) {
+    final api = ref.read(profileApiProvider);
+    if (api != null &&
+        now.source == SectionSource.notLoaded &&
+        now.lastFailure == null) {
+      load(api);
+    }
   }
 }
