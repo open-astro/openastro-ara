@@ -81,6 +81,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_imported_shared_profile_gets_the_bundled_solver_path() {
+            var shared = ProfileShareService.StripForShare(
+                ProfileSnapshotNormalizer.Defaults with { PlateSolve = WithPath("/home/astro/astap/astap_cli") });
+            Assert.That(shared.PlateSolve.PathOrEndpoint, Is.Empty, "the share strip blanks the solver path");
+
+            var normalized = ProfileSnapshotNormalizer.Normalize(shared, Present(Bundled));
+
+            Assert.That(normalized.PlateSolve.PathOrEndpoint, Is.EqualTo(Bundled));
+        }
+
+        [TestCase("")]
+        [TestCase("   ")]
+        public void A_blank_solver_path_is_reported_at_boot_when_the_bundled_solver_is_missing(string blank) {
+            Assert.That(SolverPathMigration.BootWarning(WithPath(blank), Present()), Is.Not.Null);
+        }
+
+        // OPEN CHOICE: a blank path that cannot be repaired is reported as the bundled path, the one
+        // the user should install or set; the empty string would print an unusable "not found at ".
+        [TestCase("")]
+        [TestCase("   ")]
+        public void A_blank_solver_path_is_reported_missing_as_the_bundled_path(string blank) {
+            Assert.That(SolverPathMigration.MissingSolverBinary(WithPath(blank), Present()), Is.EqualTo(Bundled));
+        }
+
+        [Test]
         public void File_store_rewrites_an_old_profile_on_load_and_persists_it() {
             var dir = Path.Combine(Path.GetTempPath(), "ara-profile-" + Guid.NewGuid().ToString("N"));
             try {
