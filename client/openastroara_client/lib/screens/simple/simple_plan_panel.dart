@@ -1110,10 +1110,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-recent-$i'),
                 width: tileWidth,
-                title: designationWithName(
-                  recentRows[i]?.id ?? r.name,
-                  recentRows[i]?.name ?? '',
-                ),
+                // The saved name leads, as the plan header shows it after a tap.
+                title: designationWithName(r.name, recentRows[i]?.name ?? ''),
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),

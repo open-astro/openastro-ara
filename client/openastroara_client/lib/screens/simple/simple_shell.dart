@@ -1917,7 +1917,7 @@ Widget simpleArtCredit(
   final credit = art.creditLine;
   if (credit == null) return thumbnail;
   return Tooltip(
-    key: const Key('simple-sky-art-credit'),
+    key: key,
     message: context.l10n.albumArtCredit(credit),
     triggerMode: TooltipTriggerMode.tap,
     showDuration: const Duration(seconds: 4),

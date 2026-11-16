@@ -1352,6 +1352,8 @@ void main() {
             'assets/album/art/c056.webp'),
       );
       expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byKey(const Key('simple-run-target-art-credit'))), findsOneWidget,
+          reason: 'the credit mark carries the Plan card key, not the Sky Map one');
 
       c.read(planetariumSelectionProvider.notifier).set(_m31);
       await tester.pumpAndSettle();
@@ -1386,6 +1388,30 @@ void main() {
       expect(find.text('NGC 246 (Skull Nebula)'), findsNWidgets(2), reason: 'one Tonight\'s Best tile, one Recent tile');
       expect(find.text('NGC 1360'), findsOneWidget, reason: 'no nickname: the designation, unpadded');
       expect(find.text('NGC0246'), findsNothing);
+    });
+
+    testWidgets("a Recent target saved under an alias, M 31, reads M 31 (Andromeda Galaxy) on the tile and the plan header",
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'M 31', raDeg: 10.7, decDeg: 41.3, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('M 31 (Andromeda Galaxy)')), findsOneWidget);
+      expect(find.text('NGC 224 (Andromeda Galaxy)'), findsNothing);
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('M 31 (Andromeda Galaxy)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
     });
 
     testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
