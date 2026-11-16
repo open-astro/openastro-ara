@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
@@ -10,7 +11,8 @@ import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
 
 // Monitor's graphs (#1875 slice 7a): what the graph tiles say and flag, the
-// tile header's corner, and painters that keep inside their canvas.
+// tile header's corner (Tonight's dark-span line there only when it fits
+// whole, read out once), and painters that keep inside their canvas.
 
 class _KeepAwake extends KeepAwake {
   const _KeepAwake();
@@ -40,8 +42,11 @@ List<MonitorFrame> _frames(List<double> hfr, {List<int>? stars}) => [
 MonitorSnapshot _snap({
   bool gear = true,
   List<MonitorFrame> frames = const [],
+  bool frozen = false,
+  double imaged = 0,
 }) => MonitorSnapshot(
   asOf: _asOf,
+  frozenSince: frozen ? _asOf : null,
   verdict: const MonitorVerdict(
     MonitorVerdictKind.allGood,
     MonitorStatus.normal,
@@ -110,6 +115,7 @@ MonitorSnapshot _snap({
     darkEnd: DateTime(2026, 11, 15, 4, 20),
     flipAt: DateTime(2026, 11, 15, 0, 58),
     parkAt: DateTime(2026, 11, 15, 1, 58),
+    imagedSeconds: imaged,
   ),
 );
 
@@ -117,17 +123,21 @@ Future<void> _pump(
   WidgetTester tester,
   MonitorSnapshot snap, {
   Size size = const Size(1288, 780),
+  Locale? locale,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
+      // A fresh scope each pump: a kept one would keep the first snapshot.
+      key: UniqueKey(),
       overrides: [
         keepAwakeProvider.overrideWithValue(const _KeepAwake()),
         monitorProvider.overrideWith(() => _Fixed(snap)),
       ],
       child: MaterialApp(
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: SimpleMonitorScreen(onOpen: (_) {}),
@@ -135,6 +145,20 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
+  // A phone's column builds as it scrolls: bring in Tonight, its last tile.
+  // (A drag would move a tile's own scroll view instead.)
+  if (size.width < kMonitorMinWidth) {
+    final column = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const Key('simple-monitor-column')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    column.position.jumpTo(column.position.maxScrollExtent);
+    await tester.pump();
+  }
 }
 
 /// Records where each painted paragraph (while it is still alive), line and
@@ -184,6 +208,10 @@ Future<void> _inside(WidgetTester tester, List<String> ids) async {
 }
 
 Finder _k(String id) => find.byKey(Key('simple-monitor-$id'));
+
+/// Tonight's dark-span line as laid out.
+RenderParagraph _darkSpan(WidgetTester tester, String line) => tester
+    .renderObject(find.descendant(of: _k('night'), matching: find.text(line)));
 
 void main() {
   testWidgets('HFR flags a rise of 15 % or more against the session start', (
@@ -315,5 +343,58 @@ void main() {
   testWidgets(
     'at 2x text the per-frame graphs paint nothing outside their canvas',
     (tester) => _inside(tester, ['hfr-chart', 'stars-chart', 'rms-chart']),
+  );
+
+  testWidgets("a phone shows Tonight's dark-span line whole, in its own row", (
+    tester,
+  ) async {
+    await _pump(tester, _snap(), size: const Size(390, 844));
+    final line = _darkSpan(tester, 'Dark 21:50 to 04:20 · 0 min imaged');
+    expect(line.didExceedMaxLines, isFalse);
+  });
+
+  testWidgets(
+    'a dark-span line too long for the corner takes its own row on a wide window too',
+    (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+        tester,
+        _snap(imaged: 8100),
+        size: const Size(1280, 800),
+        locale: const Locale('pt', 'BR'),
+      );
+      final line = _darkSpan(
+        tester,
+        'Escuro de 21:50 a 04:20 · 2 h 15 min capturados',
+      );
+      expect(line.didExceedMaxLines, isFalse);
+    },
+  );
+
+  testWidgets(
+    "a screen reader hears Tonight's dark-span line once: in the corner, its own row or frozen",
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      const line = 'Dark 21:50 to 04:20 · 0 min imaged';
+      for (final (size, frozen, corner) in [
+        (const Size(1288, 780), false, true),
+        (const Size(390, 844), false, false),
+        (const Size(1288, 780), true, false),
+      ]) {
+        await _pump(tester, _snap(frozen: frozen), size: size);
+        final name = tester.getRect(
+          find.descendant(of: _k('night'), matching: find.text('Tonight')),
+        );
+        final at = tester.getRect(
+          find.descendant(of: _k('night'), matching: find.text(line)),
+        );
+        final state = '$size${frozen ? ' frozen' : ''}';
+        expect(at.center.dy == name.center.dy, corner, reason: state);
+        final label = tester.getSemantics(_k('night')).label;
+        expect(line.allMatches(label).length, 1, reason: '$state: $label');
+      }
+      handle.dispose();
+    },
   );
 }

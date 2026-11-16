@@ -435,6 +435,7 @@ class _Tile extends StatelessWidget {
     required this.name,
     required this.status,
     this.word,
+    this.aside,
     required this.value,
     required this.onTap,
     required this.children,
@@ -446,6 +447,10 @@ class _Tile extends StatelessWidget {
   final String name;
   final MonitorStatus status;
   final String? word;
+
+  /// A line in the corner when there is no word and it fits there whole, else
+  /// the content's first row. Not read out: [value] holds it.
+  final String? aside;
 
   /// What a screen reader says after the name.
   final String value;
@@ -482,8 +487,11 @@ class _Tile extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
-            child: LayoutBuilder(
-              builder: (context, box) => SingleChildScrollView(
+            child: LayoutBuilder(builder: (context, box) {
+              // Cut short, an aside loses its end (Tonight's imaged time).
+              final up = aside != null && shown == null && _fitsCorner(context, box.maxWidth, aside!);
+              final corner = up ? aside : shown;
+              return SingleChildScrollView(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: box.maxHeight.isFinite ? box.maxHeight : 0),
                   child: IntrinsicHeight(
@@ -496,29 +504,41 @@ class _Tile extends StatelessWidget {
                           // The name takes what the word leaves; the word sits in the right
                           // corner at its own width, shortening only past 60 % of the tile (pt-BR).
                           Expanded(child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          if (shown != null && shown.isNotEmpty) ...[
+                          if (corner != null && corner.isNotEmpty) ...[
                             const SizedBox(width: 6),
                             ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
-                              child: Text(shown,
+                              child: Text(corner,
                                   maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim.copyWith(color: wordColour)),
                             ),
                           ],
                           // Stale numbers get a grey dot, as off gear does.
                           if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[const SizedBox(width: 6), dot],
                         ]),
+                        // Wrapped, never cut: its own row is there to show it whole.
+                        if (aside != null && !up) Text(aside!, style: kSimpleCaption),
                         ...children,
                       ],
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ),
         ),
       ),
     );
   }
+}
+
+/// Whether [t] fits whole in a tile header's corner, which takes at most 60 %
+/// of the tile's [width].
+bool _fitsCorner(BuildContext context, double width, String t) {
+  // The style the header's Text draws in, so the measure matches it.
+  final style = DefaultTextStyle.of(context).style
+      .merge(_dim)
+      .merge(MediaQuery.boldTextOf(context) ? const TextStyle(fontWeight: FontWeight.bold) : null);
+  return _textSize(t, MediaQuery.textScalerOf(context), style).width <= width * 0.6;
 }
 
 /// The top line's words: the headline and the reason under it.
@@ -1504,8 +1524,9 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
-      // In the header's corner, leaving the timeline the room for its labels.
-      word: line,
+      // In the header's corner when it fits there whole, leaving the timeline
+      // room for its labels; else in its own row.
+      aside: line,
       // The timeline is painted: a screen reader hears its blocks and markers.
       value: [
         line,
@@ -1516,8 +1537,6 @@ class _NightTile extends StatelessWidget {
       frozen: s.frozen,
       onTap: onTap,
       children: [
-        // Frozen, the corner says Last known: the line keeps its own row.
-        if (s.frozen) Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption),
         if (start != null && end != null)
           Expanded(
             child: CustomPaint(
@@ -1571,16 +1590,17 @@ void _text(
   tp.dispose();
 }
 
-TextPainter _axisText(String t, TextScaler scaler) => TextPainter(
-  text: TextSpan(text: t, style: kSimpleCaption),
+TextPainter _axisText(String t, TextScaler scaler, [TextStyle style = kSimpleCaption]) => TextPainter(
+  text: TextSpan(text: t, style: style),
   textScaler: scaler,
   textDirection: TextDirection.ltr,
   maxLines: 1,
 )..layout();
 
-/// The size [_text] paints [t] at, for the painters' margins.
-Size _textSize(String t, TextScaler scaler) {
-  final tp = _axisText(t, scaler);
+/// The size [_text] paints [t] at, for the painters' margins; or [t] in
+/// [style].
+Size _textSize(String t, TextScaler scaler, [TextStyle style = kSimpleCaption]) {
+  final tp = _axisText(t, scaler, style);
   final size = tp.size;
   tp.dispose();
   return size;
