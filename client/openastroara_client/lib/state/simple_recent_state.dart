@@ -52,12 +52,18 @@ List<RecentTarget> mergeRecentTargets(
   ]..sort((a, b) => b.when.compareTo(a.when))).take(kRecentTargets).toList();
 }
 
+/// The bundle's name index, built once per catalog load: a
+/// [findCatalogObject] scan per imaged target froze the Plan window (a miss
+/// walks all 17k rows several times, ~190 ms each in debug).
+final bundledNameIndexProvider = Provider<CatalogNameIndex>(
+  (ref) => CatalogNameIndex(ref.watch(bundledCatalogProvider).value ?? const []),
+);
+
 final simpleRecentProvider = Provider.autoDispose<List<RecentTarget>>((ref) {
-  final catalog = ref.watch(bundledCatalogProvider).value ?? const [];
   return mergeRecentTargets(
     ref.watch(statsTargetsProvider).value ?? const [],
     ref.watch(customTargetsProvider).value ?? const [],
-    (name) => findCatalogObject(catalog, name),
+    ref.watch(bundledNameIndexProvider).lookup,
   );
 });
 
