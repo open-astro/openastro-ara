@@ -717,10 +717,18 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     // A profile value outside the four shows as its own chip, never rewritten
     // until the user picks one of the four.
     final choices = {...kSimpleAutofocusExposures, seconds}.toList()..sort();
-    final slots = ref.watch(filterWheelProvider).value?.slots ?? const [];
-    final reference = simpleOffsetPicks(ref).$2;
-    final toMeasure = slots
-        .where((f) => f.position != reference && f.focusOffset == 0)
+    final wheel = ref.watch(filterWheelProvider).value;
+    final hasWheel = wheel?.isConnected ?? false;
+    final (picks, reference) = simpleOffsetPicks(ref);
+    // Only the slots the calibration measures (named, not dark, not the
+    // reference). Offset 0 is also what the wheel holds for "not measured".
+    final toMeasure = (wheel?.slots ?? const [])
+        .where(
+          (f) =>
+              picks.contains(f.position) &&
+              f.position != reference &&
+              f.focusOffset == 0,
+        )
         .length;
     return [
       Row(
@@ -766,11 +774,15 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         what: done ? null : l10n.focusToolOffsetsWhat,
         status: SimpleToolStatus(
           key: const Key('simple-focus-tool-offsets-status'),
-          color: toMeasure == 0
+          color: !hasWheel
+              ? AraColors.accentInfo
+              : toMeasure == 0
               ? AraColors.accentConnected
               : AraColors.accentWarning,
-          ring: toMeasure != 0,
-          text: toMeasure == 0
+          ring: !hasWheel || toMeasure != 0,
+          text: !hasWheel
+              ? l10n.focusOffsetsNeedsWheel
+              : toMeasure == 0
               ? l10n.focusToolOffsetsAllMeasured
               : l10n.focusToolOffsetsToMeasure(toMeasure),
         ),

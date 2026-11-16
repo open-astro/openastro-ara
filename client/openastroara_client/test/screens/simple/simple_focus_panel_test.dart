@@ -196,8 +196,21 @@ void main() {
     expect(find.text('Tools'), findsOneWidget);
     expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-manual-status')), matching: find.text('Not started')),
         findsOneWidget);
-    expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-offsets-status')), matching: find.text('All measured')),
-        findsOneWidget, reason: 'no filter wheel: nothing to measure');
+    // No filter wheel: nothing was measured, so not green "All measured".
+    final offsets = find.byKey(const Key('simple-focus-tool-offsets-status'));
+    expect(
+      find.descendant(of: offsets, matching: find.text('All measured')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: offsets,
+        matching: find.text(
+          'Connect the filter wheel to calibrate focus offsets.',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsOneWidget);
     expect(find.textContaining('Focus shift per filter'), findsOneWidget);
   });
@@ -743,6 +756,7 @@ void main() {
         bool camera = true,
         bool plan = false,
         bool manualWheel = false,
+        bool measuredWheel = false,
         AutofocusRun run = AutofocusRun.idle,
         bool reading = false,
         Widget child = const SimpleFocusPanel()}) async {
@@ -751,7 +765,9 @@ void main() {
         focuserProvider.overrideWith(() => _Focuser(_focuser())),
         autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: run))),
         filterOffsetCalibrationProvider.overrideWith(() => o),
-        filterWheelProvider.overrideWith(() => _Wheel(manual: manualWheel)),
+        filterWheelProvider.overrideWith(
+          () => _Wheel(manual: manualWheel, measured: measuredWheel),
+        ),
         if (camera) cameraStatusProvider.overrideWith(_Camera.new),
         if (plan) sequenceRunStateProvider.overrideWith(_PlanRunning.new),
         if (reading) bahtinovFocusProvider.overrideWith(_Reading.new),
@@ -777,6 +793,22 @@ void main() {
       expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-offsets-status')), matching: find.textContaining(' to measure')),
           findsOneWidget);
     });
+
+    testWidgets(
+      'every named filter measured: All measured, whatever a Dark or an unnamed slot holds',
+      (tester) async {
+        await offsets(tester, measuredWheel: true);
+        _c.read(simpleFocusOffsetsProvider.notifier).set(false);
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-focus-tool-offsets-status')),
+            matching: find.text('All measured'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('Offsets is locked while a plan runs, and says why', (tester) async {
       await offsets(tester, plan: true);
@@ -931,13 +963,22 @@ class _Camera extends CameraStatusNotifier {
 }
 
 class _Wheel extends FilterWheelNotifier {
-  _Wheel({this.manual = false});
+  _Wheel({this.manual = false, this.measured = false});
   final bool manual;
+
+  /// R, G and OIII have offsets (L is the reference); Dark and the unnamed
+  /// slot stay at 0, as the calibration never measures them.
+  final bool measured;
   @override
   Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
         'device_id': 'w', 'name': 'EFW', 'state': 'connected', 'manual': manual,
         'slots': [
-          for (final (i, n) in ['L', 'R', 'G', 'OIII', 'Dark', ''].indexed) {'position': i, 'name': n},
+          for (final (i, n) in ['L', 'R', 'G', 'OIII', 'Dark', ''].indexed)
+            {
+              'position': i,
+              'name': n,
+              'focus_offset': measured && i >= 1 && i <= 3 ? 40 * i : 0,
+            },
         ],
         'runtime': {'state': 'idle', 'current_slot': 0},
       });
