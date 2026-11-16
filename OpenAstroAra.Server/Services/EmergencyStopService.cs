@@ -58,7 +58,7 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 14 rungs, 140 s, inside the client's 150 s receive timeout.
+    // puts the worst-case ladder at 15 rungs, 150 s, inside the client's 160 s receive timeout.
     // Internal knob so tests can compress it.
     internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
