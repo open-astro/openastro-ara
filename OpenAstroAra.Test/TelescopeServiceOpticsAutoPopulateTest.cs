@@ -16,6 +16,8 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
@@ -93,6 +95,26 @@ namespace OpenAstroAra.Test {
             svc.MaybeAutoPopulateOptics(Caps(null, null));
             Assert.That(writes(), Is.EqualTo(0));
             Assert.That(store.GetOpticsSettings(), Is.EqualTo(Optics()));
+        }
+
+        [Test]
+        public async Task A_real_connect_fills_empty_optics_from_the_fake_mount() {
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(Optics());
+            using var svc = new TelescopeService(profileStore: store) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => new FakeTelescopeDevice(), // reports 0.5 m focal length, 0.1 m aperture
+            };
+            var mount = new DiscoveredDeviceDto(
+                UniqueId: "mount-1", Name: "Bench Mount", Type: DeviceType.Telescope,
+                HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 11111, AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(mount), null, CancellationToken.None);
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (store.GetOpticsSettings().FocalLengthMm <= 0 && DateTime.UtcNow < deadline) {
+                await Task.Delay(10);
+            }
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(500).Within(1e-6));
+            Assert.That(store.GetOpticsSettings().ApertureMm, Is.EqualTo(100).Within(1e-6));
         }
     }
 }
