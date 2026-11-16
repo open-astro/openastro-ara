@@ -4785,7 +4785,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationAcceptedDto'
+                $ref: '#/components/schemas/RestartOnIdleAcceptedDto'
+    delete:
+      tags:
+        - Server
+      operationId: CancelRestartServerOnIdle
+      responses:
+        '204':
+          description: No Content
   /api/v1/server/logs/rotate:
     post:
       tags:
@@ -14865,6 +14872,29 @@ components:
       type: object
       properties:
         name:
+          type: string
+    RestartOnIdleAcceptedDto:
+      required:
+        - operation_id
+        - operation_type
+        - accepted_utc
+        - idempotency_key
+        - status
+      type: object
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        operation_type:
+          type: string
+        accepted_utc:
+          type: string
+          format: date-time
+        idempotency_key:
+          type:
+            - 'null'
+            - string
+        status:
           type: string
     RestoreRequestDto:
       required:

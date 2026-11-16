@@ -86,7 +86,7 @@ namespace OpenAstroAra.Test {
 
         private static Moq.Mock<ISequencerService> SequencerWith(Func<int> activeRuns) {
             var seq = new Moq.Mock<ISequencerService>();
-            seq.Setup(x => x.ActiveRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
+            seq.Setup(x => x.UnfinishedRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
                 .Returns(() => Task.FromResult<IReadOnlyList<Guid>>(Enumerable.Range(0, activeRuns()).Select(_ => Guid.NewGuid()).ToList()));
             return seq;
         }
@@ -133,6 +133,70 @@ namespace OpenAstroAra.Test {
             Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
             await Task.Delay(500);
             Assert.That(fake.Calls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_says_queued_with_a_run_and_restarting_without_one() {
+            var runs = new ActiveRunSessionRegistry();
+            var idle = new PlaceholderServerStateService(restarter: new FakeRestarter(), runs: runs);
+            Assert.That((await idle.RestartOnIdleAsync("t", null, CancellationToken.None)).Status, Is.EqualTo("restarting"));
+
+            runs.Enter(Guid.NewGuid());
+            var busy = new PlaceholderServerStateService(restarter: new FakeRestarter(), runs: runs);
+            Assert.That((await busy.RestartOnIdleAsync("t", null, CancellationToken.None)).Status, Is.EqualTo("queued"));
+        }
+
+        [Test]
+        public async Task CancelRestartOnIdleAsync_stops_the_restart_publishes_cancelled_once_and_clears_PendingRestart() {
+            var fake = new FakeRestarter();
+            var ws = new RecordingBroadcaster();
+            var runs = new ActiveRunSessionRegistry();
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs);
+            var run = Guid.NewGuid();
+            runs.Enter(run);
+            await svc.RestartOnIdleAsync("because", null, CancellationToken.None);
+
+            var queued = (await svc.GetSnapshotAsync(CancellationToken.None)).PendingRestart;
+            Assert.That(queued, Is.Not.Null, "a queued request is visible in the server state");
+            Assert.That(queued!.Reason, Is.EqualTo("because"));
+            Assert.That(queued.RestartOnIdle, Is.True);
+
+            await svc.CancelRestartOnIdleAsync(CancellationToken.None);
+            await svc.CancelRestartOnIdleAsync(CancellationToken.None); // nothing queued now: no-op
+
+            Assert.That((await svc.GetSnapshotAsync(CancellationToken.None)).PendingRestart, Is.Null);
+            Assert.That(ws.Events.Count(e => e.Type == "server.restart_cancelled"), Is.EqualTo(1));
+            runs.Exit(run);
+            await Task.Delay(4500);
+            Assert.That(fake.Calls, Is.EqualTo(0), "a cancelled request must not restart when the run ends");
+            Assert.That(ws.Has("server.restart_imminent"), Is.False);
+        }
+
+        [Test]
+        public async Task CancelRestartOnIdleAsync_with_nothing_queued_does_nothing() {
+            var ws = new RecordingBroadcaster();
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: new FakeRestarter(), runs: new ActiveRunSessionRegistry());
+            await svc.CancelRestartOnIdleAsync(CancellationToken.None);
+            Assert.That(ws.Events, Is.Empty);
+        }
+
+        [Test]
+        public async Task RestartOnIdleAsync_is_held_by_a_paused_run_and_an_aborting_run_until_terminal() {
+            var fake = new FakeRestarter();
+            var states = new Moq.Mock<ISequencerService>();
+            var held = new[] { Guid.NewGuid() }; // what a paused or an aborting run reports as unfinished
+            var unfinished = (IReadOnlyList<Guid>)held;
+            states.Setup(x => x.UnfinishedRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
+                .Returns(() => Task.FromResult(Volatile.Read(ref unfinished)));
+            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry(), sequencerResolver: () => states.Object);
+
+            var accepted = await svc.RestartOnIdleAsync("t", null, CancellationToken.None);
+
+            Assert.That(accepted.Status, Is.EqualTo("queued"));
+            await Task.Delay(3000);
+            Assert.That(fake.Calls, Is.EqualTo(0));
+            Volatile.Write(ref unfinished, Array.Empty<Guid>());
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
         }
 
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime {

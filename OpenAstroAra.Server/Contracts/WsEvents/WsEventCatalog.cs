@@ -282,6 +282,8 @@ public static class WsEventCatalog {
     // #1865 — restart-on-idle asked while a run is active: server.restart_pending { reason, requested_utc };
     // the restart follows (server.restart_imminent) when the run ends.
     public static readonly WsEvent ServerRestartPending = new("server.restart_pending");
+    // #1951 — a queued restart-on-idle was cancelled: server.restart_cancelled { reason, cancelled_utc }.
+    public static readonly WsEvent ServerRestartCancelled = new("server.restart_cancelled");
 
     // §29 — a block device appeared or vanished, or the store mount came/went;
     // clients re-fetch device+space state (empty payload by design).
@@ -410,6 +412,7 @@ public static class WsEventCatalog {
         ClientSettingsUpdated,
         ServerRestartImminent,
         ServerRestartPending,
+        ServerRestartCancelled,
         StorageDevicesChanged,
         DataManagerDownloadProgress,
         DataManagerDownloadComplete,
