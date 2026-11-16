@@ -720,8 +720,8 @@ namespace OpenAstroAra.Test {
         }
     }
     /// <summary>
-    /// #1985 — a healthy rung must not need a free pool thread inside its RungTimeout window:
-    /// an Emergency Stop has to work while the pool is starved. Own fixture, run alone, because
+    /// #1985 — a rung whose work completes synchronously must not need a free pool thread to start
+    /// inside its RungTimeout window: an Emergency Stop has to work while the pool is starved. Own fixture, run alone, because
     /// it blocks every pool worker for a moment.
     /// </summary>
     [TestFixture]
@@ -741,13 +741,14 @@ namespace OpenAstroAra.Test {
             var toBlock = Math.Min(minWorkers, maxWorkers);
             using var release = new ManualResetEventSlim();
             using var started = new CountdownEvent(toBlock);
-            // Raise the floor to the blockers we hold, so the pool injects no thread within the window.
+            // Block as many workers as the pool's minimum. Above the minimum the pool injects threads
+            // slowly (about one per second), far slower than the 200 ms window. The mocks complete
+            // synchronously, so this pins the dedicated-thread start, not the continuation path.
             for (var i = 0; i < toBlock; i++) {
                 ThreadPool.QueueUserWorkItem(_ => { started.Signal(); release.Wait(TimeSpan.FromSeconds(30)); });
             }
             try {
                 Assert.That(started.Wait(TimeSpan.FromSeconds(10)), Is.True, "every pool worker is blocked");
-                // Starve beyond the minimum too: threads above it are injected at ~1/s, far slower than 200 ms.
                 EmergencyStopResultDto? result = null;
                 var caller = new Thread(() => result = service.ExecuteAsync().GetAwaiter().GetResult());
                 caller.Start();

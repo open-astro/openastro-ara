@@ -58,9 +58,14 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 15 rungs, 150 s, inside the client's 160 s receive timeout.
-    // #1985 — the window covers the connected probe and the action's synchronous prefix too
-    // (both run on a dedicated thread, so a starved pool cannot time out a healthy rung), so each rung returns within RungTimeout whatever it blocks on.
+    // puts the worst-case ladder at 16 rungs (abort runs, 11 single rungs, two
+    // mount passes of two), 160 s on a healthy pool.
+    // #1985 — the window covers the connected probe and the action's synchronous prefix too.
+    // Both run on a dedicated thread, so a probe that never completes or a prefix that blocks
+    // holds neither the caller nor the ladder, and a rung whose work completes synchronously
+    // needs no pool thread. On a starved pool, the work after a rung's first incomplete await
+    // and the timeout timer both wait for a pool thread, so the bound stretches by the pool's
+    // thread-injection delay: the worst case is a rung reported Failed late, never a hang.
     // Internal knob so tests can compress it.
     internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -282,7 +287,7 @@ public sealed partial class EmergencyStopService {
         try {
             // #1985 — probe and action run on a dedicated thread inside ONE RungTimeout window, so a probe
             // that never completes, or an action that blocks its caller before its first await,
-            // cannot hold the ladder.
+            // cannot hold the ladder (on a starved pool the window can stretch; see RungTimeout).
             // A registered-but-disconnected device is a routine state (a rig
             // without a flat panel, an idle guider), NOT a failure — probing
             // the cached connection state first keeps it out of failed_rungs,
@@ -311,9 +316,9 @@ public sealed partial class EmergencyStopService {
         }
     }
 
-    // A dedicated thread, not Task.Run: a healthy rung must not wait for a pool thread inside its
-    // RungTimeout window (an Emergency Stop has to work on a starved pool), and a blocking
-    // synchronous prefix must not hold the caller. Continuations of completed awaits stay inline.
+    // A dedicated thread, not Task.Run: the probe and the synchronous prefix start at once without
+    // waiting for a pool thread, and a blocking prefix does not hold the caller. Only work up to the
+    // first incomplete await runs here; its continuation runs on the pool (see RungTimeout).
     private static Task<T> RunOnOwnThread<T>(Func<Task<T>> body) =>
         Task.Factory.StartNew(body, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 
