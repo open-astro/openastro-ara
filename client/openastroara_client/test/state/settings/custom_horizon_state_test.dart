@@ -1,37 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 
-/// Overrides only the custom-horizon round-trip; every other ProfileApi member
-/// keeps its real (never-called-here) implementation.
-class _FakeApi extends ProfileApi {
-  _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
-
-  List<CustomHorizonPoint> served = const [];
-  List<CustomHorizonPoint>? putReceived;
-  List<CustomHorizonPoint>? putEcho; // defaults to the received input
-
-  @override
-  Future<List<CustomHorizonPoint>> getCustomHorizon() async => served;
-
-  @override
-  Future<List<CustomHorizonPoint>> putCustomHorizon(
-    List<CustomHorizonPoint> points,
-  ) async {
-    putReceived = points;
-    return putEcho ?? points;
-  }
-}
+import '../../support/fake_section_rig.dart';
+import '../../support/section_load.dart';
 
 void main() {
   group('CustomHorizonNotifier', () {
     late ProviderContainer container;
 
-    setUp(() {
+    setUp(() async {
       container = ProviderContainer();
       addTearDown(container.dispose);
+      await loadSection(container, customHorizonProvider, 'custom-horizon');
     });
 
     List<(double, double)> shape(List<CustomHorizonPoint> pts) => [
@@ -46,25 +28,27 @@ void main() {
       // NOT sorted while editing: the panel's editable rows bind to their
       // index, so reordering mid-edit would rebind a just-edited field to a
       // different vertex. Sorting happens on hydrate + the Save echo.
-      expect(shape(container.read(customHorizonProvider)), [
+      expect(shape(container.read(customHorizonProvider).value!), [
         (180.0, 40.0),
         (10.0, 15.0),
       ]);
 
       // Editing an azimuth keeps the row where the user is editing it.
       n.updateAt(0, azimuthDeg: 270);
-      expect(shape(container.read(customHorizonProvider)), [
+      expect(shape(container.read(customHorizonProvider).value!), [
         (270.0, 40.0),
         (10.0, 15.0),
       ]);
 
       n.removeAt(1);
-      expect(shape(container.read(customHorizonProvider)), [(270.0, 40.0)]);
+      expect(shape(container.read(customHorizonProvider).value!), [
+        (270.0, 40.0),
+      ]);
 
       // Out-of-range indices are ignored, not thrown.
       n.removeAt(5);
       n.updateAt(-1, altitudeDeg: 1);
-      expect(container.read(customHorizonProvider), hasLength(1));
+      expect(container.read(customHorizonProvider).value!, hasLength(1));
 
       // Out-of-range VALUES are rejected like the sibling site setters —
       // the daemon's 422 range check is unreachable from this UI.
@@ -72,44 +56,42 @@ void main() {
       n.addPoint(10, 95);
       n.updateAt(0, azimuthDeg: -5);
       n.updateAt(0, altitudeDeg: -20);
-      expect(container.read(customHorizonProvider), hasLength(1));
-      expect(container.read(customHorizonProvider).single.azimuthDeg, 270);
+      expect(container.read(customHorizonProvider).value!, hasLength(1));
+      expect(
+        container.read(customHorizonProvider).value!.single.azimuthDeg,
+        270,
+      );
     });
 
-    test(
-      'hydrate sorts the served skyline; persist sends staged and adopts the echo',
-      () async {
-        final api = _FakeApi()
-          ..served = const [
-            CustomHorizonPoint(azimuthDeg: 350, altitudeDeg: 5),
-            CustomHorizonPoint(azimuthDeg: 20, altitudeDeg: 30),
-          ];
-        final n = container.read(customHorizonProvider.notifier);
-
-        await n.hydrateFromServer(api);
-        expect(shape(container.read(customHorizonProvider)), [
-          (20.0, 30.0),
-          (350.0, 5.0),
-        ]);
-
-        n.addPoint(100, 12);
-        // The daemon canonicalizes (here: it drops a vertex) — the echo wins.
-        api.putEcho = const [
+    test('hydrate sorts the served skyline; persist sends staged and adopts the echo', () async {
+      final rig = FakeSectionRig({
+        'custom-horizon': ProfileApi.customHorizonToJson(const [
+          CustomHorizonPoint(azimuthDeg: 350, altitudeDeg: 5),
           CustomHorizonPoint(azimuthDeg: 20, altitudeDeg: 30),
-        ];
-        await n.persistToServer(api);
+        ]),
+      });
+      final api = rig.api();
+      final n = container.read(customHorizonProvider.notifier);
 
-        expect(
-          api.putReceived,
-          hasLength(3),
-          reason: 'staged skyline was sent',
-        );
-        expect(
-          shape(container.read(customHorizonProvider)),
-          [(20.0, 30.0)],
-          reason: 'client adopts the daemon\'s canonical echo',
-        );
-      },
-    );
+      await n.hydrateFromServer(api);
+      expect(shape(container.read(customHorizonProvider).value!), [
+        (20.0, 30.0),
+        (350.0, 5.0),
+      ]);
+
+      n.addPoint(100, 12);
+      await n.save(api);
+
+      expect(
+        (rig.puts.single.body as Map)['points'],
+        hasLength(3),
+        reason: 'staged skyline was sent',
+      );
+      expect(shape(container.read(customHorizonProvider).value!), [
+        (20.0, 30.0),
+        (100.0, 12.0),
+        (350.0, 5.0),
+      ], reason: 'client adopts the echo, sorted');
+    });
   });
 }

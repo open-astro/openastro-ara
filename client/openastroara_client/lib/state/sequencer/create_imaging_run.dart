@@ -876,14 +876,16 @@ Future<void> _registerMosaicProject(
 
 /// #1264 — the Imaging → Unguided knobs as the run builder takes them.
 UnguidedOptions unguidedOptionsOf(ProviderContainer container) {
-  final u = container.read(unguidedSettingsProvider);
+  final u =
+      container.read(unguidedSettingsProvider).value ??
+      const UnguidedSettings();
   return UnguidedOptions(
     guardEnabled: u.guardEnabled,
     eccentricityTolerance: u.eccentricityTolerance,
     goodEccentricity: u.goodEccentricity,
     stepDownAfter: u.stepDownAfter,
     stepUpAfter: u.stepUpAfter,
-    probeRungsSeconds: u.probeRungsSeconds,
+    probeRungsSeconds: u.effectiveProbeRungsSeconds,
     recentreDriftArcmin: u.recentreDriftArcmin,
     recentreSolveEveryN: u.recentreSolveEveryN,
   );

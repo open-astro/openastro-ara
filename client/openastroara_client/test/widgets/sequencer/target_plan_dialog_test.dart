@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -21,7 +22,8 @@ class _SeededElectronics extends CameraElectronicsNotifier {
   _SeededElectronics(this._v);
   final CameraElectronics _v;
   @override
-  CameraElectronics build() => _v;
+  LoadedSection<CameraElectronics> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -203,6 +205,28 @@ void main() {
       expect(spec, isNotNull, reason: 'some sky puts the Hα floor inside the plan\'s clamp');
       expect(fitted!['Ha']!, greaterThan(spec!['Ha']!), reason: 'half the measured sky rate moves the Hα floor out');
       expect(fitted['OIII'], spec['OIII'], reason: 'OIII has no fitted k');
+    });
+
+    testWidgets('camera electronics not loaded: the plan reads unset electronics, never a saved value', (tester) async {
+      Future<Map<String, double>> exposures(List<Object> electronics) async {
+        final choice = await open(tester, filters: shoSet, overrides: [
+          opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+          siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 5))),
+          ...electronics,
+        ], interact: (t) async {
+          await t.tap(find.text('Narrowband · SHO'));
+          await t.pump();
+          await t.tap(find.text('Create run'));
+        });
+        await tester.pumpWidget(const SizedBox());
+        return {for (final s in choice!.filterPlan!) s.filterName: s.exposureSeconds};
+      }
+      final notLoaded = await exposures(const []);
+      final unset = await exposures([
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics())),
+      ]);
+      expect(notLoaded, unset);
     });
 
     testWidgets('Basic pick returns no plan; cancel returns null',

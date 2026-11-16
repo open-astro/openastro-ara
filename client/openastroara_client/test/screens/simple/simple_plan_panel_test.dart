@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -243,8 +244,10 @@ class _Optics extends OpticsSettingsNotifier {
 
 class _Electronics extends CameraElectronicsNotifier {
   @override
-  CameraElectronics build() =>
-      const CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
+  LoadedSection<CameraElectronics> build() => const LoadedSection(
+        value: CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8),
+        source: SectionSource.rig,
+      );
 }
 
 class _Site extends SiteSettingsNotifier {

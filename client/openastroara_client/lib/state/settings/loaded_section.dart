@@ -110,11 +110,20 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   /// Same as [load], for the live-sync table.
   Future<void> hydrateFromServer(ProfileApi api) => load(api);
 
-  /// Apply an edit; ignored while there is nothing loaded to edit.
+  /// Apply an edit; ignored unless the value came from the rig. An offline
+  /// cache seed is read-only: an edit on it would be replaced by the retry-load
+  /// of the next Save, which would then report Saved (ADR 0015).
   void edit(T Function(T current) change) {
     final v = state.value;
-    if (v == null) return;
+    if (v == null || !state.canSave) return;
     state = state.copyWith(value: change(v));
+  }
+
+  /// Offline planning: show the cache's copy of the section (readable, never
+  /// saved). A copy from the rig, or a load still in flight, is never replaced.
+  void seed(T value) {
+    if (state.canSave) return;
+    state = LoadedSection(value: value, source: SectionSource.cache);
   }
 
   ProfileApi _activeApi() =>

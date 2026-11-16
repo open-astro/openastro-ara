@@ -336,23 +336,6 @@ class ProfileApi {
     return customHorizonFromJson(res.data ?? const {});
   }
 
-  /// PUT the skyline; the daemon canonicalizes (sort/dedupe/wrap, 422 on
-  /// out-of-range values) and echoes the canonical list.
-  Future<List<CustomHorizonPoint>> putCustomHorizon(
-    List<CustomHorizonPoint> points,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/custom-horizon',
-      data: {
-        'points': [
-          for (final p in points)
-            {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
-        ],
-      },
-    );
-    return customHorizonFromJson(res.data ?? const {});
-  }
-
   /// Wire shape of the §36 custom horizon (`{points: [{azimuth_deg, altitude_deg}]}`),
   /// also what the offline profile cache stores (#1137).
   static Map<String, dynamic> customHorizonToJson(
@@ -535,6 +518,120 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({CameraElectronics value, String? etag})>
+  getCameraElectronicsSection() =>
+      _getTagged('camera-electronics', _cameraElectronicsFromRig);
+  Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
+    CameraElectronics v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'camera-electronics',
+    cameraElectronicsToJson(v),
+    _cameraElectronicsFromRig,
+    ifMatch,
+  );
+
+  Future<({List<CustomHorizonPoint> value, String? etag})>
+  getCustomHorizonSection() =>
+      _getTagged('custom-horizon', _customHorizonFromRig);
+  Future<({List<CustomHorizonPoint> value, String? etag})>
+  putCustomHorizonSection(List<CustomHorizonPoint> v, {String? ifMatch}) =>
+      _putTagged(
+        'custom-horizon',
+        customHorizonToJson(v),
+        _customHorizonFromRig,
+        ifMatch,
+      );
+
+  Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
+      _getTagged('unguided', _unguidedSettingsFromRig);
+  Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
+    UnguidedSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'unguided',
+    unguidedSettingsToJson(v),
+    _unguidedSettingsFromRig,
+    ifMatch,
+  );
+
+  Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
+      _getTagged('plate-solve', _plateSolveSettingsFromRig);
+  Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
+    PlateSolveSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'plate-solve',
+    _plateSolveSettingsToJson(v),
+    _plateSolveSettingsFromRig,
+    ifMatch,
+  );
+
+  // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
+  // rule 3): as with storage, a missing or mistyped key fails the load or the
+  // Save, and so does an unknown engine, so no default is written back. The
+  // lenient readers stay for the offline cache and the untagged reads.
+  static CameraElectronics _cameraElectronicsFromRig(Map<String, dynamic> j) =>
+      CameraElectronics(
+        sensorName: j['sensor_name'] as String,
+        readNoiseE: (j['read_noise_e'] as num).toDouble(),
+        fullWellE: (j['full_well_e'] as num).toDouble(),
+        electronsPerAdu: (j['electrons_per_adu'] as num).toDouble(),
+        gain: (j['gain'] as num).toInt(),
+        quantumEfficiencyPeak: (j['quantum_efficiency_peak'] as num).toDouble(),
+        autoCaptured: j['auto_captured'] as bool,
+      );
+
+  static List<CustomHorizonPoint> _customHorizonFromRig(
+    Map<String, dynamic> j,
+  ) => [
+    for (final e in j['points'] as List)
+      CustomHorizonPoint(
+        azimuthDeg: ((e as Map)['azimuth_deg'] as num).toDouble(),
+        altitudeDeg: (e['altitude_deg'] as num).toDouble(),
+      ),
+  ];
+
+  static UnguidedSettings _unguidedSettingsFromRig(Map<String, dynamic> j) {
+    if (!j.containsKey('probe_rungs_seconds')) {
+      throw const FormatException('probe_rungs_seconds missing');
+    }
+    // Null is the daemon's own ladder (EffectiveProbeRungsSeconds): kept as
+    // null, so Save writes it back unchanged.
+    final rungs = j['probe_rungs_seconds'] as List?;
+    return UnguidedSettings(
+      guardEnabled: j['guard_enabled'] as bool,
+      eccentricityTolerance: (j['eccentricity_tolerance'] as num).toDouble(),
+      goodEccentricity: (j['good_eccentricity'] as num).toDouble(),
+      stepDownAfter: (j['step_down_after'] as num).toInt(),
+      stepUpAfter: (j['step_up_after'] as num).toInt(),
+      probeRungsSeconds: rungs?.map((r) => (r as num).toDouble()).toList(),
+      recentreDriftArcmin: (j['recentre_drift_arcmin'] as num).toDouble(),
+      recentreSolveEveryN: (j['recentre_solve_every_n'] as num).toInt(),
+      priorToleranceBasis: j['prior_tolerance_basis'] as String,
+    );
+  }
+
+  static PlateSolveSettings _plateSolveSettingsFromRig(
+    Map<String, dynamic> j,
+  ) => PlateSolveSettings(
+    engine: PlateSolveEngine.values.firstWhere(
+      (e) => _plateSolveEngineToString(e) == j['engine'],
+      orElse: () => throw FormatException('unknown engine', j['engine']),
+    ),
+    pathOrEndpoint: j['path_or_endpoint'] as String,
+    indexDownloadPath: j['index_download_path'] as String,
+    searchRadiusDeg: (j['search_radius_deg'] as num).toDouble(),
+    downsampleFactor: (j['downsample_factor'] as num).toInt(),
+    timeoutSeconds: (j['timeout_seconds'] as num).toInt(),
+    useBlindFallback: j['use_blind_fallback'] as bool,
+    centerAfterSlew: j['center_after_slew'] as bool,
+    syncToCoordinates: j['sync_to_coordinates'] as bool,
+    maxIterations: (j['max_iterations'] as num).toInt(),
+    convergenceToleranceArcsec: (j['convergence_tolerance_arcsec'] as num)
+        .toDouble(),
+  );
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -600,15 +697,6 @@ class ProfileApi {
       if (e.response?.statusCode == 404) return const UnguidedSettings();
       rethrow;
     }
-  }
-
-  /// PUT the active profile's unguided-imaging settings (#1264).
-  Future<UnguidedSettings> putUnguidedSettings(UnguidedSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/unguided',
-      data: unguidedSettingsToJson(value),
-    );
-    return unguidedSettingsFromJson(res.data ?? const {});
   }
 
   static UnguidedSettings unguidedSettingsFromJson(Map<String, dynamic> j) {

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
@@ -66,23 +66,19 @@ class PlateSolveSettings {
       );
 }
 
-class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings>
-    with SettingsSyncMixin<PlateSolveSettings> {
-  @override
-  PlateSolveSettings build() => const PlateSolveSettings();
-
-  void setEngine(PlateSolveEngine e) => state = state.copyWith(engine: e);
+class PlateSolveSettingsNotifier extends SectionNotifier<PlateSolveSettings> {
+  void setEngine(PlateSolveEngine e) => edit((c) => c.copyWith(engine: e));
 
   void setPathOrEndpoint(String s) {
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(pathOrEndpoint: v);
+    edit((c) => c.copyWith(pathOrEndpoint: v));
   }
 
   void setIndexDownloadPath(String s) {
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(indexDownloadPath: v);
+    edit((c) => c.copyWith(indexDownloadPath: v));
   }
 
   void setSearchRadiusDeg(double v) {
@@ -90,7 +86,7 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings>
     // pointing. Reject out-of-range (per the convention used by every
     // other settings notifier — display-sync snaps the field back).
     if (v <= 0 || v > 180) return;
-    state = state.copyWith(searchRadiusDeg: v);
+    edit((c) => c.copyWith(searchRadiusDeg: v));
   }
 
   void setDownsampleFactor(int v) {
@@ -98,38 +94,45 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings>
     // 1 = no downsampling; 8 is the practical upper limit before the
     // image is too coarse for star detection. Reject out-of-range.
     if (v < 0 || v > 8) return;
-    state = state.copyWith(downsampleFactor: v);
+    edit((c) => c.copyWith(downsampleFactor: v));
   }
 
   void setTimeoutSeconds(int v) {
     if (v <= 0) return;
-    state = state.copyWith(timeoutSeconds: v);
+    edit((c) => c.copyWith(timeoutSeconds: v));
   }
 
   void setUseBlindFallback(bool v) =>
-      state = state.copyWith(useBlindFallback: v);
+      edit((c) => c.copyWith(useBlindFallback: v));
   void setCenterAfterSlew(bool v) =>
-      state = state.copyWith(centerAfterSlew: v);
+      edit((c) => c.copyWith(centerAfterSlew: v));
   void setSyncToCoordinates(bool v) =>
-      state = state.copyWith(syncToCoordinates: v);
+      edit((c) => c.copyWith(syncToCoordinates: v));
 
   void setMaxIterations(int v) {
     if (v < 1) return;
-    state = state.copyWith(maxIterations: v);
+    edit((c) => c.copyWith(maxIterations: v));
   }
 
   void setConvergenceToleranceArcsec(double v) {
     if (v <= 0) return;
-    state = state.copyWith(convergenceToleranceArcsec: v);
+    edit((c) => c.copyWith(convergenceToleranceArcsec: v));
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getPlateSolveSettings());
+  @override
+  Future<Tagged<PlateSolveSettings>> fetch(ProfileApi api) =>
+      api.getPlateSolveSection();
 
-  Future<PlateSolveSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putPlateSolveSettings(sent));
+  @override
+  Future<Tagged<PlateSolveSettings>> send(
+    ProfileApi api,
+    PlateSolveSettings value,
+    String? etag,
+  ) => api.putPlateSolveSection(value, ifMatch: etag);
 }
 
 final plateSolveSettingsProvider =
-    NotifierProvider<PlateSolveSettingsNotifier, PlateSolveSettings>(
-        PlateSolveSettingsNotifier.new);
+    NotifierProvider<
+      PlateSolveSettingsNotifier,
+      LoadedSection<PlateSolveSettings>
+    >(PlateSolveSettingsNotifier.new);

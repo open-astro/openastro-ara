@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/settings/camera_electronics_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 
 /// NEXTGEN §3/§4 Camera electronics panel — the exposure-planning inputs
 /// behind the Optimal-Sub calculator (read noise, full well, e⁻/ADU, gain,
@@ -26,63 +23,24 @@ class CameraElectronicsPanel extends ConsumerStatefulWidget {
 }
 
 class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return; // no active server — keep local defaults
-    try {
-      await ref.read(cameraElectronicsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [cameraElectronicsProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(cameraElectronicsProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final e = ref.watch(cameraElectronicsProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final e = ref.watch(cameraElectronicsProvider).value!;
     final n = ref.read(cameraElectronicsProvider.notifier);
     final dim = Theme.of(
       context,
@@ -90,6 +48,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         Text(
           'Inputs for the Optimal Sub exposure calculator (read-noise criterion '
           'popularised by Dr. Robin Glover, SharpCap). Full well, e⁻/ADU, gain '
@@ -127,7 +86,8 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           label: 'Sensor name',
           helpKey: 'img.electronics.sensor_name',
           currentValue: e.sensorName,
-          getCanonical: () => ref.read(cameraElectronicsProvider).sensorName,
+          getCanonical: () =>
+              ref.read(cameraElectronicsProvider).value!.sensorName,
           parse: n.setSensorName,
           hint: 'e.g. IMX571 (auto-filled on camera connect)',
         ),
@@ -136,7 +96,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           helpKey: 'img.electronics.read_noise',
           currentValue: _fmt(e.readNoiseE),
           getCanonical: () =>
-              _fmt(ref.read(cameraElectronicsProvider).readNoiseE),
+              _fmt(ref.read(cameraElectronicsProvider).value!.readNoiseE),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setReadNoiseE(v);
@@ -147,7 +107,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           helpKey: 'img.electronics.full_well',
           currentValue: _fmt(e.fullWellE),
           getCanonical: () =>
-              _fmt(ref.read(cameraElectronicsProvider).fullWellE),
+              _fmt(ref.read(cameraElectronicsProvider).value!.fullWellE),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setFullWellE(v);
@@ -158,7 +118,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           helpKey: 'img.electronics.conversion_gain',
           currentValue: _fmt(e.electronsPerAdu),
           getCanonical: () =>
-              _fmt(ref.read(cameraElectronicsProvider).electronsPerAdu),
+              _fmt(ref.read(cameraElectronicsProvider).value!.electronsPerAdu),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setElectronsPerAdu(v);
@@ -169,7 +129,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           helpKey: 'img.electronics.gain_reference',
           currentValue: e.gain.toString(),
           getCanonical: () =>
-              ref.read(cameraElectronicsProvider).gain.toString(),
+              ref.read(cameraElectronicsProvider).value!.gain.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setGain(v);
@@ -179,8 +139,9 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
           label: 'Peak quantum efficiency (0–1)',
           helpKey: 'img.electronics.peak_qe',
           currentValue: _fmt(e.quantumEfficiencyPeak),
-          getCanonical: () =>
-              _fmt(ref.read(cameraElectronicsProvider).quantumEfficiencyPeak),
+          getCanonical: () => _fmt(
+            ref.read(cameraElectronicsProvider).value!.quantumEfficiencyPeak,
+          ),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setQuantumEfficiencyPeak(v);

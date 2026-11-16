@@ -9,18 +9,18 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/imaging_plate_solve_panel.dart';
 import 'package:openastroara/services/plate_solve_database_api.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
+
+import '../../../support/fake_section_rig.dart';
 
 /// A daemon that stores the plate-solve settings and, like the real one,
 /// normalises a stock solver path (/usr/bin/astap) to the bundled
 /// /opt/openastroara/astap_cli on write (#1215, #1136).
 class _NormalisingDaemon implements HttpClientAdapter {
-  Map<String, dynamic> stored = {
-    'path_or_endpoint': '/opt/openastroara/astap_cli',
-    'index_download_path': '/var/lib/astap',
-  };
+  Map<String, dynamic> stored = {...rigDefaults['plate-solve']!};
   final List<String> requests = [];
 
   @override
@@ -68,6 +68,9 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         activeServerProvider.overrideWithValue(null),
+        profileApiProvider.overrideWithValue(
+          FakeSectionRig({'plate-solve': rigDefaults['plate-solve']}).api(),
+        ),
         plateSolveDatabaseStatusProvider.overrideWith((ref) async => status),
       ],
       child: MaterialApp(
@@ -181,9 +184,10 @@ void main() {
       // #1215 — the daemon rewrites /usr/bin/astap to /opt/openastroara/astap_cli on write; the
       // field used to keep showing what was typed, and the status was read once.
       final daemon = _NormalisingDaemon();
-      ImagingPlateSolvePanel.apiFactory = (server) =>
-          ProfileApi(server, dio: Dio()..httpClientAdapter = daemon);
-      addTearDown(() => ImagingPlateSolvePanel.apiFactory = ProfileApi.new);
+      final api = ProfileApi(
+        const AraServer(hostname: 'rig', port: 8080),
+        dio: Dio()..httpClientAdapter = daemon,
+      );
       var statusReads = 0;
       tester.view.physicalSize = const Size(1600, 1600);
       tester.view.devicePixelRatio = 1.0;
@@ -194,6 +198,7 @@ void main() {
             activeServerProvider.overrideWithValue(
               const AraServer(hostname: 'rig', port: 8080),
             ),
+            profileApiProvider.overrideWithValue(api),
             plateSolveDatabaseStatusProvider.overrideWith((ref) async {
               statusReads++;
               return null;

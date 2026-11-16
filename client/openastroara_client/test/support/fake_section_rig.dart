@@ -28,6 +28,9 @@ class FakeSectionRig implements HttpClientAdapter {
   /// Each entry fails one PUT to its section with a 500 (nothing written).
   final List<String> failPut = [];
 
+  /// Section -> a key its PUT reply leaves out (the write still lands).
+  final Map<String, String> dropFromReply = {};
+
   /// Every write that landed, in order.
   final List<LandedPut> puts = [];
 
@@ -82,7 +85,11 @@ class FakeSectionRig implements HttpClientAdapter {
         puts.add((section: section, body: options.data, ifMatch: ifMatch));
         _sections[section] = options.data;
         savedElsewhere(section);
-        return _json(options.data, 200, etag: etagOf(section));
+        final drop = dropFromReply[section];
+        final reply = drop == null
+            ? options.data
+            : ({...options.data as Map}..remove(drop));
+        return _json(reply, 200, etag: etagOf(section));
       default:
         return _json({'title': 'method not allowed'}, 405);
     }
@@ -98,3 +105,43 @@ class FakeSectionRig implements HttpClientAdapter {
         },
       );
 }
+
+/// The daemon's copy of each section on a fresh profile (its section
+/// defaults), for the sections whose reader takes no client default: every
+/// key is there, so the load succeeds (ADR 0015 rule 3).
+const rigDefaults = <String, Map<String, Object?>>{
+  'camera-electronics': {
+    'sensor_name': '',
+    'read_noise_e': 0,
+    'full_well_e': 0,
+    'electrons_per_adu': 0,
+    'gain': -1,
+    'quantum_efficiency_peak': 0,
+    'auto_captured': false,
+  },
+  'custom-horizon': {'points': []},
+  'plate-solve': {
+    'engine': 'astap',
+    'path_or_endpoint': '/opt/openastroara/astap_cli',
+    'index_download_path': '/var/lib/astap',
+    'search_radius_deg': 30,
+    'downsample_factor': 0,
+    'timeout_seconds': 60,
+    'use_blind_fallback': true,
+    'center_after_slew': true,
+    'sync_to_coordinates': true,
+    'max_iterations': 5,
+    'convergence_tolerance_arcsec': 60,
+  },
+  'unguided': {
+    'guard_enabled': true,
+    'eccentricity_tolerance': 0.5,
+    'good_eccentricity': 0.3,
+    'step_down_after': 2,
+    'step_up_after': 10,
+    'probe_rungs_seconds': null, // the daemon's own ladder
+    'recentre_drift_arcmin': 10,
+    'recentre_solve_every_n': 1,
+    'prior_tolerance_basis': 'max',
+  },
+};

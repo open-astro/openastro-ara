@@ -160,22 +160,29 @@ Future<bool> seedPlanningFromCache(
       () async => ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
   await container.read(autofocusSettingsProvider.notifier).hydrateGuarded(
       () async => ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
+  // ADR 0015: a snapshot with no key for a section leaves it not loaded,
+  // never a default that a Save could send. A cache copy is for planning only.
   if (snap['unguided'] is Map) {
-    await container.read(unguidedSettingsProvider.notifier).hydrateGuarded(
-        () async => ProfileApi.unguidedSettingsFromJson(sec('unguided')));
+    container
+        .read(unguidedSettingsProvider.notifier)
+        .seed(ProfileApi.unguidedSettingsFromJson(sec('unguided')));
   }
   await container
       .read(siteSettingsProvider.notifier)
       .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));
   await container.read(filterSetProvider.notifier).hydrateGuarded(
       () async => ProfileApi.filterSetFromJson(sec('filter_set')));
-  await container.read(cameraElectronicsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.cameraElectronicsFromJson(sec('camera_electronics')));
+  if (snap['camera_electronics'] is Map) {
+    container
+        .read(cameraElectronicsProvider.notifier)
+        .seed(ProfileApi.cameraElectronicsFromJson(sec('camera_electronics')));
+  }
   // #1137 — a snapshot taken before the horizon was cached has no key: leave
   // the notifier alone rather than wiping a skyline the user may have staged.
   if (snap['custom_horizon'] is Map) {
-    await container.read(customHorizonProvider.notifier).hydrateGuarded(
-        () async => ProfileApi.customHorizonFromJson(sec('custom_horizon')));
+    container
+        .read(customHorizonProvider.notifier)
+        .seed(ProfileApi.customHorizonFromJson(sec('custom_horizon')));
   }
   return true;
 }

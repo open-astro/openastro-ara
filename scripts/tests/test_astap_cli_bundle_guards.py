@@ -8,9 +8,10 @@ Run from the repo root:
 
 SolverPathMigration.AstapCliPath is the profile default and the migration target. The
 .deb installs the daemon at that directory, so the Docker image's WORKDIR must be the same
-directory (the image copies astap_cli next to the daemon), and the client's three copies
-of the default (Settings registry, the profile API fallback, the settings state) must name
-the same file, or a fresh profile points at a binary that is not there.
+directory (the image copies astap_cli next to the daemon), and the client's copies of the
+default (the profile API fallback, the settings state, and the Settings registry row unless
+it is null: plate solve loads before it saves, #1807) must name the same file, or a fresh
+profile points at a binary that is not there.
 """
 
 from __future__ import annotations
@@ -24,8 +25,9 @@ MIGRATION = REPO_ROOT / "OpenAstroAra.Server" / "Services" / "SolverPathMigratio
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 CLIENT = REPO_ROOT / "client" / "openastroara_client" / "lib"
 CLIENT_DEFAULTS = (
+    # The row's own default, never a later row's (the match stops at the next Setting( row).
     (CLIENT / "settings" / "registry.dart",
-     r"id: 'img\.platesolve\.path_or_endpoint',.*?defaultValue: '([^']+)'"),
+     r"id: 'img\.platesolve\.path_or_endpoint',(?:(?!Setting\().)*?defaultValue: (?:null|'([^']+)')"),
     (CLIENT / "services" / "profile_api.dart",
      r"pathOrEndpoint:\s*\(j\['path_or_endpoint'\] as String\?\) \?\? '([^']+)'"),
     (CLIENT / "state" / "settings" / "plate_solve_settings_state.dart",
@@ -59,7 +61,8 @@ class ClientDefaults(unittest.TestCase):
         for path, pattern in CLIENT_DEFAULTS:
             m = re.search(pattern, path.read_text(), re.S)
             self.assertIsNotNone(m, f"{path.relative_to(REPO_ROOT)}: default not found")
-            self.assertEqual(m[1], expected, f"{path.relative_to(REPO_ROOT)} default")
+            if m[1] is not None:  # a null registry row holds no copy that could drift
+                self.assertEqual(m[1], expected, f"{path.relative_to(REPO_ROOT)} default")
 
 
 if __name__ == "__main__":

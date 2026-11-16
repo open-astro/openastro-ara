@@ -15,8 +15,8 @@ typedef PanelSection =
 
 /// ADR 0015 — what every settings panel does with the sections it edits: load
 /// them when it opens (and again when one goes back to not loaded, as after a
-/// rig or profile change), show [SectionNotLoaded] in place of fields that hold
-/// no value, show [SectionConflictBanner] after a 412, and save with one
+/// rig or profile change), show [SectionNotLoaded] in place of fields with no
+/// copy from the rig, [SectionConflictBanner] after a 412, and save with one
 /// refusal message. A panel with sections of its own name them in [sections];
 /// a section it still saves the old way stays out of the list.
 mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
@@ -54,12 +54,13 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
   }
 
   /// Call first in `build`. Returns what to show instead of the fields while a
-  /// section holds no value, or null when every section is loaded.
+  /// section holds no copy from the rig (an offline cache copy is not
+  /// editable), or null when every section is loaded.
   Widget? sectionGate() {
     reloadWhenReset();
     for (final s in sections) {
       final v = ref.watch(s);
-      if (v.value == null) {
+      if (!v.canSave) {
         return SectionNotLoaded(section: v, onRetry: loadSections);
       }
     }
@@ -75,14 +76,17 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
   /// snackbar and returns the refusal text, or null when everything was saved.
   ///
   /// [andThen] saves what the panel still saves the old way, after the
-  /// sections and before the message.
+  /// sections and before the message; when it fails after the sections were
+  /// saved, the message starts with [andThenFailed].
   Future<String?> saveSections({
     Future<void> Function(ProfileApi api)? andThen,
+    String andThenFailed = '',
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     String? error;
+    var saved = false;
     if (api == null) {
       error = l10n.deviceChooserNotConnected;
     } else {
@@ -90,11 +94,13 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
         for (final s in sections) {
           await ref.read(s.notifier).save(api);
         }
+        saved = true;
         await andThen?.call(api);
       } catch (e) {
         error = e is SectionNotLoadedException || e is SectionConflictException
             ? e.toString()
             : friendlyError(l10n, e, action: l10n.actionSave);
+        if (saved) error = '$andThenFailed$error';
       }
     }
     if (mounted) {
