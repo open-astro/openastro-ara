@@ -1422,6 +1422,29 @@ void main() {
       expect(find.text(title), findsNWidgets(3), reason: 'and after a Recent tap');
     });
 
+    testWidgets('a Recent region saved as Sh2-54 region reads Sh2-54 region (NGC 6604): a name that looks like a designation is still a name',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC6604', name: 'Sh2-54 region', type: 'HII', magnitude: 6.5, raDeg: 274.5, decDeg: -12.2),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Sh2-54 region', raDeg: 274.5, decDeg: -12.2, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('Sh2-54 region (NGC 6604)')), findsOneWidget);
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('Sh2-54 region (NGC 6604)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
+    });
+
     testWidgets("a Recent target saved under an alias, M 31, reads Andromeda Galaxy (M 31) on the tile and the plan header",
         (tester) async {
       await _pump(

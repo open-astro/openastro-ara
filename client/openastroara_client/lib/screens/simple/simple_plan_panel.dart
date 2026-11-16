@@ -1056,16 +1056,17 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     // and a pick that keeps it.
     final names = ref.watch(bundledNameIndexProvider);
     final recentRows = [for (final r in recent) names.lookup(r.name)];
-    // What a Recent tile and its tap lead with: the saved designation (M 31),
-    // else the row's best one; a saved common name is not a designation (#1957).
+    // What a Recent tile and its tap lead with: the saved name when it is one
+    // of the row's designations (M 31), else the row's best one. A saved
+    // common name is not a designation, even "Sh2-54 region" (#1957).
     final recentLeads = [
       for (final (i, r) in recent.indexed)
-        isCatalogDesignation(r.name)
-            ? r.name
-            : switch (recentRows[i]) {
-                final row? => bestCatalogDesignation([row.id, ...row.aliases]) ?? row.id,
-                null => r.name,
-              },
+        switch (recentRows[i]) {
+          final row?
+              when ![row.id, ...row.aliases].any((d) => designationKey(d) == designationKey(r.name)) =>
+            bestCatalogDesignation([row.id, ...row.aliases]) ?? row.id,
+          _ => r.name,
+        },
     ];
     final site = ref.watch(siteSettingsProvider);
     final span = ref.watch(simpleRestOfNightProvider);
