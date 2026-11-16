@@ -218,11 +218,14 @@ namespace OpenAstroAra.Server.Services {
                     // with the same east-positive sign convention as PolarAlignGeometry.AxisError.
                     var p = PolarAlignGeometry.PointingAltAz(
                         s.RaDegJnow, s.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, at);
-                    var altErr = seedAltErr + (p.AltDeg - seedPointing.AltDeg) * 60.0;
+                    var (altShiftDeg, azShiftDeg) = PolarAlignGeometry.AxisShiftFromPointingShift(
+                        seedPointing.AltDeg, seedPointing.AzDeg, p.AltDeg - seedPointing.AltDeg,
+                        Wrap180(p.AzDeg - seedPointing.AzDeg), site.LatitudeDeg);
+                    var altErr = seedAltErr + altShiftDeg * 60.0;
                     var axisAltDeg = Math.Abs(site.LatitudeDeg)
                         + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(site.LatitudeDeg)) / 60.0
                         + altErr / 60.0;
-                    var azErr = seedAzErr + Wrap180(p.AzDeg - seedPointing.AzDeg)
+                    var azErr = seedAzErr + azShiftDeg
                         * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
                     return (altErr, azErr);
                 },

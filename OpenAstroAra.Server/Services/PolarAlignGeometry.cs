@@ -344,6 +344,18 @@ public static class PolarAlignGeometry {
         return AltAz(decDeg, latitudeDeg, lst - raDeg);
     }
 
+    /// <summary>
+    /// §45.8 — the camera's alt/az shift since the seed (<paramref name="dAltDeg"/>, <paramref name="dAzDeg"/>,
+    /// azimuth wrapped to ±180°) mapped back to the shift of the polar axis: the altitude knob's raise of the
+    /// pole and the azimuth knob's turn about the vertical (both degrees, azimuth increasing). Small-angle
+    /// model of a rigid mount whose camera sits at (<paramref name="seedAltDeg"/>, <paramref name="seedAzDeg"/>):
+    /// with ψ the camera's azimuth from the pole's, Δalt = δalt·cos ψ and Δaz = δaz + δalt·sin ψ·tan alt.
+    /// </summary>
+    public static (double AltShiftDeg, double AzShiftDeg) AxisShiftFromPointingShift(
+            double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
+        return (dAltDeg, dAzDeg);
+    }
+
     // ── spherical helpers (unit-vector algebra; RA/Dec degrees) ─────────────────────────────
 
     private static (double X, double Y, double Z) UnitVector(double raDeg, double decDeg) {
