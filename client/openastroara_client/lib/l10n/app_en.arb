@@ -3998,6 +3998,18 @@
   "@albumBookRcw": {
     "description": "Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language"
   },
+  "albumBookNgc": "NGC",
+  "@albumBookNgc": {
+    "description": "Sky Album: Book switch segment for the NGC catalog (New General Catalogue); the name is the same in every language"
+  },
+  "albumBookIc": "IC",
+  "@albumBookIc": {
+    "description": "Sky Album: Book switch segment for the IC catalog (Index Catalogue); the name is the same in every language"
+  },
+  "albumBookSharpless": "Sharpless (Sh2)",
+  "@albumBookSharpless": {
+    "description": "Sky Album: Book switch segment for the Sharpless Sh2 catalog of HII regions; the name is the same in every language"
+  },
   "dsoTypeGalaxy": "Galaxy",
   "@dsoTypeGalaxy": {
     "description": "Deep-sky object type on a Sky Album card back's bio line"

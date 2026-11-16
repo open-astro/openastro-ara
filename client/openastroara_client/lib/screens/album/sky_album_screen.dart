@@ -4,6 +4,7 @@
 /// [SkyAlbumScreen.onImageTarget].
 library;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,6 +64,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
   /// The cache was empty before this open's fetch: the whole collection is new.
   bool _firstOpen = false;
+
+  /// [_shelf]'s missing cards by designation, with the views of the Books shown it was built
+  /// from: walking every alias of ~13k cards on each build cost a chip or filter tap ~100 ms.
+  ({List<AlbumBookView> views, Map<String, PlanningDso> byKey})? _missing;
 
   @override
   void initState() {
@@ -162,7 +167,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     // so a shelf would offer collected cards.
     final loaded = _synced || (collection?.frames.isNotEmpty ?? false);
     final shelf = loaded && view != null && _filter != AlbumFilter.collected
-        ? _shelf(objects, stats)
+        ? _shelf(objects, stats, [for (final b in books) views[b]!])
         : const <PlanningDso>[];
     final shown = switch (_filter) {
       AlbumFilter.all => objects,
@@ -244,6 +249,9 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                     AlbumBook.messier => l.albumBookMessier,
                     AlbumBook.caldwell => l.albumBookCaldwell,
                     AlbumBook.rcw => l.albumBookRcw,
+                    AlbumBook.ngc => l.albumBookNgc,
+                    AlbumBook.ic => l.albumBookIc,
+                    AlbumBook.sharpless => l.albumBookSharpless,
                   },
                   views[b]?.collected ?? 0)),
               selected: _catalogs.contains(b),
@@ -387,15 +395,23 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   }
 
   /// Tonight's Sky ranking filtered to this Book's missing cards, in ranker
-  /// order, capped. Empty (so hidden) when the ranker has nothing.
-  List<PlanningDso> _shelf(List<PlanningDso> objects, Map<String, CardStats> stats) {
+  /// order, capped. Empty (so hidden) when the ranker has nothing. [objects] and
+  /// [stats] come from [shown], the views of the Books shown.
+  List<PlanningDso> _shelf(List<PlanningDso> objects, Map<String, CardStats> stats, List<AlbumBookView> shown) {
     final ranked = ref.watch(tonightSkyProvider).value ?? const [];
-    // By any designation: the ranker's row may carry the object under another id.
-    final missing = <String, PlanningDso>{
-      for (final d in objects)
-        if (!stats.containsKey(d.id))
-          for (final name in [d.id, ...d.aliases]) designationKey(name): d,
-    };
+    // By any designation: the ranker's row may carry the object under another id. Built again
+    // only when the Books shown, or a match against new rows, give other views.
+    if (_missing == null || !listEquals(_missing!.views, shown)) {
+      _missing = (
+        views: shown,
+        byKey: {
+          for (final d in objects)
+            if (!stats.containsKey(d.id))
+              for (final name in [d.id, ...d.aliases]) designationKey(name): d,
+        },
+      );
+    }
+    final missing = _missing!.byKey;
     final out = <PlanningDso>[];
     for (final t in ranked) {
       final d = [t.id, ...t.aliases].map((n) => missing[designationKey(n)]).nonNulls.firstOrNull;

@@ -5247,6 +5247,24 @@ abstract class AppLocalizations {
   /// **'RCW'**
   String get albumBookRcw;
 
+  /// Sky Album: Book switch segment for the NGC catalog (New General Catalogue); the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'NGC'**
+  String get albumBookNgc;
+
+  /// Sky Album: Book switch segment for the IC catalog (Index Catalogue); the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'IC'**
+  String get albumBookIc;
+
+  /// Sky Album: Book switch segment for the Sharpless Sh2 catalog of HII regions; the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpless (Sh2)'**
+  String get albumBookSharpless;
+
   /// Deep-sky object type on a Sky Album card back's bio line
   ///
   /// In en, this message translates to:
