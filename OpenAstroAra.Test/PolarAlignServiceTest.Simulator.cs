@@ -77,13 +77,16 @@ namespace OpenAstroAra.Test {
                 "Declination", decDeg.ToString(CultureInfo.InvariantCulture));
 
         // A made-up northern and a made-up southern site; the simulator's own site is put back afterwards.
-        [TestCase(40.0, 25.0, -12.0)]
-        [TestCase(-40.0, 25.0, -12.0)]
-        [TestCase(-40.0, -18.0, 9.0)]
+        [TestCase(40.0, 25.0, -12.0, 85.0)]
+        [TestCase(-40.0, 25.0, -12.0, 85.0)]
+        [TestCase(-40.0, -18.0, 9.0, 85.0)]
+        [TestCase(40.0, 25.0, -12.0, 60.0)]
+        [TestCase(-40.0, 25.0, -12.0, 60.0)]
+        [TestCase(-40.0, -18.0, 9.0, 60.0)]
         [Category("Integration")]
         [Explicit("needs the PolarAlign Alpaca simulator listening at localhost:11112")]
         public async Task Against_the_PolarAlign_simulator_the_routine_drives_the_error_inside_the_tolerance(
-                double latitudeDeg, double azErrorArcmin, double altErrorArcmin) {
+                double latitudeDeg, double azErrorArcmin, double altErrorArcmin, double startDecMagnitudeDeg) {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             JsonElement before;
             try {
@@ -108,9 +111,9 @@ namespace OpenAstroAra.Test {
             var south = latitudeDeg < 0;
             var mount = new Moq.Mock<ITelescopeMediator>();
             var tracking = true;
-            // 5° from the pole, where a polar alignment is done: the live readout reads the camera's alt/az shift as
-            // the axis's, which holds near the pole only.
-            var encoder = new OpenAstroAra.Astrometry.Coordinates(0.0, south ? -85.0 : 85.0, OpenAstroAra.Astrometry.Epoch.JNOW,
+            // 5° or 30° from the pole: the live readout maps the camera's alt/az shift back to the axis's at any
+            // distance from the pole (#1983).
+            var encoder = new OpenAstroAra.Astrometry.Coordinates(0.0, south ? -startDecMagnitudeDeg : startDecMagnitudeDeg, OpenAstroAra.Astrometry.Epoch.JNOW,
                 OpenAstroAra.Astrometry.Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
                 Connected = true, SiderealTime = 0.0, TrackingEnabled = tracking });
