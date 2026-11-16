@@ -87,6 +87,8 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           SectionNotLoaded(
             section: policySection,
             onRetry: _reload(ref, filterWheelPolicyProvider),
+            // A row of the list: start where the rows start.
+            padding: const EdgeInsets.symmetric(vertical: AraSpace.s12),
           )
         else ...[
           if (policySection.conflict)

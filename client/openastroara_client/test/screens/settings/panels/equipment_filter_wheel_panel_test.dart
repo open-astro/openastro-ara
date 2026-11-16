@@ -112,20 +112,19 @@ Future<_FakeFwApi> _pump(
   bool settle = true,
   _Offsets? offsets,
   bool rig = true,
+  bool policyLoadFails = false,
 }) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
+  final policyRig = FakeSectionRig({
+    'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+  });
+  if (policyLoadFails) policyRig.failGet.add('filter-wheel/policy');
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         serverLinkUpProvider.overrideWith((ref) => true),
-        profileApiProvider.overrideWithValue(
-          rig
-              ? FakeSectionRig({
-                  'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
-                }).api()
-              : null,
-        ),
+        profileApiProvider.overrideWithValue(rig ? policyRig.api() : null),
         savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
         ),
@@ -315,6 +314,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SectionNotLoaded), findsOneWidget);
     expect(find.text('Park on slot 0 on first connect'), findsNothing);
+  });
+
+  testWidgets('the policy not-loaded row lines up with the other rows', (
+    tester,
+  ) async {
+    await _pump(tester, null, rig: false);
+    expect(
+      tester.getTopLeft(find.text('Rig not connected')).dx,
+      tester.getTopLeft(find.text('Auto-connect on boot')).dx,
+    );
+  });
+
+  testWidgets('a failed policy load: text and Retry line up with the rows', (
+    tester,
+  ) async {
+    await _pump(tester, null, policyLoadFails: true);
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    expect(
+      tester.getTopLeft(find.textContaining('Not loaded — these settings')).dx,
+      rowX,
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);
   });
 
   testWidgets('hides the Slot labels section while a wheel is connected',
