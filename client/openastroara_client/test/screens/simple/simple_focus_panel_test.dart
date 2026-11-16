@@ -141,6 +141,12 @@ class _SaveProfile extends ProfileApi {
   }
 }
 
+class _FailProfile extends ProfileApi {
+  _FailProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async => throw StateError('daemon offline');
+}
+
 Future<(_Focuser, _Live)> _pump(WidgetTester tester,
     {FocuserStatus? focuser,
     AutofocusRun run = AutofocusRun.idle,
@@ -212,6 +218,14 @@ void main() {
     // Board ruling (#1875 slice 4): no room for the descriptions on an iPad.
     expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing);
     expect(find.textContaining('Focus shift per filter'), findsNothing);
+  });
+
+  testWidgets('a screen reader hears each Tools row with its status', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, focuser: _focuser());
+    expect(find.bySemanticsLabel('Focus by hand. Not started'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filter offsets. No filter wheel'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
@@ -362,7 +376,7 @@ void main() {
     expect(plot(), done, reason: 'error');
   });
 
-  // #1898 review: the warning's slot scales with the text; at 2x the two-line warning still fits.
+  // #1898 review: the warning's slot scales with the text; at 2x the one-line warning still fits.
   testWidgets('at 2x text the weak-fit warning fits its slot under the chart (#1898)', (tester) async {
     tester.view.physicalSize = const Size(1600, 2400);
     tester.view.devicePixelRatio = 1;
@@ -521,6 +535,18 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
       await tester.pump();
       expect(api.saved.map((v) => v.exposureSeconds), [10]);
+    });
+
+    testWidgets("a failed save says so in a pill", (tester) async {
+      await _pump(tester, focuser: _focuser(), extra: [
+        profileApiProvider.overrideWithValue(_FailProfile()),
+        simpleModeActiveProvider.overrideWithValue(true),
+      ]);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      final pill = _c.read(simpleMessagesProvider).single;
+      expect((pill.kind, pill.title, pill.origin),
+          (SimpleMessageKind.error, "Couldn't save that", SimpleStatusOrigin.focus));
     });
 
     testWidgets('a profile value outside the four shows as its own chip and is not rewritten', (tester) async {

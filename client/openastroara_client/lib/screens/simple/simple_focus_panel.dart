@@ -730,6 +730,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               f.focusOffset == 0,
         )
         .length;
+    final offsetsLine = !hasWheel
+        ? l10n.focusToolOffsetsNoWheel
+        : toMeasure == 0
+        ? l10n.focusToolOffsetsAllMeasured
+        : l10n.focusToolOffsetsToMeasure(toMeasure);
     return [
       Row(
         spacing: AraSpace.s12,
@@ -750,6 +755,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       ),
       SimpleToolRow(
         title: l10n.focusToolManual,
+        statusText: l10n.focusToolManualStatus,
         status: SimpleToolStatus(
           key: const Key('simple-focus-tool-manual-status'),
           color: AraColors.accentInfo,
@@ -770,6 +776,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       const Divider(height: 1, thickness: 1, color: AraColors.border),
       SimpleToolRow(
         title: l10n.focusToolOffsets,
+        statusText: offsetsLine,
         status: SimpleToolStatus(
           key: const Key('simple-focus-tool-offsets-status'),
           color: !hasWheel
@@ -778,11 +785,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ? AraColors.accentConnected
               : AraColors.accentWarning,
           ring: !hasWheel || toMeasure != 0,
-          text: !hasWheel
-              ? l10n.focusToolOffsetsNoWheel
-              : toMeasure == 0
-              ? l10n.focusToolOffsetsAllMeasured
-              : l10n.focusToolOffsetsToMeasure(toMeasure),
+          text: offsetsLine,
         ),
         button: simpleToolButton(
           key: const Key('simple-focus-tool-offsets'),

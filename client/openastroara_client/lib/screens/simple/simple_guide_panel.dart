@@ -847,7 +847,7 @@ String? _decModeName(AppLocalizations l10n, String mode) => switch (mode) {
 
 /// One tool: its name and quiet button, what it does, where it stands (and
 /// anything extra under it, such as a refusal, or the suggestions and Apply).
-/// [what] and [status] are left out where a row has none (Focus's tools).
+/// [what] and [status] are optional (Focus's tools have no [what]).
 class SimpleToolRow extends StatelessWidget {
   const SimpleToolRow({
     super.key,
