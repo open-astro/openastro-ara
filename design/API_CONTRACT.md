@@ -1697,3 +1697,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarCorrectorService.cs` (`PolarCorrectorService`, `IPolarCorrectorService`), `Services/PolarCorrector.cs` (`PolarAlignActionsCorrector`), `SwitchService.ActionsFor`, `TelescopeService.MountActions`, `EmergencyStopService`, `EquipmentEndpoints` (`/polarcorrector`), `Contracts/EquipmentDtos.cs` (`PolarCorrectorDto`, `PolarCorrectorCapabilitiesDto`)
 
 **Related:** #1971, #1972, #1973
+
+---
+
+## 2026-11-16 — The Polar Align Routine drives the Polar Corrector: `corrector` in the status, `polar_align.corrector`, stop and resume, `polar_corrector_auto` (#1974, #1975)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` gains `corrector` (`PolarAlignCorrectorDto`, null when the rig has no Polar Corrector Ara can drive or the run has not measured yet); new WebSocket event `polar_align.corrector` with the same object on every change; new `POST /api/v1/equipment/polaralign/corrector/stop` and `POST …/corrector/resume` (202 + `OperationAcceptedDto`, 409 Problem when there is nothing to stop or resume); `GET/PUT /api/v1/profile/polar-align` gains `polar_corrector_auto` (default true).
+
+**Decision:** in the live stages the routine turns the Polar Corrector after each measurement: one test move of +2′ on each axis, then 80 % of the offset per axis, clamped to the device's `maxMove`, until the total error is inside `target_tolerance_arcmin`. `state` is `manual` (`polar_corrector_auto` off), `probing` / `moving` (with `axis` `azimuth` | `altitude` and the signed `arcmin` sent), `settling` (`seconds`), `measuring`, `converged` or `stopped` (`cause`, and `device_text` / `axis` when there is one); `moves` counts the moves sent. `arcmin` is in the wire convention: positive azimuth increases the azimuth coordinate (clockwise seen from above), positive altitude raises the axis. `cause` is one of `wrong_direction`, `wrong_scale`, `device_fault`, `not_calibrated`, `device_refused`, `diverging`, `timeout`, `link_lost`, `mount_tracking`, `mount_slewing`, `stopped_by_user`. A stop sends the device Stop and leaves the routine running by hand; `converged` does not end the routine, and the motors correct again when the error leaves the tolerance. The `polar_alignments` table gains `corrector_moves` (NULL on older rows).
+
+**Reasoning:** the client must tell a stopped move from a finished one, and say why in the device's own words. The numbers (test move, 80 %, half-to-twice scale check) follow N.I.N.A.'s Polar Alignment Correctors plugin, so one device behaves the same under both clients. The cause is a token in the state, not a Refusal: ADR 0022 has no code yet, and a stop is not a refused command.
+
+**Spec ref:** `Services/PolarAlignService.Corrector.cs`, `PolarAlignGeometry.CorrectorMove`, `Contracts/EquipmentDtos.cs` (`PolarAlignCorrectorDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`PolarAlignCorrector`), `Contracts/ProfileDtos.cs` (`PolarAlignSettingsDto.PolarCorrectorAuto`), `EquipmentEndpoints` (`/polaralign/corrector/*`)
+
+**Related:** #1971, #1974, #1975
