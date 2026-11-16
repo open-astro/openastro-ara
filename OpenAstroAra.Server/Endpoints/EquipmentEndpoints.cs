@@ -808,6 +808,12 @@ public static partial class EquipmentEndpoints {
         // Single-frame mode: take the next adjust frame. 409 outside the adjust phase.
         polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignCaptureAsync(svc, key, ct));
+        // #1971 — the Polar Corrector in a running routine: stop its motors (the routine carries on by
+        // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume.
+        polar.MapPost("/corrector/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectorAsync(() => svc.StopCorrectorAsync(key, ct)));
+        polar.MapPost("/corrector/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectorAsync(() => svc.ResumeCorrectorAsync(key, ct)));
 
         // ─── Manual reconnect (§52.1) ───
         // Reconnect the known device(s) for the type without re-running discovery (the same path
@@ -1165,6 +1171,15 @@ public static partial class EquipmentEndpoints {
     public static async Task<IResult> PolarAlignNextAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
         try {
             return Results.Accepted(value: await svc.NextAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    public static async Task<IResult> PolarAlignCorrectorAsync(Func<Task<OperationAcceptedDto>> command) {
+        ArgumentNullException.ThrowIfNull(command);
+        try {
+            return Results.Accepted(value: await command());
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }

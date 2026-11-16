@@ -916,7 +916,24 @@ public sealed record PolarAlignStateDto(
     // #1565 — the last routine to stop or finish with an error reading outside the rough stage, kept in memory per
     // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
     // the last finished one.
-    PolarAlignLastResultDto? LastResult = null);
+    PolarAlignLastResultDto? LastResult = null,
+    // #1971 — what the Polar Corrector is doing in this run; null when the rig has none Ara can drive,
+    // or no run has reached a measurement yet.
+    PolarAlignCorrectorDto? Corrector = null);
+
+/// <summary>#1971 the Polar Corrector in a running routine, also the payload of <c>polar_align.corrector</c>.
+/// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>
+/// <c>azimuth</c> | <c>altitude</c> and the signed <c>Arcmin</c> sent), <c>settling</c> (<c>Seconds</c>),
+/// <c>measuring</c>, <c>converged</c> (inside the tolerance), <c>stopped</c> (<c>Cause</c>, the device's own
+/// <c>DeviceText</c> when it gave one, the <c>Axis</c> when one is to blame). <c>Moves</c> counts the moves sent.</summary>
+public sealed record PolarAlignCorrectorDto(
+    string State,
+    string? Axis = null,
+    double? Arcmin = null,
+    double? Seconds = null,
+    string? Cause = null,
+    string? DeviceText = null,
+    int Moves = 0);
 
 /// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended; a Stop in the rough
 /// stage records none. Simple Mode's Night Setup counts polar alignment as done tonight when this is under the green

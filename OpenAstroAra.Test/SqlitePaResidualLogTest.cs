@@ -109,5 +109,16 @@ namespace OpenAstroAra.Test {
             Assert.That(latest!.EndedAt, Is.EqualTo(t0.AddMinutes(4)));
             Assert.That(await log.GetLatestMeasuredAsync(t0.AddHours(1), CancellationToken.None), Is.Null, "nothing tonight after that");
         }
+
+        [Test]
+        public async Task The_polar_alignment_row_keeps_the_Polar_Correctors_move_count() {
+            var log = new SqlitePolarAlignmentLog(db);
+            var t0 = new DateTimeOffset(2026, 11, 16, 20, 0, 0, TimeSpan.Zero);
+            await log.InsertAsync(new PolarAlignmentRecord(t0, t0.AddMinutes(4), 0.6, 0.4, 0.4, 9, "complete", CorrectorMoves: 7), CancellationToken.None);
+
+            var latest = await log.GetLatestMeasuredAsync(t0.AddHours(-1), CancellationToken.None);
+
+            Assert.That(latest?.CorrectorMoves, Is.EqualTo(7));
+        }
     }
 }

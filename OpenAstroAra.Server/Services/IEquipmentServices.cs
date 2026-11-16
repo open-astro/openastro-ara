@@ -417,6 +417,12 @@ public interface IPolarAlignService {
     /// stage to the fine stage, Next from the fine stage to the check. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#1971 — stop the Polar Corrector's motors; the routine carries on by hand. Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when no routine is running with a Polar Corrector.</summary>
+    Task<OperationAcceptedDto> StopCorrectorAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#1971 — after a stop, correct with the motors again (a new probe first). Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when the Polar Corrector is not stopped.</summary>
+    Task<OperationAcceptedDto> ResumeCorrectorAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
     /// the mount stays put).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);

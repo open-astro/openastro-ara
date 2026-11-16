@@ -275,10 +275,13 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 final_az_error_arcmin  REAL,
                 iterations             INTEGER NOT NULL,
                 outcome                TEXT NOT NULL,
-                notes                  TEXT
+                notes                  TEXT,
+                corrector_moves        INTEGER
             );
             """, ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_polar_alignments_started_at ON polar_alignments(started_at);", ct);
+        // #1971 — moves the Polar Corrector made in the run; NULL on a row written before this column (by hand).
+        await AddColumnIfMissingAsync(conn, "polar_alignments", "corrector_moves", "INTEGER", ct);
 
         // #1311 — one row per polar-alignment residual measured from guiding (the first minutes of a
         // guided run). session_id is the imaging session running at the time, when exactly one is.

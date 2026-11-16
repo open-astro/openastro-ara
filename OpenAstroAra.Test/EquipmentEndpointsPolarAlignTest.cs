@@ -131,6 +131,23 @@ namespace OpenAstroAra.Test {
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
         }
 
+        [Test]
+        public async Task A_corrector_command_returns_202_accepted_on_success() {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.corrector-stop", DateTimeOffset.UtcNow, null);
+
+            var result = await EquipmentEndpoints.PolarAlignCorrectorAsync(() => Task.FromResult(accepted));
+
+            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
+        }
+
+        [Test]
+        public async Task A_corrector_command_with_nothing_to_stop_or_resume_maps_to_409() {
+            var result = await EquipmentEndpoints.PolarAlignCorrectorAsync(
+                () => Task.FromException<OperationAcceptedDto>(new InvalidOperationException("the Polar Corrector is not stopped")));
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
 
         private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;
