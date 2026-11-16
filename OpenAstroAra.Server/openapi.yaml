@@ -2372,7 +2372,7 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/aligner/stop:
+  /api/v1/equipment/polaralign/correction/stop:
     post:
       tags:
         - Equipment
@@ -2384,7 +2384,7 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/aligner/resume:
+  /api/v1/equipment/polaralign/correction/resume:
     post:
       tags:
         - Equipment

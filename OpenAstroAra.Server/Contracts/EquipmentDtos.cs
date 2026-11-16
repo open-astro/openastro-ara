@@ -954,14 +954,14 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastResultDto? LastResult = null,
     // #1971 — what the Polar Aligner is doing in this run; null when the rig has none, when Ara cannot
     // drive the one it has, or before the run's first measurement.
-    PolarAlignAlignerDto? Aligner = null);
+    PolarAlignCorrectionDto? Correction = null);
 
-/// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.aligner</c>.
+/// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.correction</c>.
 /// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>
 /// <c>azimuth</c> | <c>altitude</c> and the signed <c>Arcmin</c> sent), <c>settling</c> (<c>Seconds</c>),
 /// <c>measuring</c>, <c>converged</c> (inside the tolerance), <c>stopped</c> (<c>Cause</c>, the device's own
 /// <c>DeviceText</c> when it gave one, the <c>Axis</c> when one is to blame). <c>Moves</c> counts the moves sent.</summary>
-public sealed record PolarAlignAlignerDto(
+public sealed record PolarAlignCorrectionDto(
     string State,
     string? Axis = null,
     double? Arcmin = null,

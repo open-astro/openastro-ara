@@ -144,7 +144,7 @@ class PolarAlignApi implements PolarAlignClient {
 
 /// #1971 the rig's Polar Aligner: the device (`/api/v1/equipment/polaraligner`,
 /// its stop and home) and its motors in a running routine
-/// (`/api/v1/equipment/polaralign/aligner/{stop,resume}`). The commands are
+/// (`/api/v1/equipment/polaralign/correction/{stop,resume}`). The commands are
 /// 202-Accepted; a refusal is a 409 whose detail is a sentence for people.
 abstract interface class PolarAlignerClient {
   /// Null on a 404: a daemon that predates the Polar Aligner.
@@ -193,10 +193,10 @@ class PolarAlignerApi implements PolarAlignerClient {
   Future<void> home() => _dio.post<void>('/api/v1/equipment/polaraligner/home');
 
   @override
-  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/aligner/stop');
+  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/stop');
 
   @override
-  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/aligner/resume');
+  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
 
   @override
   void close() => _dio.close(force: true);

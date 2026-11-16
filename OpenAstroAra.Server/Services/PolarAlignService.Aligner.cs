@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services {
 
     /// <summary>The Polar Aligner states and stop causes the routine reports (#1971).</summary>
-    public static class PolarAlignAlignerStates {
+    public static class PolarAlignCorrectionStates {
         public const string Manual = "manual";
         public const string Probing = "probing";
         public const string Moving = "moving";
@@ -36,7 +36,7 @@ namespace OpenAstroAra.Server.Services {
         public const string Stopped = "stopped";
     }
 
-    public static class PolarAlignAlignerCauses {
+    public static class PolarAlignCorrectionCauses {
         public const string WrongDirection = "wrong_direction";
         public const string WrongScale = "wrong_scale";
         public const string DeviceFault = "device_fault";
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Server.Services {
             get {
                 lock (_gate) {
                     return _active && _alignerRun is { Stopped: false }
-                        && _aligner is { State: not PolarAlignAlignerStates.Manual };
+                        && _aligner is { State: not PolarAlignCorrectionStates.Manual };
                 }
             }
         }
@@ -126,13 +126,13 @@ namespace OpenAstroAra.Server.Services {
                 DeviceText = deviceText;
                 Axis = axis;
             }
-            public string Cause { get; } = PolarAlignAlignerCauses.DeviceRefused;
+            public string Cause { get; } = PolarAlignCorrectionCauses.DeviceRefused;
             public string? DeviceText { get; }
             public string? Axis { get; }
         }
 
         private AlignerRun? _alignerRun;          // guarded by _gate
-        private PolarAlignAlignerDto? _aligner;   // guarded by _gate: what status and the event report
+        private PolarAlignCorrectionDto? _aligner;   // guarded by _gate: what status and the event report
         private int _alignerMoves;                  // guarded by _gate
 
         /// <summary>The person stops the motors; the routine carries on by hand.</summary>
@@ -149,8 +149,8 @@ namespace OpenAstroAra.Server.Services {
                 device = run.Device;
                 if (!run.Stopped) {
                     run.Stopped = true;
-                    _aligner = new PolarAlignAlignerDto(PolarAlignAlignerStates.Stopped,
-                        Cause: PolarAlignAlignerCauses.StoppedByUser, Moves: _alignerMoves);
+                    _aligner = new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Stopped,
+                        Cause: PolarAlignCorrectionCauses.StoppedByUser, Moves: _alignerMoves);
                 }
                 userStop = run.UserStop;
             }
@@ -165,7 +165,7 @@ namespace OpenAstroAra.Server.Services {
                 // handed back a task, and a device on a bad link answers after its HTTP timeout.
                 await Task.Run(() => StopDeviceBestEffort(run, device), CancellationToken.None).ConfigureAwait(false);
             }
-            LogAlignerStopped(PolarAlignAlignerCauses.StoppedByUser, null);
+            LogAlignerStopped(PolarAlignCorrectionCauses.StoppedByUser, null);
             await PublishAlignerAsync(gen).ConfigureAwait(false);
             return Accepted("polar-align.aligner-stop", idempotencyKey);
         }
@@ -182,7 +182,7 @@ namespace OpenAstroAra.Server.Services {
                 run.RearmRequested = true;
                 run.UserStop.Dispose();
                 run.UserStop = new CancellationTokenSource();
-                _aligner = new PolarAlignAlignerDto(PolarAlignAlignerStates.Measuring, Moves: _alignerMoves);
+                _aligner = new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Measuring, Moves: _alignerMoves);
             }
             await PublishAlignerAsync(gen).ConfigureAwait(false);
             return Accepted("polar-align.aligner-resume", idempotencyKey);
@@ -272,7 +272,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                 }
                 if (!settings.PolarAlignerAuto) {
-                    await SetAlignerAsync(gen, new PolarAlignAlignerDto(PolarAlignAlignerStates.Manual)).ConfigureAwait(false);
+                    await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Manual)).ConfigureAwait(false);
                     ResetAlignerBaseline();
                     return;
                 }
@@ -289,9 +289,9 @@ namespace OpenAstroAra.Server.Services {
                 await StopCorrectingAsync(gen, run, ex.Cause, ex.DeviceText, ex.Axis).ConfigureAwait(false);
             } catch (PolarAlignerException ex) {
                 await StopCorrectingAsync(gen, run, ex.Failure switch {
-                    PolarAlignerFailure.NotCalibrated => PolarAlignAlignerCauses.NotCalibrated,
-                    PolarAlignerFailure.LinkLost => PolarAlignAlignerCauses.LinkLost,
-                    _ => PolarAlignAlignerCauses.DeviceRefused,
+                    PolarAlignerFailure.NotCalibrated => PolarAlignCorrectionCauses.NotCalibrated,
+                    PolarAlignerFailure.LinkLost => PolarAlignCorrectionCauses.LinkLost,
+                    _ => PolarAlignCorrectionCauses.DeviceRefused,
                 }, ex.Message).ConfigureAwait(false);
             }
         }
@@ -318,23 +318,23 @@ namespace OpenAstroAra.Server.Services {
                 run.Growth = total > last + AlignerGrowthMarginArcmin ? run.Growth + 1 : 0;
                 LogAlignerResult(last, total);
                 if (run.Growth >= AlignerGrowthLimit) {
-                    throw new AlignerStopException(PolarAlignAlignerCauses.Diverging, deviceText: null);
+                    throw new AlignerStopException(PolarAlignCorrectionCauses.Diverging, deviceText: null);
                 }
             }
             run.TotalBeforeMove = null;
 
             var tolerance = settings.TargetToleranceArcmin;
             if (total <= tolerance) {
-                await SetAlignerAsync(gen, new PolarAlignAlignerDto(PolarAlignAlignerStates.Converged)).ConfigureAwait(false);
+                await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Converged)).ConfigureAwait(false);
                 return;
             }
 
             var mount = _mount.GetInfo();
             if (!info.MovesWhileTracking && mount.TrackingEnabled) {
-                throw new AlignerStopException(PolarAlignAlignerCauses.MountTracking, deviceText: null);
+                throw new AlignerStopException(PolarAlignCorrectionCauses.MountTracking, deviceText: null);
             }
             if (!info.MovesWhileSlewing && mount.Slewing) {
-                throw new AlignerStopException(PolarAlignAlignerCauses.MountSlewing, deviceText: null);
+                throw new AlignerStopException(PolarAlignCorrectionCauses.MountSlewing, deviceText: null);
             }
 
             List<(PolarAlignerAxis Axis, double Arcmin)> moves;
@@ -342,7 +342,7 @@ namespace OpenAstroAra.Server.Services {
             if (!run.ProbeDone) {
                 var probe = ProbeSize(info);
                 moves = [(PolarAlignerAxis.Azimuth, probe), (PolarAlignerAxis.Altitude, probe)];
-                kind = PolarAlignAlignerStates.Probing;
+                kind = PolarAlignCorrectionStates.Probing;
                 run.BeforeProbe = offset;
             } else {
                 // An axis inside half the tolerance (on the sky, as the tolerance is) is left alone: with the
@@ -354,14 +354,14 @@ namespace OpenAstroAra.Server.Services {
                 if (Math.Abs(altErr) >= tolerance / 2) {
                     moves.Add((PolarAlignerAxis.Altitude, Math.Clamp(AlignerGain * altMove, -altInfo.MaxMoveArcmin, altInfo.MaxMoveArcmin)));
                 }
-                kind = PolarAlignAlignerStates.Moving;
+                kind = PolarAlignCorrectionStates.Moving;
                 run.TotalBeforeMove = total;
             }
 
             foreach (var group in info.SimultaneousMoves ? [moves] : moves.Select(m => new List<(PolarAlignerAxis Axis, double Arcmin)> { m })) {
                 foreach (var (axis, arcmin) in group) {
                     ct.ThrowIfCancellationRequested();
-                    await SetAlignerAsync(gen, new PolarAlignAlignerDto(kind, Axis: AxisToken(axis), Arcmin: Math.Round(arcmin, 2))).ConfigureAwait(false);
+                    await SetAlignerAsync(gen, new PolarAlignCorrectionDto(kind, Axis: AxisToken(axis), Arcmin: Math.Round(arcmin, 2))).ConfigureAwait(false);
                     lock (_gate) {
                         if (run.Stopped) {
                             throw new OperationCanceledException(); // a Stop landed since the check above
@@ -378,10 +378,10 @@ namespace OpenAstroAra.Server.Services {
                 LogAlignerStatus(after.Azimuth.Moving, after.Azimuth.PositionArcmin, after.Altitude.Moving, after.Altitude.PositionArcmin);
             }
             if (info.SettleSeconds > 0) {
-                await SetAlignerAsync(gen, new PolarAlignAlignerDto(PolarAlignAlignerStates.Settling, Seconds: info.SettleSeconds)).ConfigureAwait(false);
+                await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Settling, Seconds: info.SettleSeconds)).ConfigureAwait(false);
                 await Task.Delay(TimeSpan.FromSeconds(info.SettleSeconds), ct).ConfigureAwait(false);
             }
-            await SetAlignerAsync(gen, new PolarAlignAlignerDto(PolarAlignAlignerStates.Measuring)).ConfigureAwait(false);
+            await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Measuring)).ConfigureAwait(false);
         }
 
         // The device's own cap bounds the probe; its step size is the least it can do.
@@ -395,10 +395,10 @@ namespace OpenAstroAra.Server.Services {
         private void CheckProbe(PolarAlignerAxis axis, double ratio, PolarAlignerAxisInfo info) {
             LogAlignerProbe(axis, ratio);
             if (ratio < 0) {
-                throw new AlignerStopException(PolarAlignAlignerCauses.WrongDirection, null, AxisToken(axis));
+                throw new AlignerStopException(PolarAlignCorrectionCauses.WrongDirection, null, AxisToken(axis));
             }
             if (ratio < (info.BacklashHandled ? 0.5 : 0.2) || ratio > 2) {
-                throw new AlignerStopException(PolarAlignAlignerCauses.WrongScale, null, AxisToken(axis));
+                throw new AlignerStopException(PolarAlignCorrectionCauses.WrongScale, null, AxisToken(axis));
             }
         }
 
@@ -413,7 +413,7 @@ namespace OpenAstroAra.Server.Services {
                 foreach (var axis in axes) {
                     var s = axis == PolarAlignerAxis.Azimuth ? status.Azimuth : status.Altitude;
                     if (s.Fault is { } fault) {
-                        throw new AlignerStopException(PolarAlignAlignerCauses.DeviceFault, fault, AxisToken(axis));
+                        throw new AlignerStopException(PolarAlignCorrectionCauses.DeviceFault, fault, AxisToken(axis));
                     }
                     moving |= s.Moving;
                 }
@@ -422,7 +422,7 @@ namespace OpenAstroAra.Server.Services {
                     return status;
                 }
                 if (DateTimeOffset.UtcNow >= deadline) {
-                    throw new AlignerStopException(PolarAlignAlignerCauses.Timeout, deviceText: null);
+                    throw new AlignerStopException(PolarAlignCorrectionCauses.Timeout, deviceText: null);
                 }
                 await Task.Delay(AlignerPoll, ct).ConfigureAwait(false);
             }
@@ -436,7 +436,7 @@ namespace OpenAstroAra.Server.Services {
                 run.Stopped = true;
             }
             LogAlignerStopped(cause, deviceText);
-            await SetAlignerAsync(gen, new PolarAlignAlignerDto(PolarAlignAlignerStates.Stopped, Axis: axis, Cause: cause, DeviceText: deviceText)).ConfigureAwait(false);
+            await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Stopped, Axis: axis, Cause: cause, DeviceText: deviceText)).ConfigureAwait(false);
         }
 
         private void StopDeviceBestEffort(AlignerRun run, IPolarAligner device) {
@@ -454,10 +454,10 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private async Task SetAlignerAsync(int gen, PolarAlignAlignerDto state) {
+        private async Task SetAlignerAsync(int gen, PolarAlignCorrectionDto state) {
             lock (_gate) {
                 // A superseded run; or the person's Stop landed first; or a resume landed before this stop was told.
-                if (_generation != gen || (_alignerRun?.Stopped == true) != (state.State == PolarAlignAlignerStates.Stopped)) {
+                if (_generation != gen || (_alignerRun?.Stopped == true) != (state.State == PolarAlignCorrectionStates.Stopped)) {
                     return;
                 }
                 state = state with { Moves = _alignerMoves };
@@ -470,7 +470,7 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private Task PublishAlignerAsync(int gen) {
-            PolarAlignAlignerDto? state;
+            PolarAlignCorrectionDto? state;
             lock (_gate) {
                 state = _generation == gen ? _aligner : null;
             }
@@ -483,7 +483,7 @@ namespace OpenAstroAra.Server.Services {
             if (state.Seconds is not null) { payload["seconds"] = state.Seconds; }
             if (state.Cause is not null) { payload["cause"] = state.Cause; }
             if (state.DeviceText is not null) { payload["device_text"] = state.DeviceText; }
-            return PublishAsync(WsEventCatalog.PolarAlignAligner, payload);
+            return PublishAsync(WsEventCatalog.PolarAlignCorrection, payload);
         }
 
         private static string AxisToken(PolarAlignerAxis axis) => axis == PolarAlignerAxis.Azimuth ? "azimuth" : "altitude";

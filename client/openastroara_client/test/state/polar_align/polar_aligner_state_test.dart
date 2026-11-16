@@ -67,7 +67,7 @@ class _Aligner implements PolarAlignerClient {
 class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive(phase: PolarAlignStates.adjusting);
-  void run(String state) => this.state = PolarAlignLive(phase: PolarAlignStates.adjusting, aligner: PolarAlignerRun(state: state));
+  void run(String state) => this.state = PolarAlignLive(phase: PolarAlignStates.adjusting, correction: PolarAlignerRun(state: state));
 }
 
 const _still = PolarAligner(present: true, drivable: true);
@@ -128,21 +128,21 @@ void main() {
   });
 
   test('the status carries aligner, absent when the daemon sends none', () {
-    final with_ = PolarAlignStatus.fromJson({'state': 'adjusting', 'aligner': {'state': 'moving', 'axis': 'azimuth', 'arcmin': 6.1, 'moves': 2}});
-    expect((with_.aligner!.state, with_.aligner!.arcmin), ('moving', 6.1));
-    expect(PolarAlignStatus.fromJson({'state': 'adjusting'}).aligner, isNull);
-    expect(liveFromStatus(with_).aligner!.axis, 'azimuth', reason: 'a panel opening hydrates the run');
+    final with_ = PolarAlignStatus.fromJson({'state': 'adjusting', 'correction': {'state': 'moving', 'axis': 'azimuth', 'arcmin': 6.1, 'moves': 2}});
+    expect((with_.correction!.state, with_.correction!.arcmin), ('moving', 6.1));
+    expect(PolarAlignStatus.fromJson({'state': 'adjusting'}).correction, isNull);
+    expect(liveFromStatus(with_).correction!.axis, 'azimuth', reason: 'a panel opening hydrates the run');
   });
 
-  test('polar_align.aligner folds into the live view; stopped and error clear it', () {
+  test('polar_align.correction folds into the live view; stopped and error clear it', () {
     const live = PolarAlignLive(phase: PolarAlignStates.adjusting);
-    final moving = foldPolarAlignEvent(live, _event(PolarAlignWsEvents.aligner, {'state': 'probing', 'axis': 'azimuth', 'arcmin': 2.0, 'moves': 1}))!;
-    expect((moving.aligner!.state, moving.aligner!.moves, moving.phase), ('probing', 1, PolarAlignStates.adjusting));
-    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.stopped))!.aligner, isNull,
+    final moving = foldPolarAlignEvent(live, _event(PolarAlignWsEvents.correction, {'state': 'probing', 'axis': 'azimuth', 'arcmin': 2.0, 'moves': 1}))!;
+    expect((moving.correction!.state, moving.correction!.moves, moving.phase), ('probing', 1, PolarAlignStates.adjusting));
+    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.stopped))!.correction, isNull,
         reason: 'the run ends without an aligner event');
-    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.error, {'reason': 'x'}))!.aligner, isNull);
-    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.started))!.aligner, isNull);
-    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.aligner, {'moves': 1})), isNull,
+    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.error, {'reason': 'x'}))!.correction, isNull);
+    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.started))!.correction, isNull);
+    expect(foldPolarAlignEvent(moving, _event(PolarAlignWsEvents.correction, {'moves': 1})), isNull,
         reason: 'a payload with no state writes nothing');
   });
 
@@ -160,7 +160,7 @@ void main() {
 
   test('the app knows every stop cause the daemon declares', () {
     final src = File('../../OpenAstroAra.Server/Services/PolarAlignService.Aligner.cs').readAsStringSync();
-    final block = RegExp(r'class PolarAlignAlignerCauses \{([^}]*)\}').firstMatch(src)!.group(1)!;
+    final block = RegExp(r'class PolarAlignCorrectionCauses \{([^}]*)\}').firstMatch(src)!.group(1)!;
     final daemon = RegExp(r'= "([a-z_]+)";').allMatches(block).map((m) => m.group(1)).toSet();
     expect(PolarAlignerCauses.all.toSet(), daemon);
   });

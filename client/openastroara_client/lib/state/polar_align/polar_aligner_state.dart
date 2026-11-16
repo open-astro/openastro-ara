@@ -36,7 +36,7 @@ class PolarAlignerNotifier extends AsyncNotifier<PolarAligner?> {
     final api = ref.watch(polarAlignerApiProvider);
     ref.onDispose(() => _settle?.cancel());
     if (api == null) return null;
-    ref.listen(polarAlignLiveProvider.select((l) => l.aligner?.state), (prev, next) {
+    ref.listen(polarAlignLiveProvider.select((l) => l.correction?.state), (prev, next) {
       if (prev != next &&
           (next == PolarAlignerStates.stopped ||
               next == PolarAlignerStates.converged ||

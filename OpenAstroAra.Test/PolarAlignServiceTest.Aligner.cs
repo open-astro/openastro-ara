@@ -140,7 +140,7 @@ namespace OpenAstroAra.Test {
             AlignerEventAsync(ws, e => e.GetProperty("state").GetString() == state, skip);
 
         private static async Task<JsonElement> AlignerEventAsync(WsRecorder ws, Func<JsonElement, bool> match, int skip = 0) {
-            bool Is((string Type, JsonElement Payload) e) => e.Type == WsEventCatalog.PolarAlignAligner && match(e.Payload);
+            bool Is((string Type, JsonElement Payload) e) => e.Type == WsEventCatalog.PolarAlignCorrection && match(e.Payload);
             await ws.WhenAsync(events => events.Skip(skip).Any(Is)).WaitAsync(SignalTimeout).ConfigureAwait(false);
             return ws.Events.Skip(skip).First(Is).Payload;
         }
@@ -159,8 +159,8 @@ namespace OpenAstroAra.Test {
             return (svc, ws);
         }
 
-        private static async Task<PolarAlignAlignerDto?> AlignerStatusAsync(PolarAlignService svc) =>
-            (await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).Aligner;
+        private static async Task<PolarAlignCorrectionDto?> AlignerStatusAsync(PolarAlignService svc) =>
+            (await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).Correction;
 
         private static void AssertStillAdjustingByHand(PolarAlignService svc, PolarAlignStateDto status) {
             Assert.That(svc.IsActive, Is.True, "the routine carries on by hand");
@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner, logger: logger).ConfigureAwait(false);
             using var _ = svc;
 
-            var converged = await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            var converged = await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
             var moves = aligner.Moves;
             Assert.That(moves[0], Is.EqualTo((PolarAlignerAxis.Azimuth, PolarAlignService.AlignerProbeArcmin)), "a small test move on azimuth first");
@@ -190,9 +190,9 @@ namespace OpenAstroAra.Test {
             Assert.That(status.CurrentErrorArcmin, Is.LessThanOrEqualTo(1.0 + 0.05), "inside the 1′ tolerance");
             AssertStillAdjustingByHand(svc, status);
 
-            var states = ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignAligner).Select(e => e.Payload.GetProperty("state").GetString()).ToArray();
+            var states = ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignCorrection).Select(e => e.Payload.GetProperty("state").GetString()).ToArray();
             Assert.That(states, Does.Contain("probing").And.Contain("moving").And.Contain("measuring"));
-            var firstProbe = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignAligner).Payload;
+            var firstProbe = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignCorrection).Payload;
             Assert.That(firstProbe.GetProperty("axis").GetString(), Is.EqualTo("azimuth"));
             Assert.That(firstProbe.GetProperty("arcmin").GetDouble(), Is.EqualTo(2.0));
             Assert.That(logger.Entries.Count(e => e.EventId == 4543), Is.GreaterThanOrEqualTo(moves.Length), "one log line per move");
@@ -214,9 +214,9 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner, store: store, latDeg: -SiteLatDeg).ConfigureAwait(false);
             using var _ = svc;
 
-            var first = await AlignerEventAsync(ws, PolarAlignAlignerStates.Probing).ConfigureAwait(false);
+            var first = await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
             var beforeProbe = ws.Events.Last(e => e.Type == WsEventCatalog.PolarAlignProgress).Payload;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
             Assert.That(first.GetProperty("arcmin").GetDouble(), Is.EqualTo(2.0));
             Assert.That(beforeProbe.GetProperty("azimuth_error_arcmin").GetDouble(), Is.LessThan(-10), "clockwise of the south pole is west: negative east-positive");
@@ -233,7 +233,7 @@ namespace OpenAstroAra.Test {
             var log = new RecordingLog();
             var (svc, ws) = await StartWithAlignerAsync(aligner, log: log).ConfigureAwait(false);
             using var _ = svc;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
             await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -251,7 +251,7 @@ namespace OpenAstroAra.Test {
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 4).WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             Assert.That(aligner.Moves, Is.Empty);
-            Assert.That(ws.Count(WsEventCatalog.PolarAlignAligner), Is.Zero);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignCorrection), Is.Zero);
             Assert.That(await AlignerStatusAsync(svc).ConfigureAwait(false), Is.Null);
         }
 
@@ -263,7 +263,7 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner, store: store).ConfigureAwait(false);
             using var _ = svc;
 
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Manual).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Manual).ConfigureAwait(false);
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 4).WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             Assert.That(aligner.Moves, Is.Empty);
@@ -278,7 +278,7 @@ namespace OpenAstroAra.Test {
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 4).WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             Assert.That(aligner.Moves, Is.Empty);
-            Assert.That(ws.Count(WsEventCatalog.PolarAlignAligner), Is.Zero);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignCorrection), Is.Zero);
         }
 
         [Test]
@@ -287,7 +287,7 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
 
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
             Assert.That(aligner.Moves.Select(m => Math.Abs(m.Arcmin)), Has.All.LessThanOrEqualTo(6.0));
             Assert.That(aligner.Moves[0].Arcmin, Is.EqualTo(1.5), "the test move is a quarter of the cap when the cap is small");
@@ -298,14 +298,14 @@ namespace OpenAstroAra.Test {
                 FakeAligner aligner, Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>? mount = null,
                 TimeSpan? moveTimeout = null) {
             var (svc, ws) = await StartWithAlignerAsync(aligner, mount, moveTimeout: moveTimeout).ConfigureAwait(false);
-            var stopped = await AlignerEventAsync(ws, PolarAlignAlignerStates.Stopped).ConfigureAwait(false);
+            var stopped = await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
             // The frame after the stop: the routine still measures, and sends nothing more to the motors.
             var movesAtStop = aligner.Moves.Length;
             var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
             Assert.That(aligner.Moves, Has.Length.EqualTo(movesAtStop), "a stopped aligner gets no further move");
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.Aligner?.State, Is.EqualTo(PolarAlignAlignerStates.Stopped));
+            Assert.That(status.Correction?.State, Is.EqualTo(PolarAlignCorrectionStates.Stopped));
             AssertStillAdjustingByHand(svc, status);
             return (svc, stopped, status);
         }
@@ -316,7 +316,7 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.WrongDirection));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.WrongDirection));
             Assert.That(stopped.GetProperty("axis").GetString(), Is.EqualTo("azimuth"));
             Assert.That(aligner.Moves, Has.Length.EqualTo(2), "only the two test moves went out");
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
@@ -329,7 +329,7 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.WrongScale));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.WrongScale));
             Assert.That(stopped.GetProperty("axis").GetString(), Is.EqualTo("altitude"));
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
         }
@@ -341,10 +341,10 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
 
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
-            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignAligner
-                && e.Payload.GetProperty("state").GetString() == PolarAlignAlignerStates.Stopped), Is.False);
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignCorrection
+                && e.Payload.GetProperty("state").GetString() == PolarAlignCorrectionStates.Stopped), Is.False);
         }
 
         [Test]
@@ -353,15 +353,15 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.DeviceFault));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.DeviceFault));
             Assert.That(stopped.GetProperty("device_text").GetString(), Is.EqualTo("end of travel"));
             Assert.That(aligner.Moves, Has.Length.EqualTo(3), "the failed move is the last: nothing is corrected from it");
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
         }
 
-        [TestCase(nameof(PolarAlignerFailure.NotCalibrated), PolarAlignAlignerCauses.NotCalibrated)]
-        [TestCase(nameof(PolarAlignerFailure.Refused), PolarAlignAlignerCauses.DeviceRefused)]
-        [TestCase(nameof(PolarAlignerFailure.Protocol), PolarAlignAlignerCauses.DeviceRefused)]
+        [TestCase(nameof(PolarAlignerFailure.NotCalibrated), PolarAlignCorrectionCauses.NotCalibrated)]
+        [TestCase(nameof(PolarAlignerFailure.Refused), PolarAlignCorrectionCauses.DeviceRefused)]
+        [TestCase(nameof(PolarAlignerFailure.Protocol), PolarAlignCorrectionCauses.DeviceRefused)]
         public async Task A_move_the_device_refuses_stops_the_motors_with_its_text(string failure, string cause) {
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10) {
                 OnMove = n => n == 1 ? new PolarAlignerException(Enum.Parse<PolarAlignerFailure>(failure), "the board has no factors") : null,
@@ -389,7 +389,7 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.Diverging));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.Diverging));
             Assert.That(aligner.Moves, Has.Length.EqualTo(6), "two test moves and two corrections of both axes");
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
         }
@@ -400,7 +400,7 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner, moveTimeout: TimeSpan.FromMilliseconds(60)).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.Timeout));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.Timeout));
             Assert.That(aligner.Moves, Has.Length.EqualTo(1));
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
         }
@@ -411,7 +411,7 @@ namespace OpenAstroAra.Test {
             aligner.OnMove = n => n == 2 ? new PolarAlignerException(PolarAlignerFailure.LinkLost, "connection refused") : null;
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
             using var __ = svc;
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.LinkLost));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.LinkLost));
             Assert.That(aligner.Stops, Is.Zero, "the Stop could not be delivered yet");
 
             aligner.StopFails = false;
@@ -431,7 +431,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, aligner: source);
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Stopped).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
 
             var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
             source.Device = reconnected;
@@ -450,8 +450,8 @@ namespace OpenAstroAra.Test {
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
 
-            await AlignerEventAsync(ws, e => e.GetProperty("state").GetString() == PolarAlignAlignerStates.Moving).ConfigureAwait(false);
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, e => e.GetProperty("state").GetString() == PolarAlignCorrectionStates.Moving).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
 
             Assert.That(aligner.Moves.Skip(2).Select(m => m.Axis), Has.All.EqualTo(PolarAlignerAxis.Altitude));
         }
@@ -462,7 +462,7 @@ namespace OpenAstroAra.Test {
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Probing).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
             IPolarAlignerDriver driver = svc;
             Assert.That(driver.DrivesPolarAligner, Is.True);
 
@@ -485,7 +485,7 @@ namespace OpenAstroAra.Test {
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10);
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
             IPolarAlignerDriver driver = svc;
             aligner.StopAnswers.Reset();
             try {
@@ -509,7 +509,7 @@ namespace OpenAstroAra.Test {
             var (svc, stopped, _) = await RunUntilStoppedAsync(aligner, NewMount(tracking: true)).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.MountTracking));
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.MountTracking));
             Assert.That(aligner.Moves, Is.Empty);
         }
 
@@ -518,12 +518,12 @@ namespace OpenAstroAra.Test {
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Probing).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
 
             await svc.StopAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            var stopped = await AlignerEventAsync(ws, PolarAlignAlignerStates.Stopped).ConfigureAwait(false);
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignAlignerCauses.StoppedByUser));
+            var stopped = await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.StoppedByUser));
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1));
             AssertStillAdjustingByHand(svc, await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false));
 
@@ -532,9 +532,9 @@ namespace OpenAstroAra.Test {
             var movesBefore = aligner.Moves.Length;
             await svc.ResumeAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            var probe = await AlignerEventAsync(ws, PolarAlignAlignerStates.Probing, mark).ConfigureAwait(false);
+            var probe = await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing, mark).ConfigureAwait(false);
             Assert.That(probe.GetProperty("axis").GetString(), Is.EqualTo("azimuth"), "a resume starts from a new test move");
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged, mark).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged, mark).ConfigureAwait(false);
             Assert.That(aligner.Moves, Has.Length.GreaterThan(movesBefore + 2));
         }
 
@@ -554,7 +554,7 @@ namespace OpenAstroAra.Test {
             await Assert.ThatAsync(() => svc.ResumeAlignerAsync(null, CancellationToken.None), Throws.InvalidOperationException).ConfigureAwait(false);
 
             Assert.That(await AlignerStatusAsync(svc).ConfigureAwait(false), Is.Null);
-            Assert.That(ws.Count(WsEventCatalog.PolarAlignAligner), Is.Zero);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignCorrection), Is.Zero);
         }
 
         [Test]
@@ -566,7 +566,7 @@ namespace OpenAstroAra.Test {
 
             var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
             using var _ = svc;
-            await AlignerEventAsync(ws, PolarAlignAlignerStates.Converged).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
             await Assert.ThatAsync(() => svc.ResumeAlignerAsync(null, CancellationToken.None), Throws.InvalidOperationException,
                 "an aligner that is not stopped has nothing to resume").ConfigureAwait(false);
         }

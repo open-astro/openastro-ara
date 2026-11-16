@@ -157,18 +157,18 @@ namespace OpenAstroAra.Test {
                     new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), aligner: aligners);
 
                 await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-                await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignAligner
-                        && e.Payload.GetProperty("state").GetString() is PolarAlignAlignerStates.Converged or PolarAlignAlignerStates.Stopped)
+                await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrection
+                        && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))
                     .WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
 
                 var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
                 var after = (await SimulatorStateAsync(http).ConfigureAwait(false)).GetProperty("error");
                 await TestContext.Out.WriteLineAsync(FormattableString.Invariant(
-                    $"lat {latitudeDeg}: simulator error set az {azErrorArcmin}′ alt {altErrorArcmin}′; Ara ended {status.Aligner?.State} ({status.Aligner?.Cause}) after {status.Aligner?.Moves} moves, reading {status.CurrentErrorArcmin:F2}′; simulator now az {after.GetProperty("az").GetDouble():F2}′ alt {after.GetProperty("alt").GetDouble():F2}′ total {after.GetProperty("total").GetDouble():F2}′")).ConfigureAwait(false);
+                    $"lat {latitudeDeg}: simulator error set az {azErrorArcmin}′ alt {altErrorArcmin}′; Ara ended {status.Correction?.State} ({status.Correction?.Cause}) after {status.Correction?.Moves} moves, reading {status.CurrentErrorArcmin:F2}′; simulator now az {after.GetProperty("az").GetDouble():F2}′ alt {after.GetProperty("alt").GetDouble():F2}′ total {after.GetProperty("total").GetDouble():F2}′")).ConfigureAwait(false);
                 await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-                Assert.That(status.Aligner?.State, Is.EqualTo(PolarAlignAlignerStates.Converged), $"stopped: {status.Aligner?.Cause} {status.Aligner?.DeviceText}");
+                Assert.That(status.Correction?.State, Is.EqualTo(PolarAlignCorrectionStates.Converged), $"stopped: {status.Correction?.Cause} {status.Correction?.DeviceText}");
                 Assert.That(status.CurrentErrorArcmin, Is.LessThanOrEqualTo(1.0 + 0.3), "Ara's own reading, the 1′ tolerance plus the simulator's noise");
                 // The simulator's truth has no refraction; Ara aims at the refracted pole, about 1′ higher at 40°.
                 var slack = 1.0 + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(latitudeDeg)) + 0.5;

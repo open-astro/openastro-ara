@@ -117,7 +117,7 @@ class PolarAlignLastResult {
   }
 }
 
-/// #1971 the Polar Aligner's run states (`PolarAlignAlignerDto.state`).
+/// #1971 the Polar Aligner's run states (`PolarAlignCorrectionDto.state`).
 abstract final class PolarAlignerStates {
   static const manual = 'manual';
   static const probing = 'probing';
@@ -128,8 +128,8 @@ abstract final class PolarAlignerStates {
   static const stopped = 'stopped';
 }
 
-/// Why the motors stopped (`PolarAlignAlignerDto.cause`), as the daemon's
-/// `PolarAlignAlignerCauses` declares them.
+/// Why the motors stopped (`PolarAlignCorrectionDto.cause`), as the daemon's
+/// `PolarAlignCorrectionCauses` declares them.
 abstract final class PolarAlignerCauses {
   static const wrongDirection = 'wrong_direction';
   static const wrongScale = 'wrong_scale';
@@ -149,8 +149,8 @@ abstract final class PolarAlignerCauses {
   ];
 }
 
-/// The Polar Aligner in a running routine: `aligner` on the status and
-/// the `polar_align.aligner` payload. [arcmin] is signed as sent (+ azimuth
+/// The Polar Aligner in a running routine: `correction` on the status and
+/// the `polar_align.correction` payload. [arcmin] is signed as sent (+ azimuth
 /// = clockwise seen from above, + altitude = raise).
 class PolarAlignerRun {
   final String state;
@@ -310,7 +310,7 @@ class PolarAlignStatus {
   final PolarAlignLastResult? lastResult;
 
   /// #1971 null without a Polar Aligner Ara drives, or before its first measurement.
-  final PolarAlignerRun? aligner;
+  final PolarAlignerRun? correction;
 
   const PolarAlignStatus({
     required this.state,
@@ -326,7 +326,7 @@ class PolarAlignStatus {
     this.checkSolvesDone = 0,
     this.checkResult,
     this.lastResult,
-    this.aligner,
+    this.correction,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -348,7 +348,7 @@ class PolarAlignStatus {
             ? PolarAlignCheckResult.fromJson(json['check_result'] as Map<String, dynamic>)
             : null,
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
-        aligner: PolarAlignerRun.tryParse(json['aligner']),
+        correction: PolarAlignerRun.tryParse(json['correction']),
       );
 
   /// True while the server is running any phase of the routine.

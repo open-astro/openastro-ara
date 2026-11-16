@@ -25,7 +25,7 @@ String polarToleranceText(double v) =>
 /// The motors are working in a running routine: the hand-turn arrows dim and
 /// Verify and Done step aside.
 bool polarAlignerMotorsBusy(PolarAlignLive live) =>
-    live.isActive && (live.aligner?.motorsBusy ?? false);
+    live.isActive && (live.correction?.motorsBusy ?? false);
 
 String _axisWord(AppLocalizations l, String? axis) =>
     axis == 'altitude' ? l.polarAlignerAxisAltitude : l.polarAlignerAxisAzimuth;
@@ -104,7 +104,7 @@ class PolarAlignerBlock extends ConsumerWidget {
     final l10n = context.l10n;
     final live = ref.watch(polarAlignLiveProvider);
     // The run belongs to a running routine; its end sends no aligner event.
-    final run = live.isActive ? live.aligner : null;
+    final run = live.isActive ? live.correction : null;
     final settings = ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
     final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
     final busy = ref.watch(polarAlignActionProvider).busy;
@@ -277,7 +277,7 @@ class PolarAlignerBlock extends ConsumerWidget {
 /// ("Polar Aligner · Moving azimuth 6.1′ east"); null otherwise.
 ({String text, Color color, bool working, bool ring})? polarAlignerStatusLine(
     AppLocalizations l, PolarAlignLive live, {required bool southern}) {
-  final run = live.isActive ? live.aligner : null;
+  final run = live.isActive ? live.correction : null;
   if (run == null) return null;
   if (run.state == PolarAlignerStates.stopped) {
     return (text: l.polarAlignerStopped, color: AraColors.accentBusy, working: false, ring: false);

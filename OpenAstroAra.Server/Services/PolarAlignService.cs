@@ -209,7 +209,7 @@ namespace OpenAstroAra.Server.Services {
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
                     LastResult: _lastResult,
-                    Aligner: _aligner));
+                    Correction: _aligner));
             }
         }
 

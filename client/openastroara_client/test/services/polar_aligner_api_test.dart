@@ -42,8 +42,8 @@ void main() {
       'GET /api/v1/equipment/polaraligner',
       'POST /api/v1/equipment/polaraligner/stop',
       'POST /api/v1/equipment/polaraligner/home',
-      'POST /api/v1/equipment/polaralign/aligner/stop',
-      'POST /api/v1/equipment/polaralign/aligner/resume',
+      'POST /api/v1/equipment/polaralign/correction/stop',
+      'POST /api/v1/equipment/polaralign/correction/resume',
     ]);
   });
 

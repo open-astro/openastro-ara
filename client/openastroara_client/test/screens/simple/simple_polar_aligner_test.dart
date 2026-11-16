@@ -87,7 +87,7 @@ PolarAlignLive _fine(PolarAlignerRun? run) => PolarAlignLive(
       azErrorArcmin: -1.3,
       totalErrorArcmin: 1.5,
       zone: 'green',
-      aligner: run,
+      correction: run,
     );
 
 late _Live _liveNotifier;
@@ -192,7 +192,7 @@ void main() {
           altErrorArcmin: 0.5,
           azErrorArcmin: 0.5,
           totalErrorArcmin: 0.7,
-          aligner: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
+          correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
         ));
     expect(_key('simple-polar-next-fine'), findsOneWidget);
     expect(_key('simple-polar-done-rough'), findsNothing);

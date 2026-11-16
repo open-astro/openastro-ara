@@ -84,7 +84,7 @@ const _base = PolarAligner(
 );
 
 PolarAlignLive _run(PolarAlignerRun run) =>
-    PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 8, aligner: run);
+    PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 8, correction: run);
 
 Future<_Aligner> _pump(WidgetTester tester,
     {PolarAligner? device = _base, PolarAlignLive live = const PolarAlignLive(), bool auto = true, double lat = 40}) async {

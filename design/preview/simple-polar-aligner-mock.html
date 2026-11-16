@@ -457,8 +457,8 @@ function settings() {
     </div></div>`;
 }
 
-const EV = '<b>polar_align.aligner</b>';  // the same object is `aligner` in GET /equipment/polaralign/status
-const STOPCMD = ' · Stop motors = POST <b>/equipment/polaralign/aligner/stop</b>';
+const EV = '<b>polar_align.correction</b>';  // the same object is `correction` in GET /equipment/polaralign/status
+const STOPCMD = ' · Stop motors = POST <b>/equipment/polaralign/correction/stop</b>';
 const SRC = {
   none: 'GET <b>/equipment/polaraligner</b> { present: false } · no aligner object in the Routine status',
   idle: () => `GET <b>/equipment/polaraligner</b> { present: true, drivable: true } · no aligner object until the Routine measures · profile <b>polar_aligner_auto</b> = true · Home = POST <b>/equipment/polaraligner/home</b>`,
@@ -469,7 +469,7 @@ const SRC = {
   settling: () => `${EV} { state: "settling", seconds: ${L.settle}, moves: ${L.moves} }${STOPCMD}`,
   measuring: () => `${EV} { state: "measuring", moves: ${L.moves} } · <b>polar_align.progress</b> altitude_error_arcmin / azimuth_error_arcmin update${STOPCMD}`,
   converged: () => `${EV} { state: "converged", moves: ${L.moves} } · the Routine goes on: Verify / Done as today`,
-  stopped: () => `${EV} { state: "stopped", cause: "${S.cause}"${DEVTEXT[S.cause] ? `, device_text: "${DEVTEXT[S.cause]}"` : ''}, moves: ${L.moves} } · Resume = POST <b>/equipment/polaralign/aligner/resume</b> · Home = POST <b>/equipment/polaraligner/home</b>`,
+  stopped: () => `${EV} { state: "stopped", cause: "${S.cause}"${DEVTEXT[S.cause] ? `, device_text: "${DEVTEXT[S.cause]}"` : ''}, moves: ${L.moves} } · Resume = POST <b>/equipment/polaralign/correction/resume</b> · Home = POST <b>/equipment/polaraligner/home</b>`,
   tier2: () => `GET <b>/equipment/polaraligner</b> { present: true, carrier: "${carrier()}", name: "${NAME[S.picked] || NAME.switch}", drivable: false, not_drivable_reason: "${S.why}" }`,
 };
 const carrier = () => S.picked === 'mount' ? 'mount' : 'switch';
