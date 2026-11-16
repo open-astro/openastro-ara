@@ -71,7 +71,8 @@ public class FileProfileRepositoryTest {
         using (new FileProfileRepository(_dir, _store, first)) { }
         first.Warnings.Should().ContainSingle(w => w.Contains(id.ToString("N")));
         File.Exists(path).Should().BeFalse("the unreadable file is set aside");
-        Directory.EnumerateFiles(profiles, id.ToString("N") + ".json.corrupt").Should().ContainSingle();
+        Directory.EnumerateFiles(profiles, id.ToString("N") + ".json.corrupt*").Should().ContainSingle()
+            .Which.Should().MatchRegex(@"\.json\.corrupt\.\d+$");
 
         var second = new CapturingLogger();
         using (new FileProfileRepository(_dir, _store, second)) { }
@@ -241,17 +242,25 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
-    public void Load_ignores_foreign_and_misnamed_json_files() {
+    public void Load_ignores_foreign_json_files_and_sets_aside_unparseable_ones() {
         var profilesDir = Path.Combine(_dir, "profiles");
         // A non-GUID-named JSON a future feature might drop alongside the profiles.
         File.WriteAllText(Path.Combine(profilesDir, "index.json"), "{\"some\":\"thing\"}");
         // A GUID-named file whose contents don't parse as a StoredProfileDto.
-        File.WriteAllText(
-            Path.Combine(profilesDir, Guid.NewGuid().ToString("N") + ".json"), "not json");
+        var badId = Guid.NewGuid().ToString("N");
+        var badPath = Path.Combine(profilesDir, badId + ".json");
+        File.WriteAllText(badPath, "not json");
 
-        using var repo2 = new FileProfileRepository(_dir, _store);
-        // Only the seeded "Default" profile is recognized; the stray files are ignored.
+        var log = new CapturingLogger();
+        using var repo2 = new FileProfileRepository(_dir, _store, log);
+        // Only the seeded "Default" profile is recognized; the foreign file is ignored.
         repo2.List().Profiles.Should().ContainSingle().Which.Name.Should().Be("Default");
+        File.Exists(Path.Combine(profilesDir, "index.json")).Should().BeTrue();
+        // The unparseable GUID-named file is set aside, once.
+        File.Exists(badPath).Should().BeFalse();
+        Directory.EnumerateFiles(profilesDir, badId + ".json.corrupt*").Should().ContainSingle()
+            .Which.Should().MatchRegex(@"\.json\.corrupt\.\d+$");
+        log.Warnings.Should().ContainSingle(w => w.Contains(badId));
     }
 
     [Test]

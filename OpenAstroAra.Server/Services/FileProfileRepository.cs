@@ -257,11 +257,10 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
                 var stored = string.IsNullOrWhiteSpace(json)
                     ? null
                     : JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
-                if (stored is null) SetAside(path, fileId);
+                if (stored is null) SetAside(path, fileId, null);
                 else if (stored.Meta.Id == fileId) _metas[stored.Meta.Id] = stored.Meta;
             } catch (JsonException ex) {
-                LogLoadFailed(ex, path);
-                SetAside(path, fileId);
+                SetAside(path, fileId, ex);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 // May be temporary: leave the file where it is.
                 LogLoadFailed(ex, path);
@@ -313,11 +312,13 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
 
     // A file that cannot be read as a profile is renamed so it neither matches *.json (no
     // warning at every start) nor *.tmp (the boot sweep would delete it). One Warning, once.
-    private void SetAside(string path, Guid id) {
-        var aside = path + ".corrupt";
+    // Name is <file>.corrupt.<unix-ts>, append-only, never overwritten (§28.15, as in
+    // SequenceStartupReconciler).
+    private void SetAside(string path, Guid id, Exception? cause) {
+        var aside = $"{path}.corrupt.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         try {
-            File.Move(path, aside, overwrite: true);
-            LogSetAside(id, path, aside);
+            File.Move(path, aside, overwrite: false);
+            LogSetAside(cause, id, path, aside);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogLoadFailed(ex, path);
         }
@@ -446,7 +447,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     partial void LogLoadFailed(Exception ex, string path);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Profile {Id} could not be read; set {Path} aside as {AsidePath}")]
-    partial void LogSetAside(Guid id, string path, string asidePath);
+    partial void LogSetAside(Exception? ex, Guid id, string path, string asidePath);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to persist profile file {Path}")]
     partial void LogPersistFailed(Exception ex, string path);
