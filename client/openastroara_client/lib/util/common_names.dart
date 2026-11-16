@@ -19,20 +19,9 @@ const Map<String, List<String>> commonNames = {
   'NGC0246': ['Skull Nebula'],
   // M 101; SIMBAD NAME identifier "Pinwheel" (simbad.cds.unistra.fr, ident of NGC 5457).
   'NGC5457': ['Pinwheel'],
-  // #1887. Source: Wikipedia "NGC 2359" (also "Thor's Helmet"); SIMBAD has no NAME for it.
-  'NGC2359': ["Thor's Helmet"],
-  // Source: Wikipedia "Heart Nebula" (IC 1805); SIMBAD NAME is only "AFGL 333 Cloud".
-  'IC1805': ['Heart Nebula'],
-  // Source: Wikipedia "Westerhout 5" (W5, "the Soul Nebula", containing IC 1848).
-  'IC1848': ['Soul Nebula'],
-  // Source: Wikipedia "IC 410" ("also known as the Tadpole Nebula").
-  'IC0410': ['Tadpoles Nebula'],
-  // Source: Wikipedia "Sh 2-132" ("also known as the Lion Nebula").
-  'Sh2-132': ['Lion Nebula'],
-  // Source: Wikipedia "Simeis 147" ("also known as the Spaghetti Nebula ... Sharpless 2-240").
-  'Sh2-240': ['Spaghetti Nebula'],
-  // Source: Wikipedia "Sh 2-308" ("commonly known as the Dolphin-Head Nebula").
-  'Sh2-308': ['Dolphin Head Nebula'],
+  // #1887. ESO press image eso1237a, "Close-up view of the head of the Seagull Nebula": the
+  // object page lists Sh 2-292 / RCW 2 / Gum 1 under the name "Seagull Nebula".
+  'Sh2-292': ['Seagull Nebula'],
 };
 
 /// [catalog] with [names] laid over it. Pure.

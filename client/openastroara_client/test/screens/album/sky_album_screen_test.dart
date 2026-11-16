@@ -609,6 +609,15 @@ void main() {
     expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(tester.getCenter(find.text('1 / 4 collected')).dy, 4));
   });
 
+  testWidgets('at 1200 px six chips fill the row and the filter wraps below them, nothing overflows (#1887)',
+      (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    expect(tester.takeException(), isNull);
+    final filter = find.byType(SegmentedButton<AlbumFilter>);
+    expect(tester.getTopLeft(filter).dy, greaterThan(tester.getBottomLeft(find.text('Messier · 1')).dy));
+    expect(tester.getTopLeft(find.text('1 / 4 collected')).dy, greaterThan(tester.getBottomLeft(filter).dy));
+  });
+
   testWidgets('a phone keeps the catalogs and the filter above the count, out of the bar', (tester) async {
     await _pump(tester, frames: _m31Frames, size: const Size(400, 900));
     final countTop = tester.getTopLeft(find.text('1 / 4 collected')).dy;
