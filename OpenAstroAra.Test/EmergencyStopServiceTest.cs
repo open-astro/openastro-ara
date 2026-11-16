@@ -664,6 +664,51 @@ namespace OpenAstroAra.Test {
             never.TrySetResult();
         }
 
+        // #1985 — a hung probe or a blocking synchronous prefix must not hold the ladder. The outer
+        // bound keeps a regression from hanging the suite: the ladder runs off the test thread.
+        private static async Task<EmergencyStopResultDto?> RunWithOuterBoundAsync(EmergencyStopService service) {
+            var ladder = Task.Run(() => service.ExecuteAsync());
+            var done = await Task.WhenAny(ladder, Task.Delay(TimeSpan.FromSeconds(5)));
+            return ReferenceEquals(done, ladder) ? await ladder : null;
+        }
+
+        [Test]
+        public async Task Execute_AProbeThatNeverCompletes_FailsTheRung_AndTheLadderGoesOn() {
+            var never = new TaskCompletionSource<CameraDto?>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).Returns(never.Task!);
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+
+            var result = await RunWithOuterBoundAsync(service);
+
+            never.TrySetResult(null);
+            Assert.That(result, Is.Not.Null, "the ladder must finish within the outer bound");
+            Assert.Multiple(() => {
+                Assert.That(result!.FailedRungs, Does.Contain("abort_exposure"));
+                Assert.That(result.MountStopped, Is.True, "the rungs after the hung probe still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+        }
+
+        [Test]
+        public async Task Execute_AnActionThatBlocksItsCaller_FailsTheRung_AndTheLadderGoesOn() {
+            using var release = new ManualResetEventSlim();
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
+                .Returns(() => { release.Wait(TimeSpan.FromSeconds(30)); return Task.CompletedTask; });
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+
+            var result = await RunWithOuterBoundAsync(service);
+
+            release.Set();
+            Assert.That(result, Is.Not.Null, "the ladder must finish within the outer bound");
+            Assert.Multiple(() => {
+                Assert.That(result!.FailedRungs, Does.Contain("abort_exposure"));
+                Assert.That(result.MountStopped, Is.True, "the rungs after the blocked action still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+        }
+
         [Test]
         public async Task Execute_NoRunningSequence_ReportsZeroAborted() {
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
