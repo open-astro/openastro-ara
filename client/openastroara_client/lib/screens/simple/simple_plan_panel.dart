@@ -1110,8 +1110,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-recent-$i'),
                 width: tileWidth,
-                // The saved name leads, as the plan header shows it after a tap.
-                title: designationWithName(r.name, recentRows[i]?.name ?? ''),
+                // The saved designation (M 31), else the row's id: a saved
+                // common name is not a designation (#1957).
+                title: designationWithName(
+                  isCatalogDesignation(r.name) ? r.name : recentRows[i]?.id ?? r.name,
+                  recentRows[i]?.name ?? '',
+                ),
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),
@@ -2330,7 +2334,7 @@ class SimpleRunPanel extends ConsumerWidget {
   }
 }
 
-/// A catalog suggestion as a row, 44 pt tall: `designation (name)` (the
+/// A catalog suggestion as a row, 44 pt tall: `name (designation)` (the
 /// nickname that matched, when one did) and the magnitude. Plan's search and
 /// Simple Mode's search list them.
 class SimpleSuggestion extends StatelessWidget {

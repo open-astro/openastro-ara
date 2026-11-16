@@ -1305,7 +1305,7 @@ void main() {
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 
-    testWidgets('the Skull Nebula shows as "NGC 246 (Skull Nebula)" in the suggestion row and the plan header', (tester) async {
+    testWidgets('the Skull Nebula shows as "Skull Nebula (NGC 246)" in the suggestion row and the plan header', (tester) async {
       await _pump(
           tester,
           _Seq(),
@@ -1319,11 +1319,11 @@ void main() {
       await tester.enterText(find.byKey(const Key('simple-run-search')), 'skull');
       await tester.pump();
       await tester.pump();
-      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 246 (Skull Nebula)')),
+      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('Skull Nebula (NGC 246)')),
           findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
       await tester.pump();
-      expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+      expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget, reason: 'the plan header, the list is closed');
     });
 
     testWidgets("the target card shows the object's Album Art; one without Art keeps the drawn placeholder",
@@ -1361,7 +1361,7 @@ void main() {
       expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsOneWidget);
     });
 
-    testWidgets("Tonight's Best and Recent tiles carry the nickname, NGC 246 (Skull Nebula), not NGC0246",
+    testWidgets("Tonight's Best and Recent tiles carry the nickname, Skull Nebula (NGC 246), not NGC0246",
         (tester) async {
       const skull = PlanningDso(
           id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87);
@@ -1385,12 +1385,12 @@ void main() {
                   (name: 'NGC0246', raDeg: 11.76, decDeg: -11.87, when: DateTime.utc(2026, 11, 9)),
                 ]),
           ]);
-      expect(find.text('NGC 246 (Skull Nebula)'), findsNWidgets(2), reason: 'one Tonight\'s Best tile, one Recent tile');
+      expect(find.text('Skull Nebula (NGC 246)'), findsNWidgets(2), reason: 'one Tonight\'s Best tile, one Recent tile');
       expect(find.text('NGC 1360'), findsOneWidget, reason: 'no nickname: the designation, unpadded');
       expect(find.text('NGC0246'), findsNothing);
     });
 
-    testWidgets("a Recent target saved under an alias, M 31, reads M 31 (Andromeda Galaxy) on the tile and the plan header",
+    testWidgets("a Recent target saved under an alias, M 31, reads Andromeda Galaxy (M 31) on the tile and the plan header",
         (tester) async {
       await _pump(
           tester,
@@ -1407,11 +1407,35 @@ void main() {
                 ]),
           ]);
       final tile = find.byKey(const Key('simple-run-recent-0'));
-      expect(find.descendant(of: tile, matching: find.text('M 31 (Andromeda Galaxy)')), findsOneWidget);
-      expect(find.text('NGC 224 (Andromeda Galaxy)'), findsNothing);
+      expect(find.descendant(of: tile, matching: find.text('Andromeda Galaxy (M 31)')), findsOneWidget);
+      expect(find.text('Andromeda Galaxy (NGC 224)'), findsNothing);
       await tester.tap(tile);
       await tester.pump();
-      expect(find.text('M 31 (Andromeda Galaxy)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
+      expect(find.text('Andromeda Galaxy (M 31)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
+    });
+
+    testWidgets('a Recent target saved under its common name, Helix Nebula, reads Helix Nebula (NGC 7293) on the tile and the plan header',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC7293', name: 'Helix Nebula', type: 'PN', magnitude: 7.6, raDeg: 337.4, decDeg: -20.8, aliases: ['C 063']),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Helix Nebula', raDeg: 337.4, decDeg: -20.8, when: DateTime.utc(2026, 11, 14)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('Helix Nebula (NGC 7293)')), findsOneWidget,
+          reason: 'a name is not a designation: the catalog row id leads, as the plan header does');
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('Helix Nebula (NGC 7293)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
     });
 
     testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
@@ -1427,7 +1451,7 @@ void main() {
                   PlanningDso(id: 'NGC6334', name: "Cat's Paw Nebula", type: 'HII', magnitude: null, raDeg: 260.1, decDeg: -35.8, aliases: ['RCW 127']),
                 ]),
           ]);
-      for (final (query, title) in [('M 31', 'M 31 (Andromeda Galaxy)'), ('RCW 127', "RCW 127 (Cat's Paw Nebula)")]) {
+      for (final (query, title) in [('M 31', 'Andromeda Galaxy (M 31)'), ('RCW 127', "Cat's Paw Nebula (RCW 127)")]) {
         await tester.enterText(find.byKey(const Key('simple-run-search')), query);
         await tester.pump();
         await tester.pump();
@@ -1438,17 +1462,17 @@ void main() {
       }
     });
 
-    testWidgets('an Abell planetary heads the plan as "Abell 21 (Medusa Nebula)", not by its short alias A 21',
+    testWidgets('an Abell planetary heads the plan as "Medusa Nebula (Abell 21)", not by its short alias A 21',
         (tester) async {
       const medusa = PlanningDso(
           id: 'Abell 21', name: 'Medusa Nebula', type: 'PN', magnitude: null, raDeg: 112.26, decDeg: 13.24,
           aliases: ['PN G205.1+14.2', 'A 21', 'PK 205+14 1', 'Sh 2-274']);
       await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           sel: simpleSelectionOfDso(medusa, const [], latitudeDeg: 51.477833));
-      expect(find.text('Abell 21 (Medusa Nebula)'), findsOneWidget);
+      expect(find.text('Medusa Nebula (Abell 21)'), findsOneWidget);
     });
 
-    testWidgets('a nickname that matched stays in the row: "NGC 598 (Triangulum Pinwheel)"', (tester) async {
+    testWidgets('a nickname that matched stays in the row: "Triangulum Pinwheel (NGC 598)"', (tester) async {
       await _pump(
           tester,
           _Seq(),
@@ -1466,12 +1490,12 @@ void main() {
       await tester.pump();
       expect(
           find.descendant(
-              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 598 (Triangulum Pinwheel)')),
+              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('Triangulum Pinwheel (NGC 598)')),
           findsOneWidget,
           reason: 'what matched, so the row says why it is listed');
     });
 
-    testWidgets('at twice the text size a search row and the plan header show their whole designation (name)',
+    testWidgets('at twice the text size a search row and the plan header show their whole name (designation)',
         (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -1492,11 +1516,11 @@ void main() {
       await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
       await tester.pump();
       await tester.pump();
-      whole('NGC 598 (Triangulum Pinwheel)');
+      whole('Triangulum Pinwheel (NGC 598)');
       whole('mag 5.7');
       await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
       await tester.pump();
-      whole('NGC 598 (Triangulum Galaxy)');
+      whole('Triangulum Galaxy (NGC 598)');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',

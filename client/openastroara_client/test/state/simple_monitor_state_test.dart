@@ -475,7 +475,7 @@ void main() {
       final s = r.read();
       expect(s.tonightsBest, isTrue);
       expect((s.upNext.first.kind, s.upNext.first.name, s.upNext.first.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
-      expect(s.upNext.last.name, 'NGC 246 (Skull Nebula)');
+      expect(s.upNext.last.name, 'Skull Nebula (NGC 246)');
     });
   });
 
