@@ -2328,6 +2328,50 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusMeasuredStars => 'Measured stars';
 
   @override
+  String get focusToolManual => 'Focus by hand';
+
+  @override
+  String get focusToolManualOpen => 'Open';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Open focus by hand';
+
+  @override
+  String get focusToolOffsets => 'Filter offsets';
+
+  @override
+  String get focusToolOffsetsOpen => 'Measure';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
+
+  @override
+  String get focusToolsHeading => 'Tools';
+
+  @override
+  String get focusToolManualStatus => 'Not started';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count to measure',
+      one: '1 to measure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'All measured';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'No filter wheel';
+
+  @override
+  String get focusBackToAutofocus => 'Back to Autofocus';
+
+  @override
   String get bahtinovInFocusMaskOff => 'In focus · mask off';
 
   @override
@@ -2481,7 +2525,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
   }
 
   @override

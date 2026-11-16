@@ -3254,6 +3254,59 @@
   "@focusMeasuredStars": {
     "description": "Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen"
   },
+  "focusToolManual": "Focus by hand",
+  "@focusToolManual": {
+    "description": "Simple Focus tool row and its open view's title: the Bahtinov mask readout"
+  },
+  "focusToolManualOpen": "Open",
+  "@focusToolManualOpen": {
+    "description": "Simple Focus tool row button that opens focus by hand"
+  },
+  "focusToolManualOpenSemantics": "Open focus by hand",
+  "@focusToolManualOpenSemantics": {
+    "description": "Spoken name of the focus by hand button"
+  },
+  "focusToolOffsets": "Filter offsets",
+  "@focusToolOffsets": {
+    "description": "Simple Focus tool row and its open view's title: the filter offsets measurement"
+  },
+  "focusToolOffsetsOpen": "Measure",
+  "@focusToolOffsetsOpen": {
+    "description": "Simple Focus tool row button that opens the filter offsets measurement"
+  },
+  "focusToolOffsetsOpenSemantics": "Open filter offsets",
+  "@focusToolOffsetsOpenSemantics": {
+    "description": "Spoken name of the filter offsets button"
+  },
+  "focusToolsHeading": "Tools",
+  "@focusToolsHeading": {
+    "description": "Simple Focus: heading of the Tools rows under Autofocus"
+  },
+  "focusToolManualStatus": "Not started",
+  "@focusToolManualStatus": {
+    "description": "Simple Focus tool row status: focus by hand is not open"
+  },
+  "focusToolOffsetsToMeasure": "{count, plural, =1{1 to measure} other{{count} to measure}}",
+  "@focusToolOffsetsToMeasure": {
+    "description": "Simple Focus tool row status: filters whose focus offset is still 0",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusToolOffsetsAllMeasured": "All measured",
+  "@focusToolOffsetsAllMeasured": {
+    "description": "Simple Focus tool row status: every filter has a focus offset"
+  },
+  "focusToolOffsetsNoWheel": "No filter wheel",
+  "@focusToolOffsetsNoWheel": {
+    "description": "Simple Focus tool row status: no filter wheel is connected, so there are no offsets to measure. Short, one line."
+  },
+  "focusBackToAutofocus": "Back to Autofocus",
+  "@focusBackToAutofocus": {
+    "description": "Spoken name of the back arrow in Simple Focus's tool views"
+  },
   "bahtinovInFocusMaskOff": "In focus · mask off",
   "@bahtinovInFocusMaskOff": {
     "description": "Bahtinov focusing finished in focus, mask taken off"
@@ -3463,7 +3516,7 @@
   "@focusStopBahtinov": {
     "description": "Screen reader label of Focus's shutter on Manual while it reads"
   },
-  "focusWeakFitShort": "Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.",
+  "focusWeakFitShort": "Weak curve fit (R² {r2}): run again if the sky has settled.",
   "@focusWeakFitShort": {
     "description": "Simple Focus panel: a finished autofocus whose curve fit was weak, short form",
     "placeholders": {
@@ -3680,7 +3733,7 @@
   },
   "focusScopeMain": "Main",
   "@focusScopeMain": {
-    "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"
+    "description": "Focus panel: focus the main telescope (short, shares a line with Guide)"
   },
   "focusScopeGuide": "Guide",
   "@focusScopeGuide": {

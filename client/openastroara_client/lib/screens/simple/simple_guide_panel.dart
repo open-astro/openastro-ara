@@ -702,18 +702,18 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         if (shared != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AraSpace.s8),
-            child: _ToolStatus(
+            child: SimpleToolStatus(
               key: const Key('simple-guider-tools-refusal'),
               color: AraColors.accentWarning,
               text: shared,
               warning: true,
             ),
           ),
-        _ToolRow(
+        SimpleToolRow(
           title: l10n.guideToolCalibration,
           what: l10n.guideToolCalibrationWhat,
           statusText: calibrationLine,
-          button: _toolButton(
+          button: simpleToolButton(
             key: const Key('simple-guider-recalibrate'),
             label: l10n.guideToolRecalibrate,
             semantics: l10n.guideRecalibrateNow,
@@ -721,7 +721,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
                 ? _recalibrate
                 : null,
           ),
-          status: _ToolStatus(
+          status: SimpleToolStatus(
             key: const Key('simple-guider-calibration-status'),
             color: calibrated
                 ? AraColors.accentConnected
@@ -731,18 +731,18 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
           ),
           extra: loop == null
               ? null
-              : _ToolStatus(
+              : SimpleToolStatus(
                   color: AraColors.accentWarning,
                   text: loop,
                   warning: true,
                 ),
         ),
         const Divider(height: 1, thickness: 1, color: AraColors.border),
-        _ToolRow(
+        SimpleToolRow(
           title: l10n.guideToolAssistant,
           what: l10n.guideToolAssistantWhat,
           statusText: assistantLine,
-          button: _toolButton(
+          button: simpleToolButton(
             key: const Key('simple-guider-assistant'),
             label: measuring
                 ? l10n.guideToolStop
@@ -760,7 +760,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
                 ? _runAssistant
                 : null,
           ),
-          status: _ToolStatus(
+          status: SimpleToolStatus(
             key: const Key('simple-guider-assistant-status'),
             color: measuring || status.isDone
                 ? AraColors.accentConnected
@@ -847,21 +847,23 @@ String? _decModeName(AppLocalizations l10n, String mode) => switch (mode) {
 
 /// One tool: its name and quiet button, what it does, where it stands (and
 /// anything extra under it, such as a refusal, or the suggestions and Apply).
-class _ToolRow extends StatelessWidget {
-  const _ToolRow({
+/// [what] and [status] are optional (Focus's tools have no [what]).
+class SimpleToolRow extends StatelessWidget {
+  const SimpleToolRow({
+    super.key,
     required this.title,
-    required this.what,
+    this.what,
     required this.button,
-    required this.status,
-    required this.statusText,
+    this.status,
+    this.statusText = '',
     this.extra,
   });
 
   final String title;
-  final String what;
+  final String? what;
   final String statusText;
   final Widget button;
-  final Widget status;
+  final Widget? status;
   final Widget? extra;
 
   @override
@@ -880,7 +882,8 @@ class _ToolRow extends StatelessWidget {
               child: Semantics(
                 container: true,
                 header: true,
-                label: '$title. $what $statusText',
+                label: '$title.${what == null ? '' : ' $what'} $statusText'
+                    .trim(),
                 excludeSemantics: true,
                 child: Text(
                   title,
@@ -891,8 +894,9 @@ class _ToolRow extends StatelessWidget {
             button,
           ],
         ),
-        ExcludeSemantics(child: Text(what, style: AraText.caption)),
-        ExcludeSemantics(child: status),
+        if (what != null)
+          ExcludeSemantics(child: Text(what!, style: AraText.caption)),
+        if (status != null) ExcludeSemantics(child: status!),
         if (extra != null)
           Padding(
             padding: const EdgeInsets.only(top: AraSpace.s4),
@@ -905,7 +909,7 @@ class _ToolRow extends StatelessWidget {
 
 /// A tool's quiet button: outlined with a Hairline border, 44 pt tall. The
 /// spoken name is the whole action, since "Run" alone says nothing.
-Widget _toolButton({
+Widget simpleToolButton({
   required Key key,
   required String label,
   required String semantics,
@@ -925,8 +929,8 @@ Widget _toolButton({
 /// A status line: a dot (a ring for blue, blinking while a tool works) and the
 /// words, two lines at most so Tools keeps Guide's height. [expandable] shows
 /// the rest in place on a tap; [warning] writes the words in amber.
-class _ToolStatus extends StatefulWidget {
-  const _ToolStatus({
+class SimpleToolStatus extends StatefulWidget {
+  const SimpleToolStatus({
     super.key,
     required this.color,
     required this.text,
@@ -944,10 +948,10 @@ class _ToolStatus extends StatefulWidget {
   final bool expandable;
 
   @override
-  State<_ToolStatus> createState() => _ToolStatusState();
+  State<SimpleToolStatus> createState() => _ToolStatusState();
 }
 
-class _ToolStatusState extends State<_ToolStatus> {
+class _ToolStatusState extends State<SimpleToolStatus> {
   bool _whole = false;
 
   @override

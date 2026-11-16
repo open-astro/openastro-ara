@@ -56,6 +56,10 @@ late _Bahtinov _b;
 
 Future<void> _pump(WidgetTester tester, BahtinovFocusLive live, {Widget child = const SimpleFocusPanel()}) async {
   _b = _Bahtinov(live);
+  // Room for the Back row over the readout: the shell scrolls the panel, this harness does not.
+  tester.view.physicalSize = const Size(800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       mainFocusMethodProvider.overrideWith(_Pick.new),
@@ -156,7 +160,7 @@ void main() {
 
   testWidgets('leaving Manual before Finish asks for the mask first, then switches', (tester) async {
     await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
-    await tester.tap(find.byKey(const Key('simple-focus-method-auto')));
+    await tester.tap(find.byKey(const Key('simple-focus-back')));
     await tester.pump();
     expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
     await tester.tap(find.text('Mask removed'));

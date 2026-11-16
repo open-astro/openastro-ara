@@ -2328,6 +2328,50 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusMeasuredStars => 'Measured stars';
 
   @override
+  String get focusToolManual => 'Focus by hand';
+
+  @override
+  String get focusToolManualOpen => 'Open';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Open focus by hand';
+
+  @override
+  String get focusToolOffsets => 'Filter offsets';
+
+  @override
+  String get focusToolOffsetsOpen => 'Measure';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
+
+  @override
+  String get focusToolsHeading => 'Tools';
+
+  @override
+  String get focusToolManualStatus => 'Not started';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count to measure',
+      one: '1 to measure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'All measured';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'No filter wheel';
+
+  @override
+  String get focusBackToAutofocus => 'Back to Autofocus';
+
+  @override
   String get bahtinovInFocusMaskOff => 'In focus · mask off';
 
   @override
@@ -2481,7 +2525,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
   }
 
   @override
@@ -8272,6 +8316,50 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusMeasuredStars => 'Estrelas medidas';
 
   @override
+  String get focusToolManual => 'Focar à mão';
+
+  @override
+  String get focusToolManualOpen => 'Abrir';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Abrir focar à mão';
+
+  @override
+  String get focusToolOffsets => 'Offsets de filtro';
+
+  @override
+  String get focusToolOffsetsOpen => 'Medir';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Abrir offsets de filtro';
+
+  @override
+  String get focusToolsHeading => 'Ferramentas';
+
+  @override
+  String get focusToolManualStatus => 'Não iniciado';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count para medir',
+      one: '1 para medir',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'Todos medidos';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'Sem roda de filtros';
+
+  @override
+  String get focusBackToAutofocus => 'Voltar ao autofoco';
+
+  @override
   String get bahtinovInFocusMaskOff => 'Em foco · sem máscara';
 
   @override
@@ -8425,7 +8513,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Ajuste da curva fraco (R² $r2): o foco vem do quadro medido. Rode de novo se o céu estabilizou.';
+    return 'Ajuste da curva fraco (R² $r2): rode de novo se o céu estabilizou.';
   }
 
   @override

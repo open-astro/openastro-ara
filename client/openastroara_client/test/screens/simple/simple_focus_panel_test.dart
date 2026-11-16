@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart' show LineChart;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
@@ -13,7 +14,10 @@ import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
@@ -30,6 +34,7 @@ import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -117,15 +122,45 @@ class _PierPrefs extends SimpleModePrefsService {
   Future<void> save(bool enabled) async {}
 }
 
+/// Tall enough for Autofocus and its Tools rows: the shell scrolls the panel, this harness does not.
+void _tall(WidgetTester tester) {
+  if (tester.view.physicalSize != const Size(2400, 1800)) return;
+  tester.view.physicalSize = const Size(800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
+/// The daemon's profile: records each autofocus PUT.
+class _SaveProfile extends ProfileApi {
+  _SaveProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
+  final saved = <AutofocusSettings>[];
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async {
+    saved.add(value);
+    return value;
+  }
+}
+
+class _FailProfile extends ProfileApi {
+  _FailProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async => throw StateError('daemon offline');
+}
+
 Future<(_Focuser, _Live)> _pump(WidgetTester tester,
-    {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle, Uint8List? frame}) async {
+    {FocuserStatus? focuser,
+    AutofocusRun run = AutofocusRun.idle,
+    Uint8List? frame,
+    List<Override> extra = const []}) async {
   final f = _Focuser(focuser);
   final l = _Live(AutofocusLive(run: run, frame: frame));
   _c = ProviderContainer(overrides: [
     focuserProvider.overrideWith(() => f),
     autofocusLiveProvider.overrideWith(() => l),
+    ...extra,
   ]);
   addTearDown(_c.dispose);
+  _tall(tester);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: _c,
     child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
@@ -147,20 +182,50 @@ void main() {
     });
   });
 
-  testWidgets('Main / Guide on top, Auto / Manual on a row under it; the guide camera has no Auto / Manual row',
-      (tester) async {
-    // User, 2026-11-04: Main, Guide, Auto, Manual on one line read as four of a kind.
-    await _pump(tester);
+  testWidgets('Main / Guide on top, the Tools rows under Autofocus; the guide camera has no Tools', (tester) async {
+    await _pump(tester, focuser: _focuser());
     final main = tester.getRect(find.byKey(const Key('simple-focus-scope-main')));
     final guide = tester.getRect(find.byKey(const Key('simple-focus-scope-guide')));
-    final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
+    final manual = tester.getRect(find.byKey(const Key('simple-focus-tool-manual')));
     expect(guide.top, main.top, reason: 'one row');
-    expect(auto.top, greaterThan(main.bottom), reason: 'the method under the camera');
-    expect(auto.left, main.left);
+    expect(manual.top, greaterThan(main.bottom), reason: 'Tools under the camera row');
+    expect(find.byKey(const Key('simple-focus-tool-offsets')), findsOneWidget);
+    expect(find.byKey(const Key('simple-info-on')), findsNothing, reason: 'Focus has no Info toggle');
     _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
     await tester.pump();
-    expect(find.byKey(const Key('simple-focus-method-auto')), findsNothing);
-    expect(find.byKey(const Key('simple-focus-method-manual')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-tool-offsets')), findsNothing);
+  });
+
+  testWidgets('the Tools rows: a heading, then each tool with its status pill and button, no one-line description', (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(find.text('Tools'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-manual-status')), matching: find.text('Not started')),
+        findsOneWidget);
+    // No filter wheel: nothing was measured, so not green "All measured".
+    final offsets = find.byKey(const Key('simple-focus-tool-offsets-status'));
+    expect(
+      find.descendant(of: offsets, matching: find.text('All measured')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: offsets,
+        matching: find.text('No filter wheel'),
+      ),
+      findsOneWidget,
+    );
+    // Board ruling (#1875 slice 4): no room for the descriptions on an iPad.
+    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing);
+    expect(find.textContaining('Focus shift per filter'), findsNothing);
+  });
+
+  testWidgets('a screen reader hears each Tools row with its status', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, focuser: _focuser());
+    expect(find.bySemanticsLabel('Focus by hand. Not started'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filter offsets. No filter wheel'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
@@ -217,7 +282,7 @@ void main() {
       probes: [_probe(0, 3.1), _probe(1, 2.4)],
     );
     await _pump(tester, focuser: _focuser(), run: run);
-    expect(tester.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(160));
+    expect(tester.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(86));
   });
 
   // A finished Smart Focus whose fit was weak (R² 0.55), like the rig's.
@@ -231,6 +296,28 @@ void main() {
         algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7, withinSampledRange: true, curve: []),
   );
 
+  testWidgets('every run state keeps the Tools heading, pills and buttons, without the one-line descriptions', (tester) async {
+    // Measured 2026-11-16 at 1024x768: with the descriptions an iPad scrolled
+    // by 133 px idle, 146 px running and 41 px finished; the board ruled they
+    // go in every state.
+    final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
+    for (final (name, run) in [
+      ('running', AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80)),
+      ('finished', weak),
+      ('failed', AutofocusRun(state: AutofocusRunStates.failed, totalSteps: 7, stepSize: 80)),
+    ]) {
+      live.state = AutofocusLive(run: run);
+      await tester.pump();
+      expect(find.text('Tools'), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-manual-status')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-offsets-status')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-offsets')), findsOneWidget, reason: name);
+      expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing, reason: name);
+      expect(find.textContaining('Focus shift per filter'), findsNothing, reason: name);
+    }
+  });
+
   testWidgets('a finished run: best position, stars and fit R², all on view', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     for (final t in ['Best position', '29463', 'Stars', '299', 'Fit R²', '0.55']) {
@@ -239,10 +326,11 @@ void main() {
     expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
   });
 
-  testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
+  testWidgets('Auto keeps one height from start to the last probe; a finished run gives chart height to the Tools rows (#1717)', (tester) async {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
     double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
     final start = height();
+    expect(tester.getSize(find.byType(VCurveChart)).height, 86, reason: 'idle chart');
     for (final run in [
       AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80),
       AutofocusRun(
@@ -253,34 +341,42 @@ void main() {
         stepSize: 80,
         probes: [_probe(0, 3.1), _probe(1, 2.4)],
       ),
-      weak,
     ]) {
       live.state = AutofocusLive(run: run);
       await tester.pump();
       expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
     }
+    // Board ruling (#1875 slice 4): a finished run's chart and note are
+    // smaller still, so an iPad needs no scroll.
+    live.state = AutofocusLive(run: weak);
+    await tester.pump();
+    expect(height(), lessThan(start), reason: 'finished');
   });
 
   // #1898: the plot resized between steps (axes appearing, the banner and the error taking its room).
-  testWidgets('the HFR plot keeps one size and place from before the first probe to the end, warning and error included (#1898)',
+  testWidgets('the HFR plot keeps one size and place from before the first probe to the end; a finished run and its error share a smaller one (#1898)',
       (tester) async {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
     Rect plot() => tester.getRect(find.byType(LineChart)).shift(-tester.getTopLeft(find.byType(SimpleFocusPanel)));
     final start = plot();
-    for (final (name, l) in [
-      ('probes', AutofocusLive(run: AutofocusRun(
-          state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
-          probes: [_probe(0, 3.1), _probe(1, 2.4)]))),
-      ('weak fit', AutofocusLive(run: weak)),
-      ('error', AutofocusLive(run: weak, error: StateError(List.filled(60, 'the star field drifted').join(' ')))),
-    ]) {
-      live.state = l;
-      await tester.pump();
-      expect(plot(), start, reason: name);
-    }
+    expect(tester.getSize(find.byType(VCurveChart)).height, 86, reason: 'running chart');
+    live.state = AutofocusLive(run: AutofocusRun(
+        state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
+        probes: [_probe(0, 3.1), _probe(1, 2.4)]));
+    await tester.pump();
+    expect(plot(), start, reason: 'probes');
+    // Finished: the chart is shorter (room for the Tools rows) and stays put
+    // when the error takes its slot.
+    live.state = AutofocusLive(run: weak);
+    await tester.pump();
+    final done = plot();
+    expect(done.height, lessThan(start.height), reason: 'weak fit');
+    live.state = AutofocusLive(run: weak, error: StateError(List.filled(60, 'the star field drifted').join(' ')));
+    await tester.pump();
+    expect(plot(), done, reason: 'error');
   });
 
-  // #1898 review: the warning's slot scales with the text; at 2x the two-line warning still fits.
+  // #1898 review: the warning's slot scales with the text; at 2x the one-line warning still fits.
   testWidgets('at 2x text the weak-fit warning fits its slot under the chart (#1898)', (tester) async {
     tester.view.physicalSize = const Size(1600, 2400);
     tester.view.devicePixelRatio = 1;
@@ -386,20 +482,89 @@ void main() {
     expect(find.byKey(const Key('simple-focus-stars-on')), findsNothing);
   });
 
-  testWidgets('Auto / Manual at the top of the panel picks the method (the chip follows)', (tester) async {
+  testWidgets('Focus by hand opens in place and Back returns to Autofocus (the chip follows)', (tester) async {
     await _pump(tester, focuser: _focuser());
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-auto'))).selected, isTrue,
-        reason: 'a connected focuser: Auto to start');
-    await tester.tap(find.byKey(const Key('simple-focus-method-manual')));
+    expect(find.byKey(const Key('simple-focus-back')), findsNothing, reason: 'a connected focuser: Autofocus to start');
+    await tester.tap(find.byKey(const Key('simple-focus-tool-manual')));
     await tester.pump();
     expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov);
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).selected, isTrue);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-focus-back')));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.autofocus);
+    expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget);
   });
 
-  testWidgets('the method is locked while autofocus runs', (tester) async {
+  testWidgets('the Tools rows are locked while autofocus runs', (tester) async {
     await _pump(tester,
         focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-focus-tool-manual'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-focus-tool-offsets'))).onPressed, isNull);
+  });
+
+  group('Autofocus exposure in Simple Mode', () {
+    Future<void> pumpWith(WidgetTester tester, {int? seconds}) async {
+      await _pump(tester, focuser: _focuser());
+      if (seconds != null) _c.read(autofocusSettingsProvider.notifier).setExposureSeconds(seconds);
+      await tester.pump();
+    }
+
+    bool selected(WidgetTester tester, String key) =>
+        tester.widget<SimpleSegment>(find.byKey(Key('simple-focus-af-exposure-$key'))).selected;
+
+    testWidgets('2 / 5 / 10 / 15 s, 5 s to start; Steps and Step size are not offered', (tester) async {
+      await pumpWith(tester);
+      for (final s in ['2', '5', '10', '15']) {
+        expect(find.byKey(Key('simple-focus-af-exposure-$s')), findsOneWidget);
+      }
+      expect(selected(tester, '5'), isTrue);
+      expect(find.textContaining('Step'), findsNothing);
+    });
+
+    testWidgets('a pick writes the profile setting Advanced Mode edits', (tester) async {
+      await pumpWith(tester);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 10);
+      expect(selected(tester, '10'), isTrue);
+    });
+
+    testWidgets("a pick is saved to the profile, where the daemon reads the next run's exposure", (tester) async {
+      final api = _SaveProfile();
+      await _pump(tester, focuser: _focuser(), extra: [profileApiProvider.overrideWithValue(api)]);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      expect(api.saved.map((v) => v.exposureSeconds), [10]);
+    });
+
+    testWidgets("a failed save says so in a pill", (tester) async {
+      await _pump(tester, focuser: _focuser(), extra: [
+        profileApiProvider.overrideWithValue(_FailProfile()),
+        simpleModeActiveProvider.overrideWithValue(true),
+      ]);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
+      await tester.pump();
+      final pill = _c.read(simpleMessagesProvider).single;
+      expect((pill.kind, pill.title, pill.origin),
+          (SimpleMessageKind.error, "Couldn't save that", SimpleStatusOrigin.focus));
+    });
+
+    testWidgets('a profile value outside the four shows as its own chip and is not rewritten', (tester) async {
+      await pumpWith(tester, seconds: 3);
+      expect(selected(tester, '3'), isTrue);
+      expect(find.text('3 s'), findsOneWidget);
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 3);
+      await tester.tap(find.byKey(const Key('simple-focus-af-exposure-15')));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-focus-af-exposure-3')), findsNothing);
+      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 15);
+    });
+
+    testWidgets('locked while autofocus runs', (tester) async {
+      await _pump(tester,
+          focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
+      expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-af-exposure-10'))).onTap, isNull);
+    });
   });
 
   testWidgets(
@@ -423,6 +588,7 @@ void main() {
       );
       addTearDown(_c.dispose);
       await _c.read(simplePermanentPierProvider.future);
+      _tall(tester);
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: _c,
@@ -459,6 +625,7 @@ void main() {
           // Loaded first: a derived provider refreshed after the next pumpWidget
           // drops this container's tree leaves Riverpod's refresh timer pending.
           await c.read(focuserProvider.future);
+          _tall(tester);
           await tester.pumpWidget(
             UncontrolledProviderScope(
               container: c,
@@ -498,6 +665,7 @@ void main() {
       );
       addTearDown(_c.dispose);
       await _c.read(simplePermanentPierProvider.future);
+      _tall(tester);
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: _c,
@@ -624,6 +792,7 @@ void main() {
         bool camera = true,
         bool plan = false,
         bool manualWheel = false,
+        bool measuredWheel = false,
         AutofocusRun run = AutofocusRun.idle,
         bool reading = false,
         Widget child = const SimpleFocusPanel()}) async {
@@ -632,7 +801,9 @@ void main() {
         focuserProvider.overrideWith(() => _Focuser(_focuser())),
         autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: run))),
         filterOffsetCalibrationProvider.overrideWith(() => o),
-        filterWheelProvider.overrideWith(() => _Wheel(manual: manualWheel)),
+        filterWheelProvider.overrideWith(
+          () => _Wheel(manual: manualWheel, measured: measuredWheel),
+        ),
         if (camera) cameraStatusProvider.overrideWith(_Camera.new),
         if (plan) sequenceRunStateProvider.overrideWith(_PlanRunning.new),
         if (reading) bahtinovFocusProvider.overrideWith(_Reading.new),
@@ -651,13 +822,29 @@ void main() {
       return o;
     }
 
-    testWidgets('Offsets is a third routine on the Auto / Manual row, locked while autofocus runs', (tester) async {
-      await _pump(tester, focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
-      final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
-      final offsets = find.byKey(const Key('simple-focus-method-offsets'));
-      expect(tester.getRect(offsets).top, auto.top, reason: 'one row');
-      expect(tester.widget<SimpleSegment>(offsets).onTap, isNull);
+    testWidgets('the Filter offsets pill counts the filters still at offset 0', (tester) async {
+      await offsets(tester);
+      _c.read(simpleFocusOffsetsProvider.notifier).set(false);
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-offsets-status')), matching: find.textContaining(' to measure')),
+          findsOneWidget);
     });
+
+    testWidgets(
+      'every named filter measured: All measured, whatever a Dark or an unnamed slot holds',
+      (tester) async {
+        await offsets(tester, measuredWheel: true);
+        _c.read(simpleFocusOffsetsProvider.notifier).set(false);
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('simple-focus-tool-offsets-status')),
+            matching: find.text('All measured'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('Offsets is locked while a plan runs, and says why', (tester) async {
       await offsets(tester, plan: true);
@@ -812,13 +999,22 @@ class _Camera extends CameraStatusNotifier {
 }
 
 class _Wheel extends FilterWheelNotifier {
-  _Wheel({this.manual = false});
+  _Wheel({this.manual = false, this.measured = false});
   final bool manual;
+
+  /// R, G and OIII have offsets (L is the reference); Dark and the unnamed
+  /// slot stay at 0, as the calibration never measures them.
+  final bool measured;
   @override
   Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
         'device_id': 'w', 'name': 'EFW', 'state': 'connected', 'manual': manual,
         'slots': [
-          for (final (i, n) in ['L', 'R', 'G', 'OIII', 'Dark', ''].indexed) {'position': i, 'name': n},
+          for (final (i, n) in ['L', 'R', 'G', 'OIII', 'Dark', ''].indexed)
+            {
+              'position': i,
+              'name': n,
+              'focus_offset': measured && i >= 1 && i <= 3 ? 40 * i : 0,
+            },
         ],
         'runtime': {'state': 'idle', 'current_slot': 0},
       });

@@ -14,6 +14,9 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
+import '../../state/profile_management_state.dart' show profileApiProvider;
+import '../../state/simple_messages_state.dart'
+    show SimpleStatusOrigin, userNotifier;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../models/focuser_status.dart';
@@ -29,8 +32,9 @@ import '../../widgets/focus/guide_focus_card.dart'
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_preflight_state.dart';
-import 'simple_preview_panel.dart'
-    show SimpleInfoToggle, SimpleShutterButton, kSimpleText;
+import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
+import 'simple_guide_panel.dart'
+    show SimpleToolRow, SimpleToolStatus, simpleToolButton;
 import 'simple_device_windows.dart' show simpleCelsius, simpleSigned;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -81,10 +85,6 @@ final simpleFocusScopeProvider =
     NotifierProvider<SimpleFocusScopeNotifier, SimpleFocusScope>(
       SimpleFocusScopeNotifier.new,
     );
-
-/// #1675 — the main telescope's routine row: Auto and Manual are the focus
-/// method; Offsets measures each filter's focus offset.
-enum SimpleFocusRoutine { auto, manual, offsets }
 
 /// Whether the Offsets routine is picked (session only; off to start). A
 /// calibration found on the rig, running or with results waiting, picks it.
@@ -162,6 +162,10 @@ String? simpleOffsetsBlocker(WidgetRef ref, AppLocalizations l10n) {
   if (reference == null || picks.length < 2) return l10n.focusOffsetsPickOne;
   return null;
 }
+
+/// The autofocus exposures Simple Mode offers (seconds); the profile default
+/// is 5.
+const kSimpleAutofocusExposures = [2, 5, 10, 15];
 
 /// The guide camera's live-focus exposures, and the one picked (2 s to
 /// start), as the full UI's card offers them.
@@ -397,6 +401,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final weak = MainFocusCard.weakFitText(l10n, run) == null
         ? null
         : l10n.focusWeakFitShort(fit!.rSquared.toStringAsFixed(2));
+    final done = run.isComplete || run.isFailed;
     final starsShown = ref.watch(simpleFocusStarsShownProvider);
     final error = live.error != null
         ? failureReason(l10n, live.error!)
@@ -428,7 +433,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         : null;
     return SimplePanel(
       // 12 above and below, and 4 between rows (6 before 2026-11-04): with
-      // the Auto / Manual row under Main / Guide it still fits an iPad.
+      // the Exposure and Tools rows under Autofocus it still fits an iPad.
       padding: const EdgeInsets.symmetric(
         horizontal: AraSpace.s16,
         vertical: AraSpace.s12,
@@ -440,8 +445,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 4,
           children: [
-            // Which camera, then under it how to focus the main one (the
-            // guide camera has no focuser: no Auto / Manual row).
+            // Which camera; for the main one, Back to Autofocus from a tool view (the
+            // guide camera has no focuser: no Back row).
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 4,
@@ -465,50 +470,54 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                               : pick();
                         },
                 ),
-                // The method: Smart Focus with the focuser, or by hand with a
-                // Bahtinov mask; or Offsets, which measures each filter's
-                // focus offset (#1675). Locked while a run goes.
-                if (scope == SimpleFocusScope.main)
-                  SimpleSegments<SimpleFocusRoutine>(
-                    keyPrefix: 'simple-focus-method',
-                    options: [
-                      (SimpleFocusRoutine.auto, l10n.focusAuto, 'auto'),
-                      (SimpleFocusRoutine.manual, l10n.focusManual, 'manual'),
-                      (SimpleFocusRoutine.offsets, l10n.focusOffsets, 'offsets'),
-                    ],
-                    selected: offsetsPicked
-                        ? SimpleFocusRoutine.offsets
-                        : method == MainFocusMethod.autofocus
-                        ? SimpleFocusRoutine.auto
-                        : SimpleFocusRoutine.manual,
-                    onPick: locked
-                        ? null
-                        : (r) {
-                            void pick() {
-                              ref
-                                  .read(simpleFocusOffsetsProvider.notifier)
-                                  .set(r == SimpleFocusRoutine.offsets);
-                              if (r != SimpleFocusRoutine.offsets) {
-                                ref
-                                    .read(mainFocusMethodProvider.notifier)
-                                    .pick(
-                                      r == SimpleFocusRoutine.auto
-                                          ? MainFocusMethod.autofocus
-                                          : MainFocusMethod.bahtinov,
-                                    );
-                              }
-                            }
+                // Focus by hand and Filter offsets open in place (Tools rows
+                // under Autofocus, #1875); Back returns to Autofocus. Locked
+                // while a run goes.
+                if (scope == SimpleFocusScope.main &&
+                    (offsetsPicked || method == MainFocusMethod.bahtinov))
+                  Row(
+                    spacing: AraSpace.s8,
+                    children: [
+                      IconButton(
+                        key: const Key('simple-focus-back'),
+                        tooltip: l10n.focusBackToAutofocus,
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: locked
+                            ? null
+                            : () {
+                                void back() {
+                                  ref
+                                      .read(simpleFocusOffsetsProvider.notifier)
+                                      .set(false);
+                                  ref
+                                      .read(mainFocusMethodProvider.notifier)
+                                      .pick(MainFocusMethod.autofocus);
+                                }
 
-                            r != SimpleFocusRoutine.manual &&
-                                    method == MainFocusMethod.bahtinov &&
-                                    !offsetsPicked
-                                ? _leaveManual(bahtinov, pick)
-                                : pick();
-                          },
+                                method == MainFocusMethod.bahtinov &&
+                                        !offsetsPicked
+                                    ? _leaveManual(bahtinov, back)
+                                    : back();
+                              },
+                      ),
+                      Expanded(
+                        child: Text(
+                          offsetsPicked
+                              ? l10n.focusToolOffsets
+                              : l10n.focusToolManual,
+                          style: kSimpleText.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
-            const SimpleInfoToggle(),
             if (scope == SimpleFocusScope.guide)
               ..._guide(l10n, guide)
             else if (_askMask)
@@ -585,15 +594,18 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ),
               ]),
               ?preflightDone,
-              // There from the start, with its waiting text; one size for the
-              // whole run (#1898).
+              // There from the start, with its waiting text; one size from the
+              // start to the last probe (#1898), low enough that the Tools rows
+              // fit an iPad without scrolling. A finished or failed run gives up
+              // more height to its note.
               SizedBox(
-                height: _kFocusChartHeight,
+                height: done ? _kFocusChartDoneHeight : _kFocusChartHeight,
                 child: VCurveChart(run: run, simple: true),
               ),
               // A warning or an error: a slot of their own under the chart.
               SizedBox(
-                height: MediaQuery.textScalerOf(context).scale(_kFocusNoteHeight),
+                height: MediaQuery.textScalerOf(context)
+                    .scale(done ? _kFocusNoteDoneHeight : _kFocusNoteHeight),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -622,7 +634,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                                 style: AraText.caption.copyWith(
                                   color: AraColors.accentWarning,
                                 ),
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -665,11 +677,126 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   context.l10n.focusNoFocuser,
                   style: kSimpleText.copyWith(color: AraColors.textSecondary),
                 ),
+              ..._autofocusExtras(l10n, locked),
             ],
           ],
         ),
       ),
     );
+  }
+
+  /// Saves the pick to the profile, as the daemon reads the next run's
+  /// exposure from there (it is not sent with the run).
+  Future<void> _setExposure(int seconds) async {
+    final af = ref.read(autofocusSettingsProvider.notifier);
+    af.setExposureSeconds(seconds);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focus);
+    final l10n = context.l10n;
+    try {
+      await af.persistToServer(api);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSaveThat,
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    }
+  }
+
+  /// Under Autofocus: the next run's exposure (the profile's autofocus
+  /// exposure, the same setting Advanced Mode edits; Steps and Step size stay
+  /// there) and the Tools rows that open Focus by hand and Filter offsets:
+  /// heading, pills and buttons, without the mock's one-line descriptions (no
+  /// room for them on an iPad beside the chart).
+  List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked) {
+    final seconds = ref.watch(
+      autofocusSettingsProvider.select((s) => s.exposureSeconds),
+    );
+    // A profile value outside the four shows as its own chip, never rewritten
+    // until the user picks one of the four.
+    final choices = {...kSimpleAutofocusExposures, seconds}.toList()..sort();
+    final wheel = ref.watch(filterWheelProvider).value;
+    final hasWheel = wheel?.isConnected ?? false;
+    final (picks, reference) = simpleOffsetPicks(ref);
+    // Only the slots the calibration measures (named, not dark, not the
+    // reference). Offset 0 is also what the wheel holds for "not measured".
+    final toMeasure = (wheel?.slots ?? const [])
+        .where(
+          (f) =>
+              picks.contains(f.position) &&
+              f.position != reference &&
+              f.focusOffset == 0,
+        )
+        .length;
+    final offsetsLine = !hasWheel
+        ? l10n.focusToolOffsetsNoWheel
+        : toMeasure == 0
+        ? l10n.focusToolOffsetsAllMeasured
+        : l10n.focusToolOffsetsToMeasure(toMeasure);
+    return [
+      Row(
+        spacing: AraSpace.s12,
+        children: [
+          Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
+          SimpleSegments<int>(
+            keyPrefix: 'simple-focus-af-exposure',
+            expand: false,
+            options: [for (final s in choices) (s, '$s s', '$s')],
+            selected: seconds,
+            onPick: locked ? null : _setExposure,
+          ),
+        ],
+      ),
+      Text(
+        l10n.focusToolsHeading,
+        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+      ),
+      SimpleToolRow(
+        title: l10n.focusToolManual,
+        statusText: l10n.focusToolManualStatus,
+        status: SimpleToolStatus(
+          key: const Key('simple-focus-tool-manual-status'),
+          color: AraColors.accentInfo,
+          ring: true,
+          text: l10n.focusToolManualStatus,
+        ),
+        button: simpleToolButton(
+          key: const Key('simple-focus-tool-manual'),
+          label: l10n.focusToolManualOpen,
+          semantics: l10n.focusToolManualOpenSemantics,
+          onPressed: locked
+              ? null
+              : () => ref
+                    .read(mainFocusMethodProvider.notifier)
+                    .pick(MainFocusMethod.bahtinov),
+        ),
+      ),
+      const Divider(height: 1, thickness: 1, color: AraColors.border),
+      SimpleToolRow(
+        title: l10n.focusToolOffsets,
+        statusText: offsetsLine,
+        status: SimpleToolStatus(
+          key: const Key('simple-focus-tool-offsets-status'),
+          color: !hasWheel
+              ? AraColors.accentInfo
+              : toMeasure == 0
+              ? AraColors.accentConnected
+              : AraColors.accentWarning,
+          ring: !hasWheel || toMeasure != 0,
+          text: offsetsLine,
+        ),
+        button: simpleToolButton(
+          key: const Key('simple-focus-tool-offsets'),
+          label: l10n.focusToolOffsetsOpen,
+          semantics: l10n.focusToolOffsetsOpenSemantics,
+          onPressed: locked
+              ? null
+              : () => ref.read(simpleFocusOffsetsProvider.notifier).set(true),
+        ),
+      ),
+    ];
   }
 
   /// Offsets (#1675): before a run, the reference and the filter picker; while
@@ -701,7 +828,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               : ((cal.runIndex - 1).clamp(0, cal.runCount) / cal.runCount),
         ),
         SizedBox(
-          height: _kFocusChartHeight,
+          height: _kOffsetsChartHeight,
           child: VCurveChart(run: run, simple: true),
         ),
         ?errorText,
@@ -1155,8 +1282,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 // One height from a run's start to its end (#1717): each view keeps a slot for
 // what changes. Heights at 1.0x text; the slot scales with it.
 const double _kFocusReadoutHeight = 72;
-const double _kFocusChartHeight = 160;
+const double _kFocusChartHeight = 86;
+const double _kOffsetsChartHeight = 160;
+const double _kFocusChartDoneHeight = 72;
 const double _kFocusNoteHeight = 52;
+const double _kFocusNoteDoneHeight = 36;
 const double _kFocusManualReadoutHeight = 124;
 const double _kFocusGuideReadoutHeight = 132;
 
