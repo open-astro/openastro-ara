@@ -106,8 +106,13 @@ class _Offsets extends FilterOffsetCalibrationNotifier {
   Future<void> discard() async => calls.add('discard');
 }
 
-Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status,
-    {bool settle = true, _Offsets? offsets, bool rig = true}) async {
+Future<_FakeFwApi> _pump(
+  WidgetTester tester,
+  FilterWheelStatus? status, {
+  bool settle = true,
+  _Offsets? offsets,
+  bool rig = true,
+}) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
   await tester.pumpWidget(ProviderScope(
