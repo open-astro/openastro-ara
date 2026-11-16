@@ -515,7 +515,7 @@ void main() {
       expect(selected(tester, '10'), isTrue);
     });
 
-    testWidgets('a pick is saved to the profile, where the daemon reads the next run\'s exposure', (tester) async {
+    testWidgets("a pick is saved to the profile, where the daemon reads the next run's exposure", (tester) async {
       final api = _SaveProfile();
       await _pump(tester, focuser: _focuser(), extra: [profileApiProvider.overrideWithValue(api)]);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
