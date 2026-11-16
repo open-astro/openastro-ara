@@ -272,6 +272,14 @@ void main() {
     });
   }
 
+  testWidgets('stopped: a screen reader is told why the motors stopped', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, live: _run(const PolarCorrectorRun(state: 'stopped', cause: 'diverging', moves: 4)));
+    final node = tester.getSemantics(_key('polar-corrector-cause'));
+    expect(node.flagsCollection.isLiveRegion, isTrue);
+    handle.dispose();
+  });
+
   testWidgets('not drivable (runs its own loop): the mock\'s two sentences, nothing to press', (tester) async {
     await _pump(tester,
         device: const PolarCorrector(present: true, name: 'The mount', carrier: 'mount', notDrivableReason: 'device_runs_its_own_loop'));

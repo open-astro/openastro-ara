@@ -165,7 +165,12 @@ class PolarCorrectorBlock extends ConsumerWidget {
     } else if (run?.state == PolarCorrectorStates.stopped) {
       final lost = run!.cause == PolarCorrectorCauses.linkLost;
       body = [
-        line(polarCorrectorStopText(l10n, run), color: AraColors.accentBusy, key: const Key('polar-corrector-cause')),
+        // The one line that must be heard: the motors stopped, and why.
+        Semantics(
+          liveRegion: true,
+          child: line(polarCorrectorStopText(l10n, run),
+              color: AraColors.accentBusy, key: const Key('polar-corrector-cause')),
+        ),
         line(l10n.polarCorrectorCarryOn),
         if (!lost) position,
         Row(
