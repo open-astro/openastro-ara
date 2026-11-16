@@ -65,6 +65,16 @@ void main() {
     expect(find.text('Ha 3nm'), findsOneWidget);
   });
 
+  testWidgets('Filter set panel: the Add and Seed buttons fit a 390 px phone', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({'filter-set': rigDefaults['filter-set']});
+    await _pump(tester, rig.api(), size: const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    expect(find.text('Add filter'), findsOneWidget);
+    expect(find.text('Seed from filter wheel labels'), findsOneWidget);
+  });
+
   testWidgets('Filter set panel: a Save the rig refuses as stale shows the '
       'conflict and Reload brings the rig copy back', (tester) async {
     final rig = FakeSectionRig({

@@ -98,7 +98,8 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
             onRemove: () => n.removeAt(i),
           ),
         const SizedBox(height: 8),
-        Row(
+        Wrap(
+          spacing: 12,
           children: [
             TextButton.icon(
               onPressed: () => n.addFilter(
@@ -107,7 +108,6 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add filter'),
             ),
-            const SizedBox(width: 12),
             TextButton.icon(
               onPressed: _seedFromWheel,
               icon: const Icon(Icons.download_outlined, size: 16),

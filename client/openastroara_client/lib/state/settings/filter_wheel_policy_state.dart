@@ -40,12 +40,18 @@ class FilterWheelPolicy {
 }
 
 class FilterWheelPolicyNotifier extends SelfLoadingSection<FilterWheelPolicy> {
-  /// Each switch saves on change (the panel shows a refusal).
+  /// Each switch saves on change (the panel shows a refusal). A failed save
+  /// puts the rig's copy back; a 412 keeps the edit (ADR 0015 rule 6).
   Future<void> setHomeOnFirstConnect(bool v) =>
-      editAndSave((c) => c.copyWith(homeOnFirstConnect: v));
+      _save((c) => c.copyWith(homeOnFirstConnect: v));
 
   Future<void> setUseFilterWheelOffsets(bool v) =>
-      editAndSave((c) => c.copyWith(useFilterWheelOffsets: v));
+      _save((c) => c.copyWith(useFilterWheelOffsets: v));
+
+  Future<void> _save(FilterWheelPolicy Function(FilterWheelPolicy c) change) {
+    final v = state.value;
+    return v == null ? editAndSave(change) : replaceAndSave(change(v));
+  }
 
   @override
   Future<Tagged<FilterWheelPolicy>> fetch(ProfileApi api) =>

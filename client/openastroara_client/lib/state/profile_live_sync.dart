@@ -55,18 +55,16 @@ typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
 // `migratedSections`, so adding one there adds its row here.
 final Map<String, _Hydrate> _hydrators = {
   for (final route in {for (final s in migratedSections) s.route})
-    route: (c, api) => Future.wait([
-      for (final s in migratedSections)
-        if (s.route == route)
-          c.read(s.provider.notifier).hydrateFromServer(api),
-    ]),
+    route: (c, api) => _hydrateMigrated(c, api, route),
   'imaging-defaults': (c, api) =>
       c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
   'autofocus': (c, api) =>
       c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
-  // filter-wheel/policy is a migrated section (reset point); only labels hydrate.
-  'filter-wheel': (c, api) =>
-      c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api),
+  // One route, two sections: the migrated policy and the labels.
+  'filter-wheel': (c, api) async {
+    await _hydrateMigrated(c, api, 'filter-wheel');
+    await c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api);
+  },
   'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
   'dome': (c, _) async => c.invalidate(domeSettingsProvider),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
@@ -81,3 +79,12 @@ final Map<String, _Hydrate> _hydrators = {
   'equipment-connection': (c, api) =>
       c.read(equipmentConnectionProvider.notifier).hydrateFromServer(api),
 };
+
+Future<void> _hydrateMigrated(
+  ProviderContainer c,
+  ProfileApi api,
+  String route,
+) => Future.wait([
+  for (final s in migratedSections)
+    if (s.route == route) c.read(s.provider.notifier).hydrateFromServer(api),
+]);
