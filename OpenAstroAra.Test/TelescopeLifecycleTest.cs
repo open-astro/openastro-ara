@@ -257,5 +257,17 @@ namespace OpenAstroAra.Test {
             Current.ReadFails = false;
             await WaitForAsync(() => svc.IsCleanlyConnected, "the first clean read");
         }
+
+        // #1946 — a client's tracking command is another caller's write, so Polar Align's hand-back sees it.
+        [Test]
+        public async Task A_REST_tracking_write_is_counted() {
+            using var svc = Build();
+            await ConnectAsync(svc, Mount);
+            await ConnectedAsync(svc);
+            var before = svc.TrackingWriteCount;
+            await svc.SetTrackingAsync(true, CancellationToken.None);
+            Assert.That(svc.TrackingWriteCount, Is.EqualTo(before + 1));
+            Assert.That(Current.TrackingOn, Is.True);
+        }
     }
 }

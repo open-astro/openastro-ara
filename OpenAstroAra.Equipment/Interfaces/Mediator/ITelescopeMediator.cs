@@ -47,7 +47,8 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         /// <summary>How many tracking writes callers have asked for through <see cref="SetTrackingEnabled"/>,
         /// <see cref="SetTrackingMode"/> or the telescope service's REST tracking write; a routine that hands
-        /// tracking back compares it with its own last write. The tracking a slew, park or sync turns on by
+        /// tracking back compares it with its own last write. A mediator write refused because the mount is
+        /// disconnected or the mode is Custom still counts. The tracking a slew, park or sync turns on by
         /// itself is not counted, so a routine's own seed slew never reads as another caller's write.</summary>
         long TrackingWriteCount { get; }
 
