@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../models/server.dart';
 import '../../models/ws_event.dart';
+import '../../models/ws_event_types.dart';
 import '../../services/polar_align_api.dart';
 import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
@@ -19,6 +20,7 @@ abstract final class PolarAlignWsEvents {
   static const stage = 'polar_align.stage';
   static const needsHome = 'polar_align.needs_home';
   static const checked = 'polar_align.checked';
+  static const corrector = WsEventTypes.polarAlignCorrector;
 }
 
 /// Live routine view folded from the `polar_align.*` WS stream — what the
@@ -64,6 +66,10 @@ class PolarAlignLive {
   final int checkSolvesTotal;
   final PolarAlignCheckResult? checkResult;
 
+  /// #1971 the Polar Corrector's run; null without one Ara drives, before its
+  /// first measurement, and once the routine ends.
+  final PolarCorrectorRun? corrector;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -82,6 +88,7 @@ class PolarAlignLive {
     this.checkSolvesDone = 0,
     this.checkSolvesTotal = 3,
     this.checkResult,
+    this.corrector,
   });
 
   /// True between a frame's `frame_started` and its `frame_complete`.
@@ -110,6 +117,8 @@ class PolarAlignLive {
     int? checkSolvesDone,
     int? checkSolvesTotal,
     PolarAlignCheckResult? checkResult,
+    PolarCorrectorRun? corrector,
+    bool clearCorrector = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -134,6 +143,7 @@ class PolarAlignLive {
         checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
         checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
+        corrector: clearCorrector ? null : corrector ?? this.corrector,
       );
 }
 
@@ -157,10 +167,12 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             : PolarAlignStages.fine,
       );
     case PolarAlignWsEvents.stopped:
+      // The run's end clears the corrector without an event of its own.
       return current.copyWith(
           phase: PolarAlignStates.stopped,
           clearFrameInProgress: true,
-          waitingForHome: false);
+          waitingForHome: false,
+          clearCorrector: true);
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
     case PolarAlignWsEvents.stage:
@@ -227,6 +239,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
       return current.copyWith(
         phase: PolarAlignStates.failed,
         clearFrameInProgress: true,
+        clearCorrector: true,
         errorReason: event.payload['reason'] is String
             ? event.payload['reason'] as String
             : 'internal_error',
@@ -234,6 +247,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             ? event.payload['message'] as String
             : null,
       );
+    case PolarAlignWsEvents.corrector:
+      final run = PolarCorrectorRun.tryParse(event.payload);
+      return run == null ? null : current.copyWith(corrector: run);
     default:
       return null;
   }
@@ -308,6 +324,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       waitingForHome: status.waitingForHome,
       checkSolvesDone: status.checkSolvesDone,
       checkResult: status.checkResult,
+      corrector: status.corrector,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

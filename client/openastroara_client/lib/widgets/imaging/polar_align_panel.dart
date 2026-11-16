@@ -10,6 +10,7 @@ import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/polar_align/polar_corrector_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -18,6 +19,7 @@ import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
 import 'polar_align_readout.dart';
+import 'polar_corrector_block.dart';
 import '../adaptive_controls.dart';
 
 export 'polar_align_readout.dart';
@@ -240,6 +242,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ],
           if (live.isActive || live.phase == PolarAlignStates.checked) ...[
             _stageStrip(live),
+            SizedBox(height: _short ? 8 : 12),
+          ],
+          // #1971 the shared Polar Corrector module, placed with no other layout change.
+          if (ref.watch(polarCorrectorProvider).value?.present ?? false) ...[
+            const PolarCorrectorBlock(),
             SizedBox(height: _short ? 8 : 12),
           ],
           FitFill(child: _body(live, api == null, color)),

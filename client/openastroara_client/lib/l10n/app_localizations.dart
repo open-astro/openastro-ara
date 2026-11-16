@@ -10064,6 +10064,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kept between 5° and 60°'**
   String get polarKnobVerifyStepHint;
+
+  /// The Polar Corrector (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Corrector'**
+  String get polarCorrector;
+
+  /// Polar Corrector block before the routine starts
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.'**
+  String polarCorrectorIdle(String tolerance);
+
+  /// Polar Corrector block when Turned by is By hand
+  ///
+  /// In en, this message translates to:
+  /// **'Motors off. Turn the bolts by hand.'**
+  String get polarCorrectorByHand;
+
+  /// Polar Corrector block and status line: the test move, e.g. 'Test move · azimuth 2.0′ east'
+  ///
+  /// In en, this message translates to:
+  /// **'Test move · {axis} {amount}′ {direction}'**
+  String polarCorrectorTestMove(String axis, String amount, String direction);
+
+  /// Polar Corrector block and status line: a correction, e.g. 'Moving azimuth 6.1′ east'
+  ///
+  /// In en, this message translates to:
+  /// **'Moving {axis} {amount}′ {direction}'**
+  String polarCorrectorMoving(String axis, String amount, String direction);
+
+  /// Polar Corrector block and status line: waiting the device's settle time
+  ///
+  /// In en, this message translates to:
+  /// **'Letting the mount settle · {seconds} s'**
+  String polarCorrectorSettling(String seconds);
+
+  /// Polar Corrector block and status line: the frame after a move
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring the new error…'**
+  String get polarCorrectorMeasuring;
+
+  /// Polar Corrector block: the device is going home
+  ///
+  /// In en, this message translates to:
+  /// **'Going back to its zero…'**
+  String get polarCorrectorHoming;
+
+  /// Polar Corrector block: the motors rest inside the tolerance
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
+  String polarCorrectorConverged(int moves, String tolerance);
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving and the stop sentences: the azimuth axis, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'azimuth'**
+  String get polarCorrectorAxisAzimuth;
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving and the stop sentences: the altitude axis, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'altitude'**
+  String get polarCorrectorAxisAltitude;
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving: an azimuth move toward east
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarCorrectorEast;
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving: an azimuth move toward west
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarCorrectorWest;
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving: an altitude move up
+  ///
+  /// In en, this message translates to:
+  /// **'up'**
+  String get polarCorrectorUp;
+
+  /// Fills polarCorrectorTestMove / polarCorrectorMoving: an altitude move down
+  ///
+  /// In en, this message translates to:
+  /// **'down'**
+  String get polarCorrectorDown;
+
+  /// Polar Corrector block: the device's position on each axis, signed arcminutes such as +12.4′ (— for an axis it does not report)
+  ///
+  /// In en, this message translates to:
+  /// **'From its zero: azimuth {azimuth} · altitude {altitude}'**
+  String polarCorrectorPosition(String azimuth, String altitude);
+
+  /// Polar Corrector block: the device reports no position
+  ///
+  /// In en, this message translates to:
+  /// **'This device doesn\'t report its position.'**
+  String get polarCorrectorNoPosition;
+
+  /// Polar Corrector block after the motors stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Carry on by hand: the arrows show which bolt to turn.'**
+  String get polarCorrectorCarryOn;
+
+  /// Polar Corrector block: red button that stops the motors
+  ///
+  /// In en, this message translates to:
+  /// **'Stop motors'**
+  String get polarCorrectorStopMotors;
+
+  /// Polar Corrector block: button that sends the device to its zero
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get polarCorrectorHome;
+
+  /// Polar Corrector block: green button that corrects with the motors again after a stop
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get polarCorrectorResume;
+
+  /// Polar Corrector block: why Resume and Home are off after the link was lost
+  ///
+  /// In en, this message translates to:
+  /// **'Resume and Home come back once it answers.'**
+  String get polarCorrectorLinkLostCaption;
+
+  /// Polar Corrector block and Settings > Devices: the device only offers its own loop
+  ///
+  /// In en, this message translates to:
+  /// **'Ara can\'t move this Polar Corrector yet: it only runs its own alignment.'**
+  String get polarCorrectorNotDrivableLoop;
+
+  /// Polar Corrector block and Settings > Devices: the device's Info could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Ara couldn\'t read what this Polar Corrector can do, so it won\'t move it.'**
+  String get polarCorrectorNotDrivableInfo;
+
+  /// Polar Corrector block: follows a not-drivable sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the bolts by hand.'**
+  String get polarCorrectorTurnByHand;
+
+  /// Polar Corrector stop cause wrong_direction
+  ///
+  /// In en, this message translates to:
+  /// **'The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Corrector may be set up reversed on that axis.'**
+  String polarCorrectorStopWrongDirection(String axis);
+
+  /// Polar Corrector stop cause wrong_scale
+  ///
+  /// In en, this message translates to:
+  /// **'The test move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Corrector\'s step setting.'**
+  String polarCorrectorStopWrongScale(String axis);
+
+  /// Polar Corrector stop cause device_fault, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector reported a fault: “{text}”.'**
+  String polarCorrectorStopDeviceFault(String text);
+
+  /// Polar Corrector stop cause not_calibrated, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector isn\'t calibrated, so it refused to move: “{text}”. Calibrate it in its own app, then Resume.'**
+  String polarCorrectorStopNotCalibrated(String text);
+
+  /// Polar Corrector stop cause device_refused, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector refused the move: “{text}”.'**
+  String polarCorrectorStopDeviceRefused(String text);
+
+  /// Polar Corrector stop cause diverging
+  ///
+  /// In en, this message translates to:
+  /// **'The error grew after two corrections in a row, so Ara stopped the motors.'**
+  String get polarCorrectorStopDiverging;
+
+  /// Polar Corrector stop cause timeout
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector was still moving after 60 s, so Ara stopped it.'**
+  String get polarCorrectorStopTimeout;
+
+  /// Polar Corrector stop cause link_lost
+  ///
+  /// In en, this message translates to:
+  /// **'Lost the link to the Polar Corrector. Ara stops its motors as soon as it answers again.'**
+  String get polarCorrectorStopLinkLost;
+
+  /// Polar Corrector stop cause mount_tracking
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector can\'t move while the mount tracks. Turn tracking off in the Mount window, then Resume.'**
+  String get polarCorrectorStopMountTracking;
+
+  /// Polar Corrector stop cause mount_slewing
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Corrector can\'t move while the mount slews. Resume once the mount stops.'**
+  String get polarCorrectorStopMountSlewing;
+
+  /// Polar Corrector stop cause stopped_by_user
+  ///
+  /// In en, this message translates to:
+  /// **'You stopped the motors.'**
+  String get polarCorrectorStopByUser;
+
+  /// Polar Corrector stop with a cause this app does not know
+  ///
+  /// In en, this message translates to:
+  /// **'Ara stopped the motors.'**
+  String get polarCorrectorStopUnknown;
+
+  /// Polar Corrector stop with a cause this app does not know, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'Ara stopped the motors: “{text}”.'**
+  String polarCorrectorStopUnknownText(String text);
+
+  /// Status line: the Polar Corrector's motors stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get polarCorrectorStopped;
+
+  /// Settings > Devices: the Polar Corrector can be driven and is still
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get polarCorrectorReady;
+
+  /// Settings > Devices: a Polar Corrector Ara cannot drive yet
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t drive yet'**
+  String get polarCorrectorCantDrive;
+
+  /// Settings > Devices: a Polar Corrector whose Info could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t read it'**
+  String get polarCorrectorCantRead;
+
+  /// Settings > Devices: no Polar Corrector found
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get polarCorrectorNone;
+
+  /// Settings > Devices: caption with no Polar Corrector
+  ///
+  /// In en, this message translates to:
+  /// **'No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'**
+  String get polarCorrectorFoundNone;
+
+  /// Settings > Devices: caption when the mount carries the Polar Corrector
+  ///
+  /// In en, this message translates to:
+  /// **'Found on the mount: its motors are built in.'**
+  String get polarCorrectorFoundMount;
+
+  /// Settings > Devices: caption when a separate base (a Switch) carries the Polar Corrector
+  ///
+  /// In en, this message translates to:
+  /// **'Found on the polar base.'**
+  String get polarCorrectorFoundBase;
+
+  /// Settings > Devices, under the Polar Corrector: Motors or By hand
+  ///
+  /// In en, this message translates to:
+  /// **'Turned by'**
+  String get polarCorrectorTurnedBy;
+
+  /// Settings > Devices, Turned by: the routine turns the motors
+  ///
+  /// In en, this message translates to:
+  /// **'Motors'**
+  String get polarCorrectorMotors;
+
+  /// Settings > Devices, Turned by: the person turns the bolts
+  ///
+  /// In en, this message translates to:
+  /// **'By hand'**
+  String get polarCorrectorByHandOption;
+
+  /// Settings > Devices, Turned by Motors: caption
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align turns the motors after each measurement.'**
+  String get polarCorrectorMotorsCaption;
+
+  /// Settings > Devices, Turned by By hand: caption
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align shows the turns and you make them.'**
+  String get polarCorrectorHandCaption;
+
+  /// Completes 'Couldn't …': Stop motors failed
+  ///
+  /// In en, this message translates to:
+  /// **'stop the motors'**
+  String get polarCorrectorActionStop;
+
+  /// Completes 'Couldn't …': Resume failed
+  ///
+  /// In en, this message translates to:
+  /// **'resume the motors'**
+  String get polarCorrectorActionResume;
+
+  /// Completes 'Couldn't …': Home failed
+  ///
+  /// In en, this message translates to:
+  /// **'send the Polar Corrector home'**
+  String get polarCorrectorActionHome;
 }
 
 class _AppLocalizationsDelegate

@@ -63,7 +63,12 @@ import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
+import '../../models/polar_align.dart' show PolarAlignSettings;
 import '../../state/equipment/camera_state.dart';
+import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
+import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
+import '../../state/polar_align/polar_corrector_state.dart';
+import '../../widgets/imaging/polar_corrector_block.dart' show polarCorrectorMotorsBusy, polarCorrectorNotDrivableText;
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/equipment_device_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -3582,6 +3587,7 @@ class _Gear extends ConsumerWidget {
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         )),
+      (l10n.polarCorrector, const _PolarCorrectorGearRows()),
     ]..sort((a, b) => simpleCompareNames(a.$1, b.$1));
     return Column(
       key: const Key('simple-gear'),
@@ -3590,6 +3596,104 @@ class _Gear extends ConsumerWidget {
       children: [
         for (final row in rows) row.$2,
         const _AddGearRow(),
+      ],
+    );
+  }
+}
+
+/// #1971 the rig's Polar Corrector, read-only: the daemon finds it (a separate
+/// base wins over the mount), so there is nothing to pick. Under it, Turned
+/// by (user, 2026-11-16: here, not in the Polar align panel).
+class _PolarCorrectorGearRows extends ConsumerWidget {
+  const _PolarCorrectorGearRows();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final device = ref.watch(polarCorrectorProvider).value;
+    // No rig, or a daemon that predates the Polar Corrector.
+    if (device == null) return const SizedBox.shrink();
+    final l10n = context.l10n;
+    final moving = device.moving || polarCorrectorMotorsBusy(ref.watch(polarAlignLiveProvider));
+    final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
+    final (dot, word, caption) = !device.present
+        ? (StatusLevel.disconnected, l10n.polarCorrectorNone, l10n.polarCorrectorFoundNone)
+        : !device.drivable
+        ? (
+            StatusLevel.busy,
+            unreadable ? l10n.polarCorrectorCantRead : l10n.polarCorrectorCantDrive,
+            polarCorrectorNotDrivableText(l10n, device),
+          )
+        : (
+            moving ? StatusLevel.active : StatusLevel.connected,
+            moving ? l10n.deviceMoving : l10n.polarCorrectorReady,
+            device.carrier == 'mount' ? l10n.polarCorrectorFoundMount : l10n.polarCorrectorFoundBase,
+          );
+    final title = device.name == null || !device.present
+        ? l10n.polarCorrector
+        : l10n.shellGearTitle(l10n.polarCorrector, device.name!);
+    final row = _gearRow(
+      id: 'polarcorrector',
+      title: title,
+      dot: dot,
+      word: '$word · $caption',
+      verb: null,
+      label: null,
+      action: null,
+      onOpen: null,
+      toggle: null,
+    );
+    if (!device.present || !device.drivable) return row;
+    final auto = ref.watch(polarAlignSettingsProvider).value?.polarCorrectorAuto;
+    Future<void> pick(bool next) async {
+      final notify = userNotifier(context);
+      try {
+        // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
+        final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
+        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarCorrectorAuto: next));
+      } catch (e) {
+        notify(
+          l10n.shellGearActionFailed(l10n.polarCorrectorTurnedBy, l10n.polarCorrector),
+          detail: failureReason(l10n, e),
+          error: true,
+        );
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        row,
+        Container(
+          key: const Key('simple-gear-polarcorrector-turned-by'),
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: AraSpace.s8),
+          decoration: BoxDecoration(
+            color: AraColors.tileFill,
+            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s4,
+            children: [
+              Text(l10n.polarCorrectorTurnedBy, style: kSimpleText),
+              if (auto != null)
+                Text(
+                  auto ? l10n.polarCorrectorMotorsCaption : l10n.polarCorrectorHandCaption,
+                  style: AraText.caption,
+                ),
+              SimpleSegments<bool>(
+                keyPrefix: 'simple-gear-polarcorrector',
+                group: l10n.polarCorrectorTurnedBy,
+                options: [
+                  (true, l10n.polarCorrectorMotors, 'motors'),
+                  (false, l10n.polarCorrectorByHandOption, 'hand'),
+                ],
+                selected: auto,
+                onPick: pick,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

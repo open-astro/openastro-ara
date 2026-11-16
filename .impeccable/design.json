@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T20:08:28+13:00",
+  "generatedAt": "2026-11-16T22:47:20+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -904,6 +904,14 @@
       "kind": "custom",
       "refersTo": "client/openastroara_client/lib/screens/simple/simple_rig_setup_sheet.dart",
       "description": "#1562, redone 2026-11-13 (mock design/preview/simple-rig-setup-mock.html, layout B). Settings › Rig opens with a header while the rig lacks a first-night fact: Panel Alt box with a Hairline, the title and \"N of M done\" (caption), a 4 px Connected Green bar on Input Fill, then \"Next: <item>\" with what is missing and that item's fix as an amber outlined SimpleWindowButton (accent: Busy Amber outline and label, no fill). The menu has no Rig setup row. The first-time sheet boxes each missing line in amber (10 % fill, 45 % border, 8 px radius) around its words and its amber fix; done lines are flat with a tick; a footer under a Hairline holds the count and Not now as a plain Dim Text button."
+    },
+    {
+      "name": "Polar Corrector Block (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "client/openastroara_client/lib/widgets/imaging/polar_corrector_block.dart",
+      "description": "#1971, mock design/preview/simple-polar-corrector-mock.html (approved 2026-11-16). One shared module (ADR 0013) in the Polar align panel's fixed slot between Setup and Error (user, 2026-11-16: variant A), and under the stage strip in Advanced Mode's Polar Align panel. A 12 pt Dim caption row (\"Polar Corrector\" left, the device name right) over a tile (tile fill, 10 pt corners, 12 x 8 pt padding) holding one state: the move as a status line with a 10 pt dot (working green, blinking; a blue ring while settling; Dim Text while measuring) and a red Stop motors (emergency-stop fill, 44 pt); converged in Connected Green; a stop sentence in Busy Amber with \"Carry on by hand\", an outlined Home and a green Resume (both off after a lost link, with a caption); Motors off or can't-drive-yet in Dim Text. The position from its zero in 12 pt Dim under the state, or a sentence when the device reports none, never 0. No progress bar: the daemon reports no fraction. While the motors work the turn tiles' 70 pt arrows dim to 30 % and Verify / Done step aside (user, 2026-11-16). Turned by (Motors / By hand) lives in Settings › Devices under the read-only Polar Corrector row (user, 2026-11-16: variant B).",
+      "html": "<div class=\"ds-pc\"><div class=\"ds-pc-h\"><span>Polar Corrector</span><span>Polar base</span></div><div class=\"ds-pc-t\"><div class=\"ds-pc-s\"><i></i>Moving azimuth 6.1′ east</div><div class=\"ds-pc-p\">From its zero: azimuth +12.4′ · altitude −3.0′</div><button>Stop motors</button></div></div>",
+      "css": ".ds-pc{width:388px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;gap:8px} .ds-pc-h{display:flex;justify-content:space-between;font-size:12px;color:#A0A0A0} .ds-pc-t{background:rgba(56,56,56,.55);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:4px} .ds-pc-s{display:flex;gap:8px;align-items:center;font-size:14px;color:#4CAF50} .ds-pc-s i{width:10px;height:10px;border-radius:50%;background:#4CAF50} .ds-pc-p{font-size:12px;color:#A0A0A0} .ds-pc button{min-height:44px;border:0;border-radius:10px;background:#D32F2F;color:#FFFFFF;font:600 14px system-ui,sans-serif}"
     }
   ],
   "narrative": {

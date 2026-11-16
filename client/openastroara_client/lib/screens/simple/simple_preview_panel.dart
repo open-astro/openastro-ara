@@ -62,6 +62,8 @@ import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
+import '../../widgets/imaging/polar_corrector_block.dart' show polarCorrectorStatusLine;
+import '../../state/settings/site_settings_state.dart';
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
     show
@@ -2262,6 +2264,18 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           simplePolarPhase(polar, l10n),
           AraColors.accentInfo,
           ring: true,
+        ),
+      // #1971 the Polar Corrector's motors, their own line under the routine's.
+      if (polarCorrectorStatusLine(l10n, polar,
+              southern: ref.watch(siteSettingsProvider).latitudeDeg < 0)
+          case final c?)
+        _PillData(
+          SimpleStatusOrigin.polar,
+          l10n.polarCorrector,
+          c.text,
+          c.color,
+          working: c.working,
+          ring: c.ring,
         ),
       if (guiderAsk != null)
         _PillData(
