@@ -1905,6 +1905,46 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 }
 
+/// [thumbnail] with an info mark in its corner that shows the Art's credit
+/// on a tap; the thumbnail alone when the Art has no credit. The Sky Map's
+/// pick and Plan's target card share it (CC BY asks for the credit).
+Widget simpleArtCredit(
+  BuildContext context,
+  AlbumArt art,
+  Key key,
+  Widget thumbnail,
+) {
+  final credit = art.creditLine;
+  if (credit == null) return thumbnail;
+  return Tooltip(
+    key: const Key('simple-sky-art-credit'),
+    message: context.l10n.albumArtCredit(credit),
+    triggerMode: TooltipTriggerMode.tap,
+    showDuration: const Duration(seconds: 4),
+    child: Stack(
+      children: [
+        thumbnail,
+        const Positioned(
+          right: 2,
+          bottom: 2,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.overlayScrim,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.info_outline,
+              size: 14,
+              color: AraColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+
 /// The object picked in the sky, over it: its Album Art and credit if any,
 /// name, type and altitude, and Image this, which opens Plan's sheet with it.
 class _SkyPick extends ConsumerWidget {
@@ -1925,39 +1965,6 @@ class _SkyPick extends ConsumerWidget {
     return _card(context, art);
   }
 
-  /// [thumbnail] with an info mark in its corner that shows the Art's credit
-  /// on a tap; the thumbnail alone when the Art has no credit.
-  Widget _artCredit(BuildContext context, AlbumArt art, Widget thumbnail) {
-    final credit = art.creditLine;
-    if (credit == null) return thumbnail;
-    return Tooltip(
-      key: const Key('simple-sky-art-credit'),
-      message: context.l10n.albumArtCredit(credit),
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 4),
-      child: Stack(
-        children: [
-          thumbnail,
-          const Positioned(
-            right: 2,
-            bottom: 2,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AraColors.overlayScrim,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.info_outline,
-                size: 14,
-                color: AraColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
@@ -1968,9 +1975,10 @@ class _SkyPick extends ConsumerWidget {
           // A small portrait thumbnail at the Album's aspect, on its backdrop.
           // The credit CC BY asks for is behind the info mark: a tap (or a
           // hover) on the thumbnail shows it.
-          _artCredit(
+          simpleArtCredit(
             context,
             art,
+            const Key('simple-sky-art-credit'),
             Semantics(
               image: true,
               label: selection.name,

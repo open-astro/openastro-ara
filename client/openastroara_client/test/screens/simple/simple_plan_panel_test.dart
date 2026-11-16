@@ -49,6 +49,7 @@ import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/album/album_art.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
@@ -1323,6 +1324,68 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
       await tester.pump();
       expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+    });
+
+    testWidgets("the target card shows the object's Album Art; one without Art keeps the drawn placeholder",
+        (tester) async {
+      const skull = PlanetariumSelection(
+          name: 'Skull Nebula', kind: 'PN', raHours: 0.78, decDeg: -11.87, raJ2000Hours: 0.78, decJ2000Deg: -11.87,
+          altDeg: 40, maxAltDeg: 60, designations: ['NGC0246', 'C 056']);
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: skull,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76,
+                      decDeg: -11.87, caldwellNum: 56, aliases: ['C 056']),
+                ]),
+            albumManifestProvider.overrideWith((ref) async => {
+                  'C56': const AlbumArt(asset: 'assets/album/art/c056.webp', credit: 'ESO', licence: 'CC BY 4.0'),
+                }),
+          ]);
+      final card = find.byKey(const Key('simple-run-target-card'));
+      expect(
+        tester.widget<Image>(find.descendant(of: card, matching: find.byType(Image))).image,
+        isA<ResizeImage>().having((r) => (r.imageProvider as AssetImage).assetName, 'asset',
+            'assets/album/art/c056.webp'),
+      );
+      expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsNothing);
+
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: card, matching: find.byType(Image)), findsNothing, reason: 'no M31 row in this catalog');
+      expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsOneWidget);
+    });
+
+    testWidgets("Tonight's Best and Recent tiles carry the nickname, NGC 246 (Skull Nebula), not NGC0246",
+        (tester) async {
+      const skull = PlanningDso(
+          id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          tonight: [
+            TonightSkyObject(
+                id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+                altitudeDeg: 40, maxAltitudeDeg: 60),
+            TonightSkyObject(
+                id: 'NGC1360', name: 'NGC1360', type: 'PN', magnitude: 9, raDeg: 53.31, decDeg: -25.87,
+                altitudeDeg: 40, maxAltitudeDeg: 60),
+          ],
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [skull]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'NGC0246', raDeg: 11.76, decDeg: -11.87, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      expect(find.text('NGC 246 (Skull Nebula)'), findsNWidgets(2), reason: 'one Tonight\'s Best tile, one Recent tile');
+      expect(find.text('NGC 1360'), findsOneWidget, reason: 'no nickname: the designation, unpadded');
+      expect(find.text('NGC0246'), findsNothing);
     });
 
     testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
