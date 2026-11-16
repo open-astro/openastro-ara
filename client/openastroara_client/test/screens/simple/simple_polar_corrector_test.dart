@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_corrector_state.dart';
@@ -119,6 +120,29 @@ double _arrowOpacity(WidgetTester tester, String axis) {
 }
 
 void main() {
+  testWidgets('the status card has a Polar Corrector line while the motors work, and Stopped after', (tester) async {
+    _liveNotifier = _Live(_fine(const PolarCorrectorRun(state: 'moving', axis: 'azimuth', arcmin: 6.1, moves: 3)));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        polarAlignApiProvider.overrideWithValue(_Api()),
+        polarCorrectorApiProvider.overrideWithValue(_Corrector(_base)),
+        polarAlignLiveProvider.overrideWith(() => _liveNotifier),
+      ],
+      child: MaterialApp(
+        builder: (c, w) => MediaQuery(data: MediaQuery.of(c).copyWith(disableAnimations: true), child: w!),
+        home: const Scaffold(body: Align(alignment: Alignment.topLeft, child: SimpleStatusPill())),
+      ),
+    ));
+    await tester.pump();
+    expect(find.textContaining('Polar Corrector'), findsOneWidget);
+    expect(find.textContaining('Moving azimuth 6.1′ east'), findsOneWidget);
+
+    _liveNotifier.set(_fine(const PolarCorrectorRun(state: 'stopped', cause: 'diverging', moves: 4)));
+    await tester.pump();
+    expect(find.textContaining('Moving azimuth'), findsNothing);
+    expect(find.textContaining('Stopped'), findsOneWidget);
+  });
+
   testWidgets('the Polar Corrector block has its own slot between Setup and Error', (tester) async {
     await _pump(tester, _fine(const PolarCorrectorRun(state: 'measuring')));
     final setup = tester.getRect(_key('simple-polar-setup'));

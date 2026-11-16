@@ -2270,7 +2270,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               southern: ref.watch(siteSettingsProvider).latitudeDeg < 0)
           case final c?)
         _PillData(
-          SimpleStatusOrigin.polar,
+          SimpleStatusOrigin.polarCorrector,
           l10n.polarCorrector,
           c.text,
           c.color,

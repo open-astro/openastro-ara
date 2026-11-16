@@ -6049,7 +6049,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarCorrectorLinkLostCaption =>
-      'Resume and Home come back once it answers.';
+      'Resume once it answers again. Home comes back then.';
 
   @override
   String get polarCorrectorNotDrivableLoop =>
@@ -12279,7 +12279,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarCorrectorLinkLostCaption =>
-      'Retomar e Início voltam assim que ele responder.';
+      'Retome quando ele voltar a responder. Início volta em seguida.';
 
   @override
   String get polarCorrectorNotDrivableLoop =>

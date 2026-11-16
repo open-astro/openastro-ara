@@ -192,9 +192,8 @@ class PolarCorrectorBlock extends ConsumerWidget {
                   foregroundColor: AraColors.bgPrimary,
                   minimumSize: const Size(0, 44),
                 ),
-                onPressed: lost || busy
-                    ? null
-                    : () => command(l10n.polarCorrectorActionResume, corrector.resumeInRoutine),
+                // Offered after a lost link too: only the daemon can tell whether the device answers again.
+                onPressed: busy ? null : () => command(l10n.polarCorrectorActionResume, corrector.resumeInRoutine),
                 child: Text(l10n.polarCorrectorResume),
               ),
             ),

@@ -6049,7 +6049,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarCorrectorLinkLostCaption =>
-      'Resume and Home come back once it answers.';
+      'Resume once it answers again. Home comes back then.';
 
   @override
   String get polarCorrectorNotDrivableLoop =>

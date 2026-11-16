@@ -690,7 +690,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _ => null,
     };
     if (window != null) return _openDevice(window);
-    final mode = SimpleScreen.showing(origin);
+    // The Polar Corrector's line opens the Polar align Screen, where its block is.
+    final mode = SimpleScreen.showing(
+        origin == SimpleStatusOrigin.polarCorrector ? SimpleStatusOrigin.polar : origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {

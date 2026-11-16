@@ -7823,7 +7823,7 @@
   "@polarCorrectorResume": {
     "description": "Polar Corrector block: green button that corrects with the motors again after a stop"
   },
-  "polarCorrectorLinkLostCaption": "Resume and Home come back once it answers.",
+  "polarCorrectorLinkLostCaption": "Resume once it answers again. Home comes back then.",
   "@polarCorrectorLinkLostCaption": {
     "description": "Polar Corrector block: why Resume and Home are off after the link was lost"
   },

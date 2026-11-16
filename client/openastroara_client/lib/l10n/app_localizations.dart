@@ -10194,7 +10194,7 @@ abstract class AppLocalizations {
   /// Polar Corrector block: why Resume and Home are off after the link was lost
   ///
   /// In en, this message translates to:
-  /// **'Resume and Home come back once it answers.'**
+  /// **'Resume once it answers again. Home comes back then.'**
   String get polarCorrectorLinkLostCaption;
 
   /// Polar Corrector block and Settings > Devices: the device only offers its own loop

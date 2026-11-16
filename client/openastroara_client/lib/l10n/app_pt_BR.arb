@@ -1682,7 +1682,7 @@
   "polarCorrectorStopMotors": "Parar motores",
   "polarCorrectorHome": "Início",
   "polarCorrectorResume": "Retomar",
-  "polarCorrectorLinkLostCaption": "Retomar e Início voltam assim que ele responder.",
+  "polarCorrectorLinkLostCaption": "Retome quando ele voltar a responder. Início volta em seguida.",
   "polarCorrectorNotDrivableLoop": "O Ara ainda não consegue mover este corretor polar: ele só faz o próprio alinhamento.",
   "polarCorrectorNotDrivableInfo": "O Ara não conseguiu ler o que este corretor polar faz, então não vai movê-lo.",
   "polarCorrectorTurnByHand": "Gire os parafusos à mão.",

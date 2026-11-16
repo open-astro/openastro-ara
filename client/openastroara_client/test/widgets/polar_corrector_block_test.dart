@@ -260,15 +260,14 @@ void main() {
       final lost = cause == 'link_lost';
       final resume = tester.widget<FilledButton>(_key('polar-corrector-resume'));
       final home = tester.widget<OutlinedButton>(_key('polar-corrector-home'));
-      expect(resume.onPressed == null, lost);
+      // Resume is always there: after a lost link only the daemon can tell whether the device answers again.
+      expect(resume.onPressed, isNotNull);
       expect(home.onPressed == null, lost);
-      expect(find.text('Resume and Home come back once it answers.'), lost ? findsOneWidget : findsNothing);
+      expect(find.text('Resume once it answers again. Home comes back then.'), lost ? findsOneWidget : findsNothing);
       expect(_key('polar-corrector-position'), lost ? findsNothing : findsOneWidget);
-      if (!lost) {
-        await tester.tap(_key('polar-corrector-resume'));
-        await tester.pumpAndSettle();
-        expect(c.calls, contains('resumeInRoutine'));
-      }
+      await tester.tap(_key('polar-corrector-resume'));
+      await tester.pumpAndSettle();
+      expect(c.calls, contains('resumeInRoutine'));
     });
   }
 
