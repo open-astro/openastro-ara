@@ -420,6 +420,9 @@ public interface IPolarAlignService {
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
     /// the mount stays put).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
+    /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>
+    Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct);
     /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
     /// outcome <c>complete</c> (§45.13).</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);

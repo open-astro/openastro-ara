@@ -972,7 +972,9 @@ public partial class Program {
                 () => sp.GetService<ICenteringService>(),
                 () => sp.GetService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>(),
                 // Background frame saves: a run waits for its last frames before it ends.
-                () => sp.GetService<ICameraService>()));
+                () => sp.GetService<ICameraService>(),
+                // A run starting over an open Polar Align routine ends that routine first.
+                () => sp.GetService<IPolarAlignService>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.
