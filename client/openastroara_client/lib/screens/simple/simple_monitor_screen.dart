@@ -701,7 +701,41 @@ class _NowTile extends StatelessWidget {
         ),
         if (n.filters.isNotEmpty) ...[
           const SizedBox(height: AraSpace.s8),
-          Row(
+          MediaQuery.sizeOf(context).width < kMonitorMinWidth
+              // A phone (#1942): each filter is as wide as its name and count
+              // and the row wraps, so a count is never scaled below the 14 px
+              // floor and a name keeps at least a glyph.
+              ? Wrap(
+                  spacing: 10,
+                  runSpacing: AraSpace.s8,
+                  children: [
+                    for (final f in n.filters)
+                      IntrinsicWidth(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    f.filter,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const SizedBox(width: AraSpace.s8),
+                                Text('${f.done}/${f.total}', maxLines: 1, style: _dim),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            _FilterBar(f),
+                          ],
+                        ),
+                      ),
+                  ],
+                )
+              : Row(
             children: [
               for (final f in n.filters)
                 Expanded(
@@ -753,18 +787,7 @@ class _NowTile extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 3),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AraRadius.field),
-                          child: LinearProgressIndicator(
-                            value: f.total == 0 ? 0 : f.done / f.total,
-                            minHeight: 6,
-                            // Finished green, in hand blue.
-                            color: f.done >= f.total
-                                ? AraColors.accentConnected
-                                : AraColors.accentInfo,
-                            backgroundColor: AraColors.bgInput,
-                          ),
-                        ),
+                        _FilterBar(f),
                       ],
                     ),
                   ),
@@ -775,6 +798,24 @@ class _NowTile extends StatelessWidget {
       ],
     );
   }
+}
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar(this.f);
+
+  final ({String filter, int done, int total, bool inHand}) f;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(AraRadius.field),
+    child: LinearProgressIndicator(
+      value: f.total == 0 ? 0 : f.done / f.total,
+      minHeight: 6,
+      // Finished green, in hand blue.
+      color: f.done >= f.total ? AraColors.accentConnected : AraColors.accentInfo,
+      backgroundColor: AraColors.bgInput,
+    ),
+  );
 }
 
 class _UpNext extends StatelessWidget {
