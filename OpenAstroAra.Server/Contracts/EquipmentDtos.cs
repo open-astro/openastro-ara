@@ -430,6 +430,41 @@ public sealed record SwitchPortDto(int Id, string Name, double Value, double Min
 
 public sealed record SwitchValueRequestDto(int PortId, double Value);
 
+// ─── Polar Corrector (#1972) ──────────────────────────────────────────────────
+
+/// <summary>The rig's Polar Corrector: a connected Switch, else the mount, whose driver lists
+/// <c>PolarAlign:Info</c>. <c>Carrier</c> is "switch" | "mount" | null; <c>DeviceId</c> is the
+/// switch's UniqueId (null for the mount). <c>NotDrivableReason</c>: "device_runs_its_own_loop"
+/// (Info lists no tier 1, or an axis is missing) | "info_unreadable" | null. Positions and faults
+/// are null when the device does not report them or Status cannot be read, never 0.</summary>
+public sealed record PolarCorrectorDto(
+    bool Present,
+    string? Carrier,
+    string? DeviceId,
+    string? Name,
+    bool Drivable,
+    string? NotDrivableReason,
+    PolarCorrectorCapabilitiesDto? Capabilities,
+    bool Moving,
+    double? AzimuthPositionArcmin,
+    double? AltitudePositionArcmin,
+    string? AzimuthFault,
+    string? AltitudeFault);
+
+/// <summary>The device's Info reply. An axis the device does not describe has null figures.</summary>
+public sealed record PolarCorrectorCapabilitiesDto(
+    string DeviceName,
+    string DeviceVersion,
+    double? AzimuthMaxMoveArcmin,
+    double? AzimuthResolutionArcmin,
+    double? AltitudeMaxMoveArcmin,
+    double? AltitudeResolutionArcmin,
+    bool SimultaneousMoves,
+    bool MovesWhileTracking,
+    bool MovesWhileSlewing,
+    bool CanStop,
+    double SettleSeconds);
+
 // ─── ObservingConditions (§10.6 row 8) ────────────────────────────────────────
 
 public sealed record ObservingConditionsDto(

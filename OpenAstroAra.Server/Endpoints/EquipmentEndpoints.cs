@@ -815,6 +815,20 @@ public static partial class EquipmentEndpoints {
         polar.MapPost("/corrector/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignCorrectorAsync(() => svc.ResumeCorrectorAsync(key, ct)));
 
+        // ─── Polar Corrector (#1972, #1973) ───
+        var corrector = equipment.MapGroup("/polarcorrector");
+        corrector.MapGet("", async (IPolarCorrectorService svc, CancellationToken ct) => Results.Ok(await svc.GetAsync(ct)))
+            .WithName("GetPolarCorrector").WithSummary("The rig's Polar Corrector, its capabilities and its position on each axis.")
+            .Produces<PolarCorrectorDto>();
+        corrector.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarCorrectorService svc, CancellationToken ct) =>
+            await FocuserActionAsync(() => svc.StopAsync(key, ct)))
+            .WithName("StopPolarCorrector").WithSummary("Stop both axes of the Polar Corrector.")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
+        corrector.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarCorrectorService svc, CancellationToken ct) =>
+            await FocuserActionAsync(() => svc.HomeAsync(key, ct)))
+            .WithName("HomePolarCorrector").WithSummary("Send the Polar Corrector to its home position.")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
+
         // ─── Manual reconnect (§52.1) ───
         // Reconnect the known device(s) for the type without re-running discovery (the same path
         // auto-connect-on-boot uses): the remembered entry, or — for a single-instance type with

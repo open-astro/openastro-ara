@@ -20,7 +20,7 @@ namespace OpenAstroAra.Server.Services;
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
-/// start a fresh exposure or slew behind the stop), then stop the mount where it is, halt the rotator
+/// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Corrector, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
 /// a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment
@@ -46,6 +46,7 @@ public sealed partial class EmergencyStopService {
     private readonly IWsBroadcaster? _ws;
     // #1689 — Func<>: the follower is registered after this service.
     private readonly Func<DomeFollower?>? _domeFollower;
+    private readonly IPolarCorrectorService? _polarCorrector;
     private readonly ILogger<EmergencyStopService> _logger;
 
     // Single-flight: a panicked double-press must not queue a second full
@@ -75,8 +76,10 @@ public sealed partial class EmergencyStopService {
             IBahtinovFocusService? bahtinov = null,
             AutofocusRunTracker? autofocus = null,
             IPolarAlignService? polarAlign = null,
-            Func<DomeFollower?>? domeFollower = null) {
+            Func<DomeFollower?>? domeFollower = null,
+            IPolarCorrectorService? polarCorrector = null) {
         _domeFollower = domeFollower;
+        _polarCorrector = polarCorrector;
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -148,6 +151,11 @@ public sealed partial class EmergencyStopService {
             return abortSlew is RungOutcome.Done && trackingOff is RungOutcome.Done;
         }
         var mountStoppedFirst = await StopMountAsync("first").ConfigureAwait(false);
+        // #1973 — the Polar Corrector moves the mount's polar axis: stopped right after the mount.
+        var correctorOutcome = await RungAsync("stop polar corrector",
+            _polarCorrector is null ? null : () => Task.FromResult(_polarCorrector.IsPresent),
+            _polarCorrector is null ? null : async ct => await _polarCorrector.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (correctorOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_corrector"); }
         // Left where it stops (§35.3 step 4): Halt sends no target, so a turning rotator just stops.
         var rotatorOutcome = await RungAsync("halt rotator",
             _rotator is null ? null : async () => (await _rotator.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
