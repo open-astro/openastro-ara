@@ -538,6 +538,25 @@ namespace OpenAstroAra.Test {
             Assert.That(corrector.Moves, Has.Length.GreaterThan(movesBefore + 2));
         }
 
+        [TestCase(false, true, true)]   // no Polar Corrector on the rig
+        [TestCase(true, false, true)]   // one that only runs its own loop
+        [TestCase(true, false, false)]  // the same, with automatic correction off
+        public async Task A_running_routine_with_no_Polar_Corrector_to_drive_refuses_stop_and_reports_no_state(
+                bool present, bool tier1, bool auto) {
+            var corrector = new FakeCorrector(azOffset: 20, altOffset: 10) { Present = present, InfoReply = CorrectorInfo(tier1: tier1) };
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { PolarCorrectorAuto = auto });
+            var (svc, ws) = await StartWithCorrectorAsync(corrector, store: store).ConfigureAwait(false);
+            using var _ = svc;
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 4).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            await Assert.ThatAsync(() => svc.StopCorrectorAsync(null, CancellationToken.None), Throws.InvalidOperationException).ConfigureAwait(false);
+            await Assert.ThatAsync(() => svc.ResumeCorrectorAsync(null, CancellationToken.None), Throws.InvalidOperationException).ConfigureAwait(false);
+
+            Assert.That(await CorrectorStatusAsync(svc).ConfigureAwait(false), Is.Null);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignCorrector), Is.Zero);
+        }
+
         [Test]
         public async Task Stop_and_resume_are_refused_when_there_is_nothing_to_stop_or_resume() {
             var corrector = new FakeCorrector(azOffset: 20, altOffset: 10);

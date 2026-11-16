@@ -142,7 +142,8 @@ namespace OpenAstroAra.Server.Services {
             CancellationTokenSource userStop;
             int gen;
             lock (_gate) {
-                run = _active && _correctorRun is { } r ? r
+                // A run reports a corrector state only once it has found one Ara can drive.
+                run = _active && _corrector is not null && _correctorRun is { } r ? r
                     : throw new InvalidOperationException("polar alignment is not running with a Polar Corrector");
                 gen = _generation;
                 device = run.Device;
@@ -252,13 +253,6 @@ namespace OpenAstroAra.Server.Services {
             if (stopped || run.Undrivable) {
                 return;
             }
-            if (!settings.PolarCorrectorAuto) {
-                if (run.Device is not null || _correctorSource!.Current() is not null) {
-                    await SetCorrectorAsync(gen, new PolarAlignCorrectorDto(PolarAlignCorrectorStates.Manual)).ConfigureAwait(false);
-                    ResetCorrectorBaseline();
-                }
-                return;
-            }
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, userStop);
             try {
                 if (run.Device is null) {
@@ -277,7 +271,14 @@ namespace OpenAstroAra.Server.Services {
                         return;
                     }
                 }
+                if (!settings.PolarCorrectorAuto) {
+                    await SetCorrectorAsync(gen, new PolarAlignCorrectorDto(PolarAlignCorrectorStates.Manual)).ConfigureAwait(false);
+                    ResetCorrectorBaseline();
+                    return;
+                }
                 await CorrectOnceAsync(gen, run, altErr, azErr, settings, linked.Token).ConfigureAwait(false);
+            } catch (PolarCorrectorException) when (!settings.PolarCorrectorAuto) {
+                // By hand: a device that does not answer is not a stop. It is read again at the next measurement.
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
                 // The person's Stop: the command already set the state; the device gets its Stop here too,
                 // in case a move went out after the command's own.
