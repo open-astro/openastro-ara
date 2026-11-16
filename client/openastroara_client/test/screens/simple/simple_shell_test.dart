@@ -785,6 +785,26 @@ class _LiveWeak extends AutofocusLiveNotifier {
       frame: Uint8List.fromList(_png));
 }
 
+/// A run three steps into a seven-step sweep, with its frame.
+class _LiveRunning extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(
+      run: AutofocusRun(
+        state: AutofocusRunStates.running,
+        phase: 'sweep',
+        totalSteps: 7,
+        completedSteps: 3,
+        stepSize: 50,
+        probes: [
+          for (var i = 0; i < 3; i++)
+            AutofocusProbe(
+                index: i, phase: AutofocusProbePhases.fine, position: 29300 + i * 50,
+                hfr: [4.2, 3.4, 2.8][i], stars: 40, kept: true),
+        ],
+      ),
+      frame: Uint8List.fromList(_png));
+}
+
 /// A Bahtinov readout running with a frame: the tallest Manual panel.
 class _BahtinovReading extends BahtinovFocusNotifier {
   @override
@@ -1298,6 +1318,34 @@ void main() {
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
     });
   }
+
+  // Board ruling (no scroll on an iPad, #1875 slice 4): idle and running too.
+  // With the Tools rows' one-line descriptions and a 160 px chart these were
+  // 133 and 146 px over.
+  Future<double> focusOverflow(WidgetTester tester, List<Override> gear) async {
+    await _pump(tester, const Size(1024, 768), gear: gear);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    final scroll = find.ancestor(of: find.byType(SimpleFocusPanel), matching: find.byType(Scrollable)).first;
+    return tester.state<ScrollableState>(scroll).position.maxScrollExtent;
+  }
+
+  testWidgets('the Focus panel fits on an iPad without scrolling: Auto, idle', (tester) async {
+    final overflow = await focusOverflow(tester, [
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]);
+    expect(overflow, 0, reason: 'everything in view');
+  });
+
+  testWidgets('the Focus panel fits on an iPad without scrolling: Auto, running', (tester) async {
+    final overflow = await focusOverflow(tester, [
+      autofocusLiveProvider.overrideWith(_LiveRunning.new),
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]);
+    expect(overflow, 0, reason: 'everything in view');
+  });
 
   testWidgets('a Bahtinov readout already running fills Focus with its frame over a connected focuser', (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [

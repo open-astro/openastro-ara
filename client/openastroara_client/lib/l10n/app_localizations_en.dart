@@ -2349,15 +2349,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusToolsHeading => 'Tools';
 
   @override
-  String get focusToolManualWhat =>
-      'Bahtinov mask readout while you turn the focuser.';
-
-  @override
   String get focusToolManualStatus => 'Not started';
-
-  @override
-  String get focusToolOffsetsWhat =>
-      'Focus shift per filter, so a filter change needs no autofocus.';
 
   @override
   String focusToolOffsetsToMeasure(int count) {
@@ -2372,6 +2364,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get focusToolOffsetsAllMeasured => 'All measured';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'No filter wheel';
 
   @override
   String get focusBackToAutofocus => 'Back to Autofocus';

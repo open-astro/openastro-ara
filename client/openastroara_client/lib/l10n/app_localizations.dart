@@ -4095,23 +4095,11 @@ abstract class AppLocalizations {
   /// **'Tools'**
   String get focusToolsHeading;
 
-  /// Simple Focus tool row: one line on what focus by hand does
-  ///
-  /// In en, this message translates to:
-  /// **'Bahtinov mask readout while you turn the focuser.'**
-  String get focusToolManualWhat;
-
   /// Simple Focus tool row status: focus by hand is not open
   ///
   /// In en, this message translates to:
   /// **'Not started'**
   String get focusToolManualStatus;
-
-  /// Simple Focus tool row: one line on what filter offsets do
-  ///
-  /// In en, this message translates to:
-  /// **'Focus shift per filter, so a filter change needs no autofocus.'**
-  String get focusToolOffsetsWhat;
 
   /// Simple Focus tool row status: filters whose focus offset is still 0
   ///
@@ -4124,6 +4112,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All measured'**
   String get focusToolOffsetsAllMeasured;
+
+  /// Simple Focus tool row status: no filter wheel is connected, so there are no offsets to measure. Short, one line.
+  ///
+  /// In en, this message translates to:
+  /// **'No filter wheel'**
+  String get focusToolOffsetsNoWheel;
 
   /// Spoken name of the back arrow in Simple Focus's tool views
   ///

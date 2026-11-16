@@ -594,10 +594,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ),
               ]),
               ?preflightDone,
-              // There from the start, with its waiting text; one size for the
-              // whole run (#1898).
-              // A finished or failed run gives up chart height to the Tools
-              // rows (they must fit an iPad without scrolling).
+              // There from the start, with its waiting text; one size from the
+              // start to the last probe (#1898), low enough that the Tools rows
+              // fit an iPad without scrolling. A finished or failed run gives up
+              // more height to its note.
               SizedBox(
                 height: done ? _kFocusChartDoneHeight : _kFocusChartHeight,
                 child: VCurveChart(run: run, simple: true),
@@ -677,7 +677,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   context.l10n.focusNoFocuser,
                   style: kSimpleText.copyWith(color: AraColors.textSecondary),
                 ),
-              ..._autofocusExtras(l10n, locked, done),
+              ..._autofocusExtras(l10n, locked),
             ],
           ],
         ),
@@ -707,10 +707,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 
   /// Under Autofocus: the next run's exposure (the profile's autofocus
   /// exposure, the same setting Advanced Mode edits; Steps and Step size stay
-  /// there) and the Tools rows that open Focus by hand and Filter offsets. A
-  /// finished or failed run drops the rows' one-line descriptions (the iPad
-  /// has no room for them beside the chart); heading, pills and buttons stay.
-  List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked, bool done) {
+  /// there) and the Tools rows that open Focus by hand and Filter offsets:
+  /// heading, pills and buttons, without the mock's one-line descriptions (no
+  /// room for them on an iPad beside the chart).
+  List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked) {
     final seconds = ref.watch(
       autofocusSettingsProvider.select((s) => s.exposureSeconds),
     );
@@ -750,7 +750,6 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       ),
       SimpleToolRow(
         title: l10n.focusToolManual,
-        what: done ? null : l10n.focusToolManualWhat,
         status: SimpleToolStatus(
           key: const Key('simple-focus-tool-manual-status'),
           color: AraColors.accentInfo,
@@ -771,7 +770,6 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       const Divider(height: 1, thickness: 1, color: AraColors.border),
       SimpleToolRow(
         title: l10n.focusToolOffsets,
-        what: done ? null : l10n.focusToolOffsetsWhat,
         status: SimpleToolStatus(
           key: const Key('simple-focus-tool-offsets-status'),
           color: !hasWheel
@@ -781,7 +779,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               : AraColors.accentWarning,
           ring: !hasWheel || toMeasure != 0,
           text: !hasWheel
-              ? l10n.focusOffsetsNeedsWheel
+              ? l10n.focusToolOffsetsNoWheel
               : toMeasure == 0
               ? l10n.focusToolOffsetsAllMeasured
               : l10n.focusToolOffsetsToMeasure(toMeasure),
@@ -827,7 +825,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               : ((cal.runIndex - 1).clamp(0, cal.runCount) / cal.runCount),
         ),
         SizedBox(
-          height: _kFocusChartHeight,
+          height: _kOffsetsChartHeight,
           child: VCurveChart(run: run, simple: true),
         ),
         ?errorText,
@@ -1281,7 +1279,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 // One height from a run's start to its end (#1717): each view keeps a slot for
 // what changes. Heights at 1.0x text; the slot scales with it.
 const double _kFocusReadoutHeight = 72;
-const double _kFocusChartHeight = 160;
+const double _kFocusChartHeight = 86;
+const double _kOffsetsChartHeight = 160;
 const double _kFocusChartDoneHeight = 72;
 const double _kFocusNoteHeight = 52;
 const double _kFocusNoteDoneHeight = 36;

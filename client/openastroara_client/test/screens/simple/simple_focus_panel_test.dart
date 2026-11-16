@@ -191,7 +191,7 @@ void main() {
     expect(find.byKey(const Key('simple-focus-tool-offsets')), findsNothing);
   });
 
-  testWidgets('the Tools rows: a heading, then each tool with its line, status pill and button', (tester) async {
+  testWidgets('the Tools rows: a heading, then each tool with its status pill and button, no one-line description', (tester) async {
     await _pump(tester, focuser: _focuser());
     expect(find.text('Tools'), findsOneWidget);
     expect(find.descendant(of: find.byKey(const Key('simple-focus-tool-manual-status')), matching: find.text('Not started')),
@@ -205,14 +205,13 @@ void main() {
     expect(
       find.descendant(
         of: offsets,
-        matching: find.text(
-          'Connect the filter wheel to calibrate focus offsets.',
-        ),
+        matching: find.text('No filter wheel'),
       ),
       findsOneWidget,
     );
-    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsOneWidget);
-    expect(find.textContaining('Focus shift per filter'), findsOneWidget);
+    // Board ruling (#1875 slice 4): no room for the descriptions on an iPad.
+    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing);
+    expect(find.textContaining('Focus shift per filter'), findsNothing);
   });
 
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
@@ -269,7 +268,7 @@ void main() {
       probes: [_probe(0, 3.1), _probe(1, 2.4)],
     );
     await _pump(tester, focuser: _focuser(), run: run);
-    expect(tester.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(160));
+    expect(tester.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(86));
   });
 
   // A finished Smart Focus whose fit was weak (R² 0.55), like the rig's.
@@ -283,17 +282,26 @@ void main() {
         algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7, withinSampledRange: true, curve: []),
   );
 
-  testWidgets('a finished run keeps the Tools heading, pills and buttons; the one-line descriptions go', (tester) async {
-    // Measured 2026-11-15 at 1024x768: with the descriptions, a finished
-    // weak-fit run overflowed the iPad by 41 px even with a 80 px chart and a
-    // one-line note; the board ruled the descriptions may go (finished and
-    // failed runs only).
-    await _pump(tester, focuser: _focuser(), run: weak);
-    expect(find.text('Tools'), findsOneWidget);
-    expect(find.byKey(const Key('simple-focus-tool-manual-status')), findsOneWidget);
-    expect(find.byKey(const Key('simple-focus-tool-offsets-status')), findsOneWidget);
-    expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget);
-    expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing);
+  testWidgets('every run state keeps the Tools heading, pills and buttons, without the one-line descriptions', (tester) async {
+    // Measured 2026-11-16 at 1024x768: with the descriptions an iPad scrolled
+    // by 133 px idle, 146 px running and 41 px finished; the board ruled they
+    // go in every state.
+    final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
+    for (final (name, run) in [
+      ('running', AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80)),
+      ('finished', weak),
+      ('failed', AutofocusRun(state: AutofocusRunStates.failed, totalSteps: 7, stepSize: 80)),
+    ]) {
+      live.state = AutofocusLive(run: run);
+      await tester.pump();
+      expect(find.text('Tools'), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-manual-status')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-offsets-status')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-manual')), findsOneWidget, reason: name);
+      expect(find.byKey(const Key('simple-focus-tool-offsets')), findsOneWidget, reason: name);
+      expect(find.text('Bahtinov mask readout while you turn the focuser.'), findsNothing, reason: name);
+      expect(find.textContaining('Focus shift per filter'), findsNothing, reason: name);
+    }
   });
 
   testWidgets('a finished run: best position, stars and fit R², all on view', (tester) async {
@@ -308,6 +316,7 @@ void main() {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
     double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
     final start = height();
+    expect(tester.getSize(find.byType(VCurveChart)).height, 86, reason: 'idle chart');
     for (final run in [
       AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80),
       AutofocusRun(
@@ -323,8 +332,8 @@ void main() {
       await tester.pump();
       expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
     }
-    // Board ruling (#1875 slice 4): the finished run's smaller chart pays for
-    // the full Tools rows, so an iPad needs no scroll.
+    // Board ruling (#1875 slice 4): a finished run's chart and note are
+    // smaller still, so an iPad needs no scroll.
     live.state = AutofocusLive(run: weak);
     await tester.pump();
     expect(height(), lessThan(start), reason: 'finished');
@@ -336,6 +345,7 @@ void main() {
     final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
     Rect plot() => tester.getRect(find.byType(LineChart)).shift(-tester.getTopLeft(find.byType(SimpleFocusPanel)));
     final start = plot();
+    expect(tester.getSize(find.byType(VCurveChart)).height, 86, reason: 'running chart');
     live.state = AutofocusLive(run: AutofocusRun(
         state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, completedSteps: 2, stepSize: 80,
         probes: [_probe(0, 3.1), _probe(1, 2.4)]));
