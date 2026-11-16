@@ -1976,7 +1976,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.site.bortle_class',
     label: 'Bortle class',
-    description: 'Bortle dark-sky classification, 1 (excellent dark site) through 9 (inner-city). Used for SNR estimation + suggested exposure ranges.',
+    description: 'Bortle dark-sky classification, 1 (excellent dark site) through 9 (inner-city). One of two sky brightness inputs (the other is SQM); in SQM mode this holds the class derived from the reading.',
     keywords: [
       'bortle',
       'dark sky',
@@ -1989,6 +1989,23 @@ const List<Setting> settingsRegistry = [
     type: SettingType.intRange(min: 1, max: 9),
     defaultValue: 6,
     profilePath: 'site.bortle_class',
+  ),
+  Setting(
+    id: 'safety.site.sqm_mag_per_arcsec2',
+    label: 'SQM sky brightness',
+    description: 'Measured sky brightness in mag/arcsec2, 16 to 22.5. Choose it instead of a Bortle class when you have a meter reading; 0 means Bortle mode.',
+    keywords: [
+      'sqm',
+      'sky quality',
+      'sky brightness',
+      'mag/arcsec2',
+      'light pollution',
+      'bortle',
+    ],
+    path: ['Settings', 'Location & sky', 'Where you observe'],
+    type: SettingType.doubleRange(min: 0, max: 22.5),
+    defaultValue: 0.0,
+    profilePath: 'site.sqm_mag_per_arcsec2',
   ),
   Setting(
     id: 'safety.site.typical_seeing_arcsec',

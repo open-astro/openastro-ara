@@ -5681,21 +5681,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Sky darkness: 1 darkest, 9 inner city.';
+      'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.';
 
   @override
   String get wizardBasicsBortleError => 'Enter a whole number from 1 to 9.';
 
   @override
-  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²), optional';
+  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Leave empty if not measured (Bortle is used). 16 to 22.5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Enter a value from 16 to 22.5, or leave empty.';
+  String get wizardBasicsSkyBortle => 'Bortle class';
+
+  @override
+  String get wizardBasicsSkySqm => 'SQM reading';
+
+  @override
+  String get wizardBasicsSqmError => 'Enter a value from 16 to 22.5.';
 
   @override
   String get wizardBasicsTimezone => 'Timezone';

@@ -43,7 +43,7 @@ void main() {
     return container;
   }
 
-  testWidgets('Bortle/SQM fields validate and never save out-of-range', (
+  testWidgets('sky brightness is one input: Bortle by default, SQM on switch, no hidden value', (
     tester,
   ) async {
     final container = await pump(tester);
@@ -54,26 +54,54 @@ void main() {
       await tester.pump();
     }
 
-    // Seeded from the current site settings (default Bortle 6, SQM unset).
+    Future<void> pick(String label) async {
+      final f = find.descendant(
+        of: find.byKey(const ValueKey('wiz-sky-mode')),
+        matching: find.text(label),
+      );
+      await tester.ensureVisible(f);
+      await tester.tap(f);
+      await tester.pump();
+    }
+
+    // Bortle mode with the default 6 shown, no SQM field.
+    expect(
+      tester
+          .widget<SegmentedButton<bool>>(find.byKey(const ValueKey('wiz-sky-mode')))
+          .selected,
+      {false},
+    );
     expect(find.text('6'), findsOneWidget);
+    expect(find.byKey(const ValueKey('wiz-sqm-sqm')), findsNothing);
     expect(site.bortleClass, isNull);
 
-    await type('wiz-bortle', '10');
+    await type('wiz-bortle-bortle', '10');
     expect(find.text('Enter a whole number from 1 to 9.'), findsOneWidget);
     expect(site.bortleClass, isNull);
-    await type('wiz-bortle', '3');
+    await type('wiz-bortle-bortle', '3');
     expect(find.text('Enter a whole number from 1 to 9.'), findsNothing);
     expect(site.bortleClass, 3);
+    expect(site.sqmMagPerArcsec2, 0, reason: 'Bortle mode writes SQM 0');
 
-    await type('wiz-sqm', '15');
-    expect(
-      find.text('Enter a value from 16 to 22.5, or leave empty.'),
-      findsOneWidget,
-    );
+    // Switch to SQM: the reading starts at Bortle 3's sky, the Bortle stays derived.
+    await pick('SQM reading');
+    expect(find.byKey(const ValueKey('wiz-bortle-bortle')), findsNothing);
+    expect(site.sqmMagPerArcsec2, 21.0);
+    expect(site.bortleClass, 3);
+    await type('wiz-sqm-sqm', '15');
+    expect(find.text('Enter a value from 16 to 22.5.'), findsOneWidget);
     expect(site.sqmMagPerArcsec2, isNull);
-    await type('wiz-sqm', '21.4');
+    expect(site.bortleClass, isNull);
+    await type('wiz-sqm-sqm', '21.4');
     expect(site.sqmMagPerArcsec2, 21.4);
-    await type('wiz-sqm', '');
+    expect(site.bortleClass, 2, reason: 'derived from the reading');
+    await type('wiz-sqm-sqm', '');
+    expect(site.sqmMagPerArcsec2, isNull, reason: 'blank is never saved');
+
+    // Back to Bortle: the class is kept and the reading is cleared.
+    await type('wiz-sqm-sqm', '20.3');
+    await pick('Bortle class');
+    expect(site.bortleClass, 4);
     expect(site.sqmMagPerArcsec2, 0);
   });
 

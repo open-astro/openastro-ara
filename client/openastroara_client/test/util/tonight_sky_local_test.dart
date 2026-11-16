@@ -666,6 +666,62 @@ void main() {
     expect(photogenicTierOf('Sh2-110'), isNull);
   });
 
+  test('a set SQM drives the surface-brightness contrast and the reason text (#1529)', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
+    const hii = PlanningDso(
+      id: 'SB',
+      name: 'SB',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+      sizeMinArcmin: 60,
+      surfaceBrightness: 21.0,
+    );
+    TonightSkyObject rowFor(SiteSettings s) => computeTonightSkyLocal(
+      site: s,
+      optics: optics,
+      atUtc: night,
+      filterSet: nb,
+      catalog: const [hii],
+    ).firstWhere((o) => o.id == 'SB');
+    final bortle = rowFor(site); // Bortle 6, sky 19.5
+    final sqm = rowFor(site.copyWith(sqmMagPerArcsec2: 21.5));
+    expect(bortle.scoreReasons!.join(' '), contains('for Bortle 6 sky'));
+    expect(sqm.scoreReasons!.join(' '), contains('for SQM 21.5 sky'));
+    // 21.5 is a darker sky than Bortle 6's 19.5: the contrast term is larger.
+    expect(sqm.score!, greaterThan(bortle.score!));
+    // The stored Bortle never competes with the reading.
+    expect(
+      rowFor(site.copyWith(sqmMagPerArcsec2: 19.5, bortleClass: 1)).score,
+      closeTo(bortle.score!, 1e-9),
+      reason: 'SQM 19.5 is Bortle 6 on the ladder',
+    );
+    // A bright reading shows its own text in the bright-sky penalty.
+    const g = PlanningDso(
+      id: 'E',
+      name: 'E',
+      type: 'HII',
+      magnitude: 5.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+      sizeMinArcmin: 60,
+    );
+    final bright = computeTonightSkyLocal(
+      site: site.copyWith(sqmMagPerArcsec2: 18.5, bortleClass: 2),
+      optics: optics,
+      atUtc: night,
+      filterSet: const FilterSetSettings(filters: []),
+      catalog: const [g],
+    ).firstWhere((o) => o.id == 'E');
+    expect(bright.scoreReasons!.join(' '), contains('SQM 18.5 sky) (−25%)'));
+  });
+
   test('a bare OSC (empty filter set) is scored as broadband, harder under bright skies', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const hii = PlanningDso(

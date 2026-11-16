@@ -7297,7 +7297,7 @@
   "@wizardBasicsBortle": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city.",
+  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.",
   "@wizardBasicsBortleHelper": {
     "description": "Wizard step 1: Bortle helper"
   },
@@ -7305,15 +7305,28 @@
   "@wizardBasicsBortleError": {
     "description": "Wizard step 1: Bortle validation error"
   },
-  "wizardBasicsSqm": "SQM reading (mag/arcsec²), optional",
+  "wizardBasicsSqm": "SQM reading (mag/arcsec²)",
   "@wizardBasicsSqm": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsSqmHelper": "Leave empty if not measured (Bortle is used). 16 to 22.5.",
+  "wizardBasicsSqmHelper": "Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.",
   "@wizardBasicsSqmHelper": {
-    "description": "Wizard step 1: SQM helper"
+    "description": "Wizard step 1: SQM helper",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
   },
-  "wizardBasicsSqmError": "Enter a value from 16 to 22.5, or leave empty.",
+  "wizardBasicsSkyBortle": "Bortle class",
+  "@wizardBasicsSkyBortle": {
+    "description": "Wizard step 1: sky brightness mode selector, Bortle"
+  },
+  "wizardBasicsSkySqm": "SQM reading",
+  "@wizardBasicsSkySqm": {
+    "description": "Wizard step 1: sky brightness mode selector, SQM"
+  },
+  "wizardBasicsSqmError": "Enter a value from 16 to 22.5.",
   "@wizardBasicsSqmError": {
     "description": "Wizard step 1: SQM validation error"
   },

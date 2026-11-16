@@ -9570,7 +9570,7 @@ abstract class AppLocalizations {
   /// Wizard step 1: Bortle helper
   ///
   /// In en, this message translates to:
-  /// **'Sky darkness: 1 darkest, 9 inner city.'**
+  /// **'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.'**
   String get wizardBasicsBortleHelper;
 
   /// Wizard step 1: Bortle validation error
@@ -9582,19 +9582,31 @@ abstract class AppLocalizations {
   /// Wizard step 1: field label
   ///
   /// In en, this message translates to:
-  /// **'SQM reading (mag/arcsec²), optional'**
+  /// **'SQM reading (mag/arcsec²)'**
   String get wizardBasicsSqm;
 
   /// Wizard step 1: SQM helper
   ///
   /// In en, this message translates to:
-  /// **'Leave empty if not measured (Bortle is used). 16 to 22.5.'**
-  String get wizardBasicsSqmHelper;
+  /// **'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.'**
+  String wizardBasicsSqmHelper(int bortle);
+
+  /// Wizard step 1: sky brightness mode selector, Bortle
+  ///
+  /// In en, this message translates to:
+  /// **'Bortle class'**
+  String get wizardBasicsSkyBortle;
+
+  /// Wizard step 1: sky brightness mode selector, SQM
+  ///
+  /// In en, this message translates to:
+  /// **'SQM reading'**
+  String get wizardBasicsSkySqm;
 
   /// Wizard step 1: SQM validation error
   ///
   /// In en, this message translates to:
-  /// **'Enter a value from 16 to 22.5, or leave empty.'**
+  /// **'Enter a value from 16 to 22.5.'**
   String get wizardBasicsSqmError;
 
   /// Wizard step 1: field label

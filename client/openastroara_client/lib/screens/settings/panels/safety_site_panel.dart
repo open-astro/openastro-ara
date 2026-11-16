@@ -10,6 +10,7 @@ import '../../../state/simple_mode_state.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
+import '../../../util/optimal_sub.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/section_panel.dart';
@@ -322,27 +323,13 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
             },
           ),
         const SettingsSectionHeader('Conditions defaults'),
-        EditableNumberRow(
-          label: 'Bortle class (1..9)',
-          helpKey: 'safety.site.bortle_class',
-          currentValue: s.bortleClass.toString(),
-          getCanonical: () =>
-              ref.read(siteSettingsProvider).bortleClass.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setBortleClass(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'SQM sky brightness (0 = use Bortle)',
-          helpKey: 'safety.site.sqm_mag_per_arcsec2',
-          currentValue: s.sqmMagPerArcsec2.toString(),
-          getCanonical: () =>
-              ref.read(siteSettingsProvider).sqmMagPerArcsec2.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setSqmMagPerArcsec2(v);
-          },
+        _SkyBrightnessRows(
+          sky: SkyState(
+            bortleClass: s.bortleClass,
+            sqmMagPerArcsec2: s.sqmMagPerArcsec2,
+          ),
+          sqmText: s.sqmMagPerArcsec2.toString(),
+          bortleText: s.bortleClass.toString(),
         ),
         EditableNumberRow(
           label: 'Typical seeing (″)',
@@ -495,6 +482,73 @@ class _CustomHorizonEditor extends ConsumerWidget {
             label: const Text('Add vertex'),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// One sky brightness input (#1529): a Bortle / SQM selector and the one
+/// value field of the mode in use. Switching writes the other mode's value
+/// from the sky now in effect, and the notifier clears what the mode drops.
+class _SkyBrightnessRows extends ConsumerWidget {
+  const _SkyBrightnessRows({
+    required this.sky,
+    required this.sqmText,
+    required this.bortleText,
+  });
+
+  final SkyState sky;
+  final String sqmText;
+  final String bortleText;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final n = ref.read(siteSettingsProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SegmentedButton<bool>(
+            key: const Key('site-sky-mode'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: false, label: Text('Bortle class')),
+              ButtonSegment(value: true, label: Text('SQM reading')),
+            ],
+            selected: {sky.isSqm},
+            onSelectionChanged: (sel) => sel.first
+                ? n.setSkySqm(sky.skyMag)
+                : n.setSkyBortle(sky.bortle),
+          ),
+        ),
+        if (sky.isSqm)
+          EditableNumberRow(
+            key: const ValueKey('site-sqm'),
+            label: 'SQM sky brightness (16 to 22.5)',
+            helpKey: 'safety.site.sqm_mag_per_arcsec2',
+            hint: 'Derived Bortle class: ${sky.bortle}',
+            currentValue: sqmText,
+            getCanonical: () =>
+                ref.read(siteSettingsProvider).sqmMagPerArcsec2.toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setSkySqm(v);
+            },
+          )
+        else
+          EditableNumberRow(
+            key: const ValueKey('site-bortle'),
+            label: 'Bortle class (1..9)',
+            helpKey: 'safety.site.bortle_class',
+            currentValue: bortleText,
+            getCanonical: () =>
+                ref.read(siteSettingsProvider).bortleClass.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setSkyBortle(v);
+            },
+          ),
       ],
     );
   }

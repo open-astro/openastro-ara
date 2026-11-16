@@ -4,6 +4,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../l10n/l10n.dart';
 import '../../../models/profile_draft.dart';
+import '../../../util/optimal_sub.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -97,6 +98,103 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
 
   String? _bortleError;
   String? _sqmError;
+
+  /// The mode the user picked; null until then (the draft decides). An
+  /// invalid entry nulls the draft, which must not flip the mode back.
+  bool? _sqmMode;
+
+  /// The sky in effect: what the draft holds, else the saved site settings.
+  SkyState _sky() {
+    final saved = ref.read(siteSettingsProvider);
+    return SkyState(
+      bortleClass: _draft.site.bortleClass ?? saved.bortleClass,
+      sqmMagPerArcsec2: _draft.site.sqmMagPerArcsec2 ?? saved.sqmMagPerArcsec2,
+    );
+  }
+
+  /// One sky brightness input (#1529): the draft always carries the pair, so
+  /// switching mode leaves no hidden value (Bortle mode sqm 0, SQM mode the
+  /// class derived from the reading).
+  void _setSkyMode(bool sqm) => setState(() {
+    final sky = _sky();
+    _sqmMode = sqm;
+    _bortleError = null;
+    _sqmError = null;
+    if (sqm) {
+      _draft.site.sqmMagPerArcsec2 = sky.skyMag;
+      _draft.site.bortleClass = bortleFromSkyMag(sky.skyMag);
+    } else {
+      _draft.site.bortleClass = sky.bortle;
+      _draft.site.sqmMagPerArcsec2 = 0;
+    }
+  });
+
+  Widget _skyInput() {
+    final sky = _sky();
+    final isSqm = _sqmMode ?? sky.isSqm;
+    final l10n = context.l10n;
+    final modeKey = isSqm ? 'sqm' : 'bortle';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: SegmentedButton<bool>(
+            key: const ValueKey('wiz-sky-mode'),
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(
+                value: false,
+                label: Text(l10n.wizardBasicsSkyBortle),
+              ),
+              ButtonSegment(value: true, label: Text(l10n.wizardBasicsSkySqm)),
+            ],
+            selected: {isSqm},
+            onSelectionChanged: (sel) => _setSkyMode(sel.first),
+          ),
+        ),
+        if (isSqm)
+          WizardTextField(
+            key: ValueKey('wiz-sqm-$modeKey'),
+            label: l10n.wizardBasicsSqm,
+            initialValue: sky.skyMag.toString(),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            errorText: _sqmError,
+            helperText: l10n.wizardBasicsSqmHelper(sky.bortle),
+            onChanged: (v) => setState(() {
+              final n = double.tryParse(v.trim());
+              _sqmError = n == null || !isSqmReading(n)
+                  ? l10n.wizardBasicsSqmError
+                  : null;
+              // Blank or out-of-range is never saved (null keeps the base).
+              _draft.site.sqmMagPerArcsec2 = _sqmError == null ? n : null;
+              _draft.site.bortleClass = _sqmError == null
+                  ? bortleFromSkyMag(n!)
+                  : null;
+            }),
+          )
+        else
+          WizardTextField(
+            key: ValueKey('wiz-bortle-$modeKey'),
+            label: l10n.wizardBasicsBortle,
+            initialValue: sky.bortle.toString(),
+            keyboardType: TextInputType.number,
+            inputFormatters: WizardInput.unsignedInt,
+            errorText: _bortleError,
+            helperText: l10n.wizardBasicsBortleHelper,
+            onChanged: (v) => setState(() {
+              final n = int.tryParse(v.trim());
+              _bortleError = n == null || !SiteSettingsNotifier.isValidBortle(n)
+                  ? l10n.wizardBasicsBortleError
+                  : null;
+              _draft.site.bortleClass = _bortleError == null ? n : null;
+              _draft.site.sqmMagPerArcsec2 = _bortleError == null ? 0 : null;
+            }),
+          ),
+      ],
+    );
+  }
 
   /// True once the user types in the timezone field themselves — manual
   /// coordinate edits then stop overwriting their choice (a remote-hosted rig
@@ -235,46 +333,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           inputFormatters: WizardInput.signedDecimal,
           onChanged: (v) => _setDouble(v, (d) => _draft.altitudeMeters = d),
         ),
-        WizardTextField(
-          key: const ValueKey('wiz-bortle'),
-          label: context.l10n.wizardBasicsBortle,
-          initialValue: (_draft.site.bortleClass ??
-                  ref.read(siteSettingsProvider).bortleClass)
-              .toString(),
-          keyboardType: TextInputType.number,
-          inputFormatters: WizardInput.unsignedInt,
-          errorText: _bortleError,
-          helperText: context.l10n.wizardBasicsBortleHelper,
-          onChanged: (v) => setState(() {
-            final n = int.tryParse(v.trim());
-            _bortleError = n != null && !SiteSettingsNotifier.isValidBortle(n)
-                ? context.l10n.wizardBasicsBortleError
-                : null;
-            // Blank or out-of-range is never saved (null keeps the base).
-            _draft.site.bortleClass = _bortleError == null ? n : null;
-          }),
-        ),
-        WizardTextField(
-          key: const ValueKey('wiz-sqm'),
-          label: context.l10n.wizardBasicsSqm,
-          initialValue: () {
-            final v = _draft.site.sqmMagPerArcsec2 ??
-                ref.read(siteSettingsProvider).sqmMagPerArcsec2;
-            return v == 0 ? null : v.toString();
-          }(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          errorText: _sqmError,
-          helperText: context.l10n.wizardBasicsSqmHelper,
-          onChanged: (v) => setState(() {
-            final t = v.trim();
-            final n = t.isEmpty ? 0.0 : double.tryParse(t);
-            _sqmError = n != null && !SiteSettingsNotifier.isValidSqm(n)
-                ? context.l10n.wizardBasicsSqmError
-                : null;
-            _draft.site.sqmMagPerArcsec2 = _sqmError == null ? n : null;
-          }),
-        ),
+        _skyInput(),
         WizardTextField(
           key: ValueKey('wiz-tz-$_gpsFill-$_tzFill'),
           label: context.l10n.wizardBasicsTimezone,

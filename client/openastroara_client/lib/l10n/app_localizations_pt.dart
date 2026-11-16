@@ -5681,21 +5681,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Sky darkness: 1 darkest, 9 inner city.';
+      'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.';
 
   @override
   String get wizardBasicsBortleError => 'Enter a whole number from 1 to 9.';
 
   @override
-  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²), optional';
+  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Leave empty if not measured (Bortle is used). 16 to 22.5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Enter a value from 16 to 22.5, or leave empty.';
+  String get wizardBasicsSkyBortle => 'Bortle class';
+
+  @override
+  String get wizardBasicsSkySqm => 'SQM reading';
+
+  @override
+  String get wizardBasicsSqmError => 'Enter a value from 16 to 22.5.';
 
   @override
   String get wizardBasicsTimezone => 'Timezone';
@@ -11686,21 +11692,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Escuridão do céu: 1 mais escuro, 9 centro de cidade.';
+      'Escuridão do céu: 1 mais escuro, 9 centro de cidade. Usada como o brilho do céu.';
 
   @override
   String get wizardBasicsBortleError => 'Digite um número inteiro de 1 a 9.';
 
   @override
-  String get wizardBasicsSqm => 'Leitura SQM (mag/arcsec²), opcional';
+  String get wizardBasicsSqm => 'Leitura SQM (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Deixe vazio se não medido (usa-se o Bortle). De 16 a 22,5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Brilho do céu de um medidor ou do lightpollutionmap, de 16 a 22,5. Classe Bortle derivada: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Digite um valor de 16 a 22,5 ou deixe vazio.';
+  String get wizardBasicsSkyBortle => 'Classe Bortle';
+
+  @override
+  String get wizardBasicsSkySqm => 'Leitura SQM';
+
+  @override
+  String get wizardBasicsSqmError => 'Digite um valor de 16 a 22,5.';
 
   @override
   String get wizardBasicsTimezone => 'Fuso horário';
