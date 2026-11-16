@@ -62,14 +62,49 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null) {
+                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null,
+                IPolarAlignService? polarAlign = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
                 profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications,
-                cameraResolver: () => camera);
+                cameraResolver: () => camera, polarAlignResolver: () => polarAlign);
+        }
+
+        [Test]
+        public async Task A_run_started_over_an_open_polar_align_ends_that_routine_before_its_first_instruction() {
+            var id = Guid.NewGuid();
+            var polar = new Mock<IPolarAlignService>();
+            polar.SetupGet(p => p.IsActive).Returns(true);
+            SequenceRunState? stateAtStop = null;
+            SequencerService? svc = null;
+            polar.Setup(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()))
+                .Returns(async () => {
+                    stateAtStop = (await svc!.GetRunStateAsync(id, CancellationToken.None))?.State;
+                    return PlaceholderEquipmentHelpers.Accepted("polar-align.stop", null);
+                });
+            svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), polarAlign: polar.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
+
+            polar.Verify(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(stateAtStop, Is.Not.EqualTo(SequenceRunState.Running), "stopped before the first instruction runs");
+        }
+
+        [Test]
+        public async Task A_run_started_with_no_polar_align_open_leaves_the_routine_alone() {
+            var id = Guid.NewGuid();
+            var polar = new Mock<IPolarAlignService>();
+            polar.SetupGet(p => p.IsActive).Returns(false);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), polarAlign: polar.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            polar.Verify(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]

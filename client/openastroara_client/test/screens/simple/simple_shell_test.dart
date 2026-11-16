@@ -2098,7 +2098,7 @@ void main() {
     final sel = container.read(planetariumSelectionProvider)!;
     expect(sel.name, 'Andromeda Galaxy');
     expect(sel.decJ2000Deg, 41.27);
-    expect(find.text('M 31 (Andromeda Galaxy)'), findsOneWidget, reason: "the plan names the card's label, not NGC 224");
+    expect(find.text('Andromeda Galaxy (M 31)'), findsOneWidget, reason: "the plan names the card's label, not NGC 224");
     expect(container.read(simpleRunProvider).targets, isEmpty, reason: 'nothing queued');
   });
 

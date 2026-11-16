@@ -370,16 +370,17 @@ final RegExp _catalogDesignation = RegExp(r'^[A-Za-z]+[ -]?\d');
 /// "Sh2-129"): letters, then a number. A name or a SIMBAD "NAME ..." is not.
 bool isCatalogDesignation(String s) => _catalogDesignation.hasMatch(s);
 
-/// #1720 display form `designation (name)`: "NGC 246 (Skull Nebula)". Just the
-/// designation when there is no other name; just the name when it already
-/// carries the designation or its own brackets ("Heart Nebula (IC 1805)").
+/// Display form `name (designation)`: "Skull Nebula (NGC 246)" (#1957, was
+/// designation first in #1720). Just the designation when there is no other
+/// name; just the name when it already carries the designation or its own
+/// brackets ("Spaghetti Nebula (Simeis 147)").
 String designationWithName(String designation, String name) {
   final d = prettyDesignation(designation.trim());
   final n = name.trim();
   if (d.isEmpty) return n;
   if (n.isEmpty || designationKey(n) == designationKey(d)) return d;
   if (n.contains('(')) return n;
-  return '$d ($n)';
+  return '$n ($d)';
 }
 
 /// The designation a search suggestion shows: the one that matched, or the id
@@ -387,7 +388,7 @@ String designationWithName(String designation, String name) {
 String suggestionDesignation(DsoSuggestion s) =>
     s.label == s.dso.id || isCatalogDesignation(s.label) ? s.label : s.dso.id;
 
-/// A search suggestion's title, `designation (name)`: the name is a nickname
+/// A search suggestion's title, `name (designation)`: the name is a nickname
 /// that matched, so the row says why it is listed, else the object's name.
 String suggestionTitle(DsoSuggestion s) {
   final d = suggestionDesignation(s);
