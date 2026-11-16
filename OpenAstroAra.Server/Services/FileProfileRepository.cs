@@ -254,9 +254,16 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             }
             try {
                 var json = File.ReadAllText(path);
-                var stored = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
-                if (stored is not null && stored.Meta.Id == fileId) _metas[stored.Meta.Id] = stored.Meta;
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+                var stored = string.IsNullOrWhiteSpace(json)
+                    ? null
+                    : JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
+                if (stored is null) SetAside(path, fileId);
+                else if (stored.Meta.Id == fileId) _metas[stored.Meta.Id] = stored.Meta;
+            } catch (JsonException ex) {
+                LogLoadFailed(ex, path);
+                SetAside(path, fileId);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // May be temporary: leave the file where it is.
                 LogLoadFailed(ex, path);
             }
         }
@@ -304,6 +311,29 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         }
     }
 
+    // A file that cannot be read as a profile is renamed so it neither matches *.json (no
+    // warning at every start) nor *.tmp (the boot sweep would delete it). One Warning, once.
+    private void SetAside(string path, Guid id) {
+        var aside = path + ".corrupt";
+        try {
+            File.Move(path, aside, overwrite: true);
+            LogSetAside(id, path, aside);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogLoadFailed(ex, path);
+        }
+    }
+
+    // Flush to disk before the rename so a power cut cannot leave an empty target file.
+    private static void WriteAllTextDurable(string tmp, string path, string text) {
+        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None)) {
+            using var w = new StreamWriter(fs);
+            w.Write(text);
+            w.Flush();
+            fs.Flush(flushToDisk: true);
+        }
+        File.Move(tmp, path, overwrite: true);
+    }
+
     private IEnumerable<string> SafeEnumerateProfileFiles() {
         try {
             return Directory.EnumerateFiles(_dir, "*.json").ToList();
@@ -345,8 +375,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         var tmp = path + ".tmp";
         try {
             var json = JsonSerializer.Serialize(stored, _indented.StoredProfileDto);
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+            WriteAllTextDurable(tmp, path, json);
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogPersistFailed(ex, path);
@@ -389,8 +418,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         if (_activeId is not Guid id) return;
         var tmp = _activePtrPath + ".tmp";
         try {
-            File.WriteAllText(tmp, id.ToString());
-            File.Move(tmp, _activePtrPath, overwrite: true);
+            WriteAllTextDurable(tmp, _activePtrPath, id.ToString());
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogPersistFailed(ex, _activePtrPath);
         }
@@ -416,6 +444,9 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to read profile file {Path}")]
     partial void LogLoadFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Profile {Id} could not be read; set {Path} aside as {AsidePath}")]
+    partial void LogSetAside(Guid id, string path, string asidePath);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to persist profile file {Path}")]
     partial void LogPersistFailed(Exception ex, string path);
