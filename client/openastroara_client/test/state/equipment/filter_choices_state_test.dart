@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/state/equipment/filter_choices_state.dart';
@@ -15,10 +14,8 @@ class _Wheel extends FilterWheelNotifier {
 
 class _Labels extends FilterWheelLabelsNotifier {
   @override
-  LoadedSection<FilterWheelLabels> build() => LoadedSection(
-    value: FilterWheelLabels(labels: const ['L', 'R', 'G', 'B', 'Hα', '', '']),
-    source: SectionSource.rig,
-  );
+  FilterWheelLabels build() =>
+      FilterWheelLabels(labels: const ['L', 'R', 'G', 'B', 'Hα', '', '']);
 }
 
 FilterWheelStatus _wheel(
@@ -101,23 +98,5 @@ void main() {
     expect((await _choices()).map((c) => c.name), ['L', 'R', 'G', 'B', 'Hα']);
     _Wheel.status = null;
     expect((await _choices()).map((c) => c.name), ['L', 'R', 'G', 'B', 'Hα']);
-  });
-
-  test('labels not loaded: no profile labels are offered, and a connected '
-      "wheel's unnamed slot is left out", () async {
-    _Wheel.status = _wheel(['Luminance', '']);
-    final c = ProviderContainer(
-      overrides: [filterWheelProvider.overrideWith(_Wheel.new)],
-    );
-    addTearDown(c.dispose);
-    await c.read(filterWheelProvider.future);
-    expect(c.read(filterChoicesProvider).map((f) => f.name), ['Luminance']);
-    _Wheel.status = null;
-    final offline = ProviderContainer(
-      overrides: [filterWheelProvider.overrideWith(_Wheel.new)],
-    );
-    addTearDown(offline.dispose);
-    await offline.read(filterWheelProvider.future);
-    expect(offline.read(filterChoicesProvider), isEmpty);
   });
 }

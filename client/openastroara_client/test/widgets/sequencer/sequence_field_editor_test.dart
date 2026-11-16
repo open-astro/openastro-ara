@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
@@ -49,39 +48,35 @@ SequenceDetail _detailWith(String type) => SequenceDetail(
 
 // root → [WaitForTimeSpan, StartGuiding, SetTracking, TakeExposure]
 SequenceDetail sampleDetail() => SequenceDetail(
-  id: 's',
-  body: {
-    r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-    'Name': 'root',
-    'Items': {
-      r'$type': itemsWrapperType,
-      r'$values': [
-        _node(_waitSpan),
-        _node(_startGuiding),
-        _node(_setTracking),
-        _node(_takeExposure),
-      ],
-    },
-  },
-);
+      id: 's',
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            _node(_waitSpan),
+            _node(_startGuiding),
+            _node(_setTracking),
+            _node(_takeExposure),
+          ],
+        },
+      },
+    );
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester, {
-  SequenceDetail? detail,
-  NodePath? select,
-  bool connectedWheel = false,
-  List<SwitchDevice>? switches,
-  bool switchListFails = false,
-}) async {
-  final container = ProviderContainer(
-    overrides: [
-      filterWheelLabelsProvider.overrideWith(_DefaultLabels.new),
-      if (connectedWheel) filterWheelProvider.overrideWith(_ConnectedWheel.new),
-      if (switches != null)
-        switchListProvider.overrideWith(() => _KnownSwitches(switches)),
-      if (switchListFails) switchListProvider.overrideWith(_FailedSwitches.new),
-    ],
-  );
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {SequenceDetail? detail,
+    NodePath? select,
+    bool connectedWheel = false,
+    List<SwitchDevice>? switches,
+    bool switchListFails = false}) async {
+  final container = ProviderContainer(overrides: [
+    if (connectedWheel) filterWheelProvider.overrideWith(_ConnectedWheel.new),
+    if (switches != null)
+      switchListProvider.overrideWith(() => _KnownSwitches(switches)),
+    if (switchListFails) switchListProvider.overrideWith(_FailedSwitches.new),
+  ]);
   addTearDown(container.dispose);
   if (detail != null) {
     container.read(sequenceEditorProvider.notifier).load(detail);
@@ -96,18 +91,6 @@ Future<ProviderContainer> _pump(
     ),
   );
   return container;
-}
-
-/// The reference wheel (§46.2) as the rig would serve it: L R G B Hα OIII SII
-/// and one empty slot.
-class _DefaultLabels extends FilterWheelLabelsNotifier {
-  @override
-  LoadedSection<FilterWheelLabels> build() => LoadedSection(
-    value: FilterWheelLabels(
-      labels: const ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
-    ),
-    source: SectionSource.rig,
-  );
 }
 
 /// A connected wheel reporting AlpacaBridge names that differ from the default
@@ -996,20 +979,11 @@ void main() {
       expect(find.text('Select a filter'), findsNothing);
     });
 
-    testWidgets('prompts to configure filters when no slots are labelled', (
-      tester,
-    ) async {
-      final c = await _pump(
-        tester,
-        detail: _detailWith(_switchFilter),
-        select: const [0],
-      );
+    testWidgets('prompts to configure filters when no slots are labelled',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
       final n = c.read(filterWheelLabelsProvider.notifier);
-      for (
-        var s = 1;
-        s <= c.read(filterWheelLabelsProvider).value!.slotCount;
-        s++
-      ) {
+      for (var s = 1; s <= c.read(filterWheelLabelsProvider).slotCount; s++) {
         n.setLabel(s, '');
       }
       await tester.pump();

@@ -208,13 +208,9 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     _guide = widget.guiderAvailable;
     // No labelled wheel slots = no filter wheel on this rig: the plan's
     // filter changes become Wait-for-User pauses (screw-in swap + Resume).
-    final wheel = ref.read(filterWheelLabelsProvider).value;
-    _manualSwap =
-        wheel != null &&
-        !List.generate(
-          wheel.slotCount,
-          (i) => wheel.labelAt(i + 1),
-        ).any((l) => l.trim().isNotEmpty);
+    final wheel = ref.read(filterWheelLabelsProvider);
+    _manualSwap = !List.generate(wheel.slotCount, (i) => wheel.labelAt(i + 1))
+        .any((l) => l.trim().isNotEmpty);
     _options = _buildOptions();
   }
 

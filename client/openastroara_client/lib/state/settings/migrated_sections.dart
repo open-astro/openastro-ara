@@ -8,7 +8,6 @@ import 'custom_horizon_state.dart';
 import 'diagnostics_mode_state.dart';
 import 'filenames_settings_state.dart';
 import 'filter_set_state.dart';
-import 'filter_wheel_labels_state.dart';
 import 'filter_wheel_policy_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
@@ -46,7 +45,6 @@ final List<MigratedSection> migratedSections = [
   (route: 'diagnostics-mode', provider: diagnosticsModeProvider),
   (route: 'filenames', provider: filenamesSettingsProvider),
   (route: 'filter-set', provider: filterSetProvider),
-  (route: 'filter-wheel', provider: filterWheelLabelsProvider),
   (route: 'filter-wheel', provider: filterWheelPolicyProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),

@@ -2143,7 +2143,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.complex(),
-    defaultValue: null,
+    defaultValue: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
     profilePath: 'filterwheel.slot_labels',
   ),
 

@@ -34,13 +34,11 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(filterWheelProvider);
-    final notifier = ref.read(filterWheelProvider.notifier);
     final connection = ref.watch(equipmentConnectionProvider);
     final connN = ref.read(equipmentConnectionProvider.notifier);
-    final labelsSection = ref.watch(filterWheelLabelsProvider);
-    // A cache copy is for planning: only a copy from the rig is editable.
-    final labels = labelsSection.canSave ? labelsSection.value : null;
+    final status = ref.watch(filterWheelProvider);
+    final notifier = ref.read(filterWheelProvider.notifier);
+    final labels = ref.watch(filterWheelLabelsProvider);
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
     final policySection = ref.watch(filterWheelPolicyProvider);
     final policy = policySection.canSave ? policySection.value : null;
@@ -124,42 +122,27 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // while a wheel is connected (its driver names take over) to avoid duplication.
         if (showSlotLabels) ...[
           SettingsSectionHeader(
-            manual
-                ? 'Filters (manual filter wheel)'
-                : 'Slot labels (for sequences)',
-          ),
-          if (labels == null)
-            SectionNotLoaded(
-              section: labelsSection,
-              onRetry: _reload(ref, filterWheelLabelsProvider),
-            )
-          else ...[
-            if (labelsSection.conflict)
-              SectionConflictBanner(
-                onReload: _reload(ref, filterWheelLabelsProvider),
-              ),
-            for (var slot = 1; slot <= labels.slotCount; slot++)
-              EditableTextRow(
-                label: 'Slot $slot',
-                helpKey: slot == 1
-                    ? (manual
-                          ? 'eq.filterwheel.manual_filters'
-                          : 'eq.filterwheel.slot_labels')
-                    : null,
-                currentValue: labels.labelAt(slot),
-                getCanonical: () =>
-                    ref.read(filterWheelLabelsProvider).value?.labelAt(slot) ??
-                    '',
-                // Each committed row persists to the daemon (12h.2b round-trip);
-                // a failure keeps the local edit and says so — offline authoring
-                // still works, the labels just won't survive a daemon-side reload.
-                parse: (s) {
-                  labelsN.setLabel(slot, s);
-                  unawaited(_persistLabels(context, ref));
-                },
-                hint: 'Empty = unused',
-              ),
-          ],
+              manual ? 'Filters (manual filter wheel)' : 'Slot labels (for sequences)'),
+          for (var slot = 1; slot <= labels.slotCount; slot++)
+            EditableTextRow(
+              label: 'Slot $slot',
+              helpKey: slot == 1
+                  ? (manual
+                      ? 'eq.filterwheel.manual_filters'
+                      : 'eq.filterwheel.slot_labels')
+                  : null,
+              currentValue: labels.labelAt(slot),
+              getCanonical: () =>
+                  ref.read(filterWheelLabelsProvider).labelAt(slot),
+              // Each committed row persists to the daemon (12h.2b round-trip);
+              // a failure keeps the local edit and says so — offline authoring
+              // still works, the labels just won't survive a daemon-side reload.
+              parse: (s) {
+                labelsN.setLabel(slot, s);
+                unawaited(_persistLabels(context, ref));
+              },
+              hint: 'Empty = unused',
+            ),
         ],
       ],
     );
@@ -505,7 +488,7 @@ Future<void> _autoSave(
 }
 
 /// Persist the slot labels to the daemon, surfacing a failure as a SnackBar
-/// (the edit stays on screen so a 412 can be reloaded).
+/// (the local edit is kept either way — offline authoring keeps working).
 Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
   try {
     await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
@@ -517,19 +500,9 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e is SectionNotLoadedException || e is SectionConflictException
-                ? e.toString()
-                : friendlyError(
-                    context.l10n,
-                    e,
-                    action: context.l10n.actionSaveSlotLabels,
-                  ),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSaveSlotLabels))));
     }
   }
 }

@@ -126,10 +126,6 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     state = LoadedSection(value: value, source: SectionSource.cache);
   }
 
-  /// Entry point of the pre-ADR 0015 notifiers: the same as [save]. No [api]:
-  /// the active rig's.
-  Future<void> persistToServer([ProfileApi? api]) => save(api ?? _activeApi());
-
   ProfileApi _activeApi() =>
       ref.read(profileApiProvider) ??
       (throw StateError('Not connected — connect to your rig to save this.'));

@@ -20,10 +20,7 @@ final filterChoicesProvider = Provider<List<FilterChoice>>((ref) {
   final wheel = ref
       .watch(filterWheelProvider)
       .maybeWhen(data: (s) => s, orElse: () => null);
-  // Not loaded from the rig yet: no labels, so only the wheel's own names.
-  final labels =
-      ref.watch(filterWheelLabelsProvider).value ??
-      FilterWheelLabels(labels: const []);
+  final labels = ref.watch(filterWheelLabelsProvider);
   final seen = <String>{};
   if (wheel != null &&
       wheel.connectionState == EquipmentConnectionState.connected &&
