@@ -1716,7 +1716,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ## 2026-11-16 — The Polar Align Routine drives the Polar Aligner: `correction` in the status, `polar_align.correction`, stop and resume, `polar_aligner_auto` (#1974, #1975)
 
-**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` gains `correction` (`PolarAlignCorrectionDto`, null when the rig has no Polar Aligner Ara can drive or the run has not measured yet); new WebSocket event `polar_align.correction` with the same object on every change; new `POST /api/v1/equipment/polaralign/correction/stop` and `POST …/aligner/resume` (202 + `OperationAcceptedDto`, 409 Problem when there is nothing to stop or resume); `GET/PUT /api/v1/profile/polar-align` gains `polar_aligner_auto` (default true).
+**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` gains `correction` (`PolarAlignCorrectionDto`, null when the rig has no Polar Aligner Ara can drive or the run has not measured yet); new WebSocket event `polar_align.correction` with the same object on every change; new `POST /api/v1/equipment/polaralign/correction/stop` and `POST …/correction/resume` (202 + `OperationAcceptedDto`, 409 Problem when there is nothing to stop or resume); `GET/PUT /api/v1/profile/polar-align` gains `polar_aligner_auto` (default true).
 
 **Decision:** in the live stages the routine turns the Polar Aligner after each measurement: one test move on each axis (+2′, or a quarter of the device's smaller `maxMove` when that is less, never under its resolution), then 80 % of the offset per axis, clamped to the device's `maxMove`, until the total error is inside `target_tolerance_arcmin`. `state` is `manual` (`polar_aligner_auto` off), `probing` / `moving` (with `axis` `azimuth` | `altitude` and the signed `arcmin` sent), `settling` (`seconds`), `measuring`, `converged` or `stopped` (`cause`, and `device_text` / `axis` when there is one); `moves` counts the moves sent. `arcmin` is in the wire convention: positive azimuth increases the azimuth coordinate (clockwise seen from above), positive altitude raises the axis. `cause` is one of `wrong_direction`, `wrong_scale`, `device_fault`, `not_calibrated`, `device_refused`, `diverging`, `timeout`, `link_lost`, `mount_tracking`, `mount_slewing`, `stopped_by_user`. A stop sends the device Stop and leaves the routine running by hand; `converged` does not end the routine, and the motors correct again when the error leaves the tolerance. The `polar_alignments` table gains `aligner_moves` (NULL on older rows).
 
@@ -1725,3 +1725,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarAlignService.Aligner.cs`, `PolarAlignGeometry.AlignerMove`, `Contracts/EquipmentDtos.cs` (`PolarAlignCorrectionDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`PolarAlignCorrection`), `Contracts/ProfileDtos.cs` (`PolarAlignSettingsDto.PolarAlignerAuto`), `EquipmentEndpoints` (`/polaralign/correction/*`)
 
 **Related:** #1971, #1974, #1975
+
+---
+
+## 2026-11-17 — Polar Corrector is renamed Polar Aligner; the Routine's side is the correction (#1971)
+
+**Endpoint(s) or area:** `/api/v1/equipment/polarcorrector` (and `/stop`, `/home`) is `/api/v1/equipment/polaraligner`; `PolarCorrectorDto` and `PolarCorrectorCapabilitiesDto` are `PolarAlignerDto` and `PolarAlignerCapabilitiesDto`. `POST /api/v1/equipment/polaralign/corrector/stop|resume` is `POST /api/v1/equipment/polaralign/correction/stop|resume`; the status field `corrector` (`PolarAlignCorrectorDto`) is `correction` (`PolarAlignCorrectionDto`); the WebSocket event `polar_align.corrector` is `polar_align.correction`. The `failed_rungs` value `stop_polar_corrector` is `stop_polar_aligner`. The profile field `polar_align.polar_corrector_auto` is `polar_align.polar_aligner_auto`.
+
+**Decision:** the device takes ASCOM's name. The draft interface `IAlignerV1` (Alpaca device type `aligner`) calls a polar device an Aligner whose `AlignerPurpose` is `PolarAligner`. What the Routine does with the device is the correction, so the Routine's routes, status field and event say `correction` and do not read "polar align aligner". The old routes, the old event name and the old profile key are dropped with no alias. A profile saved with `polar_corrector_auto: false` reads as the default (on). The two entries of 2026-11-16 above are rewritten with the new names, because the old names never shipped.
+
+**Reasoning:** one name for the device in Ara, in the standard and on a driver's page. The old names existed on master for two days and in no release, so an alias would be code kept for nobody. The cost is that a daemon and an app built from master on 2026-11-16 or 2026-11-17 must be updated together; the changelog says so.
+
+**Spec ref:** `Endpoints/EquipmentEndpoints.cs`, `Contracts/EquipmentDtos.cs`, `Contracts/ProfileDtos.cs`, `Contracts/WsEvents/WsEventCatalog.cs`, `Services/EmergencyStopService.cs`, `openapi.yaml`, `ws-events.json`
+
+**Related:** #1971, #1988, #1989
