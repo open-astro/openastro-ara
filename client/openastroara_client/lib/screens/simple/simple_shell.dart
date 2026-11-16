@@ -717,8 +717,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : label;
   }
 
-  /// Monitor (#1724): an enlarged tile's button closes it and opens what owns
-  /// that thing. A tile tap only enlarges the tile (#1875).
+  /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
   void _openMonitor() => unawaited(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1575,7 +1574,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       sky: _sky,
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
-                                      onMonitor: _openMonitor,
+                                      // The grid needs the room.
+                                      onMonitor:
+                                          MediaQuery.sizeOf(context).width >=
+                                              kMonitorMinWidth
+                                          ? _openMonitor
+                                          : null,
                                     ),
                                   ),
                                 ),

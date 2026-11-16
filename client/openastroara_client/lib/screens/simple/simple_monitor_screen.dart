@@ -20,13 +20,13 @@ import 'simple_plan_panel.dart' show simpleRunDuration;
 import 'simple_preview_panel.dart' show simpleCountdown;
 import 'simple_shell.dart' show kSimpleStopSize, simpleRailScale;
 
-/// The window an enlarged tile's button opens: Monitor closes and the shell
-/// opens the window or panel that owns the thing (#1724, #1875).
+/// Where a tile tap goes: Monitor closes and the shell opens the window or
+/// panel that owns the thing (#1724).
 enum MonitorDestination { queue, sky, mount, safety, weather, guider, frameInfo }
 
-/// Below this width the grid needs more room than it has: Monitor lays its
-/// tiles in one column under a verdict on a line of its own (#1775). Monitor
-/// is offered at every width.
+/// Below this width the grid needs more room than it has: Monitor is offered
+/// only from a phone's portrait deck (#1775), and lays its tiles in one
+/// column under a verdict on a line of its own.
 const double kMonitorMinWidth = 900;
 
 /// The two right columns keep this width; extra width goes to the left two.
@@ -43,8 +43,7 @@ const double _kGridMinHeight = 560;
 class SimpleMonitorScreen extends ConsumerStatefulWidget {
   const SimpleMonitorScreen({super.key, required this.onOpen});
 
-  /// An enlarged tile's button was pressed: the shell closes Monitor and
-  /// opens what owns it.
+  /// A tile was tapped: the shell closes Monitor and opens what owns it.
   final ValueChanged<MonitorDestination> onOpen;
 
   @override
@@ -54,9 +53,6 @@ class SimpleMonitorScreen extends ConsumerStatefulWidget {
 class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
   late final KeepAwake _awake = ref.read(keepAwakeProvider);
   late final MonitorShowing _showing = ref.read(monitorShowingProvider.notifier);
-
-  /// The tile enlarged over the grid, if any: widget state only (#1875).
-  String? _big;
 
   @override
   void initState() {
@@ -98,15 +94,7 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
                   const SizedBox(height: _kGap),
                   // Frozen, the tiles say Last known with grey dots; no dimming,
                   // which took the last known values under 3:1.
-                  Expanded(
-                    child: _Grid(
-                      s: s,
-                      onOpen: widget.onOpen,
-                      stop: stop,
-                      big: _big,
-                      onBig: (id) => setState(() => _big = id),
-                    ),
-                  ),
+                  Expanded(child: _Grid(s: s, onOpen: widget.onOpen, stop: stop)),
                 ],
               ),
               Positioned(
@@ -156,23 +144,6 @@ class _TopLine extends ConsumerWidget {
     // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
     // Mode's full-screen pages).
     const back = BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary);
-    // The title with its icon, as the Sky Album has (#1875).
-    final title = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.monitor_heart_outlined, size: 22, color: AraColors.textSecondary),
-        const SizedBox(width: AraSpace.s8),
-        Flexible(
-          child: Text(
-            l10n.monitorTitle,
-            key: const Key('simple-monitor-title'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w600),
-          ),
-        ),
-      ],
-    );
     final words = [
       if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
       Expanded(
@@ -262,34 +233,21 @@ class _TopLine extends ConsumerWidget {
       // the readings, which fill a phone's width at 2x text; where they do
       // not fit beside Back (a 360 px phone at 2x), they go under it.
       child: narrow
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Row(mainAxisSize: MainAxisSize.min, children: [back, title]),
-                    Row(mainAxisSize: MainAxisSize.min, children: readings),
-                  ],
-                ),
-                Flexible(child: Row(children: words)),
-              ],
-            )
-          : Row(
-              children: [
-                back,
-                // A question, a stop's outcome or large text needs the whole line.
-                if (question == null && message == null && MediaQuery.textScalerOf(context).scale(1) <= 1.3) ...[
-                  title,
-                  const SizedBox(width: AraSpace.s16),
-                ],
-                ...words,
-                const SizedBox(width: AraSpace.s16),
-                ...readings,
-              ],
-            ),
+          ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [back, Row(mainAxisSize: MainAxisSize.min, children: readings)],
+              ),
+              Flexible(child: Row(children: words)),
+            ])
+          : Row(children: [
+              back,
+              const SizedBox(width: AraSpace.s4),
+              ...words,
+              const SizedBox(width: AraSpace.s16),
+              ...readings,
+            ]),
     );
   }
 }
@@ -319,22 +277,10 @@ class _Battery extends StatelessWidget {
   }
 }
 
-/// What a tile does with a tap: enlarge, or shrink back when it is the
-/// enlarged one; the enlarged tile's button opens its window (#1875).
-class _Ctl {
-  const _Ctl({required this.big, required this.onTap, required this.onOpen});
-
-  final bool big;
-  final VoidCallback onTap;
-  final VoidCallback onOpen;
-}
-
-/// The tiles, laid out as the mock's grid. With weather (full rig): two
-/// flexible left columns and two fixed right ones, Safety a strip over them.
-/// Without it, four equal columns. A tile for gear the rig lacks is not
-/// built and the grid reflows (#1875); on a phone, one column.
+/// The tiles: two fixed right columns, the left two sharing the rest; on a
+/// phone, one column. Which areas show comes from the rig's profile.
 class _Grid extends StatelessWidget {
-  const _Grid({required this.s, required this.onOpen, required this.stop, required this.big, required this.onBig});
+  const _Grid({required this.s, required this.onOpen, required this.stop});
 
   final MonitorSnapshot s;
   final ValueChanged<MonitorDestination> onOpen;
@@ -342,211 +288,129 @@ class _Grid extends StatelessWidget {
   /// Stop's side: the phone column's end scrolls clear of it.
   final double stop;
 
-  /// The enlarged tile's id.
-  final String? big;
-  final ValueChanged<String?> onBig;
-
   @override
   Widget build(BuildContext context) {
-    _Ctl ctl(String id, MonitorDestination to) =>
-        _Ctl(big: big == id, onTap: () => onBig(big == id ? null : id), onOpen: () => onOpen(to));
-    final tiles = <String, Widget>{
-      'now': _NowTile(s: s, ctl: ctl('now', MonitorDestination.queue)),
-      if (s.safety != null) 'safety': _SafetyTile(s: s, ctl: ctl('safety', MonitorDestination.safety)),
-      'alt': _TargetTile(s: s, ctl: ctl('alt', MonitorDestination.sky)),
-      if (s.weather != null) 'cond': _ConditionsTile(s: s, ctl: ctl('cond', MonitorDestination.weather)),
-      if (s.guider != null) 'guide': _GuiderTile(s: s, ctl: ctl('guide', MonitorDestination.guider)),
-      'hfr': _HfrTile(s: s, ctl: ctl('hfr', MonitorDestination.frameInfo)),
-      'stars': _StarsTile(s: s, ctl: ctl('stars', MonitorDestination.frameInfo)),
-      'flip': _FlipTile(s: s, ctl: ctl('flip', MonitorDestination.mount)),
-      'night': _NightTile(s: s, ctl: ctl('night', MonitorDestination.queue)),
-    };
-    final narrow = MediaQuery.sizeOf(context).width < kMonitorMinWidth;
-    final enlarged = tiles[big];
-    if (enlarged != null) {
-      // Over the grid, Stop's corner kept clear.
-      return Padding(
-        key: const Key('simple-monitor-enlarged'),
-        padding: EdgeInsets.only(right: narrow ? 0 : stop + _kGap, bottom: narrow ? stop + _kGap : 0),
-        child: enlarged,
-      );
-    }
+    final now = _NowTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
+    final target = _TargetTile(s: s, onTap: () => onOpen(MonitorDestination.sky));
+    final flip = _FlipTile(s: s, onTap: () => onOpen(MonitorDestination.mount));
+    final safety = s.safety == null ? null : _SafetyTile(s: s, onTap: () => onOpen(MonitorDestination.safety));
+    final weather = s.weather == null ? null : _WeatherTile(s: s, onTap: () => onOpen(MonitorDestination.weather));
+    final guider = s.guider == null ? null : _GuiderTile(s: s, onTap: () => onOpen(MonitorDestination.guider));
+    final focus = _LastFrameTile(s: s, onTap: () => onOpen(MonitorDestination.frameInfo));
+    final night = _NightTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
+    const strip = 56.0;
 
-    // A phone (#1775): one column that scrolls, each tile at a fixed height;
-    // the end scrolls clear of Stop in the corner.
-    if (narrow) {
-      const heights = {
-        'now': 440.0,
-        'safety': 56.0,
-        'alt': 220.0,
-        'cond': 300.0,
-        'guide': 330.0,
-        'hfr': 190.0,
-        'stars': 190.0,
-        'flip': 150.0,
-        'night': 108.0,
-      };
+    // A phone (#1775): one column that scrolls, each tile at a fixed height
+    // (a graph tile tall enough for its graph, #1875); the end scrolls clear
+    // of Stop in the corner.
+    if (MediaQuery.sizeOf(context).width < kMonitorMinWidth) {
       return ListView(
         key: const Key('simple-monitor-column'),
         padding: EdgeInsets.only(bottom: stop + _kGap),
         children: [
-          for (final e in tiles.entries)
+          for (final (tile, height) in [
+            (now, 440.0),
+            (target, 220.0),
+            (flip, 150.0),
+            if (safety != null) (safety, strip),
+            if (weather != null) (weather, 150.0),
+            if (guider != null) (guider, 240.0),
+            (focus, 220.0),
+            (night, 108.0),
+          ])
             Padding(
               padding: const EdgeInsets.only(bottom: _kGap),
-              child: SizedBox(height: heights[e.key], child: e.value),
+              child: SizedBox(height: height, child: tile),
             ),
         ],
       );
     }
+
+    Widget side = LayoutBuilder(builder: (context, box) {
+      final h = box.maxHeight;
+      if (safety != null && weather != null) {
+        final fr = (h - strip - 2 * _kGap) / 2;
+        return Row(children: [
+          SizedBox(
+              width: _kSide,
+              child: Column(children: [
+                SizedBox(height: strip + _kGap + fr, child: target),
+                const SizedBox(height: _kGap),
+                Expanded(child: flip),
+              ])),
+          const SizedBox(width: _kGap),
+          SizedBox(
+              width: _kSide,
+              child: Column(children: [
+                SizedBox(height: strip, child: safety),
+                const SizedBox(height: _kGap),
+                Expanded(child: weather),
+              ])),
+        ]);
+      }
+      if (safety != null) {
+        return Column(children: [
+          SizedBox(height: strip, child: safety),
+          const SizedBox(height: _kGap),
+          Expanded(child: target),
+          const SizedBox(height: _kGap),
+          Expanded(child: flip),
+        ]);
+      }
+      if (weather != null) {
+        return Row(children: [
+          SizedBox(
+              width: _kSide,
+              child: Column(children: [
+                Expanded(child: target),
+                const SizedBox(height: _kGap),
+                Expanded(child: flip),
+              ])),
+          const SizedBox(width: _kGap),
+          SizedBox(width: _kSide, child: weather),
+        ]);
+      }
+      return Column(children: [
+        Expanded(child: target),
+        const SizedBox(height: _kGap),
+        SizedBox(height: 150, child: flip),
+      ]);
+    });
 
     // Short of room (a question stacked on the top line, large text), the
     // grid keeps its least height and scrolls rather than crushing tiles.
     return LayoutBuilder(
       builder: (context, box) => box.maxHeight >= _kGridMinHeight
-          ? _wide(tiles, box.maxHeight)
+          ? _grid(now, side, guider, focus, night)
           : SingleChildScrollView(
-              child: SizedBox(height: _kGridMinHeight, child: _wide(tiles, _kGridMinHeight)),
+              child: SizedBox(height: _kGridMinHeight, child: _grid(now, side, guider, focus, night)),
             ),
     );
   }
 
-  Widget _wide(Map<String, Widget> t, double height) {
-    const strip = 56.0, night = 108.0;
-    final safety = t['safety'], cond = t['cond'], guide = t['guide'];
-    // The timeline leaves Stop its corner.
-    final nightRow = Padding(
-      padding: const EdgeInsets.only(right: night + _kGap),
-      child: t['night'],
-    );
-    if (cond != null) {
-      // One row of the right columns: three of them above the timeline.
-      final rows = height - night - _kGap;
-      final fr = (rows - (safety == null ? 0 : strip + _kGap) - 2 * _kGap) / 3;
-      final top = safety == null ? (rows - _kGap) / 2 : strip + _kGap + fr;
-      return Column(
-        children: [
-          SizedBox(
-            height: rows,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      if (guide == null)
-                        Expanded(child: t['now']!)
-                      else ...[
-                        SizedBox(height: top, child: t['now']),
-                        const SizedBox(height: _kGap),
-                        Expanded(child: guide),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: _kGap),
-                SizedBox(
-                  width: 2 * _kSide + _kGap,
-                  child: Column(
-                    children: [
-                      if (safety != null) ...[SizedBox(height: strip, child: safety), const SizedBox(height: _kGap)],
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              width: _kSide,
-                              child: Column(
-                                children: [
-                                  Expanded(child: t['alt']!),
-                                  const SizedBox(height: _kGap),
-                                  Expanded(child: t['hfr']!),
-                                  const SizedBox(height: _kGap),
-                                  Expanded(child: t['stars']!),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: _kGap),
-                            SizedBox(
-                              width: _kSide,
-                              child: Column(
-                                children: [
-                                  Expanded(flex: 2, child: cond),
-                                  const SizedBox(height: _kGap),
-                                  Expanded(child: t['flip']!),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: _kGap),
-          SizedBox(height: night, child: nightRow),
-        ],
-      );
-    }
-    // No weather station: Target altitude takes two columns and two rows,
-    // HFR and Stars two rows, and the flip sits beside Tonight.
-    return Column(
+  Widget _grid(Widget now, Widget side, Widget? guider, Widget focus, Widget night) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(child: t['now']!),
-                    if (guide != null) ...[const SizedBox(height: _kGap), Expanded(child: guide)],
-                  ],
-                ),
-              ),
-              const SizedBox(width: _kGap),
-              Expanded(
-                child: Column(
-                  children: [
-                    if (safety != null) ...[SizedBox(height: strip, child: safety), const SizedBox(height: _kGap)],
-                    Expanded(child: t['alt']!),
-                    const SizedBox(height: _kGap),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: t['hfr']!),
-                          const SizedBox(width: _kGap),
-                          Expanded(child: t['stars']!),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: now),
+            const SizedBox(width: _kGap),
+            SizedBox(width: 2 * _kSide + _kGap, child: side),
+          ]),
         ),
         const SizedBox(height: _kGap),
         SizedBox(
-          height: night,
-          child: Padding(
-            padding: const EdgeInsets.only(right: night + _kGap),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: t['night']!),
-                const SizedBox(width: _kGap),
-                Expanded(child: t['flip']!),
-              ],
-            ),
-          ),
+          height: 170,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (guider != null) ...[Expanded(child: guider), const SizedBox(width: _kGap)],
+            guider != null ? SizedBox(width: 2 * _kSide + _kGap, child: focus) : Expanded(child: focus),
+          ]),
         ),
+        const SizedBox(height: _kGap),
+        // The timeline leaves Stop its corner.
+        SizedBox(height: 108, child: Padding(padding: const EdgeInsets.only(right: 108 + _kGap), child: night)),
       ],
     );
-  }
 }
 
 /// A healthy tile has no dot, so any dot means something changed.
@@ -563,8 +427,7 @@ TextStyle get _big => kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLa
 
 /// One tile: its header (icon, name, the status word in the right corner,
 /// dot), then its content, which scrolls inside the tile when larger text no
-/// longer fits. Enlarged, it ends in a button to its window. Read out as its
-/// name, value and status.
+/// longer fits. Read out as its name, value and status.
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.tileKey,
@@ -573,7 +436,7 @@ class _Tile extends StatelessWidget {
     required this.status,
     this.word,
     required this.value,
-    required this.ctl,
+    required this.onTap,
     required this.children,
     this.frozen = false,
   });
@@ -586,17 +449,14 @@ class _Tile extends StatelessWidget {
 
   /// What a screen reader says after the name.
   final String value;
-  final _Ctl ctl;
+  final VoidCallback onTap;
   final List<Widget> children;
   final bool frozen;
 
   @override
   Widget build(BuildContext context) {
     final (accent, outline) = switch (status) {
-      MonitorStatus.warning => (
-        AraColors.accentWarning,
-        AraColors.accentWarning,
-      ),
+      MonitorStatus.warning => (AraColors.accentWarning, AraColors.accentWarning),
       MonitorStatus.fault => (AraColors.errorText, AraColors.accentError),
       _ => (AraColors.textSecondary, AraColors.border),
     };
@@ -606,107 +466,53 @@ class _Tile extends StatelessWidget {
         : status == MonitorStatus.working
         ? AraColors.accentConnected
         : accent;
-    // One node with the tile's words; the enlarged tile's button stays its
-    // own node so a screen reader can reach its window (ADR 0009).
     return Semantics(
-      container: true,
       button: true,
       label: [name, value, ?shown].join(', '),
+      excludeSemantics: true,
       child: Material(
         key: Key('simple-monitor-$tileKey'),
-        color: ctl.big ? AraColors.bgInput : AraColors.tileFill,
+        color: AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          side: BorderSide(
-            color: outline,
-            width: outline == AraColors.border ? 1 : 1.5,
-          ),
+          side: BorderSide(color: outline, width: outline == AraColors.border ? 1 : 1.5),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: ctl.onTap,
+          onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AraSpace.s12,
-              vertical: 10,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: ExcludeSemantics(
-                    child: LayoutBuilder(
-                      builder: (context, box) => SingleChildScrollView(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: box.maxHeight.isFinite
-                                ? box.maxHeight
-                                : 0,
-                          ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(icon, size: 18, color: accent),
-                                    const SizedBox(width: 6),
-                                    // The name takes what the word leaves; the word sits
-                                    // in the right corner at its own width, shortening
-                                    // only past 60 % of the tile (pt-BR).
-                                    Expanded(
-                                      child: Text(
-                                        name,
-                                        style: _dim,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (shown != null && shown.isNotEmpty) ...[
-                                      const SizedBox(width: 6),
-                                      ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: box.maxWidth * 0.6,
-                                        ),
-                                        child: Text(
-                                          shown,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: _dim.copyWith(
-                                            color: wordColour,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    // Stale numbers get a grey dot, as off gear does.
-                                    if (_dot(
-                                          frozen ? MonitorStatus.off : status,
-                                        )
-                                        case final dot?) ...[
-                                      const SizedBox(width: 6),
-                                      dot,
-                                    ],
-                                  ],
-                                ),
-                                ...children,
-                              ],
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
+            child: LayoutBuilder(
+              builder: (context, box) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: box.maxHeight.isFinite ? box.maxHeight : 0),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(children: [
+                          Icon(icon, size: 18, color: accent),
+                          const SizedBox(width: 6),
+                          // The name takes what the word leaves; the word sits in the right
+                          // corner at its own width, shortening only past 60 % of the tile (pt-BR).
+                          Expanded(child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          if (shown != null && shown.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                              child: Text(shown,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim.copyWith(color: wordColour)),
                             ),
-                          ),
-                        ),
-                      ),
+                          ],
+                          // Stale numbers get a grey dot, as off gear does.
+                          if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[const SizedBox(width: 6), dot],
+                        ]),
+                        ...children,
+                      ],
                     ),
                   ),
                 ),
-                if (ctl.big)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      key: const Key('simple-monitor-tile-open'),
-                      onPressed: ctl.onOpen,
-                      child: Text(context.l10n.monitorOpenWindow),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
@@ -790,10 +596,10 @@ String _n(double? v, [int digits = 1]) => v == null ? '—' : v.toStringAsFixed(
 bool _named(String? f) => f != null && f.trim().isNotEmpty;
 
 class _NowTile extends StatelessWidget {
-  const _NowTile({required this.s, required this.ctl});
+  const _NowTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -811,11 +617,7 @@ class _NowTile extends StatelessWidget {
     };
     final task = n.target == null
         ? l10n.monitorNothingRunning
-        : [
-            n.target!,
-            if (_named(n.filter)) n.filter!,
-            if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s',
-          ].join(' · ');
+        : [n.target!, if (_named(n.filter)) n.filter!, if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s'].join(' · ');
     // The frame in hand, else a wait counted down, else the state in words.
     final end = n.frameEndsAt ?? n.countdownTo;
     final left = end?.difference(s.asOf).inSeconds;
@@ -855,33 +657,16 @@ class _NowTile extends StatelessWidget {
           ])
         // The state in Monitor's own words, big; the daemon's step under it,
         // small: its text can be a solver's whole log line (user, 2026-11-11).
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : word,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
-              ),
-              if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
-                Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
-            ],
-          );
-    // The tile's width as the grid lays it out: no LayoutBuilder here, as the
-    // tile's IntrinsicHeight cannot ask one for its height.
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final tileWidth = (s.weather != null
-            ? screenWidth - 24 - _kGap - (2 * _kSide + _kGap)
-            : (screenWidth - 24 - _kGap) / 2) -
-        24 -
-        AraSpace.s16;
-    // The countdown takes up to 60 % of it, and leaves Up next room for a time at the user's text size.
-    final countdownMax = math.max(
-      tileWidth * 0.3,
-      math.min(tileWidth * 0.6, tileWidth - 110 * MediaQuery.textScalerOf(context).scale(1)),
-    );
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(
+              n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : word,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
+            ),
+            if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
+              Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
+          ]);
     // One way to count: the frame in hand, and what is saved (#1875).
     final saved = n.filters.fold<int>(0, (a, f) => a + f.done);
     final sub = n.frame != null && n.frames != null
@@ -897,7 +682,7 @@ class _NowTile extends StatelessWidget {
       word: word,
       value: [task, if (left != null) simpleCountdown(left)].join(', '),
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
         Text(task, style: kSimpleReading, maxLines: 2, overflow: TextOverflow.ellipsis),
         // A phone's busy tile has no height to spare: with named filters the
@@ -905,13 +690,11 @@ class _NowTile extends StatelessWidget {
         if (sub != null)
           MediaQuery.sizeOf(context).width < kMonitorMinWidth && named
               ? Text(sub, style: _dim)
-              : Row(
-                  children: [
-                    Expanded(child: Text(sub, style: _dim)),
-                    const SizedBox(width: AraSpace.s8),
-                    Text(l10n.monitorSaved(saved), style: _dim),
-                  ],
-                ),
+              : Row(children: [
+                  Expanded(child: Text(sub, style: _dim)),
+                  const SizedBox(width: AraSpace.s8),
+                  Text(l10n.monitorSaved(saved), style: _dim),
+                ]),
         const SizedBox(height: AraSpace.s8),
         // A phone (#1915): Up next goes under the state block, so the countdown
         // and the state word keep the tile's whole width.
@@ -927,15 +710,12 @@ class _NowTile extends StatelessWidget {
                     _UpNext(s: s, limit: n.filters.length > 4 ? 1 : null),
                   ],
                 )
-              // The countdown keeps its own width, Up next takes the rest: no
-              // hole on a wide window (#1875).
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Its own width, scaled down past that.
-                    ConstrainedBox(constraints: BoxConstraints(maxWidth: countdownMax), child: big),
+                    Expanded(child: big),
                     const SizedBox(width: AraSpace.s16),
-                    Expanded(child: _UpNext(s: s)),
+                    SizedBox(width: 190, child: _UpNext(s: s)),
                   ],
                 ),
         ),
@@ -1136,32 +916,35 @@ class _UpNext extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(l10n.monitorUpNext, style: kSimpleCaption),
+        Text(s.tonightsBest ? l10n.monitorTonightsBest : l10n.monitorUpNext, style: kSimpleCaption),
         for (final u in limit == null ? s.upNext : s.upNext.take(limit!))
           Container(
             constraints: const BoxConstraints(minHeight: 30),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AraColors.border)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    switch (u.kind) {
-                      MonitorUpKind.nextFrame =>
-                        '${l10n.monitorUpFrame(u.frame ?? 0)}${_named(u.name) ? ' · ${u.name}' : ''}',
-                      MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
-                      MonitorUpKind.nextTarget => u.name ?? '',
-                      MonitorUpKind.park => l10n.monitorUpPark,
-                    },
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: kSimpleText,
-                  ),
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AraColors.border))),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  switch (u.kind) {
+                    MonitorUpKind.nextFrame =>
+                      '${l10n.monitorUpFrame(u.frame ?? 0)}${_named(u.name) ? ' · ${u.name}' : ''}',
+                    MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
+                    MonitorUpKind.nextTarget || MonitorUpKind.best => u.name ?? '',
+                    MonitorUpKind.park => l10n.monitorUpPark,
+                  },
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: kSimpleText,
                 ),
-                Text(u.at == null ? l10n.monitorThen : simpleClockTime(u.at!), style: kSimpleUnit),
-              ],
-            ),
+              ),
+              Text(
+                u.kind == MonitorUpKind.best
+                    ? l10n.monitorAltitudeUp(_n(u.altitudeDeg, 0))
+                    : u.at == null
+                    ? l10n.monitorThen
+                    : simpleClockTime(u.at!),
+                style: kSimpleUnit,
+              ),
+            ]),
           ),
       ],
     );
@@ -1169,10 +952,10 @@ class _UpNext extends StatelessWidget {
 }
 
 class _TargetTile extends StatelessWidget {
-  const _TargetTile({required this.s, required this.ctl});
+  const _TargetTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1186,7 +969,7 @@ class _TargetTile extends StatelessWidget {
         status: MonitorStatus.off,
         value: l10n.monitorNoTarget,
         frozen: s.frozen,
-        ctl: ctl,
+        onTap: onTap,
         children: [Text(l10n.monitorNoTarget, style: _dim)],
       );
     }
@@ -1198,7 +981,6 @@ class _TargetTile extends StatelessWidget {
       if (t.transit != null) l10n.monitorTransits(simpleClockTime(t.transit!)),
       if (t.moonPct != null) l10n.monitorMoon(t.moonPct!),
     ].join(' · ');
-    final hasCurve = t.curve.length > 1 && s.night.darkStart != null && s.night.darkEnd != null;
     return _Tile(
       tileKey: 'target',
       icon: Icons.my_location,
@@ -1211,14 +993,14 @@ class _TargetTile extends StatelessWidget {
       },
       value: [t.name, lines].join(', '),
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
         Text.rich(TextSpan(text: t.name, style: kSimpleReading, children: [
           if (t.longName != null) TextSpan(text: '  ${t.longName}', style: _dim),
         ])),
         if (lines.isNotEmpty) Text(lines, style: _dim),
         if (lines2.isNotEmpty) Text(lines2, style: _dim),
-        if (hasCurve) ...[
+        if (t.curve.length > 1) ...[
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: AraSpace.s4),
@@ -1237,10 +1019,7 @@ class _TargetTile extends StatelessWidget {
             ),
           ),
           if (t.spanStart != null && t.spanEnd != null)
-            Text(
-              l10n.monitorImagingSpan(simpleClockTime(t.spanStart!), simpleClockTime(t.spanEnd!)),
-              style: kSimpleUnit,
-            ),
+            Text(l10n.monitorImagingSpan(simpleClockTime(t.spanStart!), simpleClockTime(t.spanEnd!)), style: kSimpleUnit),
         ],
       ],
     );
@@ -1248,10 +1027,10 @@ class _TargetTile extends StatelessWidget {
 }
 
 class _FlipTile extends StatelessWidget {
-  const _FlipTile({required this.s, required this.ctl});
+  const _FlipTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1280,7 +1059,7 @@ class _FlipTile extends StatelessWidget {
       word: word,
       value: [?big, ?sub].join(', '),
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
         if (big != null) Text(big, key: const Key('simple-monitor-flip-countdown'), style: _big),
         if (sub != null) Text(sub, style: big == null ? kSimpleText : _dim),
@@ -1290,10 +1069,10 @@ class _FlipTile extends StatelessWidget {
 }
 
 class _SafetyTile extends StatelessWidget {
-  const _SafetyTile({required this.s, required this.ctl});
+  const _SafetyTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1309,10 +1088,7 @@ class _SafetyTile extends StatelessWidget {
           };
     final since = safety.since == null || s.frozen
         ? null
-        : l10n.monitorSince(
-            simpleClockTime(safety.since!),
-            _age(s.asOf.difference(safety.since!)),
-          );
+        : l10n.monitorSince(simpleClockTime(safety.since!), _age(s.asOf.difference(safety.since!)));
     final colour = s.frozen
         ? AraColors.textSecondary
         : switch (safety.status) {
@@ -1322,9 +1098,9 @@ class _SafetyTile extends StatelessWidget {
             _ => AraColors.textSecondary,
           };
     return Semantics(
-      container: true,
       button: true,
       label: [l10n.shellSafetyMonitor, word, ?since].join(', '),
+      excludeSemantics: true,
       child: Material(
         key: const Key('simple-monitor-safety'),
         color: AraColors.tileFill,
@@ -1341,53 +1117,23 @@ class _SafetyTile extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: ctl.onTap,
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ExcludeSemantics(
-                    child: Row(
-                      children: [
-                        Icon(Icons.shield_outlined, size: 22, color: colour),
-                        const SizedBox(width: AraSpace.s8),
-                        Flexible(
-                          child: Text(
-                            word,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: kSimpleText.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: colour == AraColors.accentConnected
-                                  ? null
-                                  : colour,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AraSpace.s8),
-                        if (since != null)
-                          Expanded(
-                            child: Text(
-                              since,
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: kSimpleCaption,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (ctl.big)
-                  TextButton(
-                    key: const Key('simple-monitor-tile-open'),
-                    onPressed: ctl.onOpen,
-                    child: Text(l10n.monitorOpenWindow),
-                  ),
-              ],
-            ),
+            child: Row(children: [
+              Icon(Icons.shield_outlined, size: 22, color: colour),
+              const SizedBox(width: AraSpace.s8),
+              Flexible(
+                child: Text(word,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: kSimpleText.copyWith(
+                        fontWeight: FontWeight.w600, color: colour == AraColors.accentConnected ? null : colour)),
+              ),
+              const SizedBox(width: AraSpace.s8),
+              if (since != null)
+                Expanded(child: Text(since, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption)),
+            ]),
           ),
         ),
       ),
@@ -1395,128 +1141,76 @@ class _SafetyTile extends StatelessWidget {
   }
 }
 
-/// Conditions: the weather station's readings, merged with the camera's and
-/// the focuser's temperatures, all as figures (#1875).
-class _ConditionsTile extends StatelessWidget {
-  const _ConditionsTile({required this.s, required this.ctl});
+class _WeatherTile extends StatelessWidget {
+  const _WeatherTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final w = s.weather!;
-    final f = s.lastFrame;
     const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     (String, String, String) cell(({MonitorWeatherCell cell, double value, double? overLimit}) c) => switch (c.cell) {
-      MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
-      MonitorWeatherCell.skyQuality => (_n(c.value, 2), '', l10n.monitorSkyQuality),
-      MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
-      MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
-      MonitorWeatherCell.humidity => (_n(c.value, 0), '%', l10n.monitorHumidity),
-      MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
-      MonitorWeatherCell.wind => (
-        _n(c.value, 0),
-        'km/h',
-        [
-          l10n.monitorWind,
-          if (w.windDeg != null) compass[((w.windDeg! % 360) / 45).round() % 8],
-          if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
-          if (w.gustKmh != null) l10n.monitorGusts(_n(w.gustKmh, 0)),
-        ].join(' · '),
-      ),
-    };
-    // Camera and focuser: only what the rig reports.
-    final gear = <(String, String, String)>[
-      if (f.sensorC != null)
-        (
-          _n(f.sensorC),
-          '°C',
-          f.sensorTargetC == null ? l10n.monitorSensor : '${l10n.monitorSensor} · ${_n(f.sensorTargetC, 0)}',
-        ),
-      if (f.coolerPowerPct != null) (_n(f.coolerPowerPct, 0), '%', l10n.monitorCoolerPower),
-      if (f.focuser && f.focuserC != null) (_n(f.focuserC), '°C', l10n.monitorFocuserTemp),
-    ];
-    Widget reading(String v, String unit, String label, {Widget? icon, Color? colour}) => Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            if (icon != null) ...[icon, const SizedBox(width: 6)],
-            Flexible(
-              child: Text.rich(
-                TextSpan(
-                  text: v,
-                  style: kSimpleReading.copyWith(color: colour),
-                  children: [TextSpan(text: ' $unit', style: kSimpleUnit)],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+          MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
+          MonitorWeatherCell.skyQuality => (_n(c.value, 2), '', l10n.monitorSkyQuality),
+          MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
+          MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
+          MonitorWeatherCell.humidity => (_n(c.value, 0), '%', l10n.monitorHumidity),
+          MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
+          MonitorWeatherCell.wind => (
+              _n(c.value, 0),
+              'km/h',
+              [
+                l10n.monitorWind,
+                if (w.windDeg != null) compass[((w.windDeg! % 360) / 45).round() % 8],
+                if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
+                if (w.gustKmh != null) l10n.monitorGusts(_n(w.gustKmh, 0)),
+              ].join(' · '),
             ),
-          ],
-        ),
-        Text(
-          label,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: kSimpleUnit.copyWith(color: colour),
-        ),
-      ],
-    );
+        };
     return _Tile(
-      tileKey: 'conditions',
+      tileKey: 'weather',
       icon: Icons.cloud_outlined,
-      name: l10n.monitorConditions,
+      name: l10n.shellWeather,
       status: w.status,
       word: w.status == MonitorStatus.warning ? l10n.monitorPastLimit : null,
-      value: [
-        for (final c in w.cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}',
-        for (final g in gear) '${g.$3} ${g.$1} ${g.$2}',
-      ].join(', '),
+      value: [for (final c in w.cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}'].join(', '),
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
         const SizedBox(height: AraSpace.s4),
         for (final row in _weatherRows(w.cells))
           Expanded(
-            child: Row(
-              children: [
-                for (final c in row)
-                  Expanded(
-                    child: reading(
-                      cell(c).$1,
-                      cell(c).$2,
-                      cell(c).$3,
-                      // The Weather window's icon in front of each reading.
-                      icon: _weatherIcon(
-                        c.cell,
-                        c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary,
+            child: Row(children: [
+              for (final c in row)
+                Expanded(
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    // The Weather window's icon in front of each reading.
+                    Row(children: [
+                      _weatherIcon(c.cell, c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: cell(c).$1,
+                            style: kSimpleReading.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null),
+                            children: [TextSpan(text: ' ${cell(c).$2}', style: kSimpleUnit)],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      colour: c.overLimit != null ? AraColors.accentWarning : null,
-                    ),
-                  ),
-              ],
-            ),
+                    ]),
+                    Text(cell(c).$3,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: kSimpleUnit.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null)),
+                  ]),
+                ),
+            ]),
           ),
-        if (gear.isNotEmpty) ...[
-          Container(
-            margin: const EdgeInsets.only(top: AraSpace.s4),
-            padding: const EdgeInsets.only(top: AraSpace.s4),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AraColors.border)),
-            ),
-            child: Text(l10n.monitorCameraAndFocuser, style: kSimpleCaption),
-          ),
-          Expanded(
-            child: Wrap(
-              spacing: AraSpace.s12,
-              children: [for (final g in gear) SizedBox(width: 100, child: reading(g.$1, g.$2, g.$3))],
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -1548,15 +1242,16 @@ List<List<T>> _weatherRows<T extends ({MonitorWeatherCell cell, double value, do
 }
 
 class _GuiderTile extends StatelessWidget {
-  const _GuiderTile({required this.s, required this.ctl});
+  const _GuiderTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final g = s.guider!;
+    final narrow = MediaQuery.sizeOf(context).width < kMonitorMinWidth;
     Widget reading(String label, double? v) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text.rich(TextSpan(text: _n(v, 2), style: _big, children: [TextSpan(text: ' ″', style: kSimpleUnit)])),
           Text(label, style: kSimpleUnit),
@@ -1575,57 +1270,84 @@ class _GuiderTile extends StatelessWidget {
       },
       value: 'RMS ${_n(g.rms, 2)}″, RA ${_n(g.ra, 2)}″, Dec ${_n(g.dec, 2)}″',
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 220,
-              child: Row(
-                children: [
-                  Expanded(child: reading('RMS', g.rms)),
-                  Expanded(child: reading('RA', g.ra)),
-                  Expanded(child: reading('Dec', g.dec)),
-                ],
-              ),
-            ),
-            const SizedBox(width: AraSpace.s12),
-            if (g.lastDither != null)
-              Expanded(child: Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim)),
-          ],
-        ),
-        // The live trace on a fixed scale, then the whole session's RMS, one
-        // point per saved frame (#1875).
+        // The readings, then the live trace on a fixed scale beside the whole
+        // session's RMS, one point per saved frame (#1875); on a phone the
+        // graphs go under the readings.
         Expanded(
-          child: CustomPaint(key: const Key('simple-monitor-trace'), painter: _TracePainter(g.trace, MediaQuery.textScalerOf(context))),
-        ),
-        if (g.rmsPerFrame.length > 1)
-          Expanded(
-            child: CustomPaint(
-              key: const Key('simple-monitor-rms-chart'),
-              painter: _SeriesPainter(
-                scaler: MediaQuery.textScalerOf(context),
-                values: g.rmsPerFrame,
-                lo: 0,
-                ticks: const [1, 2],
-                decimals: 0,
+          child: Flex(
+            direction: narrow ? Axis.vertical : Axis.horizontal,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s12,
+            children: [
+              SizedBox(
+                width: narrow ? null : 220,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: reading('RMS', g.rms)),
+                    Expanded(child: reading('RA', g.ra)),
+                    Expanded(child: reading('Dec', g.dec)),
+                  ]),
+                  const SizedBox(height: AraSpace.s4),
+                  Wrap(spacing: AraSpace.s12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    _Key(AraColors.accentInfo, 'RA'),
+                    _Key(AraColors.errorText, 'Dec', dashed: true),
+                    Text(l10n.monitorFixedScale, style: kSimpleUnit),
+                    if (g.rmsPerFrame.length > 1) Text(l10n.monitorRmsPerFrame, style: kSimpleUnit),
+                  ]),
+                  if (!narrow) const Spacer(),
+                  if (g.lastDither != null) Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim),
+                ]),
               ),
-            ),
+              Expanded(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s12, children: [
+                  Expanded(
+                    child: CustomPaint(
+                      key: const Key('simple-monitor-trace'),
+                      painter: _TracePainter(g.trace, MediaQuery.textScalerOf(context)),
+                    ),
+                  ),
+                  if (g.rmsPerFrame.length > 1)
+                    Expanded(
+                      child: CustomPaint(
+                        key: const Key('simple-monitor-rms-chart'),
+                        painter: _SeriesPainter(
+                          scaler: MediaQuery.textScalerOf(context),
+                          values: g.rmsPerFrame,
+                          lo: 0,
+                          ticks: const [1, 2],
+                          decimals: 0,
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+            ],
           ),
-        Wrap(
-          spacing: AraSpace.s12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _Key(AraColors.accentInfo, 'RA'),
-            _Key(AraColors.errorText, 'Dec', dashed: true),
-            Text(l10n.monitorFixedScale, style: kSimpleUnit),
-            if (g.rmsPerFrame.length > 1) Text(l10n.monitorRmsPerFrame, style: kSimpleUnit),
-          ],
         ),
       ],
     );
   }
 }
+
+/// "HFR +18 % since session start", the flag of a reading that moved the
+/// wrong way (#1875).
+class _Flag extends StatelessWidget {
+  const _Flag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7),
+    decoration: BoxDecoration(border: Border.all(color: AraColors.accentWarning), borderRadius: BorderRadius.circular(10)),
+    child: Text(text, style: kSimpleUnit.copyWith(color: AraColors.accentWarning, fontWeight: FontWeight.w600)),
+  );
+}
+
+String _flagText(AppLocalizations l10n, String metric, MonitorDeviation d) =>
+    l10n.monitorChangeSinceStart(metric, '${d.pct >= 0 ? '+' : '−'}${d.pct.abs().round()}');
 
 /// A graph key entry: a short line (dashed or solid) and its name.
 class _Key extends StatelessWidget {
@@ -1636,14 +1358,11 @@ class _Key extends StatelessWidget {
   final bool dashed;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      CustomPaint(size: const Size(18, 10), painter: _SwatchPainter(colour, dashed)),
-      const SizedBox(width: 4),
-      Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleUnit)),
-    ],
-  );
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    CustomPaint(size: const Size(18, 10), painter: _SwatchPainter(colour, dashed)),
+    const SizedBox(width: 4),
+    Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleUnit)),
+  ]);
 }
 
 class _SwatchPainter extends CustomPainter {
@@ -1664,171 +1383,113 @@ class _SwatchPainter extends CustomPainter {
   bool shouldRepaint(_SwatchPainter old) => old.colour != colour || old.dashed != dashed;
 }
 
-/// "HFR +18 % since session start", the flag of a reading that moved the
-/// wrong way (#1875).
-class _Flag extends StatelessWidget {
-  const _Flag(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7),
-    decoration: BoxDecoration(
-      border: Border.all(color: AraColors.accentWarning),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(
-      text,
-      style: kSimpleUnit.copyWith(color: AraColors.accentWarning, fontWeight: FontWeight.w600),
-    ),
-  );
-}
-
-String _flagText(AppLocalizations l10n, String metric, MonitorDeviation d) =>
-    l10n.monitorChangeSinceStart(metric, '${d.pct >= 0 ? '+' : '−'}${d.pct.abs().round()}');
-
-/// The autofocus line: when, and the temperature change since then.
-String? _autofocusLine(AppLocalizations l10n, MonitorLastFrame f) => f.focuser && f.autofocusAt != null
-    ? l10n.monitorAutofocusSince(
-        simpleClockTime(f.autofocusAt!),
-        f.tempSinceAutofocus == null
-            ? '—'
-            : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
-      )
-    : null;
-
-/// HFR per saved frame, flagged against the session's own start.
-class _HfrTile extends StatelessWidget {
-  const _HfrTile({required this.s, required this.ctl});
+/// The saved frames of the session: HFR, and stars with the sky background,
+/// each a graph of one point per frame flagged against the session's own
+/// start (#1875).
+class _LastFrameTile extends StatelessWidget {
+  const _LastFrameTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final f = s.lastFrame;
-    final dev = f.hfrDeviation;
-    final flagged = dev?.flagged ?? false;
-    final values = [for (final x in f.frames) ?x.hfr];
-    final af = _autofocusLine(l10n, f);
-    return _Tile(
-      tileKey: 'hfr',
-      icon: Icons.insights,
-      name: l10n.monitorHfr,
-      status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
-      word: flagged ? l10n.monitorDrifting : null,
-      value: '${l10n.monitorHfr} ${_n(f.last?.hfr, 2)}',
-      frozen: s.frozen,
-      ctl: ctl,
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AraSpace.s8,
-          children: [
-            Text(_n(f.last?.hfr, 2), style: _big),
-            if (dev != null) Text(l10n.monitorStartedAt(_n(dev.start, 2)), style: kSimpleUnit),
-            if (flagged) _Flag(_flagText(l10n, l10n.monitorHfr, dev!)),
-          ],
-        ),
-        if (values.length > 1)
-          Expanded(
-            child: CustomPaint(
-              key: const Key('simple-monitor-hfr-chart'),
-              painter: _SeriesPainter(
-                scaler: MediaQuery.textScalerOf(context),
-                values: values,
-                guide: dev == null ? null : dev.start * (1 + kMonitorDeviationPct / 100),
-                colour: flagged ? AraColors.accentWarning : AraColors.textPrimary,
-                decimals: 1,
-                lastLabel: '${values.length}',
-              ),
-            ),
-          )
-        else
-          const Spacer(),
-        if (af != null) Text(af, style: _dim),
-      ],
-    );
-  }
-}
-
-/// Stars with the sky background per saved frame, each flagged against the
-/// session's own start.
-class _StarsTile extends StatelessWidget {
-  const _StarsTile({required this.s, required this.ctl});
-
-  final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final f = s.lastFrame;
     final last = f.last;
-    final starsDev = f.starsDeviation, bgDev = f.backgroundDeviation;
-    final flagged = (starsDev?.flagged ?? false) || (bgDev?.flagged ?? false);
+    final hfrDev = f.hfrDeviation, starsDev = f.starsDeviation;
+    String? flag(String metric, MonitorDeviation? d) => d?.flagged ?? false ? _flagText(l10n, metric, d!) : null;
+    final hfrFlag = flag(l10n.monitorHfr, hfrDev);
+    final starsFlags = [?flag(l10n.monitorStars, starsDev), ?flag(l10n.monitorSkyBackground, f.backgroundDeviation)];
+    final flags = [?hfrFlag, ...starsFlags];
+    final hfr = [for (final x in f.frames) ?x.hfr];
     final stars = [for (final x in f.frames) ?x.stars?.toDouble()];
     final sky = [for (final x in f.frames) ?x.background];
     final detail = [
       if (last?.background != null) '${l10n.monitorSkyBackground} ${_n(last!.background, 0)}',
       if (last?.clippedShare != null) '${l10n.monitorClippedStars} ${_n(last!.clippedShare! * 100)} %',
     ].join(' · ');
-    return _Tile(
-      tileKey: 'stars',
-      icon: Icons.auto_awesome_outlined,
-      name: l10n.monitorStarsAndSky,
-      status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
-      word: flagged ? l10n.monitorDrifting : null,
-      value: '${l10n.monitorStars} ${last?.stars ?? '—'}, $detail',
-      frozen: s.frozen,
-      ctl: ctl,
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AraSpace.s8,
-          children: [
-            Text(last?.stars?.toString() ?? '—', style: _big),
-            if (detail.isNotEmpty) Text(detail, style: kSimpleUnit),
-            if (starsDev?.flagged ?? false) _Flag(_flagText(l10n, l10n.monitorStars, starsDev!)),
-            if (bgDev?.flagged ?? false) _Flag(_flagText(l10n, l10n.monitorSkyBackground, bgDev!)),
-          ],
-        ),
-        if (stars.length > 1)
-          Expanded(
-            child: CustomPaint(
-              key: const Key('simple-monitor-stars-chart'),
-              painter: _SeriesPainter(
-                scaler: MediaQuery.textScalerOf(context),
-                values: stars,
-                own: sky.length == stars.length ? sky : null,
-                guide: starsDev == null ? null : starsDev.start * (1 - kMonitorDeviationPct / 100),
-                colour: starsDev?.flagged ?? false ? AraColors.accentWarning : AraColors.textPrimary,
-                decimals: 0,
-                lastLabel: '${stars.length}',
-              ),
-            ),
+    final af = f.focuser && f.autofocusAt != null
+        ? l10n.monitorAutofocusSince(
+            simpleClockTime(f.autofocusAt!),
+            f.tempSinceAutofocus == null ? '—' : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
           )
-        else
-          const Spacer(),
-        Wrap(
-          spacing: AraSpace.s12,
-          children: [
-            _Key(AraColors.textPrimary, l10n.monitorStars),
-            _Key(AraColors.textSecondary, l10n.monitorSkyOwnScale, dashed: true),
-          ],
+        : null;
+    // [guide] is where the flag starts: 15 % off the start, the wrong way.
+    Widget graph(String id, List<double> values, MonitorDeviation? dev, double? guide, int decimals, [List<double>? own]) =>
+        values.length > 1
+            ? Expanded(
+                child: CustomPaint(
+                  key: Key('simple-monitor-$id-chart'),
+                  size: Size.infinite,
+                  painter: _SeriesPainter(
+                    scaler: MediaQuery.textScalerOf(context),
+                    values: values,
+                    own: own,
+                    guide: guide,
+                    colour: dev?.flagged ?? false ? AraColors.accentWarning : AraColors.textPrimary,
+                    decimals: decimals,
+                    lastLabel: '${values.length}',
+                  ),
+                ),
+              )
+            : const Spacer();
+    return _Tile(
+      tileKey: 'last-frame',
+      icon: Icons.insights,
+      name: l10n.monitorLastFrame,
+      status: flags.isEmpty ? MonitorStatus.normal : MonitorStatus.warning,
+      word: flags.isEmpty ? null : l10n.monitorDrifting,
+      value: [
+        '${l10n.monitorHfr} ${_n(last?.hfr, 2)}',
+        '${l10n.monitorStars} ${last?.stars ?? '—'}',
+        if (detail.isNotEmpty) detail,
+        ...flags,
+      ].join(', '),
+      frozen: s.frozen,
+      onTap: onTap,
+      children: [
+        Expanded(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s16, children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: AraSpace.s8, children: [
+                  Text(_n(last?.hfr, 2), style: _big),
+                  Text(hfrDev == null ? l10n.monitorHfr : '${l10n.monitorHfr} · ${l10n.monitorStartedAt(_n(hfrDev.start, 2))}', style: kSimpleUnit),
+                  if (hfrFlag != null) _Flag(hfrFlag),
+                ]),
+                graph('hfr', hfr, hfrDev, hfrDev == null ? null : hfrDev.start * (1 + kMonitorDeviationPct / 100), 1),
+              ]),
+            ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: AraSpace.s8, children: [
+                  Text(last?.stars?.toString() ?? '—', style: _big),
+                  Text(l10n.monitorStars, style: kSimpleUnit),
+                  if (detail.isNotEmpty) Text(detail, style: kSimpleUnit),
+                  for (final t in starsFlags) _Flag(t),
+                ]),
+                graph('stars', stars, starsDev, starsDev == null ? null : starsDev.start * (1 - kMonitorDeviationPct / 100), 0,
+                    sky.length == stars.length ? sky : null),
+                Wrap(spacing: AraSpace.s12, children: [
+                  _Key(AraColors.textPrimary, l10n.monitorStars),
+                  _Key(AraColors.textSecondary, l10n.monitorSkyOwnScale, dashed: true),
+                ]),
+              ]),
+            ),
+          ]),
         ),
+        if (af != null) Text(af, style: _dim),
       ],
     );
   }
 }
 
 class _NightTile extends StatelessWidget {
-  const _NightTile({required this.s, required this.ctl});
+  const _NightTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
-  final _Ctl ctl;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1843,6 +1504,7 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
+      // In the header's corner, leaving the timeline the room for its labels.
       word: line,
       // The timeline is painted: a screen reader hears its blocks and markers.
       value: [
@@ -1852,8 +1514,10 @@ class _NightTile extends StatelessWidget {
         if (n.parkAt != null) '${l10n.monitorUpPark} ${simpleClockTime(n.parkAt!)}',
       ].join(', '),
       frozen: s.frozen,
-      ctl: ctl,
+      onTap: onTap,
       children: [
+        // Frozen, the corner says Last known: the line keeps its own row.
+        if (s.frozen) Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption),
         if (start != null && end != null)
           Expanded(
             child: CustomPaint(

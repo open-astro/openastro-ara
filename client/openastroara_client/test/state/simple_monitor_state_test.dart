@@ -7,12 +7,13 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
-import 'package:openastroara/models/stats/guiding_rms.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/stats/guiding_rms.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show monitorVerdictText;
 import 'package:openastroara/services/storage_space_api.dart';
+import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
@@ -24,8 +25,8 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
-import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 
 // The Monitor state module (#1724): rig, run and frame set through fakes, and
@@ -194,6 +195,7 @@ Future<_Rig> _rig({
   Map<String, dynamic> weatherReadings = const {'cloud_cover_pct': 4, 'temperature_c': 8.4, 'dew_point_c': 1.2},
   FocuserStatus? focuser,
   int? freeBytes,
+  List<TonightSkyObject> sky = const [],
   GuidingRmsSeries? rms,
 }) async {
   late _Rig rig;
@@ -217,6 +219,7 @@ Future<_Rig> _rig({
         : null)),
     weatherProvider.overrideWith(() => _Weather(weather ? WeatherStatus.fromJson({..._wire('connected'), ...weatherReadings}) : null)),
     storageSpaceProvider.overrideWith((ref) async => StorageSpace(saveDirectory: '/d', isFallback: false, freeBytes: freeBytes)),
+    tonightSkyProvider.overrideWith((ref) async => sky),
     safetyPoliciesProvider.overrideWith(_Policies.new),
     guidingRmsProvider.overrideWith(() => _Rms(rms)),
   ]);
@@ -233,6 +236,7 @@ Future<_Rig> _rig({
     safetyMonitorProvider.future,
     weatherProvider.future,
     storageSpaceProvider.future,
+    tonightSkyProvider.future,
     guidingRmsProvider.future,
   ]) {
     await c.read(p);
@@ -477,9 +481,22 @@ void main() {
       expect(r.read().upNext.first.at, isNull);
     });
 
-    test("no plan: Up next stays empty, Tonight's Best is not Monitor's", () async {
-      final r = await _rig(plan: const SimpleRun());
-      expect(r.read().upNext, isEmpty);
+    test("no plan: tonight's best, by designation and nickname", () async {
+      final r = await _rig(plan: const SimpleRun(), sky: [
+        TonightSkyObject.fromJson({'id': 'M 42', 'name': 'M 42', 'type': 'nebula', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0})!,
+        TonightSkyObject.fromJson({'id': 'NGC0246', 'name': 'Skull Nebula', 'type': 'PN', 'ra_deg': 11.76, 'dec_deg': -11.87, 'altitude_deg': 40.0, 'max_altitude_deg': 60.0})!,
+      ]);
+      final s = r.read();
+      expect(s.tonightsBest, isTrue);
+      expect((s.upNext.first.kind, s.upNext.first.name, s.upNext.first.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
+      expect(s.upNext.last.name, 'Skull Nebula (NGC 246)');
+    });
+
+    test("no plan: a curated Messier region in tonight's best leads with its M number", () async {
+      final r = await _rig(plan: const SimpleRun(), sky: [
+        TonightSkyObject.fromJson({'id': 'NGC1976', 'name': 'Orion Nebula + Running Man', 'type': 'HII', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0, 'aliases': ['M 42']})!,
+      ]);
+      expect(r.read().upNext.first.name, 'Orion Nebula + Running Man (M 42)');
     });
   });
 

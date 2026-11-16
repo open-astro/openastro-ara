@@ -7164,11 +7164,9 @@ void main() {
       expect(monitor, findsNothing);
     });
 
-    testWidgets('offered below 900 pt wide too, in its one column (#1875)', (tester) async {
-      await openMonitor(tester, size: const Size(860, 768));
-      expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
-      expect(find.byKey(const Key('simple-monitor-column')), findsOneWidget);
-      await close(tester);
+    testWidgets('not offered below 900 pt wide', (tester) async {
+      await _pump(tester, const Size(860, 768), linkUp: true);
+      expect(find.byKey(const Key('simple-monitor-open')), findsNothing);
     });
 
     testWidgets('Emergency Stop is on screen, the shared button at 108 pt', (tester) async {
@@ -7179,15 +7177,11 @@ void main() {
       await close(tester);
     });
 
-    testWidgets('a tile tap enlarges it in Monitor; its button closes Monitor and opens the window that owns it', (tester) async {
+    testWidgets('a tile tap closes Monitor and opens the window that owns it', (tester) async {
       await openMonitor(tester, gear: [
         safetyMonitorProvider.overrideWith(() => _SafetyMon()),
       ]);
       await tester.tap(find.byKey(const Key('simple-monitor-safety')));
-      await tester.pump();
-      expect(find.byKey(const Key('simple-monitor')), findsOneWidget, reason: 'the tap stays in Monitor');
-      expect(find.byKey(const Key('simple-device-safety')), findsNothing);
-      await tester.tap(find.byKey(const Key('simple-monitor-tile-open')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byKey(const Key('simple-monitor')), findsNothing);
@@ -7204,9 +7198,9 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
       await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
-      final tile = find.byKey(const Key('simple-monitor-conditions'));
+      final tile = find.byKey(const Key('simple-monitor-weather'));
       expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
       for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
         expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');

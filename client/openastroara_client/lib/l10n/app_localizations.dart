@@ -7227,6 +7227,12 @@ abstract class AppLocalizations {
   /// **'Up next'**
   String get monitorUpNext;
 
+  /// Monitor Now tile with no plan: tonight's best Targets
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s best'**
+  String get monitorTonightsBest;
+
   /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
@@ -7244,6 +7250,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'then'**
   String get monitorThen;
+
+  /// Monitor Tonight's best row: the Target's altitude now
+  ///
+  /// In en, this message translates to:
+  /// **'{alt}° up'**
+  String monitorAltitudeUp(String alt);
 
   /// Monitor tile: the Target
   ///
@@ -7413,6 +7425,12 @@ abstract class AppLocalizations {
   /// **'Last dither {time}'**
   String monitorLastDither(String time);
 
+  /// Monitor tile: the last saved frame's quality
+  ///
+  /// In en, this message translates to:
+  /// **'Last frame'**
+  String get monitorLastFrame;
+
   /// Monitor Last frame reading
   ///
   /// In en, this message translates to:
@@ -7449,13 +7467,7 @@ abstract class AppLocalizations {
   /// **'{n} saved'**
   String monitorSaved(int n);
 
-  /// Monitor, enlarged tile: opens the window the tile belongs to
-  ///
-  /// In en, this message translates to:
-  /// **'Open its window'**
-  String get monitorOpenWindow;
-
-  /// Monitor graph tile: the reading the session started at
+  /// Monitor Last frame tile: the HFR the session started at
   ///
   /// In en, this message translates to:
   /// **'session start {value}'**
@@ -7467,53 +7479,17 @@ abstract class AppLocalizations {
   /// **'{metric} {pct} % since session start'**
   String monitorChangeSinceStart(String metric, String pct);
 
-  /// Monitor graph tile status word: a reading moved 15 % or more the wrong way since session start
+  /// Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start
   ///
   /// In en, this message translates to:
   /// **'Drifting'**
   String get monitorDrifting;
-
-  /// Monitor tile: weather with the camera and focuser temperatures
-  ///
-  /// In en, this message translates to:
-  /// **'Conditions'**
-  String get monitorConditions;
-
-  /// Monitor Conditions tile: section heading
-  ///
-  /// In en, this message translates to:
-  /// **'Camera and focuser'**
-  String get monitorCameraAndFocuser;
-
-  /// Monitor Conditions tile: the camera sensor's temperature
-  ///
-  /// In en, this message translates to:
-  /// **'Sensor'**
-  String get monitorSensor;
-
-  /// Monitor Conditions tile: the cooler's power
-  ///
-  /// In en, this message translates to:
-  /// **'Cooler power'**
-  String get monitorCoolerPower;
-
-  /// Monitor Conditions tile: the focuser's temperature
-  ///
-  /// In en, this message translates to:
-  /// **'Focuser'**
-  String get monitorFocuserTemp;
 
   /// Monitor altitude graph key: the plan's imaging span
   ///
   /// In en, this message translates to:
   /// **'Imaging {start} to {end}'**
   String monitorImagingSpan(String start, String end);
-
-  /// Monitor tile: stars and sky background per saved frame
-  ///
-  /// In en, this message translates to:
-  /// **'Stars · sky background'**
-  String get monitorStarsAndSky;
 
   /// Monitor stars graph key: the sky background line has its own scale
   ///

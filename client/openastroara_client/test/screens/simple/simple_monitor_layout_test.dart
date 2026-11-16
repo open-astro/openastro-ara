@@ -9,8 +9,8 @@ import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
 
-// Monitor's grid (#1875 slice 7): which tiles it builds for the rig, how a
-// tap enlarges one, and what the graph tiles say.
+// Monitor's graphs (#1875 slice 7a): what the graph tiles say and flag, the
+// tile header's corner, and painters that keep inside their canvas.
 
 class _KeepAwake extends KeepAwake {
   const _KeepAwake();
@@ -113,7 +113,7 @@ MonitorSnapshot _snap({
   ),
 );
 
-Future<List<MonitorDestination>> _pump(
+Future<void> _pump(
   WidgetTester tester,
   MonitorSnapshot snap, {
   Size size = const Size(1288, 780),
@@ -121,7 +121,6 @@ Future<List<MonitorDestination>> _pump(
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final opened = <MonitorDestination>[];
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -131,12 +130,11 @@ Future<List<MonitorDestination>> _pump(
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SimpleMonitorScreen(onOpen: opened.add),
+        home: SimpleMonitorScreen(onOpen: (_) {}),
       ),
     ),
   );
   await tester.pump();
-  return opened;
 }
 
 /// Records each painted paragraph's height while it is still alive.
@@ -152,83 +150,6 @@ class _Heights implements Canvas {
 Finder _k(String id) => find.byKey(Key('simple-monitor-$id'));
 
 void main() {
-  testWidgets('all gear: every tile is drawn at 1288x780', (tester) async {
-    await _pump(tester, _snap());
-    for (final id in [
-      'now',
-      'safety',
-      'target',
-      'conditions',
-      'guider',
-      'hfr',
-      'stars',
-      'flip',
-      'night',
-    ]) {
-      expect(_k(id), findsOneWidget, reason: id);
-    }
-    expect(_k('title'), findsOneWidget);
-  });
-
-  testWidgets(
-    'no Safety and no weather: their tiles are not built and the grid reflows',
-    (tester) async {
-      await _pump(tester, _snap(gear: false));
-      expect(_k('safety'), findsNothing);
-      expect(_k('conditions'), findsNothing);
-      final alt = tester.getRect(_k('target')),
-          hfr = tester.getRect(_k('hfr')),
-          stars = tester.getRect(_k('stars'));
-      // Target altitude takes two columns, HFR and Stars one each under it.
-      expect(alt.width, closeTo(hfr.width + stars.width + 8, 1));
-      expect(alt.left, hfr.left);
-      // The flip sits beside Tonight.
-      expect(tester.getRect(_k('flip')).top, tester.getRect(_k('night')).top);
-    },
-  );
-
-  testWidgets(
-    'a tap enlarges a tile inside Monitor, a second tap restores the grid',
-    (tester) async {
-      final opened = await _pump(tester, _snap());
-      await tester.tap(_k('hfr'));
-      await tester.pump();
-      expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
-      expect(_k('stars'), findsNothing);
-      expect(opened, isEmpty, reason: 'a tile tap no longer leaves Monitor');
-      await tester.tap(_k('hfr'));
-      await tester.pump();
-      expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
-      expect(_k('stars'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the enlarged tile has one button to the window the tap used to open',
-    (tester) async {
-      final opened = await _pump(tester, _snap());
-      await tester.tap(_k('flip'));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-monitor-tile-open')));
-      expect(opened, [MonitorDestination.mount]);
-    },
-  );
-
-  testWidgets('a phone: a tap enlarges a tile in the one column too', (
-    tester,
-  ) async {
-    final opened = await _pump(tester, _snap(), size: const Size(390, 844));
-    expect(_k('now'), findsOneWidget);
-    await tester.tap(_k('now'));
-    await tester.pump();
-    expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
-    await tester.ensureVisible(
-      find.byKey(const Key('simple-monitor-tile-open')),
-    );
-    await tester.tap(find.byKey(const Key('simple-monitor-tile-open')));
-    expect(opened, [MonitorDestination.queue]);
-  });
-
   testWidgets('HFR flags a rise of 15 % or more against the session start', (
     tester,
   ) async {
@@ -306,27 +227,6 @@ void main() {
     expect(tile.right - word.right, lessThan(30));
   });
 
-  testWidgets(
-    "a screen reader reaches the enlarged tile's button to its window",
-    (tester) async {
-      final semantics = tester.ensureSemantics();
-      final opened = await _pump(tester, _snap());
-      for (final (id, to) in [
-        ('hfr', MonitorDestination.frameInfo),
-        ('safety', MonitorDestination.safety),
-      ]) {
-        await tester.tap(_k(id));
-        await tester.pump();
-        expect(find.bySemanticsLabel('Open its window'), findsOneWidget);
-        tester.semantics.tap(find.semantics.byLabel('Open its window'));
-        expect(opened.last, to, reason: id);
-        await tester.tap(_k(id));
-        await tester.pump();
-      }
-      semantics.dispose();
-    },
-  );
-
   testWidgets('a long tile name and the status word keep a gap between them', (
     tester,
   ) async {
@@ -335,10 +235,10 @@ void main() {
       _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
     );
     final name = tester.getRect(
-      find.descendant(of: _k('hfr'), matching: find.text('HFR')),
+      find.descendant(of: _k('last-frame'), matching: find.text('Last frame')),
     );
     final word = tester.getRect(
-      find.descendant(of: _k('hfr'), matching: find.text('Drifting')),
+      find.descendant(of: _k('last-frame'), matching: find.text('Drifting')),
     );
     expect(word.left - name.right, greaterThanOrEqualTo(6));
   });
