@@ -296,6 +296,22 @@ void main() {
             night: base.night,
           );
           await _pump(tester, text: text, size: size, snap: snap);
+          if (text == 1.0) {
+            // The busy tile with seven filters shows without scrolling at 1x.
+            expect(
+              tester
+                  .state<ScrollableState>(
+                    find.descendant(
+                      of: _tile,
+                      matching: find.byType(Scrollable),
+                    ),
+                  )
+                  .position
+                  .maxScrollExtent,
+              0,
+              reason: 'the Now tile scrolls with seven filters',
+            );
+          }
           for (final (i, n) in names.indexed) {
             final name = find.descendant(of: _tile, matching: find.text(n));
             expect(name, findsOneWidget);

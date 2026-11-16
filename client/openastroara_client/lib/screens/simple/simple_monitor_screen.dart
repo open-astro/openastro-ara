@@ -687,7 +687,7 @@ class _NowTile extends StatelessWidget {
                       child: Align(alignment: Alignment.centerLeft, child: big),
                     ),
                     const SizedBox(height: AraSpace.s8),
-                    _UpNext(s: s),
+                    _UpNext(s: s, limit: n.filters.length > 4 ? 1 : null),
                   ],
                 )
               : Row(
@@ -702,10 +702,17 @@ class _NowTile extends StatelessWidget {
         if (n.filters.isNotEmpty) ...[
           const SizedBox(height: AraSpace.s8),
           MediaQuery.sizeOf(context).width < kMonitorMinWidth
-              // A phone (#1942): each filter is as wide as its name and count
-              // and the row wraps, so a count is never scaled below the 14 px
-              // floor and a name keeps at least a glyph.
-              ? Wrap(
+              // A phone (#1942): a count is never scaled below the 14 px floor
+              // and a name keeps at least a glyph. Up to four filters wrap, each
+              // as wide as its name and count; more take a grid of four columns
+              // (two at 2x text), name above count, in two short rows so the
+              // tile does not scroll at 1x (the Up next list shrinks to one row).
+              ? n.filters.length > 4
+                  ? _PhoneFilterGrid(
+                      filters: n.filters,
+                      cols: (4 / MediaQuery.textScalerOf(context).scale(1)).floor().clamp(1, 4),
+                    )
+                  : Wrap(
                   spacing: 10,
                   runSpacing: AraSpace.s8,
                   children: [
@@ -800,6 +807,48 @@ class _NowTile extends StatelessWidget {
   }
 }
 
+class _PhoneFilterGrid extends StatelessWidget {
+  const _PhoneFilterGrid({required this.filters, required this.cols});
+
+  final List<({String filter, int done, int total, bool inHand})> filters;
+  final int cols;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var i = 0; i < filters.length; i += cols) ...[
+        if (i > 0) const SizedBox(height: AraSpace.s8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var j = i; j < i + cols; j++) ...[
+              if (j > i) const SizedBox(width: 10),
+              Expanded(
+                child: j >= filters.length
+                    ? const SizedBox.shrink()
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            filters[j].filter,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          Text('${filters[j].done}/${filters[j].total}', maxLines: 1, style: _dim),
+                          const SizedBox(height: 3),
+                          _FilterBar(filters[j]),
+                        ],
+                      ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    ],
+  );
+}
+
 class _FilterBar extends StatelessWidget {
   const _FilterBar(this.f);
 
@@ -819,9 +868,13 @@ class _FilterBar extends StatelessWidget {
 }
 
 class _UpNext extends StatelessWidget {
-  const _UpNext({required this.s});
+  const _UpNext({required this.s, this.limit});
 
   final MonitorSnapshot s;
+
+  /// Rows shown; null shows all. A phone with many filters gives their grid
+  /// the height of the rows past the first (#1942).
+  final int? limit;
 
   @override
   Widget build(BuildContext context) {
@@ -832,7 +885,7 @@ class _UpNext extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(s.tonightsBest ? l10n.monitorTonightsBest : l10n.monitorUpNext, style: kSimpleCaption),
-        for (final u in s.upNext)
+        for (final u in limit == null ? s.upNext : s.upNext.take(limit!))
           Container(
             constraints: const BoxConstraints(minHeight: 30),
             decoration: const BoxDecoration(border: Border(top: BorderSide(color: AraColors.border))),
