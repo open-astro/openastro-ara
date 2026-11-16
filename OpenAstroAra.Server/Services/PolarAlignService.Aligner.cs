@@ -54,7 +54,7 @@ namespace OpenAstroAra.Server.Services {
     // motors (one probe move per axis, then a fraction of the error), waits for them, and lets the
     // next frame measure the result. Any way out stops the motors and leaves the routine running by
     // hand. The numbers (probe size, fraction, scale check) follow N.I.N.A.'s Polar Alignment
-    // Aligners plugin, so one device behaves the same under both clients.
+    // Correctors plugin, so one device behaves the same under both clients.
     public sealed partial class PolarAlignService : IPolarAlignerDriver {
 
         // The routine drives the Polar Aligner from its first measurement with one until it is stopped
