@@ -60,7 +60,7 @@ public sealed partial class EmergencyStopService {
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
     // puts the worst-case ladder at 15 rungs, 150 s, inside the client's 160 s receive timeout.
     // #1985 — the window covers the connected probe and the action's synchronous prefix too
-    // (both run on the pool), so each rung returns within RungTimeout whatever it blocks on.
+    // (both run on a dedicated thread, so a starved pool cannot time out a healthy rung), so each rung returns within RungTimeout whatever it blocks on.
     // Internal knob so tests can compress it.
     internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -259,7 +259,7 @@ public sealed partial class EmergencyStopService {
             // Same hung-component guard as the device rungs: the abort only
             // touches in-memory run state today, but "no single dead
             // component may wedge this button" must hold for every rung.
-            var work = Task.Run(() => sequencer.AbortActiveRunsAsync(CancellationToken.None));
+            var work = RunOnOwnThread(() => sequencer.AbortActiveRunsAsync(CancellationToken.None));
             var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
             if (!ReferenceEquals(completed, work)) {
                 LogRungTimedOut("abort runs", RungTimeout.TotalSeconds);
@@ -280,7 +280,7 @@ public sealed partial class EmergencyStopService {
             return RungOutcome.NotAvailable;
         }
         try {
-            // #1985 — probe and action run on the pool inside ONE RungTimeout window, so a probe
+            // #1985 — probe and action run on a dedicated thread inside ONE RungTimeout window, so a probe
             // that never completes, or an action that blocks its caller before its first await,
             // cannot hold the ladder.
             // A registered-but-disconnected device is a routine state (a rig
@@ -291,7 +291,7 @@ public sealed partial class EmergencyStopService {
             // Failed — a device dying mid-stop deserves the loud path.
             // CancellationToken.None deliberately: the caller disconnecting
             // must not cancel a half-finished stop.
-            var work = Task.Run(async () => {
+            var work = RunOnOwnThread(async () => {
                 if (connectedProbe is not null && !await connectedProbe().ConfigureAwait(false)) {
                     return RungOutcome.NotAvailable;
                 }
@@ -310,6 +310,12 @@ public sealed partial class EmergencyStopService {
             return RungOutcome.Failed;
         }
     }
+
+    // A dedicated thread, not Task.Run: a healthy rung must not wait for a pool thread inside its
+    // RungTimeout window (an Emergency Stop has to work on a starved pool), and a blocking
+    // synchronous prefix must not hold the caller. Continuations of completed awaits stay inline.
+    private static Task<T> RunOnOwnThread<T>(Func<Task<T>> body) =>
+        Task.Factory.StartNew(body, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 
     /// <summary>
     /// A timed-out rung's task keeps running (there is no way to cancel a

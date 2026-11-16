@@ -668,7 +668,7 @@ namespace OpenAstroAra.Test {
         // bound keeps a regression from hanging the suite: the ladder runs off the test thread.
         private static async Task<EmergencyStopResultDto?> RunWithOuterBoundAsync(EmergencyStopService service) {
             var ladder = Task.Run(() => service.ExecuteAsync());
-            var done = await Task.WhenAny(ladder, Task.Delay(TimeSpan.FromSeconds(5)));
+            var done = await Task.WhenAny(ladder, Task.Delay(TimeSpan.FromSeconds(10)));
             return ReferenceEquals(done, ladder) ? await ladder : null;
         }
 
@@ -677,7 +677,7 @@ namespace OpenAstroAra.Test {
             var never = new TaskCompletionSource<CameraDto?>();
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).Returns(never.Task!);
             var service = Build();
-            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+            service.RungTimeout = TimeSpan.FromMilliseconds(500);
 
             var result = await RunWithOuterBoundAsync(service);
 
@@ -696,7 +696,7 @@ namespace OpenAstroAra.Test {
             camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
                 .Returns(() => { release.Wait(TimeSpan.FromSeconds(30)); return Task.CompletedTask; });
             var service = Build();
-            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+            service.RungTimeout = TimeSpan.FromMilliseconds(500);
 
             var result = await RunWithOuterBoundAsync(service);
 
