@@ -372,7 +372,7 @@ bool isCatalogDesignation(String s) => _catalogDesignation.hasMatch(s);
 
 /// #1720 display form `designation (name)`: "NGC 246 (Skull Nebula)". Just the
 /// designation when there is no other name; just the name when it already
-/// carries the designation or its own brackets ("Heart Nebula (IC 1805)").
+/// carries the designation or its own brackets ("Spaghetti Nebula (Simeis 147)").
 String designationWithName(String designation, String name) {
   final d = prettyDesignation(designation.trim());
   final n = name.trim();

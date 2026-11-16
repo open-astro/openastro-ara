@@ -30,37 +30,37 @@ class ImagingRegion {
 
 const Map<String, ImagingRegion> overrides = {
   // Sagittarius / Serpens — the summer emission corridor.
-  'NGC6618': ImagingRegion('Swan Nebula (M17)', 'HII', 45, 35),
-  'NGC6611': ImagingRegion('Eagle Nebula (M16)', 'HII', 70, 55),
-  'NGC6604': ImagingRegion('Sh2-54 region (NGC 6604)', 'HII', 150, 100),
-  'NGC6523': ImagingRegion('Lagoon Nebula (M8)', 'HII', 90, 40),
-  'NGC6514': ImagingRegion('Trifid Nebula (M20)', 'HII', 28, 28),
+  'NGC6618': ImagingRegion('Swan Nebula', 'HII', 45, 35),
+  'NGC6611': ImagingRegion('Eagle Nebula', 'HII', 70, 55),
+  'NGC6604': ImagingRegion('Sh2-54 region', 'HII', 150, 100),
+  'NGC6523': ImagingRegion('Lagoon Nebula', 'HII', 90, 40),
+  'NGC6514': ImagingRegion('Trifid Nebula', 'HII', 28, 28),
   // Cygnus / Cepheus.
-  'IC1396': ImagingRegion("Elephant's Trunk region (IC 1396)", 'HII', 170, 140),
-  'NGC7023': ImagingRegion('Iris Nebula + dust (NGC 7023)', 'RfN', 60, 60),
+  'IC1396': ImagingRegion("Elephant's Trunk region", 'HII', 170, 140),
+  'NGC7023': ImagingRegion('Iris Nebula + dust', 'RfN', 60, 60),
   // Cassiopeia / Auriga / Monoceros — the winter corridor.
-  'IC1805': ImagingRegion('Heart Nebula (IC 1805)', 'HII', 150, 150),
-  'IC1848': ImagingRegion('Soul Nebula (IC 1848)', 'HII', 150, 75),
+  'IC1805': ImagingRegion('Heart Nebula', 'HII', 150, 150),
+  'IC1848': ImagingRegion('Soul Nebula', 'HII', 150, 75),
   // Keys are catalog spelling: OpenNGC zero-pads NGC/IC ids below 1000
   // ('NGC0281', 'IC0443'), so an unpadded key never matches a real row (#1141).
-  'NGC0281': ImagingRegion('Pacman Nebula (NGC 281)', 'HII', 35, 30),
-  'IC0443': ImagingRegion('Jellyfish Nebula (IC 443)', 'SNR', 50, 40),
-  'NGC2264': ImagingRegion('Cone / Christmas Tree region (NGC 2264)', 'HII', 60, 30),
-  'NGC2244': ImagingRegion('Rosette Nebula (NGC 2244)', 'HII', 80, 60),
-  'NGC1499': ImagingRegion('California Nebula (NGC 1499)', 'HII', 145, 40),
+  'NGC0281': ImagingRegion('Pacman Nebula', 'HII', 35, 30),
+  'IC0443': ImagingRegion('Jellyfish Nebula', 'SNR', 50, 40),
+  'NGC2264': ImagingRegion('Cone / Christmas Tree region', 'HII', 60, 30),
+  'NGC2244': ImagingRegion('Rosette Nebula', 'HII', 80, 60),
+  'NGC1499': ImagingRegion('California Nebula', 'HII', 145, 40),
   // Orion.
-  'NGC1976': ImagingRegion('Orion Nebula + Running Man (M42)', 'HII', 85, 60),
-  'IC0434': ImagingRegion('Horsehead + Flame region (IC 434)', 'HII', 60, 30),
+  'NGC1976': ImagingRegion('Orion Nebula + Running Man', 'HII', 85, 60),
+  'IC0434': ImagingRegion('Horsehead + Flame region', 'HII', 60, 30),
   // Wolf-Rayet shells — the blown-off envelopes of the most massive stars;
   // spectacular OIII/Ha narrowband targets most imagers have never framed.
-  'NGC2359': ImagingRegion("Thor's Helmet — WR 7 shell (NGC 2359)", 'EmN', 22, 16),
-  'NGC6888': ImagingRegion('Crescent Nebula — WR 136 shell (NGC 6888)', 'EmN', 20, 12),
-  'NGC3199': ImagingRegion('Dragon-head — WR 18 shell (NGC 3199)', 'EmN', 22, 15),
+  'NGC2359': ImagingRegion("Thor's Helmet — WR 7 shell", 'EmN', 22, 16),
+  'NGC6888': ImagingRegion('Crescent Nebula — WR 136 shell', 'EmN', 20, 12),
+  'NGC3199': ImagingRegion('Dragon-head — WR 18 shell', 'EmN', 22, 15),
   // Named favourites whose catalog rows undersell or anonymise them.
-  'NGC0246': ImagingRegion('Skull Nebula (NGC 246)', 'PN', 4.5, 4),
-  'NGC7822': ImagingRegion('Question Mark region (NGC 7822 / Ced 214)', 'HII', 100, 60),
-  'NGC6820': ImagingRegion('Sh2-86 region (NGC 6820)', 'HII', 40, 30),
-  'NGC7380': ImagingRegion('Wizard Nebula (NGC 7380)', 'HII', 25, 25),
+  'NGC0246': ImagingRegion('Skull Nebula', 'PN', 4.5, 4),
+  'NGC7822': ImagingRegion('Question Mark region', 'HII', 100, 60),
+  'NGC6820': ImagingRegion('Sh2-86 region', 'HII', 40, 30),
+  'NGC7380': ImagingRegion('Wizard Nebula', 'HII', 25, 25),
 };
 
 /// Photogenic tier for catalog rows that carry NO photometry (the Sharpless

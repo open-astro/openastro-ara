@@ -157,4 +157,18 @@ void main() {
     expect(suggestionTitle(searchSuggestions([m33], 'triangulum pinwheel').single), 'NGC 598 (Triangulum Pinwheel)',
         reason: 'a nickname other than its name matched: the row shows it, so it says why it is listed');
   });
+
+  test('a curated region name reads designation first on every pick path (#1957)', () {
+    // Recent and Tonight's Best pick the ranked row, which carries the
+    // curated name; the card titles it with designationWithName.
+    final skull = applyImagingRegions(const [
+      PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+          aliases: ['C 056']),
+    ]).firstWhere((o) => o.id == 'NGC0246');
+    expect(designationWithName(skull.id, skull.name), 'NGC 246 (Skull Nebula)');
+    for (final e in overrides.entries) {
+      expect(e.value.name, isNot(contains('(')),
+          reason: '${e.key}: a bracket keeps designationWithName from putting the designation first');
+    }
+  });
 }

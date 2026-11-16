@@ -174,7 +174,7 @@ void main() {
     final rosette = findCatalogObject(curated, 'NGC 2244')!;
     expect(rosette.id, 'NGC2239');
     expect(findCatalogObject(curated, 'Sh2-275')!.id, 'NGC2239');
-    expect(rosette.name, 'Rosette Nebula (NGC 2244)');
+    expect(rosette.name, 'Rosette Nebula');
     // An Arp row naming a PAIR (Arp 281 = NGC 4627 + NGC 4631) is a group,
     // not an identity: both galaxies survive, the Whale keeps its Caldwell
     // number, and the Arp row stands on its own (review r2).
