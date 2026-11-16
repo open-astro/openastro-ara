@@ -327,8 +327,8 @@ public static class PolarAlignGeometry {
     /// from north through east) of apparent-of-date (<paramref name="raDeg"/>, <paramref name="decDeg"/>)
     /// at <paramref name="atUtc"/>. The live-adjust loop's reverse-projection needs this: with
     /// tracking stopped the camera direction is FIXED in alt/az, so each new solve's alt/az delta
-    /// from the seed pointing IS the knob adjustment the user just made, and the axis error updates
-    /// by exactly that delta without re-slewing (§45.8).
+    /// from the seed pointing is the knob adjustment the user just made, seen from the camera; the axis
+    /// error updates by that shift mapped through <see cref="AxisShiftFromPointingShift"/>, without re-slewing (§45.8).
     /// </summary>
     public static (double AltDeg, double AzDeg) PointingAltAz(
             double raDeg, double decDeg, double latitudeDeg, double longitudeDeg, DateTimeOffset atUtc) {
@@ -353,7 +353,14 @@ public static class PolarAlignGeometry {
     /// </summary>
     public static (double AltShiftDeg, double AzShiftDeg) AxisShiftFromPointingShift(
             double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
-        return (dAltDeg, dAzDeg);
+        var poleAzDeg = latitudeDeg > 0 ? 0.0 : 180.0;
+        var psi = Deg2Rad(seedAzDeg - poleAzDeg);
+        // shortcut: floor on cos ψ, a camera ~90° of azimuth from the pole cannot read the altitude knob; the polar
+        // routine keeps the camera within 30° of the pole, where ψ stays under ~45°. Upgrade if the camera may roam.
+        var cosPsi = Math.Max(Math.Cos(psi), 0.1);
+        var altShiftDeg = dAltDeg / cosPsi;
+        var tanAlt = Math.Tan(Deg2Rad(Math.Min(seedAltDeg, 89.9)));
+        return (altShiftDeg, dAzDeg - altShiftDeg * Math.Sin(psi) * tanAlt);
     }
 
     // ── spherical helpers (unit-vector algebra; RA/Dec degrees) ─────────────────────────────

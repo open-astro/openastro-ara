@@ -211,10 +211,10 @@ namespace OpenAstroAra.Server.Services {
             await SolveLoopAsync(
                 liveCapture ?? capture,
                 toError: (s, at) => {
-                    // §45.8 reverse-projection: the pointing's alt/az delta since the seed IS the knob
-                    // adjustment (rigid mount, tracking stopped). Azimuth-knob turns are rotations about
-                    // the vertical, so the azimuth ANGLE delta is shared by pointing and axis; it becomes
-                    // an arc-distance at the AXIS altitude (≈ apparent pole altitude + current alt error),
+                    // §45.8 reverse-projection: the pointing's alt/az delta since the seed is the knob
+                    // adjustment seen from the camera (rigid mount, tracking stopped); far from the pole it
+                    // is mapped back to the axis's shift (AxisShiftFromPointingShift). The azimuth-knob
+                    // shift is an ANGLE about the vertical; it becomes an arc-distance at the AXIS altitude (≈ apparent pole altitude + current alt error),
                     // with the same east-positive sign convention as PolarAlignGeometry.AxisError.
                     var p = PolarAlignGeometry.PointingAltAz(
                         s.RaDegJnow, s.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, at);
