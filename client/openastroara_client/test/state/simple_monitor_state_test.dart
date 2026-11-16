@@ -7,12 +7,12 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
+import 'package:openastroara/models/stats/guiding_rms.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show monitorVerdictText;
 import 'package:openastroara/services/storage_space_api.dart';
-import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
@@ -24,6 +24,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
+import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 
@@ -90,6 +91,13 @@ class _Plan extends SimpleRunNotifier {
   final SimpleRun v;
   @override
   SimpleRun build() => v;
+}
+
+class _Rms extends GuidingRmsNotifier {
+  _Rms(this.v);
+  final GuidingRmsSeries? v;
+  @override
+  Future<GuidingRmsSeries?> build() async => v;
 }
 
 class _Clock extends MonitorClock {
@@ -184,7 +192,7 @@ Future<_Rig> _rig({
   Map<String, dynamic> weatherReadings = const {'cloud_cover_pct': 4, 'temperature_c': 8.4, 'dew_point_c': 1.2},
   FocuserStatus? focuser,
   int? freeBytes,
-  List<TonightSkyObject> sky = const [],
+  GuidingRmsSeries? rms,
 }) async {
   late _Rig rig;
   final camN = _Cam(camera ? cam ?? _cam() : null);
@@ -207,8 +215,8 @@ Future<_Rig> _rig({
         : null)),
     weatherProvider.overrideWith(() => _Weather(weather ? WeatherStatus.fromJson({..._wire('connected'), ...weatherReadings}) : null)),
     storageSpaceProvider.overrideWith((ref) async => StorageSpace(saveDirectory: '/d', isFallback: false, freeBytes: freeBytes)),
-    tonightSkyProvider.overrideWith((ref) async => sky),
     safetyPoliciesProvider.overrideWith(_Policies.new),
+    guidingRmsProvider.overrideWith(() => _Rms(rms)),
   ]);
   addTearDown(c.dispose);
   rig = _Rig(c, camN, guiderN, runN);
@@ -223,7 +231,7 @@ Future<_Rig> _rig({
     safetyMonitorProvider.future,
     weatherProvider.future,
     storageSpaceProvider.future,
-    tonightSkyProvider.future,
+    guidingRmsProvider.future,
   ]) {
     await c.read(p);
   }
@@ -467,13 +475,9 @@ void main() {
       expect(r.read().upNext.first.at, isNull);
     });
 
-    test("no plan: tonight's best", () async {
-      final r = await _rig(plan: const SimpleRun(), sky: [
-        TonightSkyObject.fromJson({'id': 'm42', 'name': 'M 42', 'type': 'nebula', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0})!,
-      ]);
-      final s = r.read();
-      expect(s.tonightsBest, isTrue);
-      expect((s.upNext.single.kind, s.upNext.single.name, s.upNext.single.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
+    test('no plan: Up next stays empty, Tonight\'s Best is not Monitor\'s', () async {
+      final r = await _rig(plan: const SimpleRun());
+      expect(r.read().upNext, isEmpty);
     });
   });
 
@@ -519,6 +523,85 @@ void main() {
       expect(monitorClippedShare(0, 0), 0);
       expect(monitorClippedShare(null, null), isNull);
       expect(monitorClippedShare(1412, 6), closeTo(6 / 1418, 1e-12));
+    });
+  });
+
+  group('text defects (#1875 slice 7)', () {
+    const osc = SimpleTarget(
+      name: 'NGC 1269',
+      tag: 'NGC1269',
+      steps: [FilterPlanStep(filterName: '', exposureSeconds: 60, frameCount: 120)],
+    );
+
+    test('a plan row with no filter name gives no filter on Now and none in Up next', () async {
+      final r = await _rig(
+        run: _running(frames: 26),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [osc]),
+      );
+      expect(r.read().now.filter, isNull);
+      expect(r.read().upNext.firstWhere((u) => u.kind == MonitorUpKind.nextFrame).name, isNull);
+    });
+
+    test('a long name equal to the short one once spaces are removed is not kept', () async {
+      final r = await _rig(
+        run: _running(frames: 26),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [osc]),
+      );
+      expect(r.read().target!.name, 'NGC1269');
+      expect(r.read().target!.longName, isNull);
+    });
+  });
+
+  group('session graphs (#1875 slice 7)', () {
+    List<double> hfr(List<double> v) => v;
+
+    test('no flag before six saved frames', () {
+      expect(monitorDeviation(hfr([2, 2, 2, 3, 3]), higherIsWorse: true), isNull);
+    });
+
+    test('the start is the median of the first three, now the median of the last three', () {
+      // Medians: first three 2.0 (a 9.0 outlier among them does not count), last three 2.36.
+      final d = monitorDeviation([2.0, 9.0, 2.0, 1.0, 2.36, 2.36, 2.4, 2.36], higherIsWorse: true)!;
+      expect(d.start, 2.0);
+      expect(d.pct, closeTo(18, 1e-9));
+      expect(d.flagged, isTrue);
+    });
+
+    test('flagged at 15 % the wrong way, not at 14 %, and never for an improvement', () {
+      bool flagged(List<double> v, {required bool up}) => monitorDeviation(v, higherIsWorse: up)!.flagged;
+      expect(flagged([100, 100, 100, 100, 100, 115, 115, 115], up: true), isTrue);
+      expect(flagged([100, 100, 100, 100, 100, 114, 114, 114], up: true), isFalse);
+      expect(flagged([100, 100, 100, 100, 100, 85, 85, 85], up: false), isTrue);
+      expect(flagged([100, 100, 100, 100, 100, 85, 85, 85], up: true), isFalse, reason: 'HFR falling is better');
+      expect(flagged([100, 100, 100, 100, 100, 130, 130, 130], up: false), isFalse, reason: 'stars rising is better');
+    });
+
+    test('a zero start gives no percentage', () {
+      expect(monitorDeviation([0, 0, 0, 1, 1, 1], higherIsWorse: true), isNull);
+    });
+
+    test('the last frame carries the HFR, stars and background deviations from the saved frames', () async {
+      final r = await _rig(run: _running());
+      final t = r.c.read(monitorTrendsProvider.notifier);
+      for (var i = 0; i < 6; i++) {
+        t.add(MonitorFrame(id: 'f$i', hfr: i < 3 ? 2.0 : 2.4, stars: i < 3 ? 400 : 320, background: 2000));
+      }
+      final f = r.read().lastFrame;
+      expect(f.hfrDeviation!.flagged, isTrue);
+      expect(f.starsDeviation!.pct, closeTo(-20, 1e-9));
+      expect(f.backgroundDeviation!.flagged, isFalse);
+    });
+
+    test("the guider's RMS is one point per saved frame, from /stats/guiding", () async {
+      final r = await _rig(
+        run: _running(),
+        rms: GuidingRmsSeries(samples: [for (final v in [0.9, 1.0, 1.1, 1.2]) GuidingRmsPoint(rmsArcsec: v)]),
+      );
+      expect(r.read().guider!.rmsPerFrame, isEmpty, reason: 'no saved frame yet');
+      final t = r.c.read(monitorTrendsProvider.notifier);
+      t.add(const MonitorFrame(id: 'f0'));
+      t.add(const MonitorFrame(id: 'f1'));
+      expect(r.read().guider!.rmsPerFrame, [1.1, 1.2], reason: 'the last samples, newest last');
     });
   });
 }

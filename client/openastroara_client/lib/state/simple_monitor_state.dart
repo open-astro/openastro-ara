@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/equipment_device_status.dart';
 import '../models/frame_histogram.dart';
 import '../models/guider_status.dart';
+import '../models/stats/guiding_rms.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../services/storage_space_api.dart';
 import '../util/tonight_sky_local.dart';
@@ -23,7 +24,8 @@ import 'settings/safety_policies_state.dart';
 import 'settings/site_settings_state.dart';
 import 'simple_messages_state.dart';
 import 'simple_run_state.dart';
-import 'sky_atlas/tonight_sky_state.dart';
+import 'sky_atlas/tonight_sky_state.dart' show clockProvider, skyClockProvider;
+import 'stats/guiding_rms_state.dart';
 import 'ws/ws_providers.dart';
 
 // Monitor (#1724): Simple Mode's full-screen, read-only view of the Session.
@@ -164,16 +166,15 @@ enum MonitorNowWord {
   lastKnown,
 }
 
-enum MonitorUpKind { nextFrame, meridianFlip, nextTarget, park, best }
+enum MonitorUpKind { nextFrame, meridianFlip, nextTarget, park }
 
 /// One Up next row; [at] null reads "then".
 class MonitorUpNext {
-  const MonitorUpNext(this.kind, {this.at, this.name, this.frame, this.altitudeDeg});
+  const MonitorUpNext(this.kind, {this.at, this.name, this.frame});
   final MonitorUpKind kind;
   final DateTime? at;
   final String? name;
   final int? frame;
-  final double? altitudeDeg;
 }
 
 class MonitorTarget {
@@ -251,6 +252,7 @@ class MonitorGuider {
     this.ra,
     this.dec,
     this.trace = const [],
+    this.rmsPerFrame = const [],
     this.lastDither,
   });
 
@@ -262,6 +264,10 @@ class MonitorGuider {
 
   /// RA and Dec error (″), oldest first.
   final List<({double ra, double dec})> trace;
+
+  /// Total RMS (″) of the session's saved frames, oldest first, one per saved
+  /// frame (`/stats/guiding`).
+  final List<double> rmsPerFrame;
   final DateTime? lastDither;
 }
 
@@ -293,7 +299,16 @@ class MonitorFrame {
 }
 
 class MonitorLastFrame {
-  const MonitorLastFrame({this.frames = const [], this.autofocusAt, this.tempSinceAutofocus, this.focuser = false});
+  const MonitorLastFrame({
+    this.frames = const [],
+    this.autofocusAt,
+    this.tempSinceAutofocus,
+    this.focuser = false,
+    this.sensorC,
+    this.sensorTargetC,
+    this.coolerPowerPct,
+    this.focuserC,
+  });
 
   /// This run's saved frames, oldest first, at most [kMonitorTrendFrames].
   final List<MonitorFrame> frames;
@@ -303,7 +318,62 @@ class MonitorLastFrame {
   /// The rig has a focuser: the autofocus line shows.
   final bool focuser;
 
+  /// The camera's sensor, its target and the cooler's power; the focuser's
+  /// temperature. Figures of the Conditions tile.
+  final double? sensorC;
+  final double? sensorTargetC;
+  final double? coolerPowerPct;
+  final double? focuserC;
+
   MonitorFrame? get last => frames.isEmpty ? null : frames.last;
+
+  /// HFR up, stars down and sky background up against the session's start.
+  MonitorDeviation? get hfrDeviation => monitorDeviation([for (final f in frames) ?f.hfr], higherIsWorse: true);
+  MonitorDeviation? get starsDeviation =>
+      monitorDeviation([for (final f in frames) ?f.stars?.toDouble()], higherIsWorse: false);
+  MonitorDeviation? get backgroundDeviation =>
+      monitorDeviation([for (final f in frames) ?f.background], higherIsWorse: true);
+}
+
+/// A reading against the session's own start: [start] is the median of its
+/// first [kMonitorBaselineFrames] saved frames, [pct] the change of the median
+/// of the last ones from it, [flagged] when it went the wrong way by
+/// [kMonitorDeviationPct] or more.
+class MonitorDeviation {
+  const MonitorDeviation({required this.start, required this.pct, required this.flagged});
+  final double start;
+  final double pct;
+  final bool flagged;
+}
+
+/// The saved frames the start and the current value are each the median of.
+const kMonitorBaselineFrames = 3;
+
+/// No flag before this many saved frames (the two medians must not overlap).
+const kMonitorDeviationMinFrames = 6;
+
+/// A change this big (percent) the wrong way is flagged.
+const kMonitorDeviationPct = 15.0;
+
+/// [values] oldest first, or null before [kMonitorDeviationMinFrames] values
+/// or with a start of zero.
+MonitorDeviation? monitorDeviation(List<double> values, {required bool higherIsWorse}) {
+  if (values.length < kMonitorDeviationMinFrames) return null;
+  double median(List<double> v) {
+    final x = [...v]..sort();
+    return x[x.length ~/ 2];
+  }
+
+  final start = median(values.sublist(0, kMonitorBaselineFrames));
+  final now = median(values.sublist(values.length - kMonitorBaselineFrames));
+  if (start == 0) return null;
+  final pct = (now / start - 1) * 100;
+  return MonitorDeviation(
+    start: start,
+    pct: pct,
+    // A small allowance: 115 / 100 - 1 is 14.999999999999986 in doubles.
+    flagged: (higherIsWorse ? pct : -pct) >= kMonitorDeviationPct - 1e-9,
+  );
 }
 
 /// Tonight's timeline.
@@ -324,7 +394,6 @@ class MonitorSnapshot {
     required this.now,
     this.frozenSince,
     this.upNext = const [],
-    this.tonightsBest = false,
     this.target,
     required this.flip,
     this.safety,
@@ -344,8 +413,6 @@ class MonitorSnapshot {
   final MonitorNow now;
   final List<MonitorUpNext> upNext;
 
-  /// No plan: [upNext] is tonight's best Targets.
-  final bool tonightsBest;
   final MonitorTarget? target;
   final MonitorFlip flip;
 
@@ -481,6 +548,8 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
         sub.close();
       }
       final stars = h.stars, clipped = h.clippedStars;
+      // The guiding series gains this frame's point (reused client, ADR 0013).
+      if (ref.mounted) unawaited(ref.read(guidingRmsProvider.notifier).refresh());
       add(MonitorFrame(
         id: id,
         hfr: h.hfr,
@@ -541,7 +610,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
             : MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
         now: last.now,
         upNext: last.upNext,
-        tonightsBest: last.tonightsBest,
         target: last.target,
         flip: last.flip,
         safety: last.safety,
@@ -569,6 +637,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final coolerOff = ref.watch(monitorCoolerOffProvider);
     final trends = ref.watch(monitorTrendsProvider);
     final site = ref.watch(siteSettingsProvider);
+    final guidingRms = ref.watch(guidingRmsProvider).value;
     ref.watch(skyClockProvider);
 
     final active = info?.state?.isActive ?? false;
@@ -716,7 +785,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       status: nowStatus,
       word: word,
       target: target?.tag ?? target?.name ?? info?.currentTargetName,
-      filter: step < 0 ? null : target!.steps[step].filterName,
+      filter: step < 0 ? null : _name(target!.steps[step].filterName),
       subSeconds: sub,
       frameEndsAt: frameEndsAt,
       frameSeconds: frameEndsAt == null ? null : sub,
@@ -734,7 +803,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final runLeft = info?.estimatedRemainingSeconds;
     final parkAt = active && ours && runLeft != null ? now.add(Duration(seconds: runLeft.round())) : null;
     final upNext = <MonitorUpNext>[];
-    var best = false;
     if (active && target != null) {
       final nextFrame = done.fold<int>(0, (a, b) => a + b) + 2;
       if (nextFrame <= simplePlanTotal(target.steps)) {
@@ -743,7 +811,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ]);
         if (nextStep >= 0) {
           upNext.add(MonitorUpNext(MonitorUpKind.nextFrame,
-              at: frameEndsAt, frame: nextFrame, name: target.steps[nextStep].filterName));
+              at: frameEndsAt, frame: nextFrame, name: _name(target.steps[nextStep].filterName)));
         }
       }
       if (flipAt != null) upNext.add(MonitorUpNext(MonitorUpKind.meridianFlip, at: flipAt));
@@ -761,12 +829,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       upNext
         ..clear()
         ..addAll(timed);
-    } else if (!active && startAt == null) {
-      best = true;
-      final sky = ref.watch(tonightSkyProvider).value ?? const [];
-      for (final o in sky.take(5)) {
-        upNext.add(MonitorUpNext(MonitorUpKind.best, name: o.name, altitudeDeg: o.altitudeDeg));
-      }
     }
 
     // Tonight's dark, for the timeline and the altitude curve.
@@ -809,7 +871,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       final spent = doneOn(cur);
       targetTile = MonitorTarget(
         name: target.tag ?? target.name,
-        longName: target.tag == null || target.tag == target.name ? null : target.name,
+        longName: target.tag == null || _sameName(target.tag!, target.name) ? null : target.name,
         status: mount?.parked ?? false
             ? MonitorStatus.off
             : active && (mount?.tracking ?? false)
@@ -896,6 +958,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
           for (final s in steps.length > 100 ? steps.sublist(steps.length - 100) : steps)
             if (s.raArcsec != null && s.decArcsec != null) (ra: s.raArcsec!, dec: s.decArcsec!),
         ],
+        rmsPerFrame: _rmsPerFrame(guidingRms, trends.length),
         lastDither: markers.where((m) => m.kind == GuideMarkerKind.dithered).lastOrNull?.at.toLocal(),
       );
     }
@@ -908,6 +971,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       focuser: focuser != null,
       autofocusAt: af.completedUtc?.toLocal(),
       tempSinceAutofocus: afTemp != null && liveTemp != null ? liveTemp - afTemp : null,
+      sensorC: cam?.ccdTemperature,
+      sensorTargetC: cam?.coolerOn ?? false ? cam?.coolerSetpointC : null,
+      coolerPowerPct: cam?.coolerPowerPct,
+      focuserC: liveTemp,
     );
 
     // Tonight.
@@ -941,7 +1008,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       verdict: verdict,
       now: nowTile,
       upNext: upNext.take(5).toList(),
-      tonightsBest: best,
       target: targetTile,
       flip: MonitorFlip(
         state: flipInfo?.state == 'flipping' && waitLeft != null ? 'waiting_for_meridian' : flipInfo?.state,
@@ -967,6 +1033,20 @@ bool monitorFailedSticky(SimpleMessage m) => m.sticky && m.kind == SimpleMessage
 MonitorVerdict monitorMessageVerdict(SimpleMessage m) => MonitorVerdict(MonitorVerdictKind.message,
     m.kind == SimpleMessageKind.error ? MonitorStatus.fault : MonitorStatus.warning,
     message: m);
+
+/// A filter name, or null for the camera with none (a plan row can hold '').
+String? _name(String s) => s.trim().isEmpty ? null : s;
+
+/// "NGC 1269" and "NGC1269" are one name.
+bool _sameName(String a, String b) => a.replaceAll(RegExp(r'\s'), '') == b.replaceAll(RegExp(r'\s'), '');
+
+/// One point per saved frame: the series' last [frames] samples (both end at
+/// the newest frame). shortcut: a frame the guider left no sample for shifts
+/// the match by one, upgrade when MonitorFrame carries its capture time.
+List<double> _rmsPerFrame(GuidingRmsSeries? series, int frames) {
+  final all = [for (final p in series?.samples ?? const <GuidingRmsPoint>[]) p.rmsArcsec];
+  return frames == 0 ? const [] : all.length > frames ? all.sublist(all.length - frames) : all;
+}
 
 /// The row of [t]'s plan the next frame comes from: the first not yet full.
 int _currentStep(SimpleTarget t, List<int> done) {

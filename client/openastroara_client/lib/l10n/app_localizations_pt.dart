@@ -4246,19 +4246,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorUntilFlip => 'until the flip';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Frame $frame of $frames · about $left left on $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Frame $frame of $frames · about $left left';
   }
 
   @override
   String get monitorUpNext => 'Up next';
 
   @override
-  String get monitorTonightsBest => 'Tonight\'s best';
-
-  @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Frame $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Frame $frame';
   }
 
   @override
@@ -4266,11 +4263,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get monitorThen => 'then';
-
-  @override
-  String monitorAltitudeUp(String alt) {
-    return '$alt° up';
-  }
 
   @override
   String get monitorTarget => 'Target';
@@ -4376,9 +4368,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get monitorLastFrame => 'Last frame';
-
-  @override
   String get monitorHfr => 'HFR';
 
   @override
@@ -4392,7 +4381,70 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since';
+    return 'Autofocus $time · $delta since then';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n saved';
+  }
+
+  @override
+  String get monitorOpenWindow => 'Open its window';
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'session start $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % since session start';
+  }
+
+  @override
+  String get monitorDrifting => 'Drifting';
+
+  @override
+  String get monitorConditions => 'Conditions';
+
+  @override
+  String get monitorCameraAndFocuser => 'Camera and focuser';
+
+  @override
+  String get monitorSensor => 'Sensor';
+
+  @override
+  String get monitorCoolerPower => 'Cooler power';
+
+  @override
+  String get monitorFocuserTemp => 'Focuser';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Imaging $start to $end';
+  }
+
+  @override
+  String get monitorStarsAndSky => 'Stars · sky background';
+
+  @override
+  String get monitorSkyOwnScale => 'Sky (own scale)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS per saved frame';
+
+  @override
+  String get monitorFixedScale => 'fixed ±2.5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'flip $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'park $time';
   }
 
   @override
@@ -10242,19 +10294,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorUntilFlip => 'até a virada';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Quadro $frame de $frames · cerca de $left restantes em $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Quadro $frame de $frames · cerca de $left restantes';
   }
 
   @override
   String get monitorUpNext => 'A seguir';
 
   @override
-  String get monitorTonightsBest => 'Melhores de hoje';
-
-  @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Quadro $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Quadro $frame';
   }
 
   @override
@@ -10262,11 +10311,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorThen => 'depois';
-
-  @override
-  String monitorAltitudeUp(String alt) {
-    return '$alt° de altura';
-  }
 
   @override
   String get monitorTarget => 'Alvo';
@@ -10371,9 +10415,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get monitorLastFrame => 'Último quadro';
-
-  @override
   String get monitorHfr => 'HFR';
 
   @override
@@ -10388,6 +10429,69 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String monitorAutofocusSince(String time, String delta) {
     return 'Foco automático $time · $delta desde então';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n salvos';
+  }
+
+  @override
+  String get monitorOpenWindow => 'Abrir a janela';
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'início da sessão $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % desde o início da sessão';
+  }
+
+  @override
+  String get monitorDrifting => 'Variando';
+
+  @override
+  String get monitorConditions => 'Condições';
+
+  @override
+  String get monitorCameraAndFocuser => 'Câmera e focalizador';
+
+  @override
+  String get monitorSensor => 'Sensor';
+
+  @override
+  String get monitorCoolerPower => 'Potência do resfriador';
+
+  @override
+  String get monitorFocuserTemp => 'Focalizador';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Captura $start a $end';
+  }
+
+  @override
+  String get monitorStarsAndSky => 'Estrelas · fundo do céu';
+
+  @override
+  String get monitorSkyOwnScale => 'Céu (escala própria)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS por quadro salvo';
+
+  @override
+  String get monitorFixedScale => 'escala fixa ±2,5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'inversão $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'estacionar $time';
   }
 
   @override

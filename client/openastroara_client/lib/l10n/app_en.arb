@@ -5338,7 +5338,7 @@
   "@monitorUntilFlip": {
     "description": "Monitor Now tile caption under the meridian wait countdown"
   },
-  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left on {target}",
+  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left",
   "@monitorFrameOf": {
     "description": "Monitor Now tile: progress on the Target",
     "placeholders": {
@@ -5350,9 +5350,6 @@
       },
       "left": {
         "type": "String"
-      },
-      "target": {
-        "type": "String"
       }
     }
   },
@@ -5360,19 +5357,12 @@
   "@monitorUpNext": {
     "description": "Monitor Now tile: the upcoming steps"
   },
-  "monitorTonightsBest": "Tonight's best",
-  "@monitorTonightsBest": {
-    "description": "Monitor Now tile with no plan: tonight's best Targets"
-  },
-  "monitorUpFrame": "Frame {frame} · {filter}",
+  "monitorUpFrame": "Frame {frame}",
   "@monitorUpFrame": {
-    "description": "Monitor Up next row: the next frame and filter",
+    "description": "Monitor Up next row: the next frame (the filter follows when the camera has one)",
     "placeholders": {
       "frame": {
         "type": "int"
-      },
-      "filter": {
-        "type": "String"
       }
     }
   },
@@ -5383,15 +5373,6 @@
   "monitorThen": "then",
   "@monitorThen": {
     "description": "Monitor Up next row whose time isn't known"
-  },
-  "monitorAltitudeUp": "{alt}° up",
-  "@monitorAltitudeUp": {
-    "description": "Monitor Tonight's best row: the Target's altitude now",
-    "placeholders": {
-      "alt": {
-        "type": "String"
-      }
-    }
   },
   "monitorTarget": "Target",
   "@monitorTarget": {
@@ -5553,10 +5534,6 @@
       }
     }
   },
-  "monitorLastFrame": "Last frame",
-  "@monitorLastFrame": {
-    "description": "Monitor tile: the last saved frame's quality"
-  },
   "monitorHfr": "HFR",
   "@monitorHfr": {
     "description": "Monitor Last frame reading"
@@ -5573,7 +5550,7 @@
   "@monitorClippedStars": {
     "description": "Monitor Last frame reading: the share of clipped stars"
   },
-  "monitorAutofocusSince": "Autofocus {time} · {delta} since",
+  "monitorAutofocusSince": "Autofocus {time} · {delta} since then",
   "@monitorAutofocusSince": {
     "description": "Monitor Last frame: the last autofocus and the temperature change since",
     "placeholders": {
@@ -5581,6 +5558,110 @@
         "type": "String"
       },
       "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorSaved": "{n} saved",
+  "@monitorSaved": {
+    "description": "Monitor Now tile: frames saved so far",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorOpenWindow": "Open its window",
+  "@monitorOpenWindow": {
+    "description": "Monitor, enlarged tile: opens the window the tile belongs to"
+  },
+  "monitorStartedAt": "session start {value}",
+  "@monitorStartedAt": {
+    "description": "Monitor graph tile: the reading the session started at",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorChangeSinceStart": "{metric} {pct} % since session start",
+  "@monitorChangeSinceStart": {
+    "description": "Monitor deviation flag: a reading's change against the session's own start",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorDrifting": "Drifting",
+  "@monitorDrifting": {
+    "description": "Monitor graph tile status word: a reading moved 15 % or more the wrong way since session start"
+  },
+  "monitorConditions": "Conditions",
+  "@monitorConditions": {
+    "description": "Monitor tile: weather with the camera and focuser temperatures"
+  },
+  "monitorCameraAndFocuser": "Camera and focuser",
+  "@monitorCameraAndFocuser": {
+    "description": "Monitor Conditions tile: section heading"
+  },
+  "monitorSensor": "Sensor",
+  "@monitorSensor": {
+    "description": "Monitor Conditions tile: the camera sensor's temperature"
+  },
+  "monitorCoolerPower": "Cooler power",
+  "@monitorCoolerPower": {
+    "description": "Monitor Conditions tile: the cooler's power"
+  },
+  "monitorFocuserTemp": "Focuser",
+  "@monitorFocuserTemp": {
+    "description": "Monitor Conditions tile: the focuser's temperature"
+  },
+  "monitorImagingSpan": "Imaging {start} to {end}",
+  "@monitorImagingSpan": {
+    "description": "Monitor altitude graph key: the plan's imaging span",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorStarsAndSky": "Stars · sky background",
+  "@monitorStarsAndSky": {
+    "description": "Monitor tile: stars and sky background per saved frame"
+  },
+  "monitorSkyOwnScale": "Sky (own scale)",
+  "@monitorSkyOwnScale": {
+    "description": "Monitor stars graph key: the sky background line has its own scale"
+  },
+  "monitorRmsPerFrame": "RMS per saved frame",
+  "@monitorRmsPerFrame": {
+    "description": "Monitor guider tile: the session's guiding RMS graph"
+  },
+  "monitorFixedScale": "fixed ±2.5″",
+  "@monitorFixedScale": {
+    "description": "Monitor guider tile key: the live trace's fixed scale"
+  },
+  "monitorFlipPin": "flip {time}",
+  "@monitorFlipPin": {
+    "description": "Monitor Tonight timeline: the meridian flip's label",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorParkPin": "park {time}",
+  "@monitorParkPin": {
+    "description": "Monitor Tonight timeline: the mount park's label",
+    "placeholders": {
+      "time": {
         "type": "String"
       }
     }

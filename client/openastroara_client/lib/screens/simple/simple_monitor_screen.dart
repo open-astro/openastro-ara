@@ -20,13 +20,13 @@ import 'simple_plan_panel.dart' show simpleRunDuration;
 import 'simple_preview_panel.dart' show simpleCountdown;
 import 'simple_shell.dart' show kSimpleStopSize, simpleRailScale;
 
-/// Where a tile tap goes: Monitor closes and the shell opens the window or
-/// panel that owns the thing (#1724).
+/// The window an enlarged tile's button opens: Monitor closes and the shell
+/// opens the window or panel that owns the thing (#1724, #1875).
 enum MonitorDestination { queue, sky, mount, safety, weather, guider, frameInfo }
 
-/// Below this width the grid needs more room than it has: Monitor is offered
-/// only from a phone's portrait deck (#1775), and lays its tiles in one
-/// column under a verdict on a line of its own.
+/// Below this width the grid needs more room than it has: Monitor lays its
+/// tiles in one column under a verdict on a line of its own (#1775). Monitor
+/// is offered at every width.
 const double kMonitorMinWidth = 900;
 
 /// The two right columns keep this width; extra width goes to the left two.
@@ -43,7 +43,8 @@ const double _kGridMinHeight = 560;
 class SimpleMonitorScreen extends ConsumerStatefulWidget {
   const SimpleMonitorScreen({super.key, required this.onOpen});
 
-  /// A tile was tapped: the shell closes Monitor and opens what owns it.
+  /// An enlarged tile's button was pressed: the shell closes Monitor and
+  /// opens what owns it.
   final ValueChanged<MonitorDestination> onOpen;
 
   @override
@@ -53,6 +54,9 @@ class SimpleMonitorScreen extends ConsumerStatefulWidget {
 class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
   late final KeepAwake _awake = ref.read(keepAwakeProvider);
   late final MonitorShowing _showing = ref.read(monitorShowingProvider.notifier);
+
+  /// The tile enlarged over the grid, if any: widget state only (#1875).
+  String? _big;
 
   @override
   void initState() {
@@ -94,7 +98,15 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
                   const SizedBox(height: _kGap),
                   // Frozen, the tiles say Last known with grey dots; no dimming,
                   // which took the last known values under 3:1.
-                  Expanded(child: _Grid(s: s, onOpen: widget.onOpen, stop: stop)),
+                  Expanded(
+                    child: _Grid(
+                      s: s,
+                      onOpen: widget.onOpen,
+                      stop: stop,
+                      big: _big,
+                      onBig: (id) => setState(() => _big = id),
+                    ),
+                  ),
                 ],
               ),
               Positioned(
@@ -144,6 +156,23 @@ class _TopLine extends ConsumerWidget {
     // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
     // Mode's full-screen pages).
     const back = BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary);
+    // The title with its icon, as the Sky Album has (#1875).
+    final title = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.monitor_heart_outlined, size: 22, color: AraColors.textSecondary),
+        const SizedBox(width: AraSpace.s8),
+        Flexible(
+          child: Text(
+            l10n.monitorTitle,
+            key: const Key('simple-monitor-title'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
     final words = [
       if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
       Expanded(
@@ -233,21 +262,34 @@ class _TopLine extends ConsumerWidget {
       // the readings, which fill a phone's width at 2x text; where they do
       // not fit beside Back (a 360 px phone at 2x), they go under it.
       child: narrow
-          ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [back, Row(mainAxisSize: MainAxisSize.min, children: readings)],
-              ),
-              Flexible(child: Row(children: words)),
-            ])
-          : Row(children: [
-              back,
-              const SizedBox(width: AraSpace.s4),
-              ...words,
-              const SizedBox(width: AraSpace.s16),
-              ...readings,
-            ]),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [back, title]),
+                    Row(mainAxisSize: MainAxisSize.min, children: readings),
+                  ],
+                ),
+                Flexible(child: Row(children: words)),
+              ],
+            )
+          : Row(
+              children: [
+                back,
+                // A question, a stop's outcome or large text needs the whole line.
+                if (question == null && message == null && MediaQuery.textScalerOf(context).scale(1) <= 1.3) ...[
+                  title,
+                  const SizedBox(width: AraSpace.s16),
+                ],
+                ...words,
+                const SizedBox(width: AraSpace.s16),
+                ...readings,
+              ],
+            ),
     );
   }
 }
@@ -277,10 +319,22 @@ class _Battery extends StatelessWidget {
   }
 }
 
-/// The tiles: two fixed right columns, the left two sharing the rest; on a
-/// phone, one column. Which areas show comes from the rig's profile.
+/// What a tile does with a tap: enlarge, or shrink back when it is the
+/// enlarged one; the enlarged tile's button opens its window (#1875).
+class _Ctl {
+  const _Ctl({required this.big, required this.onTap, required this.onOpen});
+
+  final bool big;
+  final VoidCallback onTap;
+  final VoidCallback onOpen;
+}
+
+/// The tiles, laid out as the mock's grid. With weather (full rig): two
+/// flexible left columns and two fixed right ones, Safety a strip over them.
+/// Without it, four equal columns. A tile for gear the rig lacks is not
+/// built and the grid reflows (#1875); on a phone, one column.
 class _Grid extends StatelessWidget {
-  const _Grid({required this.s, required this.onOpen, required this.stop});
+  const _Grid({required this.s, required this.onOpen, required this.stop, required this.big, required this.onBig});
 
   final MonitorSnapshot s;
   final ValueChanged<MonitorDestination> onOpen;
@@ -288,128 +342,211 @@ class _Grid extends StatelessWidget {
   /// Stop's side: the phone column's end scrolls clear of it.
   final double stop;
 
+  /// The enlarged tile's id.
+  final String? big;
+  final ValueChanged<String?> onBig;
+
   @override
   Widget build(BuildContext context) {
-    final now = _NowTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
-    final target = _TargetTile(s: s, onTap: () => onOpen(MonitorDestination.sky));
-    final flip = _FlipTile(s: s, onTap: () => onOpen(MonitorDestination.mount));
-    final safety = s.safety == null ? null : _SafetyTile(s: s, onTap: () => onOpen(MonitorDestination.safety));
-    final weather = s.weather == null ? null : _WeatherTile(s: s, onTap: () => onOpen(MonitorDestination.weather));
-    final guider = s.guider == null ? null : _GuiderTile(s: s, onTap: () => onOpen(MonitorDestination.guider));
-    final focus = _LastFrameTile(s: s, onTap: () => onOpen(MonitorDestination.frameInfo));
-    final night = _NightTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
-    const strip = 56.0;
+    _Ctl ctl(String id, MonitorDestination to) =>
+        _Ctl(big: big == id, onTap: () => onBig(big == id ? null : id), onOpen: () => onOpen(to));
+    final tiles = <String, Widget>{
+      'now': _NowTile(s: s, ctl: ctl('now', MonitorDestination.queue)),
+      if (s.safety != null) 'safety': _SafetyTile(s: s, ctl: ctl('safety', MonitorDestination.safety)),
+      'alt': _TargetTile(s: s, ctl: ctl('alt', MonitorDestination.sky)),
+      if (s.weather != null) 'cond': _ConditionsTile(s: s, ctl: ctl('cond', MonitorDestination.weather)),
+      if (s.guider != null) 'guide': _GuiderTile(s: s, ctl: ctl('guide', MonitorDestination.guider)),
+      'hfr': _HfrTile(s: s, ctl: ctl('hfr', MonitorDestination.frameInfo)),
+      'stars': _StarsTile(s: s, ctl: ctl('stars', MonitorDestination.frameInfo)),
+      'flip': _FlipTile(s: s, ctl: ctl('flip', MonitorDestination.mount)),
+      'night': _NightTile(s: s, ctl: ctl('night', MonitorDestination.queue)),
+    };
+    final narrow = MediaQuery.sizeOf(context).width < kMonitorMinWidth;
+    final enlarged = tiles[big];
+    if (enlarged != null) {
+      // Over the grid, Stop's corner kept clear.
+      return Padding(
+        key: const Key('simple-monitor-enlarged'),
+        padding: EdgeInsets.only(right: narrow ? 0 : stop + _kGap, bottom: narrow ? stop + _kGap : 0),
+        child: enlarged,
+      );
+    }
 
     // A phone (#1775): one column that scrolls, each tile at a fixed height;
     // the end scrolls clear of Stop in the corner.
-    if (MediaQuery.sizeOf(context).width < kMonitorMinWidth) {
+    if (narrow) {
+      const heights = {
+        'now': 440.0,
+        'safety': 56.0,
+        'alt': 220.0,
+        'cond': 300.0,
+        'guide': 330.0,
+        'hfr': 190.0,
+        'stars': 190.0,
+        'flip': 150.0,
+        'night': 108.0,
+      };
       return ListView(
         key: const Key('simple-monitor-column'),
         padding: EdgeInsets.only(bottom: stop + _kGap),
         children: [
-          for (final (tile, height) in [
-            (now, 440.0),
-            (target, 150.0),
-            (flip, 150.0),
-            if (safety != null) (safety, strip),
-            if (weather != null) (weather, 150.0),
-            if (guider != null) (guider, 170.0),
-            (focus, 170.0),
-            (night, 108.0),
-          ])
+          for (final e in tiles.entries)
             Padding(
               padding: const EdgeInsets.only(bottom: _kGap),
-              child: SizedBox(height: height, child: tile),
+              child: SizedBox(height: heights[e.key], child: e.value),
             ),
         ],
       );
     }
 
-    Widget side = LayoutBuilder(builder: (context, box) {
-      final h = box.maxHeight;
-      if (safety != null && weather != null) {
-        final fr = (h - strip - 2 * _kGap) / 2;
-        return Row(children: [
-          SizedBox(
-              width: _kSide,
-              child: Column(children: [
-                SizedBox(height: strip + _kGap + fr, child: target),
-                const SizedBox(height: _kGap),
-                Expanded(child: flip),
-              ])),
-          const SizedBox(width: _kGap),
-          SizedBox(
-              width: _kSide,
-              child: Column(children: [
-                SizedBox(height: strip, child: safety),
-                const SizedBox(height: _kGap),
-                Expanded(child: weather),
-              ])),
-        ]);
-      }
-      if (safety != null) {
-        return Column(children: [
-          SizedBox(height: strip, child: safety),
-          const SizedBox(height: _kGap),
-          Expanded(child: target),
-          const SizedBox(height: _kGap),
-          Expanded(child: flip),
-        ]);
-      }
-      if (weather != null) {
-        return Row(children: [
-          SizedBox(
-              width: _kSide,
-              child: Column(children: [
-                Expanded(child: target),
-                const SizedBox(height: _kGap),
-                Expanded(child: flip),
-              ])),
-          const SizedBox(width: _kGap),
-          SizedBox(width: _kSide, child: weather),
-        ]);
-      }
-      return Column(children: [
-        Expanded(child: target),
-        const SizedBox(height: _kGap),
-        SizedBox(height: 150, child: flip),
-      ]);
-    });
-
     // Short of room (a question stacked on the top line, large text), the
     // grid keeps its least height and scrolls rather than crushing tiles.
     return LayoutBuilder(
       builder: (context, box) => box.maxHeight >= _kGridMinHeight
-          ? _grid(now, side, guider, focus, night)
+          ? _wide(tiles, box.maxHeight)
           : SingleChildScrollView(
-              child: SizedBox(height: _kGridMinHeight, child: _grid(now, side, guider, focus, night)),
+              child: SizedBox(height: _kGridMinHeight, child: _wide(tiles, _kGridMinHeight)),
             ),
     );
   }
 
-  Widget _grid(Widget now, Widget side, Widget? guider, Widget focus, Widget night) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _wide(Map<String, Widget> t, double height) {
+    const strip = 56.0, night = 108.0;
+    final safety = t['safety'], cond = t['cond'], guide = t['guide'];
+    // The timeline leaves Stop its corner.
+    final nightRow = Padding(
+      padding: const EdgeInsets.only(right: night + _kGap),
+      child: t['night'],
+    );
+    if (cond != null) {
+      // One row of the right columns: three of them above the timeline.
+      final rows = height - night - _kGap;
+      final fr = (rows - (safety == null ? 0 : strip + _kGap) - 2 * _kGap) / 3;
+      final top = safety == null ? (rows - _kGap) / 2 : strip + _kGap + fr;
+      return Column(
+        children: [
+          SizedBox(
+            height: rows,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      if (guide == null)
+                        Expanded(child: t['now']!)
+                      else ...[
+                        SizedBox(height: top, child: t['now']),
+                        const SizedBox(height: _kGap),
+                        Expanded(child: guide),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: _kGap),
+                SizedBox(
+                  width: 2 * _kSide + _kGap,
+                  child: Column(
+                    children: [
+                      if (safety != null) ...[SizedBox(height: strip, child: safety), const SizedBox(height: _kGap)],
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: _kSide,
+                              child: Column(
+                                children: [
+                                  Expanded(child: t['alt']!),
+                                  const SizedBox(height: _kGap),
+                                  Expanded(child: t['hfr']!),
+                                  const SizedBox(height: _kGap),
+                                  Expanded(child: t['stars']!),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: _kGap),
+                            SizedBox(
+                              width: _kSide,
+                              child: Column(
+                                children: [
+                                  Expanded(flex: 2, child: cond),
+                                  const SizedBox(height: _kGap),
+                                  Expanded(child: t['flip']!),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: _kGap),
+          SizedBox(height: night, child: nightRow),
+        ],
+      );
+    }
+    // No weather station: Target altitude takes two columns and two rows,
+    // HFR and Stars two rows, and the flip sits beside Tonight.
+    return Column(
       children: [
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(child: now),
-            const SizedBox(width: _kGap),
-            SizedBox(width: 2 * _kSide + _kGap, child: side),
-          ]),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(child: t['now']!),
+                    if (guide != null) ...[const SizedBox(height: _kGap), Expanded(child: guide)],
+                  ],
+                ),
+              ),
+              const SizedBox(width: _kGap),
+              Expanded(
+                child: Column(
+                  children: [
+                    if (safety != null) ...[SizedBox(height: strip, child: safety), const SizedBox(height: _kGap)],
+                    Expanded(child: t['alt']!),
+                    const SizedBox(height: _kGap),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: t['hfr']!),
+                          const SizedBox(width: _kGap),
+                          Expanded(child: t['stars']!),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: _kGap),
         SizedBox(
-          height: 170,
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (guider != null) ...[Expanded(child: guider), const SizedBox(width: _kGap)],
-            guider != null ? SizedBox(width: 2 * _kSide + _kGap, child: focus) : Expanded(child: focus),
-          ]),
+          height: night,
+          child: Padding(
+            padding: const EdgeInsets.only(right: night + _kGap),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: t['night']!),
+                const SizedBox(width: _kGap),
+                Expanded(child: t['flip']!),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: _kGap),
-        // The timeline leaves Stop its corner.
-        SizedBox(height: 108, child: Padding(padding: const EdgeInsets.only(right: 108 + _kGap), child: night)),
       ],
     );
+  }
 }
 
 /// A healthy tile has no dot, so any dot means something changed.
@@ -424,9 +561,10 @@ Widget? _dot(MonitorStatus s) => switch (s) {
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 TextStyle get _big => kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w300);
 
-/// One tile: its header (icon, name, status word, dot), then its content,
-/// which scrolls inside the tile when larger text no longer fits. Read out as
-/// its name, value and status.
+/// One tile: its header (icon, name, the status word in the right corner,
+/// dot), then its content, which scrolls inside the tile when larger text no
+/// longer fits. Enlarged, it ends in a button to its window. Read out as its
+/// name, value and status.
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.tileKey,
@@ -435,7 +573,7 @@ class _Tile extends StatelessWidget {
     required this.status,
     this.word,
     required this.value,
-    required this.onTap,
+    required this.ctl,
     required this.children,
     this.frozen = false,
   });
@@ -448,7 +586,7 @@ class _Tile extends StatelessWidget {
 
   /// What a screen reader says after the name.
   final String value;
-  final VoidCallback onTap;
+  final _Ctl ctl;
   final List<Widget> children;
   final bool frozen;
 
@@ -471,14 +609,14 @@ class _Tile extends StatelessWidget {
       excludeSemantics: true,
       child: Material(
         key: Key('simple-monitor-$tileKey'),
-        color: AraColors.tileFill,
+        color: ctl.big ? AraColors.bgInput : AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
           side: BorderSide(color: outline, width: outline == AraColors.border ? 1 : 1.5),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
+          onTap: ctl.onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
             child: LayoutBuilder(
@@ -489,20 +627,43 @@ class _Tile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(children: [
-                          Icon(icon, size: 18, color: accent),
-                          const SizedBox(width: 6),
-                          Expanded(child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          // Flexible: a longer word (pt-BR) shortens, never overflows.
-                          if (shown != null && shown.isNotEmpty)
-                            Flexible(
-                              child: Text(shown,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim.copyWith(color: wordColour)),
+                        Row(
+                          children: [
+                            Icon(icon, size: 18, color: accent),
+                            const SizedBox(width: 6),
+                            // The name takes what the word leaves; the word sits
+                            // in the right corner at its own width, shortening
+                            // only past 60 % of the tile (pt-BR).
+                            Expanded(
+                              child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
-                          // Stale numbers get a grey dot, as off gear does.
-                          if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[const SizedBox(width: 6), dot],
-                        ]),
+                            if (shown != null && shown.isNotEmpty)
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                                child: Text(
+                                  shown,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _dim.copyWith(color: wordColour),
+                                ),
+                              ),
+                            // Stale numbers get a grey dot, as off gear does.
+                            if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[
+                              const SizedBox(width: 6),
+                              dot,
+                            ],
+                          ],
+                        ),
                         ...children,
+                        if (ctl.big)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              key: const Key('simple-monitor-tile-open'),
+                              onPressed: ctl.onOpen,
+                              child: Text(context.l10n.monitorOpenWindow),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -587,11 +748,14 @@ String _age(Duration d) {
 
 String _n(double? v, [int digits = 1]) => v == null ? '—' : v.toStringAsFixed(digits);
 
+/// A filter name worth showing: a camera with no filter wheel has none.
+bool _named(String? f) => f != null && f.trim().isNotEmpty;
+
 class _NowTile extends StatelessWidget {
-  const _NowTile({required this.s, required this.onTap});
+  const _NowTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -609,7 +773,11 @@ class _NowTile extends StatelessWidget {
     };
     final task = n.target == null
         ? l10n.monitorNothingRunning
-        : [n.target!, ?n.filter, if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s'].join(' · ');
+        : [
+            n.target!,
+            if (_named(n.filter)) n.filter!,
+            if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s',
+          ].join(' · ');
     // The frame in hand, else a wait counted down, else the state in words.
     final end = n.frameEndsAt ?? n.countdownTo;
     final left = end?.difference(s.asOf).inSeconds;
@@ -649,20 +817,40 @@ class _NowTile extends StatelessWidget {
           ])
         // The state in Monitor's own words, big; the daemon's step under it,
         // small: its text can be a solver's whole log line (user, 2026-11-11).
-        : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(
-              n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : word,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
-            ),
-            if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
-              Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
-          ]);
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : word,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
+              ),
+              if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
+                Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
+            ],
+          );
+    // The tile's width as the grid lays it out: no LayoutBuilder here, as the
+    // tile's IntrinsicHeight cannot ask one for its height.
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final tileWidth = (s.weather != null
+            ? screenWidth - 24 - _kGap - (2 * _kSide + _kGap)
+            : (screenWidth - 24 - _kGap) / 2) -
+        24 -
+        AraSpace.s16;
+    // The countdown takes up to 60 % of it, and leaves Up next room for a time at the user's text size.
+    final countdownMax = math.max(
+      tileWidth * 0.3,
+      math.min(tileWidth * 0.6, tileWidth - 110 * MediaQuery.textScalerOf(context).scale(1)),
+    );
+    // One way to count: the frame in hand, and what is saved (#1875).
+    final saved = n.filters.fold<int>(0, (a, f) => a + f.done);
     final sub = n.frame != null && n.frames != null
-        ? l10n.monitorFrameOf(n.frame!.clamp(0, n.frames!), n.frames!,
-            simpleRunDuration(n.targetSecondsLeft ?? 0), n.target ?? '')
+        ? l10n.monitorFrameOf(n.frame!.clamp(0, n.frames!), n.frames!, simpleRunDuration(n.targetSecondsLeft ?? 0))
         : null;
+    // A camera with no filter wheel has one unnamed row: one bar, no name.
+    final named = n.filters.any((f) => _named(f.filter));
     return _Tile(
       tileKey: 'now',
       icon: Icons.photo_camera_outlined,
@@ -671,10 +859,21 @@ class _NowTile extends StatelessWidget {
       word: word,
       value: [task, if (left != null) simpleCountdown(left)].join(', '),
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
         Text(task, style: kSimpleReading, maxLines: 2, overflow: TextOverflow.ellipsis),
-        if (sub != null) Text(sub, style: _dim),
+        // A phone's busy tile has no height to spare: with named filters the
+        // counts under it say what is saved, so the line is only the frame.
+        if (sub != null)
+          MediaQuery.sizeOf(context).width < kMonitorMinWidth && named
+              ? Text(sub, style: _dim)
+              : Row(
+                  children: [
+                    Expanded(child: Text(sub, style: _dim)),
+                    const SizedBox(width: AraSpace.s8),
+                    Text(l10n.monitorSaved(saved), style: _dim),
+                  ],
+                ),
         const SizedBox(height: AraSpace.s8),
         // A phone (#1915): Up next goes under the state block, so the countdown
         // and the state word keep the tile's whole width.
@@ -690,16 +889,31 @@ class _NowTile extends StatelessWidget {
                     _UpNext(s: s, limit: n.filters.length > 4 ? 1 : null),
                   ],
                 )
+              // The countdown keeps its own width, Up next takes the rest: no
+              // hole on a wide window (#1875).
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(child: big),
+                    // Its own width, scaled down past that.
+                    ConstrainedBox(constraints: BoxConstraints(maxWidth: countdownMax), child: big),
                     const SizedBox(width: AraSpace.s16),
-                    SizedBox(width: 190, child: _UpNext(s: s)),
+                    Expanded(child: _UpNext(s: s)),
                   ],
                 ),
         ),
-        if (n.filters.isNotEmpty) ...[
+        if (n.filters.isNotEmpty && !named && n.frames != null) ...[
+          const SizedBox(height: AraSpace.s8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AraRadius.field),
+            child: LinearProgressIndicator(
+              value: n.frames == 0 ? 0 : (saved / n.frames!).clamp(0.0, 1.0),
+              minHeight: 6,
+              color: AraColors.accentInfo,
+              backgroundColor: AraColors.bgInput,
+            ),
+          ),
+        ],
+        if (named) ...[
           const SizedBox(height: AraSpace.s8),
           MediaQuery.sizeOf(context).width < kMonitorMinWidth
               // A phone (#1942): a count is never scaled below the 14 px floor
@@ -884,34 +1098,32 @@ class _UpNext extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(s.tonightsBest ? l10n.monitorTonightsBest : l10n.monitorUpNext, style: kSimpleCaption),
+        Text(l10n.monitorUpNext, style: kSimpleCaption),
         for (final u in limit == null ? s.upNext : s.upNext.take(limit!))
           Container(
             constraints: const BoxConstraints(minHeight: 30),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AraColors.border))),
-            child: Row(children: [
-              Expanded(
-                child: Text(
-                  switch (u.kind) {
-                    MonitorUpKind.nextFrame => l10n.monitorUpFrame(u.frame ?? 0, u.name ?? ''),
-                    MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
-                    MonitorUpKind.nextTarget || MonitorUpKind.best => u.name ?? '',
-                    MonitorUpKind.park => l10n.monitorUpPark,
-                  },
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: kSimpleText,
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AraColors.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    switch (u.kind) {
+                      MonitorUpKind.nextFrame =>
+                        '${l10n.monitorUpFrame(u.frame ?? 0)}${_named(u.name) ? ' · ${u.name}' : ''}',
+                      MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
+                      MonitorUpKind.nextTarget => u.name ?? '',
+                      MonitorUpKind.park => l10n.monitorUpPark,
+                    },
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: kSimpleText,
+                  ),
                 ),
-              ),
-              Text(
-                u.kind == MonitorUpKind.best
-                    ? l10n.monitorAltitudeUp(_n(u.altitudeDeg, 0))
-                    : u.at == null
-                    ? l10n.monitorThen
-                    : simpleClockTime(u.at!),
-                style: kSimpleUnit,
-              ),
-            ]),
+                Text(u.at == null ? l10n.monitorThen : simpleClockTime(u.at!), style: kSimpleUnit),
+              ],
+            ),
           ),
       ],
     );
@@ -919,10 +1131,10 @@ class _UpNext extends StatelessWidget {
 }
 
 class _TargetTile extends StatelessWidget {
-  const _TargetTile({required this.s, required this.onTap});
+  const _TargetTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -936,7 +1148,7 @@ class _TargetTile extends StatelessWidget {
         status: MonitorStatus.off,
         value: l10n.monitorNoTarget,
         frozen: s.frozen,
-        onTap: onTap,
+        ctl: ctl,
         children: [Text(l10n.monitorNoTarget, style: _dim)],
       );
     }
@@ -948,6 +1160,7 @@ class _TargetTile extends StatelessWidget {
       if (t.transit != null) l10n.monitorTransits(simpleClockTime(t.transit!)),
       if (t.moonPct != null) l10n.monitorMoon(t.moonPct!),
     ].join(' · ');
+    final hasCurve = t.curve.length > 1 && s.night.darkStart != null && s.night.darkEnd != null;
     return _Tile(
       tileKey: 'target',
       icon: Icons.my_location,
@@ -960,18 +1173,19 @@ class _TargetTile extends StatelessWidget {
       },
       value: [t.name, lines].join(', '),
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
         Text.rich(TextSpan(text: t.name, style: kSimpleReading, children: [
           if (t.longName != null) TextSpan(text: '  ${t.longName}', style: _dim),
         ])),
         if (lines.isNotEmpty) Text(lines, style: _dim),
         if (lines2.isNotEmpty) Text(lines2, style: _dim),
-        if (t.curve.length > 1)
+        if (hasCurve) ...[
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: AraSpace.s4),
               child: CustomPaint(
+                key: const Key('simple-monitor-altitude'),
                 painter: _AltitudePainter(
                   curve: t.curve,
                   start: s.night.darkStart!,
@@ -983,16 +1197,22 @@ class _TargetTile extends StatelessWidget {
               ),
             ),
           ),
+          if (t.spanStart != null && t.spanEnd != null)
+            Text(
+              l10n.monitorImagingSpan(simpleClockTime(t.spanStart!), simpleClockTime(t.spanEnd!)),
+              style: kSimpleUnit,
+            ),
+        ],
       ],
     );
   }
 }
 
 class _FlipTile extends StatelessWidget {
-  const _FlipTile({required this.s, required this.onTap});
+  const _FlipTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -1021,7 +1241,7 @@ class _FlipTile extends StatelessWidget {
       word: word,
       value: [?big, ?sub].join(', '),
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
         if (big != null) Text(big, key: const Key('simple-monitor-flip-countdown'), style: _big),
         if (sub != null) Text(sub, style: big == null ? kSimpleText : _dim),
@@ -1031,10 +1251,10 @@ class _FlipTile extends StatelessWidget {
 }
 
 class _SafetyTile extends StatelessWidget {
-  const _SafetyTile({required this.s, required this.onTap});
+  const _SafetyTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -1079,7 +1299,7 @@ class _SafetyTile extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
+          onTap: ctl.onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
             child: Row(children: [
@@ -1090,12 +1310,30 @@ class _SafetyTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: kSimpleText.copyWith(
-                        fontWeight: FontWeight.w600, color: colour == AraColors.accentConnected ? null : colour)),
-              ),
-              const SizedBox(width: AraSpace.s8),
-              if (since != null)
-                Expanded(child: Text(since, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption)),
-            ]),
+                      fontWeight: FontWeight.w600,
+                      color: colour == AraColors.accentConnected ? null : colour,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AraSpace.s8),
+                if (since != null)
+                  Expanded(
+                    child: Text(
+                      since,
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: kSimpleCaption,
+                    ),
+                  ),
+                if (ctl.big)
+                  TextButton(
+                    key: const Key('simple-monitor-tile-open'),
+                    onPressed: ctl.onOpen,
+                    child: Text(l10n.monitorOpenWindow),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1103,76 +1341,128 @@ class _SafetyTile extends StatelessWidget {
   }
 }
 
-class _WeatherTile extends StatelessWidget {
-  const _WeatherTile({required this.s, required this.onTap});
+/// Conditions: the weather station's readings, merged with the camera's and
+/// the focuser's temperatures, all as figures (#1875).
+class _ConditionsTile extends StatelessWidget {
+  const _ConditionsTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final w = s.weather!;
+    final f = s.lastFrame;
     const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     (String, String, String) cell(({MonitorWeatherCell cell, double value, double? overLimit}) c) => switch (c.cell) {
-          MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
-          MonitorWeatherCell.skyQuality => (_n(c.value, 2), '', l10n.monitorSkyQuality),
-          MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
-          MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
-          MonitorWeatherCell.humidity => (_n(c.value, 0), '%', l10n.monitorHumidity),
-          MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
-          MonitorWeatherCell.wind => (
-              _n(c.value, 0),
-              'km/h',
-              [
-                l10n.monitorWind,
-                if (w.windDeg != null) compass[((w.windDeg! % 360) / 45).round() % 8],
-                if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
-                if (w.gustKmh != null) l10n.monitorGusts(_n(w.gustKmh, 0)),
-              ].join(' · '),
+      MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
+      MonitorWeatherCell.skyQuality => (_n(c.value, 2), '', l10n.monitorSkyQuality),
+      MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
+      MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
+      MonitorWeatherCell.humidity => (_n(c.value, 0), '%', l10n.monitorHumidity),
+      MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
+      MonitorWeatherCell.wind => (
+        _n(c.value, 0),
+        'km/h',
+        [
+          l10n.monitorWind,
+          if (w.windDeg != null) compass[((w.windDeg! % 360) / 45).round() % 8],
+          if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
+          if (w.gustKmh != null) l10n.monitorGusts(_n(w.gustKmh, 0)),
+        ].join(' · '),
+      ),
+    };
+    // Camera and focuser: only what the rig reports.
+    final gear = <(String, String, String)>[
+      if (f.sensorC != null)
+        (
+          _n(f.sensorC),
+          '°C',
+          f.sensorTargetC == null ? l10n.monitorSensor : '${l10n.monitorSensor} · ${_n(f.sensorTargetC, 0)}',
+        ),
+      if (f.coolerPowerPct != null) (_n(f.coolerPowerPct, 0), '%', l10n.monitorCoolerPower),
+      if (f.focuser && f.focuserC != null) (_n(f.focuserC), '°C', l10n.monitorFocuserTemp),
+    ];
+    Widget reading(String v, String unit, String label, {Widget? icon, Color? colour}) => Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (icon != null) ...[icon, const SizedBox(width: 6)],
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  text: v,
+                  style: kSimpleReading.copyWith(color: colour),
+                  children: [TextSpan(text: ' $unit', style: kSimpleUnit)],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-        };
+          ],
+        ),
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: kSimpleUnit.copyWith(color: colour),
+        ),
+      ],
+    );
     return _Tile(
-      tileKey: 'weather',
+      tileKey: 'conditions',
       icon: Icons.cloud_outlined,
-      name: l10n.shellWeather,
+      name: l10n.monitorConditions,
       status: w.status,
       word: w.status == MonitorStatus.warning ? l10n.monitorPastLimit : null,
-      value: [for (final c in w.cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}'].join(', '),
+      value: [
+        for (final c in w.cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}',
+        for (final g in gear) '${g.$3} ${g.$1} ${g.$2}',
+      ].join(', '),
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
         const SizedBox(height: AraSpace.s4),
         for (final row in _weatherRows(w.cells))
           Expanded(
-            child: Row(children: [
-              for (final c in row)
-                Expanded(
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // The Weather window's icon in front of each reading.
-                    Row(children: [
-                      _weatherIcon(c.cell, c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text.rich(
-                          TextSpan(
-                            text: cell(c).$1,
-                            style: kSimpleReading.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null),
-                            children: [TextSpan(text: ' ${cell(c).$2}', style: kSimpleUnit)],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+            child: Row(
+              children: [
+                for (final c in row)
+                  Expanded(
+                    child: reading(
+                      cell(c).$1,
+                      cell(c).$2,
+                      cell(c).$3,
+                      // The Weather window's icon in front of each reading.
+                      icon: _weatherIcon(
+                        c.cell,
+                        c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary,
                       ),
-                    ]),
-                    Text(cell(c).$3,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: kSimpleUnit.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null)),
-                  ]),
-                ),
-            ]),
+                      colour: c.overLimit != null ? AraColors.accentWarning : null,
+                    ),
+                  ),
+              ],
+            ),
           ),
+        if (gear.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(top: AraSpace.s4),
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AraColors.border)),
+            ),
+            child: Text(l10n.monitorCameraAndFocuser, style: kSimpleCaption),
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: AraSpace.s12,
+              children: [for (final g in gear) SizedBox(width: 100, child: reading(g.$1, g.$2, g.$3))],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1204,10 +1494,10 @@ List<List<T>> _weatherRows<T extends ({MonitorWeatherCell cell, double value, do
 }
 
 class _GuiderTile extends StatelessWidget {
-  const _GuiderTile({required this.s, required this.onTap});
+  const _GuiderTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -1231,95 +1521,252 @@ class _GuiderTile extends StatelessWidget {
       },
       value: 'RMS ${_n(g.rms, 2)}″, RA ${_n(g.ra, 2)}″, Dec ${_n(g.dec, 2)}″',
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
-        Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(
+          children: [
             SizedBox(
               width: 220,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
+              child: Row(
+                children: [
                   Expanded(child: reading('RMS', g.rms)),
                   Expanded(child: reading('RA', g.ra)),
                   Expanded(child: reading('Dec', g.dec)),
-                ]),
-                const Spacer(),
-                if (g.lastDither != null) Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim),
-              ]),
+                ],
+              ),
             ),
             const SizedBox(width: AraSpace.s12),
-            Expanded(child: CustomPaint(painter: _TracePainter(g.trace))),
-          ]),
+            if (g.lastDither != null)
+              Expanded(child: Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim)),
+          ],
+        ),
+        // The live trace on a fixed scale, then the whole session's RMS, one
+        // point per saved frame (#1875).
+        Expanded(
+          child: CustomPaint(key: const Key('simple-monitor-trace'), painter: _TracePainter(g.trace)),
+        ),
+        if (g.rmsPerFrame.length > 1)
+          Expanded(
+            child: CustomPaint(
+              key: const Key('simple-monitor-rms-chart'),
+              painter: _SeriesPainter(values: g.rmsPerFrame, lo: 0, ticks: const [1, 2], decimals: 0),
+            ),
+          ),
+        Wrap(
+          spacing: AraSpace.s12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _Key(AraColors.accentInfo, 'RA'),
+            _Key(AraColors.errorText, 'Dec', dashed: true),
+            Text(l10n.monitorFixedScale, style: kSimpleUnit),
+            if (g.rmsPerFrame.length > 1) Text(l10n.monitorRmsPerFrame, style: kSimpleUnit),
+          ],
         ),
       ],
     );
   }
 }
 
-class _LastFrameTile extends StatelessWidget {
-  const _LastFrameTile({required this.s, required this.onTap});
+/// A graph key entry: a short line (dashed or solid) and its name.
+class _Key extends StatelessWidget {
+  const _Key(this.colour, this.label, {this.dashed = false});
+
+  final Color colour;
+  final String label;
+  final bool dashed;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      CustomPaint(size: const Size(18, 10), painter: _SwatchPainter(colour, dashed)),
+      const SizedBox(width: 4),
+      Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleUnit)),
+    ],
+  );
+}
+
+class _SwatchPainter extends CustomPainter {
+  _SwatchPainter(this.colour, this.dashed);
+
+  final Color colour;
+  final bool dashed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = colour
+      ..strokeWidth = 1.5;
+    _line(canvas, Offset(0, size.height / 2), Offset(size.width, size.height / 2), paint, dashed: dashed);
+  }
+
+  @override
+  bool shouldRepaint(_SwatchPainter old) => old.colour != colour || old.dashed != dashed;
+}
+
+/// "HFR +18 % since session start", the flag of a reading that moved the
+/// wrong way (#1875).
+class _Flag extends StatelessWidget {
+  const _Flag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7),
+    decoration: BoxDecoration(
+      border: Border.all(color: AraColors.accentWarning),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      text,
+      style: kSimpleUnit.copyWith(color: AraColors.accentWarning, fontWeight: FontWeight.w600),
+    ),
+  );
+}
+
+String _flagText(AppLocalizations l10n, String metric, MonitorDeviation d) =>
+    l10n.monitorChangeSinceStart(metric, '${d.pct >= 0 ? '+' : '−'}${d.pct.abs().round()}');
+
+/// The autofocus line: when, and the temperature change since then.
+String? _autofocusLine(AppLocalizations l10n, MonitorLastFrame f) => f.focuser && f.autofocusAt != null
+    ? l10n.monitorAutofocusSince(
+        simpleClockTime(f.autofocusAt!),
+        f.tempSinceAutofocus == null
+            ? '—'
+            : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
+      )
+    : null;
+
+/// HFR per saved frame, flagged against the session's own start.
+class _HfrTile extends StatelessWidget {
+  const _HfrTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final f = s.lastFrame;
-    final last = f.last;
-    final cols = <(String, String, List<double>)>[
-      (l10n.monitorHfr, _n(last?.hfr, 2), [for (final x in f.frames) ?x.hfr]),
-      (l10n.monitorStars, last?.stars?.toString() ?? '—', [for (final x in f.frames) ?x.stars?.toDouble()]),
-      (l10n.monitorSkyBackground, _n(last?.background, 0), [for (final x in f.frames) ?x.background]),
-      (
-        l10n.monitorClippedStars,
-        last?.clippedShare == null ? '—' : '${_n(last!.clippedShare! * 100)} %',
-        [for (final x in f.frames) ?x.clippedShare],
-      ),
-    ];
-    final af = f.focuser && f.autofocusAt != null
-        ? l10n.monitorAutofocusSince(
-            simpleClockTime(f.autofocusAt!),
-            f.tempSinceAutofocus == null ? '—' : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
-          )
-        : null;
+    final dev = f.hfrDeviation;
+    final flagged = dev?.flagged ?? false;
+    final values = [for (final x in f.frames) ?x.hfr];
+    final af = _autofocusLine(l10n, f);
     return _Tile(
-      tileKey: 'last-frame',
+      tileKey: 'hfr',
       icon: Icons.insights,
-      name: l10n.monitorLastFrame,
-      status: MonitorStatus.normal,
-      value: [for (final c in cols) '${c.$1} ${c.$2}'].join(', '),
+      name: l10n.monitorHfr,
+      status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
+      word: flagged ? l10n.monitorDrifting : null,
+      value: '${l10n.monitorHfr} ${_n(f.last?.hfr, 2)}',
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
-        Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            for (final c in cols)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: AraSpace.s12),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.$2, style: _big),
-                    Text(c.$1, style: kSimpleUnit),
-                    // No trend while a value is missing.
-                    if (c.$2 != '—' && c.$3.length > 1)
-                      Expanded(child: CustomPaint(painter: _SparkPainter(c.$3), size: Size.infinite)),
-                  ]),
-                ),
-              ),
-          ]),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AraSpace.s8,
+          children: [
+            Text(_n(f.last?.hfr, 2), style: _big),
+            if (dev != null) Text(l10n.monitorStartedAt(_n(dev.start, 2)), style: kSimpleUnit),
+            if (flagged) _Flag(_flagText(l10n, l10n.monitorHfr, dev!)),
+          ],
         ),
+        if (values.length > 1)
+          Expanded(
+            child: CustomPaint(
+              key: const Key('simple-monitor-hfr-chart'),
+              painter: _SeriesPainter(
+                values: values,
+                guide: dev == null ? null : dev.start * (1 + kMonitorDeviationPct / 100),
+                colour: flagged ? AraColors.accentWarning : AraColors.textPrimary,
+                decimals: 1,
+                lastLabel: '${values.length}',
+              ),
+            ),
+          )
+        else
+          const Spacer(),
         if (af != null) Text(af, style: _dim),
       ],
     );
   }
 }
 
-class _NightTile extends StatelessWidget {
-  const _NightTile({required this.s, required this.onTap});
+/// Stars with the sky background per saved frame, each flagged against the
+/// session's own start.
+class _StarsTile extends StatelessWidget {
+  const _StarsTile({required this.s, required this.ctl});
 
   final MonitorSnapshot s;
-  final VoidCallback onTap;
+  final _Ctl ctl;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final f = s.lastFrame;
+    final last = f.last;
+    final starsDev = f.starsDeviation, bgDev = f.backgroundDeviation;
+    final flagged = (starsDev?.flagged ?? false) || (bgDev?.flagged ?? false);
+    final stars = [for (final x in f.frames) ?x.stars?.toDouble()];
+    final sky = [for (final x in f.frames) ?x.background];
+    final detail = [
+      if (last?.background != null) '${l10n.monitorSkyBackground} ${_n(last!.background, 0)}',
+      if (last?.clippedShare != null) '${l10n.monitorClippedStars} ${_n(last!.clippedShare! * 100)} %',
+    ].join(' · ');
+    return _Tile(
+      tileKey: 'stars',
+      icon: Icons.auto_awesome_outlined,
+      name: l10n.monitorStarsAndSky,
+      status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
+      word: flagged ? l10n.monitorDrifting : null,
+      value: '${l10n.monitorStars} ${last?.stars ?? '—'}, $detail',
+      frozen: s.frozen,
+      ctl: ctl,
+      children: [
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AraSpace.s8,
+          children: [
+            Text(last?.stars?.toString() ?? '—', style: _big),
+            if (detail.isNotEmpty) Text(detail, style: kSimpleUnit),
+            if (starsDev?.flagged ?? false) _Flag(_flagText(l10n, l10n.monitorStars, starsDev!)),
+            if (bgDev?.flagged ?? false) _Flag(_flagText(l10n, l10n.monitorSkyBackground, bgDev!)),
+          ],
+        ),
+        if (stars.length > 1)
+          Expanded(
+            child: CustomPaint(
+              key: const Key('simple-monitor-stars-chart'),
+              painter: _SeriesPainter(
+                values: stars,
+                own: sky.length == stars.length ? sky : null,
+                guide: starsDev == null ? null : starsDev.start * (1 - kMonitorDeviationPct / 100),
+                colour: starsDev?.flagged ?? false ? AraColors.accentWarning : AraColors.textPrimary,
+                decimals: 0,
+                lastLabel: '${stars.length}',
+              ),
+            ),
+          )
+        else
+          const Spacer(),
+        Wrap(
+          spacing: AraSpace.s12,
+          children: [
+            _Key(AraColors.textPrimary, l10n.monitorStars),
+            _Key(AraColors.textSecondary, l10n.monitorSkyOwnScale, dashed: true),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _NightTile extends StatelessWidget {
+  const _NightTile({required this.s, required this.ctl});
+
+  final MonitorSnapshot s;
+  final _Ctl ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -1334,6 +1781,7 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
+      word: line,
       // The timeline is painted: a screen reader hears its blocks and markers.
       value: [
         line,
@@ -1342,14 +1790,19 @@ class _NightTile extends StatelessWidget {
         if (n.parkAt != null) '${l10n.monitorUpPark} ${simpleClockTime(n.parkAt!)}',
       ].join(', '),
       frozen: s.frozen,
-      onTap: onTap,
+      ctl: ctl,
       children: [
-        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption),
         if (start != null && end != null)
           Expanded(
             child: CustomPaint(
               key: const Key('simple-monitor-timeline'),
-              painter: _NightPainter(n, s.asOf, MediaQuery.textScalerOf(context)),
+              painter: _NightPainter(
+                n,
+                s.asOf,
+                MediaQuery.textScalerOf(context),
+                flipLabel: n.flipAt == null ? null : l10n.monitorFlipPin(simpleClockTime(n.flipAt!)),
+                parkLabel: n.parkAt == null ? null : l10n.monitorParkPin(simpleClockTime(n.parkAt!)),
+              ),
             ),
           ),
       ],
@@ -1357,21 +1810,65 @@ class _NightTile extends StatelessWidget {
   }
 }
 
+/// A dashed line from [a] to [b]: 4 px on, 4 px off.
+void _line(Canvas canvas, Offset a, Offset b, Paint paint, {bool dashed = false}) {
+  if (!dashed) return canvas.drawLine(a, b, paint);
+  final len = (b - a).distance;
+  if (len == 0) return;
+  final dir = (b - a) / len;
+  for (var d = 0.0; d < len; d += 8) {
+    canvas.drawLine(a + dir * d, a + dir * math.min(d + 4, len), paint);
+  }
+}
+
+/// Small axis text: [at] is its left, centre or right edge, by [align].
+void _text(
+  Canvas canvas,
+  String t,
+  Offset at, {
+  TextAlign align = TextAlign.left,
+  Color colour = AraColors.textSecondary,
+}) {
+  final tp = TextPainter(
+    text: TextSpan(
+      text: t,
+      style: TextStyle(color: colour, fontSize: 10),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  final x = switch (align) {
+    TextAlign.right || TextAlign.end => at.dx - tp.width,
+    TextAlign.center => at.dx - tp.width / 2,
+    _ => at.dx,
+  };
+  tp.paint(canvas, Offset(x, at.dy));
+  tp.dispose();
+}
+
 /// Tonight's timeline: one block per Queue Target with progress under the
-/// one in hand, the flip and park markers, and a line at the current time.
+/// one in hand, the flip and park markers with their times above them, hour
+/// marks under the bar, and a line at the current time.
 class _NightPainter extends CustomPainter {
-  _NightPainter(this.n, this.now, this.scaler);
+  _NightPainter(this.n, this.now, this.scaler, {this.flipLabel, this.parkLabel});
 
   final MonitorNight n;
   final DateTime now;
   final TextScaler scaler;
+  final String? flipLabel, parkLabel;
 
   @override
   void paint(Canvas canvas, Size size) {
     final start = n.darkStart!, end = n.darkEnd!;
     double x(DateTime t) =>
         (t.difference(start).inSeconds / math.max(1, end.difference(start).inSeconds)).clamp(0.0, 1.0) * size.width;
-    const top = 4.0, h = 30.0;
+    const top = 16.0, h = 24.0;
+    // Hour marks.
+    final firstHour = DateTime(start.year, start.month, start.day, start.hour).add(const Duration(hours: 1));
+    for (var t = firstHour; t.isBefore(end); t = t.add(const Duration(hours: 1))) {
+      canvas.drawLine(Offset(x(t), top + h), Offset(x(t), top + h + 3), Paint()..color = AraColors.textSecondary);
+      _text(canvas, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), align: TextAlign.center);
+    }
     for (final b in n.blocks) {
       final r = Rect.fromLTRB(x(b.start), top, math.max(x(b.start) + 2, x(b.end) - 2), top + h);
       final rr = RRect.fromRectAndRadius(r, const Radius.circular(AraRadius.field));
@@ -1391,72 +1888,165 @@ class _NightPainter extends CustomPainter {
       label.dispose();
       canvas.restore();
     }
-    for (final (t, icon) in [(n.flipAt, Icons.swap_horiz), (n.parkAt, Icons.local_parking)]) {
+    for (final (t, icon, label) in [
+      (n.flipAt, Icons.swap_horiz, flipLabel),
+      (n.parkAt, Icons.local_parking, parkLabel),
+    ]) {
       if (t == null) continue;
       final c = Offset(x(t), top + h / 2);
-      canvas.drawCircle(c, 12, Paint()..color = AraColors.bgPrimary);
-      canvas.drawCircle(c, 12, Paint()
-        ..color = AraColors.textSecondary
-        ..style = PaintingStyle.stroke);
+      canvas.drawCircle(c, 11, Paint()..color = AraColors.bgPrimary);
+      canvas.drawCircle(
+        c,
+        11,
+        Paint()
+          ..color = AraColors.textSecondary
+          ..style = PaintingStyle.stroke,
+      );
       final glyph = TextPainter(
         text: TextSpan(
           text: String.fromCharCode(icon.codePoint),
-          style: TextStyle(fontFamily: icon.fontFamily, package: icon.fontPackage, fontSize: AraFontSize.simpleCaption + 4, color: AraColors.textPrimary),
+          style: TextStyle(
+            fontFamily: icon.fontFamily,
+            package: icon.fontPackage,
+            fontSize: AraFontSize.simpleCaption + 2,
+            color: AraColors.textPrimary,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       glyph.dispose();
+      if (label != null) _text(canvas, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), align: TextAlign.center);
     }
-    canvas.drawRect(Rect.fromLTWH(x(now) - 1, 0, 2, top * 2 + h), Paint()..color = AraColors.textPrimary);
+    canvas.drawRect(Rect.fromLTWH(x(now) - 1, top - 4, 2, h + 8), Paint()..color = AraColors.textPrimary);
   }
 
   @override
   bool shouldRepaint(_NightPainter old) => true;
 }
 
-/// A trend scaled to the night's own range, with a minimum span so sensor
-/// noise doesn't look dramatic.
-class _SparkPainter extends CustomPainter {
-  _SparkPainter(this.values);
+/// A per-frame trend: [lo] and [hi] fixed, else the values' own range with a
+/// minimum span so sensor noise doesn't look dramatic. [guide] is a dashed
+/// deviation line, [own] a second series on its own scale, the last point a
+/// dot.
+class _SeriesPainter extends CustomPainter {
+  _SeriesPainter({
+    required this.values,
+    this.lo,
+    this.ticks = const [],
+    this.guide,
+    this.own,
+    this.colour = AraColors.textPrimary,
+    this.decimals = 1,
+    this.lastLabel,
+  });
 
   final List<double> values;
+  final double? lo, guide;
+  final List<double> ticks;
+  final List<double>? own;
+  final Color colour;
+  final int decimals;
+
+  /// The x axis' right label (the frame count); the left is "1".
+  final String? lastLabel;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.length < 2 || size.isEmpty) return;
-    final lo = values.reduce(math.min), hi = values.reduce(math.max);
-    final mid = (lo + hi) / 2;
-    final span = math.max(hi - lo, math.max(mid.abs() * 0.1, 1e-6));
+    final axis = lastLabel == null ? 0.0 : 12.0;
+    final left = 30.0, ph = size.height - axis, pw = size.width - left;
+    final all = [...values, ?guide];
+    final dataLo = all.reduce(math.min), dataHi = all.reduce(math.max);
+    final mid = (dataHi + dataLo) / 2;
+    final span = math.max(dataHi - dataLo, math.max(mid.abs() * 0.1, 1e-6));
+    final l = lo ?? mid - span * 0.6, h = mid + span * 0.6;
+    double y(double v) => ph * (1 - (v - l) / (h - l)).clamp(0.0, 1.0);
+    Offset at(int i, double v, int n) => Offset(left + i / (n - 1) * pw, y(v));
+    final grid = Paint()..color = AraColors.border;
+    for (final t in ticks.where((t) => t > l && t < h)) {
+      canvas.drawLine(Offset(left, y(t)), Offset(size.width, y(t)), grid);
+      _text(canvas, t.toStringAsFixed(decimals), Offset(left - 4, y(t) - 6), align: TextAlign.right);
+    }
+    if (guide != null) {
+      _line(
+        canvas,
+        Offset(left, y(guide!)),
+        Offset(size.width, y(guide!)),
+        Paint()..color = AraColors.accentWarning,
+        dashed: true,
+      );
+    }
+    if (own != null && own!.length > 1) {
+      final lo2 = own!.reduce(math.min), hi2 = math.max(own!.reduce(math.max), own!.reduce(math.min) + 1e-6);
+      final path = Path();
+      for (var i = 0; i < own!.length; i++) {
+        final p = Offset(left + i / (own!.length - 1) * pw, ph * (0.9 - (own![i] - lo2) / (hi2 - lo2) * 0.8));
+        i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      }
+      for (final m in path.computeMetrics()) {
+        for (var d = 0.0; d < m.length; d += 8) {
+          canvas.drawPath(
+            m.extractPath(d, math.min(d + 4, m.length)),
+            Paint()
+              ..color = AraColors.textSecondary
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.2,
+          );
+        }
+      }
+    }
     final path = Path();
     for (var i = 0; i < values.length; i++) {
-      final p = Offset(i / (values.length - 1) * size.width, size.height * (0.5 - (values[i] - mid) / span * 0.9));
+      final p = at(i, values[i], values.length);
       i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(path, Paint()
-      ..color = AraColors.textSecondary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = colour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(at(values.length - 1, values.last, values.length), 3.5, Paint()..color = colour);
+    if (lastLabel != null) {
+      _text(canvas, '1', Offset(left, size.height - 11));
+      _text(canvas, lastLabel!, Offset(size.width, size.height - 11), align: TextAlign.right);
+    }
   }
 
   @override
-  bool shouldRepaint(_SparkPainter old) => old.values != values;
+  bool shouldRepaint(_SeriesPainter old) => true;
 }
 
-/// The guide trace: RA solid, Dec dashed, so they aren't told apart by colour
-/// alone.
+/// The guide trace on a fixed ±2.5″ scale, so a calm night and a runaway
+/// don't look alike: RA solid, Dec dashed, so they aren't told apart by
+/// colour alone.
 class _TracePainter extends CustomPainter {
   _TracePainter(this.trace);
 
   final List<({double ra, double dec})> trace;
 
+  /// The scale's half height (″).
+  static const double scale = 2.5;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final mid = size.height / 2;
-    canvas.drawLine(Offset(0, mid), Offset(size.width, mid), Paint()..color = AraColors.border);
+    const left = 30.0;
+    final mid = size.height / 2, pw = size.width - left;
+    double y(double v) => mid - v.clamp(-scale, scale) / scale * mid;
+    final grid = Paint()..color = AraColors.border;
+    for (final t in const [-2.0, -1.0, 1.0, 2.0]) {
+      canvas.drawLine(
+        Offset(left, y(t)),
+        Offset(size.width, y(t)),
+        Paint()..color = AraColors.border.withValues(alpha: 0.5),
+      );
+      _text(canvas, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t) - 6), align: TextAlign.right);
+    }
+    canvas.drawLine(Offset(left, mid), Offset(size.width, mid), grid);
     if (trace.length < 2) return;
-    final peak = math.max(1.0, trace.fold<double>(0, (m, t) => math.max(m, math.max(t.ra.abs(), t.dec.abs()))));
-    Offset at(int i, double v) => Offset(i / (trace.length - 1) * size.width, mid - v / peak * mid * 0.9);
+    Offset at(int i, double v) => Offset(left + i / (trace.length - 1) * pw, y(v));
     final ra = Path(), dec = Path();
     for (var i = 0; i < trace.length; i++) {
       final a = at(i, trace[i].ra), d = at(i, trace[i].dec);
@@ -1480,8 +2070,9 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old.trace != trace;
 }
 
-/// The Target's altitude over the night: its scheduled span shaded, a dashed
-/// 30° line, and the current time.
+/// The Target's altitude over the night: the imaging span shaded under the
+/// curve, now a dot on it, a dashed 30° line, and the dusk, plan start, plan
+/// end and dawn times on the axis.
 class _AltitudePainter extends CustomPainter {
   _AltitudePainter({
     required this.curve,
@@ -1498,30 +2089,73 @@ class _AltitudePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    double x(DateTime t) =>
-        (t.difference(start).inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0) * size.width;
-    double y(double alt) => size.height * (1 - alt.clamp(0, 90) / 90);
-    if (spanStart != null && spanEnd != null) {
-      canvas.drawRect(Rect.fromLTRB(x(spanStart!), 0, x(spanEnd!), size.height), Paint()..color = AraColors.selectionTint);
-    }
-    final ref = Paint()
-      ..color = AraColors.textDisabled
-      ..strokeWidth = 1;
-    for (var d = 0.0; d < size.width; d += 8) {
-      canvas.drawLine(Offset(d, y(30)), Offset(math.min(d + 4, size.width), y(30)), ref);
-    }
+    const left = 28.0, axis = 12.0;
+    final ph = size.height - axis, pw = size.width - left;
+    final total = math.max(1, end.difference(start).inSeconds);
+    double frac(DateTime t) => (t.difference(start).inSeconds / total).clamp(0.0, 1.0);
+    double x(DateTime t) => left + frac(t) * pw;
+    double y(double alt) => ph * (1 - alt.clamp(0, 90) / 90);
+    Offset pt(int i) => Offset(left + i / (curve.length - 1) * pw, y(curve[i]));
     final path = Path();
     for (var i = 0; i < curve.length; i++) {
-      final p = Offset(i / (curve.length - 1) * size.width, y(curve[i]));
+      final p = pt(i);
       i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(path, Paint()
-      ..color = AraColors.textPrimary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5);
-    canvas.drawLine(Offset(x(now), 0), Offset(x(now), size.height), Paint()
-      ..color = AraColors.accentInfo
-      ..strokeWidth = 1.5);
+    if (spanStart != null && spanEnd != null) {
+      final fill = Path.from(path)
+        ..lineTo(left + pw, ph)
+        ..lineTo(left, ph)
+        ..close();
+      canvas.save();
+      canvas.clipRect(Rect.fromLTRB(x(spanStart!), 0, x(spanEnd!), ph));
+      canvas.drawPath(fill, Paint()..color = AraColors.selectionTint);
+      canvas.restore();
+    }
+    for (final t in const [30.0, 60.0, 90.0]) {
+      _text(canvas, '${t.round()}°', Offset(left - 4, y(t) - 6), align: TextAlign.right);
+    }
+    _line(
+      canvas,
+      Offset(left, y(30)),
+      Offset(size.width, y(30)),
+      Paint()
+        ..color = AraColors.textDisabled
+        ..strokeWidth = 1,
+      dashed: true,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AraColors.textPrimary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    if (!now.isBefore(start) && !now.isAfter(end)) {
+      final f = frac(now) * (curve.length - 1);
+      final i = f.floor().clamp(0, curve.length - 2);
+      final alt = curve[i] + (curve[i + 1] - curve[i]) * (f - i);
+      canvas.drawCircle(Offset(x(now), y(alt)), 5, Paint()..color = AraColors.accentInfo);
+    }
+    for (final (t, align) in [
+      (start, TextAlign.left),
+      if (spanStart != null) (spanStart!, TextAlign.center),
+      if (spanEnd != null) (spanEnd!, TextAlign.center),
+      (end, TextAlign.right),
+    ]) {
+      _text(
+        canvas,
+        simpleClockTime(t),
+        Offset(
+          align == TextAlign.left
+              ? left
+              : align == TextAlign.right
+              ? size.width
+              : x(t),
+          size.height - 11,
+        ),
+        align: align,
+      );
+    }
   }
 
   @override
