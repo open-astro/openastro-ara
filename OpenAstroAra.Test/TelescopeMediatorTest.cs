@@ -133,6 +133,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Every_tracking_write_attempt_is_counted() {
+            using var svc = new TelescopeService();
+            Assert.That(svc.TrackingWriteCount, Is.Zero);
+            svc.SetTrackingEnabled(true);
+            svc.SetTrackingEnabled(true);
+            Assert.That(svc.TrackingWriteCount, Is.EqualTo(2), "a write of the same value counts too");
+        }
+
+        [Test]
         public void SetTrackingMode_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(((ITelescopeMediator)svc).SetTrackingMode(TrackingMode.Sidereal), Is.False);
