@@ -19,7 +19,9 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -1316,6 +1318,13 @@ namespace OpenAstroAra.Test {
                 state = on;
                 return true;
             });
+            // As TelescopeService does: a mode write counts and turns tracking on (Stopped turns it off).
+            mount.Setup(m => m.SetTrackingMode(It.IsAny<TrackingMode>())).Returns((TrackingMode mode) => {
+                Interlocked.Increment(ref writes);
+                state = mode != TrackingMode.Stopped;
+                calls.Record($"tracking {state}");
+                return true;
+            });
             return (mount, calls);
         }
 
@@ -1361,6 +1370,25 @@ namespace OpenAstroAra.Test {
             Assert.That(string.Join(", ", calls), Is.EqualTo(
                 $"tracking True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
                 "the routine's own restore is not written after the other caller's write");
+        }
+
+        [Test]
+        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Stop() {
+            // Drives the real instruction, so the test follows the mediator member the sequence uses.
+            var (mount, calls) = TrackingMount(tracking: false);
+            var fake = NewFake();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(fake, solver, mount);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            await new SetTracking(mount.Object) { TrackingMode = TrackingMode.Sidereal }
+                .Execute(null!, CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking True"),
+                "the sequence's Sidereal stays on: no restore to off after it");
         }
 
         private static async Task<(PolarAlignService Svc, RecordingLog Log)> AdjustingServiceAsync() {

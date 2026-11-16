@@ -412,6 +412,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     public bool SetTrackingMode(TrackingMode trackingMode) {
+        Interlocked.Increment(ref _trackingWrites);
         if (trackingMode == TrackingMode.Custom) {
             // Custom needs the separate RA/Dec offset-rate surface (SiderealShiftTrackingRate) — not
             // wired headless; SetTracking.Validate already excludes it via TrackingModes.

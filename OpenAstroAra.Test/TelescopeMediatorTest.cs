@@ -142,6 +142,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_tracking_mode_write_is_counted() {
+            // The sequence's Set Tracking instruction writes through SetTrackingMode.
+            using var svc = new TelescopeService();
+            svc.SetTrackingMode(TrackingMode.Sidereal);
+            Assert.That(svc.TrackingWriteCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public void SetTrackingMode_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(((ITelescopeMediator)svc).SetTrackingMode(TrackingMode.Sidereal), Is.False);
