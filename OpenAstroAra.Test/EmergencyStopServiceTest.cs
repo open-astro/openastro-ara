@@ -719,4 +719,44 @@ namespace OpenAstroAra.Test {
             Assert.That(result.MountStopped, Is.True, "an idle rig's mount is still stopped — the point is 'nothing moves'");
         }
     }
+    /// <summary>
+    /// #1985 — a healthy rung must not need a free pool thread inside its RungTimeout window:
+    /// an Emergency Stop has to work while the pool is starved. Own fixture, run alone, because
+    /// it blocks every pool worker for a moment.
+    /// </summary>
+    [TestFixture]
+    [NonParallelizable]
+    public class EmergencyStopServicePoolStarvationTest {
+
+        [Test]
+        public void Execute_WithEveryPoolThreadBlocked_HealthyRungsAreNotTimedOut() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new CameraDto("c1", "Cam", EquipmentConnectionState.Connected, null, null!));
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var service = new EmergencyStopService(camera.Object) { RungTimeout = TimeSpan.FromMilliseconds(200) };
+
+            ThreadPool.GetMinThreads(out var minWorkers, out _);
+            ThreadPool.GetMaxThreads(out var maxWorkers, out _);
+            var toBlock = Math.Min(minWorkers, maxWorkers);
+            using var release = new ManualResetEventSlim();
+            using var started = new CountdownEvent(toBlock);
+            // Raise the floor to the blockers we hold, so the pool injects no thread within the window.
+            for (var i = 0; i < toBlock; i++) {
+                ThreadPool.QueueUserWorkItem(_ => { started.Signal(); release.Wait(TimeSpan.FromSeconds(30)); });
+            }
+            try {
+                Assert.That(started.Wait(TimeSpan.FromSeconds(10)), Is.True, "every pool worker is blocked");
+                // Starve beyond the minimum too: threads above it are injected at ~1/s, far slower than 200 ms.
+                EmergencyStopResultDto? result = null;
+                var caller = new Thread(() => result = service.ExecuteAsync().GetAwaiter().GetResult());
+                caller.Start();
+                Assert.That(caller.Join(TimeSpan.FromSeconds(15)), Is.True, "the ladder finishes");
+                Assert.That(result!.FailedRungs, Is.Empty, "a healthy rung is not failed by a starved pool");
+                Assert.That(result.ExposureAborted, Is.True);
+            } finally {
+                release.Set();
+            }
+        }
+    }
 }
