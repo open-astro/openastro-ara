@@ -46,6 +46,14 @@ namespace OpenAstroAra.Test {
             Assert.That(migrated.PathOrEndpoint, Is.EqualTo(Bundled));
         }
 
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("  ")]
+        public void A_null_or_blank_solver_path_is_refilled_with_the_bundled_solver(string? blank) {
+            var migrated = SolverPathMigration.Migrate(WithPath(blank!), Present(Bundled));
+            Assert.That(migrated.PathOrEndpoint, Is.EqualTo(Bundled));
+        }
+
         [Test]
         public void A_stock_path_stays_when_the_bundled_solver_is_missing() {
             var ps = WithPath("/usr/bin/astap_cli");

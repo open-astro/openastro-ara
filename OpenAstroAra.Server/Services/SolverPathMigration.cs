@@ -59,7 +59,7 @@ public static class SolverPathMigration {
     public static PlateSolveSettingsDto Migrate(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
         var path = ps.PathOrEndpoint?.Trim();
         var blank = string.IsNullOrEmpty(path);
-        if (path == null || !(blank || Array.IndexOf(StockPaths, path) >= 0) || !fileExists(AstapCliPath)) {
+        if (!(blank || Array.IndexOf(StockPaths, path) >= 0) || !fileExists(AstapCliPath)) {
             return ps;
         }
         return ps with { PathOrEndpoint = AstapCliPath };
