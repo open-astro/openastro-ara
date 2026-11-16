@@ -383,6 +383,37 @@ String designationWithName(String designation, String name) {
   return '$n ($d)';
 }
 
+const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
+final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
+
+/// A designation as the plan square writes it ("M 42", "Sh2-129") and its
+/// rank in M > NGC > IC > Sh2 > B > LBN; null for any other catalog.
+(int, String)? catalogTag(String designation) {
+  final m = _tagKey.firstMatch(designationKey(designation));
+  if (m == null) return null;
+  final p = m[1]!;
+  return (_tagOrder.indexOf(p), p == 'SH2' ? 'Sh2-${m[2]}' : '$p ${m[2]}');
+}
+
+/// The best of [designations], M > NGC > IC > Sh2 > B > LBN, as written
+/// there ("NGC1976" stays padded); the first of a rank wins; null when none
+/// is in those catalogs. Titles lead with it, so a curated Messier region
+/// reads "(M 42)", not "(NGC 1976)" (#1957). Pure.
+String? bestCatalogDesignation(List<String> designations) {
+  String? best;
+  var rank = _tagOrder.length;
+  for (final d in designations) {
+    final t = catalogTag(d);
+    if (t != null && t.$1 < rank) (best, rank) = (d, t.$1);
+  }
+  return best;
+}
+
+/// A ranked object's title, `name (designation)` led by its best designation:
+/// "Orion Nebula + Running Man (M 42)".
+String objectTitle(String id, List<String> aliases, String name) =>
+    designationWithName(bestCatalogDesignation([id, ...aliases]) ?? id, name);
+
 /// The designation a search suggestion shows: the one that matched, or the id
 /// when a name did. A pick hands it to the plan, so its header names the same.
 String suggestionDesignation(DsoSuggestion s) =>
