@@ -219,7 +219,7 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
         // ADR 0018 rules 1 and 3: a stored body must load in the engine, so a disk
         // template is checked like a created sequence. The endpoint maps this to 422.
         var (valid, reason) = SequenceSchemaValidator.Validate(substitutedBody, requireCapturableInstruction: false);
-        if (!valid) throw new ArgumentException(reason);
+        if (!valid) throw new TemplateBodyRefusedException(reason ?? "template body failed the schema check");
 
         // Reuse the §38 create path so the new sequence shows up in
         // /api/v1/sequences immediately.

@@ -320,8 +320,11 @@ public static class SequenceEndpoints {
                         return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
                     } catch (KeyNotFoundException) {
                         return Results.NotFound();
-                    } catch (ArgumentException ex) {
-                        return Results.UnprocessableEntity(new { error = ex.Message });
+                    } catch (TemplateBodyRefusedException ex) {
+                        return Results.Problem(
+                            title: "Template body refused",
+                            statusCode: StatusCodes.Status422UnprocessableEntity,
+                            detail: ex.Message);
                     }
                 })
            .Accepts<TemplateInstantiateRequestDto>("application/json")
