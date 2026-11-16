@@ -387,13 +387,22 @@ void main() {
           if (size.width < 768) {
             // no panel to switch in
           } else if (open == 'Focus Manual') {
-            await tester.tap(find.byKey(const Key('simple-focus-method-manual')), warnIfMissed: false);
+            // Tall text pushes the Tools rows below the panel's fold: scroll to them.
+            await tester.ensureVisible(find.byKey(const Key('simple-focus-tool-manual')));
+            await tester.tap(find.byKey(const Key('simple-focus-tool-manual')), warnIfMissed: false);
             await tester.pump();
           } else if (open == 'Focus Guide') {
             await tester.tap(find.byKey(const Key('simple-focus-scope-guide')), warnIfMissed: false);
             await tester.pump();
           } else if (open.startsWith('Focus Offsets')) {
-            await tester.tap(find.byKey(const Key('simple-focus-method-offsets')), warnIfMissed: false);
+            // No focuser: Focus opens on Focus by hand; Back leads to the Tools rows.
+            if (find.byKey(const Key('simple-focus-back')).evaluate().isNotEmpty) {
+              await tester.tap(find.byKey(const Key('simple-focus-back')), warnIfMissed: false);
+              await tester.pump();
+            }
+            // Tall text pushes the Tools rows below the panel's fold: scroll to them.
+            await tester.ensureVisible(find.byKey(const Key('simple-focus-tool-offsets')));
+            await tester.tap(find.byKey(const Key('simple-focus-tool-offsets')), warnIfMissed: false);
             await tester.pump();
             expect(
                 find.byKey(Key(open == 'Focus Offsets' ? 'simple-offsets-pick-0' : 'simple-offsets-table')),

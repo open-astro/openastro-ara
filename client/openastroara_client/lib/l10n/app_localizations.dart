@@ -4053,6 +4053,78 @@ abstract class AppLocalizations {
   /// **'Measured stars'**
   String get focusMeasuredStars;
 
+  /// Simple Focus tool row and its open view's title: the Bahtinov mask readout
+  ///
+  /// In en, this message translates to:
+  /// **'Focus by hand'**
+  String get focusToolManual;
+
+  /// Simple Focus tool row button that opens focus by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get focusToolManualOpen;
+
+  /// Spoken name of the focus by hand button
+  ///
+  /// In en, this message translates to:
+  /// **'Open focus by hand'**
+  String get focusToolManualOpenSemantics;
+
+  /// Simple Focus tool row and its open view's title: the filter offsets measurement
+  ///
+  /// In en, this message translates to:
+  /// **'Filter offsets'**
+  String get focusToolOffsets;
+
+  /// Simple Focus tool row button that opens the filter offsets measurement
+  ///
+  /// In en, this message translates to:
+  /// **'Measure'**
+  String get focusToolOffsetsOpen;
+
+  /// Spoken name of the filter offsets button
+  ///
+  /// In en, this message translates to:
+  /// **'Open filter offsets'**
+  String get focusToolOffsetsOpenSemantics;
+
+  /// Simple Focus: heading of the Tools rows under Autofocus
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get focusToolsHeading;
+
+  /// Simple Focus tool row status: focus by hand is not open
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get focusToolManualStatus;
+
+  /// Simple Focus tool row status: filters whose focus offset is still 0
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 to measure} other{{count} to measure}}'**
+  String focusToolOffsetsToMeasure(int count);
+
+  /// Simple Focus tool row status: every filter has a focus offset
+  ///
+  /// In en, this message translates to:
+  /// **'All measured'**
+  String get focusToolOffsetsAllMeasured;
+
+  /// Simple Focus tool row status: no filter wheel is connected, so there are no offsets to measure. Short, one line.
+  ///
+  /// In en, this message translates to:
+  /// **'No filter wheel'**
+  String get focusToolOffsetsNoWheel;
+
+  /// Spoken name of the back arrow in Simple Focus's tool views
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Autofocus'**
+  String get focusBackToAutofocus;
+
   /// Bahtinov focusing finished in focus, mask taken off
   ///
   /// In en, this message translates to:
@@ -4320,7 +4392,7 @@ abstract class AppLocalizations {
   /// Simple Focus panel: a finished autofocus whose curve fit was weak, short form
   ///
   /// In en, this message translates to:
-  /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
+  /// **'Weak curve fit (R² {r2}): run again if the sky has settled.'**
   String focusWeakFitShort(String r2);
 
   /// Guide camera live focus: starting
@@ -4557,7 +4629,7 @@ abstract class AppLocalizations {
   /// **'Stop the guide camera\'s frames'**
   String get previewGuideLoopStop;
 
-  /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
+  /// Focus panel: focus the main telescope (short, shares a line with Guide)
   ///
   /// In en, this message translates to:
   /// **'Main'**
