@@ -1305,7 +1305,10 @@ namespace OpenAstroAra.Test {
                     position = target;
                 })
                 .ReturnsAsync(true);
+            var writes = 0L;
+            mount.SetupGet(m => m.TrackingWriteCount).Returns(() => Interlocked.Read(ref writes));
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
+                Interlocked.Increment(ref writes);
                 calls.Record($"tracking {on}");
                 if (onSet is not null) {
                     return onSet(on);
@@ -1337,6 +1340,61 @@ namespace OpenAstroAra.Test {
 
             Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking False"),
                 "on before the seed slew, off for the adjust loop, the user's off put back");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_on_at_Stop(bool sameValueAsRoutine) {
+            // A sequence's Set Tracking writes while the run is live; the exit must not turn it off again.
+            // sameValueAsRoutine: the other caller writes the value the routine itself last wrote (off).
+            var (mount, calls) = TrackingMount(tracking: false);
+            var fake = NewFake();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(fake, solver, mount);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            mount.Object.SetTrackingEnabled(!sameValueAsRoutine);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(string.Join(", ", calls), Is.EqualTo(
+                $"tracking True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
+                "the routine's own restore is not written after the other caller's write");
+        }
+
+        private static async Task<(PolarAlignService Svc, RecordingLog Log)> AdjustingServiceAsync() {
+            var fake = NewFake();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var log = new RecordingLog();
+            var svc = NewService(fake, solver, log: log);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            return (svc, log);
+        }
+
+        [Test]
+        public async Task A_run_ended_by_a_sequence_start_reads_stopped_not_completed() {
+            var (svc, _) = await AdjustingServiceAsync().ConfigureAwait(false);
+            using var _s = svc;
+
+            await svc.StopForSequenceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"));
+            Assert.That(svc.IsActive, Is.False);
+        }
+
+        [Test]
+        public async Task A_run_ended_by_a_sequence_start_stores_no_measured_result() {
+            var (svc, log) = await AdjustingServiceAsync().ConfigureAwait(false);
+            using var _s = svc;
+
+            await svc.StopForSequenceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null, "no last result");
+            Assert.That(log.Rows, Is.Empty, "no session row: the readout was taken through a sequence's slews");
         }
 
         [Test]

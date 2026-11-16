@@ -111,7 +111,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // construction cycles the other cross-service deps already dodge.
             Func<ICenteringService?>? centeringResolver = null,
             Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null,
-            Func<ICameraService?>? cameraResolver = null) {
+            Func<ICameraService?>? cameraResolver = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -126,6 +127,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _centeringResolver = centeringResolver;
         _autofocusResolver = autofocusResolver;
         _cameraResolver = cameraResolver;
+        _polarAlignResolver = polarAlignResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -1218,6 +1220,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     private readonly Func<ICameraService?>? _cameraResolver;
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
 
     /// <summary>How long a run's end waits for its last frames to be saved. A stalled drive must not keep
     /// the run from ending; the saves carry on in the background.</summary>

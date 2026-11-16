@@ -45,6 +45,10 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         bool SetTrackingEnabled(bool trackingEnabled);
 
+        /// <summary>How many tracking writes any caller has made through this mediator or the telescope
+        /// service; a routine that hands tracking back compares it with its own last write.</summary>
+        long TrackingWriteCount { get; }
+
         bool SetTrackingMode(TrackingMode trackingMode);
 
         bool SetCustomTrackingRate(SiderealShiftTrackingRate rate);

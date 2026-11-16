@@ -399,7 +399,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         RunMountOpAsync("telescope.findhome", c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), token);
 
+    public long TrackingWriteCount => Interlocked.Read(ref _trackingWrites);
+
     public bool SetTrackingEnabled(bool trackingEnabled) {
+        Interlocked.Increment(ref _trackingWrites);
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;

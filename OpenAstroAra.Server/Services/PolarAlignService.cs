@@ -454,6 +454,10 @@ namespace OpenAstroAra.Server.Services {
         public Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) =>
             EndRoutineAsync("polar-align.stop", outcome: "aborted", idempotencyKey, ct);
 
+        /// <inheritdoc />
+        public Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct) =>
+            EndRoutineAsync("polar-align.stop", outcome: "aborted", null, ct);
+
         /// <summary>
         /// §45 step 9 — the user is satisfied: same unwind as Stop, but the §45.13 session row records
         /// <c>complete</c> with the achieved error. Accepted (without a log row) when no routine is
