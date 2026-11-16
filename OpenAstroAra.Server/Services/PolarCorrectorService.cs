@@ -65,7 +65,8 @@ internal sealed class LiveDriverActions(IReadOnlyList<string> supportedActions, 
 /// the PolarAlign actions wins over the mount (a separate base was added for the job), and among such
 /// switches the lowest UniqueId (ordinal) wins. No profile field names it.
 /// </summary>
-internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDriverActionsCarriers mount)
+internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDriverActionsCarriers mount,
+        Func<IPolarCorrectorDriver?>? routine = null)
         : IPolarCorrectorService, IPolarCorrectorSource {
     private readonly object _gate = new();
     // Info is static per connection; one connection's reply is kept (the carrier object is per connect).
@@ -87,11 +88,19 @@ internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDr
         return chosen is null ? None : await Task.Run(() => Read(chosen), ct).ConfigureAwait(false);
     }
 
-    public Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) =>
-        CommandAsync(c => c.Stop(), "polarcorrector.stop", idempotencyKey);
+    public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
+        // A routine that is moving the motors ends its loop first: to it a device Stop alone looks like
+        // a finished move, and its next measurement would move them again.
+        if (routine?.Invoke() is { DrivesPolarCorrector: true } driver) {
+            await driver.StopPolarCorrectorAsync().ConfigureAwait(false);
+        }
+        return await CommandAsync(c => c.Stop(), "polarcorrector.stop", idempotencyKey).ConfigureAwait(false);
+    }
 
     public Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct) =>
-        CommandAsync(c => c.Home(), "polarcorrector.home", idempotencyKey);
+        routine?.Invoke() is { DrivesPolarCorrector: true }
+            ? throw new InvalidOperationException("polar alignment is moving the Polar Corrector; stop the motors first")
+            : CommandAsync(c => c.Home(), "polarcorrector.home", idempotencyKey);
 
     private Chosen? Choose() {
         var sw = switches.ConnectedActionCarriers()

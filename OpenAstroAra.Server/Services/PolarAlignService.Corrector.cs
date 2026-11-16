@@ -55,7 +55,26 @@ namespace OpenAstroAra.Server.Services {
     // next frame measure the result. Any way out stops the motors and leaves the routine running by
     // hand. The numbers (probe size, fraction, scale check) follow N.I.N.A.'s Polar Alignment
     // Correctors plugin, so one device behaves the same under both clients.
-    public sealed partial class PolarAlignService {
+    public sealed partial class PolarAlignService : IPolarCorrectorDriver {
+
+        // The routine drives the Polar Corrector from its first measurement with one until it is stopped
+        // or the run ends; "by hand" is not driving.
+        bool IPolarCorrectorDriver.DrivesPolarCorrector {
+            get {
+                lock (_gate) {
+                    return _active && _correctorRun is { Stopped: false }
+                        && _corrector is { State: not PolarAlignCorrectorStates.Manual };
+                }
+            }
+        }
+
+        async Task IPolarCorrectorDriver.StopPolarCorrectorAsync() {
+            try {
+                await StopCorrectorAsync(null, CancellationToken.None).ConfigureAwait(false);
+            } catch (InvalidOperationException) {
+                // The run ended between the question and the stop: its own exit stopped the motors.
+            }
+        }
 
         internal const double CorrectorGain = 0.8;
         internal const double CorrectorProbeArcmin = 2.0;
@@ -67,8 +86,8 @@ namespace OpenAstroAra.Server.Services {
 
         private readonly IPolarCorrectorSource? _correctorSource;
 
-        // One per run. Written by the run task, except Stopped/UserStop, which the stop and resume
-        // commands also write: every field is read and written under _gate.
+        // One per run. Stopped, RearmRequested, StopOwed and UserStop are shared with the stop and resume
+        // commands and are read and written under _gate. Everything else belongs to the run task.
         private sealed class CorrectorRun(double latitudeDeg) : IDisposable {
             public double LatitudeDeg { get; } = latitudeDeg;
             public IPolarCorrector? Device;
@@ -77,22 +96,22 @@ namespace OpenAstroAra.Server.Services {
             public bool Engaged;      // a move went out: every exit owes the device a Stop
             public bool StopOwed;     // a Stop could not be delivered (link lost): retried each measurement
             public bool Stopped;
+            public bool RearmRequested; // a resume: the run task starts again from a new device read and probe
             public bool ProbeDone;
             public (double Az, double Alt)? BeforeProbe;
             public double? TotalBeforeMove;
             public int Growth;
             public CancellationTokenSource UserStop = new();
 
+            // Run task. A resume re-reads the device: it may be another one, or recalibrated.
             public void Rearm() {
-                Stopped = false;
                 ProbeDone = false;
                 BeforeProbe = null;
                 TotalBeforeMove = null;
                 Growth = 0;
-                Device = null; // a resume re-reads the device: it may be another one, or recalibrated
+                Device = null;
                 Info = null;
-                UserStop.Dispose();
-                UserStop = new CancellationTokenSource();
+                Undrivable = false;
             }
 
             public void Dispose() => UserStop.Dispose();
@@ -156,7 +175,10 @@ namespace OpenAstroAra.Server.Services {
                     throw new InvalidOperationException("the Polar Corrector is not stopped");
                 }
                 gen = _generation;
-                run.Rearm();
+                run.Stopped = false;
+                run.RearmRequested = true;
+                run.UserStop.Dispose();
+                run.UserStop = new CancellationTokenSource();
                 _corrector = new PolarAlignCorrectorDto(PolarAlignCorrectorStates.Measuring, Moves: _correctorMoves);
             }
             await PublishCorrectorAsync(gen).ConfigureAwait(false);
@@ -207,19 +229,25 @@ namespace OpenAstroAra.Server.Services {
         private async Task CorrectAsync(int gen, double altErr, double azErr, PolarAlignSettingsDto settings, CancellationToken ct) {
             CorrectorRun? run;
             CancellationToken userStop;
-            bool stopped;
+            bool stopped, stopOwed;
             lock (_gate) {
                 run = _generation == gen ? _correctorRun : null;
-                if (run is null || run.Undrivable) {
+                if (run is null) {
                     return;
+                }
+                if (run.RearmRequested) {
+                    run.RearmRequested = false;
+                    run.Rearm();
                 }
                 userStop = run.UserStop.Token;
                 stopped = run.Stopped;
+                stopOwed = run.StopOwed;
             }
-            if (run.StopOwed && run.Device is { } owed) {
+            // An owed Stop goes to the device that answers now: after a reconnect that is a new object.
+            if (stopOwed && (_correctorSource!.Current() ?? run.Device) is { } owed) {
                 StopDeviceBestEffort(run, owed);
             }
-            if (stopped) {
+            if (stopped || run.Undrivable) {
                 return;
             }
             if (!settings.PolarCorrectorAuto) {
@@ -280,8 +308,8 @@ namespace OpenAstroAra.Server.Services {
             if (run.BeforeProbe is { } before) {
                 run.BeforeProbe = null;
                 var probe = ProbeSize(info);
-                CheckProbe(PolarCorrectorAxis.Azimuth, (offset.Az - before.Az) / probe);
-                CheckProbe(PolarCorrectorAxis.Altitude, (offset.Alt - before.Alt) / probe);
+                CheckProbe(PolarCorrectorAxis.Azimuth, (offset.Az - before.Az) / probe, azInfo);
+                CheckProbe(PolarCorrectorAxis.Altitude, (offset.Alt - before.Alt) / probe, altInfo);
                 run.ProbeDone = true;
             } else if (run.TotalBeforeMove is { } last) {
                 run.Growth = total > last + CorrectorGrowthMarginArcmin ? run.Growth + 1 : 0;
@@ -314,12 +342,13 @@ namespace OpenAstroAra.Server.Services {
                 kind = PolarAlignCorrectorStates.Probing;
                 run.BeforeProbe = offset;
             } else {
-                // An axis inside half the tolerance is left alone: with the total outside it, the other one is not.
+                // An axis inside half the tolerance (on the sky, as the tolerance is) is left alone: with the
+                // total outside it, the other one is not.
                 moves = [];
-                if (Math.Abs(offset.Az) >= tolerance / 2) {
+                if (Math.Abs(azErr) >= tolerance / 2) {
                     moves.Add((PolarCorrectorAxis.Azimuth, Math.Clamp(CorrectorGain * azMove, -azInfo.MaxMoveArcmin, azInfo.MaxMoveArcmin)));
                 }
-                if (Math.Abs(offset.Alt) >= tolerance / 2) {
+                if (Math.Abs(altErr) >= tolerance / 2) {
                     moves.Add((PolarCorrectorAxis.Altitude, Math.Clamp(CorrectorGain * altMove, -altInfo.MaxMoveArcmin, altInfo.MaxMoveArcmin)));
                 }
                 kind = PolarAlignCorrectorStates.Moving;
@@ -331,13 +360,19 @@ namespace OpenAstroAra.Server.Services {
                     ct.ThrowIfCancellationRequested();
                     await SetCorrectorAsync(gen, new PolarAlignCorrectorDto(kind, Axis: AxisToken(axis), Arcmin: Math.Round(arcmin, 2))).ConfigureAwait(false);
                     lock (_gate) {
+                        if (run.Stopped) {
+                            throw new OperationCanceledException(); // a Stop landed since the check above
+                        }
                         run.Engaged = true;
-                        _correctorMoves++;
                     }
                     device.Move(axis, arcmin);
+                    lock (_gate) {
+                        _correctorMoves++;
+                    }
                     LogCorrectorMove(kind, hemisphere, altErr, azErr, axis, arcmin);
                 }
-                await WaitForMoveAsync(device, group.Select(m => m.Axis).ToArray(), ct).ConfigureAwait(false);
+                var after = await WaitForMoveAsync(device, group.Select(m => m.Axis).ToArray(), ct).ConfigureAwait(false);
+                LogCorrectorStatus(after.Azimuth.Moving, after.Azimuth.PositionArcmin, after.Altitude.Moving, after.Altitude.PositionArcmin);
             }
             if (info.SettleSeconds > 0) {
                 await SetCorrectorAsync(gen, new PolarAlignCorrectorDto(PolarAlignCorrectorStates.Settling, Seconds: info.SettleSeconds)).ConfigureAwait(false);
@@ -352,19 +387,22 @@ namespace OpenAstroAra.Server.Services {
                 Math.Min(CorrectorProbeArcmin, Math.Min(info.Azimuth!.MaxMoveArcmin, info.Altitude!.MaxMoveArcmin) / 4),
                 Math.Max(info.Azimuth.ResolutionArcmin, info.Altitude.ResolutionArcmin));
 
-        // ratio = how far the axis went, over how far it was asked to go.
-        private static void CheckProbe(PolarCorrectorAxis axis, double ratio) {
+        // ratio = how far the axis went, over how far it was asked to go. A device that does not take up
+        // its own backlash loses part of a first move to it, so its floor is lower.
+        private void CheckProbe(PolarCorrectorAxis axis, double ratio, PolarCorrectorAxisInfo info) {
+            LogCorrectorProbe(axis, ratio);
             if (ratio < 0) {
                 throw new CorrectorStopException(PolarAlignCorrectorCauses.WrongDirection, null, AxisToken(axis));
             }
-            if (ratio is < 0.5 or > 2) {
+            if (ratio < (info.BacklashHandled ? 0.5 : 0.2) || ratio > 2) {
                 throw new CorrectorStopException(PolarAlignCorrectorCauses.WrongScale, null, AxisToken(axis));
             }
         }
 
-        // A fault string or a move still running at the deadline ends the wait as a stop; a stopped
-        // move is never read as a finished one.
-        private async Task WaitForMoveAsync(IPolarCorrector device, PolarCorrectorAxis[] axes, CancellationToken ct) {
+        // A fault string or a move still running at the deadline ends the wait as a stop. A Stop from
+        // outside looks like a finished move here (not moving, no fault): the stop commands mark the run
+        // stopped and cancel this wait first, so it is never taken for one.
+        private async Task<PolarCorrectorStatus> WaitForMoveAsync(IPolarCorrector device, PolarCorrectorAxis[] axes, CancellationToken ct) {
             var deadline = DateTimeOffset.UtcNow + CorrectorMoveTimeout;
             while (true) {
                 var status = device.Status();
@@ -377,7 +415,8 @@ namespace OpenAstroAra.Server.Services {
                     moving |= s.Moving;
                 }
                 if (!moving) {
-                    return;
+                    ct.ThrowIfCancellationRequested();
+                    return status;
                 }
                 if (DateTimeOffset.UtcNow >= deadline) {
                     throw new CorrectorStopException(PolarAlignCorrectorCauses.Timeout, deviceText: null);
@@ -414,8 +453,9 @@ namespace OpenAstroAra.Server.Services {
 
         private async Task SetCorrectorAsync(int gen, PolarAlignCorrectorDto state) {
             lock (_gate) {
-                if (_generation != gen || (_correctorRun?.Stopped == true && state.State != PolarAlignCorrectorStates.Stopped)) {
-                    return; // a superseded run, or the person's Stop landed first
+                // A superseded run; or the person's Stop landed first; or a resume landed before this stop was told.
+                if (_generation != gen || (_correctorRun?.Stopped == true) != (state.State == PolarAlignCorrectorStates.Stopped)) {
+                    return;
                 }
                 state = state with { Moves = _correctorMoves };
                 if (state == _corrector) {
@@ -447,6 +487,12 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4543, Level = LogLevel.Information, Message = "§45 polar-align corrector {Kind}: {Hemisphere} site, error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ (east-positive), sent {Axis} {Arcmin:F2}′")]
         private partial void LogCorrectorMove(string kind, string hemisphere, double altArcmin, double azArcmin, PolarCorrectorAxis axis, double arcmin);
+
+        [LoggerMessage(EventId = 4548, Level = LogLevel.Information, Message = "§45 polar-align corrector status after the move: azimuth moving {AzMoving} at {AzArcmin}′, altitude moving {AltMoving} at {AltArcmin}′")]
+        private partial void LogCorrectorStatus(bool azMoving, double? azArcmin, bool altMoving, double? altArcmin);
+
+        [LoggerMessage(EventId = 4549, Level = LogLevel.Information, Message = "§45 polar-align corrector test move on {Axis}: the axis went {Ratio:F2} times the amount asked")]
+        private partial void LogCorrectorProbe(PolarCorrectorAxis axis, double ratio);
 
         [LoggerMessage(EventId = 4544, Level = LogLevel.Information, Message = "§45 polar-align corrector: error {BeforeArcmin:F2}′ before the move, {AfterArcmin:F2}′ after")]
         private partial void LogCorrectorResult(double beforeArcmin, double afterArcmin);

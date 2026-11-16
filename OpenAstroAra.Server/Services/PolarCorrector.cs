@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -20,8 +21,9 @@ namespace OpenAstroAra.Server.Services;
 internal enum PolarCorrectorAxis { Azimuth, Altitude }
 
 /// <summary>What one axis can do: the largest single move the device accepts and its step size
-/// (0 while the device has no calibration), both in arcminutes.</summary>
-internal sealed record PolarCorrectorAxisInfo(double MaxMoveArcmin, double ResolutionArcmin);
+/// (0 while the device has no calibration), both in arcminutes, and whether the device takes up its
+/// own backlash on a reversal.</summary>
+internal sealed record PolarCorrectorAxisInfo(double MaxMoveArcmin, double ResolutionArcmin, bool BacklashHandled = false);
 
 /// <summary>A Polar Corrector's capabilities, as its <c>Info</c> reply states them. An axis the
 /// device does not describe is null. <see cref="HostDriven"/> is the one question the Polar Align
@@ -95,6 +97,14 @@ internal interface IPolarCorrector {
 internal interface IDriverActions {
     IReadOnlyList<string> SupportedActions { get; }
     string Action(string name, string parameters);
+}
+
+/// <summary>What is driving the Polar Corrector right now, if anything: the Polar Align Routine. A stop
+/// that comes from outside it (the emergency stop, the device's Stop route) must end its motor loop
+/// first, or the loop reads the stopped move as a finished one and moves the motors again.</summary>
+internal interface IPolarCorrectorDriver {
+    bool DrivesPolarCorrector { get; }
+    Task StopPolarCorrectorAsync();
 }
 
 /// <summary>Where the Polar Align Routine gets the rig's Polar Corrector: the device the profile
@@ -186,16 +196,18 @@ internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPola
                 || axis.ValueKind != JsonValueKind.Object || Number(axis, "maxMove") is not { } maxMove || maxMove <= 0) {
             return null;
         }
-        return new PolarCorrectorAxisInfo(maxMove, Math.Max(0, Number(axis, "resolution") ?? 0));
+        return new PolarCorrectorAxisInfo(maxMove, Math.Max(0, Number(axis, "resolution") ?? 0), Flag(axis, "backlashHandled") ?? false);
     }
 
     private static PolarCorrectorAxisStatus AxisStatus(JsonElement root, string name) {
-        if (!root.TryGetProperty(name, out var axis) || axis.ValueKind != JsonValueKind.Object) {
-            return new PolarCorrectorAxisStatus(false, null, null);
+        // "Not said" must never read as "not moving": a move in flight would be taken for a finished one.
+        if (!root.TryGetProperty(name, out var axis) || axis.ValueKind != JsonValueKind.Object
+                || Flag(axis, "moving") is not { } moving) {
+            throw new PolarCorrectorException(PolarCorrectorFailure.Protocol,
+                $"the device's {StatusAction} reply does not say whether the {name} axis is moving");
         }
         var fault = Text(axis, "fault");
-        return new PolarCorrectorAxisStatus(
-            Flag(axis, "moving") ?? false, Number(axis, "position"), string.IsNullOrWhiteSpace(fault) ? null : fault);
+        return new PolarCorrectorAxisStatus(moving, Number(axis, "position"), string.IsNullOrWhiteSpace(fault) ? null : fault);
     }
 
     private static JsonDocument Parse(string json, string action) {

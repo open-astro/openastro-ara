@@ -32,8 +32,8 @@ namespace OpenAstroAra.Test {
     public partial class PolarAlignServiceTest {
 
         private static PolarCorrectorInfo CorrectorInfo(double maxMove = 120, bool tier1 = true, bool movesWhileTracking = true,
-                bool simultaneous = false) =>
-            new(tier1 ? [1, 2] : [2], "Fake base", "1.0", new PolarCorrectorAxisInfo(maxMove, 0.01), new PolarCorrectorAxisInfo(maxMove, 0.01),
+                bool simultaneous = false, bool backlashHandled = true) =>
+            new(tier1 ? [1, 2] : [2], "Fake base", "1.0", new PolarCorrectorAxisInfo(maxMove, 0.01, backlashHandled), new PolarCorrectorAxisInfo(maxMove, 0.01, backlashHandled),
                 simultaneous, movesWhileTracking, MovesWhileSlewing: false, CanStop: true, SettleSeconds: 0);
 
         /// <summary>A Polar Corrector whose axis offset from the pole (arcminutes, device directions) the fake sky reads.</summary>
@@ -102,6 +102,12 @@ namespace OpenAstroAra.Test {
             }
 
             public void Home() { }
+        }
+
+        /// <summary>A rig whose Polar Corrector connection can be replaced mid-run (a reconnect).</summary>
+        private sealed class SwappableSource(IPolarCorrector first) : IPolarCorrectorSource {
+            public volatile IPolarCorrector? Device = first;
+            public IPolarCorrector? Current() => Device;
         }
 
         /// <summary>Seed frames A and B as the bench's fixed sky; every live frame is B's pointing moved by the
@@ -187,6 +193,8 @@ namespace OpenAstroAra.Test {
             Assert.That(firstProbe.GetProperty("axis").GetString(), Is.EqualTo("azimuth"));
             Assert.That(firstProbe.GetProperty("arcmin").GetDouble(), Is.EqualTo(2.0));
             Assert.That(logger.Entries.Count(e => e.EventId == 4543), Is.GreaterThanOrEqualTo(moves.Length), "one log line per move");
+            Assert.That(logger.Entries.Count(e => e.EventId == 4548), Is.GreaterThanOrEqualTo(2), "the device's status after each wait");
+            Assert.That(logger.Entries.Count(e => e.EventId == 4549), Is.EqualTo(2), "the test move's result, per axis");
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(corrector.Stops, Is.GreaterThanOrEqualTo(1), "stopping the routine stops the motors");
@@ -324,6 +332,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_device_that_does_not_take_up_its_backlash_may_lose_most_of_the_test_move() {
+            // 0.3 of the amount asked: a stop for a device that says it handles backlash, not for one that does not.
+            var corrector = new FakeCorrector(azOffset: 20, altOffset: 10) { AltResponse = 0.3, InfoReply = CorrectorInfo(backlashHandled: false) };
+            var (svc, ws) = await StartWithCorrectorAsync(corrector).ConfigureAwait(false);
+            using var _ = svc;
+
+            await CorrectorEventAsync(ws, PolarAlignCorrectorStates.Converged).ConfigureAwait(false);
+
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignCorrector
+                && e.Payload.GetProperty("state").GetString() == PolarAlignCorrectorStates.Stopped), Is.False);
+        }
+
+        [Test]
         public async Task A_fault_the_device_reports_after_a_move_stops_the_motors_with_its_text() {
             var corrector = new FakeCorrector(azOffset: 20, altOffset: 10) { FaultAfterMoves = "end of travel", FaultFromMove = 3 };
             var (svc, stopped, _) = await RunUntilStoppedAsync(corrector).ConfigureAwait(false);
@@ -348,6 +369,7 @@ namespace OpenAstroAra.Test {
             Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(cause));
             Assert.That(stopped.GetProperty("device_text").GetString(), Is.EqualTo("the board has no factors"));
             Assert.That(corrector.Moves, Is.Empty);
+            Assert.That(stopped.GetProperty("moves").GetInt32(), Is.Zero, "a refused move is not a move made");
         }
 
         [Test]
@@ -395,6 +417,62 @@ namespace OpenAstroAra.Test {
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             Assert.That(corrector.Stops, Is.GreaterThanOrEqualTo(1), "the owed Stop goes out at the next measurement");
+        }
+
+        [Test]
+        public async Task A_stop_owed_after_a_lost_link_goes_to_the_reconnected_device() {
+            // The old connection never answers again; the reconnect is a new object from the source.
+            var dead = new FakeCorrector(azOffset: 20, altOffset: 10) { StopFails = true };
+            dead.OnMove = n => n == 2 ? new PolarCorrectorException(PolarCorrectorFailure.LinkLost, "connection refused") : null;
+            var source = new SwappableSource(dead);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, corrector: source);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await CorrectorEventAsync(ws, PolarAlignCorrectorStates.Stopped).ConfigureAwait(false);
+
+            var reconnected = new FakeCorrector(azOffset: 0, altOffset: 0);
+            source.Device = reconnected;
+            var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(reconnected.Stops, Is.GreaterThanOrEqualTo(1), "the Stop reaches the device that answers now");
+            Assert.That(reconnected.Moves, Is.Empty);
+        }
+
+        [Test]
+        public async Task An_axis_inside_half_the_tolerance_on_the_sky_is_left_alone() {
+            // After the +2′ test moves the axis sits 0.57′ of rotation clockwise (0.4′ on the sky at 45°, inside
+            // half of the 1′ tolerance) and 4′ high: only altitude is corrected.
+            var corrector = new FakeCorrector(azOffset: -1.43, altOffset: 2);
+            var (svc, ws) = await StartWithCorrectorAsync(corrector).ConfigureAwait(false);
+            using var _ = svc;
+
+            await CorrectorEventAsync(ws, e => e.GetProperty("state").GetString() == PolarAlignCorrectorStates.Moving).ConfigureAwait(false);
+            await CorrectorEventAsync(ws, PolarAlignCorrectorStates.Converged).ConfigureAwait(false);
+
+            Assert.That(corrector.Moves.Skip(2).Select(m => m.Axis), Has.All.EqualTo(PolarCorrectorAxis.Altitude));
+        }
+
+        [Test]
+        public async Task A_stop_that_comes_from_outside_the_routine_ends_its_motor_loop() {
+            // The emergency stop and the device's own Stop route reach the routine through this door.
+            var corrector = new FakeCorrector(azOffset: 20, altOffset: 10) { NeverFinishes = true };
+            var (svc, ws) = await StartWithCorrectorAsync(corrector).ConfigureAwait(false);
+            using var _ = svc;
+            await CorrectorEventAsync(ws, PolarAlignCorrectorStates.Probing).ConfigureAwait(false);
+            IPolarCorrectorDriver driver = svc;
+            Assert.That(driver.DrivesPolarCorrector, Is.True);
+
+            await driver.StopPolarCorrectorAsync().ConfigureAwait(false);
+
+            corrector.NeverFinishes = false;
+            var movesAtStop = corrector.Moves.Length;
+            var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            Assert.That(corrector.Moves, Has.Length.EqualTo(movesAtStop), "no move follows the stop: the altitude test move never goes out");
+            Assert.That(movesAtStop, Is.EqualTo(1));
+            Assert.That(driver.DrivesPolarCorrector, Is.False);
+            Assert.That(corrector.Stops, Is.GreaterThanOrEqualTo(1));
         }
 
         [Test]

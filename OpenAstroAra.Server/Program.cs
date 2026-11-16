@@ -407,7 +407,9 @@ public partial class Program {
         builder.Services.AddSingleton<ICoolingFanActuator>(sp => sp.GetRequiredService<SwitchService>());
         // #1972 — the rig's Polar Corrector, derived from the connected switches and mount.
         builder.Services.AddSingleton<PolarCorrectorService>(sp => new PolarCorrectorService(
-            sp.GetRequiredService<SwitchService>(), sp.GetRequiredService<TelescopeService>()));
+            sp.GetRequiredService<SwitchService>(), sp.GetRequiredService<TelescopeService>(),
+            // Resolved at the call, not here: the routine itself is built from this service.
+            () => sp.GetRequiredService<IPolarAlignService>() as IPolarCorrectorDriver));
         builder.Services.AddSingleton<IPolarCorrectorService>(sp => sp.GetRequiredService<PolarCorrectorService>());
         builder.Services.AddSingleton<IPolarCorrectorSource>(sp => sp.GetRequiredService<PolarCorrectorService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4

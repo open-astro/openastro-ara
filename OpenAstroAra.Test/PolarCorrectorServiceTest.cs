@@ -263,6 +263,41 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        private sealed class FakeRoutine(ScriptedActions device) : IPolarCorrectorDriver {
+            public bool DrivesPolarCorrector { get; set; } = true;
+            public Task StopPolarCorrectorAsync() {
+                device.Calls.Enqueue("routine stops its motor loop");
+                DrivesPolarCorrector = false;
+                return Task.CompletedTask;
+            }
+        }
+
+        private static readonly string[] RoutineThenDevice = ["routine stops its motor loop", "PolarAlign:Stop"];
+
+        [Test]
+        public async Task Stop_ends_a_running_routines_motor_loop_before_it_stops_the_device() {
+            // The emergency stop and the Stop route both come through here. A device Stop alone reads to
+            // the routine as a finished move, and its next measurement would move the motors again.
+            var actions = Healthy();
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var routine = new FakeRoutine(actions);
+            var service = new PolarCorrectorService(_switches, _mount, () => routine);
+
+            await service.StopAsync(null, CancellationToken.None);
+
+            Assert.That(actions.Calls, Is.EqualTo(RoutineThenDevice));
+        }
+
+        [Test]
+        public async Task Home_is_refused_while_a_routine_moves_the_motors() {
+            var actions = Healthy();
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = new PolarCorrectorService(_switches, _mount, () => new FakeRoutine(actions));
+
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
+            Assert.That(actions.Calls, Is.Empty, "nothing reached the device");
+        }
+
         [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),

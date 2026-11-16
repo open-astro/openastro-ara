@@ -195,6 +195,17 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        // A reply that does not say whether an axis moves must never read as "not moving": the routine
+        // would take a move in flight for a finished one.
+        [TestCase("{}")]
+        [TestCase("""{"az":{"moving":false}}""")]
+        [TestCase("""{"az":{"position":3},"alt":{"moving":false}}""")]
+        [TestCase("""{"az":{"moving":"no"},"alt":{"moving":false}}""")]
+        public void A_status_that_does_not_say_whether_each_axis_moves_is_a_protocol_failure(string reply) {
+            Assert.That(Assert.Throws<PolarCorrectorException>(() => PolarAlignActionsCorrector.ParseStatus(reply))!.Failure,
+                Is.EqualTo(PolarCorrectorFailure.Protocol));
+        }
+
         [TestCase("not json")]
         [TestCase("[1,2]")]
         [TestCase("")]
