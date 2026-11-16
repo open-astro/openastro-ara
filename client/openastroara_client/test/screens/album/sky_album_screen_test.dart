@@ -454,6 +454,31 @@ void main() {
     expect(find.textContaining('well placed tonight'), findsNothing);
   });
 
+  testWidgets('the shelf follows a catalog chip and a refresh while the album stays open (#1887)', (tester) async {
+    // The shelf's lookup of missing cards is kept between builds; it must follow what it came from.
+    var served = const <AlbumFrame>[];
+    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m1],
+        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
+    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+    await tester.tap(find.text('Caldwell · 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 missing card well placed tonight'), findsOneWidget);
+    expect(_onShelf('Double Cluster'), findsOneWidget);
+    await tester.tap(find.text('Caldwell · 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+    // A light of M42 comes in on a pull: the open album takes it off the shelf.
+    served = [
+      AlbumFrame(frameId: 'm42', targetName: 'M 42', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ];
+    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(find.text('2 missing cards well placed tonight'), findsOneWidget);
+    expect(_onShelf('Orion Nebula'), findsNothing);
+  });
+
   testWidgets('each catalog chip shows its collected count, so a card in an unselected catalog shows', (tester) async {
     await _pump(tester, frames: _m31Frames);
     expect(find.text('Messier · 1'), findsOneWidget);
