@@ -52,22 +52,29 @@ public static class SolverPathMigration {
     /// binary once it is on disk.</summary>
     public static readonly string[] StockPaths = { LegacyAstapPath, DebianAstapCliPath, AstapDebCliPath };
 
-    /// <summary>Rewrites a stock solver path (<see cref="StockPaths"/>) to the bundled
+    /// <summary>Rewrites a stock solver path (<see cref="StockPaths"/>) or a blank one (a share import
+    /// strips the path, ADR 0007 rule 1: the default names the bundled binary) to the bundled
     /// <see cref="AstapCliPath"/> when that binary is present; otherwise returns <paramref name="ps"/>
     /// unchanged (the same instance). Any other path is the user's own choice and is never touched.</summary>
     public static PlateSolveSettingsDto Migrate(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
         var path = ps.PathOrEndpoint?.Trim();
-        if (path == null || Array.IndexOf(StockPaths, path) < 0 || !fileExists(AstapCliPath)) {
+        var blank = string.IsNullOrEmpty(path);
+        if (path == null || !(blank || Array.IndexOf(StockPaths, path) >= 0) || !fileExists(AstapCliPath)) {
             return ps;
         }
         return ps with { PathOrEndpoint = AstapCliPath };
     }
 
-    /// <summary>The configured solver binary when it is set but not on disk, else null. Boot
-    /// logs a warning for it: without the binary every solve fails before ASTAP even runs.</summary>
+    /// <summary>The configured solver binary when it is not on disk, else null. A blank path (not
+    /// repaired by <see cref="Migrate"/> because the bundled binary is absent) reports
+    /// <see cref="AstapCliPath"/>, the one to install. Boot logs a warning for it: without the binary
+    /// every solve fails before ASTAP even runs.</summary>
     public static string? MissingSolverBinary(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
         var path = ps.PathOrEndpoint?.Trim();
-        return string.IsNullOrEmpty(path) || fileExists(path) ? null : path;
+        if (string.IsNullOrEmpty(path)) {
+            path = AstapCliPath;
+        }
+        return fileExists(path) ? null : path;
     }
 
     /// <summary>True when the configured solver path is a URL: a legacy astrometry.net endpoint kept
@@ -83,7 +90,7 @@ public static class SolverPathMigration {
     public static string? BootWarning(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
         var path = ps.PathOrEndpoint?.Trim();
         if (string.IsNullOrEmpty(path)) {
-            return null;
+            path = AstapCliPath;
         }
         if (IsEndpointUrl(path)) {
             return $"Plate solver is configured as a URL ({path}), which ARA does not support (astrometry.net endpoints are not used): every plate solve (centering, polar alignment) will fail. Set Options → Plate solving → solver path to {AstapCliPath} (the solver bundled with the daemon).";

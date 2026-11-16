@@ -77,7 +77,8 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(Bundled));
             Assert.That(SolverPathMigration.MissingSolverBinary(WithPath(Bundled), Present(Bundled)),
                 Is.Null);
-            Assert.That(SolverPathMigration.MissingSolverBinary(WithPath("  "), Present()), Is.Null);
+            // A blank path is no longer "nothing to report": it reports the bundled path (#1866).
+            Assert.That(SolverPathMigration.MissingSolverBinary(WithPath("  "), Present()), Is.EqualTo(Bundled));
         }
 
         [Test]
