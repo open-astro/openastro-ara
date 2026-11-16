@@ -103,17 +103,37 @@ void main() {
     expect(find.text('5'), findsOneWidget);
   });
 
+  // hitTestable: a TextField hint stays in the tree while the field holds a
+  // value, hidden, so only painted text may match.
+  Future<void> expectDerived(WidgetTester tester, int bortle) async {
+    final line = find.text('Derived Bortle class: $bortle');
+    await tester.ensureVisible(line);
+    expect(line.hitTestable(), findsOneWidget);
+  }
+
   testWidgets(
-    'a profile with SQM 20.3 and Bortle 6 loads in SQM mode with the derived class',
+    'a profile with SQM 20.3 and Bortle 6 loads in SQM mode; the painted derived class follows a committed edit',
     (tester) async {
-      await _pumpPanel(
+      final container = await _pumpPanel(
         tester,
         _Rig(sydney.copyWith(bortleClass: 6, sqmMagPerArcsec2: 20.3)),
       );
       expect(sqmSelected(tester), isTrue);
       expect(find.byKey(const ValueKey('site-bortle')), findsNothing);
       expect(find.text('20.3'), findsOneWidget);
-      expect(find.text('Derived Bortle class: 4'), findsOneWidget);
+      await expectDerived(tester, 4);
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('site-sqm')),
+          matching: find.byType(TextField),
+        ),
+        '21.9',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(container.read(siteSettingsProvider).sqmMagPerArcsec2, 21.9);
+      await expectDerived(tester, 1);
     },
   );
 

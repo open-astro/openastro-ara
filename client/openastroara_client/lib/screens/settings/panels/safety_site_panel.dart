@@ -7,6 +7,7 @@ import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../state/simple_mode_state.dart';
+import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
@@ -522,12 +523,11 @@ class _SkyBrightnessRows extends ConsumerWidget {
                 : n.setSkyBortle(sky.bortle),
           ),
         ),
-        if (sky.isSqm)
+        if (sky.isSqm) ...[
           EditableNumberRow(
             key: const ValueKey('site-sqm'),
             label: 'SQM sky brightness (16 to 22.5)',
             helpKey: 'safety.site.sqm_mag_per_arcsec2',
-            hint: 'Derived Bortle class: ${sky.bortle}',
             currentValue: sqmText,
             getCanonical: () =>
                 ref.read(siteSettingsProvider).sqmMagPerArcsec2.toString(),
@@ -535,8 +535,19 @@ class _SkyBrightnessRows extends ConsumerWidget {
               final v = double.tryParse(str);
               if (v != null) n.setSkySqm(v);
             },
-          )
-        else
+          ),
+          // Its own line, not the field's hint: a hint hides once the field
+          // holds a value. Follows the saved reading, so it is never stale.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Derived Bortle class: ${sky.bortle}',
+              key: const Key('site-sqm-derived-bortle'),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
+          ),
+        ] else
           EditableNumberRow(
             key: const ValueKey('site-bortle'),
             label: 'Bortle class (1..9)',
