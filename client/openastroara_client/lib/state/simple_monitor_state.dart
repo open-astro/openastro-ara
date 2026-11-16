@@ -766,7 +766,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       best = true;
       final sky = ref.watch(tonightSkyProvider).value ?? const [];
       for (final o in sky.take(5)) {
-        upNext.add(MonitorUpNext(MonitorUpKind.best, name: designationWithName(o.id, o.name), altitudeDeg: o.altitudeDeg));
+        upNext.add(MonitorUpNext(MonitorUpKind.best, name: designationWithName(bestCatalogDesignation([o.id, ...o.aliases]) ?? o.id, o.name), altitudeDeg: o.altitudeDeg));
       }
     }
 
