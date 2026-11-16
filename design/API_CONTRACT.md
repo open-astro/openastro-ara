@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-16 — #1952 the instantiate 422 is problem details: `POST /sequences/templates/{name}/instantiate`
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
+
+**Decision:** supersedes the 422 shape in the 2026-11-15 #1859 entry. A body that fails the schema check answers 422 problem details (`application/problem+json`, title `Template body refused`, `detail` = the validator's reason). Only `TemplateBodyRefusedException` maps to 422; no other `ArgumentException` does. Nothing is created. An unknown name stays a 404.
+
+**Reasoning:** the body now matches the route's `ProducesProblem(422)` and the committed `openapi.yaml`, which already described problem details. The create and PATCH routes still answer `{error}`; that is not changed here.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1sequences~1templates~1{name}~1instantiate`
+
+**Related:** #1952, #1859
+
+---
+
 ## 2026-11-15 — #1859 a template that fails the schema check answers 422: `POST /sequences/templates/{name}/instantiate`
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
