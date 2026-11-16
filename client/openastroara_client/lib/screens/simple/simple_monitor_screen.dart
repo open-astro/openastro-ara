@@ -488,8 +488,11 @@ class _Tile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
             child: LayoutBuilder(builder: (context, box) {
-              // Cut short, an aside loses its end (Tonight's imaged time).
-              final up = aside != null && shown == null && _fitsCorner(context, box.maxWidth, aside!);
+              // Cut short, an aside loses its end (Tonight's imaged time): the corner takes it only whole.
+              final bold = MediaQuery.boldTextOf(context) ? const TextStyle(fontWeight: FontWeight.bold) : null;
+              final style = DefaultTextStyle.of(context).style.merge(_dim).merge(bold);
+              final scaler = MediaQuery.textScalerOf(context);
+              final up = aside != null && shown == null && _textSize(aside!, scaler, style).width <= box.maxWidth * 0.6;
               final corner = up ? aside : shown;
               return SingleChildScrollView(
                 child: ConstrainedBox(
@@ -529,16 +532,6 @@ class _Tile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Whether [t] fits whole in a tile header's corner, which takes at most 60 %
-/// of the tile's [width].
-bool _fitsCorner(BuildContext context, double width, String t) {
-  // The style the header's Text draws in, so the measure matches it.
-  final style = DefaultTextStyle.of(context).style
-      .merge(_dim)
-      .merge(MediaQuery.boldTextOf(context) ? const TextStyle(fontWeight: FontWeight.bold) : null);
-  return _textSize(t, MediaQuery.textScalerOf(context), style).width <= width * 0.6;
 }
 
 /// The top line's words: the headline and the reason under it.
@@ -1524,8 +1517,7 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
-      // In the header's corner when it fits there whole, leaving the timeline
-      // room for its labels; else in its own row.
+      // In the corner when it fits whole, leaving the timeline room for labels.
       aside: line,
       // The timeline is painted: a screen reader hears its blocks and markers.
       value: [
@@ -1597,8 +1589,7 @@ TextPainter _axisText(String t, TextScaler scaler, [TextStyle style = kSimpleCap
   maxLines: 1,
 )..layout();
 
-/// The size [_text] paints [t] at, for the painters' margins; or [t] in
-/// [style].
+/// The size [t] takes in [style], by default as [_text] paints it.
 Size _textSize(String t, TextScaler scaler, [TextStyle style = kSimpleCaption]) {
   final tp = _axisText(t, scaler, style);
   final size = tp.size;
