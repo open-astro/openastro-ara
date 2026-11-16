@@ -25,9 +25,16 @@ class _Fixed extends MonitorState {
 final _asOf = DateTime(2026, 11, 15, 0, 23);
 
 /// A colour camera mid-frame: one plan row with no filter name.
-MonitorSnapshot _snap({String? filter = '', MonitorLastFrame lastFrame = const MonitorLastFrame()}) => MonitorSnapshot(
+MonitorSnapshot _snap({
+  String? filter = '',
+  MonitorLastFrame lastFrame = const MonitorLastFrame(),
+}) => MonitorSnapshot(
   asOf: _asOf,
-  verdict: const MonitorVerdict(MonitorVerdictKind.allGood, MonitorStatus.normal, target: 'NGC 1269'),
+  verdict: const MonitorVerdict(
+    MonitorVerdictKind.allGood,
+    MonitorStatus.normal,
+    target: 'NGC 1269',
+  ),
   now: MonitorNow(
     status: MonitorStatus.working,
     word: MonitorNowWord.exposing,
@@ -41,7 +48,14 @@ MonitorSnapshot _snap({String? filter = '', MonitorLastFrame lastFrame = const M
     targetSecondsLeft: 5640,
     filters: [(filter: filter ?? '', done: 26, total: 120, inHand: true)],
   ),
-  upNext: [MonitorUpNext(MonitorUpKind.nextFrame, at: _asOf.add(const Duration(seconds: 36)), frame: 28, name: filter)],
+  upNext: [
+    MonitorUpNext(
+      MonitorUpKind.nextFrame,
+      at: _asOf.add(const Duration(seconds: 36)),
+      frame: 28,
+      name: filter,
+    ),
+  ],
   flip: const MonitorFlip(state: null),
   lastFrame: lastFrame,
   night: const MonitorNight(),
@@ -68,35 +82,47 @@ Future<void> _pump(WidgetTester tester, MonitorSnapshot snap) async {
 }
 
 void main() {
-  testWidgets('a camera with no filter shows no filter text and no separator left behind', (tester) async {
-    await _pump(tester, _snap());
-    expect(find.text('NGC 1269 · 60 s'), findsOneWidget);
-    expect(find.text('Frame 28'), findsOneWidget);
-  });
+  testWidgets(
+    'a camera with no filter shows no filter text and no separator left behind',
+    (tester) async {
+      await _pump(tester, _snap());
+      expect(find.text('NGC 1269 · 60 s'), findsOneWidget);
+      expect(find.text('Frame 28'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a frame is counted once: Frame 27 of 120 beside "26 saved", never a bare 26/120', (tester) async {
-    await _pump(tester, _snap());
-    expect(find.textContaining('Frame 27 of 120'), findsOneWidget);
-    expect(find.text('26 saved'), findsOneWidget);
-    expect(find.text('26/120'), findsNothing);
-  });
+  testWidgets(
+    'a frame is counted once: Frame 27 of 120 beside "26 saved", never a bare 26/120',
+    (tester) async {
+      await _pump(tester, _snap());
+      expect(find.textContaining('Frame 27 of 120'), findsOneWidget);
+      expect(find.text('26 saved'), findsOneWidget);
+      expect(find.text('26/120'), findsNothing);
+    },
+  );
 
-  testWidgets('the frames line does not repeat the target the tile already names', (tester) async {
-    await _pump(tester, _snap());
-    expect(find.textContaining(' on NGC 1269'), findsNothing);
-  });
+  testWidgets(
+    'the frames line does not repeat the target the tile already names',
+    (tester) async {
+      await _pump(tester, _snap());
+      expect(find.textContaining(' on NGC 1269'), findsNothing);
+    },
+  );
 
-  testWidgets('the autofocus line ends on "since then", not a dangling "since"', (tester) async {
-    await _pump(
-      tester,
-      _snap(
-        lastFrame: MonitorLastFrame(
-          focuser: true,
-          autofocusAt: DateTime(2026, 11, 14, 23, 50),
-          tempSinceAutofocus: -0.8,
+  testWidgets(
+    'the autofocus line ends on "since then", not a dangling "since"',
+    (tester) async {
+      await _pump(
+        tester,
+        _snap(
+          lastFrame: MonitorLastFrame(
+            focuser: true,
+            autofocusAt: DateTime(2026, 11, 14, 23, 50),
+            tempSinceAutofocus: -0.8,
+          ),
         ),
-      ),
-    );
-    expect(find.text('Autofocus 23:50 · −0.8 °C since then'), findsOneWidget);
-  });
+      );
+      expect(find.text('Autofocus 23:50 · −0.8 °C since then'), findsOneWidget);
+    },
+  );
 }
