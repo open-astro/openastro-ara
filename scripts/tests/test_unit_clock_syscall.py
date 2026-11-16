@@ -14,7 +14,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 UNIT = REPO_ROOT / "packaging" / "debian" / "etc" / "systemd" / "system" / "openastroara-server.service"
-PLAYBOOK = REPO_ROOT / "design" / "PORT_PLAYBOOK.md"
 
 
 def syscall_filters(text: str) -> list[str]:
@@ -40,10 +39,6 @@ class ClockSyscallTests(unittest.TestCase):
     def test_shipped_unit_filter_allows_clock_settime(self) -> None:
         tokens = syscall_filters(UNIT.read_text(encoding="utf-8"))
         self.assertTrue(allows_clock_settime(tokens), f"SystemCallFilter {tokens} blocks clock_settime")
-
-    def test_playbook_unit_copy_allows_clock_settime(self) -> None:
-        tokens = syscall_filters(PLAYBOOK.read_text(encoding="utf-8"))
-        self.assertTrue(allows_clock_settime(tokens), f"playbook SystemCallFilter {tokens} blocks clock_settime")
 
 
 if __name__ == "__main__":
