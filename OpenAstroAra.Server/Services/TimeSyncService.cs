@@ -32,9 +32,9 @@ public interface ITimeSyncService {
     Task<TimeSyncPushResultDto> PushAsync(TimeSyncPushRequestDto request, CancellationToken ct);
 }
 
-/// <summary>Sets the OS clock. The real implementation needs CAP_SYS_TIME on the server binary
-/// (DEPLOY.md's <c>setcap cap_sys_time+ep</c> step); a failed set is an expected condition on a
-/// dev box or an un-capped install, never an exception.</summary>
+/// <summary>Sets the OS clock. The real implementation needs CAP_SYS_TIME and, under the packaged
+/// unit, a SystemCallFilter that allows <c>clock_settime</c> (<c>@clock</c>); a failed set is an
+/// expected condition on a dev box or an un-capped or filtered install, never an exception.</summary>
 public interface ISystemClockSetter {
     /// <summary>Set the system clock to <paramref name="utc"/>. Returns false when the platform
     /// or privileges don't allow it — the caller then tracks the offset instead.</summary>
@@ -204,7 +204,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort boundary: a clock-set fault (missing capability, exotic platform) must degrade to offset tracking, never fail the sync push. Log-and-recover.")]
+        Justification = "Best-effort boundary: a clock-set fault (missing capability, blocked syscall, exotic platform) must degrade to offset tracking, never fail the sync push. Log-and-recover.")]
     private bool TrySetClock(DateTimeOffset utc) {
         try {
             var ok = _clockSetter.TrySet(utc);
@@ -247,7 +247,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     partial void LogSyncApplied(string source, string trust, double offsetSeconds, bool clockSet);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "System clock set unavailable (missing CAP_SYS_TIME or unsupported platform) — tracking the offset instead. DEPLOY.md: sudo setcap cap_sys_time+ep <server binary>")]
+        Message = "System clock set unavailable (missing CAP_SYS_TIME, a systemd SystemCallFilter without @clock, or unsupported platform) — tracking the offset instead. Packaged unit: check CapabilityBoundingSet/AmbientCapabilities and SystemCallFilter. Bare binary: sudo setcap cap_sys_time+ep <server binary>")]
     partial void LogClockSetUnavailable();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "System clock set threw — tracking the offset instead")]
@@ -275,7 +275,7 @@ public sealed class TimeSyncInvalidSourceException : TimeSyncInvalidRequestExcep
 }
 
 /// <summary>§31.4 — sets the clock via libc <c>clock_settime(CLOCK_REALTIME)</c>. Needs
-/// CAP_SYS_TIME on the process (the DEPLOY.md setcap step); without it the call returns EPERM
+/// CAP_SYS_TIME on the process (the DEPLOY.md setcap step) and, under systemd, a filter that allows @clock; without either the call returns EPERM
 /// and this reports false. Non-Linux platforms report false without attempting.</summary>
 internal sealed class LinuxSystemClockSetter : ISystemClockSetter {
 

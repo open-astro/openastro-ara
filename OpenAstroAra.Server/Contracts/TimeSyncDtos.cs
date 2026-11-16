@@ -52,7 +52,7 @@ public sealed record TimeSyncBeforeAfterDto(DateTimeOffset TimeUtc, double Offse
 
 /// <summary>§31.3 — the push result: the clock before and after the sync, and whether the
 /// pushed location was written into the active profile's site settings. <c>ClockSet</c> is
-/// additive-honest: false means the CAP_SYS_TIME set failed (dev box / missing capability) and
+/// additive-honest: false means the clock set failed (dev box / missing CAP_SYS_TIME / syscall filter without @clock) and
 /// the offset in <see cref="After"/> is being tracked rather than corrected.</summary>
 public sealed record TimeSyncPushResultDto(
     TimeSyncBeforeAfterDto Before,
