@@ -13,6 +13,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/banked_hours.dart';
+import '../../util/imaging_regions.dart' show regionAwareName;
 import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
 import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
@@ -512,7 +513,7 @@ class _PlanTargetCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(o.name, style: theme.textTheme.bodyMedium),
+            Text(regionAwareName(o.id, o.aliases, o.name), style: theme.textTheme.bodyMedium),
             const SizedBox(height: 4),
             Text(
               '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
