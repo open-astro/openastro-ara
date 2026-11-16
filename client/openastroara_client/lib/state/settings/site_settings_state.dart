@@ -159,9 +159,6 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
 
   static bool isValidBortle(int v) => v >= 1 && v <= 9;
 
-  /// 0 = not measured; else 16..22.5 (shared with the wizard form).
-  static bool isValidSqm(double v) => v == 0 || (v >= 16 && v <= 22.5);
-
   /// Bortle mode: the class is the one input, so any SQM reading is cleared
   /// (no hidden value may still affect planning, #1529).
   void setSkyBortle(int v) {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/wizard/screens/screen_profile_basics.dart';
 import 'package:openastroara/services/time_sync_api.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 import 'package:openastroara/util/gps_site_fill.dart';
@@ -29,11 +30,13 @@ void main() {
   Future<ProviderContainer> pump(
     WidgetTester tester, {
     TimeSyncClient? api,
+    void Function(ProviderContainer)? setup,
   }) async {
     final container = ProviderContainer(
       overrides: [timeSyncApiProvider.overrideWithValue(api)],
     );
     addTearDown(container.dispose);
+    setup?.call(container);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -103,6 +106,46 @@ void main() {
     await pick('Bortle class');
     expect(site.bortleClass, 4);
     expect(site.sqmMagPerArcsec2, 0);
+  });
+
+  // A remount (Next then Back) shows the draft's mode; an entry that passes
+  // through an invalid value ("2" on the way to "21.5") nulls the draft, which
+  // must not flip the field to the saved settings' mode.
+  testWidgets('an SQM draft over saved Bortle keeps SQM mode while typing', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      setup: (c) => c.read(wizardControllerProvider).draft.site
+        ..sqmMagPerArcsec2 = 20.3
+        ..bortleClass = 4,
+    );
+    expect(find.byKey(const ValueKey('wiz-sqm-sqm')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('wiz-sqm-sqm')));
+    await tester.enterText(find.byKey(const ValueKey('wiz-sqm-sqm')), '2');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('wiz-sqm-sqm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('wiz-bortle-bortle')), findsNothing);
+  });
+
+  testWidgets('a Bortle draft over saved SQM keeps Bortle mode while typing', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      setup: (c) {
+        c.read(siteSettingsProvider.notifier).setSkySqm(21.0);
+        c.read(wizardControllerProvider).draft.site
+          ..bortleClass = 5
+          ..sqmMagPerArcsec2 = 0;
+      },
+    );
+    expect(find.byKey(const ValueKey('wiz-bortle-bortle')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('wiz-bortle-bortle')));
+    await tester.enterText(find.byKey(const ValueKey('wiz-bortle-bortle')), '');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('wiz-bortle-bortle')), findsOneWidget);
+    expect(find.byKey(const ValueKey('wiz-sqm-sqm')), findsNothing);
   });
 
   testWidgets('Fill from GPS fills the fields and the draft from the fix', (

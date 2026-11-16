@@ -35,6 +35,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   void initState() {
     super.initState();
     _draft = ref.read(wizardControllerProvider).draft;
+    _sqmMode = _sky().isSqm;
   }
 
   /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on this
@@ -99,9 +100,10 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   String? _bortleError;
   String? _sqmError;
 
-  /// The mode the user picked; null until then (the draft decides). An
-  /// invalid entry nulls the draft, which must not flip the mode back.
-  bool? _sqmMode;
+  /// The mode in use: taken from the draft once on mount, then only the
+  /// selector changes it. An invalid entry nulls the draft, which must not
+  /// flip the mode to the saved settings' one.
+  late bool _sqmMode;
 
   /// The sky in effect: what the draft holds, else the saved site settings.
   SkyState _sky() {
@@ -131,7 +133,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
 
   Widget _skyInput() {
     final sky = _sky();
-    final isSqm = _sqmMode ?? sky.isSqm;
+    final isSqm = _sqmMode;
     final l10n = context.l10n;
     final modeKey = isSqm ? 'sqm' : 'bortle';
     return Column(
