@@ -477,5 +477,63 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(worst, Is.LessThan(3.0), "arcmin");
         }
+
+        // ── §45.8 live readout: the camera's alt/az shift mapped back to the axis's shift ──────
+
+        private static (double X, double Y, double Z) Add((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+            (a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+
+        private static (double X, double Y, double Z) Scale((double X, double Y, double Z) a, double f) =>
+            (a.X * f, a.Y * f, a.Z * f);
+
+        private static (double X, double Y, double Z) Normalize((double X, double Y, double Z) a) =>
+            Scale(a, 1.0 / Math.Sqrt(a.X * a.X + a.Y * a.Y + a.Z * a.Z));
+
+        private static (double X, double Y, double Z) NorthEastUp(double altDeg, double azDeg) {
+            var h = altDeg * Math.PI / 180.0;
+            var a = azDeg * Math.PI / 180.0;
+            return (Math.Cos(h) * Math.Cos(a), Math.Cos(h) * Math.Sin(a), Math.Sin(h));
+        }
+
+        private static (double AltDeg, double AzDeg) AltAzOf((double X, double Y, double Z) v) {
+            var az = Math.Atan2(v.Y, v.X) * 180.0 / Math.PI;
+            return (Math.Asin(Math.Clamp(v.Z, -1, 1)) * 180.0 / Math.PI, az < 0 ? az + 360.0 : az);
+        }
+
+        // A camera `distanceDeg` from the apparent pole at position angle `angleDeg`, then a KNOWN move of
+        // the rigid mount (Rodrigues rotation of the camera): the pole raised by altMoveDeg, then turned
+        // clockwise from above by azMoveDeg. The signs of the two axes are probed on the pole itself.
+        [TestCase(51.477833, 5.0)]
+        [TestCase(51.477833, 15.0)]
+        [TestCase(51.477833, 30.0)]
+        [TestCase(-33.856784, 5.0)]
+        [TestCase(-33.856784, 15.0)]
+        [TestCase(-33.856784, 30.0)]
+        public void The_live_readout_reads_each_axis_move_within_2_percent_far_from_the_pole(double latitudeDeg, double distanceDeg) {
+            const double moveDeg = 0.1;
+            var poleAz = latitudeDeg > 0 ? 0.0 : 180.0;
+            var pole = NorthEastUp(Math.Abs(latitudeDeg), poleAz);
+            var horizontalAcross = Normalize(Cross((0, 0, 1), pole));
+            var vertical = (X: 0.0, Y: 0.0, Z: 1.0);
+            var raiseAxis = AltAzOf(Rotate(pole, horizontalAcross, 1)).AltDeg > Math.Abs(latitudeDeg) ? horizontalAcross : Scale(horizontalAcross, -1);
+            var clockwiseAxis = ((AltAzOf(Rotate(pole, vertical, 1)).AzDeg - poleAz + 540.0) % 360.0) - 180.0 > 0 ? vertical : Scale(vertical, -1);
+            foreach (var positionAngle in new[] { 0.0, 90.0, 180.0, 270.0 }) {
+                var toward = Normalize(Cross(pole, horizontalAcross));
+                var tangent = Add(Scale(toward, Math.Cos(positionAngle * Math.PI / 180.0)), Scale(horizontalAcross, Math.Sin(positionAngle * Math.PI / 180.0)));
+                var d = distanceDeg * Math.PI / 180.0;
+                var camera = Add(Scale(pole, Math.Cos(d)), Scale(tangent, Math.Sin(d)));
+                var seed = AltAzOf(camera);
+                foreach (var (altMove, azMove) in new[] { (moveDeg, 0.0), (0.0, moveDeg), (-moveDeg, 0.0), (0.0, -moveDeg) }) {
+                    var moved = Rotate(Rotate(camera, raiseAxis, altMove), clockwiseAxis, azMove);
+                    var after = AltAzOf(moved);
+                    var dAz = ((after.AzDeg - seed.AzDeg + 540.0) % 360.0) - 180.0;
+                    var (altShift, azShift) = PolarAlignGeometry.AxisShiftFromPointingShift(
+                        seed.AltDeg, seed.AzDeg, after.AltDeg - seed.AltDeg, dAz, latitudeDeg);
+                    var where = $"lat {latitudeDeg}, {distanceDeg}° from the pole, position angle {positionAngle}°, move alt {altMove} az {azMove}";
+                    Assert.That(altShift, Is.EqualTo(altMove).Within(moveDeg * 0.02), where);
+                    Assert.That(azShift, Is.EqualTo(azMove).Within(moveDeg * 0.02), where);
+                }
+            }
+        }
     }
 }
