@@ -952,8 +952,8 @@ public sealed record PolarAlignStateDto(
     // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
     // the last finished one.
     PolarAlignLastResultDto? LastResult = null,
-    // #1971 — what the Polar Corrector is doing in this run; null when the rig has none Ara can drive,
-    // or no run has reached a measurement yet.
+    // #1971 — what the Polar Corrector is doing in this run; null when the rig has none, when Ara cannot
+    // drive the one it has (with polar_corrector_auto on), or before the run's first measurement.
     PolarAlignCorrectorDto? Corrector = null);
 
 /// <summary>#1971 the Polar Corrector in a running routine, also the payload of <c>polar_align.corrector</c>.

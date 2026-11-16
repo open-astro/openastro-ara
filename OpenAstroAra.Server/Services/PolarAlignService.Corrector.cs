@@ -160,7 +160,9 @@ namespace OpenAstroAra.Server.Services {
                 // A resume or the end of the run replaced it: nothing is waiting on it any more.
             }
             if (device is not null) {
-                StopDeviceBestEffort(run, device);
+                // Off the caller's thread: the emergency stop bounds a rung only once this call has
+                // handed back a task, and a device on a bad link answers after its HTTP timeout.
+                await Task.Run(() => StopDeviceBestEffort(run, device), CancellationToken.None).ConfigureAwait(false);
             }
             LogCorrectorStopped(PolarAlignCorrectorCauses.StoppedByUser, null);
             await PublishCorrectorAsync(gen).ConfigureAwait(false);

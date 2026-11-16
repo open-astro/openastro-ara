@@ -60,6 +60,8 @@ namespace OpenAstroAra.Test {
             public int FaultFromMove { get; set; } = int.MaxValue;
             public bool NeverFinishes { get; set; }
             public bool StopFails { get; set; }
+            /// <summary>While reset, Stop does not return: a device on a half-dropped link.</summary>
+            public ManualResetEventSlim StopAnswers { get; } = new(initialState: true);
 
             public (double Az, double Alt) Offset { get { lock (_gate) { return (_az, _alt); } } }
             public (PolarCorrectorAxis Axis, double Arcmin)[] Moves { get { lock (_gate) { return [.. _moves]; } } }
@@ -92,6 +94,7 @@ namespace OpenAstroAra.Test {
             }
 
             public void Stop() {
+                StopAnswers.Wait();
                 if (StopFails) {
                     throw new PolarCorrectorException(PolarCorrectorFailure.LinkLost, "no answer");
                 }
@@ -473,6 +476,30 @@ namespace OpenAstroAra.Test {
             Assert.That(movesAtStop, Is.EqualTo(1));
             Assert.That(driver.DrivesPolarCorrector, Is.False);
             Assert.That(corrector.Stops, Is.GreaterThanOrEqualTo(1));
+        }
+
+        [Test]
+        public async Task A_stop_from_outside_returns_to_its_caller_before_a_slow_device_answers() {
+            // The emergency stop bounds each rung only once the rung's call has returned a task: a device
+            // Stop made on the caller's thread would hold the whole ladder for the HTTP timeout.
+            var corrector = new FakeCorrector(azOffset: 20, altOffset: 10);
+            var (svc, ws) = await StartWithCorrectorAsync(corrector).ConfigureAwait(false);
+            using var _ = svc;
+            await CorrectorEventAsync(ws, PolarAlignCorrectorStates.Converged).ConfigureAwait(false);
+            IPolarCorrectorDriver driver = svc;
+            corrector.StopAnswers.Reset();
+            try {
+                var returned = Task.Factory.StartNew(() => driver.StopPolarCorrectorAsync(), CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+
+                var stopping = await returned.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                Assert.That(stopping.IsCompleted, Is.False, "the device has not answered yet");
+                corrector.StopAnswers.Set();
+                await stopping.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                Assert.That(corrector.Stops, Is.GreaterThanOrEqualTo(1));
+            } finally {
+                corrector.StopAnswers.Set();
+            }
         }
 
         [Test]
