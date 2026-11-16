@@ -1142,7 +1142,7 @@ CapabilityBoundingSet=CAP_SYS_TIME
 AmbientCapabilities=CAP_SYS_TIME
 
 # Syscall filter (allow standard service syscalls only)
-SystemCallFilter=@system-service
+SystemCallFilter=@system-service @clock
 SystemCallErrorNumber=EPERM
 
 # Standard output to journald (Serilog also writes to /var/log/openastroara per §29.9)
