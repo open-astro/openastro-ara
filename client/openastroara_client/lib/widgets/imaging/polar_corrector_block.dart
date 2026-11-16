@@ -87,13 +87,20 @@ String polarCorrectorNotDrivableText(AppLocalizations l, PolarCorrector d) =>
         ? l.polarCorrectorNotDrivableLoop
         : l.polarCorrectorNotDrivableInfo;
 
+/// The block is optional content: it shows only on a successful read that
+/// found a Polar Corrector, and draws nothing while loading or after a
+/// failed read (Settings › Devices says a read failed).
+bool polarCorrectorShown(AsyncValue<PolarCorrector?> read) =>
+    switch (read) { AsyncData(value: PolarCorrector(present: true)) => true, _ => false };
+
 class PolarCorrectorBlock extends ConsumerWidget {
   const PolarCorrectorBlock({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final device = ref.watch(polarCorrectorProvider).value;
-    if (device == null || !device.present) return const SizedBox.shrink();
+    final read = ref.watch(polarCorrectorProvider);
+    if (!polarCorrectorShown(read)) return const SizedBox.shrink();
+    final device = read.requireValue!;
     final l10n = context.l10n;
     final live = ref.watch(polarAlignLiveProvider);
     // The run belongs to a running routine; its end sends no corrector event.

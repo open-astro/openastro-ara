@@ -7984,5 +7984,21 @@
   "polarCorrectorActionHome": "send the Polar Corrector home",
   "@polarCorrectorActionHome": {
     "description": "Completes 'Couldn't …': Home failed"
+  },
+  "polarKnobCorrectorAuto": "Correct with the Polar Corrector's motors",
+  "@polarKnobCorrectorAuto": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's polar_corrector_auto"
+  },
+  "polarKnobCorrectorAutoOn": "On a rig with a Polar Corrector, Polar align turns its motors after each measurement",
+  "@polarKnobCorrectorAutoOn": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobCorrectorAutoOff": "Off: Polar align shows the turns and you make them",
+  "@polarKnobCorrectorAutoOff": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "estopFailPolarCorrector": "POLAR CORRECTOR MAY STILL BE MOVING (stop failed)",
+  "@estopFailPolarCorrector": {
+    "description": "Emergency stop: the Polar Corrector's stop failed"
   }
 }

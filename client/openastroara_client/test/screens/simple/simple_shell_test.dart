@@ -662,6 +662,13 @@ class _PolarCorrector implements PolarCorrectorClient {
   void close() {}
 }
 
+/// A Polar Corrector read that fails (not a 404: the route exists).
+class _PolarCorrectorDown extends _PolarCorrector {
+  _PolarCorrectorDown() : super(const PolarCorrector());
+  @override
+  Future<PolarCorrector?> get() async => throw StateError('The rig did not answer.');
+}
+
 /// The profile's polar-align section: [puts] records each save.
 class _PolarProfile implements PolarAlignClient {
   PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarCorrectorAuto: true);
@@ -4486,6 +4493,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('None · No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'),
         findsOneWidget);
+    expect(find.byKey(const Key('simple-gear-polarcorrector-turned-by')), findsNothing);
+  });
+
+  testWidgets('Devices: a failed Polar Corrector read shows Failed and why, as a device in error does', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      polarCorrectorApiProvider.overrideWithValue(_PolarCorrectorDown()),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text('Polar Corrector'), findsOneWidget);
+    expect(find.text('Failed · The rig did not answer.'), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(
+        of: find.ancestor(of: find.text('Polar Corrector'), matching: find.byType(Row)).first,
+        matching: find.byType(StatusDot)));
+    expect(dot.color, StatusLevel.error.color);
     expect(find.byKey(const Key('simple-gear-polarcorrector-turned-by')), findsNothing);
   });
 

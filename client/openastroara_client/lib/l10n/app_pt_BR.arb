@@ -1714,5 +1714,9 @@
   "polarCorrectorHandCaption": "O alinhamento polar mostra os giros e você os faz.",
   "polarCorrectorActionStop": "parar os motores",
   "polarCorrectorActionResume": "retomar os motores",
-  "polarCorrectorActionHome": "mandar o corretor polar para o início"
+  "polarCorrectorActionHome": "mandar o corretor polar para o início",
+  "polarKnobCorrectorAuto": "Corrigir com os motores do corretor polar",
+  "polarKnobCorrectorAutoOn": "Num setup com corretor polar, o alinhamento polar gira os motores depois de cada medição",
+  "polarKnobCorrectorAutoOff": "Desligado: o alinhamento polar mostra os giros e você os faz",
+  "estopFailPolarCorrector": "O CORRETOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
 }

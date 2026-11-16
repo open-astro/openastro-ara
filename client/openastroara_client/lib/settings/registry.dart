@@ -1364,6 +1364,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.use_home',
   ),
   Setting(
+    id: 'img.polar.polar_corrector_auto',
+    label: "Correct with the Polar Corrector's motors",
+    description: 'On a rig with a Polar Corrector, Polar align turns its motors after each measurement until the error is inside the tolerance. Off: Polar align shows the turns and you make them. Simple Mode sets the same thing as Turned by in Settings › Devices.',
+    keywords: ['polar', 'alignment', 'polar corrector', 'motors', 'by hand', 'turned by', 'rpa'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'polar_align.polar_corrector_auto',
+  ),
+  Setting(
     id: 'img.polar.seed_rotation_deg',
     label: 'Polar align turn (°)',
     description: 'How far the mount turns in RA to measure its axis. 60° passes solve noise through 1:1; a mount with limited RA travel wants less. Kept between 5° and 120°.',

@@ -245,7 +245,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             SizedBox(height: _short ? 8 : 12),
           ],
           // #1971 the shared Polar Corrector module, placed with no other layout change.
-          if (ref.watch(polarCorrectorProvider).value?.present ?? false) ...[
+          if (polarCorrectorShown(ref.watch(polarCorrectorProvider))) ...[
             const PolarCorrectorBlock(),
             SizedBox(height: _short ? 8 : 12),
           ],

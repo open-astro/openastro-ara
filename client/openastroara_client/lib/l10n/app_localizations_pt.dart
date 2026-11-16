@@ -6169,6 +6169,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarCorrectorActionHome => 'send the Polar Corrector home';
+
+  @override
+  String get polarKnobCorrectorAuto =>
+      'Correct with the Polar Corrector\'s motors';
+
+  @override
+  String get polarKnobCorrectorAutoOn =>
+      'On a rig with a Polar Corrector, Polar align turns its motors after each measurement';
+
+  @override
+  String get polarKnobCorrectorAutoOff =>
+      'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get estopFailPolarCorrector =>
+      'POLAR CORRECTOR MAY STILL BE MOVING (stop failed)';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -12384,4 +12400,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarCorrectorActionHome =>
       'mandar o corretor polar para o início';
+
+  @override
+  String get polarKnobCorrectorAuto =>
+      'Corrigir com os motores do corretor polar';
+
+  @override
+  String get polarKnobCorrectorAutoOn =>
+      'Num setup com corretor polar, o alinhamento polar gira os motores depois de cada medição';
+
+  @override
+  String get polarKnobCorrectorAutoOff =>
+      'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get estopFailPolarCorrector =>
+      'O CORRETOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
 }

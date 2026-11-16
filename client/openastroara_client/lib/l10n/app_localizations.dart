@@ -10388,6 +10388,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'send the Polar Corrector home'**
   String get polarCorrectorActionHome;
+
+  /// Imaging > Polar align settings panel: switch for the profile's polar_corrector_auto
+  ///
+  /// In en, this message translates to:
+  /// **'Correct with the Polar Corrector\'s motors'**
+  String get polarKnobCorrectorAuto;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'On a rig with a Polar Corrector, Polar align turns its motors after each measurement'**
+  String get polarKnobCorrectorAutoOn;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Off: Polar align shows the turns and you make them'**
+  String get polarKnobCorrectorAutoOff;
+
+  /// Emergency stop: the Polar Corrector's stop failed
+  ///
+  /// In en, this message translates to:
+  /// **'POLAR CORRECTOR MAY STILL BE MOVING (stop failed)'**
+  String get estopFailPolarCorrector;
 }
 
 class _AppLocalizationsDelegate

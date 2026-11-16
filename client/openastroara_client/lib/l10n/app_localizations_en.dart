@@ -6169,4 +6169,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarCorrectorActionHome => 'send the Polar Corrector home';
+
+  @override
+  String get polarKnobCorrectorAuto =>
+      'Correct with the Polar Corrector\'s motors';
+
+  @override
+  String get polarKnobCorrectorAutoOn =>
+      'On a rig with a Polar Corrector, Polar align turns its motors after each measurement';
+
+  @override
+  String get polarKnobCorrectorAutoOff =>
+      'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get estopFailPolarCorrector =>
+      'POLAR CORRECTOR MAY STILL BE MOVING (stop failed)';
 }

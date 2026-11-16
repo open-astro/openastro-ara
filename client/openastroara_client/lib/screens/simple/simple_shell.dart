@@ -63,7 +63,7 @@ import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
-import '../../models/polar_align.dart' show PolarAlignSettings;
+import '../../models/polar_align.dart' show PolarAlignSettings, PolarCorrector;
 import '../../state/equipment/camera_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
 import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
@@ -3609,10 +3609,30 @@ class _PolarCorrectorGearRows extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final device = ref.watch(polarCorrectorProvider).value;
-    // No rig, or a daemon that predates the Polar Corrector.
-    if (device == null) return const SizedBox.shrink();
     final l10n = context.l10n;
+    final PolarCorrector? device;
+    switch (ref.watch(polarCorrectorProvider)) {
+      case AsyncData(:final value):
+        device = value;
+      // A failed read says so, as a device in error does: red dot, Failed and why.
+      case AsyncError(:final error):
+        return _gearRow(
+          id: 'polarcorrector',
+          title: l10n.polarCorrector,
+          dot: StatusLevel.error,
+          word: '${l10n.shellFailed} · ${failureReason(l10n, error)}',
+          verb: null,
+          label: null,
+          action: null,
+          onOpen: null,
+          toggle: null,
+        );
+      // Before the first read, like the other rows.
+      case AsyncLoading():
+        return const SizedBox.shrink();
+    }
+    // No rig, or a daemon that predates the Polar Corrector (404).
+    if (device == null) return const SizedBox.shrink();
     final moving = device.moving || polarCorrectorMotorsBusy(ref.watch(polarAlignLiveProvider));
     final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
     final (dot, word, caption) = !device.present

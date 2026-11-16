@@ -222,7 +222,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     // #1971 while the Polar Corrector's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
     final motorsBusy = polarCorrectorMotorsBusy(live);
-    final corrector = ref.watch(polarCorrectorProvider).value?.present ?? false;
+    final corrector = polarCorrectorShown(ref.watch(polarCorrectorProvider));
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
