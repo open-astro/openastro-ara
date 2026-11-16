@@ -135,10 +135,12 @@ SequenceRunStateInfo _running({
   double? remaining = 3600,
   String? reasonCode,
   int? waitLeft,
+  DateTime? started,
 }) =>
     SequenceRunStateInfo(
       sequenceId: 'seq-1',
       runId: runId,
+      startedUtc: started,
       state: state,
       framesCaptured: frames,
       meridianFlip: flip,
@@ -504,7 +506,11 @@ void main() {
         t.add(MonitorFrame(id: 'f$i', hfr: 2.0));
       }
       expect(r.read().lastFrame.frames.length, 200);
-      expect(r.read().lastFrame.frames.first.id, 'f5');
+      expect(
+        [for (final f in r.read().lastFrame.frames.take(4)) f.id],
+        ['f0', 'f1', 'f2', 'f8'],
+        reason: 'the run\'s first frames stay, the oldest after them go',
+      );
       t.add(const MonitorFrame(id: 'f204', hfr: 2.4));
       expect(r.read().lastFrame.frames.length, 200, reason: 'the same frame read again replaces its point');
       expect(r.read().lastFrame.last!.hfr, 2.4);
@@ -602,6 +608,46 @@ void main() {
       t.add(const MonitorFrame(id: 'f0'));
       t.add(const MonitorFrame(id: 'f1'));
       expect(r.read().guider!.rmsPerFrame, [1.1, 1.2], reason: 'the last samples, newest last');
+    });
+
+    test('the session start stays the run\'s first frames after the oldest are dropped', () async {
+      final r = await _rig(run: _running());
+      final t = r.c.read(monitorTrendsProvider.notifier);
+      for (var i = 0; i < 205; i++) {
+        t.add(MonitorFrame(id: 'f$i', hfr: i < 3 ? 2.0 : 2.6));
+      }
+      final f = r.read().lastFrame;
+      expect(f.frames.length, kMonitorTrendFrames);
+      expect(f.hfrDeviation!.start, 2.0);
+      expect(f.hfrDeviation!.flagged, isTrue);
+    });
+
+    test("the guider's RMS per frame leaves out samples from before the run started", () async {
+      final started = DateTime.utc(2026, 11, 15, 21);
+      final r = await _rig(
+        run: _running(started: started),
+        rms: GuidingRmsSeries(
+          samples: [
+            GuidingRmsPoint(
+              timestamp: DateTime.utc(2026, 11, 14, 23),
+              rmsArcsec: 0.7,
+            ),
+            GuidingRmsPoint(
+              timestamp: DateTime.utc(2026, 11, 14, 23, 1),
+              rmsArcsec: 0.8,
+            ),
+            GuidingRmsPoint(
+              timestamp: started.add(const Duration(minutes: 5)),
+              rmsArcsec: 1.3,
+            ),
+          ],
+        ),
+      );
+      final t = r.c.read(monitorTrendsProvider.notifier);
+      for (var i = 0; i < 3; i++) {
+        t.add(MonitorFrame(id: 'f$i'));
+      }
+      expect(r.read().guider!.rmsPerFrame, [1.3]);
     });
   });
 }

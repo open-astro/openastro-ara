@@ -310,7 +310,8 @@ class MonitorLastFrame {
     this.focuserC,
   });
 
-  /// This run's saved frames, oldest first, at most [kMonitorTrendFrames].
+  /// This run's saved frames, oldest first, at most [kMonitorTrendFrames]:
+  /// its first [kMonitorBaselineFrames] (the session start) and the latest.
   final List<MonitorFrame> frames;
   final DateTime? autofocusAt;
   final double? tempSinceAutofocus;
@@ -426,7 +427,8 @@ class MonitorSnapshot {
   bool get frozen => frozenSince != null;
 }
 
-/// Trends keep this many saved frames of the current run.
+/// Trends keep this many saved frames of the current run, its first ones
+/// included.
 const kMonitorTrendFrames = 200;
 
 /// The cooler warns once the sensor has been this far from its target...
@@ -514,8 +516,9 @@ class MonitorCoolerOff extends Notifier<DateTime?> {
 final monitorCoolerOffProvider = NotifierProvider<MonitorCoolerOff, DateTime?>(MonitorCoolerOff.new);
 
 /// The current run's saved frames and their quality, from when Simple Mode
-/// opens: one per `frame.complete`, filled in again on its `frame.analyzed`.
-/// A new run starts over. The shell keeps it alive while Simple Mode shows.
+/// opens (so a Monitor opened mid-run takes its session start from there):
+/// one per `frame.complete`, filled in again on its `frame.analyzed`. A new
+/// run starts over. The shell keeps it alive while Simple Mode shows.
 class MonitorTrends extends Notifier<List<MonitorFrame>> {
   String? _runId;
 
@@ -569,7 +572,15 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
     final i = state.indexWhere((x) => x.id == f.id);
     final next = [...state];
     i >= 0 ? next[i] = f : next.add(f);
-    state = next.length > kMonitorTrendFrames ? next.sublist(next.length - kMonitorTrendFrames) : next;
+    // The first frames stay: they are the start the flags compare with.
+    state = next.length > kMonitorTrendFrames
+        ? [
+            ...next.take(kMonitorBaselineFrames),
+            ...next.skip(
+              next.length - kMonitorTrendFrames + kMonitorBaselineFrames,
+            ),
+          ]
+        : next;
   }
 }
 
@@ -958,7 +969,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
           for (final s in steps.length > 100 ? steps.sublist(steps.length - 100) : steps)
             if (s.raArcsec != null && s.decArcsec != null) (ra: s.raArcsec!, dec: s.decArcsec!),
         ],
-        rmsPerFrame: _rmsPerFrame(guidingRms, trends.length),
+        rmsPerFrame: _rmsPerFrame(guidingRms, trends.length, info?.startedUtc),
         lastDither: markers.where((m) => m.kind == GuideMarkerKind.dithered).lastOrNull?.at.toLocal(),
       );
     }
@@ -1040,12 +1051,27 @@ String? _name(String s) => s.trim().isEmpty ? null : s;
 /// "NGC 1269" and "NGC1269" are one name.
 bool _sameName(String a, String b) => a.replaceAll(RegExp(r'\s'), '') == b.replaceAll(RegExp(r'\s'), '');
 
-/// One point per saved frame: the series' last [frames] samples (both end at
-/// the newest frame). shortcut: a frame the guider left no sample for shifts
-/// the match by one, upgrade when MonitorFrame carries its capture time.
-List<double> _rmsPerFrame(GuidingRmsSeries? series, int frames) {
-  final all = [for (final p in series?.samples ?? const <GuidingRmsPoint>[]) p.rmsArcsec];
-  return frames == 0 ? const [] : all.length > frames ? all.sublist(all.length - frames) : all;
+/// One point per saved frame: the last [frames] samples since the run
+/// [started], all of them when it is not known (both end at the newest frame;
+/// the series holds every night's).
+/// shortcut: a frame the guider left no sample for shifts the match by one,
+/// upgrade when MonitorFrame carries its capture time.
+List<double> _rmsPerFrame(
+  GuidingRmsSeries? series,
+  int frames,
+  DateTime? started,
+) {
+  final all = [
+    for (final p in series?.samples ?? const <GuidingRmsPoint>[])
+      if (started == null ||
+          (p.timestamp != null && !p.timestamp!.isBefore(started)))
+        p.rmsArcsec,
+  ];
+  return frames == 0
+      ? const []
+      : all.length > frames
+      ? all.sublist(all.length - frames)
+      : all;
 }
 
 /// The row of [t]'s plan the next frame comes from: the first not yet full.
