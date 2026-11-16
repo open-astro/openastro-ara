@@ -29,9 +29,11 @@ import '../../services/dso_catalog_service.dart'
     show
         DsoSuggestion,
         PlanningDso,
+        bestCatalogDesignation,
         designationKey,
         designationWithName,
         isCatalogDesignation,
+        objectTitle,
         searchSuggestions,
         suggestionDesignation,
         suggestionTitle;
@@ -1103,10 +1105,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-suggestion-${o.name}'),
                 width: tileWidth,
-                title: designationWithName(
-                  bestCatalogDesignation([o.id, ...o.aliases]) ?? o.id,
-                  o.name,
-                ),
+                title: objectTitle(o.id, o.aliases, o.name),
                 line: simpleSuggestionLine(context.l10n, o),
                 selected: picked(o.name) || picked(o.id),
                 onTap: () => ref

@@ -329,6 +329,14 @@ ImagingRegion? overrideFor(PlanningDso o) {
   return null;
 }
 
+/// How the full UI titles a ranked object: a curated region's plain name with
+/// its designation, "Skull Nebula (NGC 246)", as before the names lost their
+/// bracket (#1957); any other object keeps its name as it is.
+String regionAwareName(String id, List<String> aliases, String name) {
+  final region = [id, ...aliases].map((d) => _overridesByKey[designationKey(d)]).nonNulls.firstOrNull;
+  return region?.name == name ? objectTitle(id, aliases, name) : name;
+}
+
 /// [overrides] keyed by designation key, built once (review r3).
 final Map<String, ImagingRegion> _overridesByKey = {
   for (final e in overrides.entries) designationKey(e.key): e.value,

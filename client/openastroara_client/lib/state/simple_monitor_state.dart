@@ -8,7 +8,7 @@ import '../models/frame_histogram.dart';
 import '../models/guider_status.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../models/stats/guiding_rms.dart';
-import '../services/dso_catalog_service.dart' show designationWithName;
+import '../services/dso_catalog_service.dart' show objectTitle;
 import '../services/storage_space_api.dart';
 import '../util/tonight_sky_local.dart';
 import '../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -835,7 +835,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       best = true;
       final sky = ref.watch(tonightSkyProvider).value ?? const [];
       for (final o in sky.take(5)) {
-        upNext.add(MonitorUpNext(MonitorUpKind.best, name: designationWithName(bestCatalogDesignation([o.id, ...o.aliases]) ?? o.id, o.name), altitudeDeg: o.altitudeDeg));
+        upNext.add(MonitorUpNext(MonitorUpKind.best, name: objectTitle(o.id, o.aliases, o.name), altitudeDeg: o.altitudeDeg));
       }
     }
 

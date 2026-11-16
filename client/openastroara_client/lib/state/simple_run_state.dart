@@ -16,7 +16,7 @@ import 'time_sync_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/site_settings_state.dart';
 import '../services/dso_catalog_service.dart'
-    show designationKey;
+    show bestCatalogDesignation, catalogTag;
 import 'sky_atlas/planetarium_selection_state.dart';
 import 'sky_atlas/tonight_sky_state.dart';
 import '../l10n/l10n.dart';
@@ -97,32 +97,6 @@ int simpleFramesThatFit(List<FilterPlanStep> steps, double hoursLeft) {
   );
 }
 
-const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
-final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
-
-/// A designation as the plan square writes it ("M 42", "Sh2-129") and its
-/// rank in [_tagOrder]; null for any other catalog.
-(int, String)? _catalogTag(String designation) {
-  final m = _tagKey.firstMatch(designationKey(designation));
-  if (m == null) return null;
-  final p = m[1]!;
-  return (_tagOrder.indexOf(p), p == 'SH2' ? 'Sh2-${m[2]}' : '$p ${m[2]}');
-}
-
-/// The best of [designations], M > NGC > IC > Sh2 > B > LBN, as written
-/// there ("NGC1976" stays padded); the first of a rank wins; null when none
-/// is in those catalogs. Titles lead with it, so a curated Messier region
-/// reads "(M 42)", not "(NGC 1976)" (#1957). Pure — unit-tested.
-String? bestCatalogDesignation(List<String> designations) {
-  String? best;
-  var rank = _tagOrder.length;
-  for (final d in designations) {
-    final t = _catalogTag(d);
-    if (t != null && t.$1 < rank) (best, rank) = (d, t.$1);
-  }
-  return best;
-}
-
 /// The plan square's name for a target: a standalone region's own tag (its
 /// name ends "(Simeis 147)"), else its best designation
 /// ([bestCatalogDesignation]); null when it has none (the square shows the
@@ -131,10 +105,10 @@ String? simpleTargetTag(String name, List<String> designations) {
   final own = RegExp(r'\(([^()]+)\)\s*$').firstMatch(name)?[1];
   if (own != null) {
     final first = own.split(' / ').first.trim();
-    return _catalogTag(first)?.$2 ?? first;
+    return catalogTag(first)?.$2 ?? first;
   }
   final best = bestCatalogDesignation(designations);
-  return best == null ? null : _catalogTag(best)!.$2;
+  return best == null ? null : catalogTag(best)!.$2;
 }
 
 /// [t]'s time of day at its next occurrence after [now], on the wheel's
