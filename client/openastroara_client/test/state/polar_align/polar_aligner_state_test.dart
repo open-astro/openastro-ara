@@ -127,7 +127,7 @@ void main() {
     expect([for (final s in ['manual', 'converged', 'stopped']) busy(s)], everyElement(isFalse));
   });
 
-  test('the status carries aligner, absent when the daemon sends none', () {
+  test('the status carries correction, absent when the daemon sends none', () {
     final with_ = PolarAlignStatus.fromJson({'state': 'adjusting', 'correction': {'state': 'moving', 'axis': 'azimuth', 'arcmin': 6.1, 'moves': 2}});
     expect((with_.correction!.state, with_.correction!.arcmin), ('moving', 6.1));
     expect(PolarAlignStatus.fromJson({'state': 'adjusting'}).correction, isNull);

@@ -1714,7 +1714,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ---
 
-## 2026-11-16 — The Polar Align Routine drives the Polar Aligner: `aligner` in the status, `polar_align.correction`, stop and resume, `polar_aligner_auto` (#1974, #1975)
+## 2026-11-16 — The Polar Align Routine drives the Polar Aligner: `correction` in the status, `polar_align.correction`, stop and resume, `polar_aligner_auto` (#1974, #1975)
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` gains `correction` (`PolarAlignCorrectionDto`, null when the rig has no Polar Aligner Ara can drive or the run has not measured yet); new WebSocket event `polar_align.correction` with the same object on every change; new `POST /api/v1/equipment/polaralign/correction/stop` and `POST …/aligner/resume` (202 + `OperationAcceptedDto`, 409 Problem when there is nothing to stop or resume); `GET/PUT /api/v1/profile/polar-align` gains `polar_aligner_auto` (default true).
 
