@@ -47,8 +47,12 @@ Which activity holds the Guide Camera at a given moment, and how it passes from 
 _Avoid_: lease (the guider program's own word), lock
 
 **Polar Align Routine**:
-The steps that measure the polar alignment error while the person turns the mount's bolts.
+The steps that measure the polar alignment error while the mount's polar axis is turned, by the person on the mount's bolts or by a Polar Corrector.
 _Avoid_: Polar Align session, Polar Align run
+
+**Polar Corrector**:
+A motorised device that moves the mount's polar axis in azimuth and altitude.
+_Avoid_: RPA, aligner, PA motor
 
 ### Connection
 

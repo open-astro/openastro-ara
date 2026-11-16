@@ -536,7 +536,10 @@ public sealed record PolarAlignSettingsDto(
     double CoarseExposureSeconds = 3.0,
     // Every stage starts by sending the mount Home (Find Home when it can, else the routine waits
     // for the user — needs_home), a fine start included. Off = use the current pointing as "home".
-    bool UseHome = true);
+    bool UseHome = true,
+    // #1971: with a Polar Corrector on the rig, the live stages move its motors after each
+    // measurement. Off = the person turns the bolts, as on a rig without one.
+    bool PolarCorrectorAuto = true);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

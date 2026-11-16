@@ -340,6 +340,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<SwitchDto>))]
 [JsonSerializable(typeof(SwitchPortDto))]
 [JsonSerializable(typeof(SwitchValueRequestDto))]
+[JsonSerializable(typeof(PolarCorrectorDto))]
 [JsonSerializable(typeof(MoveAxisRateBandDto))]
 [JsonSerializable(typeof(IReadOnlyList<MoveAxisRateBandDto>))]
 [JsonSerializable(typeof(TelescopeCapabilitiesDto))]

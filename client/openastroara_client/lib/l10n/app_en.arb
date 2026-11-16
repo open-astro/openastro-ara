@@ -7690,5 +7690,315 @@
   "polarKnobVerifyStepHint": "Kept between 5° and 60°",
   "@polarKnobVerifyStepHint": {
     "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarCorrector": "Polar Corrector",
+  "@polarCorrector": {
+    "description": "The Polar Corrector (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line"
+  },
+  "polarCorrectorIdle": "Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.",
+  "@polarCorrectorIdle": {
+    "description": "Polar Corrector block before the routine starts",
+    "placeholders": {
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorByHand": "Motors off. Turn the bolts by hand.",
+  "@polarCorrectorByHand": {
+    "description": "Polar Corrector block when Turned by is By hand"
+  },
+  "polarCorrectorTestMove": "Test move · {axis} {amount}′ {direction}",
+  "@polarCorrectorTestMove": {
+    "description": "Polar Corrector block and status line: the test move, e.g. 'Test move · azimuth 2.0′ east'",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorMoving": "Moving {axis} {amount}′ {direction}",
+  "@polarCorrectorMoving": {
+    "description": "Polar Corrector block and status line: a correction, e.g. 'Moving azimuth 6.1′ east'",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorSettling": "Letting the mount settle · {seconds} s",
+  "@polarCorrectorSettling": {
+    "description": "Polar Corrector block and status line: waiting the device's settle time",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorMeasuring": "Measuring the new error…",
+  "@polarCorrectorMeasuring": {
+    "description": "Polar Corrector block and status line: the frame after a move"
+  },
+  "polarCorrectorHoming": "Going back to its zero…",
+  "@polarCorrectorHoming": {
+    "description": "Polar Corrector block: the device is going home"
+  },
+  "polarCorrectorConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.",
+  "@polarCorrectorConverged": {
+    "description": "Polar Corrector block: the motors rest inside the tolerance",
+    "placeholders": {
+      "moves": {
+        "type": "int"
+      },
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorAxisAzimuth": "azimuth",
+  "@polarCorrectorAxisAzimuth": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving and the stop sentences: the azimuth axis, lower case"
+  },
+  "polarCorrectorAxisAltitude": "altitude",
+  "@polarCorrectorAxisAltitude": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving and the stop sentences: the altitude axis, lower case"
+  },
+  "polarCorrectorEast": "east",
+  "@polarCorrectorEast": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving: an azimuth move toward east"
+  },
+  "polarCorrectorWest": "west",
+  "@polarCorrectorWest": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving: an azimuth move toward west"
+  },
+  "polarCorrectorUp": "up",
+  "@polarCorrectorUp": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving: an altitude move up"
+  },
+  "polarCorrectorDown": "down",
+  "@polarCorrectorDown": {
+    "description": "Fills polarCorrectorTestMove / polarCorrectorMoving: an altitude move down"
+  },
+  "polarCorrectorPosition": "From its zero: azimuth {azimuth} · altitude {altitude}",
+  "@polarCorrectorPosition": {
+    "description": "Polar Corrector block: the device's position on each axis, signed arcminutes such as +12.4′ (— for an axis it does not report)",
+    "placeholders": {
+      "azimuth": {
+        "type": "String"
+      },
+      "altitude": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorNoPosition": "This device doesn't report its position.",
+  "@polarCorrectorNoPosition": {
+    "description": "Polar Corrector block: the device reports no position"
+  },
+  "polarCorrectorCarryOn": "Carry on by hand: the arrows show which bolt to turn.",
+  "@polarCorrectorCarryOn": {
+    "description": "Polar Corrector block after the motors stopped"
+  },
+  "polarCorrectorStopMotors": "Stop motors",
+  "@polarCorrectorStopMotors": {
+    "description": "Polar Corrector block: red button that stops the motors"
+  },
+  "polarCorrectorHome": "Home",
+  "@polarCorrectorHome": {
+    "description": "Polar Corrector block: button that sends the device to its zero"
+  },
+  "polarCorrectorResume": "Resume",
+  "@polarCorrectorResume": {
+    "description": "Polar Corrector block: green button that corrects with the motors again after a stop"
+  },
+  "polarCorrectorLinkLostCaption": "Resume once it answers again. Home comes back then.",
+  "@polarCorrectorLinkLostCaption": {
+    "description": "Polar Corrector block: why Resume and Home are off after the link was lost"
+  },
+  "polarCorrectorNotDrivableLoop": "Ara can't move this Polar Corrector yet: it only runs its own alignment.",
+  "@polarCorrectorNotDrivableLoop": {
+    "description": "Polar Corrector block and Settings > Devices: the device only offers its own loop"
+  },
+  "polarCorrectorNotDrivableInfo": "Ara couldn't read what this Polar Corrector can do, so it won't move it.",
+  "@polarCorrectorNotDrivableInfo": {
+    "description": "Polar Corrector block and Settings > Devices: the device's Info could not be read"
+  },
+  "polarCorrectorTurnByHand": "Turn the bolts by hand.",
+  "@polarCorrectorTurnByHand": {
+    "description": "Polar Corrector block: follows a not-drivable sentence"
+  },
+  "polarCorrectorStopWrongDirection": "The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Corrector may be set up reversed on that axis.",
+  "@polarCorrectorStopWrongDirection": {
+    "description": "Polar Corrector stop cause wrong_direction",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopWrongScale": "The test move on {axis} didn't go the distance asked, so Ara stopped the motors. Check the Polar Corrector's step setting.",
+  "@polarCorrectorStopWrongScale": {
+    "description": "Polar Corrector stop cause wrong_scale",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopDeviceFault": "The Polar Corrector reported a fault: “{text}”.",
+  "@polarCorrectorStopDeviceFault": {
+    "description": "Polar Corrector stop cause device_fault, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopNotCalibrated": "The Polar Corrector isn't calibrated, so it refused to move: “{text}”. Calibrate it in its own app, then Resume.",
+  "@polarCorrectorStopNotCalibrated": {
+    "description": "Polar Corrector stop cause not_calibrated, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopDeviceRefused": "The Polar Corrector refused the move: “{text}”.",
+  "@polarCorrectorStopDeviceRefused": {
+    "description": "Polar Corrector stop cause device_refused, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopDiverging": "The error grew after two corrections in a row, so Ara stopped the motors.",
+  "@polarCorrectorStopDiverging": {
+    "description": "Polar Corrector stop cause diverging"
+  },
+  "polarCorrectorStopTimeout": "The Polar Corrector was still moving after 60 s, so Ara stopped it.",
+  "@polarCorrectorStopTimeout": {
+    "description": "Polar Corrector stop cause timeout"
+  },
+  "polarCorrectorStopLinkLost": "Lost the link to the Polar Corrector. Ara stops its motors as soon as it answers again.",
+  "@polarCorrectorStopLinkLost": {
+    "description": "Polar Corrector stop cause link_lost"
+  },
+  "polarCorrectorStopMountTracking": "The Polar Corrector can't move while the mount tracks. Turn tracking off in the Mount window, then Resume.",
+  "@polarCorrectorStopMountTracking": {
+    "description": "Polar Corrector stop cause mount_tracking"
+  },
+  "polarCorrectorStopMountSlewing": "The Polar Corrector can't move while the mount slews. Resume once the mount stops.",
+  "@polarCorrectorStopMountSlewing": {
+    "description": "Polar Corrector stop cause mount_slewing"
+  },
+  "polarCorrectorStopByUser": "You stopped the motors.",
+  "@polarCorrectorStopByUser": {
+    "description": "Polar Corrector stop cause stopped_by_user"
+  },
+  "polarCorrectorStopUnknown": "Ara stopped the motors.",
+  "@polarCorrectorStopUnknown": {
+    "description": "Polar Corrector stop with a cause this app does not know"
+  },
+  "polarCorrectorStopUnknownText": "Ara stopped the motors: “{text}”.",
+  "@polarCorrectorStopUnknownText": {
+    "description": "Polar Corrector stop with a cause this app does not know, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCorrectorStopped": "Stopped",
+  "@polarCorrectorStopped": {
+    "description": "Status line: the Polar Corrector's motors stopped"
+  },
+  "polarCorrectorReady": "Ready",
+  "@polarCorrectorReady": {
+    "description": "Settings > Devices: the Polar Corrector can be driven and is still"
+  },
+  "polarCorrectorCantDrive": "Can't drive yet",
+  "@polarCorrectorCantDrive": {
+    "description": "Settings > Devices: a Polar Corrector Ara cannot drive yet"
+  },
+  "polarCorrectorCantRead": "Can't read it",
+  "@polarCorrectorCantRead": {
+    "description": "Settings > Devices: a Polar Corrector whose Info could not be read"
+  },
+  "polarCorrectorNone": "None",
+  "@polarCorrectorNone": {
+    "description": "Settings > Devices: no Polar Corrector found"
+  },
+  "polarCorrectorFoundNone": "No connected device offers polar-alignment moves. Polar align shows the turns and you make them.",
+  "@polarCorrectorFoundNone": {
+    "description": "Settings > Devices: caption with no Polar Corrector"
+  },
+  "polarCorrectorFoundMount": "Found on the mount: its motors are built in.",
+  "@polarCorrectorFoundMount": {
+    "description": "Settings > Devices: caption when the mount carries the Polar Corrector"
+  },
+  "polarCorrectorFoundBase": "Found on the polar base.",
+  "@polarCorrectorFoundBase": {
+    "description": "Settings > Devices: caption when a separate base (a Switch) carries the Polar Corrector"
+  },
+  "polarCorrectorTurnedBy": "Turned by",
+  "@polarCorrectorTurnedBy": {
+    "description": "Settings > Devices, under the Polar Corrector: Motors or By hand"
+  },
+  "polarCorrectorMotors": "Motors",
+  "@polarCorrectorMotors": {
+    "description": "Settings > Devices, Turned by: the routine turns the motors"
+  },
+  "polarCorrectorByHandOption": "By hand",
+  "@polarCorrectorByHandOption": {
+    "description": "Settings > Devices, Turned by: the person turns the bolts"
+  },
+  "polarCorrectorMotorsCaption": "Polar align turns the motors after each measurement.",
+  "@polarCorrectorMotorsCaption": {
+    "description": "Settings > Devices, Turned by Motors: caption"
+  },
+  "polarCorrectorHandCaption": "Polar align shows the turns and you make them.",
+  "@polarCorrectorHandCaption": {
+    "description": "Settings > Devices, Turned by By hand: caption"
+  },
+  "polarCorrectorActionStop": "stop the motors",
+  "@polarCorrectorActionStop": {
+    "description": "Completes 'Couldn't …': Stop motors failed"
+  },
+  "polarCorrectorActionResume": "resume the motors",
+  "@polarCorrectorActionResume": {
+    "description": "Completes 'Couldn't …': Resume failed"
+  },
+  "polarCorrectorActionHome": "send the Polar Corrector home",
+  "@polarCorrectorActionHome": {
+    "description": "Completes 'Couldn't …': Home failed"
+  },
+  "polarKnobCorrectorAuto": "Correct with the Polar Corrector's motors",
+  "@polarKnobCorrectorAuto": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's polar_corrector_auto"
+  },
+  "polarKnobCorrectorAutoOn": "On a rig with a Polar Corrector, Polar align turns its motors after each measurement",
+  "@polarKnobCorrectorAutoOn": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobCorrectorAutoOff": "Off: Polar align shows the turns and you make them",
+  "@polarKnobCorrectorAutoOff": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "estopFailPolarCorrector": "POLAR CORRECTOR MAY STILL BE MOVING (stop failed)",
+  "@estopFailPolarCorrector": {
+    "description": "Emergency stop: the Polar Corrector's stop failed"
   }
 }

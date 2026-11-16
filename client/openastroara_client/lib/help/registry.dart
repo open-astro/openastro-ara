@@ -2409,10 +2409,12 @@ const Map<String, Help> helpRegistry = {
         '**Send the mount Home first** off uses where the mount points now as Home (a mount whose Home is not on the pole, '
         'or whose Find Home is unreliable). The **turn** is how far the mount turns in RA to measure its axis, and the '
         '**Verify step** is the turn between Verify\'s three frames: smaller turns suit a mount with limited RA travel. '
-        'The **rough exposure** is the main camera\'s: longer for a slow camera.',
+        'The **rough exposure** is the main camera\'s: longer for a slow camera. '
+        '**Correct with the Polar Corrector\'s motors** only matters on a rig with a Polar Corrector: off, you turn the bolts.',
     relatedSettings: [
       'img.polar.target_tolerance_arcmin',
       'img.polar.use_home',
+      'img.polar.polar_corrector_auto',
       'img.polar.seed_rotation_deg',
       'img.polar.check_step_deg',
       'img.polar.coarse_exposure_seconds',

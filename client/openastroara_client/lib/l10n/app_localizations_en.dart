@@ -5963,4 +5963,226 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
+
+  @override
+  String get polarCorrector => 'Polar Corrector';
+
+  @override
+  String polarCorrectorIdle(String tolerance) {
+    return 'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
+  }
+
+  @override
+  String get polarCorrectorByHand => 'Motors off. Turn the bolts by hand.';
+
+  @override
+  String polarCorrectorTestMove(String axis, String amount, String direction) {
+    return 'Test move · $axis $amount′ $direction';
+  }
+
+  @override
+  String polarCorrectorMoving(String axis, String amount, String direction) {
+    return 'Moving $axis $amount′ $direction';
+  }
+
+  @override
+  String polarCorrectorSettling(String seconds) {
+    return 'Letting the mount settle · $seconds s';
+  }
+
+  @override
+  String get polarCorrectorMeasuring => 'Measuring the new error…';
+
+  @override
+  String get polarCorrectorHoming => 'Going back to its zero…';
+
+  @override
+  String polarCorrectorConverged(int moves, String tolerance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your $tolerance′ tolerance after $moves moves.',
+      one: 'Inside your $tolerance′ tolerance after 1 move.',
+    );
+    return '$_temp0 Finish with Verify or Done. If the error drifts out, the motors correct again.';
+  }
+
+  @override
+  String get polarCorrectorAxisAzimuth => 'azimuth';
+
+  @override
+  String get polarCorrectorAxisAltitude => 'altitude';
+
+  @override
+  String get polarCorrectorEast => 'east';
+
+  @override
+  String get polarCorrectorWest => 'west';
+
+  @override
+  String get polarCorrectorUp => 'up';
+
+  @override
+  String get polarCorrectorDown => 'down';
+
+  @override
+  String polarCorrectorPosition(String azimuth, String altitude) {
+    return 'From its zero: azimuth $azimuth · altitude $altitude';
+  }
+
+  @override
+  String get polarCorrectorNoPosition =>
+      'This device doesn\'t report its position.';
+
+  @override
+  String get polarCorrectorCarryOn =>
+      'Carry on by hand: the arrows show which bolt to turn.';
+
+  @override
+  String get polarCorrectorStopMotors => 'Stop motors';
+
+  @override
+  String get polarCorrectorHome => 'Home';
+
+  @override
+  String get polarCorrectorResume => 'Resume';
+
+  @override
+  String get polarCorrectorLinkLostCaption =>
+      'Resume once it answers again. Home comes back then.';
+
+  @override
+  String get polarCorrectorNotDrivableLoop =>
+      'Ara can\'t move this Polar Corrector yet: it only runs its own alignment.';
+
+  @override
+  String get polarCorrectorNotDrivableInfo =>
+      'Ara couldn\'t read what this Polar Corrector can do, so it won\'t move it.';
+
+  @override
+  String get polarCorrectorTurnByHand => 'Turn the bolts by hand.';
+
+  @override
+  String polarCorrectorStopWrongDirection(String axis) {
+    return 'The test move on $axis went the wrong way, so Ara stopped the motors. The Polar Corrector may be set up reversed on that axis.';
+  }
+
+  @override
+  String polarCorrectorStopWrongScale(String axis) {
+    return 'The test move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Corrector\'s step setting.';
+  }
+
+  @override
+  String polarCorrectorStopDeviceFault(String text) {
+    return 'The Polar Corrector reported a fault: “$text”.';
+  }
+
+  @override
+  String polarCorrectorStopNotCalibrated(String text) {
+    return 'The Polar Corrector isn\'t calibrated, so it refused to move: “$text”. Calibrate it in its own app, then Resume.';
+  }
+
+  @override
+  String polarCorrectorStopDeviceRefused(String text) {
+    return 'The Polar Corrector refused the move: “$text”.';
+  }
+
+  @override
+  String get polarCorrectorStopDiverging =>
+      'The error grew after two corrections in a row, so Ara stopped the motors.';
+
+  @override
+  String get polarCorrectorStopTimeout =>
+      'The Polar Corrector was still moving after 60 s, so Ara stopped it.';
+
+  @override
+  String get polarCorrectorStopLinkLost =>
+      'Lost the link to the Polar Corrector. Ara stops its motors as soon as it answers again.';
+
+  @override
+  String get polarCorrectorStopMountTracking =>
+      'The Polar Corrector can\'t move while the mount tracks. Turn tracking off in the Mount window, then Resume.';
+
+  @override
+  String get polarCorrectorStopMountSlewing =>
+      'The Polar Corrector can\'t move while the mount slews. Resume once the mount stops.';
+
+  @override
+  String get polarCorrectorStopByUser => 'You stopped the motors.';
+
+  @override
+  String get polarCorrectorStopUnknown => 'Ara stopped the motors.';
+
+  @override
+  String polarCorrectorStopUnknownText(String text) {
+    return 'Ara stopped the motors: “$text”.';
+  }
+
+  @override
+  String get polarCorrectorStopped => 'Stopped';
+
+  @override
+  String get polarCorrectorReady => 'Ready';
+
+  @override
+  String get polarCorrectorCantDrive => 'Can\'t drive yet';
+
+  @override
+  String get polarCorrectorCantRead => 'Can\'t read it';
+
+  @override
+  String get polarCorrectorNone => 'None';
+
+  @override
+  String get polarCorrectorFoundNone =>
+      'No connected device offers polar-alignment moves. Polar align shows the turns and you make them.';
+
+  @override
+  String get polarCorrectorFoundMount =>
+      'Found on the mount: its motors are built in.';
+
+  @override
+  String get polarCorrectorFoundBase => 'Found on the polar base.';
+
+  @override
+  String get polarCorrectorTurnedBy => 'Turned by';
+
+  @override
+  String get polarCorrectorMotors => 'Motors';
+
+  @override
+  String get polarCorrectorByHandOption => 'By hand';
+
+  @override
+  String get polarCorrectorMotorsCaption =>
+      'Polar align turns the motors after each measurement.';
+
+  @override
+  String get polarCorrectorHandCaption =>
+      'Polar align shows the turns and you make them.';
+
+  @override
+  String get polarCorrectorActionStop => 'stop the motors';
+
+  @override
+  String get polarCorrectorActionResume => 'resume the motors';
+
+  @override
+  String get polarCorrectorActionHome => 'send the Polar Corrector home';
+
+  @override
+  String get polarKnobCorrectorAuto =>
+      'Correct with the Polar Corrector\'s motors';
+
+  @override
+  String get polarKnobCorrectorAutoOn =>
+      'On a rig with a Polar Corrector, Polar align turns its motors after each measurement';
+
+  @override
+  String get polarKnobCorrectorAutoOff =>
+      'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get estopFailPolarCorrector =>
+      'POLAR CORRECTOR MAY STILL BE MOVING (stop failed)';
 }

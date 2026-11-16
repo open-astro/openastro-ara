@@ -175,8 +175,10 @@ namespace OpenAstroAra.Server.Services {
                 IWsBroadcaster? ws = null,
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
-                IPolarAlignMainCameraSolver? mainCamera = null) {
+                IPolarAlignMainCameraSolver? mainCamera = null,
+                IPolarCorrectorSource? corrector = null) {
             _guider = guider;
+            _correctorSource = corrector;
             _mainCamera = mainCamera;
             _logger = logger;
             _solver = solver;
@@ -206,7 +208,8 @@ namespace OpenAstroAra.Server.Services {
                     WaitingForHome: _waitingForHome,
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
-                    LastResult: _lastResult));
+                    LastResult: _lastResult,
+                    Corrector: _corrector));
             }
         }
 
@@ -654,6 +657,7 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 _trackingTouched = false;
             }
+            var correctorRun = BeginCorrectorRun(site.LatitudeDeg);
             try {
                 Directory.CreateDirectory(workDir);
 
@@ -713,6 +717,7 @@ namespace OpenAstroAra.Server.Services {
                 // the session log the successor run now owns — log and drain quietly.
                 LogRoutineFailed("superseded", ex);
             } finally {
+                EndCorrectorRun(correctorRun);
                 // Hand back tracking unless a NEWER RUN has started (it owns the mount now and has
                 // already turned tracking off for its own adjust loop — a zombie's late restore
                 // would silently break the successor's §45.8 stationary-camera assumption). A clean
@@ -883,6 +888,8 @@ namespace OpenAstroAra.Server.Services {
                 }
                 await CompleteFrameAsync(gen, frameId, s, timing, consecutiveSolveFailures: 0).ConfigureAwait(false);
                 await PublishProgressAsync(gen, iteration, altErr, azErr, solved: true).ConfigureAwait(false);
+                // #1971: the motors' turn. The frame after it measures what they did.
+                await CorrectAsync(gen, altErr, azErr, settings, ct).ConfigureAwait(false);
 
                 var elapsed = DateTimeOffset.UtcNow - iterationStart;
                 if (settings.LoopMode != PolarAlignLoopModes.SingleFrame && elapsed < cadence) {
@@ -1298,7 +1305,8 @@ namespace OpenAstroAra.Server.Services {
                     FinalAltErrorArcmin: _altErrorArcmin,
                     FinalAzErrorArcmin: _azErrorArcmin,
                     Iterations: _liveIterations,
-                    Outcome: outcome);
+                    Outcome: outcome,
+                    CorrectorMoves: _correctorMoves);
             }
             LogFinalError(outcome, record.FinalErrorArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
             try {

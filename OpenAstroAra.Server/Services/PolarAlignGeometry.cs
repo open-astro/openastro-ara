@@ -298,6 +298,31 @@ public static class PolarAlignGeometry {
     }
 
     /// <summary>
+    /// #1971 — the move that brings the polar axis onto the apparent pole, in the PolarAlign
+    /// actions' wire convention: a positive azimuth move INCREASES the azimuth coordinate
+    /// (clockwise seen from above; a rotation about the vertical, in arcminutes of that rotation)
+    /// and a positive altitude move RAISES the axis. The inputs are <see cref="AxisError"/>'s
+    /// numbers (east-positive, azimuth cos-scaled to an arc), so this is the one place the
+    /// hemisphere and the cosine are undone; the device never learns either.
+    /// </summary>
+    public static (double AzMoveArcmin, double AltMoveArcmin) CorrectorMove(
+            double altErrorArcmin, double azErrorArcmin, double latitudeDeg) {
+        RequireFinite(altErrorArcmin, nameof(altErrorArcmin));
+        RequireFinite(azErrorArcmin, nameof(azErrorArcmin));
+        if (!(double.IsFinite(latitudeDeg) && Math.Abs(latitudeDeg) is > 0 and <= 90)) {
+            throw new ArgumentOutOfRangeException(nameof(latitudeDeg),
+                "site latitude must be non-zero and within ±90°");
+        }
+        // The axis altitude the error was cos-scaled at, as the live loop computes it.
+        var poleAltDeg = Math.Abs(latitudeDeg);
+        // Short of the zenith: next to a geographic pole the sum passes 90° and the cosine would flip the move.
+        var axisAltDeg = Math.Min(poleAltDeg + BennettRefractionArcmin(poleAltDeg) / 60.0 + altErrorArcmin / 60.0, 89.9);
+        // East of the pole is a larger azimuth facing north and a smaller one facing south.
+        var azimuthOffsetArcmin = azErrorArcmin / Math.Cos(Deg2Rad(axisAltDeg)) * (latitudeDeg > 0 ? 1.0 : -1.0);
+        return (-azimuthOffsetArcmin, -altErrorArcmin);
+    }
+
+    /// <summary>
     /// Horizontal coordinates of a pointing at the site — altitude + azimuth (degrees, azimuth
     /// from north through east) of apparent-of-date (<paramref name="raDeg"/>, <paramref name="decDeg"/>)
     /// at <paramref name="atUtc"/>. The live-adjust loop's reverse-projection needs this: with

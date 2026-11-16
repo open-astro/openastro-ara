@@ -159,6 +159,9 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
     public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
+    // #1971 — the Polar Corrector's state in a running routine, on every change: {state, moves,
+    // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectorDto).
+    public static readonly WsEvent PolarAlignCorrector = new("polar_align.corrector");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
@@ -353,6 +356,7 @@ public static class WsEventCatalog {
         PolarAlignStage,
         PolarAlignNeedsHome,
         PolarAlignChecked,
+        PolarAlignCorrector,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

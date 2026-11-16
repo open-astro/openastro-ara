@@ -81,6 +81,8 @@ import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/state/polar_align/polar_corrector_state.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -638,6 +640,60 @@ class _LoopOnRig implements LiveViewClient {
   Future<void> stop() async => calls.add('stop');
   @override
   Future<LiveFrame?> fetchFrame() async => null;
+  @override
+  void close() {}
+}
+
+/// #1971 the rig's Polar Corrector as the daemon reports it.
+class _PolarCorrector implements PolarCorrectorClient {
+  _PolarCorrector(this.device);
+  final PolarCorrector device;
+  @override
+  Future<PolarCorrector?> get() async => device;
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> home() async {}
+  @override
+  Future<void> stopInRoutine() async {}
+  @override
+  Future<void> resumeInRoutine() async {}
+  @override
+  void close() {}
+}
+
+/// A Polar Corrector read that fails (not a 404: the route exists).
+class _PolarCorrectorDown extends _PolarCorrector {
+  _PolarCorrectorDown() : super(const PolarCorrector());
+  @override
+  Future<PolarCorrector?> get() async => throw StateError('The rig did not answer.');
+}
+
+/// The profile's polar-align section: [puts] records each save.
+class _PolarProfile implements PolarAlignClient {
+  PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarCorrectorAuto: true);
+  final puts = <Map<String, dynamic>>[];
+  @override
+  Future<PolarAlignSettings> getSettings() async => settings;
+  @override
+  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
+    puts.add(next.toJson());
+    return settings = next;
+  }
+  @override
+  Future<PolarAlignStatus?> getStatus() async => null;
+  @override
+  Future<void> start({String? stage}) async {}
+  @override
+  Future<void> next() async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> complete() async {}
+  @override
+  Future<void> requestCapture() async {}
+  @override
+  Future<Uint8List?> getLiveFrame() async => null;
   @override
   void close() {}
 }
@@ -4392,6 +4448,68 @@ void main() {
     expect(save.onPressed, isNotNull, reason: 'savable with no rig');
     expect(find.byType(SettingsShell), findsNothing);
     expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('Devices shows the Polar Corrector the daemon found, read-only, with Turned by under it', (tester) async {
+    final profile = _PolarProfile();
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      polarCorrectorApiProvider.overrideWithValue(_PolarCorrector(
+          const PolarCorrector(present: true, carrier: 'switch', name: 'Polar base', drivable: true))),
+      polarAlignApiProvider.overrideWithValue(profile),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    final row = find.ancestor(of: find.text('Polar Corrector · Polar base'), matching: find.byType(Row)).first;
+    expect(find.text('Ready · Found on the polar base.'), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.byType(TextButton)), findsNothing, reason: 'nothing to pick or connect');
+    expect(find.text('Polar align turns the motors after each measurement.'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-polarcorrector-hand')));
+    await tester.tap(find.byKey(const Key('simple-gear-polarcorrector-hand')));
+    await tester.pumpAndSettle();
+    expect(profile.puts.single['polar_corrector_auto'], isFalse);
+    expect(profile.puts.single['exposure_seconds'], 4, reason: 'saved over the loaded section, not defaults');
+    expect(find.text('Polar align shows the turns and you make them.'), findsOneWidget);
+  });
+
+  testWidgets('Devices: a Polar Corrector Ara cannot drive shows why and has no Turned by', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      polarCorrectorApiProvider.overrideWithValue(_PolarCorrector(const PolarCorrector(
+          present: true, carrier: 'mount', name: 'AM5', notDrivableReason: 'device_runs_its_own_loop'))),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text("Can't drive yet · Ara can't move this Polar Corrector yet: it only runs its own alignment."),
+        findsOneWidget);
+    expect(find.byKey(const Key('simple-gear-polarcorrector-turned-by')), findsNothing);
+  });
+
+  testWidgets('Devices: with no Polar Corrector found, its row says so', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      polarCorrectorApiProvider.overrideWithValue(_PolarCorrector(const PolarCorrector())),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text('None · No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'),
+        findsOneWidget);
+    expect(find.byKey(const Key('simple-gear-polarcorrector-turned-by')), findsNothing);
+  });
+
+  testWidgets('Devices: a failed Polar Corrector read shows Failed and why, as a device in error does', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      polarCorrectorApiProvider.overrideWithValue(_PolarCorrectorDown()),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text('Polar Corrector'), findsOneWidget);
+    expect(find.text('Failed · The rig did not answer.'), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(
+        of: find.ancestor(of: find.text('Polar Corrector'), matching: find.byType(Row)).first,
+        matching: find.byType(StatusDot)));
+    expect(dot.color, StatusLevel.error.color);
+    expect(find.byKey(const Key('simple-gear-polarcorrector-turned-by')), findsNothing);
   });
 
   testWidgets('Devices lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '

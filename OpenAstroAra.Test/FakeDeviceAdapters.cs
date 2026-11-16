@@ -158,6 +158,16 @@ namespace OpenAstroAra.Test {
         public double SwitchStep(short id) => 1;
         public bool CanWrite(short id) => true;
         public void SetSwitchValue(short id, double value) { }
+        // The driver's actions: set the list before the connect reads it; ActionResponder answers each
+        // call (null = NotImplemented, as a driver without actions does). Every call is recorded.
+        public List<string> Actions { get; } = [];
+        public System.Collections.Concurrent.ConcurrentQueue<(string Name, string Parameters)> ActionCalls { get; } = new();
+        public volatile Func<string, string, string>? ActionResponder;
+        public IList<string> SupportedActions => Actions;
+        public string Action(string name, string parameters) {
+            ActionCalls.Enqueue((name, parameters));
+            return ActionResponder is { } respond ? respond(name, parameters) : throw new ASCOM.NotImplementedException(name);
+        }
     }
 
     internal sealed class FakeSafetyMonitorDevice : FakeDeviceAdapter, ISafetyMonitorDevice {
@@ -312,13 +322,21 @@ namespace OpenAstroAra.Test {
         public double FocalLength => 0.5;
         public double ApertureDiameter => 0.1;
         public ITrackingRates TrackingRates => new FakeTrackingRates();
-        public IList<string> SupportedActions => new List<string>();
         public double SiteLatitude { get; set; }
         public double SiteLongitude { get; set; }
         public double SiteElevation { get; set; }
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
-        public string Action(string name, string parameters) => throw new ASCOM.NotImplementedException(name);
+        // The driver's actions: set the list before the connect reads it; ActionResponder answers each
+        // call (null = NotImplemented, as a driver without actions does). Every call is recorded.
+        public List<string> Actions { get; } = [];
+        public System.Collections.Concurrent.ConcurrentQueue<(string Name, string Parameters)> ActionCalls { get; } = new();
+        public volatile Func<string, string, string>? ActionResponder;
+        public IList<string> SupportedActions => Actions;
+        public string Action(string name, string parameters) {
+            ActionCalls.Enqueue((name, parameters));
+            return ActionResponder is { } respond ? respond(name, parameters) : throw new ASCOM.NotImplementedException(name);
+        }
         public PointingState DestinationSideOfPier(double raHours, double decDegrees) => PointingState.Normal;
         public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } }
         public override void Stop() => AbortSlew();

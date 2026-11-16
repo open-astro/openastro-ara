@@ -141,3 +141,63 @@ class PolarAlignApi implements PolarAlignClient {
   @override
   void close() => _dio.close(force: true);
 }
+
+/// #1971 the rig's Polar Corrector: the device (`/api/v1/equipment/polarcorrector`,
+/// its stop and home) and its motors in a running routine
+/// (`/api/v1/equipment/polaralign/corrector/{stop,resume}`). The commands are
+/// 202-Accepted; a refusal is a 409 whose detail is a sentence for people.
+abstract interface class PolarCorrectorClient {
+  /// Null on a 404: a daemon that predates the Polar Corrector.
+  Future<PolarCorrector?> get();
+  Future<void> stop();
+  Future<void> home();
+
+  /// Stop the motors; the routine carries on by hand.
+  Future<void> stopInRoutine();
+
+  /// After a stop: correct with the motors again, from a new test move.
+  Future<void> resumeInRoutine();
+  void close();
+}
+
+class PolarCorrectorApi implements PolarCorrectorClient {
+  final Dio _dio;
+
+  PolarCorrectorApi(AraServer server, {Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          );
+
+  @override
+  Future<PolarCorrector?> get() async {
+    try {
+      final res = await _dio.get<dynamic>('/api/v1/equipment/polarcorrector');
+      final data = res.data;
+      return data is Map<String, dynamic> ? PolarCorrector.fromJson(data) : null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> stop() => _dio.post<void>('/api/v1/equipment/polarcorrector/stop');
+
+  @override
+  Future<void> home() => _dio.post<void>('/api/v1/equipment/polarcorrector/home');
+
+  @override
+  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/corrector/stop');
+
+  @override
+  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/corrector/resume');
+
+  @override
+  void close() => _dio.close(force: true);
+}

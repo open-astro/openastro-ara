@@ -11,7 +11,9 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
+import '../../state/polar_align/polar_corrector_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
+import '../../widgets/imaging/polar_corrector_block.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
@@ -109,10 +111,6 @@ int? simplePolarStep(PolarAlignLive live) {
   if (!live.isActive) return null;
   return live.stage == PolarAlignStages.coarse ? 0 : 1;
 }
-
-/// "2" for a 2.0 tolerance, "1.5" for 1.5.
-String _tolerance(double v) =>
-    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 /// The rough stage's side-of-pole sentence in the user's language, or null
 /// until both errors are known. Pure — unit-tested.
@@ -221,6 +219,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final inTolerance =
         total != null && total <= settings.targetToleranceArcmin;
     final color = zoneColor(total);
+    // #1971 while the Polar Corrector's motors work, the arrows dim and
+    // Verify and Done step aside (user, 2026-11-16).
+    final motorsBusy = polarCorrectorMotorsBusy(live);
+    final corrector = polarCorrectorShown(ref.watch(polarCorrectorProvider));
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
@@ -244,7 +246,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       child: Row(
         spacing: AraSpace.s8,
         children: [
-          Icon(hint.$1, size: 70, color: AraColors.textPrimary),
+          // 0.3: the approved mock's dimmed arrow.
+          if (motorsBusy)
+            Opacity(opacity: 0.3, child: Icon(hint.$1, size: 70, color: AraColors.textPrimary))
+          else
+            Icon(hint.$1, size: 70, color: AraColors.textPrimary),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -387,6 +393,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     active && !stack ? Expanded(child: w) : w,
                 ],
               ),
+              // Its own fixed slot between Setup and Error (user, 2026-11-16).
+              if (corrector) const PolarCorrectorBlock(),
             ],
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)
@@ -484,10 +492,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 Text(
                   inTolerance
                       ? l10n.polarInsideTolerance(
-                          _tolerance(settings.targetToleranceArcmin),
+                          polarToleranceText(settings.targetToleranceArcmin),
                         )
                       : l10n.polarOutsideTolerance(
-                          _tolerance(settings.targetToleranceArcmin),
+                          polarToleranceText(settings.targetToleranceArcmin),
                         ),
                   key: const Key('simple-polar-tolerance-caption'),
                   style: AraText.caption,
@@ -496,7 +504,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               Row(
                 spacing: AraSpace.s8,
                 children: [
-                  if (inTolerance)
+                  if (inTolerance && !motorsBusy)
                     Expanded(
                       child: OutlinedButton(
                         key: const Key('simple-polar-done-rough'),
@@ -528,6 +536,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 child: Text(_doneLabel(l10n, inSimplePreflight)),
               ),
             if (active &&
+                !motorsBusy &&
                 live.stage != PolarAlignStages.coarse &&
                 (live.phase == PolarAlignStates.adjusting ||
                     live.phase == PolarAlignStates.paused))
@@ -559,6 +568,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                         child: Text(l10n.polarTakeFrame),
                       ),
                     ),
+                  if (!motorsBusy) ...[
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
@@ -579,6 +589,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       child: Text(_doneLabel(l10n, inSimplePreflight)),
                     ),
                   ),
+                  ],
                 ],
               ),
           ],

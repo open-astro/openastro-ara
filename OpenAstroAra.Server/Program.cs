@@ -405,6 +405,13 @@ public partial class Program {
                 cameraProbe: () => sp.GetService<ICameraService>()));
         builder.Services.AddSingleton<ISwitchService>(sp => sp.GetRequiredService<SwitchService>());
         builder.Services.AddSingleton<ICoolingFanActuator>(sp => sp.GetRequiredService<SwitchService>());
+        // #1972 — the rig's Polar Corrector, derived from the connected switches and mount.
+        builder.Services.AddSingleton<PolarCorrectorService>(sp => new PolarCorrectorService(
+            sp.GetRequiredService<SwitchService>(), sp.GetRequiredService<TelescopeService>(),
+            // Resolved at the call, not here: the routine itself is built from this service.
+            () => sp.GetRequiredService<IPolarAlignService>() as IPolarCorrectorDriver));
+        builder.Services.AddSingleton<IPolarCorrectorService>(sp => sp.GetRequiredService<PolarCorrectorService>());
+        builder.Services.AddSingleton<IPolarCorrectorSource>(sp => sp.GetRequiredService<PolarCorrectorService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4
         // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
         // IWeatherDataMediator stays the headless stub.
@@ -522,7 +529,8 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
-                mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>()));
+                mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
+                corrector: sp.GetRequiredService<IPolarCorrectorSource>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>
@@ -1059,7 +1067,8 @@ public partial class Program {
                 sp.GetService<IBahtinovFocusService>(),
                 sp.GetService<AutofocusRunTracker>(),
                 sp.GetService<IPolarAlignService>(),
-                () => sp.GetService<DomeFollower>()));
+                () => sp.GetService<DomeFollower>(),
+                sp.GetService<IPolarCorrectorService>()));
 
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.

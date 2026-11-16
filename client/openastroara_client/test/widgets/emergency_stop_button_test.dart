@@ -224,6 +224,25 @@ void main() {
     expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
   });
 
+  testWidgets('a Polar Corrector that would not stop is called out by name (#1971)', (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 0,
+      exposureAborted: true,
+      guidingStopped: true,
+      mountStopped: true,
+      flatPanelLightOff: false,
+      failedRungs: ['stop_polar_corrector'],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).first.title,
+        startsWith('CHECK THE RIG: POLAR CORRECTOR MAY STILL BE MOVING (stop failed)'));
+  });
+
   for (final (rung, phrase) in const [
     ('stop_guide_focus', 'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING'),
     ('stop_bahtinov', 'BAHTINOV READOUT MAY STILL BE RUNNING'),
