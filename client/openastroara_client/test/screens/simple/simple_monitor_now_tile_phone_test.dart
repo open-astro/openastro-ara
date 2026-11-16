@@ -349,4 +349,55 @@ void main() {
       );
     }
   }
+  // Four filters keep the side-by-side wrap (#1942).
+  testWidgets(
+    'the phone Now tile keeps four long filter names and three-digit counts unscaled at 360 pt at 1x text (#1942)',
+    (tester) async {
+      expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+      final base = _busy();
+      const names = ['Luminance', 'Red', 'Green', 'Blue'];
+      final snap = MonitorSnapshot(
+        asOf: base.asOf,
+        verdict: base.verdict,
+        now: MonitorNow(
+          status: base.now.status,
+          word: base.now.word,
+          target: base.now.target,
+          filter: 'Red',
+          subSeconds: 300,
+          frameEndsAt: base.now.frameEndsAt,
+          frameSeconds: 300,
+          frame: 42,
+          frames: 110,
+          targetSecondsLeft: 20400,
+          filters: [
+            for (final (i, n) in names.indexed)
+              (filter: n, done: 100 + i, total: 766 + 111 * i, inHand: i == 1),
+          ],
+        ),
+        upNext: base.upNext,
+        flip: base.flip,
+        lastFrame: base.lastFrame,
+        night: base.night,
+      );
+      await _pump(tester, size: const Size(360, 780), snap: snap);
+      for (final (i, n) in names.indexed) {
+        final label = find.descendant(
+          of: _tile,
+          matching: find.text('${100 + i}/${766 + 111 * i}'),
+        );
+        expect(label, findsOneWidget, reason: n);
+        expect(
+          find.ancestor(of: label, matching: find.byType(FittedBox)),
+          findsNothing,
+          reason: '$n count is scaled',
+        );
+        expect(
+          tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+          isFalse,
+        );
+      }
+    },
+    skip: skip,
+  );
 }
