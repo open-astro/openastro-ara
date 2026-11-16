@@ -405,6 +405,19 @@ void main() {
     await tester.pump(const Duration(seconds: 7));
   });
 
+  testWidgets('a curated region keeps its catalog number in the row and the details: Skull Nebula (NGC 246) (#1957)',
+      (tester) async {
+    const skull = TonightSkyObject(
+        id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+        altitudeDeg: 40, maxAltitudeDeg: 60, aliases: ['C 056'], score: 60);
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [skull]));
+    await tester.pumpAndSettle();
+    expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget, reason: 'the row');
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pump();
+    expect(find.text('Skull Nebula (NGC 246)'), findsNWidgets(2), reason: 'the row and the details title');
+  });
+
   testWidgets('a merged row lists its other designations under the name (#1267)',
       (tester) async {
     await tester.pumpWidget(_host(_RecordingClient(), objects: [_nam]));

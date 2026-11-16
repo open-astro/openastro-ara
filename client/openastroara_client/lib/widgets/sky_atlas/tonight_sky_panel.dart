@@ -17,6 +17,7 @@ import '../../theme/ara_colors.dart';
 import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
 import '../../util/banked_hours.dart';
+import '../../util/imaging_regions.dart' show regionAwareName;
 import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
 import '../../util/reduce_motion.dart';
@@ -451,7 +452,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_object.name, style: theme.textTheme.bodyMedium),
+                        Text(
+                          regionAwareName(_object.id, _object.aliases, _object.name),
+                          style: theme.textTheme.bodyMedium,
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
@@ -839,7 +843,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(o.name),
+        title: Text(regionAwareName(o.id, o.aliases, o.name)),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

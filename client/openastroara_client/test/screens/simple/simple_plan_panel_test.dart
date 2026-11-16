@@ -50,6 +50,7 @@ import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/album/album_art.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
@@ -530,10 +531,10 @@ void main() {
   });
 
   test('the plan square\'s catalog tag: a region\'s own, else M > NGC > IC > Sh2 > B > LBN, else none', () {
-    expect(simpleTargetTag('Horsehead + Flame region (IC 434)', ['IC0434']), 'IC 434');
-    expect(simpleTargetTag('Question Mark region (NGC 7822 / Ced 214)', ['NGC7822']), 'NGC 7822');
+    expect(simpleTargetTag('Horsehead + Flame region', ['IC0434', 'LBN 953']), 'IC 434');
+    expect(simpleTargetTag('Question Mark region', ['NGC7822']), 'NGC 7822');
     expect(simpleTargetTag('Spaghetti Nebula (Simeis 147)', ['REGION-SIMEIS-147']), 'Simeis 147');
-    expect(simpleTargetTag('Orion Nebula + Running Man (M42)', ['NGC1976']), 'M 42');
+    expect(simpleTargetTag('Orion Nebula + Running Man', ['NGC1976', 'M 42']), 'M 42');
     expect(simpleTargetTag('Rho Ophiuchi cloud complex', ['REGION-RHO-OPH']), isNull);
     // A sky pick: the page's designations.
     expect(simpleTargetTag('Horsehead Nebula', ['NAME Horsehead Nebula', 'B 33', 'LDN 1630']), 'B 33');
@@ -546,7 +547,7 @@ void main() {
 
   test('a tonight\'s-best pick carries its id and aliases; the page\'s pick its designations', () {
     final o = TonightSkyObject(
-        id: 'IC0434', name: 'Horsehead + Flame region (IC 434)', type: 'HII', magnitude: null, raDeg: 85.25,
+        id: 'IC0434', name: 'Horsehead + Flame region', type: 'HII', magnitude: null, raDeg: 85.25,
         decDeg: -2.45, altitudeDeg: 30, maxAltitudeDeg: 50, aliases: const ['LBN 953']);
     expect(simpleSelectionOf(o).designations, ['IC0434', 'LBN 953']);
     final page = PlanetariumSelection.tryFromJson(const {
@@ -1367,7 +1368,7 @@ void main() {
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 
-    testWidgets('the Skull Nebula shows as "NGC 246 (Skull Nebula)" in the suggestion row and the plan header', (tester) async {
+    testWidgets('the Skull Nebula shows as "Skull Nebula (NGC 246)" in the suggestion row and the plan header', (tester) async {
       await _pump(
           tester,
           _Seq(),
@@ -1381,11 +1382,178 @@ void main() {
       await tester.enterText(find.byKey(const Key('simple-run-search')), 'skull');
       await tester.pump();
       await tester.pump();
-      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 246 (Skull Nebula)')),
+      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('Skull Nebula (NGC 246)')),
           findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
       await tester.pump();
-      expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+      expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget, reason: 'the plan header, the list is closed');
+    });
+
+    testWidgets("the target card shows the object's Album Art; one without Art keeps the drawn placeholder",
+        (tester) async {
+      const skull = PlanetariumSelection(
+          name: 'Skull Nebula', kind: 'PN', raHours: 0.78, decDeg: -11.87, raJ2000Hours: 0.78, decJ2000Deg: -11.87,
+          altDeg: 40, maxAltDeg: 60, designations: ['NGC0246', 'C 056']);
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: skull,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76,
+                      decDeg: -11.87, caldwellNum: 56, aliases: ['C 056']),
+                ]),
+            albumManifestProvider.overrideWith((ref) async => {
+                  'C56': const AlbumArt(asset: 'assets/album/art/c056.webp', credit: 'ESO', licence: 'CC BY 4.0'),
+                }),
+          ]);
+      final card = find.byKey(const Key('simple-run-target-card'));
+      expect(
+        tester.widget<Image>(find.descendant(of: card, matching: find.byType(Image))).image,
+        isA<ResizeImage>().having((r) => (r.imageProvider as AssetImage).assetName, 'asset',
+            'assets/album/art/c056.webp'),
+      );
+      expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byKey(const Key('simple-run-target-art-credit'))), findsOneWidget,
+          reason: 'the credit mark carries the Plan card key, not the Sky Map one');
+
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: card, matching: find.byType(Image)), findsNothing, reason: 'no M31 row in this catalog');
+      expect(find.descendant(of: card, matching: find.byIcon(Icons.auto_awesome)), findsOneWidget);
+    });
+
+    testWidgets("Tonight's Best and Recent tiles carry the nickname, Skull Nebula (NGC 246), not NGC0246",
+        (tester) async {
+      const skull = PlanningDso(
+          id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          tonight: [
+            TonightSkyObject(
+                id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+                altitudeDeg: 40, maxAltitudeDeg: 60),
+            TonightSkyObject(
+                id: 'NGC1360', name: 'NGC1360', type: 'PN', magnitude: 9, raDeg: 53.31, decDeg: -25.87,
+                altitudeDeg: 40, maxAltitudeDeg: 60),
+          ],
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [skull]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'NGC0246', raDeg: 11.76, decDeg: -11.87, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      expect(find.text('Skull Nebula (NGC 246)'), findsNWidgets(2), reason: 'one Tonight\'s Best tile, one Recent tile');
+      expect(find.text('NGC 1360'), findsOneWidget, reason: 'no nickname: the designation, unpadded');
+      expect(find.text('NGC0246'), findsNothing);
+    });
+
+    testWidgets('a curated Messier region reads Orion Nebula + Running Man (M 42) on its tiles and the plan header, not (NGC 1976)',
+        (tester) async {
+      const orion = PlanningDso(
+          id: 'NGC1976', name: 'Orion Nebula + Running Man', type: 'HII', magnitude: 4, raDeg: 83.82, decDeg: -5.39,
+          aliases: ['M 42']);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          tonight: [
+            TonightSkyObject(
+                id: 'NGC1976', name: 'Orion Nebula + Running Man', type: 'HII', magnitude: 4, raDeg: 83.82,
+                decDeg: -5.39, altitudeDeg: 40, maxAltitudeDeg: 60, aliases: const ['M 42']),
+          ],
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [orion]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Orion Nebula + Running Man', raDeg: 83.82, decDeg: -5.39, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      const title = 'Orion Nebula + Running Man (M 42)';
+      expect(find.text(title), findsNWidgets(2), reason: "one Tonight's Best tile, one Recent tile: M before NGC");
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-Orion Nebula + Running Man')));
+      await tester.pump();
+      expect(find.text(title), findsNWidgets(3), reason: "the plan header after a Tonight's Best tap agrees");
+      await tester.tap(find.byKey(const Key('simple-run-recent-0')));
+      await tester.pump();
+      expect(find.text(title), findsNWidgets(3), reason: 'and after a Recent tap');
+    });
+
+    testWidgets('a Recent region saved as Sh2-54 region reads Sh2-54 region (NGC 6604): a name that looks like a designation is still a name',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC6604', name: 'Sh2-54 region', type: 'HII', magnitude: 6.5, raDeg: 274.5, decDeg: -12.2),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Sh2-54 region', raDeg: 274.5, decDeg: -12.2, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('Sh2-54 region (NGC 6604)')), findsOneWidget);
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('Sh2-54 region (NGC 6604)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
+    });
+
+    testWidgets("a Recent target saved under an alias, M 31, reads Andromeda Galaxy (M 31) on the tile and the plan header",
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'M 31', raDeg: 10.7, decDeg: 41.3, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('Andromeda Galaxy (M 31)')), findsOneWidget);
+      expect(find.text('Andromeda Galaxy (NGC 224)'), findsNothing);
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('Andromeda Galaxy (M 31)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
+    });
+
+    testWidgets('a Recent target saved under its common name, Helix Nebula, reads Helix Nebula (NGC 7293) on the tile and the plan header',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC7293', name: 'Helix Nebula', type: 'PN', magnitude: 7.6, raDeg: 337.4, decDeg: -20.8, aliases: ['C 063']),
+                ]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Helix Nebula', raDeg: 337.4, decDeg: -20.8, when: DateTime.utc(2026, 11, 14)),
+                ]),
+          ]);
+      final tile = find.byKey(const Key('simple-run-recent-0'));
+      expect(find.descendant(of: tile, matching: find.text('Helix Nebula (NGC 7293)')), findsOneWidget,
+          reason: 'a name is not a designation: the catalog row id leads, as the plan header does');
+      await tester.tap(tile);
+      await tester.pump();
+      expect(find.text('Helix Nebula (NGC 7293)'), findsNWidgets(2), reason: 'the tile and the plan header agree');
     });
 
     testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
@@ -1401,7 +1569,7 @@ void main() {
                   PlanningDso(id: 'NGC6334', name: "Cat's Paw Nebula", type: 'HII', magnitude: null, raDeg: 260.1, decDeg: -35.8, aliases: ['RCW 127']),
                 ]),
           ]);
-      for (final (query, title) in [('M 31', 'M 31 (Andromeda Galaxy)'), ('RCW 127', "RCW 127 (Cat's Paw Nebula)")]) {
+      for (final (query, title) in [('M 31', 'Andromeda Galaxy (M 31)'), ('RCW 127', "Cat's Paw Nebula (RCW 127)")]) {
         await tester.enterText(find.byKey(const Key('simple-run-search')), query);
         await tester.pump();
         await tester.pump();
@@ -1412,17 +1580,17 @@ void main() {
       }
     });
 
-    testWidgets('an Abell planetary heads the plan as "Abell 21 (Medusa Nebula)", not by its short alias A 21',
+    testWidgets('an Abell planetary heads the plan as "Medusa Nebula (Abell 21)", not by its short alias A 21',
         (tester) async {
       const medusa = PlanningDso(
           id: 'Abell 21', name: 'Medusa Nebula', type: 'PN', magnitude: null, raDeg: 112.26, decDeg: 13.24,
           aliases: ['PN G205.1+14.2', 'A 21', 'PK 205+14 1', 'Sh 2-274']);
       await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           sel: simpleSelectionOfDso(medusa, const [], latitudeDeg: 51.477833));
-      expect(find.text('Abell 21 (Medusa Nebula)'), findsOneWidget);
+      expect(find.text('Medusa Nebula (Abell 21)'), findsOneWidget);
     });
 
-    testWidgets('a nickname that matched stays in the row: "NGC 598 (Triangulum Pinwheel)"', (tester) async {
+    testWidgets('a nickname that matched stays in the row: "Triangulum Pinwheel (NGC 598)"', (tester) async {
       await _pump(
           tester,
           _Seq(),
@@ -1440,12 +1608,12 @@ void main() {
       await tester.pump();
       expect(
           find.descendant(
-              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 598 (Triangulum Pinwheel)')),
+              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('Triangulum Pinwheel (NGC 598)')),
           findsOneWidget,
           reason: 'what matched, so the row says why it is listed');
     });
 
-    testWidgets('at twice the text size a search row and the plan header show their whole designation (name)',
+    testWidgets('at twice the text size a search row and the plan header show their whole name (designation)',
         (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -1466,11 +1634,11 @@ void main() {
       await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
       await tester.pump();
       await tester.pump();
-      whole('NGC 598 (Triangulum Pinwheel)');
+      whole('Triangulum Pinwheel (NGC 598)');
       whole('mag 5.7');
       await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
       await tester.pump();
-      whole('NGC 598 (Triangulum Galaxy)');
+      whole('Triangulum Galaxy (NGC 598)');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
@@ -1818,7 +1986,7 @@ void main() {
 
   testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {
     const region = PlanetariumSelection(
-        name: 'Horsehead + Flame region (IC 434)', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
+        name: 'Horsehead + Flame region', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
         decJ2000Deg: -2.45, altDeg: 30, maxAltDeg: 50, designations: ['IC0434']);
     final (_, _) = await run(tester, sel: region);
     expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');

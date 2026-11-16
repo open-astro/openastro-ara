@@ -56,6 +56,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     internal TargetDisplayLatch TargetLatch { get; } = new();
 
     private readonly ILogger<TelescopeService> _logger;
+    private long _trackingWrites;
     private readonly IEquipmentFaultSink? _faults;
     private readonly IWsBroadcaster? _ws;
     // #1229 — the site longitude and the flip window for the meridian bookkeeping GetInfo serves
@@ -355,6 +356,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {
         var client = RequireConnectedClient();
+        Interlocked.Increment(ref _trackingWrites);
         // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the write — the same hazard as the abort path.

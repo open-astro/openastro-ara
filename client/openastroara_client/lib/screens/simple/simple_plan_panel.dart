@@ -29,12 +29,16 @@ import '../../services/dso_catalog_service.dart'
     show
         DsoSuggestion,
         PlanningDso,
+        bestCatalogDesignation,
         designationKey,
         designationWithName,
         isCatalogDesignation,
+        objectTitle,
         searchSuggestions,
         suggestionDesignation,
         suggestionTitle;
+import '../../state/album/album_art.dart';
+import '../../state/album/album_matching.dart' show skyPickArt;
 import '../../state/sky_atlas/dso_catalog_state.dart'
     show bundledCatalogProvider;
 import '../../services/tonight_sky_api.dart';
@@ -66,6 +70,7 @@ import 'simple_preview_panel.dart'
         kSimpleText;
 import 'simple_shell.dart'
     show
+        simpleArtCredit,
         SimplePanel,
         SimpleSegments,
         simpleFrost,
@@ -169,7 +174,10 @@ PlanetariumSelection simpleSelectionOf(
   altDeg: o.altitudeDeg,
   maxAltDeg: o.maxAltitudeDeg,
   rise: o.windowStartUtc?.toLocal(),
-  designations: _pickedFirst(designation, [o.id, ...o.aliases]),
+  designations: _pickedFirst(
+    designation ?? bestCatalogDesignation([o.id, ...o.aliases]),
+    [o.id, ...o.aliases],
+  ),
 );
 
 /// A position's altitude above the site at [utc], in degrees. Pure —
@@ -953,6 +961,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     );
   }
 
+  /// The picked object's Album Art, as the Sky Map's pick shows it; null
+  /// until the manifest and catalog load, or for an object without Art.
+  AlbumArt? _artOf(PlanetariumSelection sel) {
+    final manifest = ref.watch(albumManifestProvider).value;
+    final catalog = ref.watch(bundledCatalogProvider).value;
+    return manifest == null || catalog == null
+        ? null
+        : skyPickArt(sel.designations, sel.name, catalog, manifest);
+  }
+
   Widget _plan(SimpleRun run) {
     // An edit whose target went (deleted, or the queue ended) plans anew.
     final editing =
@@ -1036,6 +1054,22 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         .take(4)
         .toList();
     final recent = ref.watch(simpleRecentProvider);
+    // The catalog row behind each Recent name: its nickname for the title,
+    // and a pick that keeps it.
+    final names = ref.watch(bundledNameIndexProvider);
+    final recentRows = [for (final r in recent) names.lookup(r.name)];
+    // What a Recent tile and its tap lead with: the saved name when it is one
+    // of the row's designations (M 31), else the row's best one. A saved
+    // common name is not a designation, even "Sh2-54 region" (#1957).
+    final recentLeads = [
+      for (final (i, r) in recent.indexed)
+        switch (recentRows[i]) {
+          final row?
+              when ![row.id, ...row.aliases].any((d) => designationKey(d) == designationKey(r.name)) =>
+            bestCatalogDesignation([row.id, ...row.aliases]) ?? row.id,
+          _ => r.name,
+        },
+    ];
     final site = ref.watch(siteSettingsProvider);
     final span = ref.watch(simpleRestOfNightProvider);
     // Null: unknown (no site set, or no night ahead), never zero hours.
@@ -1071,7 +1105,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-suggestion-${o.name}'),
                 width: tileWidth,
-                title: o.name,
+                title: objectTitle(o.id, o.aliases, o.name),
                 line: simpleSuggestionLine(context.l10n, o),
                 selected: picked(o.name) || picked(o.id),
                 onTap: () => ref
@@ -1093,7 +1127,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-recent-$i'),
                 width: tileWidth,
-                title: r.name,
+                title: designationWithName(recentLeads[i], recentRows[i]?.name ?? ''),
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),
@@ -1117,15 +1151,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     .set(
                       simplePickDso(
                         ref,
-                        PlanningDso(
-                          id: r.name,
-                          name: r.name,
-                          type: '',
-                          magnitude: null,
-                          raDeg: r.raDeg,
-                          decDeg: r.decDeg,
-                        ),
-                        designation: r.name,
+                        recentRows[i] ??
+                            PlanningDso(
+                              id: r.name,
+                              name: r.name,
+                              type: '',
+                              magnitude: null,
+                              raDeg: r.raDeg,
+                              decDeg: r.decDeg,
+                            ),
+                        designation: recentLeads[i],
                       ),
                     ),
               ),
@@ -1150,6 +1185,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           _TargetCard(
             sel: sel,
             hours: selHours,
+            art: _artOf(sel),
             onPickInSky: widget.onPickInSky,
           ),
         if (!wide && editing == null) ...lists,
@@ -1630,11 +1666,15 @@ class _TargetCard extends StatelessWidget {
   const _TargetCard({
     required this.sel,
     required this.hours,
+    required this.art,
     required this.onPickInSky,
   });
 
   final PlanetariumSelection sel;
   final double? hours;
+
+  /// The object's Album Art, null for none (the drawn placeholder stands in).
+  final AlbumArt? art;
   final VoidCallback onPickInSky;
 
   @override
@@ -1664,19 +1704,44 @@ class _TargetCard extends StatelessWidget {
         spacing: AraSpace.s8,
         children: [
           // Decorative: the name beside it says it all.
-          ExcludeSemantics(
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                gradient: const RadialGradient(
-                  colors: [AraColors.targetArtGlow, AraColors.targetArtNight],
+          if (art case final art?)
+            simpleArtCredit(
+              context,
+              art,
+              const Key('simple-run-target-art-credit'),
+              ExcludeSemantics(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                  child: ColoredBox(
+                    color: AraColors.albumArtBackdrop,
+                    child: Image.asset(
+                      art.asset!,
+                      key: const Key('simple-run-target-art'),
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      cacheWidth: 120, // 3x of 40 px (iPad)
+                      errorBuilder: (_, _, _) =>
+                          const SizedBox(width: 40, height: 40),
+                    ),
+                  ),
                 ),
               ),
-              child: const Icon(Icons.auto_awesome, size: 20),
+            )
+          else
+            ExcludeSemantics(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                  gradient: const RadialGradient(
+                    colors: [AraColors.targetArtGlow, AraColors.targetArtNight],
+                  ),
+                ),
+                child: const Icon(Icons.auto_awesome, size: 20),
+              ),
             ),
-          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2281,7 +2346,7 @@ class SimpleRunPanel extends ConsumerWidget {
   }
 }
 
-/// A catalog suggestion as a row, 44 pt tall: `designation (name)` (the
+/// A catalog suggestion as a row, 44 pt tall: `name (designation)` (the
 /// nickname that matched, when one did) and the magnitude. Plan's search and
 /// Simple Mode's search list them.
 class SimpleSuggestion extends StatelessWidget {

@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
             Assert.That(SolverPathMigration.BootWarning(Settings("/usr/bin/astap_cli"), Nothing),
                 Does.Contain("not found at /usr/bin/astap_cli").And.Contain("Reinstall openastroara-server"));
             Assert.That(SolverPathMigration.BootWarning(Settings("/usr/bin/astap_cli"), static _ => true), Is.Null);
-            Assert.That(SolverPathMigration.BootWarning(Settings(""), Nothing), Is.Null, "nothing configured: the normalizer's default applies, nothing to warn about");
+            Assert.That(SolverPathMigration.BootWarning(Settings(""), Nothing), Does.Contain("not found at /opt/openastroara/astap_cli"), "a blank path means the bundled solver, so a missing bundled binary is reported (#1866)");
             Assert.That(SolverPathMigration.IsEndpointUrl("http://localhost:8080"), Is.True);
             Assert.That(SolverPathMigration.IsEndpointUrl("C:\\astap\\astap.exe"), Is.False, "a drive letter is not a scheme we warn about");
         }

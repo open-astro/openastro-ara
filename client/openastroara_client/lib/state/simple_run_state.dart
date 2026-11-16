@@ -16,7 +16,7 @@ import 'time_sync_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/site_settings_state.dart';
 import '../services/dso_catalog_service.dart'
-    show designationKey;
+    show bestCatalogDesignation, catalogTag;
 import 'sky_atlas/planetarium_selection_state.dart';
 import 'sky_atlas/tonight_sky_state.dart';
 import '../l10n/l10n.dart';
@@ -97,30 +97,18 @@ int simpleFramesThatFit(List<FilterPlanStep> steps, double hoursLeft) {
   );
 }
 
-const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
-final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
-
-/// A designation as the plan square writes it ("M 42", "Sh2-129") and its
-/// rank in [_tagOrder]; null for any other catalog.
-(int, String)? _catalogTag(String designation) {
-  final m = _tagKey.firstMatch(designationKey(designation));
-  if (m == null) return null;
-  final p = m[1]!;
-  return (_tagOrder.indexOf(p), p == 'SH2' ? 'Sh2-${m[2]}' : '$p ${m[2]}');
-}
-
-/// The plan square's name for a target: a curated region's own tag (its name
-/// ends "(IC 434)"), else its best designation, M > NGC > IC > Sh2 > B > LBN;
-/// null when it has none (the square shows the name). Pure — unit-tested.
+/// The plan square's name for a target: a standalone region's own tag (its
+/// name ends "(Simeis 147)"), else its best designation
+/// ([bestCatalogDesignation]); null when it has none (the square shows the
+/// name). Pure — unit-tested.
 String? simpleTargetTag(String name, List<String> designations) {
   final own = RegExp(r'\(([^()]+)\)\s*$').firstMatch(name)?[1];
   if (own != null) {
     final first = own.split(' / ').first.trim();
-    return _catalogTag(first)?.$2 ?? first;
+    return catalogTag(first)?.$2 ?? first;
   }
-  final tags = [for (final d in designations) ?_catalogTag(d)]
-    ..sort((a, b) => a.$1.compareTo(b.$1));
-  return tags.firstOrNull?.$2;
+  final best = bestCatalogDesignation(designations);
+  return best == null ? null : catalogTag(best)!.$2;
 }
 
 /// [t]'s time of day at its next occurrence after [now], on the wheel's

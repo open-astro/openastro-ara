@@ -85,6 +85,7 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
         Task.FromResult(false);
 
     public bool SetTrackingEnabled(bool trackingEnabled) => false;
+    public long TrackingWriteCount => 0;
     public bool SetTrackingMode(TrackingMode trackingMode) => false;
     public bool SetCustomTrackingRate(SiderealShiftTrackingRate rate) => false;
     public bool SendToSnapPort(bool start) => false;

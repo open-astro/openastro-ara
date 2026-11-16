@@ -138,8 +138,8 @@ void main() {
     expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
   });
 
-  test('the display form is designation (name) in the search row and the plan (#1720)', () {
-    expect(designationWithName('NGC0246', 'Skull Nebula'), 'NGC 246 (Skull Nebula)');
+  test('the display form is name (designation) in the search row and the plan (#1957)', () {
+    expect(designationWithName('NGC0246', 'Skull Nebula'), 'Skull Nebula (NGC 246)');
     expect(designationWithName('Sh2-129', 'Sh2-129'), 'Sh2-129', reason: 'no other name');
     expect(designationWithName('NGC7000', 'North America Nebula (NGC 7000)'), 'North America Nebula (NGC 7000)',
         reason: 'the name already carries its designation');
@@ -147,14 +147,28 @@ void main() {
     final skull = PlanningDso(
         id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
         aliases: const ['C 056', 'Skull Nebula']);
-    expect(suggestionTitle(searchSuggestions([skull], 'skull').single), 'NGC 246 (Skull Nebula)',
+    expect(suggestionTitle(searchSuggestions([skull], 'skull').single), 'Skull Nebula (NGC 246)',
         reason: 'a nickname matched: the title shows the designation, then the name');
-    expect(suggestionTitle(searchSuggestions([skull], 'C 56').single), 'C 56 (Skull Nebula)',
+    expect(suggestionTitle(searchSuggestions([skull], 'C 56').single), 'Skull Nebula (C 56)',
         reason: 'a Caldwell number matched: it is the designation');
     const m33 = PlanningDso(
         id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
         aliases: ['M 33', 'Triangulum Pinwheel']);
-    expect(suggestionTitle(searchSuggestions([m33], 'triangulum pinwheel').single), 'NGC 598 (Triangulum Pinwheel)',
+    expect(suggestionTitle(searchSuggestions([m33], 'triangulum pinwheel').single), 'Triangulum Pinwheel (NGC 598)',
         reason: 'a nickname other than its name matched: the row shows it, so it says why it is listed');
+  });
+
+  test('a curated region name reads name first, Skull Nebula (NGC 246), on every pick path (#1957)', () {
+    // Recent and Tonight's Best pick the ranked row, which carries the
+    // curated name; the card titles it with designationWithName.
+    final skull = applyImagingRegions(const [
+      PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+          aliases: ['C 056']),
+    ]).firstWhere((o) => o.id == 'NGC0246');
+    expect(designationWithName(skull.id, skull.name), 'Skull Nebula (NGC 246)');
+    for (final e in overrides.entries) {
+      expect(e.value.name, isNot(contains('(')),
+          reason: '${e.key}: the designation in the name would show twice or out of order');
+    }
   });
 }

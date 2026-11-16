@@ -111,7 +111,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // construction cycles the other cross-service deps already dodge.
             Func<ICenteringService?>? centeringResolver = null,
             Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null,
-            Func<ICameraService?>? cameraResolver = null) {
+            Func<ICameraService?>? cameraResolver = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -126,6 +127,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _centeringResolver = centeringResolver;
         _autofocusResolver = autofocusResolver;
         _cameraResolver = cameraResolver;
+        _polarAlignResolver = polarAlignResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -225,6 +227,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Body-load boundary on the background worker: deserialization / store access can throw IO/Json/argument/etc.; any escape must surface as a Failed run via WS and be contained, not fault the worker. CA1031's log-and-recover boundary exception applies.")]
     private async Task LoadAndRunAsync(Guid id, RunState run) {
+        await EndOpenPolarAlignAsync(id);
         ISequenceRootContainer? root;
         ISequenceContainer? bodyTop;
         try {
@@ -275,6 +278,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // longer needs to pin every SequenceItem/container in memory. SkipAsync only
             // reaches Root for abortable (non-terminal) runs, so a null here is harmless.
             run.SetRoot(null);
+        }
+    }
+
+    // A Polar Align run left open would keep capturing through this run's slews and store a result taken
+    // while the mount moved; end it before the first instruction, the way the guide start does.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort on the start path: a fault ending the routine must not fail the run.")]
+    private async Task EndOpenPolarAlignAsync(Guid id) {
+        try {
+            if (_polarAlignResolver?.Invoke() is { IsActive: true } polar) {
+                await polar.StopForSequenceAsync(CancellationToken.None);
+                LogPolarAlignEnded(id);
+            }
+        } catch (Exception ex) {
+            LogPolarAlignEndFailed(ex, id);
         }
     }
 
@@ -1218,6 +1236,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     private readonly Func<ICameraService?>? _cameraResolver;
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
 
     /// <summary>How long a run's end waits for its last frames to be saved. A stalled drive must not keep
     /// the run from ending; the saves carry on in the background.</summary>
@@ -1438,6 +1457,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: instruction {Index} ('{Name}') failed — sequence.instruction_failed published (§42.4)")]
     private partial void LogInstructionFailed(Guid sequenceId, int index, string name);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Sequence run {SequenceId}: an open Polar Align run was stopped before the first instruction")]
+    private partial void LogPolarAlignEnded(Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: stopping the open Polar Align run failed")]
+    private partial void LogPolarAlignEndFailed(Exception ex, Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
