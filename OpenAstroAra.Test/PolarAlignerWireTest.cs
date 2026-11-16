@@ -24,7 +24,7 @@ namespace OpenAstroAra.Test {
     /// carrier, against a scripted loopback device.</summary>
     [TestFixture]
     [Category("bench")] // loopback-only, runs in the default job too
-    public class PolarCorrectorWireTest {
+    public class PolarAlignerWireTest {
 
         private const string ActionPath = "/api/v1/switch/0/action";
 
@@ -43,10 +43,10 @@ namespace OpenAstroAra.Test {
         // The Alpaca reply carries the action's text as a JSON string Value.
         private static string Reply(string text) => JsonSerializer.Serialize(text);
 
-        private static (ISwitchDevice Device, PolarAlignActionsCorrector Corrector) Over(ScriptedAlpacaDevice box) {
+        private static (ISwitchDevice Device, PolarAlignActionsAligner Aligner) Over(ScriptedAlpacaDevice box) {
             var device = AlpacaSwitchDevice.Create(Device(box));
             var carrier = new LiveDriverActions(LiveDriverActions.Read(() => device.SupportedActions), () => true, device.Action);
-            return (device, new PolarAlignActionsCorrector(carrier));
+            return (device, new PolarAlignActionsAligner(carrier));
         }
 
         private static (string? Action, string? Parameters) Sent(ScriptedAlpacaDevice box, int index) {
@@ -60,12 +60,12 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(
                 path => path.EndsWith("/supportedactions", StringComparison.Ordinal) ? """["PolarAlign:Info"]""" : null,
                 path => path == ActionPath ? Reply(string.Empty) : null);
-            var (device, corrector) = Over(box);
+            var (device, aligner) = Over(box);
             using (device) {
-                corrector.Move(PolarCorrectorAxis.Azimuth, -1.25);
-                corrector.Move(PolarCorrectorAxis.Altitude, 3);
-                corrector.Stop();
-                corrector.Home();
+                aligner.Move(PolarAlignerAxis.Azimuth, -1.25);
+                aligner.Move(PolarAlignerAxis.Altitude, 3);
+                aligner.Stop();
+                aligner.Home();
             }
 
             Assert.Multiple(() => {
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Test {
                 path => path.EndsWith("/supportedactions", StringComparison.Ordinal) ? """["polaralign:info","Other"]""" : null);
             using var device = AlpacaSwitchDevice.Create(Device(box));
 
-            Assert.That(PolarAlignActionsCorrector.IsOfferedBy(device.SupportedActions), Is.True);
+            Assert.That(PolarAlignActionsAligner.IsOfferedBy(device.SupportedActions), Is.True);
         }
 
         [Test]
@@ -92,13 +92,13 @@ namespace OpenAstroAra.Test {
             const string status = """{"az":{"moving":true,"position":-12.5,"fault":"stalled","extra":1},"alt":{"moving":false,"position":0}}""";
             var reply = Reply(FullInfo);
             await using var box = ScriptedAlpacaDevice.Start(putResponder: _ => reply);
-            var (device, corrector) = Over(box);
-            PolarCorrectorInfo info;
-            PolarCorrectorStatus state;
+            var (device, aligner) = Over(box);
+            PolarAlignerInfo info;
+            PolarAlignerStatus state;
             using (device) {
-                info = corrector.Info();
+                info = aligner.Info();
                 reply = Reply(status);
-                state = corrector.Status();
+                state = aligner.Status();
             }
 
             Assert.Multiple(() => {
@@ -106,14 +106,14 @@ namespace OpenAstroAra.Test {
                 Assert.That(Sent(box, 1), Is.EqualTo(("PolarAlign:Status", string.Empty)));
                 Assert.That(info.HostDriven, Is.True);
                 Assert.That(info.DeviceName, Is.EqualTo("Bench PA"));
-                Assert.That(info.Azimuth, Is.EqualTo(new PolarCorrectorAxisInfo(60, 0.05)));
-                Assert.That(info.Altitude, Is.EqualTo(new PolarCorrectorAxisInfo(30, 0.1)));
+                Assert.That(info.Azimuth, Is.EqualTo(new PolarAlignerAxisInfo(60, 0.05)));
+                Assert.That(info.Altitude, Is.EqualTo(new PolarAlignerAxisInfo(30, 0.1)));
                 Assert.That(info.SimultaneousMoves, Is.True);
                 Assert.That(info.MovesWhileTracking, Is.False);
                 Assert.That(info.CanStop, Is.True);
                 Assert.That(info.SettleSeconds, Is.EqualTo(2.5));
-                Assert.That(state.Azimuth, Is.EqualTo(new PolarCorrectorAxisStatus(true, -12.5, "stalled")));
-                Assert.That(state.Altitude, Is.EqualTo(new PolarCorrectorAxisStatus(false, 0, null)), "a reported 0 is a position");
+                Assert.That(state.Azimuth, Is.EqualTo(new PolarAlignerAxisStatus(true, -12.5, "stalled")));
+                Assert.That(state.Altitude, Is.EqualTo(new PolarAlignerAxisStatus(false, 0, null)), "a reported 0 is a position");
             });
         }
 
@@ -121,20 +121,20 @@ namespace OpenAstroAra.Test {
         public async Task Info_and_status_without_the_optional_fields_leave_them_absent() {
             var reply = Reply("""{"tiers":[1],"axes":{"az":{"maxMove":60},"alt":{"maxMove":30}}}""");
             await using var box = ScriptedAlpacaDevice.Start(putResponder: _ => reply);
-            var (device, corrector) = Over(box);
-            PolarCorrectorInfo info;
-            PolarCorrectorStatus state;
+            var (device, aligner) = Over(box);
+            PolarAlignerInfo info;
+            PolarAlignerStatus state;
             using (device) {
-                info = corrector.Info();
+                info = aligner.Info();
                 reply = Reply("""{"az":{"moving":false},"alt":{"moving":true}}""");
-                state = corrector.Status();
+                state = aligner.Status();
             }
 
             Assert.Multiple(() => {
-                Assert.That(info.Azimuth, Is.EqualTo(new PolarCorrectorAxisInfo(60, 0)), "no resolution is 0 (no calibration)");
+                Assert.That(info.Azimuth, Is.EqualTo(new PolarAlignerAxisInfo(60, 0)), "no resolution is 0 (no calibration)");
                 Assert.That(info.HostDriven, Is.True);
-                Assert.That(state.Azimuth, Is.EqualTo(new PolarCorrectorAxisStatus(false, null, null)));
-                Assert.That(state.Altitude, Is.EqualTo(new PolarCorrectorAxisStatus(true, null, null)));
+                Assert.That(state.Azimuth, Is.EqualTo(new PolarAlignerAxisStatus(false, null, null)));
+                Assert.That(state.Altitude, Is.EqualTo(new PolarAlignerAxisStatus(true, null, null)));
                 Assert.That(state.Moving, Is.True);
             });
         }
@@ -142,10 +142,10 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task An_InvalidOperation_error_on_Move_is_not_calibrated() {
             await using var box = ScriptedAlpacaDevice.Start(putResponder: _ => ScriptedAlpacaDevice.Error(0x40B, "no calibration factors"));
-            var (device, corrector) = Over(box);
+            var (device, aligner) = Over(box);
             using (device) {
-                var ex = Assert.Throws<PolarCorrectorException>(() => corrector.Move(PolarCorrectorAxis.Azimuth, 1));
-                Assert.That(ex!.Failure, Is.EqualTo(PolarCorrectorFailure.NotCalibrated));
+                var ex = Assert.Throws<PolarAlignerException>(() => aligner.Move(PolarAlignerAxis.Azimuth, 1));
+                Assert.That(ex!.Failure, Is.EqualTo(PolarAlignerFailure.NotCalibrated));
                 Assert.That(ex.Message, Does.Contain("no calibration factors"));
             }
         }
@@ -153,10 +153,10 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Another_driver_error_on_Move_is_refused_with_the_devices_text() {
             await using var box = ScriptedAlpacaDevice.Start(putResponder: _ => ScriptedAlpacaDevice.Error("axis at its limit"));
-            var (device, corrector) = Over(box);
+            var (device, aligner) = Over(box);
             using (device) {
-                var ex = Assert.Throws<PolarCorrectorException>(() => corrector.Move(PolarCorrectorAxis.Altitude, 1));
-                Assert.That(ex!.Failure, Is.EqualTo(PolarCorrectorFailure.Refused));
+                var ex = Assert.Throws<PolarAlignerException>(() => aligner.Move(PolarAlignerAxis.Altitude, 1));
+                Assert.That(ex!.Failure, Is.EqualTo(PolarAlignerFailure.Refused));
                 Assert.That(ex.Message, Does.Contain("axis at its limit"));
             }
         }
@@ -164,11 +164,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_dead_socket_is_a_lost_link() {
             var box = ScriptedAlpacaDevice.Start();
-            var (device, corrector) = Over(box);
+            var (device, aligner) = Over(box);
             await box.DisposeAsync();
             using (device) {
-                var ex = Assert.Throws<PolarCorrectorException>(() => corrector.Stop());
-                Assert.That(ex!.Failure, Is.EqualTo(PolarCorrectorFailure.LinkLost));
+                var ex = Assert.Throws<PolarAlignerException>(() => aligner.Stop());
+                Assert.That(ex!.Failure, Is.EqualTo(PolarAlignerFailure.LinkLost));
             }
         }
 
@@ -176,19 +176,19 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Info_without_tier_1_is_not_host_driven() {
-            var info = PolarAlignActionsCorrector.ParseInfo("""{"tiers":[2],"axes":{"az":{"maxMove":60},"alt":{"maxMove":30}}}""");
+            var info = PolarAlignActionsAligner.ParseInfo("""{"tiers":[2],"axes":{"az":{"maxMove":60},"alt":{"maxMove":30}}}""");
             Assert.That(info.HostDriven, Is.False);
         }
 
         [Test]
         public void Info_without_tiers_is_not_host_driven() {
-            var info = PolarAlignActionsCorrector.ParseInfo("""{"axes":{"az":{"maxMove":60},"alt":{"maxMove":30}}}""");
+            var info = PolarAlignActionsAligner.ParseInfo("""{"axes":{"az":{"maxMove":60},"alt":{"maxMove":30}}}""");
             Assert.That(info.HostDriven, Is.False);
         }
 
         [Test]
         public void An_axis_without_maxMove_is_absent() {
-            var info = PolarAlignActionsCorrector.ParseInfo("""{"tiers":[1],"axes":{"az":{"resolution":0.1},"alt":{"maxMove":30}}}""");
+            var info = PolarAlignActionsAligner.ParseInfo("""{"tiers":[1],"axes":{"az":{"resolution":0.1},"alt":{"maxMove":30}}}""");
             Assert.Multiple(() => {
                 Assert.That(info.Azimuth, Is.Null);
                 Assert.That(info.HostDriven, Is.False);
@@ -202,8 +202,8 @@ namespace OpenAstroAra.Test {
         [TestCase("""{"az":{"position":3},"alt":{"moving":false}}""")]
         [TestCase("""{"az":{"moving":"no"},"alt":{"moving":false}}""")]
         public void A_status_that_does_not_say_whether_each_axis_moves_is_a_protocol_failure(string reply) {
-            Assert.That(Assert.Throws<PolarCorrectorException>(() => PolarAlignActionsCorrector.ParseStatus(reply))!.Failure,
-                Is.EqualTo(PolarCorrectorFailure.Protocol));
+            Assert.That(Assert.Throws<PolarAlignerException>(() => PolarAlignActionsAligner.ParseStatus(reply))!.Failure,
+                Is.EqualTo(PolarAlignerFailure.Protocol));
         }
 
         [TestCase("not json")]
@@ -211,10 +211,10 @@ namespace OpenAstroAra.Test {
         [TestCase("")]
         public void A_reply_that_is_not_a_JSON_object_is_a_protocol_failure(string reply) {
             Assert.Multiple(() => {
-                Assert.That(Assert.Throws<PolarCorrectorException>(() => PolarAlignActionsCorrector.ParseInfo(reply))!.Failure,
-                    Is.EqualTo(PolarCorrectorFailure.Protocol));
-                Assert.That(Assert.Throws<PolarCorrectorException>(() => PolarAlignActionsCorrector.ParseStatus(reply))!.Failure,
-                    Is.EqualTo(PolarCorrectorFailure.Protocol));
+                Assert.That(Assert.Throws<PolarAlignerException>(() => PolarAlignActionsAligner.ParseInfo(reply))!.Failure,
+                    Is.EqualTo(PolarAlignerFailure.Protocol));
+                Assert.That(Assert.Throws<PolarAlignerException>(() => PolarAlignActionsAligner.ParseStatus(reply))!.Failure,
+                    Is.EqualTo(PolarAlignerFailure.Protocol));
             });
         }
     }

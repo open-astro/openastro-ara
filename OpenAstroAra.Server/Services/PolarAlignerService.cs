@@ -18,13 +18,13 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>#1972/#1973 — the rig's Polar Corrector for the API and the emergency stop.</summary>
-public interface IPolarCorrectorService {
+/// <summary>#1972/#1973 — the rig's Polar Aligner for the API and the emergency stop.</summary>
+public interface IPolarAlignerService {
     /// <summary>True while a connected device offers the PolarAlign actions.</summary>
     bool IsPresent { get; }
     /// <summary>Never throws for a device error: what could not be read is reported as unknown.</summary>
-    Task<PolarCorrectorDto> GetAsync(CancellationToken ct);
-    /// <summary>Stops both axes. Throws InvalidOperationException (→ 409) with no Polar Corrector
+    Task<PolarAlignerDto> GetAsync(CancellationToken ct);
+    /// <summary>Stops both axes. Throws InvalidOperationException (→ 409) with no Polar Aligner
     /// connected or when the device refuses, carrying the device's text.</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Sends the device home; same refusals as <see cref="StopAsync"/>.</summary>
@@ -61,29 +61,29 @@ internal sealed class LiveDriverActions(IReadOnlyList<string> supportedActions, 
 }
 
 /// <summary>
-/// #1972/#1973 — derives the rig's Polar Corrector from the connected devices: a Switch that offers
+/// #1972/#1973 — derives the rig's Polar Aligner from the connected devices: a Switch that offers
 /// the PolarAlign actions wins over the mount (a separate base was added for the job), and among such
 /// switches the lowest UniqueId (ordinal) wins. No profile field names it.
 /// </summary>
-internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDriverActionsCarriers mount,
-        Func<IPolarCorrectorDriver?>? routine = null)
-        : IPolarCorrectorService, IPolarCorrectorSource {
+internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriverActionsCarriers mount,
+        Func<IPolarAlignerDriver?>? routine = null)
+        : IPolarAlignerService, IPolarAlignerSource {
     private readonly object _gate = new();
     // Info is static per connection; one connection's reply is kept (the carrier object is per connect).
-    private (IDriverActions Carrier, PolarCorrectorInfo Info)? _info;
+    private (IDriverActions Carrier, PolarAlignerInfo Info)? _info;
 
     private sealed record Chosen(string Carrier, DriverActionsCarrier Device);
 
-    private static readonly PolarCorrectorDto None = new(
+    private static readonly PolarAlignerDto None = new(
         Present: false, Carrier: null, DeviceId: null, Name: null, Drivable: false, NotDrivableReason: null,
         Capabilities: null, Moving: false, AzimuthPositionArcmin: null, AltitudePositionArcmin: null,
         AzimuthFault: null, AltitudeFault: null);
 
     public bool IsPresent => Choose() is not null;
 
-    public IPolarCorrector? Current() => Choose() is { } chosen ? new PolarAlignActionsCorrector(chosen.Device.Actions) : null;
+    public IPolarAligner? Current() => Choose() is { } chosen ? new PolarAlignActionsAligner(chosen.Device.Actions) : null;
 
-    public async Task<PolarCorrectorDto> GetAsync(CancellationToken ct) {
+    public async Task<PolarAlignerDto> GetAsync(CancellationToken ct) {
         var chosen = Choose();
         return chosen is null ? None : await Task.Run(() => Read(chosen), ct).ConfigureAwait(false);
     }
@@ -91,56 +91,56 @@ internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDr
     public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
         // A routine that is moving the motors ends its loop first: to it a device Stop alone looks like
         // a finished move, and its next measurement would move them again.
-        if (routine?.Invoke() is { DrivesPolarCorrector: true } driver) {
-            await driver.StopPolarCorrectorAsync().ConfigureAwait(false);
+        if (routine?.Invoke() is { DrivesPolarAligner: true } driver) {
+            await driver.StopPolarAlignerAsync().ConfigureAwait(false);
         }
-        return await CommandAsync(c => c.Stop(), "polarcorrector.stop", idempotencyKey).ConfigureAwait(false);
+        return await CommandAsync(c => c.Stop(), "polaraligner.stop", idempotencyKey).ConfigureAwait(false);
     }
 
     public Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct) =>
-        routine?.Invoke() is { DrivesPolarCorrector: true }
-            ? throw new InvalidOperationException("polar alignment is moving the Polar Corrector; stop the motors first")
-            : CommandAsync(c => c.Home(), "polarcorrector.home", idempotencyKey);
+        routine?.Invoke() is { DrivesPolarAligner: true }
+            ? throw new InvalidOperationException("polar alignment is moving the Polar Aligner; stop the motors first")
+            : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
 
     private Chosen? Choose() {
         var sw = switches.ConnectedActionCarriers()
-            .Where(c => PolarAlignActionsCorrector.IsOfferedBy(c.Actions.SupportedActions))
+            .Where(c => PolarAlignActionsAligner.IsOfferedBy(c.Actions.SupportedActions))
             .OrderBy(c => c.DeviceId, StringComparer.Ordinal)
             .FirstOrDefault();
         if (sw is not null) {
             return new Chosen("switch", sw);
         }
-        var m = mount.ConnectedActionCarriers().FirstOrDefault(c => PolarAlignActionsCorrector.IsOfferedBy(c.Actions.SupportedActions));
+        var m = mount.ConnectedActionCarriers().FirstOrDefault(c => PolarAlignActionsAligner.IsOfferedBy(c.Actions.SupportedActions));
         return m is null ? null : new Chosen("mount", m);
     }
 
-    private async Task<OperationAcceptedDto> CommandAsync(Action<IPolarCorrector> command, string operationType, string? idempotencyKey) {
-        var corrector = Current() ?? throw new InvalidOperationException("no Polar Corrector is connected");
+    private async Task<OperationAcceptedDto> CommandAsync(Action<IPolarAligner> command, string operationType, string? idempotencyKey) {
+        var aligner = Current() ?? throw new InvalidOperationException("no Polar Aligner is connected");
         try {
-            await Task.Run(() => command(corrector), CancellationToken.None).ConfigureAwait(false);
-        } catch (PolarCorrectorException ex) {
+            await Task.Run(() => command(aligner), CancellationToken.None).ConfigureAwait(false);
+        } catch (PolarAlignerException ex) {
             throw new InvalidOperationException(ex.Message, ex);
         }
         return new OperationAcceptedDto(Guid.NewGuid(), operationType, DateTimeOffset.UtcNow, idempotencyKey);
     }
 
-    private PolarCorrectorDto Read(Chosen chosen) {
-        var corrector = new PolarAlignActionsCorrector(chosen.Device.Actions);
-        var info = CachedInfo(chosen.Device.Actions, corrector);
-        PolarCorrectorStatus? status;
+    private PolarAlignerDto Read(Chosen chosen) {
+        var aligner = new PolarAlignActionsAligner(chosen.Device.Actions);
+        var info = CachedInfo(chosen.Device.Actions, aligner);
+        PolarAlignerStatus? status;
         try {
-            status = corrector.Status();
-        } catch (PolarCorrectorException) {
+            status = aligner.Status();
+        } catch (PolarAlignerException) {
             status = null;
         }
-        return new PolarCorrectorDto(
+        return new PolarAlignerDto(
             Present: true,
             Carrier: chosen.Carrier,
             DeviceId: chosen.Carrier == "switch" ? chosen.Device.DeviceId : null,
             Name: chosen.Device.Name,
             Drivable: info?.HostDriven == true,
             NotDrivableReason: info is null ? "info_unreadable" : info.HostDriven ? null : "device_runs_its_own_loop",
-            Capabilities: info is null ? null : new PolarCorrectorCapabilitiesDto(
+            Capabilities: info is null ? null : new PolarAlignerCapabilitiesDto(
                 info.DeviceName, info.DeviceVersion,
                 info.Azimuth?.MaxMoveArcmin, info.Azimuth?.ResolutionArcmin,
                 info.Altitude?.MaxMoveArcmin, info.Altitude?.ResolutionArcmin,
@@ -152,19 +152,19 @@ internal sealed class PolarCorrectorService(IDriverActionsCarriers switches, IDr
             AltitudeFault: status?.Altitude.Fault);
     }
 
-    private PolarCorrectorInfo? CachedInfo(IDriverActions carrier, PolarAlignActionsCorrector corrector) {
+    private PolarAlignerInfo? CachedInfo(IDriverActions carrier, PolarAlignActionsAligner aligner) {
         lock (_gate) {
             if (_info is { } cached && ReferenceEquals(cached.Carrier, carrier)) {
                 return cached.Info;
             }
         }
         try {
-            var info = corrector.Info();
+            var info = aligner.Info();
             lock (_gate) {
                 _info = (carrier, info);
             }
             return info;
-        } catch (PolarCorrectorException) {
+        } catch (PolarAlignerException) {
             return null; // not cached: the next GET asks again
         }
     }

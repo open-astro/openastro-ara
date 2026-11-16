@@ -393,11 +393,11 @@ namespace OpenAstroAra.Test {
             Assert.That(calls, Is.EqualTo(MountRightAfterRuns));
         }
 
-        private static readonly string[] PolarCorrectorFailed = { "stop_polar_corrector" };
-        private static readonly string[] CorrectorRightAfterMount = { "abort", "tracking_off", "corrector", "exposure" };
+        private static readonly string[] PolarAlignerFailed = { "stop_polar_aligner" };
+        private static readonly string[] AlignerRightAfterMount = { "abort", "tracking_off", "aligner", "exposure" };
 
         [Test]
-        public async Task Execute_StopsAPresentPolarCorrector_RightAfterTheMount() {
+        public async Task Execute_StopsAPresentPolarAligner_RightAfterTheMount() {
             var calls = new List<string>();
             telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
                 .Callback(() => calls.Add("abort")).Returns(Task.CompletedTask);
@@ -405,48 +405,48 @@ namespace OpenAstroAra.Test {
                 .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
             camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
                 .Callback(() => calls.Add("exposure")).Returns(Task.CompletedTask);
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(true);
-            corrector.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .Callback(() => calls.Add("corrector")).ReturnsAsync(Accepted);
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(true);
+            aligner.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("aligner")).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
-            Assert.That(calls, Is.EqualTo(CorrectorRightAfterMount));
+            Assert.That(calls, Is.EqualTo(AlignerRightAfterMount));
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
         [Test]
-        public async Task Execute_NoPolarCorrector_IsNotPoked() {
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(false);
+        public async Task Execute_NoPolarAligner_IsNotPoked() {
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(false);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
-            corrector.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            aligner.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
         [Test]
-        public async Task Execute_APolarCorrectorThatRefusesToStop_IsCalledOut_AndTheLadderGoesOn() {
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(true);
-            corrector.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        public async Task Execute_APolarAlignerThatRefusesToStop_IsCalledOut_AndTheLadderGoesOn() {
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(true);
+            aligner.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("motor driver fault"));
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
             Assert.Multiple(() => {
-                Assert.That(result.FailedRungs, Is.EqualTo(PolarCorrectorFailed));
+                Assert.That(result.FailedRungs, Is.EqualTo(PolarAlignerFailed));
                 Assert.That(result.ExposureAborted, Is.True, "the rungs after it still run");
             });
         }

@@ -224,7 +224,7 @@ void main() {
     expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
   });
 
-  testWidgets('a Polar Corrector that would not stop is called out by name (#1971)', (tester) async {
+  testWidgets('a Polar Aligner that would not stop is called out by name (#1971)', (tester) async {
     await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
     fake.result = const EmergencyStopResult(
       alreadyInProgress: false,
@@ -233,14 +233,14 @@ void main() {
       guidingStopped: true,
       mountStopped: true,
       flatPanelLightOff: false,
-      failedRungs: ['stop_polar_corrector'],
+      failedRungs: ['stop_polar_aligner'],
     );
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
     expect(container.read(simpleMessagesProvider).first.title,
-        startsWith('CHECK THE RIG: POLAR CORRECTOR MAY STILL BE MOVING (stop failed)'));
+        startsWith('CHECK THE RIG: POLAR ALIGNER MAY STILL BE MOVING (stop failed)'));
   });
 
   for (final (rung, phrase) in const [

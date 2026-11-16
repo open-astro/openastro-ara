@@ -249,7 +249,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         'stop_bahtinov' => l.estopFailBahtinov,
         'cancel_autofocus' => l.estopFailAutofocus,
         'stop_polar_align' => l.estopFailPolarAlign,
-        'stop_polar_corrector' => l.estopFailPolarCorrector,
+        'stop_polar_aligner' => l.estopFailPolarAligner,
         'stop_guiding' => l.estopFailStopGuiding,
         'stop_mount' => l.estopFailStopMount,
         'halt_rotator' => l.estopFailRotator,

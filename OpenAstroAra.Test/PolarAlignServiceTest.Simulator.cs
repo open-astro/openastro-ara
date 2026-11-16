@@ -27,7 +27,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    // #1971 — the indoor loop: the real routine, the real mount and Polar Corrector services, and the
+    // #1971 — the indoor loop: the real routine, the real mount and Polar Aligner services, and the
     // PolarAlign Alpaca simulator over real HTTP. The simulator's virtual mount reports where a misaligned
     // mount really points, so its reported pointing, read from the simulator, stands in for the camera and the plate solve; nothing
     // here shares code with the simulator's own sky geometry. Run by hand with the simulator listening:
@@ -96,10 +96,10 @@ namespace OpenAstroAra.Test {
             var simLongitude = before.GetProperty("mount").GetProperty("longitude").GetDouble();
             const double longitudeDeg = 10.0;
 
-            // The corrector over real Alpaca: the simulator's Switch through the daemon's own services.
+            // The aligner over real Alpaca: the simulator's Switch through the daemon's own services.
             using var telescope = new TelescopeService();
             using var switches = new SwitchService();
-            var correctorDevice = new DiscoveredDeviceDto("4c8a1f0e-6b1d-4f6a-9a38-0000000000aa", "Simulated corrector", DeviceType.Switch,
+            var alignerDevice = new DiscoveredDeviceDto("4c8a1f0e-6b1d-4f6a-9a38-0000000000aa", "Simulated aligner", DeviceType.Switch,
                 "localhost", "127.0.0.1", 11112, AlpacaDeviceNumber: 0, UseHttps: false);
             // The mount as the routine sees a real one: it reports its own (encoder) coordinates, which are
             // what it was last sent to. The simulator's Telescope reports the true sky pointing instead, for a
@@ -136,11 +136,11 @@ namespace OpenAstroAra.Test {
                 await PutMountAsync(http, "sitelongitude", "SiteLongitude", longitudeDeg.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                 await PutMountAsync(http, "tracking", "Tracking", "true").ConfigureAwait(false);
                 await SlewSimulatorAsync(http, encoder.RADegrees / 15.0, encoder.Dec).ConfigureAwait(false);
-                await switches.ConnectAsync(new ConnectRequestDto(correctorDevice), null, CancellationToken.None).ConfigureAwait(false);
-                var correctors = new PolarCorrectorService(switches, telescope);
+                await switches.ConnectAsync(new ConnectRequestDto(alignerDevice), null, CancellationToken.None).ConfigureAwait(false);
+                var aligners = new PolarAlignerService(switches, telescope);
                 var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-                while (!correctors.IsPresent) {
-                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the simulated corrector did not connect as a Polar Corrector");
+                while (!aligners.IsPresent) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the simulated aligner did not connect as a Polar Aligner");
                     await Task.Delay(50).ConfigureAwait(false);
                 }
                 using (var error = new StringContent(
@@ -154,27 +154,27 @@ namespace OpenAstroAra.Test {
                     ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 60.0, UseHome: false));
                 var ws = new WsRecorder();
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
-                    new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), corrector: correctors);
+                    new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), aligner: aligners);
 
                 await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-                await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrector
-                        && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectorStates.Converged or PolarAlignCorrectorStates.Stopped)
+                await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignAligner
+                        && e.Payload.GetProperty("state").GetString() is PolarAlignAlignerStates.Converged or PolarAlignAlignerStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))
                     .WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
 
                 var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
                 var after = (await SimulatorStateAsync(http).ConfigureAwait(false)).GetProperty("error");
                 await TestContext.Out.WriteLineAsync(FormattableString.Invariant(
-                    $"lat {latitudeDeg}: simulator error set az {azErrorArcmin}′ alt {altErrorArcmin}′; Ara ended {status.Corrector?.State} ({status.Corrector?.Cause}) after {status.Corrector?.Moves} moves, reading {status.CurrentErrorArcmin:F2}′; simulator now az {after.GetProperty("az").GetDouble():F2}′ alt {after.GetProperty("alt").GetDouble():F2}′ total {after.GetProperty("total").GetDouble():F2}′")).ConfigureAwait(false);
+                    $"lat {latitudeDeg}: simulator error set az {azErrorArcmin}′ alt {altErrorArcmin}′; Ara ended {status.Aligner?.State} ({status.Aligner?.Cause}) after {status.Aligner?.Moves} moves, reading {status.CurrentErrorArcmin:F2}′; simulator now az {after.GetProperty("az").GetDouble():F2}′ alt {after.GetProperty("alt").GetDouble():F2}′ total {after.GetProperty("total").GetDouble():F2}′")).ConfigureAwait(false);
                 await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-                Assert.That(status.Corrector?.State, Is.EqualTo(PolarAlignCorrectorStates.Converged), $"stopped: {status.Corrector?.Cause} {status.Corrector?.DeviceText}");
+                Assert.That(status.Aligner?.State, Is.EqualTo(PolarAlignAlignerStates.Converged), $"stopped: {status.Aligner?.Cause} {status.Aligner?.DeviceText}");
                 Assert.That(status.CurrentErrorArcmin, Is.LessThanOrEqualTo(1.0 + 0.3), "Ara's own reading, the 1′ tolerance plus the simulator's noise");
                 // The simulator's truth has no refraction; Ara aims at the refracted pole, about 1′ higher at 40°.
                 var slack = 1.0 + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(latitudeDeg)) + 0.5;
                 Assert.That(after.GetProperty("total").GetDouble(), Is.LessThanOrEqualTo(slack), "the simulator's own measure of the misalignment left");
             } finally {
-                await switches.DisconnectAsync(correctorDevice.UniqueId, null, CancellationToken.None).ConfigureAwait(false);
+                await switches.DisconnectAsync(alignerDevice.UniqueId, null, CancellationToken.None).ConfigureAwait(false);
                 await PutMountAsync(http, "sitelatitude", "SiteLatitude", simLatitude.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                 await PutMountAsync(http, "sitelongitude", "SiteLongitude", simLongitude.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
                 var was = before.GetProperty("error");

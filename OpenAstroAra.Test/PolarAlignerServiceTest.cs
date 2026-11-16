@@ -20,10 +20,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#1972/#1973 — which connected device is the Polar Corrector, what GET reports about it,
+    /// <summary>#1972/#1973 — which connected device is the Polar Aligner, what GET reports about it,
     /// Stop and Home, and the Switch and Telescope services lending their driver actions.</summary>
     [TestFixture]
-    public class PolarCorrectorServiceTest {
+    public class PolarAlignerServiceTest {
 
         private const string HealthyInfo = """
             {"tiers":[1],"deviceName":"PA","deviceVersion":"1.0","axes":{"az":{"maxMove":60,"resolution":0.05},"alt":{"maxMove":30,"resolution":0.1}},
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
             _mount = new Carriers();
         }
 
-        private PolarCorrectorService Build() => new(_switches, _mount);
+        private PolarAlignerService Build() => new(_switches, _mount);
 
         private static ScriptedActions Healthy() {
             var actions = new ScriptedActions("PolarAlign:Info", "PolarAlign:Status");
@@ -73,7 +73,7 @@ namespace OpenAstroAra.Test {
         [TestCase("PolarAlign:Info")]
         [TestCase("polaralign:info")]
         [TestCase("POLARALIGN:INFO")]
-        public void A_device_listing_the_info_action_in_any_case_is_a_polar_corrector(string listed) {
+        public void A_device_listing_the_info_action_in_any_case_is_a_polar_aligner(string listed) {
             _switches.Connected.Add(new("sw", "Power box", new ScriptedActions(listed)));
             Assert.That(Build().Current(), Is.Not.Null, "switch");
 
@@ -83,9 +83,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_device_without_the_info_action_is_not_a_polar_corrector_whatever_its_name() {
-            _switches.Connected.Add(new("sw", "Polar Corrector", new ScriptedActions("PolarAlign:Move", "Other")));
-            _mount.Connected.Add(new("mount", "Polar Corrector mount", new ScriptedActions()));
+        public void A_device_without_the_info_action_is_not_a_polar_aligner_whatever_its_name() {
+            _switches.Connected.Add(new("sw", "Polar Aligner", new ScriptedActions("PolarAlign:Move", "Other")));
+            _mount.Connected.Add(new("mount", "Polar Aligner mount", new ScriptedActions()));
 
             var service = Build();
             Assert.Multiple(() => {
@@ -123,7 +123,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Nothing_connected_is_no_polar_corrector() {
+        public async Task Nothing_connected_is_no_polar_aligner() {
             var service = Build();
             var dto = await service.GetAsync(CancellationToken.None);
 
@@ -159,7 +159,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(dto.Present, Is.True);
                 Assert.That(dto.Drivable, Is.True);
                 Assert.That(dto.NotDrivableReason, Is.Null);
-                Assert.That(dto.Capabilities, Is.EqualTo(new PolarCorrectorCapabilitiesDto(
+                Assert.That(dto.Capabilities, Is.EqualTo(new PolarAlignerCapabilitiesDto(
                     "PA", "1.0", 60, 0.05, 30, 0.1, false, true, false, true, 1.5)));
                 Assert.That(dto.Moving, Is.True);
                 Assert.That(dto.AzimuthPositionArcmin, Is.EqualTo(-4.5));
@@ -257,17 +257,17 @@ namespace OpenAstroAra.Test {
 
             Assert.Multiple(() => {
                 Assert.That(actions.Calls, Is.EqualTo(StopThenHome));
-                Assert.That(stop.OperationType, Is.EqualTo("polarcorrector.stop"));
+                Assert.That(stop.OperationType, Is.EqualTo("polaraligner.stop"));
                 Assert.That(stop.IdempotencyKey, Is.EqualTo("k1"));
-                Assert.That(home.OperationType, Is.EqualTo("polarcorrector.home"));
+                Assert.That(home.OperationType, Is.EqualTo("polaraligner.home"));
             });
         }
 
-        private sealed class FakeRoutine(ScriptedActions device) : IPolarCorrectorDriver {
-            public bool DrivesPolarCorrector { get; set; } = true;
-            public Task StopPolarCorrectorAsync() {
+        private sealed class FakeRoutine(ScriptedActions device) : IPolarAlignerDriver {
+            public bool DrivesPolarAligner { get; set; } = true;
+            public Task StopPolarAlignerAsync() {
                 device.Calls.Enqueue("routine stops its motor loop");
-                DrivesPolarCorrector = false;
+                DrivesPolarAligner = false;
                 return Task.CompletedTask;
             }
         }
@@ -281,7 +281,7 @@ namespace OpenAstroAra.Test {
             var actions = Healthy();
             _switches.Connected.Add(new("sw", "Base", actions));
             var routine = new FakeRoutine(actions);
-            var service = new PolarCorrectorService(_switches, _mount, () => routine);
+            var service = new PolarAlignerService(_switches, _mount, () => routine);
 
             await service.StopAsync(null, CancellationToken.None);
 
@@ -292,7 +292,7 @@ namespace OpenAstroAra.Test {
         public async Task Home_is_refused_while_a_routine_moves_the_motors() {
             var actions = Healthy();
             _switches.Connected.Add(new("sw", "Base", actions));
-            var service = new PolarCorrectorService(_switches, _mount, () => new FakeRoutine(actions));
+            var service = new PolarAlignerService(_switches, _mount, () => new FakeRoutine(actions));
 
             await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
             Assert.That(actions.Calls, Is.Empty, "nothing reached the device");
@@ -301,7 +301,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),
-                Throws.InvalidOperationException.With.Message.EqualTo("no Polar Corrector is connected"));
+                Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));
             await Assert.ThatAsync(() => Build().HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
         }
 
@@ -339,7 +339,7 @@ namespace OpenAstroAra.Test {
             fake.Actions.Add("PolarAlign:Info");
             using var switches = new SwitchService { RefreshPeriod = TimeSpan.FromMilliseconds(20), DeviceFactory = _ => fake };
             using var telescope = new TelescopeService();
-            var service = new PolarCorrectorService(switches, telescope);
+            var service = new PolarAlignerService(switches, telescope);
             await switches.ConnectAsync(new ConnectRequestDto(Device("pa-box", DeviceType.Switch)), null, CancellationToken.None);
             await WaitForAsync(() => switches.ActionsFor("pa-box") is not null, "the switch's actions");
 
@@ -349,7 +349,7 @@ namespace OpenAstroAra.Test {
 
             await switches.DisconnectAsync("pa-box", null, CancellationToken.None);
             Assert.Multiple(() => {
-                Assert.That(service.Current(), Is.Null, "a disconnected carrier is no Polar Corrector");
+                Assert.That(service.Current(), Is.Null, "a disconnected carrier is no Polar Aligner");
                 Assert.That(switches.ActionsFor("pa-box"), Is.Null);
                 Assert.Throws<ASCOM.NotConnectedException>(() => carrier.Action("PolarAlign:Stop", string.Empty),
                     "a held carrier refuses once its connection is gone");
@@ -363,7 +363,7 @@ namespace OpenAstroAra.Test {
             fake.Actions.Add("polaralign:info");
             using var switches = new SwitchService();
             using var telescope = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(20), DeviceFactory = _ => fake };
-            var service = new PolarCorrectorService(switches, telescope);
+            var service = new PolarAlignerService(switches, telescope);
             await telescope.ConnectAsync(new ConnectRequestDto(Device("mount", DeviceType.Telescope)), null, CancellationToken.None);
             await WaitForAsync(() => telescope.MountActions() is not null, "the mount's actions");
 

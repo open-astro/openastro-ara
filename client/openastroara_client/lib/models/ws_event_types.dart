@@ -38,7 +38,7 @@ abstract final class WsEventTypes {
   static const String polarAlignStage = 'polar_align.stage';
   static const String polarAlignNeedsHome = 'polar_align.needs_home';
   static const String polarAlignChecked = 'polar_align.checked';
-  static const String polarAlignCorrector = 'polar_align.corrector';
+  static const String polarAlignAligner = 'polar_align.aligner';
   static const String autofocusCollimationVerdict =
       'autofocus.collimation_verdict';
   static const String autofocusStarted = 'autofocus.started';

@@ -117,8 +117,8 @@ class PolarAlignLastResult {
   }
 }
 
-/// #1971 the Polar Corrector's run states (`PolarAlignCorrectorDto.state`).
-abstract final class PolarCorrectorStates {
+/// #1971 the Polar Aligner's run states (`PolarAlignAlignerDto.state`).
+abstract final class PolarAlignerStates {
   static const manual = 'manual';
   static const probing = 'probing';
   static const moving = 'moving';
@@ -128,9 +128,9 @@ abstract final class PolarCorrectorStates {
   static const stopped = 'stopped';
 }
 
-/// Why the motors stopped (`PolarAlignCorrectorDto.cause`), as the daemon's
-/// `PolarAlignCorrectorCauses` declares them.
-abstract final class PolarCorrectorCauses {
+/// Why the motors stopped (`PolarAlignAlignerDto.cause`), as the daemon's
+/// `PolarAlignAlignerCauses` declares them.
+abstract final class PolarAlignerCauses {
   static const wrongDirection = 'wrong_direction';
   static const wrongScale = 'wrong_scale';
   static const deviceFault = 'device_fault';
@@ -149,10 +149,10 @@ abstract final class PolarCorrectorCauses {
   ];
 }
 
-/// The Polar Corrector in a running routine: `corrector` on the status and
-/// the `polar_align.corrector` payload. [arcmin] is signed as sent (+ azimuth
+/// The Polar Aligner in a running routine: `aligner` on the status and
+/// the `polar_align.aligner` payload. [arcmin] is signed as sent (+ azimuth
 /// = clockwise seen from above, + altitude = raise).
-class PolarCorrectorRun {
+class PolarAlignerRun {
   final String state;
   final int moves;
 
@@ -163,7 +163,7 @@ class PolarCorrectorRun {
   final String? cause;
   final String? deviceText;
 
-  const PolarCorrectorRun({
+  const PolarAlignerRun({
     required this.state,
     this.moves = 0,
     this.axis,
@@ -174,10 +174,10 @@ class PolarCorrectorRun {
   });
 
   /// Null for anything that is not an object with a state.
-  static PolarCorrectorRun? tryParse(Object? json) {
+  static PolarAlignerRun? tryParse(Object? json) {
     if (json is! Map || json['state'] is! String) return null;
     String? s(String k) => json[k] is String ? json[k] as String : null;
-    return PolarCorrectorRun(
+    return PolarAlignerRun(
       state: json['state'] as String,
       moves: (json['moves'] as num?)?.toInt() ?? 0,
       axis: s('axis'),
@@ -190,17 +190,17 @@ class PolarCorrectorRun {
 
   /// The motors are working: a move, its settle or the measurement after it.
   bool get motorsBusy =>
-      state == PolarCorrectorStates.probing ||
-      state == PolarCorrectorStates.moving ||
-      state == PolarCorrectorStates.settling ||
-      state == PolarCorrectorStates.measuring;
+      state == PolarAlignerStates.probing ||
+      state == PolarAlignerStates.moving ||
+      state == PolarAlignerStates.settling ||
+      state == PolarAlignerStates.measuring;
 }
 
-/// The rig's Polar Corrector (`GET /api/v1/equipment/polarcorrector`), derived
+/// The rig's Polar Aligner (`GET /api/v1/equipment/polaraligner`), derived
 /// by the daemon: there is no stored choice. A null position is a device that
 /// does not report it, never 0. Capabilities and faults are not read: nothing
 /// in the app shows them.
-class PolarCorrector {
+class PolarAligner {
   final bool present;
 
   /// `mount` | `switch`.
@@ -214,7 +214,7 @@ class PolarCorrector {
   final double? azimuthPositionArcmin;
   final double? altitudePositionArcmin;
 
-  const PolarCorrector({
+  const PolarAligner({
     this.present = false,
     this.carrier,
     this.name,
@@ -225,7 +225,7 @@ class PolarCorrector {
     this.altitudePositionArcmin,
   });
 
-  factory PolarCorrector.fromJson(Map<String, dynamic> json) => PolarCorrector(
+  factory PolarAligner.fromJson(Map<String, dynamic> json) => PolarAligner(
         present: json['present'] == true,
         carrier: json['carrier'] is String ? json['carrier'] as String : null,
         name: json['name'] is String ? json['name'] as String : null,
@@ -309,8 +309,8 @@ class PolarAlignStatus {
   /// #1565 — null from an older daemon or before any routine ended.
   final PolarAlignLastResult? lastResult;
 
-  /// #1971 null without a Polar Corrector Ara drives, or before its first measurement.
-  final PolarCorrectorRun? corrector;
+  /// #1971 null without a Polar Aligner Ara drives, or before its first measurement.
+  final PolarAlignerRun? aligner;
 
   const PolarAlignStatus({
     required this.state,
@@ -326,7 +326,7 @@ class PolarAlignStatus {
     this.checkSolvesDone = 0,
     this.checkResult,
     this.lastResult,
-    this.corrector,
+    this.aligner,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -348,7 +348,7 @@ class PolarAlignStatus {
             ? PolarAlignCheckResult.fromJson(json['check_result'] as Map<String, dynamic>)
             : null,
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
-        corrector: PolarCorrectorRun.tryParse(json['corrector']),
+        aligner: PolarAlignerRun.tryParse(json['aligner']),
       );
 
   /// True while the server is running any phase of the routine.
@@ -380,8 +380,8 @@ class PolarAlignSettings {
   /// Coarse and check stages send the mount Home first.
   final bool useHome;
 
-  /// #1971 the routine turns the Polar Corrector's motors (off: by hand).
-  final bool polarCorrectorAuto;
+  /// #1971 the routine turns the Polar Aligner's motors (off: by hand).
+  final bool polarAlignerAuto;
 
   const PolarAlignSettings({
     this.exposureSeconds = 1.0,
@@ -394,7 +394,7 @@ class PolarAlignSettings {
     this.checkStepDeg = 30.0,
     this.coarseExposureSeconds = 3.0,
     this.useHome = true,
-    this.polarCorrectorAuto = true,
+    this.polarAlignerAuto = true,
   });
 
   factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
@@ -413,7 +413,7 @@ class PolarAlignSettings {
         coarseExposureSeconds:
             (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
         useHome: json['use_home'] != false,
-        polarCorrectorAuto: json['polar_corrector_auto'] != false,
+        polarAlignerAuto: json['polar_aligner_auto'] != false,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -427,7 +427,7 @@ class PolarAlignSettings {
         'check_step_deg': checkStepDeg,
         'coarse_exposure_seconds': coarseExposureSeconds,
         'use_home': useHome,
-        'polar_corrector_auto': polarCorrectorAuto,
+        'polar_aligner_auto': polarAlignerAuto,
       };
 
   PolarAlignSettings copyWith({
@@ -441,7 +441,7 @@ class PolarAlignSettings {
     double? checkStepDeg,
     double? coarseExposureSeconds,
     bool? useHome,
-    bool? polarCorrectorAuto,
+    bool? polarAlignerAuto,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -456,6 +456,6 @@ class PolarAlignSettings {
         coarseExposureSeconds:
             coarseExposureSeconds ?? this.coarseExposureSeconds,
         useHome: useHome ?? this.useHome,
-        polarCorrectorAuto: polarCorrectorAuto ?? this.polarCorrectorAuto,
+        polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
       );
 }

@@ -2372,7 +2372,7 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/corrector/stop:
+  /api/v1/equipment/polaralign/aligner/stop:
     post:
       tags:
         - Equipment
@@ -2384,7 +2384,7 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/corrector/resume:
+  /api/v1/equipment/polaralign/aligner/resume:
     post:
       tags:
         - Equipment
@@ -2396,25 +2396,25 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polarcorrector:
+  /api/v1/equipment/polaraligner:
     get:
       tags:
         - Equipment
-      summary: 'The rig''s Polar Corrector, its capabilities and its position on each axis.'
-      operationId: GetPolarCorrector
+      summary: 'The rig''s Polar Aligner, its capabilities and its position on each axis.'
+      operationId: GetPolarAligner
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolarCorrectorDto'
-  /api/v1/equipment/polarcorrector/stop:
+                $ref: '#/components/schemas/PolarAlignerDto'
+  /api/v1/equipment/polaraligner/stop:
     post:
       tags:
         - Equipment
-      summary: Stop both axes of the Polar Corrector.
-      operationId: StopPolarCorrector
+      summary: Stop both axes of the Polar Aligner.
+      operationId: StopPolarAligner
       parameters:
         - name: Idempotency-Key
           in: header
@@ -2433,12 +2433,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  /api/v1/equipment/polarcorrector/home:
+  /api/v1/equipment/polaraligner/home:
     post:
       tags:
         - Equipment
-      summary: Send the Polar Corrector to its home position.
-      operationId: HomePolarCorrector
+      summary: Send the Polar Aligner to its home position.
+      operationId: HomePolarAligner
       parameters:
         - name: Idempotency-Key
           in: header
@@ -14129,6 +14129,131 @@ components:
             - number
             - string
           format: double
+    PolarAlignerCapabilitiesDto:
+      required:
+        - device_name
+        - device_version
+        - azimuth_max_move_arcmin
+        - azimuth_resolution_arcmin
+        - altitude_max_move_arcmin
+        - altitude_resolution_arcmin
+        - simultaneous_moves
+        - moves_while_tracking
+        - moves_while_slewing
+        - can_stop
+        - settle_seconds
+      type: object
+      properties:
+        device_name:
+          type: string
+        device_version:
+          type: string
+        azimuth_max_move_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        azimuth_resolution_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_max_move_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_resolution_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        simultaneous_moves:
+          type: boolean
+        moves_while_tracking:
+          type: boolean
+        moves_while_slewing:
+          type: boolean
+        can_stop:
+          type: boolean
+        settle_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    PolarAlignerDto:
+      required:
+        - present
+        - carrier
+        - device_id
+        - name
+        - drivable
+        - not_drivable_reason
+        - capabilities
+        - moving
+        - azimuth_position_arcmin
+        - altitude_position_arcmin
+        - azimuth_fault
+        - altitude_fault
+      type: object
+      properties:
+        present:
+          type: boolean
+        carrier:
+          type:
+            - 'null'
+            - string
+        device_id:
+          type:
+            - 'null'
+            - string
+        name:
+          type:
+            - 'null'
+            - string
+        drivable:
+          type: boolean
+        not_drivable_reason:
+          type:
+            - 'null'
+            - string
+        capabilities:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignerCapabilitiesDto'
+        moving:
+          type: boolean
+        azimuth_position_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_position_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        azimuth_fault:
+          type:
+            - 'null'
+            - string
+        altitude_fault:
+          type:
+            - 'null'
+            - string
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -14194,138 +14319,13 @@ components:
         use_home:
           type: boolean
           default: true
-        polar_corrector_auto:
+        polar_aligner_auto:
           type: boolean
           default: true
     PolarAlignStartRequestDto:
       type: object
       properties:
         stage:
-          type:
-            - 'null'
-            - string
-    PolarCorrectorCapabilitiesDto:
-      required:
-        - device_name
-        - device_version
-        - azimuth_max_move_arcmin
-        - azimuth_resolution_arcmin
-        - altitude_max_move_arcmin
-        - altitude_resolution_arcmin
-        - simultaneous_moves
-        - moves_while_tracking
-        - moves_while_slewing
-        - can_stop
-        - settle_seconds
-      type: object
-      properties:
-        device_name:
-          type: string
-        device_version:
-          type: string
-        azimuth_max_move_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        azimuth_resolution_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        altitude_max_move_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        altitude_resolution_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        simultaneous_moves:
-          type: boolean
-        moves_while_tracking:
-          type: boolean
-        moves_while_slewing:
-          type: boolean
-        can_stop:
-          type: boolean
-        settle_seconds:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-    PolarCorrectorDto:
-      required:
-        - present
-        - carrier
-        - device_id
-        - name
-        - drivable
-        - not_drivable_reason
-        - capabilities
-        - moving
-        - azimuth_position_arcmin
-        - altitude_position_arcmin
-        - azimuth_fault
-        - altitude_fault
-      type: object
-      properties:
-        present:
-          type: boolean
-        carrier:
-          type:
-            - 'null'
-            - string
-        device_id:
-          type:
-            - 'null'
-            - string
-        name:
-          type:
-            - 'null'
-            - string
-        drivable:
-          type: boolean
-        not_drivable_reason:
-          type:
-            - 'null'
-            - string
-        capabilities:
-          oneOf:
-            - type: 'null'
-            - $ref: '#/components/schemas/PolarCorrectorCapabilitiesDto'
-        moving:
-          type: boolean
-        azimuth_position_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        altitude_position_arcmin:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        azimuth_fault:
-          type:
-            - 'null'
-            - string
-        altitude_fault:
           type:
             - 'null'
             - string

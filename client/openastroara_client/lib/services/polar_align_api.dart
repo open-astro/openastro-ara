@@ -142,13 +142,13 @@ class PolarAlignApi implements PolarAlignClient {
   void close() => _dio.close(force: true);
 }
 
-/// #1971 the rig's Polar Corrector: the device (`/api/v1/equipment/polarcorrector`,
+/// #1971 the rig's Polar Aligner: the device (`/api/v1/equipment/polaraligner`,
 /// its stop and home) and its motors in a running routine
-/// (`/api/v1/equipment/polaralign/corrector/{stop,resume}`). The commands are
+/// (`/api/v1/equipment/polaralign/aligner/{stop,resume}`). The commands are
 /// 202-Accepted; a refusal is a 409 whose detail is a sentence for people.
-abstract interface class PolarCorrectorClient {
-  /// Null on a 404: a daemon that predates the Polar Corrector.
-  Future<PolarCorrector?> get();
+abstract interface class PolarAlignerClient {
+  /// Null on a 404: a daemon that predates the Polar Aligner.
+  Future<PolarAligner?> get();
   Future<void> stop();
   Future<void> home();
 
@@ -160,10 +160,10 @@ abstract interface class PolarCorrectorClient {
   void close();
 }
 
-class PolarCorrectorApi implements PolarCorrectorClient {
+class PolarAlignerApi implements PolarAlignerClient {
   final Dio _dio;
 
-  PolarCorrectorApi(AraServer server, {Dio? dio})
+  PolarAlignerApi(AraServer server, {Dio? dio})
     : _dio =
           dio ??
           Dio(
@@ -175,11 +175,11 @@ class PolarCorrectorApi implements PolarCorrectorClient {
           );
 
   @override
-  Future<PolarCorrector?> get() async {
+  Future<PolarAligner?> get() async {
     try {
-      final res = await _dio.get<dynamic>('/api/v1/equipment/polarcorrector');
+      final res = await _dio.get<dynamic>('/api/v1/equipment/polaraligner');
       final data = res.data;
-      return data is Map<String, dynamic> ? PolarCorrector.fromJson(data) : null;
+      return data is Map<String, dynamic> ? PolarAligner.fromJson(data) : null;
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       rethrow;
@@ -187,16 +187,16 @@ class PolarCorrectorApi implements PolarCorrectorClient {
   }
 
   @override
-  Future<void> stop() => _dio.post<void>('/api/v1/equipment/polarcorrector/stop');
+  Future<void> stop() => _dio.post<void>('/api/v1/equipment/polaraligner/stop');
 
   @override
-  Future<void> home() => _dio.post<void>('/api/v1/equipment/polarcorrector/home');
+  Future<void> home() => _dio.post<void>('/api/v1/equipment/polaraligner/home');
 
   @override
-  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/corrector/stop');
+  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/aligner/stop');
 
   @override
-  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/corrector/resume');
+  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/aligner/resume');
 
   @override
   void close() => _dio.close(force: true);
