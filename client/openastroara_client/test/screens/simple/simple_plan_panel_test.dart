@@ -484,10 +484,10 @@ void main() {
   });
 
   test('the plan square\'s catalog tag: a region\'s own, else M > NGC > IC > Sh2 > B > LBN, else none', () {
-    expect(simpleTargetTag('Horsehead + Flame region (IC 434)', ['IC0434']), 'IC 434');
-    expect(simpleTargetTag('Question Mark region (NGC 7822 / Ced 214)', ['NGC7822']), 'NGC 7822');
+    expect(simpleTargetTag('Horsehead + Flame region', ['IC0434', 'LBN 953']), 'IC 434');
+    expect(simpleTargetTag('Question Mark region', ['NGC7822']), 'NGC 7822');
     expect(simpleTargetTag('Spaghetti Nebula (Simeis 147)', ['REGION-SIMEIS-147']), 'Simeis 147');
-    expect(simpleTargetTag('Orion Nebula + Running Man (M42)', ['NGC1976']), 'M 42');
+    expect(simpleTargetTag('Orion Nebula + Running Man', ['NGC1976', 'M 42']), 'M 42');
     expect(simpleTargetTag('Rho Ophiuchi cloud complex', ['REGION-RHO-OPH']), isNull);
     // A sky pick: the page's designations.
     expect(simpleTargetTag('Horsehead Nebula', ['NAME Horsehead Nebula', 'B 33', 'LDN 1630']), 'B 33');
@@ -500,7 +500,7 @@ void main() {
 
   test('a tonight\'s-best pick carries its id and aliases; the page\'s pick its designations', () {
     final o = TonightSkyObject(
-        id: 'IC0434', name: 'Horsehead + Flame region (IC 434)', type: 'HII', magnitude: null, raDeg: 85.25,
+        id: 'IC0434', name: 'Horsehead + Flame region', type: 'HII', magnitude: null, raDeg: 85.25,
         decDeg: -2.45, altitudeDeg: 30, maxAltitudeDeg: 50, aliases: const ['LBN 953']);
     expect(simpleSelectionOf(o).designations, ['IC0434', 'LBN 953']);
     final page = PlanetariumSelection.tryFromJson(const {
@@ -1390,6 +1390,38 @@ void main() {
       expect(find.text('NGC0246'), findsNothing);
     });
 
+    testWidgets('a curated Messier region reads Orion Nebula + Running Man (M 42) on its tiles and the plan header, not (NGC 1976)',
+        (tester) async {
+      const orion = PlanningDso(
+          id: 'NGC1976', name: 'Orion Nebula + Running Man', type: 'HII', magnitude: 4, raDeg: 83.82, decDeg: -5.39,
+          aliases: ['M 42']);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          tonight: [
+            TonightSkyObject(
+                id: 'NGC1976', name: 'Orion Nebula + Running Man', type: 'HII', magnitude: 4, raDeg: 83.82,
+                decDeg: -5.39, altitudeDeg: 40, maxAltitudeDeg: 60, aliases: const ['M 42']),
+          ],
+          overrides: [
+            ..._rig,
+            bundledCatalogProvider.overrideWith((ref) async => const [orion]),
+            simpleRecentProvider.overrideWith((ref) => [
+                  (name: 'Orion Nebula + Running Man', raDeg: 83.82, decDeg: -5.39, when: DateTime.utc(2026, 11, 9)),
+                ]),
+          ]);
+      const title = 'Orion Nebula + Running Man (M 42)';
+      expect(find.text(title), findsNWidgets(2), reason: "one Tonight's Best tile, one Recent tile: M before NGC");
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-Orion Nebula + Running Man')));
+      await tester.pump();
+      expect(find.text(title), findsNWidgets(3), reason: "the plan header after a Tonight's Best tap agrees");
+      await tester.tap(find.byKey(const Key('simple-run-recent-0')));
+      await tester.pump();
+      expect(find.text(title), findsNWidgets(3), reason: 'and after a Recent tap');
+    });
+
     testWidgets("a Recent target saved under an alias, M 31, reads Andromeda Galaxy (M 31) on the tile and the plan header",
         (tester) async {
       await _pump(
@@ -1868,7 +1900,7 @@ void main() {
 
   testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {
     const region = PlanetariumSelection(
-        name: 'Horsehead + Flame region (IC 434)', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
+        name: 'Horsehead + Flame region', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
         decJ2000Deg: -2.45, altDeg: 30, maxAltDeg: 50, designations: ['IC0434']);
     final (_, _) = await run(tester, sel: region);
     expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');

@@ -172,7 +172,10 @@ PlanetariumSelection simpleSelectionOf(
   altDeg: o.altitudeDeg,
   maxAltDeg: o.maxAltitudeDeg,
   rise: o.windowStartUtc?.toLocal(),
-  designations: _pickedFirst(designation, [o.id, ...o.aliases]),
+  designations: _pickedFirst(
+    designation ?? bestCatalogDesignation([o.id, ...o.aliases]),
+    [o.id, ...o.aliases],
+  ),
 );
 
 /// A position's altitude above the site at [utc], in degrees. Pure —
@@ -1053,6 +1056,17 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     // and a pick that keeps it.
     final names = ref.watch(bundledNameIndexProvider);
     final recentRows = [for (final r in recent) names.lookup(r.name)];
+    // What a Recent tile and its tap lead with: the saved designation (M 31),
+    // else the row's best one; a saved common name is not a designation (#1957).
+    final recentLeads = [
+      for (final (i, r) in recent.indexed)
+        isCatalogDesignation(r.name)
+            ? r.name
+            : switch (recentRows[i]) {
+                final row? => bestCatalogDesignation([row.id, ...row.aliases]) ?? row.id,
+                null => r.name,
+              },
+    ];
     final site = ref.watch(siteSettingsProvider);
     final span = ref.watch(simpleRestOfNightProvider);
     // Null: unknown (no site set, or no night ahead), never zero hours.
@@ -1088,7 +1102,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-suggestion-${o.name}'),
                 width: tileWidth,
-                title: designationWithName(o.id, o.name),
+                title: designationWithName(
+                  bestCatalogDesignation([o.id, ...o.aliases]) ?? o.id,
+                  o.name,
+                ),
                 line: simpleSuggestionLine(context.l10n, o),
                 selected: picked(o.name) || picked(o.id),
                 onTap: () => ref
@@ -1110,12 +1127,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-recent-$i'),
                 width: tileWidth,
-                // The saved designation (M 31), else the row's id: a saved
-                // common name is not a designation (#1957).
-                title: designationWithName(
-                  isCatalogDesignation(r.name) ? r.name : recentRows[i]?.id ?? r.name,
-                  recentRows[i]?.name ?? '',
-                ),
+                title: designationWithName(recentLeads[i], recentRows[i]?.name ?? ''),
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),
@@ -1148,7 +1160,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                               raDeg: r.raDeg,
                               decDeg: r.decDeg,
                             ),
-                        designation: r.name,
+                        designation: recentLeads[i],
                       ),
                     ),
               ),

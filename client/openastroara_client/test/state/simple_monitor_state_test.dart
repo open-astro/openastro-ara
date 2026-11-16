@@ -477,6 +477,13 @@ void main() {
       expect((s.upNext.first.kind, s.upNext.first.name, s.upNext.first.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
       expect(s.upNext.last.name, 'Skull Nebula (NGC 246)');
     });
+
+    test("no plan: a curated Messier region in tonight's best leads with its M number", () async {
+      final r = await _rig(plan: const SimpleRun(), sky: [
+        TonightSkyObject.fromJson({'id': 'NGC1976', 'name': 'Orion Nebula + Running Man', 'type': 'HII', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0, 'aliases': ['M 42']})!,
+      ]);
+      expect(r.read().upNext.first.name, 'Orion Nebula + Running Man (M 42)');
+    });
   });
 
   group('the meridian flip tile', () {
