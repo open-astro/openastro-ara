@@ -4,6 +4,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:collection/collection.dart' show lowerBound;
+
 import '../../models/preflight_checklist.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
@@ -96,12 +98,14 @@ List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) =>
 /// False for a frame without pointing or pixel scale (those use [targetNames]).
 bool frameContains(AlbumFrame f, PlanningDso o) {
   if (!f.hasPosition) return false;
-  final radiusArcmin =
-      math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60;
-  // 1e-9': the edge itself counts, whatever the last bit of the trigonometry says.
   return separationArcmin(f.raDeg!, f.decDeg!, o.raDeg, o.decDeg) <=
-      radiusArcmin + 1e-9;
+      _reachArcmin(f);
 }
+
+/// How far from a position frame's centre [frameContains] credits: half the short side, plus
+/// 1e-9' so the edge itself counts, whatever the last bit of the trigonometry says.
+double _reachArcmin(AlbumFrame f) =>
+    math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60 + 1e-9;
 
 /// The alias fallback: [target] (a frame's target name) names [o] when it
 /// equals the object's id, name or an alias after folding case, spacing, zero
@@ -213,17 +217,58 @@ Map<String, CardStats> aggregateBook(
       final t = (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch);
       return t != 0 ? t : a.frameId.compareTo(b.frameId);
     });
+  // Indexed once per call, each only if a frame needs it: testing all ~8k objects of a Book
+  // against each of thousands of frames froze the Album.
+  late final contained = _containedIn(book);
+  late final named = _byTargetKey(book);
   final hits = <String, List<AlbumFrame>>{};
   for (final f in ordered) {
-    for (final o in book) {
-      if (f.hasPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
-        hits.putIfAbsent(o.id, () => []).add(f);
-      }
+    for (final i in f.hasPosition ? contained(f) : named[_albumKey(f.targetName)] ?? const <int>[]) {
+      hits.putIfAbsent(book[i].id, () => []).add(f);
     }
   }
   return {
     for (final MapEntry(key: id, value: fs) in hits.entries) id: _stats(fs, siteLongitudeDeg),
   };
+}
+
+/// The [book] indices, ascending, of the objects a position frame contains ([frameContains]).
+/// Only the objects within its reach in declination are tested: no point of its circle is
+/// further than that from the centre in declination.
+List<int> Function(AlbumFrame) _containedIn(List<PlanningDso> book) {
+  final byDec = [for (var i = 0; i < book.length; i++) i]
+    ..sort((a, b) => book[a].decDeg.compareTo(book[b].decDeg));
+  final decs = [for (final i in byDec) book[i].decDeg];
+  // The band rule holds on the sphere only; a declination past a pole is corrupt, so tested
+  // object by object, as before.
+  final onSphere = decs.every((d) => d.abs() <= 90);
+  return (f) {
+    final dec = f.decDeg!;
+    if (!onSphere || dec.abs() > 90) {
+      return [for (var i = 0; i < book.length; i++) if (frameContains(f, book[i])) i];
+    }
+    // 1e-6 deg: far above the rounding of the trigonometry and of the bounds.
+    final band = _reachArcmin(f) / 60 + 1e-6;
+    return [
+      for (var j = lowerBound(decs, dec - band); j < decs.length && decs[j] <= dec + band; j++)
+        if (frameContains(f, book[byDec[j]])) byDec[j],
+    ]..sort();
+  };
+}
+
+/// The [book] indices, ascending, of the objects with an id, name or alias that [targetNames]
+/// folds to each key: a name-only frame is one lookup.
+Map<String, List<int>> _byTargetKey(List<PlanningDso> book) {
+  final out = <String, List<int>>{};
+  for (var i = 0; i < book.length; i++) {
+    final o = book[i];
+    // Each key once per object: a frame credits it once, however many designations fold alike.
+    for (final k in {for (final d in [o.id, o.name, ...o.aliases]) _albumKey(d)}) {
+      // An empty key names nothing ([targetNames]).
+      if (k.isNotEmpty) out.putIfAbsent(k, () => []).add(i);
+    }
+  }
+  return out;
 }
 
 CardStats _stats(List<AlbumFrame> fs, double? siteLongitudeDeg) {
