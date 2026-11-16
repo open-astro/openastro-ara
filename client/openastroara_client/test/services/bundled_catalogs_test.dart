@@ -344,6 +344,29 @@ void main() {
       expect(searchSuggestions(bundle, 'War and Peace').length, 1);
     });
 
+    test('the NGC, IC and Sharpless Books have the pinned Card counts and known objects (#1887)', () {
+      final counts = {for (final b in AlbumBook.values) b: bookObjects(bundle, b).length};
+      expect(counts, {
+        AlbumBook.messier: 110,
+        AlbumBook.caldwell: 109,
+        AlbumBook.rcw: 181,
+        AlbumBook.ngc: 7996,
+        AlbumBook.ic: 5341,
+        AlbumBook.sharpless: 312,
+      });
+      expect(bookLabel(findCatalogObject(bundle, 'NGC 891')!, AlbumBook.ngc), 'NGC 891');
+      expect(bookLabel(findCatalogObject(bundle, 'IC 1805')!, AlbumBook.ic), 'IC 1805');
+      expect(bookLabel(findCatalogObject(bundle, 'Sh2-129')!, AlbumBook.sharpless), 'Sh2-129');
+    });
+
+    test('every common-names key names a row in the bundle, and a new nickname finds its object (#1887)', () {
+      final ids = {for (final d in bundle) d.id};
+      expect([for (final k in commonNames.keys) if (!ids.contains(k)) k], isEmpty);
+      expect(findCatalogObject(bundle, "Thor's Helmet")!.id, 'NGC2359');
+      expect(findCatalogObject(bundle, 'Heart Nebula')!.id, 'IC1805');
+      expect(searchSuggestions(bundle, 'Lion Nebula').first.dso.id, 'Sh2-132');
+    });
+
     test('the Catalogs overlay lists RCW next to Sharpless (#1629)', () {
       final ids = catalogOverlayInfos().map((m) => m['id']).toList();
       expect(ids, contains('rcw'));

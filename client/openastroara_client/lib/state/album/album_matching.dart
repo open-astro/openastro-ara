@@ -11,51 +11,85 @@ import 'album_art.dart';
 import 'album_frame.dart';
 
 /// The Books in display order. An object is a Card in every Book that claims it (RCW
-/// overlaps Messier and Caldwell); with several shown, it shows as its first Book's
-/// Card. A fourth Book is one more value here.
-enum AlbumBook { messier, caldwell, rcw }
+/// overlaps Messier and Caldwell, NGC overlaps all three); with several shown, it shows
+/// as its first Book's Card. One more Book is one more value here, its claim pattern and
+/// its label.
+enum AlbumBook { messier, caldwell, rcw, ngc, ic, sharpless }
 
 enum AlbumTier { bronze, silver, gold }
 
-final RegExp _rcwDesignation = RegExp(r'^RCW (\d+)$');
+/// What a catalog-file Book claims through: `RCW n`, `NGC n[A]`, `IC n[A]`, `Sh2-n`, on the
+/// id or an alias, zero padding and a space after the prefix tolerated.
+final Map<AlbumBook, RegExp> _claimPatterns = {
+  AlbumBook.rcw: RegExp(r'^RCW\s?0*(\d+)()$'),
+  AlbumBook.ngc: RegExp(r'^NGC\s?0*(\d+)([A-Z]?)$'),
+  AlbumBook.ic: RegExp(r'^IC\s?0*(\d+)([A-Z]?)$'),
+  AlbumBook.sharpless: RegExp(r'^Sh2-0*(\d+)()$'),
+};
 
-/// The RCW number of [d]: the lowest `RCW n` among its id and aliases (a nebula that
-/// carries two RCW numbers is one Card, labelled by the first), null without one.
-/// Worked out once per row: until its Books are matched the Album asks it of every
-/// catalog row on each build.
-int? rcwNumOf(PlanningDso d) => (_rcwNums[d] ??= (_scanRcwNum(d),)).$1;
+/// [d]'s number and letter suffix in [book] ("" without one).
+typedef _Claim = ({int number, String suffix});
 
-final Expando<(int?,)> _rcwNums = Expando('rcwNum');
+/// Worked out once per row and Book: until its Books are matched the Album asks it of
+/// every catalog row on each build.
+final Map<AlbumBook, Expando<(_Claim?,)>> _claims = {
+  for (final b in _claimPatterns.keys) b: Expando('claim ${b.name}'),
+};
 
-int? _scanRcwNum(PlanningDso d) {
-  int? best;
+_Claim? _claimOf(PlanningDso d, AlbumBook book) =>
+    (_claims[book]![d] ??= (_scanClaim(d, _claimPatterns[book]!),)).$1;
+
+/// The lowest number among [d]'s id and aliases (a row that carries two numbers in a
+/// Book is one Card, labelled by the first); the plain number sorts before its suffixes.
+_Claim? _scanClaim(PlanningDso d, RegExp pattern) {
+  _Claim? best;
   for (final s in [d.id, ...d.aliases]) {
-    final n = int.tryParse(_rcwDesignation.firstMatch(s)?.group(1) ?? '');
-    if (n != null && (best == null || n < best)) best = n;
+    final m = pattern.firstMatch(s);
+    if (m == null) continue;
+    final c = (number: int.parse(m[1]!), suffix: m[2]!);
+    if (best == null || _compareClaims(c, best) < 0) best = c;
   }
   return best;
 }
+
+int _compareClaims(_Claim a, _Claim b) =>
+    a.number != b.number ? a.number.compareTo(b.number) : a.suffix.compareTo(b.suffix);
+
+/// The RCW number of [d]: the lowest `RCW n` among its id and aliases, null without one.
+int? rcwNumOf(PlanningDso d) => _claimOf(d, AlbumBook.rcw)?.number;
 
 /// [d]'s catalog number in [book], null when the Book does not claim it.
 int? bookNumberOf(PlanningDso d, AlbumBook book) => switch (book) {
       AlbumBook.messier => d.messierNum,
       AlbumBook.caldwell => d.caldwellNum,
-      AlbumBook.rcw => rcwNumOf(d),
+      _ => _claimOf(d, book)?.number,
     };
 
-/// The Card label: `M 31`, `C 14`, `RCW 32`.
-String bookLabel(PlanningDso d, AlbumBook book) => switch (book) {
-      AlbumBook.messier => 'M ${d.messierNum}',
-      AlbumBook.caldwell => 'C ${d.caldwellNum}',
-      AlbumBook.rcw => 'RCW ${rcwNumOf(d)}',
-    };
+/// The letter after [bookNumberOf] (`NGC 5194A`): "" for none and for the Books without suffixes.
+String bookSuffixOf(PlanningDso d, AlbumBook book) => _claims[book] == null ? '' : _claimOf(d, book)?.suffix ?? '';
+
+/// The Card label: `M 31`, `C 14`, `RCW 32`, `NGC 224`, `IC 434`, `Sh2-101`.
+String bookLabel(PlanningDso d, AlbumBook book) {
+  final n = '${bookNumberOf(d, book)}${bookSuffixOf(d, book)}';
+  return switch (book) {
+    AlbumBook.messier => 'M $n',
+    AlbumBook.caldwell => 'C $n',
+    AlbumBook.rcw => 'RCW $n',
+    AlbumBook.ngc => 'NGC $n',
+    AlbumBook.ic => 'IC $n',
+    AlbumBook.sharpless => 'Sh2-$n',
+  };
+}
 
 /// A Book's Cards: everything [book] claims in the full bundled catalog, in
 /// catalog-number order, whatever another Book also claims. The grid, the chips and
 /// the aggregates all read this, so their counts agree.
 List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) =>
     [for (final d in catalog) if (bookNumberOf(d, book) != null) d]
-      ..sort((a, b) => bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!));
+      ..sort((a, b) {
+        final n = bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!);
+        return n != 0 ? n : bookSuffixOf(a, book).compareTo(bookSuffixOf(b, book));
+      });
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
 /// circle, half the short side across. Rotation-free, so corners never count.

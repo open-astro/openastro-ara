@@ -7,8 +7,9 @@ import '../services/dso_catalog_service.dart';
 /// nickname; it never replaces a name the catalog already carries. A row with
 /// no common name of its own (its display name is its id) shows the first one.
 ///
-/// Only names with a source: an entry cites the SIMBAD `NAME` identifier or
-/// the issue that asked for it. OpenNGC's Common names column already names the
+/// Only names with a source: an entry cites the SIMBAD `NAME` identifier, a named
+/// published source, or the issue that asked for it (#1887 adds the NGC, IC and Sharpless
+/// nicknames below; each candidate OpenNGC or sh2.csv already names is left out). OpenNGC's Common names column already names the
 /// other Messier and Caldwell objects that have a well-known name, and the
 /// rest are left out until a name with a source is found.
 ///
@@ -18,6 +19,20 @@ const Map<String, List<String>> commonNames = {
   'NGC0246': ['Skull Nebula'],
   // M 101; SIMBAD NAME identifier "Pinwheel" (simbad.cds.unistra.fr, ident of NGC 5457).
   'NGC5457': ['Pinwheel'],
+  // #1887. Source: Wikipedia "NGC 2359" (also "Thor's Helmet"); SIMBAD has no NAME for it.
+  'NGC2359': ["Thor's Helmet"],
+  // Source: Wikipedia "Heart Nebula" (IC 1805); SIMBAD NAME is only "AFGL 333 Cloud".
+  'IC1805': ['Heart Nebula'],
+  // Source: Wikipedia "Westerhout 5" (W5, "the Soul Nebula", containing IC 1848).
+  'IC1848': ['Soul Nebula'],
+  // Source: Wikipedia "IC 410" ("also known as the Tadpole Nebula").
+  'IC0410': ['Tadpoles Nebula'],
+  // Source: Wikipedia "Sh 2-132" ("also known as the Lion Nebula").
+  'Sh2-132': ['Lion Nebula'],
+  // Source: Wikipedia "Simeis 147" ("also known as the Spaghetti Nebula ... Sharpless 2-240").
+  'Sh2-240': ['Spaghetti Nebula'],
+  // Source: Wikipedia "Sh 2-308" ("commonly known as the Dolphin-Head Nebula").
+  'Sh2-308': ['Dolphin Head Nebula'],
 };
 
 /// [catalog] with [names] laid over it. Pure.

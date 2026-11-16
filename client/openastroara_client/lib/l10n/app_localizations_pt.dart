@@ -3041,6 +3041,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get albumBookRcw => 'RCW';
 
   @override
+  String get albumBookNgc => 'NGC';
+
+  @override
+  String get albumBookIc => 'IC';
+
+  @override
+  String get albumBookSharpless => 'Sharpless (Sh2)';
+
+  @override
   String get dsoTypeGalaxy => 'Galaxy';
 
   @override
@@ -9028,6 +9037,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get albumBookRcw => 'RCW';
+
+  @override
+  String get albumBookNgc => 'NGC';
+
+  @override
+  String get albumBookIc => 'IC';
+
+  @override
+  String get albumBookSharpless => 'Sharpless (Sh2)';
 
   @override
   String get dsoTypeGalaxy => 'Galáxia';

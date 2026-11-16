@@ -265,6 +265,64 @@ void main() {
       expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
     });
 
+    test('the NGC, IC and Sharpless Books claim their own designations, in number-then-suffix order (#1887)', () {
+      final catalog = [
+        _dso('NGC5194A'),
+        _dso('NGC0224', m: 31),
+        _dso('NGC5194'),
+        _dso('IC0434'),
+        _dso('IC0005'),
+        _dso('Sh2-101'),
+        _dso('Sh2-9'),
+        _dso('RCW 5'),
+      ];
+      final ngc = bookObjects(catalog, AlbumBook.ngc);
+      expect(ngc.map((d) => d.id), ['NGC0224', 'NGC5194', 'NGC5194A']);
+      expect(ngc.map((d) => bookLabel(d, AlbumBook.ngc)), ['NGC 224', 'NGC 5194', 'NGC 5194A']);
+      expect(ngc.map((d) => bookNumberOf(d, AlbumBook.ngc)), [224, 5194, 5194]);
+      final ic = bookObjects(catalog, AlbumBook.ic);
+      expect(ic.map((d) => bookLabel(d, AlbumBook.ic)), ['IC 5', 'IC 434']);
+      final sh = bookObjects(catalog, AlbumBook.sharpless);
+      expect(sh.map((d) => bookLabel(d, AlbumBook.sharpless)), ['Sh2-9', 'Sh2-101']);
+    });
+
+    test('a row with two NGC numbers is one Card, labelled by the lowest; an alias with a space still claims (#1887)', () {
+      final row = _dso('NGC0300', aliases: ['NGC 0250', 'NGC 0299B']);
+      expect(bookObjects([row], AlbumBook.ngc), [row]);
+      expect(bookLabel(row, AlbumBook.ngc), 'NGC 250');
+      expect(bookObjects([_dso('NGC1976', aliases: ['IC 434'])], AlbumBook.ic).length, 1);
+    });
+
+    test('M 31 is also NGC 224: a Card in both Books, labelled M 31 by Book order, its Messier label unchanged (#1887)', () {
+      final m31 = _dso('NGC0224', m: 31);
+      expect(bookObjects([m31], AlbumBook.messier), [m31]);
+      expect(bookObjects([m31], AlbumBook.ngc), [m31]);
+      expect(bookLabel(m31, AlbumBook.messier), 'M 31');
+      expect(bookLabel(m31, AlbumBook.ngc), 'NGC 224');
+      expect(AlbumBook.values.first, AlbumBook.messier);
+    });
+
+    test("a row's NGC, IC and Sharpless claim is worked out once per row (#1887)", () {
+      final aliases = <String>[];
+      final row = _dso('NGC0001', aliases: aliases);
+      expect(bookNumberOf(row, AlbumBook.ngc), 1);
+      expect(bookNumberOf(row, AlbumBook.ic), isNull);
+      aliases..add('IC 5')..add('NGC 0000');
+      expect(bookNumberOf(row, AlbumBook.ngc), 1);
+      expect(bookNumberOf(row, AlbumBook.ic), isNull);
+    });
+
+    test('a frame named ngc891 or IC 0434 or sh2-101 fills its Card (#1887)', () {
+      final cards = {
+        'ngc891': _dso('NGC0891'),
+        'IC 434': _dso('IC0434'),
+        'sh2-101': _dso('Sh2-101'),
+      };
+      for (final MapEntry(key: name, value: dso) in cards.entries) {
+        expect(aggregateBook([_frame('a', ra: null, target: name)], [dso]).keys, [dso.id], reason: name);
+      }
+    });
+
     test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {
       final rcw15 = _dso('RCW 15', aliases: ['Gum 15', 'NGC 2736']);
       for (final name in ['Gum 15', 'Gum15', 'gum 015', 'NGC 2736', 'RCW 15']) {

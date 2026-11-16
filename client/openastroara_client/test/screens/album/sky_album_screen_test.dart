@@ -446,10 +446,23 @@ void main() {
     expect(find.text('Caldwell · 0'), findsOneWidget);
   });
 
-  testWidgets('the Book switch has three segments: Messier, Caldwell, RCW (#1629)', (tester) async {
+  testWidgets('six catalog chips wrap at phone width without overflow, each still 44 px (#1887)', (tester) async {
+    await _pump(tester, frames: _m31Frames, size: const Size(360, 740));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(FilterChip), findsNWidgets(6));
+    for (final chip in find.byType(FilterChip).evaluate()) {
+      expect(tester.getSize(find.byWidget(chip.widget)).height, greaterThanOrEqualTo(44));
+      expect(tester.getRect(find.byWidget(chip.widget)).right, lessThanOrEqualTo(360));
+    }
+  });
+
+  testWidgets('the Book switch has six segments: Messier, Caldwell, RCW, NGC, IC, Sharpless (#1629, #1887)', (tester) async {
     await _pump(tester, frames: _m31Frames);
-    expect(find.byType(FilterChip), findsNWidgets(3));
+    expect(find.byType(FilterChip), findsNWidgets(6));
     expect(find.text('RCW · 0'), findsOneWidget);
+    expect(find.text('NGC · 1'), findsOneWidget, reason: 'M 31 is NGC 224');
+    expect(find.text('IC · 0'), findsOneWidget);
+    expect(find.text('Sharpless (Sh2) · 0'), findsOneWidget);
   });
 
   testWidgets('an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
@@ -588,7 +601,7 @@ void main() {
   });
 
   testWidgets('the catalogs sit left of the filter on one row, the count below', (tester) async {
-    await _pump(tester, frames: _m31Frames);
+    await _pump(tester, frames: _m31Frames, size: const Size(2400, 900));
     final filter = find.byType(SegmentedButton<AlbumFilter>);
     expect(tester.getCenter(find.text('Messier · 1')).dy, closeTo(tester.getCenter(filter).dy, 4));
     expect(tester.getCenter(find.text('Caldwell · 0')).dx, lessThan(tester.getTopLeft(filter).dx));
@@ -811,6 +824,9 @@ void main() {
 
   testWidgets('a flipped card stays inside a landscape phone', (tester) async {
     await _pump(tester, frames: _m31Frames, size: const Size(800, 400));
+    // Six catalog chips wrap the header taller; the grid starts lower.
+    await tester.ensureVisible(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     final back = tester.getRect(find.byType(AlbumCardBack));
