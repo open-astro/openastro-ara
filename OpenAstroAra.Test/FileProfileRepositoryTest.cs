@@ -60,6 +60,35 @@ public class FileProfileRepositoryTest {
     private double Latitude() => _store.GetSiteSettings().LatitudeDeg;
 
     [Test]
+    public void Zero_byte_profile_file_is_set_aside_and_not_reported_at_the_next_load() {
+        // #1947: a power cut can leave {id}.json empty. It must not warn at every start forever.
+        var id = Guid.NewGuid();
+        var profiles = Path.Combine(_dir, "profiles");
+        var path = Path.Combine(profiles, id.ToString("N") + ".json");
+        File.WriteAllBytes(path, Array.Empty<byte>());
+
+        var first = new CapturingLogger();
+        using (new FileProfileRepository(_dir, _store, first)) { }
+        first.Warnings.Should().ContainSingle(w => w.Contains(id.ToString("N")));
+        File.Exists(path).Should().BeFalse("the unreadable file is set aside");
+        Directory.EnumerateFiles(profiles, id.ToString("N") + ".json.corrupt").Should().ContainSingle();
+
+        var second = new CapturingLogger();
+        using (new FileProfileRepository(_dir, _store, second)) { }
+        second.Warnings.Should().BeEmpty();
+    }
+
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<FileProfileRepository> {
+        public List<string> Warnings { get; } = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel level) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel level, Microsoft.Extensions.Logging.EventId id,
+            TState state, Exception? ex, Func<TState, Exception?, string> fmt) {
+            if (level == Microsoft.Extensions.Logging.LogLevel.Warning) Warnings.Add(fmt(state, ex));
+        }
+    }
+
+    [Test]
     public void FreshDir_starts_with_zero_profiles_and_no_active_id() {
         // A fresh install must land the user in profile setup, not on an
         // unconfigured auto-seeded profile that can't run a rig.
