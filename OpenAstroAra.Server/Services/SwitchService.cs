@@ -123,7 +123,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         public int UnreadableTicksSinceConnect { get; set; }
         // §42.4 — per-connection commanded-value read-back watch (only ports the daemon wrote).
         public SwitchReadbackWatch Readback { get; }
-        // #1971 — the driver's actions, read once per connect (a Polar Corrector rides on them).
+        // #1971 — the driver's actions, read once per connect (a Polar Aligner rides on them).
         public IDriverActions? Actions { get; set; }
 
         // Caller holds Lifecycle.Gate: a fresh, ended or tripped session starts clean.

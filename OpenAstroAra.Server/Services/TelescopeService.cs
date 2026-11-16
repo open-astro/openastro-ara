@@ -83,7 +83,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
     internal Func<DiscoveredDeviceDto, ITelescopeDevice> DeviceFactory { init => _createDevice = value; }
     private TelescopeCapabilitiesDto? _capabilities;
-    // #1971 — the driver's actions, read with the capabilities once per connect (a Polar Corrector may ride on them).
+    // #1971 — the driver's actions, read with the capabilities once per connect (a Polar Aligner may ride on them).
     private IDriverActions? _mountActions;
     // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
     // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver

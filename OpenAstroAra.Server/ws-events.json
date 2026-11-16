@@ -32,7 +32,7 @@
     { "name": "PolarAlignStage", "type": "polar_align.stage" },
     { "name": "PolarAlignNeedsHome", "type": "polar_align.needs_home" },
     { "name": "PolarAlignChecked", "type": "polar_align.checked" },
-    { "name": "PolarAlignCorrector", "type": "polar_align.corrector" },
+    { "name": "PolarAlignCorrection", "type": "polar_align.correction" },
     { "name": "AutofocusCollimationVerdict", "type": "autofocus.collimation_verdict" },
     { "name": "AutofocusStarted", "type": "autofocus.started" },
     { "name": "AutofocusShotComplete", "type": "autofocus.shot_complete" },

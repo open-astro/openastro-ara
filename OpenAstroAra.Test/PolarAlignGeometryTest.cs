@@ -186,7 +186,7 @@ namespace OpenAstroAra.Test {
             Assert.That(Math.Abs(azE), Is.GreaterThan(1.0), "a 0.3° off-pole axis at ±40° HA has a real az component");
         }
 
-        // ── #1971: the Polar Corrector move (PolarAlign actions wire convention) ─────────────
+        // ── #1971: the Polar Aligner move (PolarAlign actions wire convention) ─────────────
         // Made-up sites at ±40°. The axis is placed by its alt/az, read back through AxisError
         // (east-positive, cos-scaled), and the move must undo the azimuth COORDINATE offset.
 
@@ -200,36 +200,36 @@ namespace OpenAstroAra.Test {
             Math.Abs(latDeg) + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(latDeg)) / 60.0;
 
         [Test]
-        public void Corrector_move_north_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
+        public void Aligner_move_north_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
             var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(40), 1.0, 40);
             Assert.That(azErr, Is.GreaterThan(40), "north: clockwise of the pole is east, east-positive");
-            var (az, alt) = PolarAlignGeometry.CorrectorMove(altErr, azErr, 40);
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, 40);
             Assert.That(az, Is.EqualTo(-60.0).Within(0.05), "decrease the azimuth coordinate by the full degree");
             Assert.That(alt, Is.EqualTo(0).Within(0.05));
         }
 
         [Test]
-        public void Corrector_move_south_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
+        public void Aligner_move_south_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
             var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(-40), 181.0, -40);
             Assert.That(azErr, Is.LessThan(-40), "south: clockwise of the pole is west, so east-positive is negative");
-            var (az, alt) = PolarAlignGeometry.CorrectorMove(altErr, azErr, -40);
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, -40);
             Assert.That(az, Is.EqualTo(-60.0).Within(0.05), "the wire sign follows the azimuth coordinate, not east");
             Assert.That(alt, Is.EqualTo(0).Within(0.05));
         }
 
         [TestCase(40.0, 0.0)]
         [TestCase(-40.0, 180.0)]
-        public void Corrector_move_an_axis_thirty_arcmin_below_the_pole_is_raised_by_thirty(double lat, double poleAz) {
+        public void Aligner_move_an_axis_thirty_arcmin_below_the_pole_is_raised_by_thirty(double lat, double poleAz) {
             var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(lat) - 0.5, poleAz, lat);
-            var (az, alt) = PolarAlignGeometry.CorrectorMove(altErr, azErr, lat);
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, lat);
             Assert.That(alt, Is.EqualTo(30.0).Within(0.05), "positive altitude raises the polar axis");
             Assert.That(az, Is.EqualTo(0).Within(0.05));
         }
 
         [Test]
-        public void Corrector_move_next_to_a_geographic_pole_keeps_its_direction() {
+        public void Aligner_move_next_to_a_geographic_pole_keeps_its_direction() {
             // At 89.8° the axis altitude plus refraction and a high axis passes 90°: the cosine must not flip the move.
-            var (az, _) = PolarAlignGeometry.CorrectorMove(altErrorArcmin: 30.0, azErrorArcmin: 5.0, latitudeDeg: 89.8);
+            var (az, _) = PolarAlignGeometry.AlignerMove(altErrorArcmin: 30.0, azErrorArcmin: 5.0, latitudeDeg: 89.8);
             Assert.That(az, Is.LessThan(0), "east of the north pole is still a larger azimuth: the move decreases it");
         }
 
