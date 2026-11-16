@@ -326,6 +326,11 @@ void main() {
   ) async {
     await _pump(tester, _snap(), size: const Size(390, 844));
     expect(_cut(tester, 'Dark 21:50 to 04:20 · 0 min imaged'), isFalse);
+    // The timeline under that row keeps its 7 hour marks, 22 to 04.
+    final canvas = _Painted();
+    final night = tester.widget<CustomPaint>(_k('timeline')).painter!;
+    night.paint(canvas, tester.getSize(_k('timeline')));
+    expect(canvas.text, hasLength(4 + 7), reason: 'flip and park: glyph, time');
   });
 
   testWidgets(

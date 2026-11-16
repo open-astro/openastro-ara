@@ -316,7 +316,7 @@ class _Grid extends StatelessWidget {
             if (weather != null) (weather, 150.0),
             if (guider != null) (guider, 240.0),
             (focus, 220.0),
-            (night, 108.0),
+            (night, 130.0),
           ])
             Padding(
               padding: const EdgeInsets.only(bottom: _kGap),
