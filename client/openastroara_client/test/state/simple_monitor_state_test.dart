@@ -477,7 +477,7 @@ void main() {
       expect(r.read().upNext.first.at, isNull);
     });
 
-    test('no plan: Up next stays empty, Tonight\'s Best is not Monitor\'s', () async {
+    test("no plan: Up next stays empty, Tonight's Best is not Monitor's", () async {
       final r = await _rig(plan: const SimpleRun());
       expect(r.read().upNext, isEmpty);
     });
@@ -610,7 +610,7 @@ void main() {
       expect(r.read().guider!.rmsPerFrame, [1.1, 1.2], reason: 'the last samples, newest last');
     });
 
-    test('the session start stays the run\'s first frames after the oldest are dropped', () async {
+    test("the session start stays the run's first frames after the oldest are dropped", () async {
       final r = await _rig(run: _running());
       final t = r.c.read(monitorTrendsProvider.notifier);
       for (var i = 0; i < 205; i++) {
