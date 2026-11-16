@@ -227,6 +227,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Corrector_move_next_to_a_geographic_pole_keeps_its_direction() {
+            // At 89.8° the axis altitude plus refraction and a high axis passes 90°: the cosine must not flip the move.
+            var (az, _) = PolarAlignGeometry.CorrectorMove(altErrorArcmin: 30.0, azErrorArcmin: 5.0, latitudeDeg: 89.8);
+            Assert.That(az, Is.LessThan(0), "east of the north pole is still a larger azimuth: the move decreases it");
+        }
+
+        [Test]
         public void End_to_end_a_synthetic_misalignment_round_trips_through_fit_and_error() {
             // Generate pointings from a KNOWN slightly-misaligned axis, fit it, decompose the
             // error — the whole §45 measurement pipeline on a synthetic sky. The recovered total

@@ -315,7 +315,8 @@ public static class PolarAlignGeometry {
         }
         // The axis altitude the error was cos-scaled at, as the live loop computes it.
         var poleAltDeg = Math.Abs(latitudeDeg);
-        var axisAltDeg = poleAltDeg + BennettRefractionArcmin(poleAltDeg) / 60.0 + altErrorArcmin / 60.0;
+        // Short of the zenith: next to a geographic pole the sum passes 90° and the cosine would flip the move.
+        var axisAltDeg = Math.Min(poleAltDeg + BennettRefractionArcmin(poleAltDeg) / 60.0 + altErrorArcmin / 60.0, 89.9);
         // East of the pole is a larger azimuth facing north and a smaller one facing south.
         var azimuthOffsetArcmin = azErrorArcmin / Math.Cos(Deg2Rad(axisAltDeg)) * (latitudeDeg > 0 ? 1.0 : -1.0);
         return (-azimuthOffsetArcmin, -altErrorArcmin);

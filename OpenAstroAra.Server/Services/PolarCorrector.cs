@@ -107,8 +107,8 @@ internal interface IPolarCorrectorDriver {
     Task StopPolarCorrectorAsync();
 }
 
-/// <summary>Where the Polar Align Routine gets the rig's Polar Corrector: the device the profile
-/// names, when it is connected and offers the actions. Null otherwise.</summary>
+/// <summary>Where the Polar Align Routine gets the rig's Polar Corrector: the connected device that
+/// offers the actions (a Switch before the mount; no setting names it). Null when there is none.</summary>
 internal interface IPolarCorrectorSource {
     IPolarCorrector? Current();
 }
