@@ -593,7 +593,10 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (accent, outline) = switch (status) {
-      MonitorStatus.warning => (AraColors.accentWarning, AraColors.accentWarning),
+      MonitorStatus.warning => (
+        AraColors.accentWarning,
+        AraColors.accentWarning,
+      ),
       MonitorStatus.fault => (AraColors.errorText, AraColors.accentError),
       _ => (AraColors.textSecondary, AraColors.border),
     };
@@ -603,72 +606,107 @@ class _Tile extends StatelessWidget {
         : status == MonitorStatus.working
         ? AraColors.accentConnected
         : accent;
+    // One node with the tile's words; the enlarged tile's button stays its
+    // own node so a screen reader can reach its window (ADR 0009).
     return Semantics(
+      container: true,
       button: true,
       label: [name, value, ?shown].join(', '),
-      excludeSemantics: true,
       child: Material(
         key: Key('simple-monitor-$tileKey'),
         color: ctl.big ? AraColors.bgInput : AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          side: BorderSide(color: outline, width: outline == AraColors.border ? 1 : 1.5),
+          side: BorderSide(
+            color: outline,
+            width: outline == AraColors.border ? 1 : 1.5,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: ctl.onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
-            child: LayoutBuilder(
-              builder: (context, box) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: box.maxHeight.isFinite ? box.maxHeight : 0),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(icon, size: 18, color: accent),
-                            const SizedBox(width: 6),
-                            // The name takes what the word leaves; the word sits
-                            // in the right corner at its own width, shortening
-                            // only past 60 % of the tile (pt-BR).
-                            Expanded(
-                              child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                            if (shown != null && shown.isNotEmpty)
-                              ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
-                                child: Text(
-                                  shown,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _dim.copyWith(color: wordColour),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AraSpace.s12,
+              vertical: 10,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ExcludeSemantics(
+                    child: LayoutBuilder(
+                      builder: (context, box) => SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: box.maxHeight.isFinite
+                                ? box.maxHeight
+                                : 0,
+                          ),
+                          child: IntrinsicHeight(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(icon, size: 18, color: accent),
+                                    const SizedBox(width: 6),
+                                    // The name takes what the word leaves; the word sits
+                                    // in the right corner at its own width, shortening
+                                    // only past 60 % of the tile (pt-BR).
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: _dim,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (shown != null && shown.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: box.maxWidth * 0.6,
+                                        ),
+                                        child: Text(
+                                          shown,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: _dim.copyWith(
+                                            color: wordColour,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    // Stale numbers get a grey dot, as off gear does.
+                                    if (_dot(
+                                          frozen ? MonitorStatus.off : status,
+                                        )
+                                        case final dot?) ...[
+                                      const SizedBox(width: 6),
+                                      dot,
+                                    ],
+                                  ],
                                 ),
-                              ),
-                            // Stale numbers get a grey dot, as off gear does.
-                            if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[
-                              const SizedBox(width: 6),
-                              dot,
-                            ],
-                          ],
-                        ),
-                        ...children,
-                        if (ctl.big)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              key: const Key('simple-monitor-tile-open'),
-                              onPressed: ctl.onOpen,
-                              child: Text(context.l10n.monitorOpenWindow),
+                                ...children,
+                              ],
                             ),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                if (ctl.big)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      key: const Key('simple-monitor-tile-open'),
+                      onPressed: ctl.onOpen,
+                      child: Text(context.l10n.monitorOpenWindow),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -1193,6 +1231,7 @@ class _TargetTile extends StatelessWidget {
                   now: s.asOf,
                   spanStart: t.spanStart,
                   spanEnd: t.spanEnd,
+                  scaler: MediaQuery.textScalerOf(context),
                 ),
               ),
             ),
@@ -1270,7 +1309,10 @@ class _SafetyTile extends StatelessWidget {
           };
     final since = safety.since == null || s.frozen
         ? null
-        : l10n.monitorSince(simpleClockTime(safety.since!), _age(s.asOf.difference(safety.since!)));
+        : l10n.monitorSince(
+            simpleClockTime(safety.since!),
+            _age(s.asOf.difference(safety.since!)),
+          );
     final colour = s.frozen
         ? AraColors.textSecondary
         : switch (safety.status) {
@@ -1280,9 +1322,9 @@ class _SafetyTile extends StatelessWidget {
             _ => AraColors.textSecondary,
           };
     return Semantics(
+      container: true,
       button: true,
       label: [l10n.shellSafetyMonitor, word, ?since].join(', '),
-      excludeSemantics: true,
       child: Material(
         key: const Key('simple-monitor-safety'),
         color: AraColors.tileFill,
@@ -1302,30 +1344,42 @@ class _SafetyTile extends StatelessWidget {
           onTap: ctl.onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
-            child: Row(children: [
-              Icon(Icons.shield_outlined, size: 22, color: colour),
-              const SizedBox(width: AraSpace.s8),
-              Flexible(
-                child: Text(word,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: kSimpleText.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colour == AraColors.accentConnected ? null : colour,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ExcludeSemantics(
+                    child: Row(
+                      children: [
+                        Icon(Icons.shield_outlined, size: 22, color: colour),
+                        const SizedBox(width: AraSpace.s8),
+                        Flexible(
+                          child: Text(
+                            word,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: kSimpleText.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colour == AraColors.accentConnected
+                                  ? null
+                                  : colour,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AraSpace.s8),
+                        if (since != null)
+                          Expanded(
+                            child: Text(
+                              since,
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: kSimpleCaption,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(width: AraSpace.s8),
-                if (since != null)
-                  Expanded(
-                    child: Text(
-                      since,
-                      textAlign: TextAlign.right,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: kSimpleCaption,
-                    ),
-                  ),
                 if (ctl.big)
                   TextButton(
                     key: const Key('simple-monitor-tile-open'),
@@ -1543,13 +1597,19 @@ class _GuiderTile extends StatelessWidget {
         // The live trace on a fixed scale, then the whole session's RMS, one
         // point per saved frame (#1875).
         Expanded(
-          child: CustomPaint(key: const Key('simple-monitor-trace'), painter: _TracePainter(g.trace)),
+          child: CustomPaint(key: const Key('simple-monitor-trace'), painter: _TracePainter(g.trace, MediaQuery.textScalerOf(context))),
         ),
         if (g.rmsPerFrame.length > 1)
           Expanded(
             child: CustomPaint(
               key: const Key('simple-monitor-rms-chart'),
-              painter: _SeriesPainter(values: g.rmsPerFrame, lo: 0, ticks: const [1, 2], decimals: 0),
+              painter: _SeriesPainter(
+                scaler: MediaQuery.textScalerOf(context),
+                values: g.rmsPerFrame,
+                lo: 0,
+                ticks: const [1, 2],
+                decimals: 0,
+              ),
             ),
           ),
         Wrap(
@@ -1677,6 +1737,7 @@ class _HfrTile extends StatelessWidget {
             child: CustomPaint(
               key: const Key('simple-monitor-hfr-chart'),
               painter: _SeriesPainter(
+                scaler: MediaQuery.textScalerOf(context),
                 values: values,
                 guide: dev == null ? null : dev.start * (1 + kMonitorDeviationPct / 100),
                 colour: flagged ? AraColors.accentWarning : AraColors.textPrimary,
@@ -1739,6 +1800,7 @@ class _StarsTile extends StatelessWidget {
             child: CustomPaint(
               key: const Key('simple-monitor-stars-chart'),
               painter: _SeriesPainter(
+                scaler: MediaQuery.textScalerOf(context),
                 values: stars,
                 own: sky.length == stars.length ? sky : null,
                 guide: starsDev == null ? null : starsDev.start * (1 - kMonitorDeviationPct / 100),
@@ -1821,29 +1883,40 @@ void _line(Canvas canvas, Offset a, Offset b, Paint paint, {bool dashed = false}
   }
 }
 
-/// Small axis text: [at] is its left, centre or right edge, by [align].
+/// Axis text at Simple Mode's caption size, scaled with the user's text:
+/// [at] is its left, centre or right edge, by [align]; its top, or its middle
+/// when [middle].
 void _text(
   Canvas canvas,
   String t,
-  Offset at, {
+  Offset at,
+  TextScaler scaler, {
   TextAlign align = TextAlign.left,
-  Color colour = AraColors.textSecondary,
+  bool middle = false,
 }) {
-  final tp = TextPainter(
-    text: TextSpan(
-      text: t,
-      style: TextStyle(color: colour, fontSize: 10),
-    ),
-    textDirection: TextDirection.ltr,
-    maxLines: 1,
-  )..layout();
+  final tp = _axisText(t, scaler);
   final x = switch (align) {
     TextAlign.right || TextAlign.end => at.dx - tp.width,
     TextAlign.center => at.dx - tp.width / 2,
     _ => at.dx,
   };
-  tp.paint(canvas, Offset(x, at.dy));
+  tp.paint(canvas, Offset(x, middle ? at.dy - tp.height / 2 : at.dy));
   tp.dispose();
+}
+
+TextPainter _axisText(String t, TextScaler scaler) => TextPainter(
+  text: TextSpan(text: t, style: kSimpleCaption),
+  textScaler: scaler,
+  textDirection: TextDirection.ltr,
+  maxLines: 1,
+)..layout();
+
+/// The size [_text] paints [t] at, for the painters' margins.
+Size _textSize(String t, TextScaler scaler) {
+  final tp = _axisText(t, scaler);
+  final size = tp.size;
+  tp.dispose();
+  return size;
 }
 
 /// Tonight's timeline: one block per Queue Target with progress under the
@@ -1862,12 +1935,13 @@ class _NightPainter extends CustomPainter {
     final start = n.darkStart!, end = n.darkEnd!;
     double x(DateTime t) =>
         (t.difference(start).inSeconds / math.max(1, end.difference(start).inSeconds)).clamp(0.0, 1.0) * size.width;
-    const top = 16.0, h = 24.0;
+    final top = _textSize('0', scaler).height + 4;
+    const h = 24.0;
     // Hour marks.
     final firstHour = DateTime(start.year, start.month, start.day, start.hour).add(const Duration(hours: 1));
     for (var t = firstHour; t.isBefore(end); t = t.add(const Duration(hours: 1))) {
       canvas.drawLine(Offset(x(t), top + h), Offset(x(t), top + h + 3), Paint()..color = AraColors.textSecondary);
-      _text(canvas, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), align: TextAlign.center);
+      _text(canvas, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), scaler, align: TextAlign.center);
     }
     for (final b in n.blocks) {
       final r = Rect.fromLTRB(x(b.start), top, math.max(x(b.start) + 2, x(b.end) - 2), top + h);
@@ -1916,7 +1990,9 @@ class _NightPainter extends CustomPainter {
       )..layout();
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       glyph.dispose();
-      if (label != null) _text(canvas, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), align: TextAlign.center);
+      if (label != null) {
+        _text(canvas, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), scaler, align: TextAlign.center);
+      }
     }
     canvas.drawRect(Rect.fromLTWH(x(now) - 1, top - 4, 2, h + 8), Paint()..color = AraColors.textPrimary);
   }
@@ -1931,6 +2007,7 @@ class _NightPainter extends CustomPainter {
 /// dot.
 class _SeriesPainter extends CustomPainter {
   _SeriesPainter({
+    required this.scaler,
     required this.values,
     this.lo,
     this.ticks = const [],
@@ -1941,6 +2018,7 @@ class _SeriesPainter extends CustomPainter {
     this.lastLabel,
   });
 
+  final TextScaler scaler;
   final List<double> values;
   final double? lo, guide;
   final List<double> ticks;
@@ -1954,8 +2032,9 @@ class _SeriesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (values.length < 2 || size.isEmpty) return;
-    final axis = lastLabel == null ? 0.0 : 12.0;
-    final left = 30.0, ph = size.height - axis, pw = size.width - left;
+    final axis = lastLabel == null ? 0.0 : _textSize('1', scaler).height;
+    final left = [30.0, for (final t in ticks) _textSize(t.toStringAsFixed(decimals), scaler).width + 6].reduce(math.max);
+    final ph = size.height - axis, pw = size.width - left;
     final all = [...values, ?guide];
     final dataLo = all.reduce(math.min), dataHi = all.reduce(math.max);
     final mid = (dataHi + dataLo) / 2;
@@ -1966,7 +2045,7 @@ class _SeriesPainter extends CustomPainter {
     final grid = Paint()..color = AraColors.border;
     for (final t in ticks.where((t) => t > l && t < h)) {
       canvas.drawLine(Offset(left, y(t)), Offset(size.width, y(t)), grid);
-      _text(canvas, t.toStringAsFixed(decimals), Offset(left - 4, y(t) - 6), align: TextAlign.right);
+      _text(canvas, t.toStringAsFixed(decimals), Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     if (guide != null) {
       _line(
@@ -2010,8 +2089,8 @@ class _SeriesPainter extends CustomPainter {
     );
     canvas.drawCircle(at(values.length - 1, values.last, values.length), 3.5, Paint()..color = colour);
     if (lastLabel != null) {
-      _text(canvas, '1', Offset(left, size.height - 11));
-      _text(canvas, lastLabel!, Offset(size.width, size.height - 11), align: TextAlign.right);
+      _text(canvas, '1', Offset(left, ph), scaler);
+      _text(canvas, lastLabel!, Offset(size.width, ph), scaler, align: TextAlign.right);
     }
   }
 
@@ -2023,16 +2102,17 @@ class _SeriesPainter extends CustomPainter {
 /// don't look alike: RA solid, Dec dashed, so they aren't told apart by
 /// colour alone.
 class _TracePainter extends CustomPainter {
-  _TracePainter(this.trace);
+  _TracePainter(this.trace, this.scaler);
 
   final List<({double ra, double dec})> trace;
+  final TextScaler scaler;
 
   /// The scale's half height (″).
   static const double scale = 2.5;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const left = 30.0;
+    final left = math.max(30.0, _textSize('-2″', scaler).width + 6);
     final mid = size.height / 2, pw = size.width - left;
     double y(double v) => mid - v.clamp(-scale, scale) / scale * mid;
     final grid = Paint()..color = AraColors.border;
@@ -2042,7 +2122,7 @@ class _TracePainter extends CustomPainter {
         Offset(size.width, y(t)),
         Paint()..color = AraColors.border.withValues(alpha: 0.5),
       );
-      _text(canvas, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t) - 6), align: TextAlign.right);
+      _text(canvas, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     canvas.drawLine(Offset(left, mid), Offset(size.width, mid), grid);
     if (trace.length < 2) return;
@@ -2081,15 +2161,17 @@ class _AltitudePainter extends CustomPainter {
     required this.now,
     this.spanStart,
     this.spanEnd,
+    required this.scaler,
   });
 
   final List<double> curve;
   final DateTime start, end, now;
   final DateTime? spanStart, spanEnd;
+  final TextScaler scaler;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const left = 28.0, axis = 12.0;
+    final left = math.max(28.0, _textSize('90°', scaler).width + 6), axis = _textSize('0', scaler).height;
     final ph = size.height - axis, pw = size.width - left;
     final total = math.max(1, end.difference(start).inSeconds);
     double frac(DateTime t) => (t.difference(start).inSeconds / total).clamp(0.0, 1.0);
@@ -2112,7 +2194,7 @@ class _AltitudePainter extends CustomPainter {
       canvas.restore();
     }
     for (final t in const [30.0, 60.0, 90.0]) {
-      _text(canvas, '${t.round()}°', Offset(left - 4, y(t) - 6), align: TextAlign.right);
+      _text(canvas, '${t.round()}°', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
     }
     _line(
       canvas,
@@ -2151,8 +2233,9 @@ class _AltitudePainter extends CustomPainter {
               : align == TextAlign.right
               ? size.width
               : x(t),
-          size.height - 11,
+          ph,
         ),
+        scaler,
         align: align,
       );
     }

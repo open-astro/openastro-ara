@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
+import 'package:openastroara/theme/ara_metrics.dart';
 
 // Monitor's grid (#1875 slice 7): which tiles it builds for the rig, how a
 // tap enlarges one, and what the graph tiles say.
@@ -134,6 +137,16 @@ Future<List<MonitorDestination>> _pump(
   );
   await tester.pump();
   return opened;
+}
+
+/// Records each painted paragraph's height while it is still alive.
+class _Heights implements Canvas {
+  final heights = <double>[];
+  @override
+  void drawParagraph(ui.Paragraph paragraph, Offset offset) =>
+      heights.add(paragraph.height);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 Finder _k(String id) => find.byKey(Key('simple-monitor-$id'));
@@ -292,4 +305,62 @@ void main() {
     );
     expect(tile.right - word.right, lessThan(30));
   });
+
+  testWidgets(
+    "a screen reader reaches the enlarged tile's button to its window",
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final opened = await _pump(tester, _snap());
+      for (final (id, to) in [
+        ('hfr', MonitorDestination.frameInfo),
+        ('safety', MonitorDestination.safety),
+      ]) {
+        await tester.tap(_k(id));
+        await tester.pump();
+        expect(find.bySemanticsLabel('Open its window'), findsOneWidget);
+        tester.semantics.tap(find.semantics.byLabel('Open its window'));
+        expect(opened.last, to, reason: id);
+        await tester.tap(_k(id));
+        await tester.pump();
+      }
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('a long tile name and the status word keep a gap between them', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
+    );
+    final name = tester.getRect(
+      find.descendant(of: _k('hfr'), matching: find.text('HFR')),
+    );
+    final word = tester.getRect(
+      find.descendant(of: _k('hfr'), matching: find.text('Drifting')),
+    );
+    expect(word.left - name.right, greaterThanOrEqualTo(6));
+  });
+
+  testWidgets(
+    "Tonight's hour marks and flip and park times follow 2x text at caption size",
+    (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, _snap(gear: false));
+      final paint = tester.widget<CustomPaint>(
+        find.byKey(const Key('simple-monitor-timeline')),
+      );
+      final canvas = _Heights();
+      paint.painter!.paint(
+        canvas,
+        tester.getSize(find.byKey(const Key('simple-monitor-timeline'))),
+      );
+      final heights = canvas.heights;
+      // No plan blocks here: each paragraph is an hour mark, a time or a glyph.
+      final tall = heights.where((h) => h >= 2 * AraFontSize.simpleCaption);
+      expect(tall.length, greaterThanOrEqualTo(3), reason: '$heights');
+    },
+  );
 }
