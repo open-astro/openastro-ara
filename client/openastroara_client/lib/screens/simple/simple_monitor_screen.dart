@@ -1340,8 +1340,8 @@ class _Flag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7),
-    decoration: BoxDecoration(border: Border.all(color: AraColors.accentWarning), borderRadius: BorderRadius.circular(10)),
+    padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+    decoration: BoxDecoration(border: Border.all(color: AraColors.accentWarning), borderRadius: BorderRadius.circular(AraRadius.pill)),
     child: Text(text, style: kSimpleUnit.copyWith(color: AraColors.accentWarning, fontWeight: FontWeight.w600)),
   );
 }
@@ -1360,7 +1360,7 @@ class _Key extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
     CustomPaint(size: const Size(18, 10), painter: _SwatchPainter(colour, dashed)),
-    const SizedBox(width: 4),
+    const SizedBox(width: AraSpace.s4),
     Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleUnit)),
   ]);
 }
