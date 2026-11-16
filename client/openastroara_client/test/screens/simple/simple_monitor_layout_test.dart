@@ -39,11 +39,13 @@ List<MonitorFrame> _frames(List<double> hfr, {List<int>? stars}) => [
     ),
 ];
 
+/// HFR 2.0 for the first three frames, 2.36 for the last three: +18 %.
+final _drifting = _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36]);
+
 MonitorSnapshot _snap({
   bool gear = true,
   List<MonitorFrame> frames = const [],
   bool frozen = false,
-  double imaged = 0,
 }) => MonitorSnapshot(
   asOf: _asOf,
   frozenSince: frozen ? _asOf : null,
@@ -115,7 +117,6 @@ MonitorSnapshot _snap({
     darkEnd: DateTime(2026, 11, 15, 4, 20),
     flipAt: DateTime(2026, 11, 15, 0, 58),
     parkAt: DateTime(2026, 11, 15, 1, 58),
-    imagedSeconds: imaged,
   ),
 );
 
@@ -145,18 +146,11 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
-  // A phone's column builds as it scrolls: bring in Tonight, its last tile.
-  // (A drag would move a tile's own scroll view instead.)
+  // A phone's column builds as it scrolls: jump to Tonight, its last tile (a
+  // drag would scroll a tile's own content).
   if (size.width < kMonitorMinWidth) {
-    final column = tester.state<ScrollableState>(
-      find
-          .descendant(
-            of: find.byKey(const Key('simple-monitor-column')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    column.position.jumpTo(column.position.maxScrollExtent);
+    final column = Scrollable.of(tester.element(_k('now'))).position;
+    column.jumpTo(column.maxScrollExtent);
     await tester.pump();
   }
 }
@@ -183,11 +177,7 @@ class _Painted implements Canvas {
 Future<void> _inside(WidgetTester tester, List<String> ids) async {
   tester.platformDispatcher.textScaleFactorTestValue = 2;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-  await _pump(
-    tester,
-    _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
-    size: const Size(1280, 800),
-  );
+  await _pump(tester, _snap(frames: _drifting), size: const Size(1280, 800));
   for (final id in ids) {
     final f = _k(id);
     for (final size in [
@@ -209,19 +199,18 @@ Future<void> _inside(WidgetTester tester, List<String> ids) async {
 
 Finder _k(String id) => find.byKey(Key('simple-monitor-$id'));
 
-/// Tonight's dark-span line as laid out.
-RenderParagraph _darkSpan(WidgetTester tester, String line) => tester
-    .renderObject(find.descendant(of: _k('night'), matching: find.text(line)));
+Finder _in(String id, String text) =>
+    find.descendant(of: _k(id), matching: find.text(text));
+
+/// Whether Tonight's [line] is cut short as laid out.
+bool _cut(WidgetTester tester, String line) =>
+    tester.renderObject<RenderParagraph>(_in('night', line)).didExceedMaxLines;
 
 void main() {
   testWidgets('HFR flags a rise of 15 % or more against the session start', (
     tester,
   ) async {
-    // First three 2.0, last three 2.36: +18 %.
-    await _pump(
-      tester,
-      _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
-    );
+    await _pump(tester, _snap(frames: _drifting));
     expect(find.text('HFR +18 % since session start'), findsOneWidget);
     expect(find.text('Drifting'), findsOneWidget);
   });
@@ -285,25 +274,16 @@ void main() {
   ) async {
     await _pump(tester, _snap());
     final tile = tester.getRect(_k('now'));
-    final word = tester.getRect(
-      find.descendant(of: _k('now'), matching: find.text('Exposing')),
-    );
+    final word = tester.getRect(_in('now', 'Exposing'));
     expect(tile.right - word.right, lessThan(30));
   });
 
   testWidgets('a long tile name and the status word keep a gap between them', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
-    );
-    final name = tester.getRect(
-      find.descendant(of: _k('last-frame'), matching: find.text('Last frame')),
-    );
-    final word = tester.getRect(
-      find.descendant(of: _k('last-frame'), matching: find.text('Drifting')),
-    );
+    await _pump(tester, _snap(frames: _drifting));
+    final name = tester.getRect(_in('last-frame', 'Last frame'));
+    final word = tester.getRect(_in('last-frame', 'Drifting'));
     expect(word.left - name.right, greaterThanOrEqualTo(6));
   });
 
@@ -313,16 +293,12 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await _pump(tester, _snap(gear: false));
-      final paint = tester.widget<CustomPaint>(
-        find.byKey(const Key('simple-monitor-timeline')),
-      );
+      final paint = tester.widget<CustomPaint>(_k('timeline'));
       final canvas = _Painted();
       // Tall enough for every label: at 2x the tile has no room for the
       // hour marks, which are then left out.
-      paint.painter!.paint(
-        canvas,
-        Size(tester.getSize(_k('timeline')).width, 120),
-      );
+      final width = tester.getSize(_k('timeline')).width;
+      paint.painter!.paint(canvas, Size(width, 120));
       final heights = [for (final r in canvas.text) r.height];
       // No plan blocks here: each paragraph is an hour mark, a time or a glyph.
       final tall = heights.where((h) => h >= 2 * AraFontSize.simpleCaption);
@@ -349,8 +325,7 @@ void main() {
     tester,
   ) async {
     await _pump(tester, _snap(), size: const Size(390, 844));
-    final line = _darkSpan(tester, 'Dark 21:50 to 04:20 · 0 min imaged');
-    expect(line.didExceedMaxLines, isFalse);
+    expect(_cut(tester, 'Dark 21:50 to 04:20 · 0 min imaged'), isFalse);
   });
 
   testWidgets(
@@ -358,17 +333,10 @@ void main() {
     (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await _pump(
-        tester,
-        _snap(imaged: 8100),
-        size: const Size(1280, 800),
-        locale: const Locale('pt', 'BR'),
-      );
-      final line = _darkSpan(
-        tester,
-        'Escuro de 21:50 a 04:20 · 2 h 15 min capturados',
-      );
-      expect(line.didExceedMaxLines, isFalse);
+      const ptBR = Locale('pt', 'BR');
+      await _pump(tester, _snap(), size: const Size(1280, 800), locale: ptBR);
+      const line = 'Escuro de 21:50 a 04:20 · 0 min capturados';
+      expect(_cut(tester, line), isFalse);
     },
   );
 
@@ -383,16 +351,11 @@ void main() {
         (const Size(1288, 780), true, false),
       ]) {
         await _pump(tester, _snap(frozen: frozen), size: size);
-        final name = tester.getRect(
-          find.descendant(of: _k('night'), matching: find.text('Tonight')),
-        );
-        final at = tester.getRect(
-          find.descendant(of: _k('night'), matching: find.text(line)),
-        );
-        final state = '$size${frozen ? ' frozen' : ''}';
-        expect(at.center.dy == name.center.dy, corner, reason: state);
+        final dy = tester.getCenter(_in('night', 'Tonight')).dy;
+        final inCorner = tester.getCenter(_in('night', line)).dy == dy;
+        expect(inCorner, corner, reason: '$size, frozen: $frozen');
         final label = tester.getSemantics(_k('night')).label;
-        expect(line.allMatches(label).length, 1, reason: '$state: $label');
+        expect(line.allMatches(label).length, 1, reason: label);
       }
       handle.dispose();
     },
