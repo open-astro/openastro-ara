@@ -467,13 +467,15 @@ void main() {
       expect(r.read().upNext.first.at, isNull);
     });
 
-    test("no plan: tonight's best", () async {
+    test("no plan: tonight's best, by designation and nickname", () async {
       final r = await _rig(plan: const SimpleRun(), sky: [
-        TonightSkyObject.fromJson({'id': 'm42', 'name': 'M 42', 'type': 'nebula', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0})!,
+        TonightSkyObject.fromJson({'id': 'M 42', 'name': 'M 42', 'type': 'nebula', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0})!,
+        TonightSkyObject.fromJson({'id': 'NGC0246', 'name': 'Skull Nebula', 'type': 'PN', 'ra_deg': 11.76, 'dec_deg': -11.87, 'altitude_deg': 40.0, 'max_altitude_deg': 60.0})!,
       ]);
       final s = r.read();
       expect(s.tonightsBest, isTrue);
-      expect((s.upNext.single.kind, s.upNext.single.name, s.upNext.single.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
+      expect((s.upNext.first.kind, s.upNext.first.name, s.upNext.first.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
+      expect(s.upNext.last.name, 'NGC 246 (Skull Nebula)');
     });
   });
 
