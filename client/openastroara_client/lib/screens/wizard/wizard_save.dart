@@ -12,8 +12,6 @@ import '../../services/profile_api.dart';
 import '../../state/profile_management_state.dart';
 import '../../util/guide_optics.dart';
 import '../../util/host_port.dart';
-import '../../widgets/guider/guider_setup_wizard.dart'
-    show parseAlpacaChoiceEndpoint;
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/camera_electronics_state.dart';
@@ -251,20 +249,17 @@ Phd2Settings applyDraftToPhd2(
     forceCalibrationEachSession:
         g.calibrationCadence == CalibrationCadence.eachSession,
     // §63.17 — null (untouched picker) keeps the base profile's selection.
-    guiderCamera: g.guiderCamera,
+    guiderCamera: g.guiderPick?.camera,
     // #1308 — a picked camera brings its own UniqueID (or none): the base
     // profile's names the camera it replaced.
-    guiderCameraAlpacaUniqueId: g.guiderCamera == null
-        ? null
-        : g.guiderCameraAlpacaUniqueId ?? '',
+    guiderCameraAlpacaUniqueId: g.guiderPick?.uniqueId,
     guiderMount: g.guiderMount,
     guiderAuxMount: g.guiderAuxMount,
     guiderRotator: g.guiderRotator,
     // A camera picked on another Alpaca server retargets the daemon's Alpaca
-    // config (same rule as the §63.17 setup wizard's Apply) — without this the
-    // pick would silently not take effect.
-    guiderAlpacaHost: parseAlpacaChoiceEndpoint(g.guiderCamera ?? '')?.host,
-    guiderAlpacaPort: parseAlpacaChoiceEndpoint(g.guiderCamera ?? '')?.port,
+    // config (same rule as the §63.17 setup wizard's Apply); null keeps the base.
+    guiderAlpacaHost: g.guiderPick?.host,
+    guiderAlpacaPort: g.guiderPick?.port,
     // §63.19 — null keeps the base for anything the user left untouched.
     guiderSetupType: setupType,
     guideFocalLength: focalLength,

@@ -69,9 +69,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   String _json() => jsonEncode(ProfileApi.phd2SettingsToJson(ref.read(phd2SettingsProvider)));
 
   // §63.17 guider equipment — transient discovery/apply UI state.
-  bool _discovering = false;
   bool _applying = false;
-  List<String>? _discoveredServers;
   String? _equipmentStatus;
 
   // §63.20 / #1306 — real device names behind every Alpaca endpoint we know
@@ -228,11 +226,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   }
 
   Future<void> _discoverAlpaca() async {
-    setState(() {
-      _discovering = true;
-      _equipmentStatus = null;
-      _discoveredServers = null;
-    });
+    setState(() => _equipmentStatus = null);
     try {
       final servers =
           await ref
@@ -240,7 +234,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
               .discover(fresh: false);
       if (!mounted) return;
       setState(() {
-        _discoveredServers = servers;
         _equipmentStatus = servers.isEmpty
             ? 'No Alpaca servers answered on the guider\'s network.'
             : 'Found ${servers.length} Alpaca '
@@ -255,8 +248,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           fallback: "Couldn't discover Alpaca devices",
         ),
       );
-    } finally {
-      if (mounted) setState(() => _discovering = false);
     }
   }
 
@@ -636,6 +627,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   // profile on its own; "Apply to guider" saves AND pushes.
   List<Widget> _equipmentSection(BuildContext context) {
     final phd2 = ref.watch(phd2SettingsProvider);
+    final discovery = ref.watch(guiderDiscoveryProvider);
     final phd2N = ref.read(phd2SettingsProvider.notifier);
     final equipment = ref.watch(guiderEquipmentProvider);
     final envelope = equipment.value;
@@ -699,10 +691,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
             label: const Text('Refresh choices'),
           ),
           OutlinedButton.icon(
-            onPressed: (_discovering || !connected)
+            onPressed: (discovery.running || !connected)
                 ? null
                 : () => _discoverAlpaca(),
-            icon: _discovering
+            icon: discovery.running
                 ? const SizedBox(
                     width: 16,
                     height: 16,
@@ -722,14 +714,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-      if (_discoveredServers != null && _discoveredServers!.isNotEmpty)
+      if (discovery.servers != null && discovery.servers!.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Wrap(
             spacing: 8,
             runSpacing: 4,
             children: [
-              for (final s in _discoveredServers!)
+              for (final s in discovery.servers!)
                 ActionChip(
                   label: Text(s),
                   onPressed: () {
@@ -756,17 +748,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
             blankLabel: 'None picked'),
         onChanged: (v) {
           if (v == null) return;
-          phd2N.setGuiderCamera(v);
-          phd2N.setGuiderCameraAlpacaUniqueId(
-              ref.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor(v));
-          // A camera with an endpoint retargets the guider's Alpaca server
-          // on Apply — keep the stored host/port in step so the mount and
-          // rotator pickers offer that server and the push names it.
-          final e = parseAlpacaChoiceEndpoint(v);
-          if (e != null) {
-            phd2N.setGuiderAlpacaHost(e.host);
-            phd2N.setGuiderAlpacaPort(e.port);
-          }
+          phd2N.applyPick(
+              ref.read(guiderAlpacaDevicesProvider.notifier).pick(v));
         },
       ),
       if (phd2.guiderCamera.trim().isEmpty)
