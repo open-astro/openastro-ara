@@ -256,7 +256,7 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Connected Green** (`accent-connected`): the Green row. A device that is connected and working blinks its dot in this green (the `active` status).
 - **Sky Info Blue** (`accent-info`): the Blue row (the `changing` status, drawn as a ring by the shared `StatusDot`), as well as informational text and links.
 - **Dew Amber** (`accent-warning`, `accent-busy`): the Amber row only. The two tokens share a value; `accent-busy` is kept for the `busy` status dot, which now means warning: an in-between state is Blue, never amber.
-- **Fault Red** (`accent-error`): the Red row. The theme's `error`.
+- **Fault Red** (`accent-error`): the Red row, and fills, dots, status icons and destructive buttons (`AraColors.accentError`, the theme's `errorContainer`; the theme's `error` is `error-text`).
 - **Unplugged Grey** (`accent-disconnected`): the Grey row. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
 
 ### Sky Album tiers
@@ -391,7 +391,7 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Shape:** Material 3 filled and text buttons on the theme radius.
 - **Primary:** Console Blue fill, white text. Reserved for the main action of a pane.
 - **Secondary:** text or outlined buttons, with Hairline outlines. The `button-secondary` grey exists but is rarely used.
-- **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
+- **Destructive:** Fault Red fill (`AraColors.accentError`), with the action named in the label.
 
 ### Platform gestures (iOS and iPadOS)
 - **Pull to refresh:** a list that can reload (today the Sky Album, the Stats page and the rig list; the image library and calibration screens still use `RefreshIndicator` and are not converted yet) uses `CupertinoSliverRefreshControl` on iOS and iPadOS and Material's `RefreshIndicator` elsewhere, through one adaptive wrapper. Under Reduce Motion it adds no animation of its own.
