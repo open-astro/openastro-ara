@@ -205,7 +205,7 @@ namespace OpenAstroAra.Sequencer {
 
                 var jsonContainer = sequenceJsonConverter.Serialize(deepSkyObjectContainer);
 
-                var path = existingTarget == null ? targetPath : Path.Combine(targetPath, Path.Combine(existingTarget.SubGroups.ToArray()));
+                var path = existingTarget == null ? targetPath : Path.Combine([targetPath, .. existingTarget.SubGroups]);
 
                 File.WriteAllText(Path.Combine(path, OpenAstroAra.Core.Utility.CoreUtil.ReplaceAllInvalidFilenameChars(deepSkyObjectContainer.Name) + ".json"), jsonContainer);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or Newtonsoft.Json.JsonException) {
@@ -279,7 +279,7 @@ namespace OpenAstroAra.Sequencer {
             try {
                 if (targetSequenceContainer == null) return;
 
-                var file = Path.Combine(targetPath, Path.Combine(targetSequenceContainer.SubGroups.ToArray()), CoreUtil.ReplaceAllInvalidFilenameChars(targetSequenceContainer.Name) + ".json");
+                var file = Path.Combine([targetPath, .. targetSequenceContainer.SubGroups, CoreUtil.ReplaceAllInvalidFilenameChars(targetSequenceContainer.Name) + ".json"]);
                 if (File.Exists(file)) {
                     File.Delete(file);
                 }

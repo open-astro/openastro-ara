@@ -144,7 +144,7 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
               "Parent": null, "ErrorBehavior": 0, "Attempts": 1
             }
             """;
-        return JsonDocument.Parse(json).RootElement.Clone();
+        return JsonElement.Parse(json);
     }
 
     private static readonly SequenceTemplateDto[] BuiltIns = new[] {

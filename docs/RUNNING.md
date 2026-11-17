@@ -13,7 +13,7 @@ see [`DEPLOY.md`](DEPLOY.md) instead.
 
 | Tool | Version | Notes |
 |---|---|---|
-| .NET SDK | **10.0.100+** | Pinned in `global.json` (`rollForward: latestFeature`) |
+| .NET SDK | **11.0.100+** | Pinned in `global.json` (`rollForward: latestFeature`); the projects target net10.0, so running tests or the daemon also needs the .NET 10 runtime |
 | Flutter | **exactly the version in `client/openastroara_client/.flutter-version`** | That file is the source of truth and moves weekly (see "How the pin gets updated"); `pubspec.yaml` constrains to that minor, so a newer Flutter fails `flutter pub get` |
 | CFITSIO | any recent | Native library the daemon loads at runtime to write FITS files — per-OS install below |
 
