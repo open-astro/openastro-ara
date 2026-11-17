@@ -296,12 +296,14 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   Future<List<String>> discover({bool fresh = true}) async {
     final discovery = ref.read(guiderDiscoveryProvider.notifier);
     final discoveryRef = discovery.ref; // before the await, see [resolve]
+    final buildRef = ref;
     discovery.state = (running: true, servers: null);
     try {
       final servers = await ref
           .read(guiderEquipmentProvider.notifier)
           .discoverAlpaca();
-      await resolve(servers, fresh: fresh);
+      // A rig switched during the sweep: its servers are not the new rig's.
+      if (buildRef.mounted) await resolve(servers, fresh: fresh);
       if (discoveryRef.mounted) {
         discovery.state = (running: false, servers: servers);
       }
