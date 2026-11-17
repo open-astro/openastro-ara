@@ -174,6 +174,19 @@ namespace OpenAstroAra.Test {
 
         [Test]
         [Category("bench")]
+        public async Task The_wrapper_refuses_a_request_file_larger_than_the_byte_cap() {
+            if (!OperatingSystem.IsLinux()) Assert.Ignore("the wrapper is Linux-only");
+            var id = "huge";
+            await File.WriteAllTextAsync(Path.Combine(exchange, id + ".request"), new string('x', 5000) + "\n");
+
+            var (exit, output) = await RunWrapperAsync(id);
+
+            Assert.That(exit, Is.EqualTo(9), output);
+            Assert.That(output, Does.Contain("too large"));
+        }
+
+        [Test]
+        [Category("bench")]
         public async Task The_wrapper_refuses_a_request_that_is_not_a_regular_file() {
             if (!OperatingSystem.IsLinux()) Assert.Ignore("the wrapper is Linux-only");
             var id = "planted";
