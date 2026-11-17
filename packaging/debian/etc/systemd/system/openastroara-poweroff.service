@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenAstro Ara host poweroff helper
+Documentation=https://github.com/open-astro/openastro-ara
+# Root-side half of End Night's last step (#1901). openastroara-server.service runs with
+# NoNewPrivileges=true, so the daemon cannot power the host off itself. It asks systemd over
+# D-Bus to start this unit; polkit authorises exactly that (50-openastroara-poweroff.rules,
+# `start` only). The unit takes no instance id and no request file: there is nothing to
+# parameterise, so there is no helper script to validate (ADR 0017 rule 4 does not apply).
+
+[Service]
+Type=oneshot
+# --no-block: queue the poweroff job and return, so this unit does not wait on the shutdown
+# transaction that stops it.
+ExecStart=/usr/bin/systemctl --no-block poweroff
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara-poweroff
