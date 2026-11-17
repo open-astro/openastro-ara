@@ -92,6 +92,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_omitted_exposure_takes_the_profile_autofocus_exposure_clamped_else_one_second() {
+            Assert.That(BahtinovFocusService.ExposureOrDefault(0.4, 5), Is.EqualTo(0.4), "the request wins");
+            Assert.That(BahtinovFocusService.ExposureOrDefault(null, 5), Is.EqualTo(5));
+            Assert.That(BahtinovFocusService.ExposureOrDefault(null, 45), Is.EqualTo(BahtinovFocusService.MaxExposureSeconds), "clamped to the readout's range");
+            Assert.That(BahtinovFocusService.ExposureOrDefault(null, null), Is.EqualTo(BahtinovFocusService.FallbackExposureSeconds));
+            Assert.That(BahtinovFocusService.ExposureOrDefault(null, 0), Is.EqualTo(BahtinovFocusService.FallbackExposureSeconds));
+        }
+
+        [Test]
+        public async Task A_start_without_an_exposure_runs_at_the_profile_autofocus_exposure() {
+            var frames = new ScriptedFrames();
+            using var svc = new BahtinovFocusService(frames, () => RedCat, defaultExposure: () => 7);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(), CancellationToken.None);
+            Assert.That(svc.GetStatus().ExposureSec, Is.EqualTo(7));
+        }
+
+        [Test]
         public async Task Samples_follow_the_offset_and_report_the_zone() {
             var frames = new ScriptedFrames();
             frames.Script.Enqueue((2.0, 23));
