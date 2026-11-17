@@ -1725,3 +1725,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarAlignService.Corrector.cs`, `PolarAlignGeometry.CorrectorMove`, `Contracts/EquipmentDtos.cs` (`PolarAlignCorrectorDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`PolarAlignCorrector`), `Contracts/ProfileDtos.cs` (`PolarAlignSettingsDto.PolarCorrectorAuto`), `EquipmentEndpoints` (`/polaralign/corrector/*`)
 
 **Related:** #1971, #1974, #1975
+
+---
+
+## 2026-11-17 — Restart when idle says queued or restarting, and can be cancelled: `status`, `DELETE /server/restart-on-idle`, `pending_restart`, `server.restart_cancelled` (#1951)
+
+**Endpoint(s) or area:** the 202 body of `POST /api/v1/server/restart-on-idle` becomes `RestartOnIdleAcceptedDto` (the `OperationAcceptedDto` fields plus `status`); new `DELETE /api/v1/server/restart-on-idle` (204, no body); `GET /api/v1/server/state` fills `pending_restart` while a request is queued; new WebSocket event `server.restart_cancelled` `{ reason, cancelled_utc }`.
+
+**Decision:** `status` is `queued` when a run that is not terminal (running, paused or aborting) holds the restart, and `restarting` when no run is on and the 2 s notice (`server.restart_imminent`) starts at once. A second POST while a request is pending answers the same `status` as the first. While a request is queued, `pending_restart` carries its `reason`, `requested_utc` and `restart_on_idle: true` (`planned_at_utc` null); it goes back to null when the request is cancelled or its notice starts. `DELETE` cancels a queued request: the daemon does not restart when the run ends, `pending_restart` goes null and `server.restart_cancelled` is published once with the request's `reason`. With nothing queued, or once the 2 s notice has started, `DELETE` answers 204 and does nothing. "Restart now", its notice and the exit code 75 restart (ADR 0017) do not change.
+
+**Reasoning:** the client must tell the operator whether the daemon is about to go away or is waiting for the run, and offer a way back from a request made by mistake. A cancel with nothing to cancel has already reached the state the caller wants, so it is a 204 no-op, not a 404 or 409: two clients that both press Cancel both succeed. Once the notice has started, clients are already told the daemon is going, so the cancel no longer applies. A paused run holds the restart because the operator may resume it (maintainer decision on #1865: any state that is not terminal), and an aborting run still saves its last frames, so it holds the restart until it is terminal.
+
+**Spec ref:** `Services/PlaceholderServerStateService.cs` (`RestartOnIdleAsync`, `CancelRestartOnIdleAsync`, `RunIsOnAsync`), `ISequencerService.UnfinishedRunIdsAsync`, `Contracts/ServerStateDtos.cs` (`RestartOnIdleAcceptedDto`, `PendingRestartDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`ServerRestartCancelled`), `ServerStateEndpoints` (`/restart-on-idle`)
+
+**Related:** #1865, #1951
