@@ -820,7 +820,7 @@
   "@deviceKeepSharpCustom": {
     "description": "Focuser window, Keep focus sharp: the refocus triggers were changed in Advanced Mode and match no preset (shown picked, cannot be tapped)"
   },
-  "deviceKeepSharpHint": "Refocus after a filter change, after {temp} of cooling, when stars grow {hfr} %, or every {hours} h.",
+  "deviceKeepSharpHint": "Refocus after a filter change, when the temperature changes by {temp}, when stars grow {hfr} %, or every {hours} h.",
   "@deviceKeepSharpHint": {
     "description": "Focuser window: what the picked Keep focus sharp preset does",
     "placeholders": {

@@ -1128,7 +1128,7 @@ abstract class AppLocalizations {
   /// Focuser window: what the picked Keep focus sharp preset does
   ///
   /// In en, this message translates to:
-  /// **'Refocus after a filter change, after {temp} of cooling, when stars grow {hfr} %, or every {hours} h.'**
+  /// **'Refocus after a filter change, when the temperature changes by {temp}, when stars grow {hfr} %, or every {hours} h.'**
   String deviceKeepSharpHint(String temp, String hfr, String hours);
 
   /// Focuser window: under Keep focus sharp when the triggers match no preset

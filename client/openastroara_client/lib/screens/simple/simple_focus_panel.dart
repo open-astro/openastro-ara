@@ -183,7 +183,7 @@ final simpleGuideExposureProvider =
     NotifierProvider<SimpleGuideExposure, double?>(SimpleGuideExposure.new);
 
 /// The exposure a Focus row highlights: the one picked, else the profile's
-/// autofocus exposure when it is one of [options] (what the daemon will use).
+/// autofocus exposure (what the daemon uses when the request leaves it out).
 double? simpleFocusExposureShown(WidgetRef ref, double? picked) =>
     picked ??
     ref

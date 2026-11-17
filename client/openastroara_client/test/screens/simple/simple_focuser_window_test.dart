@@ -669,7 +669,7 @@ void main() {
       );
       expect(
         find.text(
-          'Refocus after a filter change, after 2 °C of cooling, when stars grow 15 %, or every 2 h.',
+          'Refocus after a filter change, when the temperature changes by 2 °C, when stars grow 15 %, or every 2 h.',
         ),
         findsOneWidget,
       );
@@ -694,7 +694,7 @@ void main() {
       );
       expect(
         find.textContaining(
-          'after 1 °C of cooling, when stars grow 10 %, or every 1 h',
+          'when the temperature changes by 1 °C, when stars grow 10 %, or every 1 h',
         ),
         findsOneWidget,
       );

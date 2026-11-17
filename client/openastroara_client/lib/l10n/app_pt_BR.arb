@@ -171,7 +171,7 @@
   "deviceKeepSharpNormal": "Normal",
   "deviceKeepSharpTight": "Rigoroso",
   "deviceKeepSharpCustom": "Personalizado",
-  "deviceKeepSharpHint": "Refocar após trocar de filtro, após {temp} de resfriamento, quando as estrelas crescem {hfr} % ou a cada {hours} h.",
+  "deviceKeepSharpHint": "Refocar após trocar de filtro, quando a temperatura varia {temp}, quando as estrelas crescem {hfr} % ou a cada {hours} h.",
   "deviceKeepSharpCustomHint": "Definido nas Configurações do Modo Avançado. Escolha um ajuste para substituir esses valores.",
   "settingsAdvancedToggle": "Avançado",
   "autofocusStepSizeDerived": "Derivado: {steps} passos, {source}",

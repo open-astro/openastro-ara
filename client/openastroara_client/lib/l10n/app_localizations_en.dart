@@ -632,7 +632,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deviceKeepSharpHint(String temp, String hfr, String hours) {
-    return 'Refocus after a filter change, after $temp of cooling, when stars grow $hfr %, or every $hours h.';
+    return 'Refocus after a filter change, when the temperature changes by $temp, when stars grow $hfr %, or every $hours h.';
   }
 
   @override
