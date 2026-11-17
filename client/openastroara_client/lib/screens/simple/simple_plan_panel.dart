@@ -835,8 +835,12 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
     required this.onShowSky,
     required this.onPickInSky,
     required this.onCreated,
+    this.onSeeAll,
     this.editing,
   });
+
+  /// Tonight's Best row: opens the whole list (#1900); no button when null.
+  final VoidCallback? onSeeAll;
 
   /// The queued target being edited (its rows are in the plan rows); null
   /// when planning the next target.
@@ -1096,7 +1100,20 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final lists = <Widget>[
       // Tonight's best, ranked for the rest of tonight: one tap picks a target.
       if (best.isNotEmpty) ...[
-        Text(context.l10n.planTonightsBest, style: AraText.caption),
+        Row(
+          children: [
+            Expanded(
+              child: Text(context.l10n.planTonightsBest, style: AraText.caption),
+            ),
+            if (widget.onSeeAll != null)
+              OutlinedButton(
+                key: const Key('simple-run-best-see-all'),
+                onPressed: widget.onSeeAll,
+                style: OutlinedButton.styleFrom(minimumSize: const Size(44, 44)),
+                child: Text(context.l10n.bestSeeAll),
+              ),
+          ],
+        ),
         Wrap(
           spacing: AraSpace.s8,
           runSpacing: AraSpace.s8,

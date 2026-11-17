@@ -8104,5 +8104,277 @@
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
+  },
+  "bestNav": "Best",
+  "@bestNav": {
+    "description": "Rail and deck word for Tonight's Best"
+  },
+  "bestTitle": "Tonight's Best",
+  "@bestTitle": {
+    "description": "Tonight's Best screen title"
+  },
+  "bestSubtitle": "for the rest of tonight · updated {time}",
+  "@bestSubtitle": {
+    "description": "Subtitle: when the list was ranked (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bestSeeAll": "See all",
+  "@bestSeeAll": {
+    "description": "Plan sheet button that opens Tonight's Best"
+  },
+  "bestBack": "Back",
+  "@bestBack": {
+    "description": "Tonight's Best: back button"
+  },
+  "bestRefresh": "Refresh",
+  "@bestRefresh": {
+    "description": "Tonight's Best: rank again"
+  },
+  "bestSort": "Sort",
+  "@bestSort": {
+    "description": "Sort control label"
+  },
+  "bestSortScore": "Score",
+  "@bestSortScore": {
+    "description": "Sort by score"
+  },
+  "bestSortTransit": "Transit",
+  "@bestSortTransit": {
+    "description": "Sort by transit time; also the transit label"
+  },
+  "bestSortAltitude": "Altitude now",
+  "@bestSortAltitude": {
+    "description": "Sort by altitude now"
+  },
+  "bestType": "Type",
+  "@bestType": {
+    "description": "Type chips label"
+  },
+  "bestTypeAll": "All",
+  "@bestTypeAll": {
+    "description": "Type chip: every type"
+  },
+  "bestTypeGalaxy": "Galaxy",
+  "@bestTypeGalaxy": {
+    "description": "Type chip"
+  },
+  "bestTypeNebula": "Nebula",
+  "@bestTypeNebula": {
+    "description": "Type chip"
+  },
+  "bestTypeCluster": "Cluster",
+  "@bestTypeCluster": {
+    "description": "Type chip"
+  },
+  "bestTypePlanetary": "Planetary nebula",
+  "@bestTypePlanetary": {
+    "description": "Type chip"
+  },
+  "bestTypeOther": "Other",
+  "@bestTypeOther": {
+    "description": "Type chip"
+  },
+  "bestShow": "Show",
+  "@bestShow": {
+    "description": "Show control label"
+  },
+  "bestShowAll": "All night",
+  "@bestShowAll": {
+    "description": "Show: the whole night"
+  },
+  "bestShowUp": "Up now",
+  "@bestShowUp": {
+    "description": "Show: only Targets up now"
+  },
+  "bestPeak": "Peak altitude (at transit)",
+  "@bestPeak": {
+    "description": "Peak altitude control label"
+  },
+  "bestPeakAny": "Any",
+  "@bestPeakAny": {
+    "description": "Peak altitude: no minimum"
+  },
+  "bestPeakDeg": "{deg}°",
+  "@bestPeakDeg": {
+    "description": "Peak altitude minimum",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestField": "Field",
+  "@bestField": {
+    "description": "Fits my field control label"
+  },
+  "bestFitsOn": "Fits my field",
+  "@bestFitsOn": {
+    "description": "Only Targets that fit the field"
+  },
+  "bestFitsOff": "All fields",
+  "@bestFitsOff": {
+    "description": "Every Target, whatever its fit"
+  },
+  "bestFieldUnknown": "Field not known. Set your camera and telescope in Settings > Rig.",
+  "@bestFieldUnknown": {
+    "description": "Why Fits my field is off"
+  },
+  "bestCount": "{shown} of {total} Targets",
+  "@bestCount": {
+    "description": "Count line",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "bestKept": "Sort and filters are kept on this device.",
+  "@bestKept": {
+    "description": "Note under the controls"
+  },
+  "bestFitTooSmall": "Too small",
+  "@bestFitTooSmall": {
+    "description": "Framing fit"
+  },
+  "bestFitFills": "Fills the frame",
+  "@bestFitFills": {
+    "description": "Framing fit"
+  },
+  "bestFitMosaic": "Needs a mosaic",
+  "@bestFitMosaic": {
+    "description": "Framing fit"
+  },
+  "bestWindow": "Best {range}",
+  "@bestWindow": {
+    "description": "Best dark window, e.g. 20:40-03:20",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "bestTransitAt": "Transit {time}",
+  "@bestTransitAt": {
+    "description": "Transit time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bestHighest": "Highest {deg}°",
+  "@bestHighest": {
+    "description": "Peak altitude of the Target",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestNow": "Now {deg}°",
+  "@bestNow": {
+    "description": "Altitude now",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestNowBelow": "Now: below the horizon",
+  "@bestNowBelow": {
+    "description": "Altitude line of a Target under the horizon"
+  },
+  "bestMoon": "Moon {deg}° away: brighter sky",
+  "@bestMoon": {
+    "description": "Moon distance on a Target the Moon affects",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestInQueue": "In Queue",
+  "@bestInQueue": {
+    "description": "Marker and disabled button"
+  },
+  "bestCollected": "Collected",
+  "@bestCollected": {
+    "description": "Marker: already imaged"
+  },
+  "bestImage": "Image this",
+  "@bestImage": {
+    "description": "Opens the plan sheet on the Target"
+  },
+  "bestAddToQueue": "Add to Queue",
+  "@bestAddToQueue": {
+    "description": "Adds the Target while a plan runs"
+  },
+  "bestAdded": "{name} added to the Queue",
+  "@bestAdded": {
+    "description": "Pill after the add",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bestNoneTitle": "Nothing well placed tonight",
+  "@bestNoneTitle": {
+    "description": "Empty state"
+  },
+  "bestNoneBody": "No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.",
+  "@bestNoneBody": {
+    "description": "Empty state text"
+  },
+  "bestSearch": "Search",
+  "@bestSearch": {
+    "description": "Empty state action"
+  },
+  "bestNoSiteTitle": "Set your site",
+  "@bestNoSiteTitle": {
+    "description": "Empty state"
+  },
+  "bestNoSiteBody": "Tonight's Best ranks by where you are. Add your site and the list fills in.",
+  "@bestNoSiteBody": {
+    "description": "Empty state text"
+  },
+  "bestSetSite": "Set site",
+  "@bestSetSite": {
+    "description": "Empty state action"
+  },
+  "bestNoMatchTitle": "No Targets match",
+  "@bestNoMatchTitle": {
+    "description": "Filters hide every Target"
+  },
+  "bestNoMatchBody": "Your filters hide every Target.",
+  "@bestNoMatchBody": {
+    "description": "Empty state text"
+  },
+  "bestClearFilters": "Clear filters",
+  "@bestClearFilters": {
+    "description": "Resets the four filters"
+  },
+  "bestRigOff": "Rig not connected",
+  "@bestRigOff": {
+    "description": "Strip text"
+  },
+  "bestOffline": "Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.",
+  "@bestOffline": {
+    "description": "Note when the rig is not connected"
+  },
+  "bestLoadFailed": "Could not rank tonight's Targets.",
+  "@bestLoadFailed": {
+    "description": "Error text"
+  },
+  "bestRetry": "Try again",
+  "@bestRetry": {
+    "description": "Error action"
   }
 }

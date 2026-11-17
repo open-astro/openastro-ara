@@ -96,6 +96,7 @@ class SimpleScreenHost {
     this.onShowSky,
     this.onPickInSky,
     this.onSheetDone,
+    this.onSeeAll,
   });
 
   /// Queue: open the run sheet to add a target, or to edit row [i].
@@ -108,4 +109,7 @@ class SimpleScreenHost {
   final VoidCallback? onShowSky;
   final VoidCallback? onPickInSky;
   final VoidCallback? onSheetDone;
+
+  /// Plan's Tonight's Best row: See all opens the Best page.
+  final VoidCallback? onSeeAll;
 }

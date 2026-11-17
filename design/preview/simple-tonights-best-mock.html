@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Mode: Tonight's Best</title>
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as design/preview/plan-window-mock.html.
+     Day / Night here is the app's Night mode: the red luminance fold, applied to the scene only. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --okText: #81C784; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --stop: #D32F2F; --selbg: rgba(25,118,210,.32); --warnBg: rgba(255,179,0,.12);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 28px 16px 72px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 84ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+  .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; min-height: 44px; min-width: 44px; padding: 0 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  [hidden] { display: none !important; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .legend { color: var(--busy); font-size: 12px; }
+  .where { color: var(--text2); font-size: 13px; box-shadow: inset 0 0 0 1px rgba(255,179,0,.5); border-radius: 8px; padding: 6px 10px; max-width: 92ch; }
+  .where b { color: var(--text); font-weight: 600; }
+  .stage { overflow-x: auto; padding-bottom: 6px; }
+
+  /* The device scene */
+  .dev { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; flex: none; margin: 0 auto;
+         background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .dev.ipad { width: 1024px; height: 720px; }
+  .dev.phone { width: 390px; height: 844px; }
+  body.night .dev { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .p { position: absolute; background: rgba(14,14,14,.92); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .strip { left: 0; right: 0; top: 0; height: 56px; border-radius: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  .strip .grow { flex: 1; min-width: 0; }
+  .mark { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--link); flex: none; }
+  .dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .warn { color: var(--busy); font-size: 13px; white-space: nowrap; }
+  .ic { vertical-align: -2px; flex: none; }
+  .ib svg { width: 20px; height: 20px; }
+  .ib { width: 44px; height: 44px; border-radius: 10px; border: 0; background: transparent; color: var(--text); display: grid; place-items: center; font-size: 17px; cursor: default; }
+  .rail { left: 16px; top: 72px; width: 76px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 62px; min-height: 52px; border-radius: 8px; background: var(--tile); color: var(--text); border: 0; font: 12px/1.2 var(--sys); padding: 4px 2px; cursor: default; }
+  .chip.on { background: var(--sel); color: #fff; }
+  .chip.go { cursor: pointer; }
+  .rrail { right: 16px; top: 72px; width: 76px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; background: none; }
+  .shutter b { width: 0; height: 0; border-left: 20px solid #fff; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 6px; }
+  .stop { right: 16px; bottom: 16px; width: 60px; height: 60px; border-radius: 10px; background: var(--stop); color: #fff; font: 700 12px var(--sys); display: grid; place-items: center; border: 0; }
+  .hint { position: absolute; left: 50%; top: 46%; transform: translateX(-50%); color: var(--text2); text-align: center; max-width: 320px; }
+  .deck { left: 8px; right: 8px; bottom: 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .deck .row { display: flex; gap: 8px; align-items: center; }
+  .deck .sections { overflow-x: auto; scrollbar-width: none; }
+  .deck .sections .chip { flex: none; width: auto; min-width: 64px; padding: 4px 12px; min-height: 44px; }
+  .deck .row .chip { min-height: 44px; flex: 1; width: auto; }
+  .deck .stop { position: static; margin-left: auto; flex: none; }
+  .deck .shutter { flex: none; }
+
+  /* Screen panel */
+  .screen { display: flex; flex-direction: column; min-width: 0; overflow: hidden; z-index: 2; }
+  .ipad .screen { left: 108px; right: 108px; top: 72px; bottom: 16px; }
+  .phone .screen { left: 8px; right: 8px; top: 64px; bottom: 200px; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .head h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .head small { display: block; color: var(--text2); font-size: 12px; }
+  .head .grow { flex: 1; min-width: 0; }
+  .btn { min-height: 44px; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 6px 14px; white-space: nowrap; }
+  .btn.out { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .btn.go { background: #1565C0; color: #fff; }
+  .btn.amber { background: transparent; color: var(--busy); box-shadow: inset 0 0 0 1.5px var(--busy); }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
+  .btn[aria-pressed="true"] { background: var(--selbg); color: #cfe3fb; box-shadow: inset 0 0 0 1.5px var(--link); }
+  .body { display: flex; min-height: 0; flex: 1; }
+  .listcol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #2a2a2a; }
+  .bar .r { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .phone .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .fchip { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 0; background: var(--tile); color: var(--text); font: 13px var(--sys); cursor: pointer; white-space: nowrap; flex: none; }
+  .fchip[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .count { color: var(--text2); font-size: 12px; }
+  .scroll { overflow-y: auto; flex: 1; padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .banner { padding: 8px 12px; border-radius: 10px; background: var(--warnBg); box-shadow: inset 0 0 0 1px rgba(255,179,0,.45); color: var(--text); font-size: 13px; }
+  .banner b { color: var(--busy); font-weight: 600; }
+
+  /* Row. The .art backgrounds are stand-ins for the catalogue Art (a photograph in the app), not decoration. */
+  .row-t { display: grid; grid-template-columns: 56px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.9fr) auto; gap: 12px; align-items: center;
+           background: var(--tile); border-radius: 12px; padding: 8px 10px; }
+  .row-t.sel { background: var(--selbg); box-shadow: inset 0 0 0 1.5px var(--link); }
+  .tap { background: none; border: 0; color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer; display: block; min-width: 0; }
+  .nm { min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+  .nm b { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+  .nm .sub { color: #B8B8B8; font-size: 12px; }
+  .nm .fit { font-size: 13px; }
+  .fit.bad { color: var(--busy); }
+  .moon { color: var(--busy); font-size: 12px; }
+  .fact { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; }
+  .fact small { display: block; color: #B8B8B8; font-size: 12px; }
+  .acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .marks { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--border); color: var(--text); white-space: nowrap; }
+  .tag.col { box-shadow: inset 0 0 0 1px rgba(76,175,80,.7); color: var(--okText); }
+  .tag.q { box-shadow: inset 0 0 0 1px var(--link); color: var(--link); }
+  .art { width: 56px; height: 56px; border-radius: 8px; background-color: #0b0d14; flex: none; }
+  .art.galaxy { background-image: radial-gradient(ellipse 36% 14% at 50% 50%, rgba(255,230,190,.95) 0 55%, transparent 100%), radial-gradient(circle at 20% 25%, #fff 0 1px, transparent 2px), radial-gradient(circle at 80% 75%, #fff 0 1px, transparent 2px); transform: none; }
+  .art.nebula { background-image: radial-gradient(circle at 45% 50%, rgba(255,120,150,.85) 0 10%, rgba(160,80,200,.5) 28%, transparent 55%), radial-gradient(circle at 75% 25%, #fff 0 1px, transparent 2px); }
+  .art.cluster { background-image: radial-gradient(circle at 50% 50%, #fff 0 3px, rgba(255,230,160,.6) 8px, transparent 22px), radial-gradient(circle at 30% 70%, #fff 0 1px, transparent 2px), radial-gradient(circle at 70% 30%, #fff 0 1px, transparent 2px), radial-gradient(circle at 62% 68%, #ddd 0 1px, transparent 2px); }
+  .art.planetary { background-image: radial-gradient(circle at 50% 50%, transparent 0 8px, rgba(80,220,200,.85) 10px, rgba(60,160,220,.45) 16px, transparent 24px); }
+  .art.other { background-image: radial-gradient(circle at 40% 55%, rgba(255,160,90,.6) 0 8%, transparent 40%), radial-gradient(circle at 70% 30%, #fff 0 1px, transparent 2px), radial-gradient(circle at 25% 25%, #fff 0 1px, transparent 2px); }
+
+  .phone .row-t { grid-template-columns: 56px minmax(0,1fr); grid-template-areas: "art name" "facts facts" "acts acts"; row-gap: 6px; }
+  .phone .row-t > .art { grid-area: art; }
+  .phone .row-t .tap { grid-area: name; }
+  .phone .row-t .acts { grid-area: acts; flex-direction: row; justify-content: space-between; align-items: center; width: 100%; }
+  .phone .row-t .facts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; grid-area: facts; }
+  .ipad .facts2 { display: contents; }
+
+  /* Side pane (iPad) and sky view */
+  .side { width: 288px; flex: none; border-left: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  .sky { aspect-ratio: 1; border-radius: 12px; position: relative; background: radial-gradient(circle at 50% 60%, #1c2230 0, #0b0d14 70%); box-shadow: inset 0 0 0 1px var(--border); overflow: hidden; }
+  .sky::before { content: ""; position: absolute; left: 0; right: 0; bottom: 18%; border-top: 1px dashed var(--text2); }
+  .sky .tgt { position: absolute; left: 56%; top: 34%; width: 44px; height: 44px; margin: -22px; border-radius: 50%; box-shadow: 0 0 0 2px var(--link); }
+  .sky .tgt::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--link); }
+  .sky span { position: absolute; left: 8px; top: 8px; right: 8px; font-size: 12px; color: var(--text2); }
+  .sky em { position: absolute; left: 8px; bottom: 6px; font-size: 12px; font-style: normal; color: var(--text2); }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; }
+  .kv small { display: block; color: var(--text2); font-size: 12px; }
+  .detail { padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; }
+
+  .empty { margin: auto; text-align: center; max-width: 320px; padding: 24px 12px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .empty h3 { margin: 0; font-size: 18px; font-weight: 600; }
+  .empty p { margin: 0; color: var(--text2); }
+
+  /* Plan sheet */
+  .sheet { z-index: 4; display: flex; flex-direction: column; overflow: hidden; }
+  .ipad .sheet { right: 108px; top: 72px; bottom: 92px; width: 440px; }
+  .phone .sheet { left: 8px; right: 8px; top: 64px; bottom: 200px; }
+  .sheet .scroll { gap: 10px; }
+  .sect { color: var(--text2); font-size: 12px; letter-spacing: .06em; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card { display: flex; flex-direction: column; gap: 1px; text-align: left; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 14px var(--sys); cursor: pointer; min-height: 44px; }
+  .card small { color: #B8B8B8; font-size: 12px; }
+  .card.sel { background: var(--selbg); box-shadow: inset 0 0 0 1.5px var(--link); }
+  .card.sel small { color: #cfe3fb; }
+  .card .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card .hrs { font-variant-numeric: tabular-nums; color: var(--okText); font-size: 13px; white-space: nowrap; }
+  .hero { display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 12px; padding: 10px; border-radius: 12px; background: var(--selbg); box-shadow: inset 0 0 0 1.5px var(--link); }
+  .hero .art { width: 76px; height: 76px; }
+  .hero h3 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.25; }
+  .hero .src { color: #cfe3fb; font-size: 12px; }
+  .rowline { color: var(--text2); font-size: 13px; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 10px; }
+
+  /* Status card (messages, no popups) */
+  .msg { position: absolute; z-index: 6; left: 108px; top: 64px; max-width: 420px; padding: 10px 12px; border-radius: 10px; background: rgba(14,14,14,.95);
+         box-shadow: inset 0 0 0 1px var(--border); display: flex; gap: 8px; font-size: 13px; }
+  .phone .msg { left: 12px; right: 12px; max-width: none; top: 62px; }
+  .msg i { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--ok); flex: none; }
+  .msg.warnm i { background: var(--busy); }
+  @media (prefers-reduced-motion: no-preference) { .card, .row-t { transition: background .15s; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 id="h1">Simple Mode: Tonight's Best</h1>
+  <p class="note" id="note"></p>
+  <div class="controls" id="ctl"></div>
+  <div class="where" id="where"></div>
+  <div class="stage"><div class="dev ipad" id="dev"></div></div>
+</div>
+
+<script>
+// ---------- strings (EN / pt-BR) ----------
+const L = {
+ en: {
+  title:"Simple Mode: Tonight's Best",
+  note:"Example data only (made-up site, one night, clock 22:05). Dashed amber outlines mark what is new against today's Simple Mode. Everything is clickable: pick an entry, open the Screen, sort, filter, tap a row, tap Image this.",
+  device:"Device", ipad:"iPad landscape", phone:"Phone 390 x 844", look:"Look", day:"Day", night:"Night", lang:"Language",
+  state:"State", st_n:"Ranked list", st_e:"Nothing well placed", st_s:"Set your site", st_r:"No rig", plan:"Plan", p_off:"Not running", p_on:"Running",
+  entry:"Entry", jump:"Jump to", j_home:"Home", j_plan:"Plan sheet", j_best:"Tonight's Best",
+  eA:"A · Nav item", eB:"B · In Sky Map", eC:"C · See all only (recommended)",
+  w_home:"Home. Entry A adds a Best item to the rail. Entry B puts a Tonight's Best button in the Sky Map (tap Sky Map). Entry C has no new item: open Plan, then See all.",
+  w_A:"Entry A: a sixth section, Best, in the rail (the phone's section row). Costs a rail slot and makes six Screens.",
+  w_B:"Entry B: Tonight's Best button in the Sky Map's top bar, beside Search. Adds no section.",
+  w_C:"Entry C: no new control. The Plan sheet's row has See all, which story 21 needs anyway.",
+  seeall:"See all", tb:"TONIGHT'S BEST", tb_sub:"for the rest of tonight · updated 22:05", left:"h left above 30°",
+  back:"Back", close:"Close", best:"Tonight's Best", upd:"for the rest of tonight · updated 22:05",
+  sort:"Sort", s_score:"Score", s_transit:"Transit", s_alt:"Altitude now", type:"Type", all:"All",
+  g_galaxy:"Galaxy", g_nebula:"Nebula", g_cluster:"Cluster", g_planetary:"Planetary nebula", g_other:"Other",
+  show:"Show", sh_all:"All night", sh_up:"Up now", n_of:"of", targets:"Targets",
+  f_small:"Too small", f_fill:"Fills the frame", f_mos:"Needs a mosaic", bestwin:"Best", transit:"Transit", high:"Highest", now:"Now", below:"below the horizon",
+  moonp:"Moon", moonaway:"away: brighter sky", queue:"In Queue", coll:"Collected",
+  imgthis:"Image this", addq:"Add to Queue", inq:"In Queue",
+  sky:"Sky", skyph:"Sky view goes here. The sky points at the Target.", horizon:"horizon",
+  e_title:"Nothing well placed tonight", e_body:"No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.", e_btn:"Search",
+  s_title:"Set your site", s_body:"Tonight's Best ranks by where you are. Add your site and the list fills in.", s_btn:"Set site",
+  nf_title:"No Targets match", nf_body:"Your filters hide every Target.", nf_btn:"Clear filters",
+  r_bar:"Rig not connected", r_note:"Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.",
+  added:"added to the Queue", opens:"Opens Settings › Rig", opensS:"Opens Search",
+  plan_t:"Plan", picked:"Picked · Tonight's Best", total:"frames · fits before 30° or dawn", start:"Start now", addlater:"Add to queue",
+  kept:"Sort and filters are kept on this device.",
+  skymap:"Sky Map", info:"Info", library:"Library", sec:["Preview","Focus","P.A.","Guider","Plan","Monitor"], secBest:"Best", rail:["Preview","Focus","P.A.","Guider","Queue"],
+  stop:"STOP", search:"Search", nightbtn:"Night mode", gear:"Settings", chip:"Settings chip", notmock:"Not part of this mock",
+  atype:{galaxy:"Galaxy",nebula:"Nebula",cluster:"Cluster",planetary:"Planetary nebula"},
+  hrs:"h"
+ },
+ pt: {
+  title:"Modo Simples: Melhores da Noite",
+  note:"Somente dados de exemplo (local inventado, uma noite, relógio 22:05). Contornos tracejados em âmbar marcam o que é novo no Modo Simples de hoje. Tudo é clicável: escolha uma entrada, abra a Tela, ordene, filtre, toque numa linha, toque em Fotografar.",
+  device:"Aparelho", ipad:"iPad na horizontal", phone:"Celular 390 x 844", look:"Aparência", day:"Dia", night:"Noite", lang:"Idioma",
+  state:"Estado", st_n:"Lista ordenada", st_e:"Nada bem posicionado", st_s:"Defina seu local", st_r:"Sem equipamento", plan:"Plano", p_off:"Parado", p_on:"Em execução",
+  entry:"Entrada", jump:"Ir para", j_home:"Início", j_plan:"Folha do Plano", j_best:"Melhores da Noite",
+  eA:"A · Item de navegação", eB:"B · No Mapa do Céu", eC:"C · Só Ver tudo (recomendada)",
+  w_home:"Início. A entrada A adiciona um item Melhores à barra. A entrada B põe um botão Melhores da Noite no Mapa do Céu (toque em Mapa do Céu). A entrada C não tem item novo: abra o Plano e depois Ver tudo.",
+  w_A:"Entrada A: uma sexta seção, Melhores, na barra (na fileira de seções do celular). Gasta um lugar na barra e faz seis Telas.",
+  w_B:"Entrada B: botão Melhores da Noite na barra superior do Mapa do Céu, ao lado da Busca. Não adiciona seção.",
+  w_C:"Entrada C: nenhum controle novo. A linha da folha do Plano já tem Ver tudo, que a história 21 exige de qualquer forma.",
+  seeall:"Ver tudo", tb:"MELHORES DA NOITE", tb_sub:"para o resto da noite · atualizado 22:05", left:"h restantes acima de 30°",
+  back:"Voltar", close:"Fechar", best:"Melhores da Noite", upd:"para o resto da noite · atualizado 22:05",
+  sort:"Ordem", s_score:"Nota", s_transit:"Trânsito", s_alt:"Altura agora", type:"Tipo", all:"Todos",
+  g_galaxy:"Galáxia", g_nebula:"Nebulosa", g_cluster:"Aglomerado", g_planetary:"Nebulosa planetária", g_other:"Outros",
+  show:"Mostrar", sh_all:"A noite toda", sh_up:"Visíveis agora", n_of:"de", targets:"Alvos",
+  f_small:"Pequeno demais", f_fill:"Preenche o quadro", f_mos:"Precisa de mosaico", bestwin:"Melhor", transit:"Trânsito", high:"Máxima", now:"Agora", below:"abaixo do horizonte",
+  moonp:"Lua", moonaway:"de distância: céu mais claro", queue:"Na Fila", coll:"Coletado",
+  imgthis:"Fotografar", addq:"Adicionar à Fila", inq:"Na Fila",
+  sky:"Céu", skyph:"A vista do céu fica aqui. O céu aponta para o Alvo.", horizon:"horizonte",
+  e_title:"Nada bem posicionado esta noite", e_body:"Nenhum Alvo fica acima de 30° por tempo suficiente para este equipamento esta noite. Tente amanhã ou busque um Alvo pelo nome.", e_btn:"Buscar",
+  s_title:"Defina seu local", s_body:"Melhores da Noite classifica pelo lugar onde você está. Adicione seu local e a lista aparece.", s_btn:"Definir local",
+  nf_title:"Nenhum Alvo corresponde", nf_body:"Seus filtros escondem todos os Alvos.", nf_btn:"Limpar filtros",
+  r_bar:"Equipamento não conectado", r_note:"Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; o equipamento executa depois.",
+  added:"adicionado à Fila", opens:"Abre Ajustes › Equipamento", opensS:"Abre a Busca",
+  plan_t:"Plano", picked:"Escolhido · Melhores da Noite", total:"quadros · cabem antes de 30° ou do amanhecer", start:"Começar agora", addlater:"Adicionar à fila",
+  kept:"Ordem e filtros ficam salvos neste aparelho.",
+  skymap:"Mapa do Céu", info:"Info", library:"Biblioteca", sec:["Prévia","Foco","Alinh.","Guia","Plano","Monitor"], secBest:"Melhores", rail:["Prévia","Foco","Alinh.","Guia","Fila"],
+  stop:"PARAR", search:"Buscar", nightbtn:"Modo noturno", gear:"Ajustes", chip:"Chip de ajustes", notmock:"Fora desta maquete",
+  atype:{galaxy:"Galáxia",nebula:"Nebulosa",cluster:"Aglomerado",planetary:"Nebulosa planetária"},
+  hrs:"h"
+ }
+};
+
+// ---------- example data ----------
+// [id, en name, pt name, group, sub[en,pt]|null, score, bestStart, bestEnd, transit, maxAlt, altNow, fit s|f|m, moon° | 0, inQueue, collected]
+const D = [
+ ["NGC 253","Sculptor Galaxy","Galáxia do Escultor","galaxy",null,96,"20:40","03:20","00:05",80,62,"f",0,0,1],
+ ["IC 5148","Spare Tyre Nebula","Nebulosa do Pneu Sobressalente","planetary",null,94,"20:30","03:00","23:50",78,71,"f",0,1,0],
+ ["NGC 7293","Helix Nebula","Nebulosa da Hélice","planetary",null,92,"20:10","02:20","22:40",75,66,"f",0,0,1],
+ ["NGC 300","Sculptor Pinwheel","Catavento do Escultor","galaxy",null,90,"21:00","02:50","23:30",64,49,"f",0,0,0],
+ ["NGC 104","47 Tucanae","47 Tucanae","cluster",null,88,"20:00","02:00","22:55",73,70,"f",0,0,1],
+ ["NGC 55","Whale Galaxy","Galáxia da Baleia","galaxy",null,87,"20:20","02:30","23:10",72,60,"m",0,0,0],
+ ["NGC 1365","Great Barred Spiral","Grande Espiral Barrada","galaxy",null,85,"22:30","05:10","02:45",68,28,"f",0,0,0],
+ ["NGC 7009","Saturn Nebula","Nebulosa de Saturno","planetary",null,83,"20:40","01:50","23:10",72,69,"s",0,0,0],
+ ["NGC 362","","","cluster",null,81,"20:30","01:20","22:30",71,68,"f",0,0,0],
+ ["NGC 1097","","","galaxy",null,80,"21:30","04:10","00:55",72,50,"f",0,0,0],
+ ["NGC 1316","Fornax A","Fornax A","galaxy",null,78,"21:40","04:20","01:10",75,52,"f",0,0,1],
+ ["SMC","Small Magellanic Cloud","Pequena Nuvem de Magalhães","galaxy",null,77,"20:00","03:30","23:40",76,70,"m",0,0,0],
+ ["NGC 2070","Tarantula Nebula","Nebulosa da Tarântula","nebula",null,75,"23:10","05:30","03:25",83,22,"f",0,0,0],
+ ["M31","Andromeda Galaxy","Galáxia de Andrômeda","galaxy",null,73,"19:00","00:20","20:45",56,41,"m",0,0,0],
+ ["NGC 6744","","","galaxy",null,71,"20:20","03:10","23:20",70,63,"f",0,0,0],
+ ["NGC 1851","","","cluster",null,69,"22:00","04:00","01:20",76,44,"s",0,0,0],
+ ["M42","Orion Nebula","Nebulosa de Órion","nebula",null,66,"23:50","04:30","01:50",72,14,"f",41,0,1],
+ ["NGC 2264","Cone and Christmas Tree","Cone e Árvore de Natal","nebula",null,60,"00:30","05:00","02:20",50,-6,"f",36,0,0],
+ ["M45","Pleiades","Plêiades","cluster",null,57,"00:10","05:00","03:00",52,-3,"m",44,0,0],
+ ["NGC 2237","Rosette Nebula","Nebulosa da Roseta","nebula",null,54,"00:40","05:10","02:30",58,-9,"m",39,0,0],
+ ["NGC 5139","Omega Centauri","Ômega do Centauro","cluster",null,52,"02:00","06:00","04:40",78,-20,"f",0,0,1],
+ ["NGC 3372","Carina Nebula","Nebulosa de Carina","nebula",null,49,"03:40","06:00","05:30",79,-35,"m",0,0,0],
+ ["Alpha Cen","Alpha Centauri","Alfa do Centauro","other",["Double star","Estrela dupla"],44,"03:00","06:00","05:00",80,-30,"s",0,0,0],
+ ["M33","Triangulum Galaxy","Galáxia do Triângulo","galaxy",null,41,"20:30","01:30","23:00",26,24,"m",0,0,0],
+ ["Gum 12","Vela Supernova Remnant","Remanescente de Supernova de Vela","other",["Supernova remnant","Remanescente de supernova"],38,"04:30","06:00","05:40",60,-40,"m",0,0,0],
+];
+const GROUPS = ["galaxy","nebula","cluster","planetary","other"];
+const S = { dev:"ipad", night:false, lang:"en", state:"n", running:false, entry:"C", view:"home", sheet:false, sel:null, detail:false, sort:"score", types:[], up:false, sky:false, msg:null };
+try { const k = JSON.parse(localStorage.getItem("tbMock") || "null"); if (k) { S.sort = k.sort || S.sort; S.types = k.types || []; S.up = !!k.up; } } catch (e) {}
+const $ = (id) => document.getElementById(id);
+const t = (k) => L[S.lang][k];
+const mins = (hm) => { const [h, m] = hm.split(":").map(Number); return ((h * 60 + m) - 18 * 60 + 1440) % 1440; }; // minutes since 18:00
+const P = { search:"M10.5 10.5 14 14M7 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z", moon:"M13 9.5A5.5 5.5 0 1 1 6.5 3a4.5 4.5 0 0 0 6.5 6.5Z", gear:"M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4ZM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4", check:"M3 8.5 6.5 12 13 4.5", queue:"M2 4h12M2 8h12M2 12h8", back:"M10 3 5 8l5 5", small:"M3 13 13 3M3 13V8M3 13h5", fill:"M3 3h10v10H3Z", mosaic:"M2 2h5.5v5.5H2ZM8.5 2H14v5.5H8.5ZM2 8.5h5.5V14H2ZM8.5 8.5H14V14H8.5Z" };
+const ico = (n) => `<svg class="ic" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${P[n]}"/></svg>`;
+let timer = 0;
+
+function rows() {
+  let r = D.map((d) => ({ id:d[0], name:S.lang === "pt" ? (d[2] || d[1]) : d[1], g:d[3], sub:d[4] ? d[4][S.lang === "pt" ? 1 : 0] : null, score:d[5], w0:d[6], w1:d[7], tr:d[8], max:d[9], now:d[10], fit:d[11], moon:d[12], q:d[13], c:d[14] }));
+  const qSet = new Set(S.queued || []); r.forEach((o) => { if (qSet.has(o.id)) o.q = 1; });
+  if (S.types.length) r = r.filter((o) => S.types.includes(o.g));
+  if (S.up) r = r.filter((o) => o.now > 0);
+  r.sort(S.sort === "transit" ? (a, b) => mins(a.tr) - mins(b.tr) : S.sort === "alt" ? (a, b) => b.now - a.now : (a, b) => b.score - a.score);
+  return r;
+}
+const all = () => D.map((d) => ({ id:d[0], name:S.lang === "pt" ? (d[2] || d[1]) : d[1], g:d[3], now:d[10], max:d[9], hrs:Math.max(0.5, +((d[9] - 10) / 12).toFixed(1)) }));
+const typeLabel = (o) => o.sub || t("g_" + o.g);
+const fitTxt = (f) => ({ s:[ico("small") + " " + t("f_small"), 1], f:[ico("fill") + " " + t("f_fill"), 0], m:[ico("mosaic") + " " + t("f_mos"), 1] })[f];
+const nameOf = (o) => o.id + (o.name ? " · " + o.name : "");
+const byId = (id) => D.find((d) => d[0] === id);
+
+function rowHTML(o) {
+  const f = fitTxt(o.fit);
+  const isQ = o.q, runningAdd = S.running;
+  const imgLabel = isQ && runningAdd ? t("inq") : runningAdd ? t("addq") : t("imgthis");
+  const dis = isQ && runningAdd ? " disabled aria-disabled='true'" : "";
+  return `<div class="row-t${S.sel === o.id ? " sel" : ""}" data-id="${o.id}">
+    <div class="art ${o.g}" role="img" aria-label="Art"></div>
+    <button type="button" class="tap" data-act="open" data-id="${o.id}"><span class="nm"><b>${nameOf(o)}</b>
+      <span class="sub">${typeLabel(o)}</span><span class="fit ${f[1] ? "bad" : ""}">${f[0]}</span>
+      ${o.moon ? `<span class="moon">${ico("moon")} ${t("moonp")} ${o.moon}° ${t("moonaway")}</span>` : ""}</span></button>
+    <div class="facts2">
+      <div class="fact f-when"><small>${t("bestwin")} ${o.w0}–${o.w1}</small>${t("transit")} ${o.tr}</div>
+      <div class="fact f-alt"><small>${t("high")} ${o.max}°</small>${t("now")} ${o.now > 0 ? o.now + "°" : t("below")}</div></div>
+    <div class="acts"><div class="marks">${o.q ? `<span class="tag q">${ico("queue")} ${t("queue")}</span>` : ""}${o.c ? `<span class="tag col">${ico("check")} ${t("coll")}</span>` : ""}</div>
+      <button type="button" class="btn ${isQ && runningAdd ? "out" : "go"} sm" data-act="img" data-id="${o.id}"${dis}>${imgLabel}</button></div></div>`;
+}
+function emptyHTML(kind) {
+  const m = { e:["e_title","e_body","e_btn","search"], s:["s_title","s_body","s_btn","site"], f:["nf_title","nf_body","nf_btn","clear"] }[kind];
+  return `<div class="empty"><h3>${t(m[0])}</h3><p>${t(m[1])}</p><button type="button" class="btn ${kind === "s" ? "amber" : "out"}" data-act="${m[3]}">${t(m[2])}</button></div>`;
+}
+function sideHTML(o) {
+  const f = fitTxt(o.fit);
+  return `<div class="sky" role="img" aria-label="${t("sky")}"><span>${t("skyph")}</span><i class="tgt"></i><em>${t("horizon")}</em></div>
+    <div><b>${nameOf(o)}</b><div class="rowline">${typeLabel(o)} · ${f[0]}</div></div>
+    <div class="kv"><div><small>${t("bestwin")}</small>${o.w0}–${o.w1}</div><div><small>${t("transit")}</small>${o.tr}</div>
+      <div><small>${t("high")}</small>${o.max}°</div><div><small>${t("now")}</small>${o.now > 0 ? o.now + "°" : t("below")}</div></div>
+    ${o.moon ? `<div class="moon">${ico("moon")} ${t("moonp")} ${o.moon}° ${t("moonaway")}</div>` : ""}
+    <button type="button" class="btn go" data-act="img" data-id="${o.id}">${S.running ? (o.q ? t("inq") : t("addq")) : t("imgthis")}</button>`;
+}
+function screenHTML() {
+  const phone = S.dev === "phone", selRow = S.sel ? mapRow(S.sel) : null;
+  let head, inner;
+  if (phone && S.detail && selRow) {
+    head = `<div class="head"><button type="button" class="btn out" data-act="back">${ico("back")} ${t("back")}</button><div class="grow"><h2>${t("sky")}</h2></div></div>`;
+    return head + `<div class="detail">${sideHTML(selRow)}</div>`;
+  }
+  head = `<div class="head"><button type="button" class="btn out" data-act="home">${ico("back")} ${t("back")}</button><div class="grow"><h2>${t("best")}</h2><small>${t("upd")}</small></div></div>`;
+  const noSite = S.state === "s", none = S.state === "e", noRig = S.state === "r";
+  let list;
+  if (noSite) list = emptyHTML("s"); else if (none) list = emptyHTML("e");
+  else { const r = rows(); list = r.length ? r.map(rowHTML).join("") : emptyHTML("f"); }
+  const showBar = !noSite && !none;
+  const bar = showBar ? `<div class="bar">
+    <div class="r"><span class="lbl">${t("sort")}</span><span class="seg" role="group" aria-label="${t("sort")}">
+      ${[["score","s_score"],["transit","s_transit"],["alt","s_alt"]].map((x) => `<button type="button" data-sort="${x[0]}" aria-pressed="${S.sort === x[0]}">${t(x[1])}</button>`).join("")}</span></div>
+    <div class="r"><span class="lbl">${t("show")}</span><span class="seg" role="group" aria-label="${t("show")}">
+      <button type="button" data-up="0" aria-pressed="${!S.up}">${t("sh_all")}</button><button type="button" data-up="1" aria-pressed="${S.up}">${t("sh_up")}</button></span></div>
+    <div class="chips" role="group" aria-label="${t("type")}"><button type="button" class="fchip" data-type="all" aria-pressed="${!S.types.length}">${t("all")}</button>
+      ${GROUPS.map((g) => `<button type="button" class="fchip" data-type="${g}" aria-pressed="${S.types.includes(g)}">${t("g_" + g)}</button>`).join("")}</div>
+    <div class="count">${rows().length} ${t("n_of")} ${D.length} ${t("targets")} · ${t("kept")}</div></div>` : "";
+  const banner = noRig ? `<div class="banner"><b>${t("r_bar")}.</b> ${t("r_note")}</div>` : "";
+  const side = !phone && selRow && showBar ? `<aside class="side">${sideHTML(selRow)}</aside>` : "";
+  return head + `<div class="body"><div class="listcol">${bar}<div class="scroll">${banner}${list}</div></div>${side}</div>`;
+}
+function mapRow(id) { const d = byId(id); return { id:d[0], name:S.lang === "pt" ? (d[2] || d[1]) : d[1], g:d[3], sub:d[4] ? d[4][S.lang === "pt" ? 1 : 0] : null, w0:d[6], w1:d[7], tr:d[8], max:d[9], now:d[10], fit:d[11], moon:d[12], q:d[13] || ((S.queued || []).includes(d[0]) ? 1 : 0), c:d[14] }; }
+
+function sheetHTML() {
+  const top4 = all().slice(0, 4).map((o) => ({ ...o }));
+  const cards = top4.map((o) => `<button type="button" class="card${S.sel === o.id ? " sel" : ""}" data-act="pick" data-id="${o.id}"><span class="top"><span>${nameOf(o)}</span><span class="hrs">${o.hrs.toFixed(1)} ${t("hrs")}</span></span>
+    <small>${t("atype")[o.g] || t("g_other")} · ${o.now > 0 ? o.now + "°" : t("below")}</small></button>`).join("");
+  const s = S.sel ? mapRow(S.sel) : null;
+  const hero = s ? `<div class="hero"><div class="art ${s.g}" role="img" aria-label="Art"></div><div style="min-width:0"><div class="src">${t("picked")}</div><h3>${nameOf(s)}</h3>
+    <div class="rowline">${t("high")} ${s.max}° · ${t("now")} ${s.now > 0 ? s.now + "°" : t("below")} · ${fitTxt(s.fit)[0]}</div></div></div>` : "";
+  return `<div class="head"><button type="button" class="btn out" data-act="closesheet">${ico("back")} ${t("back")}</button><div class="grow"><h2>${t("plan_t")}</h2></div></div>
+    <div class="scroll"><div class="sect"><span>${t("tb")}</span><button type="button" class="btn out sm new" data-act="seeall">${t("seeall")}</button></div>
+      <small class="rowline" style="margin-top:-6px">${t("tb_sub")}</small>${cards}${hero}
+      <div style="display:flex; gap:8px; flex-wrap:wrap"><button type="button" class="btn out" style="flex:1">${t("addlater")}</button><button type="button" class="btn go" style="flex:1">${t("start")}</button></div></div>`;
+}
+function skyMapHTML() {
+  const b = S.entry === "B" ? `<button type="button" class="btn go new" data-act="best">${t("best")}</button>` : "";
+  return `<div class="head"><button type="button" class="btn out" data-act="home">${ico("back")} ${t("back")}</button><div class="grow"><h2>${t("skymap")}</h2></div>${b}<button type="button" class="btn out" data-act="search">${t("search")}</button></div>
+    <div class="detail"><div class="sky" role="img" aria-label="${t("sky")}"><span>${t("skyph")}</span><i class="tgt"></i><em>${t("horizon")}</em></div></div>`;
+}
+function shellHTML() {
+  const phone = S.dev === "phone", A = S.entry === "A";
+  const strip = `<div class="p strip"><i class="mark"></i>${S.state === "r" ? `<span class="warn">${t("r_bar")}</span>` : `<span class="dot"><i></i>Camera</span>${phone ? "" : `<span class="dot"><i></i>Mount</span>`}`}<span class="grow"></span>
+    <button class="ib" type="button" aria-label="${t("search")}">${ico("search")}</button><button class="ib" type="button" aria-label="${t("nightbtn")}">${ico("moon")}</button><button class="ib" type="button" aria-label="${t("gear")}">${ico("gear")}</button></div>`;
+  let h = strip;
+  const hintShown = S.view === "home" && !S.sheet;
+  const hint = hintShown ? `<div class="hint">${S.lang === "pt" ? "Toque no obturador para fazer um quadro" : "Tap the shutter to take a frame"}</div>` : "";
+  if (!phone) {
+    h += `<div class="p rail">${t("rail").map((n, i) => `<button type="button" class="chip${i === 4 && S.sheet ? " on" : ""}${i === 4 ? " go" : ""}" ${i === 4 ? `data-act="plan"` : `aria-disabled="true" title="${t("notmock")}"`}>${n}</button>`).join("")}
+      ${A ? `<button type="button" class="chip go new${S.view === "best" ? " on" : ""}" data-act="best">${t("secBest")}</button>` : ""}
+      <button type="button" class="chip go" data-act="skymap">${t("skymap")}</button></div>
+      <div class="p rrail"><button type="button" class="shutter" aria-label="Start"><b></b></button></div><button type="button" class="p stop">${t("stop")}</button>`;
+  } else {
+    const secs = t("sec").map((n, i) => `<button type="button" class="chip${i === 4 ? " go" : ""}${i === 4 && S.sheet ? " on" : ""}" ${i === 4 ? `data-act="plan"` : `aria-disabled="true"`}>${n}</button>`).join("")
+      + (A ? `<button type="button" class="chip go new${S.view === "best" ? " on" : ""}" data-act="best">${t("secBest")}</button>` : "");
+    h += `<div class="p deck"><div class="row sections">${secs}</div>
+      <div class="row"><button type="button" class="chip go" data-act="skymap">${t("skymap")}</button><button type="button" class="chip" aria-disabled="true">${t("info")}</button><button type="button" class="chip" aria-disabled="true">${t("library")}</button></div>
+      <div class="row"><button type="button" class="shutter" aria-label="Start"><b></b></button><button type="button" class="chip" aria-disabled="true">${t("chip")}</button><button type="button" class="stop">${t("stop")}</button></div></div>`;
+  }
+  h += hint;
+  if (S.view === "best") h += `<div class="p screen">${screenHTML()}</div>`;
+  if (S.view === "sky") h += `<div class="p screen">${skyMapHTML()}</div>`;
+  if (S.sheet) h += `<div class="p sheet">${sheetHTML()}</div>`;
+  if (S.msg) h += `<div class="msg ${S.msg.warn ? "warnm" : ""}" role="status"><i></i><span>${S.msg.text}</span></div>`;
+  return h;
+}
+
+function seg(id, items, cur) { return `<span class="ctl"><span class="lbl">${t(id)}</span><span class="seg" role="group" aria-label="${t(id)}">${items.map((i) => `<button type="button" data-c="${id}" data-v="${i[0]}" aria-pressed="${cur === i[0]}">${i[1]}</button>`).join("")}</span></span>`; }
+function render() {
+  document.documentElement.lang = S.lang === "pt" ? "pt-BR" : "en";
+  document.body.classList.toggle("night", S.night);
+  $("h1").textContent = t("title"); $("note").textContent = t("note");
+  $("ctl").innerHTML = seg("device", [["ipad", t("ipad")], ["phone", t("phone")]], S.dev) + seg("look", [["day", t("day")], ["night", t("night")]], S.night ? "night" : "day")
+    + seg("lang", [["en", "EN"], ["pt", "pt-BR"]], S.lang) + seg("state", [["n", t("st_n")], ["e", t("st_e")], ["s", t("st_s")], ["r", t("st_r")]], S.state)
+    + (S.state === "r" ? "" : seg("plan", [["off", t("p_off")], ["on", t("p_on")]], S.running ? "on" : "off"))
+    + seg("entry", [["A", t("eA")], ["B", t("eB")], ["C", t("eC")]], S.entry) + seg("jump", [["home", t("j_home")], ["plan", t("j_plan")], ["best", t("j_best")]], S.view === "best" ? "best" : S.sheet ? "plan" : "home");
+  $("where").innerHTML = S.view === "home" && !S.sheet ? t("w_home") : t("w_" + S.entry);
+  const dev = $("dev"); dev.className = "dev " + S.dev; dev.innerHTML = shellHTML();
+  try { localStorage.setItem("tbMock", JSON.stringify({ sort:S.sort, types:S.types, up:S.up })); } catch (e) {}
+}
+function say(text, warn) { S.msg = { text, warn }; clearTimeout(timer); timer = setTimeout(() => { S.msg = null; render(); }, 6000); }
+function act(a, id) {
+  if (a === "plan") { S.sheet = true; }
+  else if (a === "closesheet") S.sheet = false;
+  else if (a === "seeall" || a === "best") { S.sheet = false; S.view = "best"; S.detail = false; }
+  else if (a === "skymap") S.view = "sky";
+  else if (a === "home") { S.view = "home"; S.detail = false; }
+  else if (a === "open") { S.sel = id; S.detail = true; }
+  else if (a === "back") S.detail = false;
+  else if (a === "pick") S.sel = id;
+  else if (a === "img") {
+    S.sel = id;
+    if (S.running && S.state !== "r") { S.queued = (S.queued || []).concat(id); say(`${id} ${t("added")}`); }
+    else { S.sheet = true; }
+  }
+  else if (a === "site") say(t("opens"), true);
+  else if (a === "search") say(t("opensS"), true);
+  else if (a === "clear") { S.types = []; S.up = false; }
+  render();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  if (b.dataset.c) {
+    const c = b.dataset.c, v = b.dataset.v;
+    if (c === "device") { S.dev = v; S.detail = false; } else if (c === "look") S.night = v === "night"; else if (c === "lang") S.lang = v;
+    else if (c === "state") { S.state = v; if (v === "r") S.running = false; } else if (c === "plan") S.running = v === "on";
+    else if (c === "entry") { S.entry = v; S.view = "home"; S.sheet = false; }
+    else if (c === "jump") { S.detail = false; S.view = v === "best" ? "best" : "home"; S.sheet = v === "plan"; }
+    return render();
+  }
+  if (b.dataset.sort) { S.sort = b.dataset.sort; return render(); }
+  if (b.dataset.up) { S.up = b.dataset.up === "1"; return render(); }
+  if (b.dataset.type) { const g = b.dataset.type; S.types = g === "all" ? [] : S.types.includes(g) ? S.types.filter((x) => x !== g) : S.types.concat(g); return render(); }
+  if (b.dataset.act) act(b.dataset.act, b.dataset.id);
+});
+// Deep link for screenshots: #dev=phone&night=1&view=best&sel=NGC%20253&lang=pt&state=r&sheet=1&running=1&entry=A
+new URLSearchParams(location.hash.slice(1)).forEach((v, k) => { if (k in S && k !== 'bare') S[k] = ["night","running","sheet","detail","up"].includes(k) ? v === "1" : v; });
+if (location.hash.includes('bare=1')) document.querySelectorAll('h1,.note,.controls,.where').forEach((n) => (n.hidden = true));
+render();
+</script>
+</body>
+</html>

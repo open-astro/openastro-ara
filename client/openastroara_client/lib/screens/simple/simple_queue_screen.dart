@@ -32,6 +32,7 @@ class SimpleQueueScreen extends SimpleScreen {
     onShowSky: host.onShowSky ?? () {},
     onPickInSky: host.onPickInSky ?? () {},
     onCreated: host.onSheetDone ?? () {},
+    onSeeAll: host.onSeeAll,
   );
 
   @override
