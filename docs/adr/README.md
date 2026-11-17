@@ -100,3 +100,4 @@ referred to by its slug until it is written, and numbered then.
 - [Guiding is done by a separate guider service that the daemon drives over the PHD2 protocol](0020-guiding-is-a-separate-guider-service.md)
 - [A Prompt is raised in one client state module](0021-a-prompt-is-raised-in-one-client-module.md)
 - [A Refusal is declared once](0022-a-refusal-is-declared-once.md)
+- [The Sequencer owns its equipment seam, and a missing capability refuses](0023-the-sequencer-owns-its-equipment-seam.md)
