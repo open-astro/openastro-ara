@@ -137,11 +137,16 @@ class TimeSyncOnConnect {
       // The push can succeed and the clock stay wrong (#1945): say so.
       final err = await _ref.read(timeSyncClockErrorProvider.future);
       if (err != null) {
-        _ref.read(simpleMessagesProvider.notifier).show(
-              SimpleMessageKind.warning,
-              clockWrongText(l10nFor(_ref.read(appLocaleProvider)), err),
-              sticky: true,
-            );
+        final text = clockWrongText(l10nFor(_ref.read(appLocaleProvider)), err);
+        // A reconnect pushes again: one copy of the same warning is enough.
+        final shown = _ref
+            .read(simpleMessagesProvider)
+            .any((m) => m.kind == SimpleMessageKind.warning && m.title == text);
+        if (!shown) {
+          _ref
+              .read(simpleMessagesProvider.notifier)
+              .show(SimpleMessageKind.warning, text, sticky: true);
+        }
       }
     } catch (e) {
       // Best-effort: never surface an error for an opportunistic sync.

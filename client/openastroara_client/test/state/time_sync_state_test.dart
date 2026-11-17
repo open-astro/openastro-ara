@@ -4,6 +4,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -68,6 +69,27 @@ ProviderContainer _container(_FakeTimeSyncClient api) {
 }
 
 void main() {
+  test(
+    'a reconnect with the clock still wrong keeps one warning (#1945)',
+    () async {
+      final api = _FakeTimeSyncClient(
+        const TimeSyncState(synced: false, systemTimeOffsetSeconds: 120),
+      );
+      final c = _container(api);
+      await c.read(savedServersProvider.future);
+      final onConnect = c.read(timeSyncOnConnectProvider);
+      await onConnect.syncIfNeeded();
+      await onConnect.syncIfNeeded();
+
+      final warnings = c
+          .read(simpleMessagesProvider)
+          .where((m) => m.kind == SimpleMessageKind.warning)
+          .toList();
+      expect(api.pushes, 2);
+      expect(warnings, hasLength(1));
+    },
+  );
+
   test('an unsynced daemon gets the device clock pushed', () async {
     final api = _FakeTimeSyncClient(const TimeSyncState(synced: false));
     final c = _container(api);
