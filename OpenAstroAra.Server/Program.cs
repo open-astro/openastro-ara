@@ -1321,7 +1321,9 @@ public partial class Program {
                 // #1195 — the saved-light solve feed behind the Center After Drift trigger.
                 frameSolveFeed: sp.GetRequiredService<FrameSolveFeed>(),
                 // §42.2 — a Dither that restarts guiding after a long gap re-centers the target first.
-                guidingRestartRecenter: new GuidingRestartRecenter(sp.GetRequiredService<TargetRecenter>())));
+                guidingRestartRecenter: new GuidingRestartRecenter(sp.GetRequiredService<TargetRecenter>()),
+                // The Connect Equipment item and Reconnect trigger share the reconnector's answer (§52.1).
+                equipmentConnections: (OpenAstroAra.Sequencer.Connections.IEquipmentConnections)sp.GetRequiredService<IEquipmentReconnector>()));
         // The by-hand rotation readout (the Plan screen's "Rotate camera" panel on a rig without a rotator):
         // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done",
         // the profile's plate-solve exposure as the default exposure.

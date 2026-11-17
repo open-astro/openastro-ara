@@ -26,10 +26,8 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class ProfileDeviceSwitch : IDisposable {
 
-    private static readonly TimeSpan SettlePoll = TimeSpan.FromMilliseconds(200);
-
     /// <summary>How long a switch waits for its connects (which run in the background) to settle.</summary>
-    internal TimeSpan SettleTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    internal TimeSpan SettleTimeout { get; set; } = ConnectSettle.DefaultTimeout;
 
     private readonly IServiceProvider _services;
     private readonly IEquipmentSelectionStore _store;
@@ -176,7 +174,7 @@ public sealed partial class ProfileDeviceSwitch : IDisposable {
 
         // Connects run in the background; wait so a failure can be named in the response.
         var unsettled = dispatched;
-        while (unsettled.Count > 0) {
+        var settled = await ConnectSettle.UntilAsync(async () => {
             var still = new List<DiscoveredDeviceDto>();
             foreach (var device in unsettled) {
                 switch (await StateAsync(device).ConfigureAwait(false)) {
@@ -191,15 +189,10 @@ public sealed partial class ProfileDeviceSwitch : IDisposable {
                 }
             }
             unsettled = still;
-            if (unsettled.Count == 0) {
-                return;
-            }
-            try {
-                await Task.Delay(SettlePoll, deadline.Token).ConfigureAwait(false);
-            } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
-                messages.AddRange(unsettled.Select(d => new ProfileDeviceMessageDto(Name(d), "It is still connecting. Check its card in a moment.")));
-                return;
-            }
+            return unsettled.Count == 0;
+        }, deadline.Token, ct).ConfigureAwait(false);
+        if (!settled) {
+            messages.AddRange(unsettled.Select(d => new ProfileDeviceMessageDto(Name(d), "It is still connecting. Check its card in a moment.")));
         }
     }
 

@@ -14,6 +14,8 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -75,7 +77,7 @@ public interface IEquipmentReconnector {
 /// devices failed to even dispatch (e.g. their Alpaca server is down on a rig restart).</summary>
 public readonly record struct ReconnectOutcome(int Attempted, int Dispatched);
 
-public sealed partial class EquipmentReconnector : IEquipmentReconnector {
+public sealed partial class EquipmentReconnector : IEquipmentReconnector, IEquipmentConnections {
 
     private readonly IServiceProvider _services;
     private readonly IEquipmentSelectionStore _store;
@@ -163,8 +165,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
                 await _services.GetRequiredService<IGuiderService>()
                     .ConnectAsync(new GuiderConnectRequestDto(), null, ct).ConfigureAwait(false);
                 return new ReconnectOutcome(Attempted: 1, Dispatched: 1);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 throw;
             }
 #pragma warning disable CA1031 // a failed dispatch is an outcome, not a fault — same contract as the Alpaca loop below
@@ -208,8 +209,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
                     await connect().ConfigureAwait(false);
                 }
                 dispatched++;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 throw; // daemon shutting down — unwind cleanly
             }
 #pragma warning disable CA1031 // one device failing the dispatch (e.g. its Alpaca server isn't up yet during a rig restart) must not abort the others
@@ -223,6 +223,76 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // synchronously" (attempted > 0 but dispatched == 0) so the caller isn't told
         // "reconnecting…" when every device failed on the spot.
         return new ReconnectOutcome(attempted, dispatched);
+    }
+
+    // ── The Sequencer's connections port (#1545, ADR 0023) ──
+
+    /// <summary>How long a Sequencer connect waits for the device to settle (the profile switch's wait).</summary>
+    internal TimeSpan SettleTimeout { get; set; } = ConnectSettle.DefaultTimeout;
+
+    private static (DeviceType Type, string Label) Describe(EquipmentRole role) => role switch {
+        EquipmentRole.Camera => (DeviceType.Camera, "Camera"),
+        EquipmentRole.FilterWheel => (DeviceType.FilterWheel, "Filter Wheel"),
+        EquipmentRole.Focuser => (DeviceType.Focuser, "Focuser"),
+        EquipmentRole.Rotator => (DeviceType.Rotator, "Rotator"),
+        EquipmentRole.Mount => (DeviceType.Telescope, "Mount"),
+        EquipmentRole.Guider => (DeviceType.Guider, "Guider"),
+        EquipmentRole.Switch => (DeviceType.Switch, "Switch"),
+        EquipmentRole.FlatPanel => (DeviceType.CoverCalibrator, "Flat Panel"),
+        EquipmentRole.Weather => (DeviceType.ObservingConditions, "Weather"),
+        EquipmentRole.Dome => (DeviceType.Dome, "Dome"),
+        EquipmentRole.SafetyMonitor => (DeviceType.SafetyMonitor, "Safety Monitor"),
+        _ => throw new ArgumentOutOfRangeException(nameof(role)),
+    };
+
+    // The services answer a state read from memory under their own gate, so the wait is not a real one.
+    public bool IsConnected(EquipmentRole role) =>
+        GetConnectionStateAsync(Describe(role).Type, CancellationToken.None).GetAwaiter().GetResult() == EquipmentConnectionState.Connected;
+
+    public bool IsDisconnectedByUser(EquipmentRole role) =>
+        GetDesiredConnection(Describe(role).Type) == DesiredConnection.DisconnectedByUser;
+
+    public Task ConnectAsync(EquipmentRole role, CancellationToken ct) => ConnectAndSettleAsync(role, recovery: false, ct);
+
+    public Task RecoverAsync(EquipmentRole role, CancellationToken ct) => ConnectAndSettleAsync(role, recovery: true, ct);
+
+    private async Task ConnectAndSettleAsync(EquipmentRole role, bool recovery, CancellationToken ct) {
+        var (type, label) = Describe(role);
+        if (role == EquipmentRole.Guider) {
+            // PHD2, not Alpaca: its Connect(CancellationToken) waits out an in-flight recovery pass (#1123, #1228)
+            // and settles itself. Nothing records a user disconnect for it, so recover and connect are the same.
+            if (_services.GetRequiredService<IGuiderService>() is not GuiderService guider) {
+                throw new EquipmentRefusedException(EquipmentRefusalCause.NotSupported, $"The {label} cannot be connected from a sequence");
+            }
+            if (!await guider.Connect(ct).ConfigureAwait(false)) {
+                throw new SequenceEntityFailedException($"Failed to connect to {label}");
+            }
+            return;
+        }
+        var outcome = await DispatchAsync(type, recovery, ct).ConfigureAwait(false);
+        if (outcome.Attempted == 0) {
+            throw new EquipmentRefusedException(EquipmentRefusalCause.NotKnown,
+                $"No {label} is remembered on this rig: connect it once from the Equipment page");
+        }
+        if (outcome.Dispatched == 0) {
+            if (recovery && GetDesiredConnection(type) == DesiredConnection.DisconnectedByUser) {
+                throw new EquipmentRefusedException(EquipmentRefusalCause.DisconnectedByUser,
+                    $"The {label} was disconnected by the user, so it was not reconnected");
+            }
+            throw new SequenceEntityFailedException($"Failed to connect to {label}");
+        }
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(SettleTimeout);
+        var settled = await ConnectSettle.UntilAsync(async () => {
+            var state = await GetConnectionStateAsync(type, ct).ConfigureAwait(false);
+            if (state is EquipmentConnectionState.Error or EquipmentConnectionState.Disconnected) {
+                throw new SequenceEntityFailedException($"Failed to connect to {label}");
+            }
+            return state == EquipmentConnectionState.Connected && IsCleanlyConnected(type);
+        }, deadline.Token, ct).ConfigureAwait(false);
+        if (!settled) {
+            throw new SequenceEntityFailedException($"Failed to connect to {label}");
+        }
     }
 
     // #1127 — the single-instance service's retained record for the type (null when the service
@@ -270,21 +340,21 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             case DeviceType.CoverCalibrator:
                 return (await _services.GetRequiredService<IFlatDeviceService>().GetAsync(ct).ConfigureAwait(false))?.State;
             case DeviceType.Switch: {
-                var all = await _services.GetRequiredService<ISwitchService>().GetAllAsync(ct).ConfigureAwait(false);
-                if (all.Count == 0) {
-                    return null;
-                }
-                EquipmentConnectionState? firstNonConnected = null;
-                foreach (var sw in all) {
-                    if (sw.State == EquipmentConnectionState.Error) {
-                        return EquipmentConnectionState.Error;
+                    var all = await _services.GetRequiredService<ISwitchService>().GetAllAsync(ct).ConfigureAwait(false);
+                    if (all.Count == 0) {
+                        return null;
                     }
-                    if (sw.State != EquipmentConnectionState.Connected) {
-                        firstNonConnected ??= sw.State;
+                    EquipmentConnectionState? firstNonConnected = null;
+                    foreach (var sw in all) {
+                        if (sw.State == EquipmentConnectionState.Error) {
+                            return EquipmentConnectionState.Error;
+                        }
+                        if (sw.State != EquipmentConnectionState.Connected) {
+                            firstNonConnected ??= sw.State;
+                        }
                     }
+                    return firstNonConnected ?? EquipmentConnectionState.Connected;
                 }
-                return firstNonConnected ?? EquipmentConnectionState.Connected;
-            }
             default:
                 return null;
         }

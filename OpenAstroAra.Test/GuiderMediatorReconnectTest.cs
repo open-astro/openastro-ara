@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Contracts;
@@ -70,13 +71,14 @@ namespace OpenAstroAra.Test {
                 ReconnectGraceFromSeconds = _ => grace,
             };
 
-        private static ReconnectTrigger GuiderTrigger(HeadlessProfileService profile, IGuiderMediator guider) =>
-            new(profile, Mock.Of<ICameraMediator>(), Mock.Of<IFilterWheelMediator>(), Mock.Of<IFocuserMediator>(),
-                Mock.Of<IRotatorMediator>(), Mock.Of<ITelescopeMediator>(), guider, Mock.Of<ISwitchMediator>(),
-                Mock.Of<IFlatDeviceMediator>(), Mock.Of<IWeatherDataMediator>(), Mock.Of<IDomeMediator>(),
-                Mock.Of<ISafetyMonitorMediator>()) {
-                SelectedDevice = "Guider",
-            };
+        // The trigger over the real reconnector, which reaches the guider through IGuiderService (the port's guider path).
+        private static ReconnectTrigger GuiderTrigger(GuiderService guider) {
+            var services = new Mock<IServiceProvider>();
+            services.Setup(x => x.GetService(typeof(IGuiderService))).Returns(guider);
+            var reconnector = new EquipmentReconnector(services.Object, Mock.Of<IEquipmentSelectionStore>(),
+                NullLogger<EquipmentReconnector>.Instance);
+            return new ReconnectTrigger(reconnector) { SelectedDevice = "Guider" };
+        }
 
         private static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 15000) {
             var sw = Stopwatch.StartNew();
@@ -108,7 +110,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
 
-            var trigger = GuiderTrigger(profile, svc);
+            var trigger = GuiderTrigger(svc);
             Assert.That(trigger.ShouldTrigger(null, null), Is.True, "the trigger must fire while the guider is in Error");
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
 
@@ -132,7 +134,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(profile, GatedRecovery(gate.Task), grace);
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
 
-            var trigger = GuiderTrigger(profile, svc);
+            var trigger = GuiderTrigger(svc);
             var sw = Stopwatch.StartNew();
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(run),
@@ -155,7 +157,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(profile, UnsupervisedRecovery(supervisor), grace: TimeSpan.FromSeconds(20));
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
 
-            var trigger = GuiderTrigger(profile, svc);
+            var trigger = GuiderTrigger(svc);
             Assert.That(trigger.ShouldTrigger(null, null), Is.True);
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20))).ConfigureAwait(false), Is.SameAs(run));
@@ -175,7 +177,7 @@ namespace OpenAstroAra.Test {
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
             await fake.DisposeAsync().ConfigureAwait(false); // PHD2 is gone for good
 
-            var trigger = GuiderTrigger(profile, svc);
+            var trigger = GuiderTrigger(svc);
             var run = trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
             Assert.That(await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false), Is.SameAs(run),
                 "the plain reconnect must be bounded by the retry timeout");
@@ -192,7 +194,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(profile, UnsupervisedRecovery(new Mock<IGuiderProcessSupervisor>()), grace: TimeSpan.FromSeconds(20));
 
             Assert.That(await svc.Rescan().ConfigureAwait(false), Does.Contain(profile.ActiveProfile.GuiderSettings.GuiderName),
-                "ConnectEquipment only calls Connect() when Rescan lists the profile's guider id");
+                "Rescan lists the profile's guider id");
             Assert.That(await svc.Connect().ConfigureAwait(false), Is.True);
             Assert.That(svc.GetInfo().Connected, Is.True);
 
@@ -218,7 +220,7 @@ namespace OpenAstroAra.Test {
             Assert.That(startGuiding.Validate(), Is.True);
             Assert.That(startGuiding.Issues, Is.Empty);
         }
-    
+
 
         // #1228 — a Stop/Abort while the trigger waits on recovery cancels the wait instead of sitting out
         // the retry timeout.
@@ -290,7 +292,7 @@ namespace OpenAstroAra.Test {
         }
 
         // #1228 — the sequencer's Connect Equipment hands its token to the guider's Connect(CancellationToken)
-        // (found by reflection), so a Stop/Abort during the reconnect wait cancels it.
+        // (the port's guider path), so a Stop/Abort during the reconnect wait cancels it.
         [Test]
         public async Task ConnectEquipment_passes_the_sequencer_token_to_the_guider_connect() {
             await using var fake = StartFake();
@@ -298,7 +300,7 @@ namespace OpenAstroAra.Test {
             var profile = new HeadlessProfileService();
             using var svc = NewService(profile, GatedRecovery(gate.Task), grace: TimeSpan.FromSeconds(20));
             await ConnectAndDropAsync(svc, fake).ConfigureAwait(false);
-            var item = GuiderTrigger(profile, svc).ConnectEquipmentInstruction;
+            var item = GuiderTrigger(svc).ConnectEquipmentInstruction;
 
             using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
             var sw = Stopwatch.StartNew();
@@ -312,25 +314,17 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => svc.GetInfo().Connected), Is.True);
         }
 
-        // #1228 — a mediator without the overload still takes the parameterless interface path.
+        // The port skips a dial for a role the service already reads Connected.
         [Test]
-        public async Task ConnectEquipment_uses_the_parameterless_connect_for_other_mediators() {
-            var profile = new HeadlessProfileService();
-            profile.ActiveProfile.CameraSettings.Id = "cam-1";
-            var camera = new Mock<ICameraMediator>();
-            var connected = false;
-            camera.Setup(c => c.Rescan()).ReturnsAsync(new List<string> { "cam-1" });
-            camera.Setup(c => c.Connect()).ReturnsAsync(() => connected = true);
-            camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = connected });
-            var item = new ConnectEquipment(profile, camera.Object, Mock.Of<IFilterWheelMediator>(), Mock.Of<IFocuserMediator>(),
-                Mock.Of<IRotatorMediator>(), Mock.Of<ITelescopeMediator>(), Mock.Of<IGuiderMediator>(), Mock.Of<ISwitchMediator>(),
-                Mock.Of<IFlatDeviceMediator>(), Mock.Of<IWeatherDataMediator>(), Mock.Of<IDomeMediator>(),
-                Mock.Of<ISafetyMonitorMediator>()) { SelectedDevice = "Camera" };
+        public async Task ConnectEquipment_does_not_dial_a_role_that_is_already_connected() {
+            var port = new Mock<IEquipmentConnections>();
+            port.Setup(c => c.IsConnected(EquipmentRole.Camera)).Returns(true);
+            var item = new ConnectEquipment(port.Object) { SelectedDevice = "Camera" };
 
             await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None).ConfigureAwait(false);
 
-            camera.Verify(c => c.Connect(), Times.Once);
-            Assert.That(item.IsConnected(), Is.True);
+            port.Verify(c => c.ConnectAsync(It.IsAny<EquipmentRole>(), It.IsAny<CancellationToken>()), Times.Never);
+            port.Verify(c => c.RecoverAsync(It.IsAny<EquipmentRole>(), It.IsAny<CancellationToken>()), Times.Never);
         }
     }
 }

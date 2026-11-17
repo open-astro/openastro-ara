@@ -18,6 +18,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Format;
 using OpenAstroAra.Sequencer.Interfaces;
@@ -192,12 +193,13 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null,
-            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null) =>
+            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null,
+            IEquipmentConnections? equipmentConnections = null) =>
         Build(safetyMonitorMediator, telescopeMediator, guiderMediator, focuserMediator, cameraMediator, rotatorMediator,
             switchMediator, domeMediator, domeFollower, filterWheelMediator, flatDeviceMediator, weatherDataMediator,
             profileService, imagingMediator, meridianFlipExecutor, centeringExecutor, autofocusExecutor, imageHistory,
             autofocusConditionGate, flatCaptureExecutor, trackingProbeExecutor, frameQualityFeed, frameSolveFeed,
-            guidingRestartRecenter, constructorOverrides: null);
+            guidingRestartRecenter, equipmentConnections, constructorOverrides: null);
 
     /// <summary>The same build with some constructors replaced, for a test that makes one prototype fault. Not for production code.</summary>
     internal static HeadlessSequencerFactory WithDefaults(IReadOnlyDictionary<Type, Func<object>> constructorOverrides) =>
@@ -230,6 +232,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null,
             OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null,
+            IEquipmentConnections? equipmentConnections = null,
             IReadOnlyDictionary<Type, Func<object>>? constructorOverrides = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
@@ -239,7 +242,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         //
         // §38k-22 — profileService is a HeadlessProfileService stub: it exists
         // only so the profile-bound instructions (Dither / SwitchFilter / the
-        // Connect dir) can be *constructed* as JSON-resolvable prototypes.
+        // Connect dir except ConnectEquipment) can be *constructed* as JSON-resolvable prototypes.
         // Prototypes never execute, so a default ActiveProfile + no-op events
         // suffice; reconciling the real user-edited profile (IProfileStore /
         // profile.json) is an execution-engine concern decided later.
@@ -258,7 +261,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // §38k-21 — the one non-mediator dependency a dome instruction needs.
         domeFollower ??= new HeadlessDomeFollower();
         // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub
-        // that the Connect dir + Dither/SwitchFilter need.
+        // that the Connect dir (except ConnectEquipment) + Dither/SwitchFilter need.
         filterWheelMediator ??= new HeadlessFilterWheelMediator();
         flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
         weatherDataMediator ??= new HeadlessWeatherDataMediator();
@@ -267,6 +270,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // placeholder keeps the prototype JSON-resolvable for clone/validate; Program.cs hands in the real
         // §58.4 MeridianFlipExecutor so an executed flip actually runs the recovery sequence.
         meridianFlipExecutor ??= new PlaceholderMeridianFlipExecutor();
+        // The Connect Equipment item and the Reconnect trigger connect through the rig's connections; Program.cs
+        // hands in the EquipmentReconnector. This placeholder keeps the prototypes constructible and refuses a run.
+        equipmentConnections ??= new UnwiredEquipmentConnections();
         // Wait (until time) and Until a time need their time sources: the clock (the default, which
         // rolls over at the site's dawn, so an evening plan's 01:30 means tonight's 01:30) and the
         // sky events the full UI's editor offers.
@@ -391,8 +397,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             [typeof(OpenFlatPanelCover)] = () => new OpenFlatPanelCover(flatCaptureExecutor),
             // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
             [typeof(CloseFlatPanelCover)] = () => new CloseFlatPanelCover(flatCaptureExecutor),
-            // §38k-22 — Connect dir. All take the full 11 device mediators;
-            // Connect*/SwitchProfile also take IProfileService (profile-first),
+            // §38k-22 — Connect dir. ConnectEquipment (and the ReconnectTrigger below) take only the
+            // connections port (#1545); the rest still take the full 11 device mediators;
+            // ConnectAll/SwitchProfile also take IProfileService (profile-first),
             // Disconnect* do not (camera-first). The Disconnect* classes were
             // flipped internal→public in this PR so the factory can construct
             // them. Real connect/disconnect orchestration runs at execution
@@ -401,10 +408,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 profileService, cameraMediator, filterWheelMediator, focuserMediator,
                 rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                 flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-            [typeof(ConnectEquipment)] = () => new ConnectEquipment(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(ConnectEquipment)] = () => new ConnectEquipment(equipmentConnections),
             [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(
                 cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
                 telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
@@ -468,11 +472,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
             // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
             // prototype was already registered above; the trigger itself was missed.
-            [typeof(ReconnectTrigger)] = () => new ReconnectTrigger(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-
+            [typeof(ReconnectTrigger)] = () => new ReconnectTrigger(equipmentConnections),
         };
         if (constructorOverrides != null) {
             foreach (var (type, make) in constructorOverrides) constructors[type] = make;
@@ -485,5 +485,15 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             triggers: Instantiate(SequenceKinds.All.Where(e => e.Role == SequenceNodeRole.Trigger), constructors).Cast<ISequenceTrigger>().ToList(),
             // A body naming a provider (the full UI's editor does) resolves through this list.
             dateTimeProviders: timeSources);
+    }
+
+    // The default when no connections are handed in: the prototypes construct, and a run refuses.
+    private sealed class UnwiredEquipmentConnections : IEquipmentConnections {
+        public bool IsConnected(EquipmentRole role) => false;
+        public bool IsDisconnectedByUser(EquipmentRole role) => false;
+        public Task ConnectAsync(EquipmentRole role, CancellationToken ct) => throw Unwired();
+        public Task RecoverAsync(EquipmentRole role, CancellationToken ct) => throw Unwired();
+        private static EquipmentRefusedException Unwired() =>
+            new(EquipmentRefusalCause.NotSupported, "This sequencer was built without equipment connections");
     }
 }
