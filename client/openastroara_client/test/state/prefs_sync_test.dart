@@ -404,15 +404,18 @@ void main() {
     });
     final a = _Device(rig);
     await a.open();
+
+    final gate = rig.gate = Completer<void>();
+    a.container.invalidate(clientSettingsProvider);
+    await settle();
+    // Listen only now, synchronously before the edit: a load that opened the
+    // device may still be landing on a slow host, and its report of the
+    // starting value is not a read landing after the edit.
     final seen = <Object>[];
     a.container.listen(
       planningPrefsProvider,
       (_, next) => seen.add(field(next)),
     );
-
-    final gate = rig.gate = Completer<void>();
-    a.container.invalidate(clientSettingsProvider);
-    await settle();
     edit(a.container.read(planningPrefsProvider.notifier));
     gate.complete();
     await settle();
