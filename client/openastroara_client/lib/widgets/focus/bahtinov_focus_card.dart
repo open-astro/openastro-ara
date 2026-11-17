@@ -14,6 +14,7 @@ import '../../models/equipment_device_status.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
+import '../../state/settings/autofocus_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../fit_pane.dart';
@@ -71,7 +72,9 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
 }
 
 class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
-  double _exposureSec = 1;
+  // Null until a segment is picked: the daemon then takes the profile's autofocus
+  // exposure, so the card sends no default of its own (#1544).
+  double? _exposureSec;
   // Up to 8 s: on a small image scale the spikes are faint (a 2 s RedCat 51
   // frame put the weakest one at the detector's limit), and the exposure is
   // the cleanest gain in signal.
@@ -95,7 +98,9 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final measured = status.hasMeasurement;
     final (headline, headlineColor) = BahtinovFocusCard.headlineFor(context.l10n, live);
 
-    final exposure = active && status.exposureSec > 0 ? status.exposureSec : _exposureSec;
+    final exposure = active && status.exposureSec > 0
+        ? status.exposureSec
+        : _exposureSec ?? ref.watch(autofocusSettingsProvider.select((s) => s.exposureSeconds)).toDouble();
     final subhead = [
       if (focuserConnected && focuser != null) 'Focuser at ${focuser.position ?? '—'} · ${focuser.name}' else 'Manual focuser',
       'Bahtinov mask',
@@ -153,10 +158,12 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
         segments: [
           for (final e in _exposures) ButtonSegment(value: e, label: Text(_seconds(e))),
         ],
-        selected: {_exposureSec},
+        selected: {?_exposureSec},
+        emptySelectionAllowed: true,
         showSelectedIcon: false,
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.first),
+        // Tapping the picked segment again goes back to the autofocus exposure.
+        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
       ),
       child: FitColumn(
         children: [

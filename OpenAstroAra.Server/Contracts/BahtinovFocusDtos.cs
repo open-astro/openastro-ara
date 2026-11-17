@@ -18,9 +18,10 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>Start the Bahtinov focus readout. <c>ExposureSec</c> 0.05–30 s (a bright star through the mask
-/// wants well under a second to a few seconds); <c>Binning</c> 1–4, default 1 (the offset is sub-pixel, so
+/// wants well under a second to a few seconds); omitted, it is the profile's autofocus exposure (clamped to
+/// that range), else 1 s. <c>Binning</c> 1–4, default 1 (the offset is sub-pixel, so
 /// binning costs precision — it is there for cameras whose full frames download slowly).</summary>
-public sealed record BahtinovFocusStartRequestDto(double ExposureSec = 1.0, int? Binning = null);
+public sealed record BahtinovFocusStartRequestDto(double? ExposureSec = null, int? Binning = null);
 
 /// <summary>Lock the readout on a star: its position in (binned) frame pixels — the frame is
 /// <c>FrameWidth</c> × <c>FrameHeight</c> in the status.</summary>
