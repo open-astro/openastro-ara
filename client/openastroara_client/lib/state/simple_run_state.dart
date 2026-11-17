@@ -1019,6 +1019,28 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Starts the queue as it stands (Preflight's last Done). With [startAt]
   /// the run starts at once but waits on the rig until then.
   Future<bool> startQueue({DateTime? startAt}) async {
+    // #1945: a rig clock that could not be set. Ask before the run starts.
+    final clockErr = await ref.read(timeSyncClockErrorProvider.future);
+    if (clockErr == null) return _startQueue(startAt);
+    final l = l10nFor(ref.read(appLocaleProvider));
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    int? qid;
+    qid = messages.show(
+      SimpleMessageKind.question,
+      clockWrongText(l, clockErr),
+      origin: SimpleStatusOrigin.plan,
+      actions: [
+        SimpleMessageAction(l.calibrationNotNow, () => messages.dismiss(qid!)),
+        SimpleMessageAction(l.clockWrongStartAnyway, () {
+          messages.dismiss(qid!);
+          unawaited(_startQueue(startAt));
+        }),
+      ],
+    );
+    return false;
+  }
+
+  Future<bool> _startQueue(DateTime? startAt) async {
     // An edit or reorder still on its way: _op would skip the start quietly
     // and this would report success (review of #1486).
     if (state.busy) {

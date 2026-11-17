@@ -10538,6 +10538,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
   String get estopFailPolarAligner;
+
+  /// Question and notice: the rig's clock could not be set and runs behind; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} slow, so times and targets will be off. Start anyway?'**
+  String clockWrongSlow(String amount);
+
+  /// Question and notice: the rig's clock could not be set and runs ahead; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} fast, so times and targets will be off. Start anyway?'**
+  String clockWrongFast(String amount);
+
+  /// Advanced Mode Run dialog title when the rig's clock could not be set
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is wrong'**
+  String get clockWrongTitle;
+
+  /// Button: start the run although the rig's clock is wrong
+  ///
+  /// In en, this message translates to:
+  /// **'Start anyway'**
+  String get clockWrongStartAnyway;
 }
 
 class _AppLocalizationsDelegate

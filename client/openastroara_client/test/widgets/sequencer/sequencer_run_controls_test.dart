@@ -2,7 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
+import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
@@ -528,6 +530,52 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Resume imaging?'), findsNothing);
       expect(client.calls, isNot(contains('resume')));
+    });
+  });
+  group('Run on a rig clock that could not be set (#1945)', () {
+    Future<ProviderContainer> pump(WidgetTester tester) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+        timeSyncClockErrorProvider.overrideWith(
+            (ref) async => const TimeSyncClockError(seconds: 120, slow: true)),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      final run = tester.widget<ButtonStyleButton>(find.ancestor(
+          of: find.text('Run'), matching: find.bySubtype<ButtonStyleButton>()));
+      run.onPressed!();
+      await tester.pumpAndSettle();
+      return container;
+    }
+
+    testWidgets('Run asks first, saying by how much; Not now starts nothing',
+        (tester) async {
+      await wideSurface(tester);
+      final container = await pump(tester);
+      expect(find.textContaining('2 min slow'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, isNot(contains('start')));
+    });
+
+    testWidgets('Start anyway starts the run', (tester) async {
+      await wideSurface(tester);
+      final container = await pump(tester);
+      await tester.tap(find.text('Start anyway'));
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, contains('start'));
     });
   });
 }

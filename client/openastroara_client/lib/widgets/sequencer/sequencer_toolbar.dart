@@ -15,6 +15,8 @@ import '../../state/app_shell_state.dart';
 import '../../state/settings/settings_nav.dart'
     show kOptionsTabIndex, kSetupTabIndex, selectedSettingsPanelProvider;
 import '../../state/setup/setup_readiness.dart';
+import '../../state/time_sync_state.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_delete.dart';
 import 'sequence_export.dart';
@@ -557,6 +559,33 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
     }
     if (!context.mounted) return;
   }
+  // #1945: a rig clock that could not be set. Ask before the run starts.
+  final clockErr = await read(timeSyncClockErrorProvider.future);
+  if (clockErr != null) {
+    if (!context.mounted) return;
+    final l = context.l10n;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AraColors.bgPanel,
+        title: Text(l.clockWrongTitle),
+        content: Text(clockWrongText(l, clockErr)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l.calibrationNotNow),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l.clockWrongStartAnyway),
+          ),
+        ],
+      ),
+    );
+    if (go != true) return;
+    if (!context.mounted) return;
+  }
+  if (!context.mounted) return;
   await runSequenceLifecycle(context, read, (api, id) => api.start(id));
 }
 

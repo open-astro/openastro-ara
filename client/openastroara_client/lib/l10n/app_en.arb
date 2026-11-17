@@ -8139,5 +8139,23 @@
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
+  },
+  "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
+  "@clockWrongSlow": {
+    "description": "Question and notice: the rig's clock could not be set and runs behind; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongFast": "The rig's clock is {amount} fast, so times and targets will be off. Start anyway?",
+  "@clockWrongFast": {
+    "description": "Question and notice: the rig's clock could not be set and runs ahead; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongTitle": "The rig's clock is wrong",
+  "@clockWrongTitle": {
+    "description": "Advanced Mode Run dialog title when the rig's clock could not be set"
+  },
+  "clockWrongStartAnyway": "Start anyway",
+  "@clockWrongStartAnyway": {
+    "description": "Button: start the run although the rig's clock is wrong"
   }
 }
