@@ -593,4 +593,93 @@ void main() {
       );
     });
   });
+
+  test('a window closed while the 3 s check re-reads the rotator raises no error when the read returns', () {
+    fakeAsync((async) {
+      final rotator = _Rotator()..onRefresh = _rotator();
+      final c = ProviderContainer(
+        overrides: [
+          rotatorProvider.overrideWith(() => rotator),
+          sequenceRunStateProvider.overrideWith(() => _Run(false)),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(rotatorProvider, (_, _) {});
+      final shown = c.listen(rotatorCommandProvider, (_, _) {});
+      async.flushMicrotasks();
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.flushMicrotasks();
+      expect(rotator.sent, ['move 75.0 sky']);
+      // The 3 s check has asked for a read, which answers 100 ms later.
+      async.elapse(const Duration(milliseconds: 3010));
+      shown.close();
+      // The module is disposed, then the read answers. The check is unawaited,
+      // so anything it throws is an uncaught error that fails this test.
+      async.elapse(const Duration(milliseconds: 300));
+      expect(
+        c.read(rotatorCommandProvider).phase,
+        DeviceCommandPhase.idle,
+        reason: 'the move ended with the window',
+      );
+    });
+  });
+
+  test(
+    'a move keeps its 3 s check after its window is covered and shown again',
+    () {
+      fakeAsync((async) {
+        final rotator = _Rotator();
+        final c = ProviderContainer(
+          overrides: [
+            rotatorProvider.overrideWith(() => rotator),
+            sequenceRunStateProvider.overrideWith(() => _Run(false)),
+          ],
+        );
+        addTearDown(c.dispose);
+        c.listen(rotatorProvider, (_, _) {});
+        final shown = c.listen(rotatorCommandProvider, (_, _) {});
+        async.flushMicrotasks();
+        c.read(rotatorCommandProvider.notifier).request(_to75);
+        async.flushMicrotasks();
+        // A covered window pauses what it listens to (TickerMode off) and
+        // resumes it when shown again; the pause stops the module's timers.
+        shown.pause();
+        shown.resume();
+        async.elapse(const Duration(milliseconds: 3100));
+        expect(
+          c.read(rotatorCommandProvider).refusal,
+          DeviceCommandRefusal.didntMove,
+        );
+      });
+    },
+  );
+
+  test('a window covered and shown while the 3 s check finds the rotator turning leaves no timer once closed', () {
+    fakeAsync((async) {
+      final rotator = _Rotator();
+      final c = ProviderContainer(
+        overrides: [
+          rotatorProvider.overrideWith(() => rotator),
+          sequenceRunStateProvider.overrideWith(() => _Run(false)),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(rotatorProvider, (_, _) {});
+      final shown = c.listen(rotatorCommandProvider, (_, _) {});
+      async.flushMicrotasks();
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.elapse(const Duration(milliseconds: 2900));
+      rotator.onRefresh = _rotator(sky: 85, runtime: 'moving');
+      // The 3 s check asks for a read; before it answers, the window is
+      // covered and shown again, which arms a new 3 s check.
+      async.elapse(const Duration(milliseconds: 110));
+      shown.pause();
+      shown.resume();
+      // The read finds the rotator turning: the backstop takes the check's place.
+      async.elapse(const Duration(milliseconds: 300));
+      shown.close();
+      async.elapse(Duration.zero); // autoDispose runs once nothing listens
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
 }

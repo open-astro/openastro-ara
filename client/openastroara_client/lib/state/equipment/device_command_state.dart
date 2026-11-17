@@ -111,14 +111,17 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
   bool _sawTurning = false;
   bool _sawMotion = false;
 
+  /// The target the timers watch, kept apart from [state]: life-cycle
+  /// callbacks such as onResume may not read [state] (Riverpod asserts).
+  T? _timed;
+
   @override
   DeviceCommand<T> build() {
     ref.onDispose(_stopTimers);
     if (pausesWithoutListeners) {
       ref.onCancel(_stopTimers);
       ref.onResume(() {
-        final target = state.target;
-        if (state.phase == DeviceCommandPhase.moving && target != null) {
+        if (_timed case final target?) {
           _armStall(target);
           _armReconcile();
         }
@@ -232,6 +235,7 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
   }
 
   void _armStall(T target) {
+    _timed = target;
     _stall?.cancel();
     _stall = Timer(firstStall(target), () {
       if (_sawMotion) {
@@ -266,12 +270,9 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
     } catch (_) {
       // The read failed; no news.
     }
+    if (!_stillMoving) return;
     final target = state.target;
-    if (!ref.mounted ||
-        state.phase != DeviceCommandPhase.moving ||
-        target == null) {
-      return;
-    }
+    if (target == null) return;
     final s = ref.read(device).value;
     if (s != null) {
       if (motionSeen(s, target)) _sawMotion = true;
@@ -281,7 +282,9 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
       }
     }
     if (!afterBackstop && _sawMotion) {
-      // The re-read found motion no poll had seen: give it the backstop.
+      // The re-read found motion no poll had seen: give it the backstop. A
+      // resume during the read may have armed a new check; it is replaced.
+      _stall?.cancel();
       _stall = Timer(
         backstop(target),
         () => unawaited(_stallHard(afterBackstop: true)),
@@ -293,6 +296,7 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
 
   void _land() {
     _stopTimers();
+    _timed = null;
     state = state.copyWith(
       phase: DeviceCommandPhase.landed,
       target: state.target,
@@ -302,6 +306,7 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
 
   void _end(DeviceCommandRefusal? refusal, {Object? error}) {
     _stopTimers();
+    _timed = null;
     state = state.copyWith(
       phase: DeviceCommandPhase.idle,
       refusal: refusal,
