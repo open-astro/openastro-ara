@@ -282,7 +282,9 @@ void main() {
         );
       }
       expect(
-        tester.getSemantics(find.byKey(const Key('polar-align-exposure'))).label,
+        tester
+            .getSemantics(find.byKey(const Key('polar-align-exposure')))
+            .label,
         contains('Exposure'),
       );
       handle.dispose();
