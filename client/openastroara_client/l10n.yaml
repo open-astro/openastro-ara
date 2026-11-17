@@ -1,4 +1,5 @@
 # Flutter gen-l10n: lib/l10n/app_en.arb is the template; add app_<locale>.arb to translate.
+# app_pt.arb is the empty fallback gen-l10n requires (it refuses app_pt_BR.arb without a base pt file); pt-BR strings live in app_pt_BR.arb, so bare pt and pt_PT read English.
 arb-dir: lib/l10n
 template-arb-file: app_en.arb
 output-localization-file: app_localizations.dart
