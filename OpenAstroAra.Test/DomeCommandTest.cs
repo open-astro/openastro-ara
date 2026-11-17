@@ -78,22 +78,36 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_dome_call_that_never_returns_fails_with_one_StallTimeout_and_the_abandoned_call_is_observed() {
+            // The handler is process-wide: count only this call's exception, not a stray task from another test.
+            const string Marker = "late abandoned dome call (#1808)";
+            var unobserved = 0;
+            void OnUnobserved(object? s, UnobservedTaskExceptionEventArgs e) {
+                if (e.Exception.InnerExceptions.Any(x => x.Message.Contains(Marker, StringComparison.Ordinal))) {
+                    Interlocked.Increment(ref unobserved);
+                }
+            }
+            TaskScheduler.UnobservedTaskException += OnUnobserved;
             using var release = new ManualResetEventSlim(false);
+            using var thrown = new ManualResetEventSlim(false);
             using var dome = new FakeDomeDevice {
-                OnCommand = () => { release.Wait(TimeSpan.FromSeconds(10)); throw new InvalidOperationException("late"); },
+                OnCommand = () => { release.Wait(TimeSpan.FromSeconds(10)); thrown.Set(); throw new InvalidOperationException(Marker); },
             };
             using var svc = await ConnectedAsync(dome, Policy());
             try {
                 await Assert.ThrowsAsync<SequenceEntityFailedException>(() => Park(svc));
                 Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
+                // The abandoned call faults after the verdict; it must be observed, never an unobserved task.
+                release.Set();
+                Assert.That(thrown.Wait(TimeSpan.FromSeconds(10)), Is.True, "the abandoned call never faulted");
+                await Task.Delay(100);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                Assert.That(unobserved, Is.Zero);
+                Assert.That(_faults.Faults, Has.Count.EqualTo(1));
             } finally {
                 release.Set();
+                TaskScheduler.UnobservedTaskException -= OnUnobserved;
             }
-            // The abandoned call faults after the verdict; it must not surface as an unobserved task exception.
-            await Task.Delay(50);
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            Assert.That(_faults.Faults, Has.Count.EqualTo(1));
         }
 
         [Test]
