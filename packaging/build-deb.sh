@@ -137,6 +137,7 @@ fi
 if command -v systemd-analyze > /dev/null; then
     systemd-analyze verify "$STAGE/etc/systemd/system/openastroara-server.service" \
         "$STAGE/etc/systemd/system/openastroara-storage@.service" \
+        "$STAGE/etc/systemd/system/openastroara-poweroff.service" \
         2>&1 | grep -v 'systemd does not run with system instance' || true
 fi
 

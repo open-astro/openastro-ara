@@ -1,0 +1,21 @@
+// Allow the openastroara service user to start the root-owned host poweroff unit
+// (End Night's "shut down the Pi" step, #1901). systemctl asks systemd over D-Bus and
+// polkit authorises it here — the daemon's unit runs with NoNewPrivileges=true, so
+// sudo/setuid cannot be used for this. Scoped to exactly one unit and one verb: `start`.
+// stop, restart, mask, edit and every other unit stay NOT_HANDLED (which falls through
+// to the default: admin auth, i.e. denied for a service user).
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "openastroara") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.lookup("unit") !== "openastroara-poweroff.service") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.lookup("verb") === "start") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

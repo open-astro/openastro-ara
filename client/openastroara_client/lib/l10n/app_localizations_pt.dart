@@ -6459,6 +6459,32 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get bestRetry => 'Try again';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'The rig\'s clock is $amount fast, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String get clockWrongTitle => 'The rig\'s clock is wrong';
+
+  @override
+  String get clockWrongStartAnyway => 'Start anyway';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -12928,7 +12954,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get bestNoneBody =>
-      'Nenhum Alvo fica acima de 30° por tempo suficiente para este equipamento esta noite. Tente amanhã ou busque um Alvo pelo nome.';
+      'Nenhum Alvo fica acima de 30° por tempo suficiente para esta configuração esta noite. Tente amanhã ou busque um Alvo pelo nome.';
 
   @override
   String get bestSearch => 'Buscar';
@@ -12957,7 +12983,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get bestOffline =>
-      'Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; o equipamento executa depois.';
+      'Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; a configuração executa depois.';
 
   @override
   String get bestLoadFailed =>
@@ -12965,4 +12991,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get bestRetry => 'Tentar de novo';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'O relógio do setup está $amount adiantado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'O relógio do setup está $amount adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String get clockWrongTitle => 'O relógio do setup está errado';
+
+  @override
+  String get clockWrongStartAnyway => 'Iniciar mesmo assim';
 }

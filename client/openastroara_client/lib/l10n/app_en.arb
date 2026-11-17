@@ -8411,5 +8411,33 @@
   "bestRetry": "Try again",
   "@bestRetry": {
     "description": "Error action"
+  },
+  "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
+  "@clockWrongSlow": {
+    "description": "Start question: the rig's clock could not be set and runs behind; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongFast": "The rig's clock is {amount} fast, so times and targets will be off. Start anyway?",
+  "@clockWrongFast": {
+    "description": "Start question: the rig's clock could not be set and runs ahead; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockNoticeSlow": "The rig's clock is {amount} slow and could not be set. Times and targets will be off.",
+  "@clockNoticeSlow": {
+    "description": "Notice on connect: the rig's clock could not be set and runs behind; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockNoticeFast": "The rig's clock is {amount} fast and could not be set. Times and targets will be off.",
+  "@clockNoticeFast": {
+    "description": "Notice on connect: the rig's clock could not be set and runs ahead; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongTitle": "The rig's clock is wrong",
+  "@clockWrongTitle": {
+    "description": "Advanced Mode Run dialog title when the rig's clock could not be set"
+  },
+  "clockWrongStartAnyway": "Start anyway",
+  "@clockWrongStartAnyway": {
+    "description": "Button: start the run although the rig's clock is wrong"
   }
 }
