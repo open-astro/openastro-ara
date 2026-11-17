@@ -159,7 +159,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => SequencerService.IsAbortableRun(kv.Value.State)).Select(kv => kv.Key).ToList());
 
     public Task<IReadOnlyList<Guid>> UnfinishedRunIdsAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => kv.Value.State is not (SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped)).Select(kv => kv.Key).ToList());
+        Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => !SequencerService.IsTerminal(kv.Value.State)).Select(kv => kv.Key).ToList());
 
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) {
         var paused = new List<Guid>();

@@ -799,7 +799,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
-    private static bool IsTerminal(SequenceRunState s) =>
+    public static bool IsTerminal(SequenceRunState s) =>
         s is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped;
 
     /// <summary>

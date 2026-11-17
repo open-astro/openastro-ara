@@ -144,6 +144,7 @@ namespace OpenAstroAra.Test {
             runs.Enter(Guid.NewGuid());
             var busy = new PlaceholderServerStateService(restarter: new FakeRestarter(), runs: runs);
             Assert.That((await busy.RestartOnIdleAsync("t", null, CancellationToken.None)).Status, Is.EqualTo("queued"));
+            await busy.CancelRestartOnIdleAsync(CancellationToken.None); // stop its waiter: the run never ends
         }
 
         [Test]
