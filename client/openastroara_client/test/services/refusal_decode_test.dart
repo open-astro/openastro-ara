@@ -118,6 +118,19 @@ void main() {
     );
   });
 
+  test(
+    'a Center that fails on the daemon stays a server error, not a Refusal',
+    () async {
+      final d = _Daemon(500, {
+        'title': 'Internal Server Error',
+        'status': 500,
+        'detail': 'boom',
+      });
+      final api = CenterApi(_server, dio: Dio()..httpClientAdapter = d);
+      await expectLater(api.start(5.5, 20), throwsA(isA<DioException>()));
+    },
+  );
+
   test('a reason this app does not know keeps the daemon detail', () async {
     final d = _Daemon(409, {
       'title': 'Refused',

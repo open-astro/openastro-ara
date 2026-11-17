@@ -128,6 +128,16 @@ namespace OpenAstroAra.Test {
             using var svc = Check(new System.IO.FileNotFoundException("/opt/solver/bin"));
             var refusal = await RefusedAsync(() => svc.VerifyAsync(2, CancellationToken.None));
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.SolverNotSet));
+            // The framework message can embed the server-side path: detail is a fixed sentence, never ex.Message.
+            Assert.That(refusal.Message, Does.Not.Contain("/opt/solver/bin"));
+        }
+
+        [Test]
+        public async Task Check_with_the_frame_store_missing_refuses_storage_unavailable() {
+            using var svc = Check(new StoreUnavailableException("No storage disk: nothing is mounted, so there is nowhere to save frames."));
+            var refusal = await RefusedAsync(() => svc.VerifyAsync(2, CancellationToken.None));
+            Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.StorageUnavailable));
+            Assert.That(refusal.Parameters, Is.Empty);
         }
 
         [Test]
@@ -186,6 +196,10 @@ namespace OpenAstroAra.Test {
             var sut = new PlateSolveService(Profile(800, 3.8).Object, factory.Object);
             var refusal = await RefusedAsync(() => sut.SolveImageAndLearnOptics(Mock.Of<IImageData>(), null, null, CancellationToken.None));
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.SolverNotSet));
+            if (solverFault == typeof(System.IO.FileNotFoundException)) {
+                // The framework message can embed the server-side path: detail is a fixed sentence, never ex.Message.
+                Assert.That(refusal.Message, Does.Not.Contain("the solver path"));
+            }
         }
 
         [Test]

@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using OpenAstroAra.Server;
@@ -43,6 +44,7 @@ namespace OpenAstroAra.Test {
             new object[] { "optics-not-set", 422, new[] { "missing" } },
             new object[] { "solver-not-set", 422, Array.Empty<string>() },
             new object[] { "capture-settings-unsupported", 422, Array.Empty<string>() },
+            new object[] { "storage-unavailable", 409, Array.Empty<string>() },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };
@@ -132,6 +134,26 @@ namespace OpenAstroAra.Test {
                 thrown = ex;
             }
             Assert.That(thrown, Is.SameAs(fault));
+            Assert.That(http.Response.Body.Length, Is.Zero);
+        }
+
+        private sealed class StartedResponse : HttpResponseFeature {
+            public override bool HasStarted => true;
+        }
+
+        [Test]
+        public async Task A_refusal_after_the_answer_has_started_is_rethrown() {
+            // The headers are already sent, so no problem body can be written: the Refusal leaves as it came.
+            var http = Http();
+            http.Features.Set<IHttpResponseFeature>(new StartedResponse());
+            var refusal = new RefusalException(RefusalCatalog.CameraBusy, "busy");
+            Exception? thrown = null;
+            try {
+                await RefusalHandler.Middleware(http, _ => throw refusal);
+            } catch (RefusalException ex) {
+                thrown = ex;
+            }
+            Assert.That(thrown, Is.SameAs(refusal));
             Assert.That(http.Response.Body.Length, Is.Zero);
         }
 

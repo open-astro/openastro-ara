@@ -114,6 +114,13 @@ void main() {
     expect(s.error, _words(r));
   });
 
+  test('a missing storage disk offers no settings, since plugging it back in fixes it', () async {
+    final r = _r(RefusalCause.storageUnavailable);
+    final s = await _check(r);
+    expect(s.fix, isNull);
+    expect(s.error, _words(r));
+  });
+
   test(
     'a cause this app does not know shows the daemon detail and guesses no fix',
     () async {
