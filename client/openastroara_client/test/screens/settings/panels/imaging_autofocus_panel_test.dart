@@ -180,7 +180,9 @@ void main() {
       final c = ProviderScope.containerOf(
         tester.element(find.byType(ImagingAutofocusPanel)),
       );
-      c.read(highlightedSettingProvider.notifier).highlight('img.autofocus.method');
+      c
+          .read(highlightedSettingProvider.notifier)
+          .highlight('img.autofocus.method');
       await tester.pump();
       expect(find.text('Method'), findsOneWidget);
 
