@@ -200,7 +200,7 @@ Three of the four tracking files this section created (`PORT_DECISIONS.md`, `POR
 | Runtime | **.NET 10** (current LTS through Nov 2028) |
 | Web framework | ASP.NET Core minimal API |
 | Target frameworks | pure `net10.0` — no multi-targeting, no `-windows` anywhere |
-| SDK pin | `global.json` pinning SDK 10.0.x with `rollForward: latestFeature` |
+| SDK pin | `global.json` pinning SDK 11.0.x with `rollForward: latestFeature`; the projects still target `net10.0`, so running tests or the daemon also needs the .NET 10 runtime |
 | Hosting | Kestrel listening on configurable port (default **5555**), no reverse proxy. Overridable via `OPENASTROARA_PORT` env var or `appsettings.json`. mDNS advertises the actual bound port (§32.4). |
 | Persistence | SQLite via `Microsoft.Data.Sqlite` 10.0.x for session/profile; FITS files on disk |
 | Equipment | Decided in ADR 0003. `ASCOM.Alpaca.Components` 2.1.0+. |
@@ -12376,9 +12376,10 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **macOS** (Apple Silicon primary, Intel supported):
   ```
-  # .NET 10 SDK
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
   brew install --cask dotnet-sdk
-  # OR Microsoft's installer from dot.net
+  # then the ASP.NET Core Runtime 10 installer from dot.net
+  # OR both from Microsoft's installers on dot.net
 
   # Flutter at the pinned version (per §12.1). NOT `brew install --cask
   # flutter` — that tracks latest stable and drifts off the pin.
@@ -12394,8 +12395,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **Linux (Debian/Ubuntu)** — primary dev environment matching production:
   ```
-  # .NET 10 SDK (Microsoft package feed)
-  curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
+  curl -sSL https://dot.net/install.sh | bash -s -- --channel 11.0
+  curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0 --runtime aspnetcore
 
   # Flutter at the pinned version — see docs/RUNNING.md
   git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
@@ -12407,8 +12409,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **Windows** — secondary; works but less tested:
   ```
-  # .NET 10 SDK
-  winget install Microsoft.DotNet.SDK.10
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
+  winget install Microsoft.DotNet.SDK.11
+  winget install Microsoft.DotNet.AspNetCore.10
   # OR choco install dotnet-sdk
 
   # Flutter
