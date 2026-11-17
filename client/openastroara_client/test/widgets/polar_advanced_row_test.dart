@@ -160,6 +160,40 @@ void main() {
     },
   );
 
+  testWidgets(
+    'collapsed: the row sums up the rig\'s turn, step and exposure (#1736)',
+    (tester) async {
+      final rig = _Api()
+        ..settings = const PolarAlignSettings(
+          seedRotationDeg: 45,
+          checkStepDeg: 20,
+          coarseExposureSeconds: 5,
+        );
+      await _pump(tester, rig: rig, open: false);
+      final row = find.byKey(const Key('polar-advanced-row'));
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('45° turn · 20° step · 5 s'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'collapsed after a failed load: no summary, never the client\'s defaults (#1736)',
+    (tester) async {
+      final rig = _Api()..getError = StateError('rig gone');
+      await _pump(tester, rig: rig, open: false);
+      final row = find.byKey(const Key('polar-advanced-row'));
+      expect(
+        find.descendant(of: row, matching: find.textContaining('° turn')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('an edit in the Settings panel shows in the row (#1736)', (
     tester,
   ) async {
