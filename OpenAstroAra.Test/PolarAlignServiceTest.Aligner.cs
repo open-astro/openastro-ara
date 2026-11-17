@@ -130,10 +130,28 @@ namespace OpenAstroAra.Test {
                 var now = DateTimeOffset.UtcNow;
                 var p = PolarAlignGeometry.PointingAltAz(_b.RaDegJnow, _b.DecDegJnow, latDeg, SiteLonDeg, now);
                 var (az, alt) = aligner.Offset;
-                var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(p.AltDeg + alt / 60.0, p.AzDeg + az / 60.0, latDeg,
+                var (newAlt, newAz) = MovedWithTheMount(p.AltDeg, p.AzDeg, alt / 60.0, az / 60.0, latDeg);
+                var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(newAlt, newAz, latDeg,
                     SiteAstrometry.LocalSiderealTimeDeg(now, SiteLonDeg));
                 return Task.FromResult(new PolarAlignSolveOutcome(true, ra, dec));
             }
+        }
+
+        /// <summary>Where a camera fixed to the mount points after the pole is raised by <paramref name="raiseDeg"/> and the
+        /// mount turned <paramref name="turnDeg"/> clockwise about the vertical: a rigid rotation, so far from the pole the
+        /// camera's own altitude moves by less than the pole's (cos of its azimuth from the pole).</summary>
+        private static (double AltDeg, double AzDeg) MovedWithTheMount(double altDeg, double azDeg, double raiseDeg, double turnDeg, double latDeg) {
+            var poleAz = latDeg > 0 ? 0.0 : 180.0;
+            double Rad(double d) => d * Math.PI / 180.0;
+            // x toward the pole's azimuth, y toward increasing azimuth, z up.
+            var x = Math.Cos(Rad(altDeg)) * Math.Cos(Rad(azDeg - poleAz));
+            var y = Math.Cos(Rad(altDeg)) * Math.Sin(Rad(azDeg - poleAz));
+            var z = Math.Sin(Rad(altDeg));
+            var (cr, sr) = (Math.Cos(Rad(raiseDeg)), Math.Sin(Rad(raiseDeg)));
+            (x, z) = (x * cr - z * sr, z * cr + x * sr);
+            var (ct, st) = (Math.Cos(Rad(turnDeg)), Math.Sin(Rad(turnDeg)));
+            (x, y) = (x * ct - y * st, x * st + y * ct);
+            return (Math.Asin(Math.Clamp(z, -1, 1)) * 180.0 / Math.PI, poleAz + Math.Atan2(y, x) * 180.0 / Math.PI);
         }
 
         private static Task<JsonElement> AlignerEventAsync(WsRecorder ws, string state, int skip = 0) =>
