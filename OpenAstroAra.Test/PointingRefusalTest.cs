@@ -188,7 +188,7 @@ namespace OpenAstroAra.Test {
         public async Task Solving_a_frame_whose_solver_is_not_set_up_refuses_solver_not_set(Type solverFault) {
             var imageSolver = new Mock<IImageSolver>();
             imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync((Exception)Activator.CreateInstance(solverFault, "the solver path")!);
+                .ThrowsAsync((Exception)Activator.CreateInstance(solverFault, "/opt/solver/astap")!);
             var factory = new Mock<IPlateSolverFactory>();
             factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
             factory.Setup(f => f.GetBlindSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
@@ -198,7 +198,7 @@ namespace OpenAstroAra.Test {
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.SolverNotSet));
             if (solverFault == typeof(System.IO.FileNotFoundException)) {
                 // The framework message can embed the server-side path: detail is a fixed sentence, never ex.Message.
-                Assert.That(refusal.Message, Does.Not.Contain("the solver path"));
+                Assert.That(refusal.Message, Does.Not.Contain("/opt/solver/astap"));
             }
         }
 
