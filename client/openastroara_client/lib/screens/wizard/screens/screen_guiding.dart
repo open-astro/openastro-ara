@@ -434,13 +434,12 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                   // Camera has no ''-vs-null distinction: blank = untouched.
                   final sel = v.isEmpty ? null : v;
                   setState(() {
-                    _g.guiderCamera = sel;
-                    // #1308 — pinned by UniqueID, as the other surfaces do.
-                    _g.guiderCameraAlpacaUniqueId = sel == null
+                    // #1308 / #1861 — one pick: camera, UniqueID and server.
+                    _g.guiderPick = sel == null
                         ? null
                         : ref
                             .read(guiderAlpacaDevicesProvider.notifier)
-                            .uniqueIdFor(sel);
+                            .pick(sel);
                     _pixelSizeFromDriver = false;
                   });
                   _publishValid();

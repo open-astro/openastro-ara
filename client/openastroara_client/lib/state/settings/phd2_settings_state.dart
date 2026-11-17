@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'settings_sync_mixin.dart';
 
+import '../../models/guider_pick.dart';
 import '../../services/profile_api.dart';
+import '../guider/guider_choice_state.dart' show applyGuiderPick;
 
 /// §63 OpenAstro Guider settings. Phase 12h.6k wires the daemon round-trip
 /// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
@@ -202,6 +204,9 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     with SettingsSyncMixin<Phd2Settings> {
   @override
   Phd2Settings build() => const Phd2Settings();
+
+  /// Writes a Guide Camera pick (ADR 0013 rule 4): see [applyGuiderPick].
+  void applyPick(GuiderPick pick) => state = applyGuiderPick(state, pick);
 
   void setHost(String s) {
     final v = s.trim();

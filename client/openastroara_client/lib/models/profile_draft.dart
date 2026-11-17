@@ -1,3 +1,4 @@
+import 'guider_pick.dart';
 import 'switch_device.dart' show CoolingFan;
 
 /// Mutable working copy of a profile being built by the §37 wizard.
@@ -203,10 +204,22 @@ class GuiderSettings {
   // §63.17 — guide-camera selection (a daemon choice string, verbatim from
   // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
   // value on Save (like the other nullable draft fields).
-  String? guiderCamera;
-  // #1308 — the Alpaca UniqueID behind [guiderCamera]; "" when unknown. Null
-  // with an untouched camera keeps the base profile's.
-  String? guiderCameraAlpacaUniqueId;
+  // #1861 — the pick carries the camera, its Alpaca UniqueID and the server
+  // endpoint together. Null = untouched camera: keeps the base profile's
+  // camera, UniqueID and server.
+  GuiderPick? guiderPick;
+  String? get guiderCamera => guiderPick?.camera;
+  // A bare camera name (a restored draft, tests): no UniqueID known, and the
+  // endpoint is the one the name itself carries.
+  set guiderCamera(String? v) {
+    if (v == null) {
+      guiderPick = null;
+      return;
+    }
+    final e = parseAlpacaChoiceEndpoint(v);
+    guiderPick = GuiderPick(camera: v, host: e?.host, port: e?.port);
+  }
+
   // §63.17 — mount / aux-mount / rotator selections (daemon choice strings,
   // same format as guiderCamera). Null = untouched, keeps the base profile's
   // value on Save; empty string = explicit "keep the guider's current pick".
