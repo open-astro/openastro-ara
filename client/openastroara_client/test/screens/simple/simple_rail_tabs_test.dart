@@ -611,6 +611,38 @@ void main() {
     );
   }
 
+  testWidgets(
+    // The test font draws each glyph as a square: "Calibration" is wider
+    // than its tab at 1x.
+    'iPad 1024x768 at 1x text: no tab caption breaks a word, it shrinks to its tab',
+    (tester) async {
+      await _pump(tester, ipad);
+      for (final tab in [
+        for (final (_, name) in _order) _tab(name),
+        find.byKey(const Key('simple-mode-preflight')),
+      ]) {
+        final fittedBox = find.descendant(
+          of: tab,
+          matching: find.byType(FittedBox),
+        );
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: fittedBox, matching: find.byType(RichText)),
+        );
+        // The longest word, as drawn after the FittedBox's scale.
+        final word =
+            paragraph.getMinIntrinsicWidth(double.infinity) *
+            paragraph
+                .getTransformTo(tester.renderObject(fittedBox))
+                .entry(0, 0);
+        expect(
+          word,
+          lessThanOrEqualTo(tester.getSize(tab).width + 0.01),
+          reason: 'each word of the caption in $tab is whole on its line',
+        );
+      }
+    },
+  );
+
   for (final (name, size) in [
     ('portrait', const Size(390, 844)),
     ('landscape', const Size(844, 390)),

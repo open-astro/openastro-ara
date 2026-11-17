@@ -2909,6 +2909,21 @@ class _RailTab extends StatelessWidget {
     final label = name
         ? mode.railLabelOf(context.l10n)
         : mode.labelOf(context.l10n);
+    final style = AraText.caption.copyWith(
+      color: color,
+      fontWeight: selected ? FontWeight.w600 : null,
+    );
+    // The longest word, so two lines wrap between words, never inside one.
+    final words = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: DefaultTextStyle.of(context).style.merge(style),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final longestWord = words.minIntrinsicWidth;
+    words.dispose();
     return Semantics(
       role: SemanticsRole.tab,
       selected: selected,
@@ -2930,24 +2945,24 @@ class _RailTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (!name && !compact) Icon(mode.icon, size: 20, color: color),
-                // "Polar align" wraps to two lines; a word wider than the
-                // rail shrinks to fit, never cut. Compact keeps one line and
-                // shrinks it whole, so no fixed width there.
+                // "Polar align" wraps to two lines at the rail's width (or
+                // its longest word's), and FittedBox shrinks the caption to
+                // the tab, never cut. Compact keeps one line and shrinks it
+                // whole, so no fixed width there.
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: SizedBox(
-                      width: compact ? null : 60 * scale,
+                      width: compact
+                          ? null
+                          : math.max(60 * scale, longestWord.ceilToDouble()),
                       child: Text(
                         label,
                         maxLines: compact ? 1 : 2,
                         softWrap: !compact,
                         textAlign: TextAlign.center,
-                        style: AraText.caption.copyWith(
-                          color: color,
-                          fontWeight: selected ? FontWeight.w600 : null,
-                        ),
+                        style: style,
                       ),
                     ),
                   ),
