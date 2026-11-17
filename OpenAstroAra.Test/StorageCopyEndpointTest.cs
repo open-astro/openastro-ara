@@ -203,6 +203,7 @@ namespace OpenAstroAra.Test {
         public async Task An_erase_is_noted_before_the_wipe_even_when_the_format_fails() {
             camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
             var before = DateTime.UtcNow;
+            devices.Setup(d => d.RefuseEraseOnOsDiskAsync("A1B2-C3D4", It.IsAny<CancellationToken>())).ReturnsAsync((StorageConfigureResult?)null);
             devices.Setup(d => d.ConfigureAsync("A1B2-C3D4", true, "BACKUP", null, It.IsAny<CancellationToken>()))
                 .Callback(() => Assert.That(erased.ErasedSince("A1B2-C3D4", before), Is.True, "noted before the helper runs"))
                 .ReturnsAsync(new StorageConfigureResult(false, "format_failed", "mkfs died", null));
@@ -221,6 +222,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task An_erase_that_cannot_be_noted_is_refused_and_never_reaches_the_drive() {
             camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            devices.Setup(d => d.RefuseEraseOnOsDiskAsync("C9D0-E1F2", It.IsAny<CancellationToken>())).ReturnsAsync((StorageConfigureResult?)null);
             // A file where the state directory should be: the append throws.
             if (Directory.Exists(stateDir)) {
                 Directory.Delete(stateDir, recursive: true);
@@ -236,6 +238,27 @@ namespace OpenAstroAra.Test {
                 devices.Verify(d => d.ConfigureAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             } finally {
                 File.Delete(stateDir);
+            }
+        }
+
+        [Test]
+        public async Task An_erase_of_a_drive_on_the_os_disk_is_refused_before_it_is_noted() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            var before = DateTime.UtcNow;
+            devices.Setup(d => d.RefuseEraseOnOsDiskAsync("0A0B-0C0D", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new StorageConfigureResult(false, "refused", "system_disk", null));
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure",
+                    new { uuid = "0A0B-0C0D", format = true, confirm_label = "DATA" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                Assert.That(doc.RootElement.GetProperty("title").GetString(), Is.EqualTo("refused"));
+                Assert.That(doc.RootElement.GetProperty("detail").GetString(), Is.EqualTo("system_disk"));
+                Assert.That(erased.ErasedSince("0A0B-0C0D", before), Is.False, "no erase-log entry");
+                devices.Verify(d => d.ConfigureAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            } finally {
+                devices.Reset();
             }
         }
 

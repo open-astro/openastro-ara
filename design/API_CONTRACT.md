@@ -193,6 +193,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-17 — #1769 the OS disk's other partitions: `system_disk_level` and `media_kind` on `GET /api/v1/storage/devices`
+
+**Endpoint(s) or area:** `GET /api/v1/storage/devices` → `StorageDeviceDto` gains `system_disk_level` (`none` | `os_partition` | `os_disk_data`) and `media_kind` (`emmc` | `nvme` | `sd` | `unknown`); `POST /api/v1/storage/configure` with `format: true`.
+
+**Decision:** `os_partition` is a device that carries `/`, `/boot` or `/boot/firmware`, or an ancestor of one (md, LVM, dm-crypt, the physical disk). `os_disk_data` is any other partition on that physical disk. `is_system_disk` stays true for both, so an older client hides exactly what it hides today. `media_kind` is read from sysfs `device/type` (`SD`, `MMC` = eMMC) and lsblk's NVMe transport; anything else, or a failed read, is `unknown`. Both fields are additive; a client that does not know them reads `none` and `unknown`. `POST /storage/configure` with `format: true` on a device of either level answers 422 Problem `title: refused`, `detail: system_disk`, before the erase is noted and before the helper runs. Mount, check, eject and the copy target on an `os_disk_data` partition are not refused; the root helper refuses every mode on an `os_partition` and the erase of an `os_disk_data` partition.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml` (`StorageDeviceDto`); `Services/StorageDeviceService.cs` (`ParseDevices`, `ProbeMedia`, `RefuseEraseOnOsDiskAsync`), `Endpoints/SystemEndpoints.cs` (`/storage/configure`), `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`refuse_if_os_partition`, `refuse_if_os_disk`).
+
+**Related:** #1769, ADR 0017; tests `StorageOsDiskTest`, `StorageCopyEndpointTest`, `scripts/tests/test_configure_storage_switch.py`.
+
+---
+
 ## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.

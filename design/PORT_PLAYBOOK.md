@@ -2877,7 +2877,7 @@ sudo /opt/openastroara/scripts/configure-storage.sh --mount-copy <uuid>
 sudo /opt/openastroara/scripts/configure-storage.sh --unmount-copy
 ```
 
-Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses any device on the disk holding `/`, `/boot` or `/boot/firmware` (`refused system_disk`, exit 6). The script header is the source of truth; this is the shape.
+Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses the partition holding `/`, `/boot` or `/boot/firmware` and its ancestors in every mode, and any other partition on that disk when it is erased (`refused system_disk`, exit 6). The script header is the source of truth; this is the shape.
 
 **Behavior (no `--format`): use a drive as the store**
 
@@ -2925,7 +2925,7 @@ On a packaged install neither line is reachable (NoNewPrivileges, above); the st
 | 3 | Filesystem is neither exFAT nor ext4 (`not_ext4`) |
 | 4 | Label mismatch on `--format` (`label_mismatch`) |
 | 5 | Device busy — unmount failed (`device_busy`) |
-| 6 | Refused: the root or boot disk (`refused system_disk`), or the store as a copy target (`refused is_store`) |
+| 6 | Refused: the root or boot partition, or an erase on the OS disk (`refused system_disk`), or the store as a copy target (`refused is_store`) |
 | 7 | mkfs failed (`mkfs_failed`) |
 | 8 | mount failed, or the fstab rebuild could not run (`mount_failed`, `fstab_unreadable`, `fstab_tmp_failed`, `fstab_locked`) |
 | 9 | Usage error — bad or conflicting arguments (`usage`) |

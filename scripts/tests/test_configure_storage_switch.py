@@ -67,8 +67,14 @@ case "$tag" in
 esac
 awk -v d="$dev" -v c="$col" '$2 == d { print $c }' "$SHIM_DIR/drives"
 """,
+    # lsblk -no PKNAME <dev> reads the optional "device parent-name" table in $SHIM_DIR/pkname
+    # (an OS-disk layout); with no table every device is a top-level disk.
     "lsblk": r"""#!/bin/sh
 case "$*" in
+    *PKNAME*)
+        for a; do dev=$a; done
+        awk -v d="$dev" '$1 == d { print $2 }' "$SHIM_DIR/pkname" 2>/dev/null
+        ;;
     *TYPE*) echo part ;;
 esac
 exit 0
@@ -77,7 +83,9 @@ exit 0
 # findmnt -no SOURCE <target> | findmnt -no TARGET <source>
 col=$2; key=$3
 case "$key" in
-    /|/boot|/boot/firmware) echo /dev/shim-root; exit 0 ;;
+    /|/boot|/boot/firmware)
+        if [ -s "$SHIM_DIR/root" ]; then cat "$SHIM_DIR/root"; else echo /dev/shim-root; fi
+        exit 0 ;;
 esac
 if [ "$col" = SOURCE ]; then
     out=$(awk -v k="$key" '$2 == k { print $1 }' "$SHIM_DIR/mounts")
@@ -391,6 +399,52 @@ class ConfigureStorageCopyTarget(HelperRig):
         result = self.run_helper("--mount-copy", self.NEW[0])
         self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
         self.assertIn("ERROR: mount_failed", result.stdout)
+
+
+class OsDiskLevels(HelperRig):
+    """#1769 — NEW sits on the OS disk next to the root partition: data, not the OS itself."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        (self.shims / "pkname").write_text(f"{self.NEW[1]} shimdisk\n/dev/shim-root shimdisk\n")
+
+    def erased(self) -> bool:
+        return (self.shims / "erased").exists() or (self.shims / "wiped").exists()
+
+    def test_mounting_an_os_disk_data_partition_passes(self) -> None:
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
+
+    def test_the_copy_target_check_and_eject_pass_on_an_os_disk_data_partition(self) -> None:
+        copy = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(copy.returncode, 0, copy.stdout + copy.stderr)
+        self.assertEqual(self.copy_mounted(), [self.NEW[1]])
+        for mode in ("--check", "--eject"):
+            result = self.run_helper(mode, self.NEW[0])
+            self.assertNotIn("system_disk", result.stdout, f"{mode}: {result.stdout}")
+
+    def test_erasing_an_os_disk_data_partition_is_refused_untouched(self) -> None:
+        result = self.run_helper("--format", "--fs", "ext4", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+        self.assertIn("ERROR: refused system_disk", result.stdout)
+        self.assertFalse(self.erased(), "mkfs/wipefs never ran")
+
+    def test_the_root_partition_is_refused_in_every_mode(self) -> None:
+        (self.shims / "root").write_text(f"{self.NEW[1]}\n")
+        for args in ([self.NEW[0]], ["--check", self.NEW[0]], ["--mount-copy", self.NEW[0]],
+                     ["--eject", self.NEW[0]], ["--format", "--fs", "ext4", self.NEW[0], "ARA-DISK"]):
+            result = self.run_helper(*args)
+            self.assertEqual(result.returncode, 6, f"{args}: {result.stdout}{result.stderr}")
+            self.assertIn("ERROR: refused system_disk", result.stdout, str(args))
+
+    def test_an_ancestor_of_the_root_partition_is_refused_in_every_mode(self) -> None:
+        # Root on a mapper node that sits on NEW: NEW is its ancestor, so it is the OS itself.
+        (self.shims / "root").write_text("/dev/mapper/shim-crypt\n")
+        (self.shims / "pkname").write_text(f"/dev/mapper/shim-crypt {Path(self.NEW[1]).name}\n")
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+        self.assertIn("ERROR: refused system_disk", result.stdout)
 
 
 class ExfatUnsupportedKernel(HelperRig):

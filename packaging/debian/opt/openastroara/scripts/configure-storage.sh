@@ -89,11 +89,13 @@ refuse_if_exfat_unsupported() {
     exit 12
 }
 
-# Refuse anything that carries the running system: the disk holding / or
-# /boot/firmware, and any of its partitions. Formatting those bricks the box.
-# Walks the WHOLE parent chain (partition → md/LVM/dm-crypt → physical disk),
+# Two levels of "system disk" (#1769). The OS partition, and every ancestor of it
+# (partition -> md/LVM/dm-crypt -> physical disk), is refused in every mode. Any other
+# partition on the OS disk is data: mount, --check, --mount-copy and --eject pass,
+# and only the erase path refuses it. The ancestor walk follows the WHOLE parent chain,
 # not one hop, so a stacked root still resolves to its physical holder.
-# Keep in lock-step with StorageDeviceService.SystemDisksAsync.
+# Keep in lock-step with StorageDeviceService.SystemDisksAsync (the OS-partition set)
+# and ParseDevices (os_partition / os_disk_data).
 base_disk() { # deepest ancestor of a device node
     d=$1
     i=0
@@ -106,14 +108,33 @@ base_disk() { # deepest ancestor of a device node
     echo "$d"
 }
 
-refuse_if_system_disk() {
+# Is $1 the node carrying /, /boot or /boot/firmware, or one of its ancestors?
+refuse_if_os_partition() {
     dev=$1
-    base=$(base_disk "$dev")
+    for critical in / /boot /boot/firmware; do
+        node=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)
+        [ -z "$node" ] && continue
+        i=0
+        while [ -n "$node" ] && [ "$i" -lt 9 ]; do
+            if [ "$dev" = "$node" ]; then
+                echo "ERROR: refused system_disk"
+                exit 6
+            fi
+            p=$(lsblk -no PKNAME "$node" 2>/dev/null | head -n1 || true)
+            [ -z "$p" ] && break
+            node="/dev/$p"
+            i=$((i + 1))
+        done
+    done
+}
+
+# Is $1 on the same physical disk as /, /boot or /boot/firmware? Erase path only.
+refuse_if_os_disk() {
+    base=$(base_disk "$1")
     for critical in / /boot /boot/firmware; do
         holder=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)
         [ -z "$holder" ] && continue
-        holder_base=$(base_disk "$holder")
-        if [ "$dev" = "$holder" ] || [ "$base" = "$holder_base" ]; then
+        if [ "$base" = "$(base_disk "$holder")" ]; then
             echo "ERROR: refused system_disk"
             exit 6
         fi
@@ -370,7 +391,8 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     echo "ERROR: uuid_not_found"
     exit 2
 fi
-refuse_if_system_disk "$DEVICE"
+refuse_if_os_partition "$DEVICE"
+[ "$FORMAT" -ne 1 ] || refuse_if_os_disk "$DEVICE"
 
 if [ "$MOUNT_COPY" -eq 1 ]; then
     # The store is the copy SOURCE: copying a drive onto itself would mount it
