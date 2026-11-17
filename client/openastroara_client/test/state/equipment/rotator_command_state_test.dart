@@ -277,6 +277,40 @@ void main() {
     });
   });
 
+  test('a move to 0 from 359.97 is not taken as motion until the angle moves more than 0.1 degrees, wrapping through 0', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      rotator.report(_rotator(sky: 359.97));
+      c
+          .read(rotatorCommandProvider.notifier)
+          .request(const RotatorTarget.move(0, useSkyAngle: true));
+      async.flushMicrotasks();
+      // 0.06 degrees through 0: no motion seen, so a 0.03 reading is no landing.
+      rotator.report(_rotator(sky: 0.03));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.moving);
+      async.elapse(const Duration(milliseconds: 3100));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.idle);
+      expect(
+        c.read(rotatorCommandProvider).refusal,
+        DeviceCommandRefusal.didntMove,
+      );
+    });
+  });
+
+  test('a second press while the run state is still being read sends nothing once the first has started moving', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(
+        async,
+        runReadTakes: const Duration(seconds: 1),
+      );
+      final cmd = c.read(rotatorCommandProvider.notifier);
+      cmd.request(_to75);
+      cmd.request(const RotatorTarget.move(40, useSkyAngle: true));
+      async.elapse(const Duration(seconds: 2));
+      expect(rotator.sent, ['move 75.0 sky']);
+    });
+  });
+
   test('a rotator that stops with its angle unread has not landed', () {
     fakeAsync((async) {
       final (c, rotator) = _rig(async);

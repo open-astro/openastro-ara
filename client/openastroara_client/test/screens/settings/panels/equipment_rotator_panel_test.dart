@@ -11,6 +11,8 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/settings/panels/equipment_rotator_panel.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/equipment/device_command_state.dart';
+import 'package:openastroara/state/equipment/rotator_command_state.dart';
 import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -210,6 +212,29 @@ void main() {
               c.contains('use_sky_angle: true'))
         ],
         reason: api.calls.toString());
+  });
+
+  testWidgets('an answer to a question another window has since replaced applies nothing',
+      (tester) async {
+    final api = await _pump(tester, _status(), planRunning: true);
+    await tester.enterText(find.byType(TextField), '270');
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(AlertDialog)));
+    final other = Object();
+    container
+        .read(rotatorCommandProvider.notifier)
+        .request(const RotatorTarget.sync(80), by: other);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Rotate anyway'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.startsWith('command:')), isEmpty,
+        reason: api.calls.toString());
+    final command = container.read(rotatorCommandProvider);
+    expect(command.phase, DeviceCommandPhase.asking);
+    expect(command.by, same(other));
   });
 
   testWidgets('a rotator that never starts moving says so after 3 s',
