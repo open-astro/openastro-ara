@@ -107,7 +107,7 @@ Finder _tab(String name) => find.byKey(Key('simple-rail-tab-$name'));
 Future<ProviderContainer> _pump(
   WidgetTester tester,
   Size size, {
-  TargetPlatform platform = TargetPlatform.linux,
+  TargetPlatform? platform,
   List<Override> extra = const [],
   double textScale = 1,
 }) async {
@@ -116,7 +116,11 @@ Future<ProviderContainer> _pump(
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
     overrides: [
-      companionPlatformProvider.overrideWithValue(platform),
+      companionPlatformProvider.overrideWithValue(
+        // The 1024 wide group is an iPad.
+        platform ??
+            (size.width == 1024 ? TargetPlatform.iOS : TargetPlatform.linux),
+      ),
       simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
       discoveredServersProvider.overrideWith(
         (ref) => const Stream<AraServer>.empty(),
@@ -146,7 +150,7 @@ Future<ProviderContainer> _pump(
 
 void main() {
   const desktop = Size(1280, 720);
-  const ipad = Size(1024, 720);
+  const ipad = Size(1024, 768);
 
   for (final size in [desktop, ipad]) {
     group('rail tabs at ${size.width.toInt()}', () {
@@ -312,15 +316,25 @@ void main() {
         await _pump(tester, size, extra: _runningPlan);
         final dot = find.byKey(const Key('simple-rail-dot-plan'));
         expect(dot, findsOneWidget);
+        expect(
+          find.descendant(of: _tab('plan'), matching: dot),
+          findsOneWidget,
+          reason: 'the dot sits inside its tab',
+        );
         expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
         for (var i = 0; i < 4; i++) {
           await tester.pump(const Duration(milliseconds: 500));
           expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
+          // Only fades between the dot and its own tab count: the shell and
+          // its routes put fades above every widget.
           for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
             expect(
-              find.ancestor(of: dot, matching: find.byType(w)),
+              find.descendant(
+                of: _tab('plan'),
+                matching: find.ancestor(of: dot, matching: find.byType(w)),
+              ),
               findsNothing,
-              reason: 'no $w above the dot',
+              reason: 'no $w between the dot and its tab',
             );
           }
         }
