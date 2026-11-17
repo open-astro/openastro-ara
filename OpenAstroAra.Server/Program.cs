@@ -353,7 +353,8 @@ public partial class Program {
             // A REST park / home stops guiding first; the guider is registered after the mount, so it is
             // resolved lazily (and the factory lambda bypasses constructor activation: every optional
             // parameter is passed by hand, #711).
-            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>())));
+            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+            sp.GetService<IProfileStore>())));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
