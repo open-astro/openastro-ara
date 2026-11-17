@@ -78,23 +78,13 @@ namespace OpenAstroAra.Test {
 
         [TestCase(null, null)]
         [TestCase(0.0, 0.0)]
+        [TestCase(-1.0, -1.0)] // the store drops an equal write, so only a negative value shows the > 0 guard
         public void A_mount_reporting_no_optics_writes_nothing(double? focal, double? aperture) {
             var (svc, store, writes) = Rig(Optics());
             using var _ = svc;
             svc.MaybeAutoPopulateOptics(Caps(focal, aperture));
             Assert.That(store.GetOpticsSettings(), Is.EqualTo(Optics()));
             Assert.That(writes(), Is.EqualTo(0));
-        }
-
-        [Test]
-        public void A_throwing_property_reads_as_null_and_writes_nothing() {
-            // ReadCapabilities maps a throwing FocalLength / ApertureDiameter to null via OpticsMmFromMetres' try.
-            Assert.That(TelescopeService.OpticsMmFromMetres(0.48), Is.EqualTo(480).Within(1e-9));
-            var (svc, store, writes) = Rig(Optics());
-            using var _ = svc;
-            svc.MaybeAutoPopulateOptics(Caps(null, null));
-            Assert.That(writes(), Is.EqualTo(0));
-            Assert.That(store.GetOpticsSettings(), Is.EqualTo(Optics()));
         }
 
         [Test]
