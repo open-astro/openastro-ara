@@ -217,6 +217,7 @@ A trigger's `run` is a list of instruction nodes. It maps to the trigger's `Trig
 | Field | Type | Meaning |
 |---|---|---|
 | `role` | `container`, `instruction`, `condition`, `trigger` | where it sits; picks the class |
+| `name` | string | set to `originalType` by the importer and the migration; the engine builds the displayed name from it (`UnknownSequenceItem.Name` wraps `base.Name`) |
 | `originalType` | string | the NINA `$type` token as found, or the v1 token |
 | `originalPayload` | object | the source node, kept so nothing is lost and a later Ara release can retry it |
 | `reason` | string | why it was not mapped |
@@ -236,7 +237,7 @@ Import is client-side and one-way. The NINA file lives on the client machine, so
 **Target.** The importer stays in the client, as the successor of `nina_import.dart`, and writes v2:
 
 1. **Detect.** A body with a top-level `$type` and no `schemaVersion` is NINA JSON. A body that already has `schemaVersion` is not imported. Anything else is refused on the client with "This file is not a NINA sequence." Malformed JSON, a body that is not an object, or a root that is not a container refuses the whole import; nothing is uploaded.
-2. **Map `$type` to `kind`.** The client strips the NINA or `OpenAstroAra` namespace from each `$type` and looks the class name up in this spec's kind tables. The five `NINA.Plugins.Connector` instructions (`ConnectAllEquipment`, `ConnectEquipment`, `DisconnectEquipment`, `DisconnectAllEquipment`, `SwitchProfile`) map to the same-named Ara classes, as `SequenceItemCreationConverter.PluginMergeMigration` does on the daemon today. No `NinaTypeRemapper.ResolveType` step runs on the server.
+2. **Map `$type` to `kind`.** The client strips the NINA or `OpenAstroAra` namespace from each `$type` and looks the class name up in this spec's kind tables. The five `NINA.Plugins.Connector` instructions (`ConnectAllEquipment`, `ConnectEquipment`, `DisconnectEquipment`, `DisconnectAllEquipment`, `SwitchProfile`) map to the same-named Ara classes, as `SequenceItemCreationConverter.PluginMergeMigration` does on the daemon today, and the Connector `ReconnectTrigger` maps to `reconnect`, as `SequenceTriggerCreationConverter.PluginMergeMigration` does. That converter also maps the Connector `ReconnectOnDownloadFailure`, but Ara has no such class (`OpenAstroAra.Sequencer/Trigger/Connect/` holds only `ReconnectTrigger`), so it loads as `UnknownSequenceTrigger` today and the importer writes a placeholder for it. No `NinaTypeRemapper.ResolveType` step runs on the server.
 3. **Map fields.** Each property becomes its v2 field (see "Renamed fields"). `ImageType` `DARKFLAT` becomes `DARK`. A NINA `Strategy.$type` is dropped (the `kind` decides it). A `SelectedProvider.$type` becomes a `provider` string. A `DeepSkyObjectContainer`'s `Target` is hoisted into `targets` and the container gets a `targetId`. A `$ref` to a node already seen is refused as "shared node"; NINA files do not produce one for the types Ara supports.
 4. **Supported constructs import losslessly**: every NINA class the tables list, with every field the class carries. There is no export back to NINA, so lossless means "nothing the engine runs is dropped or changed".
 5. **Not supported: placeholder or refusal.**
@@ -244,7 +245,7 @@ Import is client-side and one-way. The NINA file lives on the client machine, so
 | NINA construct | What import does |
 |---|---|
 | a `$type` with no `kind` in the tables (a NINA instruction Ara does not ship, any third-party plugin type, MGEN, `StartAreaContainer`, `TargetAreaContainer`, `EndAreaContainer`, `ConditionalContainer`, `IfContainer`-style containers) | the node becomes a placeholder (`kind: "unknown"`) with `originalType`, `originalPayload` and `reason`; its children are inside `originalPayload` and are not imported; the import goes on |
-| a plugin type under `NINA.Plugins.*` other than the five Connector instructions | the same placeholder |
+| a plugin type under `NINA.Plugins.*` other than the five Connector instructions and the Connector `ReconnectTrigger` (the Connector `ReconnectOnDownloadFailure` included) | the same placeholder |
 | a node with no `$type` | the same placeholder, `originalType` empty |
 | a device id (`SelectedDevice`, `AlpacaDeviceNumber`) that names a NINA ASCOM device | kept as found; the client adds a warning `equipment_unmatched` (the user reassigns it in the editor) |
 | malformed JSON, a body that is not an object, or a root that is not a container | the whole import is refused; nothing is uploaded |
@@ -253,7 +254,7 @@ Import is client-side and one-way. The NINA file lives on the client machine, so
 
    `"<originalType>" is not supported by OpenAstro Ara and was not imported. It stays in the sequence as a placeholder that is skipped when the sequence runs.`
 
-   The placeholder node itself shows, in the editor and in the sequence's validation list, today's engine text unchanged: the name `<Unknown Instruction - <originalType>> ` and the issue "Unknown instruction detected! Please double check your sequence and inspect which instructions became invalid. Furthermore validate that everything is up to date." (`LblUnknownInstruction`, `LblUnknownInstructionValidation`). When the engine reaches it, the run log says "Unknown instruction will be skipped - <name>". The client banner counts the warnings ("3 issues need attention"). An import with at least one placeholder still saves; it cannot start until the user removes or replaces each placeholder, because a sequence with a placeholder fails its validation (`Validate()` is `false`).
+   The placeholder node itself shows, in the editor and in the sequence's validation list, today's engine text unchanged: the name `<Unknown Instruction - <name>> ` (the node's `name`, which the importer sets to `originalType`) and the issue "Unknown instruction detected! Please double check your sequence and inspect which instructions became invalid. Furthermore validate that everything is up to date." (`LblUnknownInstruction`, `LblUnknownInstructionValidation`). When the engine reaches it, the run log says "Unknown instruction will be skipped - <name>". The client banner counts the warnings ("3 issues need attention"). An import with at least one placeholder still saves; it cannot start until the user removes or replaces each placeholder, because a sequence with a placeholder fails its validation (`Validate()` is `false`).
 7. **Provenance.** The client sets `metadata.importedFrom` to `{ "format": "nina", "fileName": "<name>", "importedUtc": "<ISO 8601>" }` in the v2 body. The daemon keeps no source file and no `sequences/imported/` directory.
 8. **Daemon gate.** The daemon's v2 validator (follow-up (a)) gates the create and answers HTTP 422 on an invalid body. A placeholder from the client passes the create only when it carries `originalType`, `originalPayload` and `reason`.
 9. **No Glover.** NINA has no equivalent of `glover-exposure`, so import never creates one; a NINA `TakeExposure` becomes a `capture`.
@@ -352,7 +353,7 @@ Follow-up (a) writes the validator. The rules it must hold, beyond today's `Sequ
 - `root` is the only `root`, and a `target`'s `targetId` is an `id` in `targets`;
 - a `capture`, `flat-panel-flats` or `sky-flats` node or a `glover-exposure` counts as capturable;
 - no unknown fields (a typo is a 422 naming the node path);
-- a client upload carries no `unknown` node.
+- an `unknown` node carries `originalType`, `originalPayload` and `reason` (the client importer and the migration write it; the editor never offers one).
 
 ## Follow-up issues
 
@@ -381,11 +382,11 @@ Four issues, filed after the maintainer signs this spec off. Each is a separate 
 **Desired outcome.** The client maps a NINA `.json` to a v2 document through the spec's kind table, shows `warnings` for placeholder and unmatched-device nodes before upload, records `metadata.importedFrom`, and uploads through the ordinary create. The daemon's v2 validator answers 422 on an invalid body. No import endpoint, no server-side `NinaTypeRemapper.ResolveType` step, no source file kept on the daemon.
 
 **Acceptance criteria.**
-- A fixture set of real NINA files (a target block, a Smart Exposure with triggers, the Connector plugin instructions, a plugin instruction Ara does not ship) imports with the node counts and field values asserted, in Dart tests.
+- A fixture set of real NINA files (a target block, a Smart Exposure with triggers, the Connector plugin instructions, the Connector `ReconnectTrigger` and `ReconnectOnDownloadFailure` triggers, a plugin instruction Ara does not ship) imports with the node counts and field values asserted, in Dart tests.
 - The warning text for a placeholder equals the sentence in this spec, and the placeholder shows the `LblUnknownInstruction` and `LblUnknownInstructionValidation` text.
-- `DARKFLAT` becomes `DARK`; the five Connector instructions map; `StartAreaContainer` becomes a placeholder.
+- `DARKFLAT` becomes `DARK`; the five Connector instructions and the Connector `ReconnectTrigger` (to `reconnect`) map; `ReconnectOnDownloadFailure` and `StartAreaContainer` become placeholders.
 - Malformed JSON, a non-object body and a non-container root are refused and upload nothing.
-- The existing import tests (`NinaImportFidelityTest`, `JsonCreationConverterRemapTest`, and the client import tests) are ported, not deleted.
+- The client import tests (`test/util/nina_import_test.dart`, `test/widgets/sequencer/sequence_import_test.dart`) are ported to v2, not deleted. The daemon's `NinaImportFidelityTest` and `JsonCreationConverterRemapTest` pin the run-time `$type` path (`NinaTypeRemapper`), which v1 compatibility and the migration (c) still use; this issue does not touch them.
 
 **Out of scope.** NINA export, importing plugin instructions, equipment matching beyond the `equipment_unmatched` warning, a daemon import endpoint, editing `design/PORT_PLAYBOOK.md`.
 
