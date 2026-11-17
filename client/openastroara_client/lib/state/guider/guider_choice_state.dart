@@ -247,6 +247,9 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   /// UniqueID, as each surface's own fetch did before.
   Future<void> resolve(Iterable<String> endpoints, {bool fresh = false}) async {
     final namesApi = ref.read(alpacaDeviceNamesApiProvider);
+    // The Ref of this build: a rig switch rebuilds the notifier under a new
+    // Ref, so `ref.mounted` read after the await would still be true.
+    final buildRef = ref;
     final targets = <({String endpoint, String host, int port})>[];
     for (final endpoint in endpoints.toSet()) {
       if ((!fresh && _named.contains(endpoint)) || _resolving.contains(endpoint)) {
@@ -270,7 +273,7 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
     } finally {
       _resolving.removeAll(targets.map((t) => t.endpoint));
     }
-    if (!ref.mounted) return;
+    if (!buildRef.mounted) return;
     final names = {...state.names};
     final uniqueIds = {...state.uniqueIds};
     for (final result in fetched) {
@@ -292,18 +295,19 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   /// what its panel already named, as each did on its own.
   Future<List<String>> discover({bool fresh = true}) async {
     final discovery = ref.read(guiderDiscoveryProvider.notifier);
+    final discoveryRef = discovery.ref; // before the await, see [resolve]
     discovery.state = (running: true, servers: null);
     try {
       final servers = await ref
           .read(guiderEquipmentProvider.notifier)
           .discoverAlpaca();
       await resolve(servers, fresh: fresh);
-      if (discovery.ref.mounted) {
+      if (discoveryRef.mounted) {
         discovery.state = (running: false, servers: servers);
       }
       return servers;
     } catch (_) {
-      if (discovery.ref.mounted) {
+      if (discoveryRef.mounted) {
         discovery.state = (running: false, servers: null);
       }
       rethrow;

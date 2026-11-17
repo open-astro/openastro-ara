@@ -17,6 +17,7 @@ import 'package:openastroara/services/guider_equipment_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
+import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
@@ -485,6 +486,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(h.profile.lastPut?.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
     expect(h.equipment.calls, contains('push'));
+  });
+
+  testWidgets('#1861 the panel shows the choice module\'s discovery state, not its own',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    final discovery = container.read(guiderDiscoveryProvider.notifier);
+
+    discovery.state = (running: true, servers: null);
+    await tester.pump();
+    final button = find.ancestor(
+        of: find.text('Discover Alpaca'), matching: find.byWidgetPredicate((w) => w is OutlinedButton));
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNull, reason: 'a sweep the module runs disables Discover');
+
+    discovery.state = (running: false, servers: ['192.0.2.10:6800']);
+    await tester.pump();
+    expect(find.widgetWithText(ActionChip, '192.0.2.10:6800'), findsOneWidget,
+        reason: 'servers set in the module appear without the panel running a sweep');
   });
 
   testWidgets('an endpoint that answered nothing is asked again on the next trigger',

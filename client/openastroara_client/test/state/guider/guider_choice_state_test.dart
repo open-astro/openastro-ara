@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/alpaca_device_names_api.dart';
@@ -23,10 +25,12 @@ class _FakeNames extends AlpacaDeviceNamesClient {
 
   final Map<String, Map<String, AlpacaDeviceInfo>> byServer;
   final asked = <String>[];
+  Completer<void>? gate;
 
   @override
   Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     asked.add('$host:$port');
+    await gate?.future;
     return byServer['$host:$port'] ?? const {};
   }
 
@@ -36,11 +40,12 @@ class _FakeNames extends AlpacaDeviceNamesClient {
 
 class _FakeEquipment implements GuiderEquipmentClient {
   final servers = <String>['rig.lan:6800'];
+  Completer<List<String>>? gate;
   @override
   Future<List<String>> discoverAlpaca({
     int? numQueries,
     int? timeoutSeconds,
-  }) async => servers;
+  }) async => gate != null ? await gate!.future : servers;
   @override
   void close() {}
   @override
@@ -173,7 +178,7 @@ void main() {
           .read(guiderAlpacaDevicesProvider.notifier)
           .pick('ZWO ASI120MM');
       expect(pick.uniqueId, '');
-      expect(pick.hasEndpoint, isFalse);
+      expect(pick.host, isNull);
       final out = applyGuiderPick(stored, pick);
       expect(out.guiderCamera, 'ZWO ASI120MM');
       expect(out.guiderCameraAlpacaUniqueId, '');
@@ -188,7 +193,7 @@ void main() {
             .read(guiderAlpacaDevicesProvider.notifier)
             .pick('Alpaca Camera [rig.lan:6800/9]');
         expect(pick.uniqueId, '');
-        expect(pick.hasEndpoint, isTrue);
+        expect(pick.host, isNotNull);
       },
     );
 
@@ -258,6 +263,36 @@ void main() {
 
       c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
       expect(c.read(guiderDiscoveryProvider).servers, isNull);
+    });
+    test('a sweep started on one rig does not write its servers into the next rig', () async {
+      final gate = Completer<List<String>>();
+      final eq = _FakeEquipment()..gate = gate;
+      final c = withEquipment(_FakeNames({}), eq);
+      c.listen(guiderDiscoveryProvider, (_, _) {});
+      c.listen(guiderAlpacaDevicesProvider, (_, _) {});
+      final f = c.read(guiderAlpacaDevicesProvider.notifier).discover();
+
+      c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
+      expect(c.read(guiderDiscoveryProvider).servers, isNull);
+      gate.complete(['rig-a-alpaca.lan:11111']);
+      await f;
+      expect(c.read(guiderDiscoveryProvider).servers, isNull, reason: 'rig A\'s servers stay out of rig B');
+    });
+
+    test('a name lookup started on one rig does not write its UniqueIDs into the next rig', () async {
+      final gate = Completer<void>();
+      final names = _FakeNames({
+        'localhost:11111': {'camera/0': const AlpacaDeviceInfo(name: 'ASI120', uniqueId: 'rig-a-cam')},
+      })..gate = gate;
+      final c = container(names);
+      c.listen(guiderAlpacaDevicesProvider, (_, _) {});
+      final f = c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
+
+      c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
+      c.read(guiderAlpacaDevicesProvider); // rig B's state is built before the lookup answers
+      gate.complete();
+      await f;
+      expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty);
     });
   });
 }

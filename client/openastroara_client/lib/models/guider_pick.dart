@@ -14,8 +14,6 @@ class GuiderPick {
   final String uniqueId;
   final String? host;
   final int? port;
-
-  bool get hasEndpoint => host != null && port != null;
 }
 
 /// Parsed Alpaca endpoint from a daemon camera-choice string, e.g.
