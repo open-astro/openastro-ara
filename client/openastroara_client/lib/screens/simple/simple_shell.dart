@@ -122,6 +122,7 @@ import '../../state/sky_atlas/dso_catalog_state.dart'
 import '../../state/album/album_art.dart';
 import '../../state/album/album_matching.dart' show skyPickArt;
 import '../../widgets/album/album_card.dart' show albumCardAspect;
+import 'simple_devices_empty.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 import 'simple_rig_card.dart';
@@ -3489,6 +3490,18 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 ),
                 'Dome' => const SimpleDomeWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
+                // #1580: with nothing connected, the add-your-devices panel leads the list.
+                'Devices'
+                    when ref.watch(serverLinkUpProvider) &&
+                        !_anyDeviceShown(ref) =>
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: AraSpace.s16,
+                    children: [
+                      const SimpleDevicesEmpty(),
+                      _Gear(onOpen: (id) => setState(() => _section = id)),
+                    ],
+                  ),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),

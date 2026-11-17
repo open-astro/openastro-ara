@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/discovered_device.dart';
 import '../../../models/profile_draft.dart';
 import '../../../services/equipment_discovery_api.dart';
+import '../../../state/equipment/alpacabridge_setup_state.dart';
 import '../../../state/equipment/equipment_discovery_provider.dart';
+import '../../../widgets/alpacabridge_setup/alpacabridge_setup_panel.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../util/friendly_error.dart';
@@ -44,20 +46,8 @@ class ScreenAlpacaConnect extends ConsumerStatefulWidget {
       _ScreenAlpacaConnectState();
 }
 
-/// The types the Connect probe counts, camera first (the handshake). Guider
-/// is not Alpaca-discoverable.
-const _summaryTypes = [
-  EquipmentDeviceType.camera,
-  EquipmentDeviceType.mount,
-  EquipmentDeviceType.focuser,
-  EquipmentDeviceType.filterWheel,
-  EquipmentDeviceType.rotator,
-  EquipmentDeviceType.flatPanel,
-  EquipmentDeviceType.dome,
-  EquipmentDeviceType.weather,
-  EquipmentDeviceType.safetyMonitor,
-  EquipmentDeviceType.switchDevice,
-];
+/// The types the Connect probe counts (see [equipmentProbeTypes]).
+const _summaryTypes = equipmentProbeTypes;
 
 String _countNoun(EquipmentDeviceType t, int n) {
   final (one, many) = switch (t) {
@@ -217,6 +207,9 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   Widget build(BuildContext context) {
     final failed = _result != null && !_ok && !_testing && !_noServer;
     final noServer = _result != null && !_testing && _noServer;
+    final running = isRunning(
+      ref.watch(foundDevicesProvider).value ?? const [],
+    );
     return WizardScreenScaffold(
       step: 2,
       intro: context.l10n.wizardDiscoveryIntro,
@@ -240,7 +233,13 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton.tonalIcon(
-            onPressed: _testing ? null : _test,
+            onPressed: _testing || running
+                ? null
+                : () {
+                    // The Found list reads the bridge again with the probe.
+                    ref.read(foundDevicesProvider.notifier).redetect();
+                    _test();
+                  },
             icon: _testing
                 ? const SizedBox(
                     width: 16,
@@ -276,6 +275,9 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
             ),
           ),
         ],
+        // The add-your-devices panel (#1580): hidden while the bridge itself is unreachable.
+        if (!failed && !noServer)
+          const AlpacaBridgeSetupPanel(showRetry: false),
         if (noServer) ...[
           const SizedBox(height: 16),
           // Not a bridge problem — no daemon connection at all, so the install

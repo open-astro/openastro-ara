@@ -484,6 +484,7 @@ void main() {
     await _rows(t.c);
     // Back to back, no await between: the rows are `waiting` before the first await.
     final first = _n(t.c).addSelected();
+    expect(isRunning(_now(t.c)), isTrue);
     final second = _n(t.c).addSelected();
     await _settle();
     expect(t.bridge.calls, ['AAAA000000000001']);

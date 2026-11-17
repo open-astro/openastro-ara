@@ -21,10 +21,10 @@ Map<String, Object?> _field(
   'required': required,
   'secret': secret,
   'role': 'Plain',
-  if (range != null) 'range': range,
-  if (enumValues != null) 'enum': enumValues,
-  if (appliesWhen != null) 'appliesWhen': appliesWhen,
-  if (fields != null) 'fields': fields,
+  'range': ?range,
+  'enum': ?enumValues,
+  'appliesWhen': ?appliesWhen,
+  'fields': ?fields,
 };
 
 BridgeForm _form(List<Map<String, Object?>> fields) => BridgeForm(

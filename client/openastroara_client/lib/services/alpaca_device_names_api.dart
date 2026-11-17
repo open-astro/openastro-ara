@@ -28,11 +28,18 @@ abstract class AlpacaDeviceNamesClient {
   void close();
 }
 
-/// One configured Alpaca device: its name and UniqueID ("" when unknown).
+/// One configured Alpaca device: its name, UniqueID and serial ("" when unknown).
 class AlpacaDeviceInfo {
   final String name;
   final String uniqueId;
-  const AlpacaDeviceInfo({required this.name, this.uniqueId = ''});
+
+  /// The device's hardware serial ("" when unknown; #1580: what tells two cameras of one model apart).
+  final String serial;
+  const AlpacaDeviceInfo({
+    required this.name,
+    this.uniqueId = '',
+    this.serial = '',
+  });
 }
 
 class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
@@ -80,6 +87,8 @@ class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
     final names = data['names'];
     if (names is! Map) return const {};
     final ids = data['unique_ids'];
+    final serials =
+        data['serials']; // additive, #1580; absent on an older daemon
     return {
       for (final entry in names.entries)
         if (entry.key is String &&
@@ -89,6 +98,9 @@ class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
             name: entry.value as String,
             uniqueId: ids is Map && ids[entry.key] is String
                 ? ids[entry.key] as String
+                : '',
+            serial: serials is Map && serials[entry.key] is String
+                ? serials[entry.key] as String
                 : '',
           ),
     };
