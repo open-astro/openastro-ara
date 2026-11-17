@@ -7320,11 +7320,20 @@
   },
   "wizardBasicsSkyBortle": "Bortle class",
   "@wizardBasicsSkyBortle": {
-    "description": "Wizard step 1: sky brightness mode selector, Bortle"
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, Bortle"
   },
   "wizardBasicsSkySqm": "SQM reading",
   "@wizardBasicsSkySqm": {
-    "description": "Wizard step 1: sky brightness mode selector, SQM"
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, SQM"
+  },
+  "sitePanelDerivedBortle": "Derived Bortle class: {bortle}",
+  "@sitePanelDerivedBortle": {
+    "description": "Settings › Safety › Site: the Bortle class derived from the SQM reading, on a line under the SQM field",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
   },
   "wizardBasicsSqmError": "Enter a value from 16 to 22.5.",
   "@wizardBasicsSqmError": {

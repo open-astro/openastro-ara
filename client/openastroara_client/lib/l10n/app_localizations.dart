@@ -9591,17 +9591,23 @@ abstract class AppLocalizations {
   /// **'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.'**
   String wizardBasicsSqmHelper(int bortle);
 
-  /// Wizard step 1: sky brightness mode selector, Bortle
+  /// Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, Bortle
   ///
   /// In en, this message translates to:
   /// **'Bortle class'**
   String get wizardBasicsSkyBortle;
 
-  /// Wizard step 1: sky brightness mode selector, SQM
+  /// Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, SQM
   ///
   /// In en, this message translates to:
   /// **'SQM reading'**
   String get wizardBasicsSkySqm;
+
+  /// Settings › Safety › Site: the Bortle class derived from the SQM reading, on a line under the SQM field
+  ///
+  /// In en, this message translates to:
+  /// **'Derived Bortle class: {bortle}'**
+  String sitePanelDerivedBortle(int bortle);
 
   /// Wizard step 1: SQM validation error
   ///

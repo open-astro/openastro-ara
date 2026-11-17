@@ -1584,6 +1584,7 @@
   "wizardBasicsSqmHelper": "Brilho do céu de um medidor ou do lightpollutionmap, de 16 a 22,5. Classe Bortle derivada: {bortle}.",
   "wizardBasicsSkyBortle": "Classe Bortle",
   "wizardBasicsSkySqm": "Leitura SQM",
+  "sitePanelDerivedBortle": "Classe Bortle derivada: {bortle}",
   "wizardBasicsSqmError": "Digite um valor de 16 a 22,5.",
   "wizardBasicsTimezone": "Fuso horário",
   "wizardBasicsTimezoneHint": "ex.: America/Sao_Paulo",

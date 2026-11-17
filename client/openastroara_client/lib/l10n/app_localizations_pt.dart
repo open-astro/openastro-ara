@@ -5701,6 +5701,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get wizardBasicsSkySqm => 'SQM reading';
 
   @override
+  String sitePanelDerivedBortle(int bortle) {
+    return 'Derived Bortle class: $bortle';
+  }
+
+  @override
   String get wizardBasicsSqmError => 'Enter a value from 16 to 22.5.';
 
   @override
@@ -11710,6 +11715,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get wizardBasicsSkySqm => 'Leitura SQM';
+
+  @override
+  String sitePanelDerivedBortle(int bortle) {
+    return 'Classe Bortle derivada: $bortle';
+  }
 
   @override
   String get wizardBasicsSqmError => 'Digite um valor de 16 a 22,5.';

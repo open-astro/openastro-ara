@@ -505,6 +505,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final n = ref.read(siteSettingsProvider.notifier);
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -513,9 +514,12 @@ class _SkyBrightnessRows extends ConsumerWidget {
           child: SegmentedButton<bool>(
             key: const Key('site-sky-mode'),
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, label: Text('Bortle class')),
-              ButtonSegment(value: true, label: Text('SQM reading')),
+            segments: [
+              ButtonSegment(
+                value: false,
+                label: Text(l10n.wizardBasicsSkyBortle),
+              ),
+              ButtonSegment(value: true, label: Text(l10n.wizardBasicsSkySqm)),
             ],
             selected: {sky.isSqm},
             onSelectionChanged: (sel) => sel.first
@@ -541,7 +545,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: AraSpace.s8),
             child: Text(
-              'Derived Bortle class: ${sky.bortle}',
+              l10n.sitePanelDerivedBortle(sky.bortle),
               key: const Key('site-sqm-derived-bortle'),
               style: AraText.caption,
             ),
