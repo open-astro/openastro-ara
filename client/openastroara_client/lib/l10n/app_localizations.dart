@@ -1137,7 +1137,7 @@ abstract class AppLocalizations {
   /// **'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.'**
   String get deviceKeepSharpCustomHint;
 
-  /// Settings header switch: show the Advanced tier of every panel (off shows only the Simple tier)
+  /// Settings header switch, on by default: on shows every setting; off shows only the Autofocus panel's Simple tier and hides the derived step size in Equipment › Focuser
   ///
   /// In en, this message translates to:
   /// **'Advanced'**

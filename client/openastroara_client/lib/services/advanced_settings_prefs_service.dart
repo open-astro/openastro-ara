@@ -21,16 +21,16 @@ class AdvancedSettingsPrefsService {
   Future<File> _file() async =>
       File('${(await _supportDir()).path}/$_fileName');
 
-  /// The saved flag, or false (Simple tier only) when nothing is stored or the
-  /// file cannot be read.
+  /// The saved flag, or true (the default: every setting shows) when nothing
+  /// is stored or the file cannot be read.
   Future<bool> load() async {
     try {
       final f = await _file();
-      if (!await f.exists()) return false;
+      if (!await f.exists()) return true;
       final decoded = jsonDecode(await f.readAsString());
-      return decoded is Map && decoded['advanced'] == true;
+      return !(decoded is Map && decoded['advanced'] == false);
     } catch (_) {
-      return false;
+      return true;
     }
   }
 

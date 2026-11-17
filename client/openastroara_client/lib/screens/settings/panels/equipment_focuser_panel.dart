@@ -66,7 +66,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         // #1544: the step size the next sweep would use, read beside the
         // focuser it belongs to; it is edited, with its other inputs, in the
         // Autofocus panel only.
-        if (ref.watch(advancedSettingsProvider).value ?? false)
+        if (ref.watch(advancedSettingsProvider).value ?? true)
           if (ref.watch(autofocusStepSizeProvider).value case final derived?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),

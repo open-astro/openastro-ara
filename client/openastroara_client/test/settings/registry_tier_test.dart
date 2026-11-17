@@ -3,7 +3,7 @@ import 'package:openastroara/settings/registry.dart';
 
 void main() {
   test(
-    'every entry has a tier; only the AF filter is Simple so far (#1544)',
+    'every entry has a tier; Simple is the Advanced toggle and the three focus basics (#1544)',
     () {
       expect(settingsRegistry, isNotEmpty);
       expect(
@@ -11,11 +11,16 @@ void main() {
         {SettingTier.simple, SettingTier.advanced},
       );
       expect(
-        [
+        {
           for (final s in settingsRegistry)
             if (s.tier == SettingTier.simple) s.id,
-        ],
-        ['img.autofocus.af_filter'],
+        },
+        {
+          'app.settings.advanced',
+          'img.autofocus.during_plans',
+          'img.autofocus.keep_focus_sharp',
+          'img.autofocus.af_filter',
+        },
       );
     },
   );

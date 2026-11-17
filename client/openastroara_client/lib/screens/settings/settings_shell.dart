@@ -237,8 +237,8 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
               ),
               const SizedBox(width: 12),
             ],
-            // #1544 — the one global Advanced toggle: off shows only each
-            // panel's Simple tier.
+            // #1544 — the one global Advanced toggle, on by default: off shows
+            // only the Autofocus panel's Simple tier.
             MergeSemantics(
               child: Row(
                 children: [
@@ -248,7 +248,7 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
                   ),
                   Switch(
                     key: const Key('settings-advanced-toggle'),
-                    value: ref.watch(advancedSettingsProvider).value ?? false,
+                    value: ref.watch(advancedSettingsProvider).value ?? true,
                     onChanged: (v) =>
                         ref.read(advancedSettingsProvider.notifier).set(v),
                   ),

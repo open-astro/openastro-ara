@@ -6,7 +6,7 @@ import 'package:openastroara/services/advanced_settings_prefs_service.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
 
 void main() {
-  test('the Advanced toggle is off to start, and a choice survives a relaunch (#1544)', () async {
+  test('the Advanced toggle is on to start, and a choice survives a relaunch (#1544)', () async {
     final dir = await Directory.systemTemp.createTemp('advanced_prefs');
     addTearDown(() => dir.delete(recursive: true));
     ProviderContainer launch() {
@@ -22,27 +22,27 @@ void main() {
     }
 
     final first = launch();
-    expect(await first.read(advancedSettingsProvider.future), isFalse);
-    await first.read(advancedSettingsProvider.notifier).set(true);
-    expect(first.read(advancedSettingsProvider).value, isTrue);
+    expect(await first.read(advancedSettingsProvider.future), isTrue);
+    await first.read(advancedSettingsProvider.notifier).set(false);
+    expect(first.read(advancedSettingsProvider).value, isFalse);
 
     final second = launch();
     expect(
       await second.read(advancedSettingsProvider.future),
-      isTrue,
+      isFalse,
       reason: 'read from the file',
     );
-    await second.read(advancedSettingsProvider.notifier).set(false);
-    expect(await launch().read(advancedSettingsProvider.future), isFalse);
+    await second.read(advancedSettingsProvider.notifier).set(true);
+    expect(await launch().read(advancedSettingsProvider.future), isTrue);
   });
 
-  test('a corrupt prefs file reads as off', () async {
+  test('a corrupt prefs file reads as on, the default (#1544)', () async {
     final dir = await Directory.systemTemp.createTemp('advanced_prefs');
     addTearDown(() => dir.delete(recursive: true));
     File('${dir.path}/advanced_settings.json').writeAsStringSync('not json');
     expect(
       await AdvancedSettingsPrefsService(supportDir: () async => dir).load(),
-      isFalse,
+      isTrue,
     );
   });
 }

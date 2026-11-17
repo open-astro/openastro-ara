@@ -835,7 +835,7 @@
   },
   "settingsAdvancedToggle": "Advanced",
   "@settingsAdvancedToggle": {
-    "description": "Settings header switch: show the Advanced tier of every panel (off shows only the Simple tier)"
+    "description": "Settings header switch, on by default: on shows every setting; off shows only the Autofocus panel's Simple tier and hides the derived step size in Equipment › Focuser"
   },
   "autofocusStepSizeDerived": "Derived: {steps} steps, {source}",
   "@autofocusStepSizeDerived": {

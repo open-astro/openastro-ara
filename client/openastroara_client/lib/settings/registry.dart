@@ -125,6 +125,25 @@ class Setting {
 
 /// The canonical settings registry.
 const List<Setting> settingsRegistry = [
+  // #1544 — the Settings header's one Advanced toggle, a view preference of
+  // this device (`advancedSettingsProvider`), not in the profile.
+  Setting(
+    id: 'app.settings.advanced',
+    tier: SettingTier.simple,
+    label: 'Advanced settings',
+    description: 'On (the default), every setting shows. Off, the Autofocus panel shows only its Simple tier (autofocus during plans, Keep focus sharp and the AF filter) and Equipment › Focuser hides the derived step size. Kept on this device.',
+    keywords: [
+      'advanced',
+      'simple',
+      'tier',
+      'show all',
+      'hide',
+      'toggle',
+    ],
+    path: ['Settings'],
+    type: SettingType.bool(),
+    defaultValue: true,
+  ),
   // §35 Safety Policies — 12 fields covering unsafe weather + meridian flip
   // + altitude limit + guider loss. State lives in `safetyPoliciesProvider`.
   Setting(
@@ -2589,8 +2608,8 @@ const List<Setting> settingsRegistry = [
     profilePath: 'equipment.safety.auto_connect',
   ),
 
-  // §37.11 Autofocus — 12 fields covering method + V-curve params + triggers
-  // + failure handling. State lives in `autofocusSettingsProvider`.
+  // §37.11 Autofocus — method + V-curve params + triggers + failure handling,
+  // and the Simple tier (#1544). State lives in `autofocusSettingsProvider`.
   // An action, not a stored value: forgets the Smart Focus calibration (#1543).
   Setting(
     id: 'img.autofocus.reset_calibration',
@@ -2722,6 +2741,43 @@ const List<Setting> settingsRegistry = [
     type: SettingType.intRange(min: 1, max: 4),
     defaultValue: 1,
     profilePath: 'autofocus.binning',
+  ),
+  // #1544 — the Simple tier's two views over the four triggers below; no
+  // profile field of their own.
+  Setting(
+    id: 'img.autofocus.during_plans',
+    tier: SettingTier.simple,
+    label: 'Autofocus during plans',
+    description: 'Whether a running plan refocuses by itself. Off clears all four refocus triggers, so plans never refocus on their own (the Autofocus button still works); on again applies Keep focus sharp Normal.',
+    keywords: [
+      'autofocus',
+      'refocus',
+      'plan',
+      'automatic',
+      'off',
+      'focus',
+    ],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.bool(),
+    defaultValue: true,
+  ),
+  Setting(
+    id: 'img.autofocus.keep_focus_sharp',
+    tier: SettingTier.simple,
+    label: 'Keep focus sharp',
+    description: 'How readily a plan refocuses: Relaxed, Normal or Tight, each setting all four refocus triggers (filter change, temperature change, HFR drift, every N hours). Custom shows when the triggers match no preset; picking a preset overwrites them.',
+    keywords: [
+      'keep focus sharp',
+      'preset',
+      'relaxed',
+      'normal',
+      'tight',
+      'refocus',
+      'trigger',
+    ],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.enumValue(['Relaxed', 'Normal', 'Tight']),
+    defaultValue: 'Normal',
   ),
   Setting(
     id: 'img.autofocus.af_filter',

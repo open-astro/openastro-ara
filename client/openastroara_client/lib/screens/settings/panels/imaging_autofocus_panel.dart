@@ -148,7 +148,7 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     final n = ref.read(autofocusSettingsProvider.notifier);
     final l10n = context.l10n;
     // #1544: the Simple tier always; the Advanced tier with the one global toggle.
-    final advanced = ref.watch(advancedSettingsProvider).value ?? false;
+    final advanced = ref.watch(advancedSettingsProvider).value ?? true;
     final derivedStep = ref.watch(autofocusStepSizeProvider).value;
     final sharp = keepFocusSharpOf(s);
 
