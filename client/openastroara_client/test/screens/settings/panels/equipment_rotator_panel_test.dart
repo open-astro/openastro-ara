@@ -7,11 +7,13 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/rotator_status.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/settings/panels/equipment_rotator_panel.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -69,7 +71,18 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeRotatorApi> _pump(WidgetTester tester, RotatorStatus? status) async {
+/// The run state the panel reads: a running plan, or none.
+class _Run extends SequenceRunStateNotifier {
+  _Run(this.running);
+  final bool running;
+  @override
+  Future<SequenceRunStateInfo?> build() async => running
+      ? const SequenceRunStateInfo(runId: 'r', state: SequenceRunState.running)
+      : null;
+}
+
+Future<_FakeRotatorApi> _pump(WidgetTester tester, RotatorStatus? status,
+    {bool planRunning = false}) async {
   await _wideSurface(tester);
   final api = _FakeRotatorApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -78,6 +91,7 @@ Future<_FakeRotatorApi> _pump(WidgetTester tester, RotatorStatus? status) async 
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       rotatorApiFactoryProvider.overrideWithValue((_) => api),
+      sequenceRunStateProvider.overrideWith(() => _Run(planRunning)),
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentRotatorPanel())),
   ));
@@ -145,6 +159,68 @@ void main() {
     expect(find.text('Reverse direction'), findsNothing);
     // Only the auto-connect-on-boot switch remains.
     expect(find.byType(Switch), findsOneWidget);
+  });
+
+  bool sent(_FakeRotatorApi api, String verb) =>
+      api.calls.any((c) => c.startsWith('command:$verb:'));
+
+  testWidgets('while a plan runs, Move asks first in a dialog and sends nothing',
+      (tester) async {
+    final api = await _pump(tester, _status(), planRunning: true);
+    await tester.enterText(find.byType(TextField), '270');
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AlertDialog, 'A plan is running. Rotate anyway?'),
+        findsOneWidget);
+    expect(sent(api, 'move'), isFalse, reason: api.calls.toString());
+  });
+
+  testWidgets('while a plan runs, Sync asks first in a dialog and sends nothing',
+      (tester) async {
+    final api = await _pump(tester, _status(), planRunning: true);
+    await tester.enterText(find.byType(TextField), '45');
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Sync'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AlertDialog, 'A plan is running. Sync anyway?'),
+        findsOneWidget);
+    expect(sent(api, 'sync'), isFalse, reason: api.calls.toString());
+  });
+
+  testWidgets('Cancel on the question sends nothing; Rotate anyway sends the angle asked',
+      (tester) async {
+    final api = await _pump(tester, _status(), planRunning: true);
+    await tester.enterText(find.byType(TextField), '270');
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(sent(api, 'move'), isFalse, reason: api.calls.toString());
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    // The field changes while the question shows; the asked angle still goes.
+    await tester.enterText(find.byType(TextField), '10');
+    await tester.tap(find.widgetWithText(FilledButton, 'Rotate anyway'));
+    await tester.pumpAndSettle();
+    expect(
+        api.calls.where((c) => c.startsWith('command:move:')).toList(),
+        [
+          predicate<String>((c) =>
+              c.contains('target_angle_deg: 270') &&
+              c.contains('use_sky_angle: true'))
+        ],
+        reason: api.calls.toString());
+  });
+
+  testWidgets('a rotator that never starts moving says so after 3 s',
+      (tester) async {
+    await _pump(tester, _status());
+    await tester.enterText(find.byType(TextField), '270');
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 3500));
+    await tester.pump();
+    expect(find.text("Couldn't move the rotator"), findsOneWidget);
   });
 
   testWidgets('no device connected shows the empty state + Connect…',
