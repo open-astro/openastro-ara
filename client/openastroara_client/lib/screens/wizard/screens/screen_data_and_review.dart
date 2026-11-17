@@ -496,7 +496,7 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: theme.colorScheme.error),
+          Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentError),
           const SizedBox(width: 8),
           Expanded(
             child: Text(l.wizardReviewSolverTooNarrow(field, p.reason),
