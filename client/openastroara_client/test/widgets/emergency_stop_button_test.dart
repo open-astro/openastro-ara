@@ -467,6 +467,22 @@ void main() {
   });
 
   group('EmergencyStopButton (§35.3), keyboard / screen-reader path', () {
+    testWidgets('the confirm dialog warning icon stays Fault Red', (
+      tester,
+    ) async {
+      await pumpButton(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final icon = tester.widget<Icon>(
+        find.byIcon(Icons.warning_amber_rounded),
+      );
+      expect(
+        icon.color,
+        AraColors.accentError,
+        reason: 'the theme error is error-text, a text colour',
+      );
+    });
+
     testWidgets('cancel in the confirm dialog sends nothing', (tester) async {
       await pumpButton(tester);
 
