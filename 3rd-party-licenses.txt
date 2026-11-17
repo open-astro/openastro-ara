@@ -75,16 +75,16 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (108 packages):
+License summary (107 packages):
     MIT: 72 packages
-    Apache-2.0: 20 packages
+    Apache-2.0: 19 packages
     BSD-3-Clause: 12 packages
     Microsoft .NET Library License: 2 packages
     BSD-2-Clause: 1 package
     MIT AND Ms-PL: 1 package
 
 
-SERVER — OpenAstroAra.Server NuGet dependency graph (85 packages, transitive closure)
+SERVER — OpenAstroAra.Server NuGet dependency graph (84 packages, transitive closure)
 =====================================================================================
 
 ------------------------------------------------------------------------
@@ -607,14 +607,6 @@ Authors:        Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-sinks-file
-
-------------------------------------------------------------------------
-Package:        SharpGIS.NmeaParser 2.2.2
-Authors:        Morten Nielsen
-Copyright:      Copyright © Morten Nielsen 2015-2020
-License:        Apache-2.0
-License source: https://licenses.nuget.org/Apache-2.0
-Project:        https://dotmorten.github.io/NmeaParser/
 
 ------------------------------------------------------------------------
 Package:        SimpleBase 1.3.1
