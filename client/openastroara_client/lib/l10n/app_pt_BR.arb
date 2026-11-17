@@ -1783,7 +1783,7 @@
   "bestAddToQueue": "Adicionar à Fila",
   "bestAdded": "{name} adicionado à Fila",
   "bestNoneTitle": "Nada bem posicionado esta noite",
-  "bestNoneBody": "Nenhum Alvo fica acima de 30° por tempo suficiente para este equipamento esta noite. Tente amanhã ou busque um Alvo pelo nome.",
+  "bestNoneBody": "Nenhum Alvo fica acima de 30° por tempo suficiente para esta configuração esta noite. Tente amanhã ou busque um Alvo pelo nome.",
   "bestSearch": "Buscar",
   "bestNoSiteTitle": "Defina seu local",
   "bestNoSiteBody": "Melhores da Noite classifica pelo lugar onde você está. Adicione seu local e a lista aparece.",
@@ -1792,7 +1792,7 @@
   "bestNoMatchBody": "Seus filtros escondem todos os Alvos.",
   "bestClearFilters": "Limpar filtros",
   "bestRigOff": "Equipamento não conectado",
-  "bestOffline": "Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; o equipamento executa depois.",
+  "bestOffline": "Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; a configuração executa depois.",
   "bestLoadFailed": "Não foi possível classificar os Alvos desta noite.",
   "bestRetry": "Tentar de novo",
   "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
