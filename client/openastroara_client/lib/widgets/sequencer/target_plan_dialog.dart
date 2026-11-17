@@ -129,7 +129,7 @@ double suggestedSubSeconds(
     electronics:
         ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
     site: ref.read(siteSettingsProvider),
-    filterSet: ref.read(filterSetProvider),
+    filterSet: ref.read(filterSetProvider).value ?? const FilterSetSettings(),
     filterName: filterName,
     raDeg: raDeg,
     decDeg: decDeg,
@@ -250,7 +250,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
       .join(' ·   ');
 
   List<_PlanOption> _buildOptions() {
-    final filters = ref.read(filterSetProvider).filters;
+    final filters = ref.read(filterSetProvider).value?.filters ?? const [];
     PlanningFilter? byKind(FilterKind k) =>
         filters.where((f) => f.kind == k).firstOrNull;
 

@@ -86,6 +86,7 @@
     { "name": "ClientSettingsUpdated", "type": "client_settings.updated" },
     { "name": "ServerRestartImminent", "type": "server.restart_imminent" },
     { "name": "ServerRestartPending", "type": "server.restart_pending" },
+    { "name": "ServerRestartCancelled", "type": "server.restart_cancelled" },
     { "name": "StorageDevicesChanged", "type": "storage.devices_changed" },
     { "name": "DataManagerDownloadProgress", "type": "data_manager.download.progress" },
     { "name": "DataManagerDownloadComplete", "type": "data_manager.download.complete" },

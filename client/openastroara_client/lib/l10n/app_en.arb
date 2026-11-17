@@ -5350,7 +5350,7 @@
   "@monitorUntilFlip": {
     "description": "Monitor Now tile caption under the meridian wait countdown"
   },
-  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left on {target}",
+  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left",
   "@monitorFrameOf": {
     "description": "Monitor Now tile: progress on the Target",
     "placeholders": {
@@ -5361,9 +5361,6 @@
         "type": "int"
       },
       "left": {
-        "type": "String"
-      },
-      "target": {
         "type": "String"
       }
     }
@@ -5376,15 +5373,12 @@
   "@monitorTonightsBest": {
     "description": "Monitor Now tile with no plan: tonight's best Targets"
   },
-  "monitorUpFrame": "Frame {frame} · {filter}",
+  "monitorUpFrame": "Frame {frame}",
   "@monitorUpFrame": {
-    "description": "Monitor Up next row: the next frame and filter",
+    "description": "Monitor Up next row: the next frame (the filter follows when the camera has one)",
     "placeholders": {
       "frame": {
         "type": "int"
-      },
-      "filter": {
-        "type": "String"
       }
     }
   },
@@ -5585,7 +5579,7 @@
   "@monitorClippedStars": {
     "description": "Monitor Last frame reading: the share of clipped stars"
   },
-  "monitorAutofocusSince": "Autofocus {time} · {delta} since",
+  "monitorAutofocusSince": "Autofocus {time} · {delta} since then",
   "@monitorAutofocusSince": {
     "description": "Monitor Last frame: the last autofocus and the temperature change since",
     "placeholders": {
@@ -5593,6 +5587,82 @@
         "type": "String"
       },
       "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorSaved": "{n} saved",
+  "@monitorSaved": {
+    "description": "Monitor Now tile: frames saved so far",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorStartedAt": "session start {value}",
+  "@monitorStartedAt": {
+    "description": "Monitor Last frame tile: the HFR the session started at",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorChangeSinceStart": "{metric} {pct} % since session start",
+  "@monitorChangeSinceStart": {
+    "description": "Monitor deviation flag: a reading's change against the session's own start",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorDrifting": "Drifting",
+  "@monitorDrifting": {
+    "description": "Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start"
+  },
+  "monitorImagingSpan": "Imaging {start} to {end}",
+  "@monitorImagingSpan": {
+    "description": "Monitor altitude graph key: the plan's imaging span",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorSkyOwnScale": "Sky (own scale)",
+  "@monitorSkyOwnScale": {
+    "description": "Monitor stars graph key: the sky background line has its own scale"
+  },
+  "monitorRmsPerFrame": "RMS per saved frame",
+  "@monitorRmsPerFrame": {
+    "description": "Monitor guider tile: the session's guiding RMS graph"
+  },
+  "monitorFixedScale": "fixed ±2.5″",
+  "@monitorFixedScale": {
+    "description": "Monitor guider tile key: the live trace's fixed scale"
+  },
+  "monitorFlipPin": "flip {time}",
+  "@monitorFlipPin": {
+    "description": "Monitor Tonight timeline: the meridian flip's label",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorParkPin": "park {time}",
+  "@monitorParkPin": {
+    "description": "Monitor Tonight timeline: the mount park's label",
+    "placeholders": {
+      "time": {
         "type": "String"
       }
     }
@@ -7309,7 +7379,7 @@
   "@wizardBasicsBortle": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city.",
+  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.",
   "@wizardBasicsBortleHelper": {
     "description": "Wizard step 1: Bortle helper"
   },
@@ -7317,15 +7387,37 @@
   "@wizardBasicsBortleError": {
     "description": "Wizard step 1: Bortle validation error"
   },
-  "wizardBasicsSqm": "SQM reading (mag/arcsec²), optional",
+  "wizardBasicsSqm": "SQM reading (mag/arcsec²)",
   "@wizardBasicsSqm": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsSqmHelper": "Leave empty if not measured (Bortle is used). 16 to 22.5.",
+  "wizardBasicsSqmHelper": "Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.",
   "@wizardBasicsSqmHelper": {
-    "description": "Wizard step 1: SQM helper"
+    "description": "Wizard step 1: SQM helper",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
   },
-  "wizardBasicsSqmError": "Enter a value from 16 to 22.5, or leave empty.",
+  "wizardBasicsSkyBortle": "Bortle class",
+  "@wizardBasicsSkyBortle": {
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, Bortle"
+  },
+  "wizardBasicsSkySqm": "SQM reading",
+  "@wizardBasicsSkySqm": {
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, SQM"
+  },
+  "sitePanelDerivedBortle": "Derived Bortle class: {bortle}",
+  "@sitePanelDerivedBortle": {
+    "description": "Settings › Safety › Site: the Bortle class derived from the SQM reading, on a line under the SQM field",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
+  },
+  "wizardBasicsSqmError": "Enter a value from 16 to 22.5.",
   "@wizardBasicsSqmError": {
     "description": "Wizard step 1: SQM validation error"
   },
@@ -8008,6 +8100,41 @@
   "polarKnobAlignerAutoOff": "Off: Polar align shows the turns and you make them",
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarAdvancedTitle": "Advanced",
+  "@polarAdvancedTitle": {
+    "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"
+  },
+  "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
+  "@polarAdvancedSummary": {
+    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure",
+    "placeholders": {
+      "turn": {"type": "String"},
+      "step": {"type": "String"},
+      "exposure": {"type": "String"}
+    }
+  },
+  "polarAdvancedRange": "{min} to {max}",
+  "@polarAdvancedRange": {
+    "description": "Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '",
+    "placeholders": {
+      "min": {"type": "String"},
+      "max": {"type": "String"}
+    }
+  },
+  "polarAdvancedOutOfRange": "Out of range: use {range}",
+  "@polarAdvancedOutOfRange": {
+    "description": "Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "polarAdvancedSaveFailed": "{reason} The field is back to the rig's value.",
+  "@polarAdvancedSaveFailed": {
+    "description": "Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
   },
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {

@@ -28,6 +28,82 @@ void main() {
     filterBandwidthNm: 100,
   );
 
+  group('sky state (#1529)', () {
+    test('SQM to Bortle at every class boundary and the clamps', () {
+      // Class b covers (skyMagFromBortle(b) - 0.25, skyMagFromBortle(b) + 0.25]
+      // away from the .5 rounding edge: exact, just above, just below.
+      final edges = {21.75: 2, 21.25: 3, 20.75: 4, 20.25: 5, 19.75: 6, 19.25: 7, 18.75: 8, 18.25: 9};
+      edges.forEach((m, b) {
+        // round() takes .5 away from zero: the exact edge falls to the
+        // brighter-sky (higher) class; just above stays one class darker.
+        expect(bortleFromSkyMag(m), b, reason: 'exact $m');
+        expect(bortleFromSkyMag(m + 0.01), b - 1, reason: 'above $m');
+        expect(bortleFromSkyMag(m - 0.01), b, reason: 'below $m');
+      });
+      expect(bortleFromSkyMag(22.5), 1);
+      expect(bortleFromSkyMag(16), 9);
+      for (var b = 1; b <= 9; b++) {
+        expect(bortleFromSkyMag(skyMagFromBortle(b)), b, reason: 'round trip');
+      }
+    });
+
+    test('mode is derived: a valid reading is SQM, else Bortle', () {
+      final bortle = SkyState(bortleClass: 5);
+      expect(bortle.isSqm, isFalse);
+      expect(bortle.skyMag, 20.0);
+      expect(bortle.label, 'Bortle 5');
+      // SQM 0 + Bortle 5 loads as before.
+      expect(SkyState(bortleClass: 5, sqmMagPerArcsec2: 0).skyMag, 20.0);
+      final sqm = SkyState(bortleClass: 6, sqmMagPerArcsec2: 20.3);
+      expect(sqm.isSqm, isTrue);
+      expect(sqm.skyMag, 20.3);
+      expect(sqm.bortle, 4, reason: 'the derived class, not the stored 6');
+      expect(sqm.label, 'SQM 20.3');
+      expect(SkyState(bortleClass: 6, sqmMagPerArcsec2: 15.9).isSqm, isFalse);
+      expect(SkyState(bortleClass: 6, sqmMagPerArcsec2: 22.6).isSqm, isFalse);
+    });
+
+    test('Bortle 6 and SQM 19.5 give the same Glover floor and ceiling', () {
+      SkyState bortle6 = SkyState(bortleClass: 6);
+      SkyState sqm = SkyState(bortleClass: 1, sqmMagPerArcsec2: 19.5);
+      OptimalSubResult run(SkyState s) => computeOptimalSub(OptimalSubInput(
+            readNoiseE: 1.5,
+            fullWellE: 51000,
+            electronsPerAdu: 0.78,
+            pixelSizeUm: 3.76,
+            apertureMm: 51,
+            focalLengthMm: 250,
+            quantumEfficiency: 0.8,
+            skyMagPerArcsec2: s.skyMag,
+            filterBandwidthNm: 100,
+          ));
+      expect(run(sqm).floorSec, run(bortle6).floorSec);
+      expect(run(sqm).ceilingSec, run(bortle6).ceilingSec);
+      expect(run(sqm).floorSec, closeTo(computeOptimalSub(input).floorSec, 1e-9));
+      // A darker reading moves both bounds.
+      final dark = run(SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5));
+      expect(dark.floorSec, greaterThan(run(bortle6).floorSec));
+    });
+
+    test('filter advice thresholds and text run on the SQM reading', () {
+      const ha = PlanningFilter(name: 'Ha', kind: FilterKind.ha);
+      const l = PlanningFilter(name: 'L', kind: FilterKind.l);
+      const nb = FilterSetSettings(filters: [ha, l]);
+      const lOnly = FilterSetSettings(filters: [l]);
+      final dark = adviseFilter(
+          EmissionClass.emissionLine, lOnly, SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5));
+      final city = adviseFilter(
+          EmissionClass.emissionLine, lOnly, SkyState(bortleClass: 1, sqmMagPerArcsec2: 18.5));
+      expect(dark!.$2, isNot(contains('many hours')));
+      expect(city!.$2, contains('many hours'));
+      expect(city.$2, contains('SQM 18.5 sky'));
+      final reason = adviseFilter(EmissionClass.emissionLine, nb,
+          SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5))!.$2;
+      expect(reason, contains('SQM 21.5 sky'));
+      expect(reason, isNot(contains('Bortle 6')));
+    });
+  });
+
   group('optimal sub', () {
     test('sky flux P matches the closed-form model', () {
       // P = 1e4 · 10^(−0.4·19.5) · 100 · π·(51/20)² · (206.265·3.76/250)² · 0.8
@@ -255,7 +331,7 @@ void main() {
     test('emission target + mono narrowband → narrowband with the ~14× ratio',
         () {
       final advice = adviseFilter(EmissionClass.emissionLine,
-          const FilterSetSettings(filters: [haFilter, lFilter]), 6);
+          const FilterSetSettings(filters: [haFilter, lFilter]), SkyState(bortleClass: 6));
       expect(advice, isNotNull);
       expect(advice!.$1, TonightFilterAdvice.narrowband);
       expect(advice.$2, contains('~14×'));
@@ -263,24 +339,24 @@ void main() {
 
     test('continuum target → broadband even when narrowband exists', () {
       final advice = adviseFilter(EmissionClass.continuum,
-          const FilterSetSettings(filters: [haFilter, lFilter]), 4);
+          const FilterSetSettings(filters: [haFilter, lFilter]), SkyState(bortleClass: 4));
       expect(advice!.$1, TonightFilterAdvice.broadband);
     });
 
     test('mixed under a bright sky tips to duoband with OSC kit', () {
       final advice = adviseFilter(EmissionClass.mixed,
-          const FilterSetSettings(filters: [duoFilter]), 7);
+          const FilterSetSettings(filters: [duoFilter]), SkyState(bortleClass: 7));
       expect(advice!.$1, TonightFilterAdvice.duoband);
     });
 
     test('no honest advice: empty set or unknown emission', () {
       expect(
           adviseFilter(EmissionClass.emissionLine,
-              const FilterSetSettings(filters: []), 6),
+              const FilterSetSettings(filters: []), SkyState(bortleClass: 6)),
           isNull);
       expect(
           adviseFilter(EmissionClass.unknown,
-              const FilterSetSettings(filters: [haFilter]), 6),
+              const FilterSetSettings(filters: [haFilter]), SkyState(bortleClass: 6)),
           isNull);
     });
 

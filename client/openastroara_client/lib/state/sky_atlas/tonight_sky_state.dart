@@ -100,7 +100,8 @@ Future<List<TonightSkyObject>> _rankAt(
   final optics = ref.watch(opticsSettingsProvider);
   // Planning reads what is loaded (the rig, or the offline cache); a section
   // not loaded plans with the unset values, and is never saved from here.
-  final filterSet = ref.watch(filterSetProvider);
+  final filterSet =
+      ref.watch(filterSetProvider).value ?? const FilterSetSettings();
   final electronics =
       ref.watch(cameraElectronicsProvider).value ?? const CameraElectronics();
   // The bundled planning catalog (culled, plus any mirrored daemon rows the

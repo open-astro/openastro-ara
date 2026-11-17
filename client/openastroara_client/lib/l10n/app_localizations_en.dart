@@ -4255,8 +4255,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorUntilFlip => 'until the flip';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Frame $frame of $frames · about $left left on $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Frame $frame of $frames · about $left left';
   }
 
   @override
@@ -4266,8 +4266,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorTonightsBest => 'Tonight\'s best';
 
   @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Frame $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Frame $frame';
   }
 
   @override
@@ -4401,7 +4401,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since';
+    return 'Autofocus $time · $delta since then';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n saved';
+  }
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'session start $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % since session start';
+  }
+
+  @override
+  String get monitorDrifting => 'Drifting';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Imaging $start to $end';
+  }
+
+  @override
+  String get monitorSkyOwnScale => 'Sky (own scale)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS per saved frame';
+
+  @override
+  String get monitorFixedScale => 'fixed ±2.5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'flip $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'park $time';
   }
 
   @override
@@ -5690,21 +5732,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Sky darkness: 1 darkest, 9 inner city.';
+      'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.';
 
   @override
   String get wizardBasicsBortleError => 'Enter a whole number from 1 to 9.';
 
   @override
-  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²), optional';
+  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Leave empty if not measured (Bortle is used). 16 to 22.5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Enter a value from 16 to 22.5, or leave empty.';
+  String get wizardBasicsSkyBortle => 'Bortle class';
+
+  @override
+  String get wizardBasicsSkySqm => 'SQM reading';
+
+  @override
+  String sitePanelDerivedBortle(int bortle) {
+    return 'Derived Bortle class: $bortle';
+  }
+
+  @override
+  String get wizardBasicsSqmError => 'Enter a value from 16 to 22.5.';
 
   @override
   String get wizardBasicsTimezone => 'Timezone';
@@ -6189,6 +6242,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get polarKnobAlignerAutoOff =>
       'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get polarAdvancedTitle => 'Advanced';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return '$turn° turn · $step° step · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Out of range: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason The field is back to the rig\'s value.';
+  }
 
   @override
   String get estopFailPolarAligner =>

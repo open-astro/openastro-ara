@@ -200,7 +200,7 @@ Three of the four tracking files this section created (`PORT_DECISIONS.md`, `POR
 | Runtime | **.NET 10** (current LTS through Nov 2028) |
 | Web framework | ASP.NET Core minimal API |
 | Target frameworks | pure `net10.0` — no multi-targeting, no `-windows` anywhere |
-| SDK pin | `global.json` pinning SDK 10.0.x with `rollForward: latestFeature` |
+| SDK pin | `global.json` pinning SDK 11.0.x with `rollForward: latestFeature`; the projects still target `net10.0`, so running tests or the daemon also needs the .NET 10 runtime |
 | Hosting | Kestrel listening on configurable port (default **5555**), no reverse proxy. Overridable via `OPENASTROARA_PORT` env var or `appsettings.json`. mDNS advertises the actual bound port (§32.4). |
 | Persistence | SQLite via `Microsoft.Data.Sqlite` 10.0.x for session/profile; FITS files on disk |
 | Equipment | Decided in ADR 0003. `ASCOM.Alpaca.Components` 2.1.0+. |
@@ -822,7 +822,7 @@ Cross-refs §28 (recovery + state), §46 (notifications), §50 (Stats), §60.4 (
 | NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
 |---|---|---|---|---|
 | Server state snapshot | `/api/v1/server/state` | `ServerStateDto`, `PendingRestartDto`, `ApiVersionsDto` | (none — pure REST) | §60.4, §34.7 |
-| Server lifecycle | `/api/v1/server/{restart,restart-on-idle,release-notes,info}` | `ReleaseNotesDto`, `ServerInfoDto` | `server.{pending_restart,restart_imminent,migrating_database,migration_complete,migration_failed}` | §33.7, §34.7, §28.14, §30.8 |
+| Server lifecycle | `/api/v1/server/{restart,restart-on-idle,release-notes,info}` | `ReleaseNotesDto`, `ServerInfoDto` | `server.{pending_restart,restart_imminent,restart_pending,restart_cancelled,migrating_database,migration_complete,migration_failed}` | §33.7, §34.7, §28.14, §30.8 |
 | Log endpoints + rotation | `/api/v1/server/logs/{rotate,download,tail}` | `LogTailRequestDto`, `LogEntryDto` | `storage.log_pressure` | §29.9 |
 | Health (root paths, NOT /api/v1) | `/healthz`, `/readyz` | (text + JSON) | (none) | §60.8 |
 | WebSocket stream root | `/api/v1/ws` | (event envelopes per §60.9) | ALL event types emitted from prior phases route through here | §60.9 |
@@ -4391,7 +4391,8 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 |---|---|---|
 | `/api/v1/server/state` | GET | Existing — now includes `pending_restart` field |
 | `/api/v1/server/restart` | POST | Immediate restart (with optional `reason` for telemetry). Returns 200 immediately; server schedules restart 5 s out |
-| `/api/v1/server/restart-on-idle` | POST | Sets in-memory `auto_restart_on_idle=true`. Returns 200. Idempotent. |
+| `/api/v1/server/restart-on-idle` | POST | Sets in-memory `auto_restart_on_idle=true`. Returns 202 with `status`: `queued` while a run that is not terminal holds the restart, `restarting` when no run is on. Idempotent. |
+| `/api/v1/server/restart-on-idle` | DELETE | Cancels a queued restart-on-idle; `pending_restart` goes back to null. Returns 204; a no-op when nothing is queued or the restart notice has started. |
 | `/api/v1/server/release-notes` | GET | Query: `?version=<v>`. Returns bundled `CHANGELOG.md` section for that version (per the in-app changelog viewer gap — Tier 2). |
 
 **WebSocket events added:**
@@ -4401,6 +4402,7 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 | `server.pending_restart` | `{current_version, pending_version, reason}` | Emitted once on WS connect if flag is set; emitted again when postinst sets the flag on an already-connected WILMA |
 | `server.restart_imminent` | `{in_seconds, reason}` | 5 s before a planned graceful restart |
 | `server.restart_pending` | `{reason, requested_utc}` | A "Restart when idle" request arrived while a run is on; not the update flag of `server.pending_restart` |
+| `server.restart_cancelled` | `{reason, cancelled_utc}` | A queued "Restart when idle" request was cancelled (`DELETE /api/v1/server/restart-on-idle`) |
 
 **§61 search registry entries** (added in 12h Settings sub-PR):
 
@@ -12374,9 +12376,10 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **macOS** (Apple Silicon primary, Intel supported):
   ```
-  # .NET 10 SDK
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
   brew install --cask dotnet-sdk
-  # OR Microsoft's installer from dot.net
+  # then the ASP.NET Core Runtime 10 installer from dot.net
+  # OR both from Microsoft's installers on dot.net
 
   # Flutter at the pinned version (per §12.1). NOT `brew install --cask
   # flutter` — that tracks latest stable and drifts off the pin.
@@ -12392,8 +12395,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **Linux (Debian/Ubuntu)** — primary dev environment matching production:
   ```
-  # .NET 10 SDK (Microsoft package feed)
-  curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
+  curl -sSL https://dot.net/install.sh | bash -s -- --channel 11.0
+  curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0 --runtime aspnetcore
 
   # Flutter at the pinned version — see docs/RUNNING.md
   git clone https://github.com/flutter/flutter.git -b "$(cat client/openastroara_client/.flutter-version)" ~/development/flutter
@@ -12405,8 +12409,9 @@ ARA's tech stack — .NET 10 Native AOT (§71) + Flutter (§12) + cfitsio via P/
 
 - **Windows** — secondary; works but less tested:
   ```
-  # .NET 10 SDK
-  winget install Microsoft.DotNet.SDK.10
+  # .NET 11 SDK plus the .NET 10 runtime (projects target net10.0)
+  winget install Microsoft.DotNet.SDK.11
+  winget install Microsoft.DotNet.AspNetCore.10
   # OR choco install dotnet-sdk
 
   # Flutter

@@ -6,6 +6,8 @@ import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/diagnostics_mode_state.dart';
 import 'package:openastroara/state/settings/filenames_settings_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
@@ -17,17 +19,32 @@ import '../../support/fake_section_rig.dart';
 // ADR 0015 for the sections that load before they save: one list drives the
 // reset and the live-sync table.
 
-/// Every migrated section by the path the rig serves it under.
+/// Every migrated section by the path the rig serves it under (the filter
+/// wheel policy shares the route `filter-wheel` with the slot labels).
 const _paths = [
   'camera-electronics',
   'custom-horizon',
   'diagnostics-mode',
   'filenames',
+  'filter-set',
+  'filter-wheel/policy',
   'notifications',
   'plate-solve',
   'storage',
   'unguided',
 ];
+
+final _selfLoading = {filterWheelPolicyProvider};
+
+String _routeOf(String path) => path.split('/').first;
+
+/// The section the rig serves under [path].
+MigratedSection _sectionAt(String path) => migratedSections.firstWhere(
+  (s) => switch (path) {
+    'filter-wheel/policy' => s.provider == filterWheelPolicyProvider,
+    _ => s.route == path,
+  },
+);
 
 FakeSectionRig _rig() => FakeSectionRig({
   for (final p in _paths) p: rigDefaults[p] ?? <String, Object?>{},
@@ -57,11 +74,16 @@ ProviderContainer _container(FakeSectionRig rig) {
 void main() {
   test('Migrated sections: every live-sync route loads exactly its own '
       'sections', () async {
-    expect({for (final s in migratedSections) s.route}, _paths.toSet());
+    expect(
+      {for (final s in migratedSections) s.route},
+      {for (final p in _paths) _routeOf(p)},
+    );
     final c = _container(_rig());
-    for (final route in _paths) {
-      await applyProfileUpdated(c, route);
+    for (final route in {for (final p in _paths) _routeOf(p)}) {
+      await applyProfileUpdated(c, _routeOf(route));
       for (final s in migratedSections) {
+        // The wheel's two sections load on their own (SelfLoadingSection).
+        if (s.route != route && _selfLoading.contains(s.provider)) continue;
         expect(
           c.read(s.provider).canSave,
           s.route == route,
@@ -75,8 +97,8 @@ void main() {
   test('Migrated sections: the reset sends every one back to not loaded, '
       'saved or not', () async {
     final c = _container(_rig());
-    for (final route in _paths) {
-      await applyProfileUpdated(c, route);
+    for (final route in {for (final p in _paths) _routeOf(p)}) {
+      await applyProfileUpdated(c, _routeOf(route));
     }
     expect(migratedSections.every((s) => c.read(s.provider).canSave), isTrue);
     resetMigratedSections(c.read);
@@ -105,10 +127,16 @@ void main() {
     'diagnostics-mode': (c) => c
         .read(diagnosticsModeProvider.notifier)
         .edit((_) => DiagnosticsMode.values.last),
+    'filter-set': (c) => c
+        .read(filterSetProvider.notifier)
+        .addFilter(const PlanningFilter(name: 'Ha', kind: FilterKind.ha)),
+    'filter-wheel/policy': (c) => c
+        .read(filterWheelPolicyProvider.notifier)
+        .edit((v) => v.copyWith(useFilterWheelOffsets: true)),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
-    final section = migratedSections.firstWhere((s) => s.route == route);
+    final section = _sectionAt(route);
 
     test(
       '$route: Save after a failed load writes nothing to the rig',
@@ -128,7 +156,8 @@ void main() {
       () async {
         final rig = _rig();
         final c = _container(rig);
-        await applyProfileUpdated(c, route);
+        await applyProfileUpdated(c, _routeOf(route));
+        await settle(() => c.read(section.provider).canSave);
         edit(c);
         rig.savedElsewhere(route);
         await expectLater(
@@ -155,6 +184,29 @@ void main() {
       ...without(rigDefaults['plate-solve']!),
       {...rigDefaults['plate-solve']!, 'engine': 'bogus'},
     ],
+    'filter-set': [
+      null,
+      <String, Object?>{},
+      {
+        'filters': [
+          {'name': 'Ha', 'kind': 'bogus', 'bandwidth_nm': 7},
+        ],
+      },
+      {
+        'filters': [
+          {'kind': 'ha', 'bandwidth_nm': 7},
+        ],
+      },
+      {
+        'filters': [
+          {'name': 'Ha', 'kind': 'ha'},
+        ],
+      },
+    ],
+    'filter-wheel/policy': [
+      null,
+      ...without(rigDefaults['filter-wheel/policy']!),
+    ],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -165,7 +217,7 @@ void main() {
     ],
   };
   for (final MapEntry(key: route, value: bodies) in partial.entries) {
-    final section = migratedSections.firstWhere((s) => s.route == route);
+    final section = _sectionAt(route);
     test('$route: a reply missing a key fails the load and Save writes '
         'nothing', () async {
       for (final body in bodies) {
@@ -186,16 +238,19 @@ void main() {
   const replyDrops = {
     'camera-electronics': 'read_noise_e',
     'custom-horizon': 'points',
+    'filter-set': 'filters',
+    'filter-wheel/policy': 'use_filter_wheel_offsets',
     'plate-solve': 'center_after_slew',
     'unguided': 'guard_enabled',
   };
   for (final MapEntry(key: route, value: key) in replyDrops.entries) {
-    final section = migratedSections.firstWhere((s) => s.route == route);
+    final section = _sectionAt(route);
     test('$route: a save reply missing a key fails the Save and keeps the '
         'edit', () async {
       final rig = _rig()..dropFromReply[route] = key;
       final c = _container(rig);
-      await applyProfileUpdated(c, route);
+      await applyProfileUpdated(c, _routeOf(route));
+      await settle(() => c.read(section.provider).canSave);
       final etag = c.read(section.provider).etag;
       edits[route]!(c);
       final edited = c.read(section.provider).value;

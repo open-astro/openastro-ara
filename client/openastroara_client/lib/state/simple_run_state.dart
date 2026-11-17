@@ -173,7 +173,10 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     // and never under a queued target's own rows.
     ref.listen(
       filterSetProvider.select(
-        (s) => [for (final f in s.filters) '${f.name}/${f.kind}'].join('|'),
+        (s) => [
+          for (final f in s.value?.filters ?? const <PlanningFilter>[])
+            '${f.name}/${f.kind}',
+        ].join('|'),
       ),
       (_, _) => _reseed(),
     );
@@ -187,7 +190,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
   }
 
   List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
-    ref.read(filterSetProvider).filters,
+    ref.read(filterSetProvider).value?.filters ?? const [],
     ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
     remainingDarkHours: _darkHours,
     // A wheel the daemon retains, connected or not (readRigCapabilities' rule).

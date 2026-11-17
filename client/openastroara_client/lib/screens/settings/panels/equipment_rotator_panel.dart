@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../../widgets/status_indicator.dart' show StatusBlink;
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/rotator_status.dart';
+import '../../../state/equipment/device_command_state.dart';
+import '../../../state/equipment/rotator_command_state.dart';
 import '../../../state/equipment/rotator_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -89,8 +95,82 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     super.dispose();
   }
 
+  /// While a plan runs a move or sync asks first, in a dialog (the Simple
+  /// Mode window asks inline). The answer applies only while the question is
+  /// still this panel's: another window may have replaced or ended it.
+  Future<void> _ask(RotatorTarget target) async {
+    final cmd = ref.read(rotatorCommandProvider.notifier);
+    final l10n = context.l10n;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(
+          target.isSync
+              ? l10n.devicePlanRunningSync
+              : l10n.devicePlanRunningRotate,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.planCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              target.isSync ? l10n.deviceSyncAnyway : l10n.deviceRotateAnyway,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    final now = ref.read(rotatorCommandProvider);
+    if (now.phase != DeviceCommandPhase.asking || now.by != this) return;
+    if (go ?? false) {
+      cmd.confirm();
+    } else {
+      cmd.cancel();
+    }
+  }
+
+  void _onCommand(
+    DeviceCommand<RotatorTarget>? prev,
+    DeviceCommand<RotatorTarget> next,
+  ) {
+    // Only a command this panel asked for.
+    if (next.by != this) return;
+    final target = next.target;
+    if (next.phase == DeviceCommandPhase.asking &&
+        target != null &&
+        (prev?.phase != DeviceCommandPhase.asking || prev?.by != this)) {
+      unawaited(_ask(target));
+    }
+    if (next.outcomes == prev?.outcomes) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final verb = (prev?.target?.isSync ?? false) ? 'sync' : 'move';
+    switch (next.refusal) {
+      case DeviceCommandRefusal.busy:
+        _busy(messenger);
+      case DeviceCommandRefusal.failed:
+        _failed(messenger, verb, next.error!);
+      case DeviceCommandRefusal.didntMove:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.deviceCouldntMoveRotator),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+      case null:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen(rotatorCommandProvider, _onCommand);
+    final busy =
+        widget.status.isMoving ||
+        ref.watch(rotatorCommandProvider).phase == DeviceCommandPhase.moving;
     final s = widget.status;
     if (s.isConnecting) return const Text('Reading…');
     if (s.connectionState == EquipmentConnectionState.error) {
@@ -155,12 +235,12 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
             ),
             const SizedBox(width: 12),
             FilledButton(
-              onPressed: s.isMoving ? null : _move,
+              onPressed: busy ? null : _move,
               child: const Text('Move'),
             ),
             const SizedBox(width: 8),
             OutlinedButton(
-              onPressed: s.isMoving ? null : _sync,
+              onPressed: busy ? null : _sync,
               child: const Text('Sync'),
             ),
             HelpIcon(helpKey: 'eq.rotator.move', device: s.name),
@@ -205,28 +285,23 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     return v;
   }
 
-  Future<void> _move() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final angle = _parseAngle(messenger);
+  void _move() {
+    final angle = _parseAngle(ScaffoldMessenger.of(context));
     if (angle == null) return;
-    await _run(
-      messenger,
-      "move",
-      () => ref
-          .read(rotatorProvider.notifier)
-          .move(angle, useSkyAngle: _useSkyAngle),
-    );
+    ref
+        .read(rotatorCommandProvider.notifier)
+        .request(
+          RotatorTarget.move(angle, useSkyAngle: _useSkyAngle),
+          by: this,
+        );
   }
 
-  Future<void> _sync() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final angle = _parseAngle(messenger);
+  void _sync() {
+    final angle = _parseAngle(ScaffoldMessenger.of(context));
     if (angle == null) return;
-    await _run(
-      messenger,
-      "sync",
-      () => ref.read(rotatorProvider.notifier).sync(angle),
-    );
+    ref
+        .read(rotatorCommandProvider.notifier)
+        .request(RotatorTarget.sync(angle), by: this);
   }
 
   Future<void> _setReverse(bool reverse) async {
@@ -243,21 +318,22 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     String verb,
     Future<bool> Function() action,
   ) async {
-    final l10n = context.l10n;
     try {
-      final performed = await action();
-      if (!performed) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Another action is still in progress.')),
-        );
-      }
+      if (!await action()) _busy(messenger);
     } catch (e) {
+      _failed(messenger, verb, e);
+    }
+  }
+
+  void _busy(ScaffoldMessengerState messenger) => messenger.showSnackBar(
+    const SnackBar(content: Text('Another action is still in progress.')),
+  );
+
+  void _failed(ScaffoldMessengerState messenger, String verb, Object e) =>
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
+          content: Text("Couldn't $verb: ${failureReason(context.l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
-    }
-  }
 }

@@ -486,6 +486,28 @@ void main() {
     expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't move the rotator"));
   });
 
+  testWidgets('a rotator that never starts moving says so in a pill after 3 s', (tester) async {
+    final (c, r) = await _pump(tester, _wire());
+    await _turn(tester, 17.5);
+    await tester.tap(_go);
+    await tester.pump();
+    expect(r.calls, ['move 75.0 sky']);
+    await tester.pump(const Duration(milliseconds: 3500));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'the move ends in a pill');
+    final pill = c.read(simpleMessagesProvider).single;
+    expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't move the rotator"));
+  });
+
+  testWidgets('while a plan runs, Stop halts at once with no question', (tester) async {
+    final (_, r) = await _pump(tester, _wire(runtime: 'moving'), planRunning: true);
+    await tester.pump(); // the run state arrives
+    await tester.tap(_hub);
+    await tester.pump();
+    expect(r.calls, ['halt']);
+    expect(find.textContaining('A plan is running'), findsNothing);
+  });
+
   testWidgets('while it moves the dial leaves the finger to the page: a swipe on it scrolls (#1670 audit P1)', (tester) async {
     await _pump(tester, _wire(runtime: 'moving'), scrolling: true);
     final page = tester.state<ScrollableState>(find.byType(Scrollable)).position;

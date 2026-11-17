@@ -306,10 +306,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
       optics.focalLengthMm > 0 &&
       optics.pixelSizeUm > 0 &&
       optics.reducerFactor > 0;
-  final skyMag = effectiveSkyMag(
+  final sky = SkyState(
     bortleClass: site.bortleClass,
     sqmMagPerArcsec2: site.sqmMagPerArcsec2,
   );
+  final skyMag = sky.skyMag;
   // Per-approach memo: (rounded floor for display, unrounded recommendation,
   // the assembled input for the star-count tag).
   final adviceMemo =
@@ -452,7 +453,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
       fov.$2,
       peakAltDeg,
       integrationHours,
-      site.bortleClass,
+      sky,
     );
 
     // Moon context over THIS window (separation at the midpoint).
@@ -481,11 +482,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     String? adviceReason;
     double? optimalSubS;
     final adviceLines = <String>[];
-    final advised = adviseFilter(
-      classifyEmission(o.type),
-      filterSet,
-      site.bortleClass,
-    );
+    final advised = adviseFilter(classifyEmission(o.type), filterSet, sky);
     if (advised != null) {
       advice = advised.$1;
       adviceReason = advised.$2;
@@ -585,14 +582,14 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // or DSLR; before, it was silently scored as if it had Hα). Under a
         // bright sky the gap widens: unfiltered emission through Bortle 5+
         // is the hardest thing a broadband camera can be pointed at.
-        final bright = site.bortleClass >= brightSkyBortle;
+        final bright = sky.bortle >= brightSkyBortle;
         adjusted *= bright ? 0.75 : 0.85;
         adjustReasons.add(
           filterSet.filters.isEmpty
               ? 'emission target with no narrowband filter (OSC/broadband'
-                    '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
+                    '${bright ? ', ${sky.label} sky) (−25%)' : ') (−15%)'}'
               : 'emission target but no narrowband filter in your set'
-                    '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
+                    '${bright ? ' under a ${sky.label} sky (−25%)' : ' (−15%)'}',
         );
       }
     }
@@ -756,7 +753,7 @@ double tonightMoonFactor({
   double fovHeightArcmin,
   double peakAltDeg,
   double integrationHours,
-  int bortleClass,
+  SkyState sky,
 ) {
   final reasons = <String>[];
 
@@ -823,14 +820,14 @@ double tonightMoonFactor({
   String sbTag;
   final sb = o.surfaceBrightness;
   if (sb != null) {
-    final contrastMag = skyMagFromBortle(bortleClass) - sb;
+    final contrastMag = sky.skyMag - sb;
     sbQ = ((contrastMag + _sbContrastSpanMag) / _sbContrastSpanMag).clamp(
       _sbFloorQ,
       1.0,
     );
     sbTag = contrastMag >= 0
-        ? 'bright for Bortle $bortleClass sky'
-        : 'faint for Bortle $bortleClass sky';
+        ? 'bright for ${sky.label} sky'
+        : 'faint for ${sky.label} sky';
   } else if (o.type == 'DrkN') {
     // A dark nebula is a silhouette: by definition darker than the sky behind
     // it, so "unknown" must not read as average. The LDN/Barnard rows carry

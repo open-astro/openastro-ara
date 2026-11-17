@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/ara_colors.dart';
 import 'adaptive_controls.dart';
 
 /// Opens an alert in the theme's platform look: `showAdaptiveDialog` (iOS
@@ -74,7 +75,7 @@ Widget adaptiveDialogAction(
     return FilledButton(
       key: key,
       style: isDestructive
-          ? FilledButton.styleFrom(backgroundColor: error)
+          ? FilledButton.styleFrom(backgroundColor: AraColors.accentError)
           : null,
       onPressed: onPressed,
       child: child,

@@ -63,6 +63,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // the MeridianFlipTrigger (SiderealTime / TimeToMeridianFlip). Optional: without it both stay
     // NaN and the trigger's own NaN guard keeps it inert, never "flip now".
     private readonly IProfileService? _profileService;
+    // ↑ara#1846 — the connect-time optics fill (MaybeAutoPopulateOptics) writes the Optics section through it.
+    private readonly IProfileStore? _profileStore;
     private readonly MountTrackingWatch _trackingWatch = new();
     // §57.8 — slew lifecycle events from observed IsSlewing transitions (internal for tests).
     internal SlewEventWatch SlewWatch { get; } = new();
@@ -140,7 +142,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
-            Func<IGuiderMediator?>? guiderResolver = null) {
+            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null) {
+        _profileStore = profileStore;
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _guiderResolver = guiderResolver;
         _faults = faults;
@@ -859,8 +862,56 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 } else if (trackingVerdict == TrackingWatchVerdict.Recovered) {
                     LogTrackingRecovered(watchedDevice?.Name ?? "?");
                 }
+                // Outside the lock: it does profile IO. caps is non-null only on the first read of a connect.
+                if (caps is not null) {
+                    MaybeAutoPopulateOptics(caps);
+                }
             });
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Runs on the status-refresh timer: a profile read/write failure must not crash the timer or fail the mount connect — log and skip; the user can still set optics manually. CA1031's log-and-recover boundary applies.")]
+    internal void MaybeAutoPopulateOptics(TelescopeCapabilitiesDto caps) {
+        if (_profileStore is null) {
+            return;
+        }
+        try {
+            // Atomic read-modify-write like the camera fill: the decision runs under the store lock
+            // against the live value, so a user's PUT /optics that races the connect wins.
+            var populated = false;
+            _profileStore.UpdateOpticsSettings(current => {
+                var next = AutoPopulatedOptics(current, caps);
+                populated = next is not null;
+                return next;
+            });
+            if (populated) {
+                LogOpticsAutoPopulated(_logger, caps.FocalLengthMm, caps.ApertureDiameterMm);
+            }
+        } catch (Exception ex) {
+            LogOpticsAutoPopulateFailed(_logger, ex);
+        }
+    }
+
+    /// <summary>↑ara#1846 — the optics to persist given the connected mount's reported focal length and
+    /// aperture, or null when nothing changes. A field fills only when the stored value is empty (≤ 0)
+    /// and the mount reported one; a user-entered value is never overwritten.</summary>
+    internal static OpticsSettingsDto? AutoPopulatedOptics(OpticsSettingsDto current, TelescopeCapabilitiesDto caps) {
+        var fillFocal = current.FocalLengthMm <= 0 && caps.FocalLengthMm is > 0;
+        var fillAperture = current.ApertureMm <= 0 && caps.ApertureDiameterMm is > 0;
+        if (!fillFocal && !fillAperture) {
+            return null;
+        }
+        return current with {
+            FocalLengthMm = fillFocal ? caps.FocalLengthMm!.Value : current.FocalLengthMm,
+            ApertureMm = fillAperture ? caps.ApertureDiameterMm!.Value : current.ApertureMm,
+        };
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-populated optics from the connected mount: focal length {FocalLengthMm} mm, aperture {ApertureMm} mm")]
+    private static partial void LogOpticsAutoPopulated(ILogger logger, double? focalLengthMm, double? apertureMm);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not auto-populate optics from the connected mount; set them manually")]
+    private static partial void LogOpticsAutoPopulateFailed(ILogger logger, Exception ex);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a status-poll or abort path. CA1031's log-and-recover boundary applies.")]

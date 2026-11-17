@@ -49,7 +49,7 @@ namespace OpenAstroAra.Server.Services {
     /// <para><b>Fine-stage state machine</b> (the <c>state</c> string in <see cref="PolarAlignStateDto"/>):
     /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA slew Δ away from the meridian → frame B →
     /// two-point axis fit) → <c>adjusting</c> (tracking stopped; continuous capture→solve, each
-    /// solve's alt/az delta from the seed pointing IS the user's knob adjustment — §45.8
+    /// solve's alt/az delta from the seed pointing is the user's knob adjustment seen from the camera — §45.8
     /// reverse-projection, no re-slewing) → Stop → <c>stopped</c>. Five consecutive failed solves
     /// park the loop in <c>paused</c> (it keeps retrying at a slower cadence and resumes on the next
     /// good solve); a fatal error (seed solve failure, mount fault) lands in <c>failed</c>.

@@ -1,16 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
-import '../saved_server_state.dart';
 
 /// #1075 — the profile's filter-wheel policy, daemon-backed
 /// (`/api/v1/profile/filter-wheel/policy`): whether Ara parks the wheel on
 /// slot 0 (L) the first time it connects after the daemon starts (#1066).
-/// Same shape as [EquipmentConnectionNotifier]: one-shot hydrate on build,
-/// optimistic local update + fire-and-forget PUT on change, silent failure
-/// (best-effort, trusted LAN).
+/// Same shape as [EquipmentConnectionNotifier]: loads itself, saves on change.
+/// ADR 0015: no value until the rig answered (no "home on" default).
 class FilterWheelPolicy {
   final bool homeOnFirstConnect;
 
@@ -20,12 +18,6 @@ class FilterWheelPolicy {
     this.homeOnFirstConnect = true,
     this.useFilterWheelOffsets = false,
   });
-
-  factory FilterWheelPolicy.fromJson(Map<String, dynamic> json) =>
-      FilterWheelPolicy(
-        homeOnFirstConnect: (json['home_on_first_connect'] as bool?) ?? true,
-        useFilterWheelOffsets: (json['use_filter_wheel_offsets'] as bool?) ?? false,
-      );
 
   Map<String, dynamic> toJson() => {
         'home_on_first_connect': homeOnFirstConnect,
@@ -47,59 +39,34 @@ class FilterWheelPolicy {
   int get hashCode => Object.hash(homeOnFirstConnect, useFilterWheelOffsets);
 }
 
-class FilterWheelPolicyNotifier extends Notifier<FilterWheelPolicy>
-    with SettingsSyncMixin<FilterWheelPolicy> {
+class FilterWheelPolicyNotifier extends SelfLoadingSection<FilterWheelPolicy> {
+  /// Each switch saves on change (the panel shows a refusal). A failed save
+  /// puts the rig's copy back; a 412 keeps the edit (ADR 0015 rule 6).
+  Future<void> setHomeOnFirstConnect(bool v) =>
+      _save((c) => c.copyWith(homeOnFirstConnect: v));
+
+  Future<void> setUseFilterWheelOffsets(bool v) =>
+      _save((c) => c.copyWith(useFilterWheelOffsets: v));
+
+  Future<void> _save(FilterWheelPolicy Function(FilterWheelPolicy c) change) {
+    final v = state.value;
+    return v == null ? editAndSave(change) : replaceAndSave(change(v));
+  }
+
   @override
-  FilterWheelPolicy build() {
-    Future.microtask(_tryHydrate);
-    return const FilterWheelPolicy();
-  }
+  Future<Tagged<FilterWheelPolicy>> fetch(ProfileApi api) =>
+      api.getFilterWheelPolicySection();
 
-  void setHomeOnFirstConnect(bool v) {
-    state = state.copyWith(homeOnFirstConnect: v);
-    Future.microtask(_tryPersist);
-  }
-
-  void setUseFilterWheelOffsets(bool v) {
-    state = state.copyWith(useFilterWheelOffsets: v);
-    Future.microtask(_tryPersist);
-  }
-
-  /// Manual hydrate — exposed for tests that inject a mocked api.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getFilterWheelPolicy());
-
-  /// Manual persist — exposed for tests.
-  Future<FilterWheelPolicy> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putFilterWheelPolicy(sent));
-
-  ProfileApi? _activeApi() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
-
-  Future<void> _tryHydrate() async {
-    final api = _activeApi();
-    if (api == null) return;
-    try {
-      await hydrateGuarded(() => api.getFilterWheelPolicy());
-    } catch (_) {
-      // Silent — the default (home on) remains.
-    }
-  }
-
-  Future<void> _tryPersist() async {
-    final api = _activeApi();
-    if (api == null) return;
-    try {
-      await persistGuarded((sent) => api.putFilterWheelPolicy(sent));
-    } catch (_) {
-      // Silent — the local optimistic update stays.
-    }
-  }
+  @override
+  Future<Tagged<FilterWheelPolicy>> send(
+    ProfileApi api,
+    FilterWheelPolicy value,
+    String? etag,
+  ) => api.putFilterWheelPolicySection(value, ifMatch: etag);
 }
 
 final filterWheelPolicyProvider =
-    NotifierProvider<FilterWheelPolicyNotifier, FilterWheelPolicy>(
-  FilterWheelPolicyNotifier.new,
-);
+    NotifierProvider<
+      FilterWheelPolicyNotifier,
+      LoadedSection<FilterWheelPolicy>
+    >(FilterWheelPolicyNotifier.new);

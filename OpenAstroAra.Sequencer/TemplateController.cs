@@ -234,7 +234,7 @@ namespace OpenAstroAra.Sequencer {
                     dso.Target = dso.Target;
                 }
 
-                var path = existingTemplate == null ? userTemplatePath : Path.Combine(userTemplatePath, Path.Combine(existingTemplate.SubGroups.ToArray()));
+                var path = existingTemplate == null ? userTemplatePath : Path.Combine([userTemplatePath, .. existingTemplate.SubGroups]);
 
                 var jsonContainer = sequenceJsonConverter.Serialize(sequenceContainer);
                 File.WriteAllText(Path.Combine(path, GetTemplateFileName(sequenceContainer)), jsonContainer);
@@ -247,7 +247,7 @@ namespace OpenAstroAra.Sequencer {
         public void DeleteUserTemplate(TemplatedSequenceContainer sequenceContainer) {
             try {
                 if (sequenceContainer == null) return;
-                File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups.ToArray()), GetTemplateFileName(sequenceContainer.Container)));
+                File.Delete(Path.Combine([userTemplatePath, .. sequenceContainer.SubGroups, GetTemplateFileName(sequenceContainer.Container)]));
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);

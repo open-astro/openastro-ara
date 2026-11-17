@@ -42,7 +42,10 @@ void main() {
     expect(s.steps.length, 7);
 
     final first = s.steps.first;
-    expect(first.at, DateTime(2026, 10, 4, 7, 12, 8).add(const Duration(milliseconds: 8408)));
+    expect(
+      first.at,
+      DateTime(2026, 10, 4, 7, 12, 8).add(const Duration(milliseconds: 8408)),
+    );
     // RA raw negated (daemon / NINA convention), Dec as logged.
     expect(first.raPx, closeTo(-1.601, 1e-9));
     expect(first.decPx, closeTo(6.315, 1e-9));
@@ -87,7 +90,45 @@ void main() {
   });
 
   test('a log with no guiding session yields nothing', () {
-    expect(Phd2GuideLog.parse('Calibration Begins at 2026-10-04 06:58:40\n').sessions, isEmpty);
+    expect(
+      Phd2GuideLog.parse('Calibration Begins at 2026-10-04 06:58:40\n')
+          .sessions,
+      isEmpty,
+    );
     expect(Phd2GuideLog.parse('').allSteps, isEmpty);
+  });
+
+  test('frames carry settling, dither and star-lost flags', () {
+    final f = Phd2GuideLog.parse(_log).sessions.single.frames;
+    expect(f.length, 7);
+    expect(f.map((x) => x.settling), [
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+    ]);
+    expect(f.map((x) => x.dither), [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(f.map((x) => x.starLost), [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+    ]);
+    expect(f.first.raPx, closeTo(-1.601, 1e-9));
+    expect(f[5].raPx, isNull);
   });
 }

@@ -20,6 +20,7 @@ set -u
 DIR=${DIR:-/run/openastroara/update}
 HELPER=${HELPER:-/opt/openastroara/scripts/apply-update.sh}
 MAX_ARGS=3
+MAX_BYTES=4096   # far above any real request (three short lines); read before the loop
 
 ID=${1:-}
 case "$ID" in
@@ -51,6 +52,10 @@ ERROR: $1"
 
 if [ -L "$REQ" ] || [ ! -f "$REQ" ]; then
     refuse "$REQ is not a regular file"
+fi
+# Size cap before any line is read into shell memory (ADR 0017 rule 4).
+if [ "$(wc -c < "$REQ")" -gt "$MAX_BYTES" ]; then
+    refuse "request $REQ is too large"
 fi
 
 n=0

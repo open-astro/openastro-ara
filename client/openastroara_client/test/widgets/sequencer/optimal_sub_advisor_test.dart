@@ -261,7 +261,7 @@ void main() {
       ({double raDeg, double decDeg})? targetPosition,
       OpticsSettings optics = _rigOptics,
       CameraElectronics? electronics = _rigElectronics, // null: not loaded
-      FilterSetSettings filterSet = _rigFilters,
+      FilterSetSettings? filterSet = _rigFilters, // null: not loaded
       SiteSettings site = _rigSite,
       GuiderStatus? guider,
       TrackingCalibration? tracking,
@@ -269,22 +269,32 @@ void main() {
       TrackingPrior prior = const TrackingPrior(),
       SkyModelCalibration? skyModel,
     }) async {
-      container = ProviderContainer(overrides: [
-        trackingPriorProvider.overrideWith((ref) async => prior),
-        skyModelCalibrationProvider.overrideWith(() => _SeededSkyModel(skyModel)),
-        planningPrefsProvider.overrideWith(
-            () => _SeededPrefs(PlanningPrefs(noiseTolerancePct: noiseTolerancePct))),
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
-        if (electronics != null)
-          cameraElectronicsProvider
-              .overrideWith(() => _SeededElectronics(electronics)),
-        filterSetProvider.overrideWith(() => _SeededFilters(filterSet)),
-        siteSettingsProvider.overrideWith(() => _SeededSite(site)),
-        // #1264 — the rig's guider and stored tracking ceiling, no daemon.
-        guiderStatusProvider.overrideWith(() => _SeededGuider(guider)),
-        trackingCalibrationProvider
-            .overrideWith(() => _SeededTracking(tracking)),
-      ]);
+      container = ProviderContainer(
+        overrides: [
+          trackingPriorProvider.overrideWith((ref) async => prior),
+          skyModelCalibrationProvider.overrideWith(
+            () => _SeededSkyModel(skyModel),
+          ),
+          planningPrefsProvider.overrideWith(
+            () => _SeededPrefs(
+              PlanningPrefs(noiseTolerancePct: noiseTolerancePct),
+            ),
+          ),
+          opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
+          if (electronics != null)
+            cameraElectronicsProvider.overrideWith(
+              () => _SeededElectronics(electronics),
+            ),
+          if (filterSet != null)
+            filterSetProvider.overrideWith(() => _SeededFilters(filterSet)),
+          siteSettingsProvider.overrideWith(() => _SeededSite(site)),
+          // #1264 — the rig's guider and stored tracking ceiling, no daemon.
+          guiderStatusProvider.overrideWith(() => _SeededGuider(guider)),
+          trackingCalibrationProvider.overrideWith(
+            () => _SeededTracking(tracking),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
       await tester.pumpWidget(UncontrolledProviderScope(
@@ -417,11 +427,21 @@ void main() {
       expect(find.textContaining('read noise'), findsWidgets);
     });
 
-    testWidgets('camera electronics not loaded: the advisor plans with unset electronics, never a saved value',
-        (tester) async {
-      await pumpAdvisor(tester, electronics: null);
-      expect(container.read(cameraElectronicsProvider).value, isNull);
-      expect(find.textContaining('generic defaults for'), findsOneWidget);
+    testWidgets(
+      'camera electronics not loaded: the advisor plans with unset electronics, never a saved value',
+      (tester) async {
+        await pumpAdvisor(tester, electronics: null);
+        expect(container.read(cameraElectronicsProvider).value, isNull);
+        expect(find.textContaining('generic defaults for'), findsOneWidget);
+      },
+    );
+
+    testWidgets('filter set not loaded: the advisor names no filter and offers '
+        'no Apply', (tester) async {
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', filterSet: null);
+      expect(container.read(filterSetProvider).value, isNull);
+      expect(find.textContaining("Unknown filter 'Ha 7nm'"), findsOneWidget);
+      expect(find.text('Apply'), findsNothing);
     });
 
     testWidgets('a target position renders the local star line',
@@ -523,7 +543,8 @@ class _SeededFilters extends FilterSetNotifier {
   _SeededFilters(this._v);
   final FilterSetSettings _v;
   @override
-  FilterSetSettings build() => _v;
+  LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededSite extends SiteSettingsNotifier {

@@ -1985,8 +1985,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.bortle_class',
-    label: 'Bortle class',
-    description: 'Bortle dark-sky classification, 1 (excellent dark site) through 9 (inner-city). Used for SNR estimation + suggested exposure ranges.',
+    label: 'Sky brightness (Bortle or SQM)',
+    description: 'One sky brightness input: a Bortle class, 1 (excellent dark site) through 9 (inner-city), or a measured SQM reading, 16 to 22.5 mag/arcsec2. In SQM mode the class is derived from the reading.',
     keywords: [
       'bortle',
       'dark sky',
@@ -1994,6 +1994,8 @@ const List<Setting> settingsRegistry = [
       'sqm',
       'class',
       'sky quality',
+      'sky brightness',
+      'mag/arcsec2',
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 1, max: 9),
@@ -2176,7 +2178,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.home_on_first_connect',
   ),
   Setting(
@@ -2194,7 +2196,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.use_filter_wheel_offsets',
   ),
 
