@@ -1261,6 +1261,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// routine picks the change up on its next frame.
   Widget _captureSettings() {
     final settings = _settings;
+    // One literal names both the visible label and the field for a screen reader.
+    const exposureLabel = Text(
+      'Exposure',
+      style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
+    );
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 12,
@@ -1269,25 +1274,29 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Exposure',
-                style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
+            exposureLabel,
             const SizedBox(width: 8),
             SizedBox(
               width: 96,
-              child: TextField(
-                key: const Key('polar-align-exposure'),
-                controller: _exposureCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  suffixText: 's',
-                  border: OutlineInputBorder(),
+              child: Semantics(
+                label: exposureLabel.data,
+                child: TextField(
+                  key: const Key('polar-align-exposure'),
+                  controller: _exposureCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    suffixText: 's',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _commitExposure(),
+                  onTapOutside: (_) {
+                    FocusScope.of(context).unfocus();
+                    _commitExposure();
+                  },
                 ),
-                onSubmitted: (_) => _commitExposure(),
-                onTapOutside: (_) {
-                  FocusScope.of(context).unfocus();
-                  _commitExposure();
-                },
               ),
             ),
           ],
