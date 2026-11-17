@@ -34,6 +34,9 @@ class _Rotator extends RotatorNotifier {
   /// What a refresh reads, 100 ms after it is asked; null reads nothing new.
   RotatorStatus? onRefresh;
 
+  /// True: sync re-reads the rotator before it returns, as the real notifier does.
+  bool syncReReads = false;
+
   @override
   Future<RotatorStatus?> build() async => _rotator();
 
@@ -50,6 +53,7 @@ class _Rotator extends RotatorNotifier {
   Future<bool> sync(double skyAngleDeg) async {
     sent.add('sync ${skyAngleDeg.toStringAsFixed(1)}');
     if (error case final e?) throw e;
+    if (syncReReads) state = AsyncData(_rotator(sky: skyAngleDeg));
     return answer;
   }
 
@@ -223,6 +227,23 @@ void main() {
       );
     });
   });
+
+  test(
+    'a Sync whose call re-reads the rotator onto the angle counts one outcome',
+    () {
+      fakeAsync((async) {
+        final (c, rotator) = _rig(async);
+        rotator.syncReReads = true;
+        c
+            .read(rotatorCommandProvider.notifier)
+            .request(const RotatorTarget.sync(75));
+        async.flushMicrotasks();
+        expect(rotator.sent, ['sync 75.0']);
+        expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
+        expect(c.read(rotatorCommandProvider).outcomes, 1);
+      });
+    },
+  );
 
   test('a press while the rotator moves sends nothing more', () {
     fakeAsync((async) {

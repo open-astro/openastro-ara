@@ -135,8 +135,9 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
   void request(T target, {Object? by}) {
     if (state.phase == DeviceCommandPhase.moving) return;
     final run = ref.read(sequenceRunStateProvider);
-    if (run.hasValue)
+    if (run.hasValue) {
       return _decide(target, by, run.value?.state?.isActive ?? false);
+    }
     // Not read yet: wait for it rather than send without asking. A read that
     // fails, or takes longer than [runStateWait], asks: the safe side.
     unawaited(
@@ -194,16 +195,20 @@ abstract class DeviceCommandNotifier<T, S> extends Notifier<DeviceCommand<T>> {
     try {
       performed = await send(target);
     } catch (e) {
-      if (ref.mounted) _end(DeviceCommandRefusal.failed, error: e);
+      if (_stillMoving) _end(DeviceCommandRefusal.failed, error: e);
       return;
     }
-    if (!ref.mounted) return;
+    // A poll may have ended the move while the call was out (send re-reads).
+    if (!_stillMoving) return;
     if (!performed) {
       _end(DeviceCommandRefusal.busy);
     } else if (!expects) {
       _land();
     }
   }
+
+  bool get _stillMoving =>
+      ref.mounted && state.phase == DeviceCommandPhase.moving;
 
   void _follow(S? s) {
     if (state.phase != DeviceCommandPhase.moving) return;
