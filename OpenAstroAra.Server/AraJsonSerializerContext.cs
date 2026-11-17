@@ -186,6 +186,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(NotificationsSettingsDto))]
 [JsonSerializable(typeof(ObservingConditionsDto))]
 [JsonSerializable(typeof(OperationAcceptedDto))]
+[JsonSerializable(typeof(RestartOnIdleAcceptedDto))]
 [JsonSerializable(typeof(StorageSpaceDto))]
 [JsonSerializable(typeof(StorageDeviceDto))]
 [JsonSerializable(typeof(IReadOnlyList<StorageDeviceDto>))]

@@ -822,7 +822,7 @@ Cross-refs §28 (recovery + state), §46 (notifications), §50 (Stats), §60.4 (
 | NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
 |---|---|---|---|---|
 | Server state snapshot | `/api/v1/server/state` | `ServerStateDto`, `PendingRestartDto`, `ApiVersionsDto` | (none — pure REST) | §60.4, §34.7 |
-| Server lifecycle | `/api/v1/server/{restart,restart-on-idle,release-notes,info}` | `ReleaseNotesDto`, `ServerInfoDto` | `server.{pending_restart,restart_imminent,migrating_database,migration_complete,migration_failed}` | §33.7, §34.7, §28.14, §30.8 |
+| Server lifecycle | `/api/v1/server/{restart,restart-on-idle,release-notes,info}` | `ReleaseNotesDto`, `ServerInfoDto` | `server.{pending_restart,restart_imminent,restart_pending,restart_cancelled,migrating_database,migration_complete,migration_failed}` | §33.7, §34.7, §28.14, §30.8 |
 | Log endpoints + rotation | `/api/v1/server/logs/{rotate,download,tail}` | `LogTailRequestDto`, `LogEntryDto` | `storage.log_pressure` | §29.9 |
 | Health (root paths, NOT /api/v1) | `/healthz`, `/readyz` | (text + JSON) | (none) | §60.8 |
 | WebSocket stream root | `/api/v1/ws` | (event envelopes per §60.9) | ALL event types emitted from prior phases route through here | §60.9 |
@@ -4391,7 +4391,8 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 |---|---|---|
 | `/api/v1/server/state` | GET | Existing — now includes `pending_restart` field |
 | `/api/v1/server/restart` | POST | Immediate restart (with optional `reason` for telemetry). Returns 200 immediately; server schedules restart 5 s out |
-| `/api/v1/server/restart-on-idle` | POST | Sets in-memory `auto_restart_on_idle=true`. Returns 200. Idempotent. |
+| `/api/v1/server/restart-on-idle` | POST | Sets in-memory `auto_restart_on_idle=true`. Returns 202 with `status`: `queued` while a run that is not terminal holds the restart, `restarting` when no run is on. Idempotent. |
+| `/api/v1/server/restart-on-idle` | DELETE | Cancels a queued restart-on-idle; `pending_restart` goes back to null. Returns 204; a no-op when nothing is queued or the restart notice has started. |
 | `/api/v1/server/release-notes` | GET | Query: `?version=<v>`. Returns bundled `CHANGELOG.md` section for that version (per the in-app changelog viewer gap — Tier 2). |
 
 **WebSocket events added:**
@@ -4401,6 +4402,7 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 | `server.pending_restart` | `{current_version, pending_version, reason}` | Emitted once on WS connect if flag is set; emitted again when postinst sets the flag on an already-connected WILMA |
 | `server.restart_imminent` | `{in_seconds, reason}` | 5 s before a planned graceful restart |
 | `server.restart_pending` | `{reason, requested_utc}` | A "Restart when idle" request arrived while a run is on; not the update flag of `server.pending_restart` |
+| `server.restart_cancelled` | `{reason, cancelled_utc}` | A queued "Restart when idle" request was cancelled (`DELETE /api/v1/server/restart-on-idle`) |
 
 **§61 search registry entries** (added in 12h Settings sub-PR):
 

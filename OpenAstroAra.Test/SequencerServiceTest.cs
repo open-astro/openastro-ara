@@ -276,6 +276,49 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Unfinished_run_ids_name_a_running_or_paused_run_until_it_is_terminal() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty, "nothing started yet");
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "a paused run holds a restart");
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
+        public async Task Unfinished_run_ids_name_an_aborting_run_until_it_is_terminal() {
+            // The run stays Aborting while its last frames drain; a restart must wait for that too.
+            var id = Guid.NewGuid();
+            var saves = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(saves.Task);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })), camera: camera.Object);
+            svc.StoppedRunSavesWait = TimeSpan.FromMinutes(10);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            for (var i = 0; i < 250 && camera.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            camera.Verify(c => c.FinishPendingSavesAsync(), Times.Once);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "the run is Aborting");
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "an aborting run holds a restart");
+
+            saves.SetResult(0);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
         public async Task Progress_frames_carry_the_current_instructions_description() {
             // Rig night 2026-10-18: the camera cooled for 4.7 min and the Run tab read "Run started"
             // throughout, because the description was only on GET /state, which the client re-reads
