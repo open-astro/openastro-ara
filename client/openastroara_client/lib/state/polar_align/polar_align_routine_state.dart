@@ -17,6 +17,17 @@ import 'polar_align_state.dart';
 bool polarExposureValid(double? seconds) =>
     seconds != null && seconds > 0 && seconds <= 60;
 
+/// The ranges the knobs accept (the settings registry's), shared by the
+/// Settings panel and the Start card's Advanced row so they refuse alike.
+typedef PolarKnobRange = ({double min, double max});
+const polarSeedRotationRange = (min: 5.0, max: 120.0);
+const polarCheckStepRange = (min: 5.0, max: 60.0);
+const polarCoarseExposureRange = (min: 0.1, max: 60.0);
+
+/// A knob's value as its field shows it.
+String polarKnobText(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
 /// The profile's polar-align settings (exposure, Loop/Single, tolerance). The
 /// running routine re-reads them before every frame, so a save applies to the
 /// next one; a failed save rolls back, so a panel never shows an exposure or
