@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -67,6 +68,8 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
+
+import '../../support/fake_section_rig.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -219,7 +222,10 @@ class _Filters extends FilterSetNotifier {
   _Filters([this.filters = _lrgb]);
   final List<PlanningFilter> filters;
   @override
-  FilterSetSettings build() => FilterSetSettings(filters: filters);
+  LoadedSection<FilterSetSettings> build() => LoadedSection(
+    value: FilterSetSettings(filters: filters),
+    source: SectionSource.rig,
+  );
 }
 
 /// A colour camera's dual-band filters: long names.
@@ -312,6 +318,7 @@ Future<ProviderContainer> _pump(
   PlanetariumSelection? sel = _m31,
   List<Object> overrides = const [],
   List<PlanningFilter> filters = _lrgb,
+  bool filtersLoaded = true,
   List<TonightSkyObject> tonight = const [],
 }) async {
   final container = ProviderContainer(
@@ -322,7 +329,8 @@ Future<ProviderContainer> _pump(
       tonightsBestProvider.overrideWith((ref) async => tonight),
       sequenceApiProvider.overrideWith((ref) => seq),
       planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
-      filterSetProvider.overrideWith(() => _Filters(filters)),
+      if (filtersLoaded)
+        filterSetProvider.overrideWith(() => _Filters(filters)),
     ],
   );
   addTearDown(container.dispose);
@@ -371,6 +379,10 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
   }
   return FocusManager.instance.primaryFocus?.debugLabel == label;
 }
+
+/// The filter set the rig serves, as a re-read of it would return.
+ProfileApi _filterRig(FilterSetSettings v) =>
+    FakeSectionRig({'filter-set': ProfileApi.filterSetToJson(v)}).api();
 
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
@@ -424,16 +436,30 @@ void main() {
 
   group('frames fill the dark window', () {
     TonightSkyObject m31(double hours) => TonightSkyObject(
-        id: 'm31', name: 'M31', type: 'Galaxy', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3,
-        altitudeDeg: 62, maxAltitudeDeg: 74, remainingHours: hours);
+      id: 'm31',
+      name: 'M31',
+      type: 'Galaxy',
+      magnitude: 3.4,
+      raDeg: 10.7,
+      decDeg: 41.3,
+      altitudeDeg: 62,
+      maxAltitudeDeg: 74,
+      remainingHours: hours,
+    );
 
-    Future<ProviderContainer> plan(List<TonightSkyObject> tonight, {bool wheel = true}) async {
-      final c = ProviderContainer(overrides: [
-        filterWheelProvider.overrideWith(() => _Wheel(wheel)),
-        tonightSkyProvider.overrideWith((ref) async => tonight),
-        planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
-        filterSetProvider.overrideWith(() => _Filters()),
-      ]);
+    Future<ProviderContainer> plan(
+      List<TonightSkyObject> tonight, {
+      bool wheel = true,
+      bool filtersLoaded = true,
+    }) async {
+      final c = ProviderContainer(
+        overrides: [
+          filterWheelProvider.overrideWith(() => _Wheel(wheel)),
+          tonightSkyProvider.overrideWith((ref) async => tonight),
+          planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
+          if (filtersLoaded) filterSetProvider.overrideWith(() => _Filters()),
+        ],
+      );
       addTearDown(c.dispose);
       c.listen(simpleRunPlanProvider, (_, _) {});
       await c.read(tonightSkyProvider.future);
@@ -448,6 +474,13 @@ void main() {
       expect((await plan([m31(2)])).read(simpleRunPlanProvider).map((s) => s.filterName), ['L', 'R', 'G', 'B']);
     });
 
+    test('the filter set not loaded: one unnamed row, no filter implied, even '
+        'with a wheel', () async {
+      final c = await plan([m31(2)], filtersLoaded: false);
+      expect(c.read(filterSetProvider).value, isNull);
+      expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['']);
+    });
+
     test('a settings re-read that changes nothing keeps the rows; a queued target\'s rows stay while editing',
         () async {
       // Review: hydrate always assigns a new object and the settings have no ==, so the rows reset to the
@@ -456,12 +489,26 @@ void main() {
       final rows = c.read(simpleRunPlanProvider.notifier);
       rows.setExposure(0, 120);
       final edited = c.read(simpleRunPlanProvider);
-      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => FilterSetSettings(filters: [..._lrgb]));
-      expect(c.read(simpleRunPlanProvider), edited, reason: 'the same filters read again');
-      const queued = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12)];
+      await c
+          .read(filterSetProvider.notifier)
+          .load(_filterRig(FilterSetSettings(filters: [..._lrgb])));
+      expect(
+        c.read(simpleRunPlanProvider),
+        edited,
+        reason: 'the same filters read again',
+      );
+      const queued = [
+        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12),
+      ];
       rows.load(queued);
-      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => const FilterSetSettings(filters: _duo));
-      expect(c.read(simpleRunPlanProvider), queued, reason: "editing a queued target: its own rows");
+      await c
+          .read(filterSetProvider.notifier)
+          .load(_filterRig(const FilterSetSettings(filters: _duo)));
+      expect(
+        c.read(simpleRunPlanProvider),
+        queued,
+        reason: "editing a queued target: its own rows",
+      );
       c.invalidate(simpleRunPlanProvider);
       expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['L-enhance', 'L-eXtreme'],
           reason: 'a new plan follows the filters');
@@ -912,6 +959,22 @@ void main() {
     ];
     Widget sheet() =>
         SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {});
+
+    testWidgets('the filter set not loaded: the sheet opens with no filter '
+        'named on its row', (tester) async {
+      final c = await _pump(
+        tester,
+        _Seq(),
+        sheet(),
+        overrides: rig,
+        filtersLoaded: false,
+      );
+      expect(c.read(filterSetProvider).value, isNull);
+      expect(find.byKey(const Key('simple-run-target-card')), findsOneWidget);
+      for (final f in _lrgb) {
+        expect(find.text(f.name), findsNothing);
+      }
+    });
 
     testWidgets(
       'the picked target is a card at the top: name, altitude now, hours left above 30°',

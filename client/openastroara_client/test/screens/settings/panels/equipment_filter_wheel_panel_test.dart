@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -14,7 +15,10 @@ import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
+import 'package:openastroara/widgets/settings/section_load_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
+
+import '../../../support/fake_section_rig.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -102,20 +106,37 @@ class _Offsets extends FilterOffsetCalibrationNotifier {
   Future<void> discard() async => calls.add('discard');
 }
 
-Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status,
-    {bool settle = true, _Offsets? offsets}) async {
+Future<_FakeFwApi> _pump(
+  WidgetTester tester,
+  FilterWheelStatus? status, {
+  bool settle = true,
+  _Offsets? offsets,
+  bool rig = true,
+  bool policyLoadFails = false,
+}) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      serverLinkUpProvider.overrideWith((ref) => true),
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      filterWheelApiFactoryProvider.overrideWithValue((_) => api),
-      if (offsets != null) filterOffsetCalibrationProvider.overrideWith(() => offsets),
-    ],
-    child: const MaterialApp(home: Scaffold(body: EquipmentFilterWheelPanel())),
-  ));
+  final policyRig = FakeSectionRig({
+    'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+  });
+  if (policyLoadFails) policyRig.failGet.add('filter-wheel/policy');
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        profileApiProvider.overrideWithValue(rig ? policyRig.api() : null),
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        filterWheelApiFactoryProvider.overrideWithValue((_) => api),
+        if (offsets != null)
+          filterOffsetCalibrationProvider.overrideWith(() => offsets),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(body: EquipmentFilterWheelPanel()),
+      ),
+    ),
+  );
   if (settle) await tester.pumpAndSettle();
   return api;
 }
@@ -157,17 +178,30 @@ void main() {
     expect(find.textContaining(RegExp(r'^focus offset')), findsNothing);
   });
 
-  testWidgets('the focus-offset row toggles the policy, off by default', (tester) async {
+  testWidgets('the focus-offset row toggles the policy, off by default', (
+    tester,
+  ) async {
     await _pump(tester, null);
     final rowText = find.text("Move the focuser by each filter's offset");
     expect(rowText, findsOneWidget);
     final container = ProviderScope.containerOf(tester.element(rowText));
-    expect(container.read(filterWheelPolicyProvider).useFilterWheelOffsets, isFalse);
-    final toggle = find.ancestor(of: rowText, matching: find.byType(SettingsSwitchRow));
+    expect(
+      container.read(filterWheelPolicyProvider).value!.useFilterWheelOffsets,
+      isFalse,
+    );
+    final toggle = find.ancestor(
+      of: rowText,
+      matching: find.byType(SettingsSwitchRow),
+    );
     await tester.ensureVisible(toggle);
-    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
+    await tester.tap(
+      find.descendant(of: toggle, matching: find.byType(Switch)),
+    );
     await tester.pump();
-    expect(container.read(filterWheelPolicyProvider).useFilterWheelOffsets, isTrue);
+    expect(
+      container.read(filterWheelPolicyProvider).value!.useFilterWheelOffsets,
+      isTrue,
+    );
     await tester.pump(const Duration(seconds: 20));
   });
 
@@ -232,20 +266,76 @@ void main() {
     expect(find.text('−41 · Fit R² 0.93 · Before −12'), findsOneWidget);
   });
 
-  testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',
-      (tester) async {
-    await _pump(tester, null);
-    final rowText = find.text('Park on slot 0 on first connect');
-    expect(rowText, findsOneWidget);
-    final container = ProviderScope.containerOf(tester.element(rowText));
-    expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isTrue);
-    final toggle = find.ancestor(of: rowText, matching: find.byType(SettingsSwitchRow));
-    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
-    await tester.pump();
-    expect(container.read(filterWheelPolicyProvider).homeOnFirstConnect, isFalse);
-    // The optimistic update fires a best-effort PUT at the (unreachable) test
-    // server; let its transport timers run out so none outlive the test.
-    await tester.pump(const Duration(seconds: 20));
+  testWidgets(
+    'the first-connect home policy toggle is shown and flips the setting (#1075)',
+    (tester) async {
+      await _pump(tester, null);
+      final rowText = find.text('Park on slot 0 on first connect');
+      expect(rowText, findsOneWidget);
+      final container = ProviderScope.containerOf(tester.element(rowText));
+      expect(
+        container.read(filterWheelPolicyProvider).value!.homeOnFirstConnect,
+        isTrue,
+      );
+      final toggle = find.ancestor(
+        of: rowText,
+        matching: find.byType(SettingsSwitchRow),
+      );
+      await tester.tap(
+        find.descendant(of: toggle, matching: find.byType(Switch)),
+      );
+      await tester.pump();
+      expect(
+        container.read(filterWheelPolicyProvider).value!.homeOnFirstConnect,
+        isFalse,
+      );
+      // Let the save to the fake rig finish so no timer outlives the test.
+      await tester.pump(const Duration(seconds: 20));
+    },
+  );
+
+  testWidgets('no rig: the policy shows not loaded, no switches', (
+    tester,
+  ) async {
+    await _pump(tester, null, rig: false);
+    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.text('Park on slot 0 on first connect'), findsNothing);
+    expect(find.text("Move the focuser by each filter's offset"), findsNothing);
+  });
+
+  testWidgets('no rig: an offline cache copy of the policy is not editable', (
+    tester,
+  ) async {
+    await _pump(tester, null, rig: false);
+    final c = ProviderScope.containerOf(
+      tester.element(find.byType(EquipmentFilterWheelPanel)),
+    );
+    c.read(filterWheelPolicyProvider.notifier).seed(const FilterWheelPolicy());
+    await tester.pumpAndSettle();
+    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.text('Park on slot 0 on first connect'), findsNothing);
+  });
+
+  testWidgets('the policy not-loaded row lines up with the other rows', (
+    tester,
+  ) async {
+    await _pump(tester, null, rig: false);
+    expect(
+      tester.getTopLeft(find.text('Rig not connected')).dx,
+      tester.getTopLeft(find.text('Auto-connect on boot')).dx,
+    );
+  });
+
+  testWidgets('a failed policy load: text and Retry line up with the rows', (
+    tester,
+  ) async {
+    await _pump(tester, null, policyLoadFails: true);
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    expect(
+      tester.getTopLeft(find.textContaining('Not loaded — these settings')).dx,
+      rowX,
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);
   });
 
   testWidgets('hides the Slot labels section while a wheel is connected',

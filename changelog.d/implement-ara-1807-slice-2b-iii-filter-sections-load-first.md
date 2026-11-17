@@ -1,0 +1,3 @@
+### Fixed
+
+- **The filter set and the filter wheel policy load from the rig before they save** (#1807): Settings. A Save that was never loaded, or that follows a failed load, now writes nothing and says why; a reply from the rig that lacks a setting, or names an unknown filter kind, counts as a failed load instead of filling in a default. A copy another device saved in between is refused and the panel offers Reload; a policy switch whose save fails goes back to the rig's value. A rig or profile change sends both back to not loaded. The offline cache fills the filter set for planning only and is never saved; with no rig the panels say so instead of showing that copy.

@@ -14,6 +14,7 @@ import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
@@ -197,8 +198,44 @@ void main() {
     expect(c.read(opticsSettingsProvider).focalLengthMm, 382);
     expect(c.read(imagingDefaultsProvider).defaultGain, 101);
     expect(c.read(siteSettingsProvider).siteName, 'South GA');
-    expect(c.read(filterSetProvider).filters.single.name, 'Ha');
+    expect(c.read(filterSetProvider).value!.filters.single.name, 'Ha');
     expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);
+  });
+
+  test(
+    'a snapshot without a filter set leaves it not loaded, never a default a '
+    'Save could send',
+    () async {
+      await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+      await cache.saveSections('p1', {
+        'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      });
+      final c = ProviderContainer(
+        overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+      );
+      addTearDown(c.dispose);
+      expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+      expect(c.read(filterSetProvider).source, SectionSource.notLoaded);
+      expect(c.read(filterSetProvider).value, isNull);
+    },
+  );
+
+  test('a filter set from the snapshot is a cache copy: readable, not '
+      'saveable', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(filterSetProvider).source, SectionSource.cache);
+    expect(c.read(filterSetProvider).canSave, isFalse);
+    c
+        .read(filterSetProvider.notifier)
+        .addFilter(const PlanningFilter(name: 'OIII', kind: FilterKind.oiii));
+    expect(c.read(filterSetProvider).value!.filters.map((f) => f.name), [
+      'Ha',
+    ], reason: 'an edit on a cache copy is ignored');
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',

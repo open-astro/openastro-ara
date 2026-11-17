@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/settings/filter_set_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 
 /// NEXTGEN §1/§4 Filter set panel — the user's declared planning filters
 /// (name + kind + effective bandwidth). Feeds filter-aware planning advice
@@ -27,53 +24,17 @@ class FilterSetPanel extends ConsumerStatefulWidget {
 }
 
 class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return; // no active server — keep local defaults
-    try {
-      await ref.read(filterSetProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [filterSetProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(filterSetProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   void _seedFromWheel() {
@@ -93,9 +54,9 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
                 stored.labelAt(slot),
             ];
           }();
-    final before = ref.read(filterSetProvider).filters.length;
+    final before = ref.read(filterSetProvider).value!.filters.length;
     ref.read(filterSetProvider.notifier).seedFromWheelLabels(labels);
-    final added = ref.read(filterSetProvider).filters.length - before;
+    final added = ref.read(filterSetProvider).value!.filters.length - before;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -107,14 +68,11 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     );
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final set = ref.watch(filterSetProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final set = ref.watch(filterSetProvider).value!;
     final n = ref.read(filterSetProvider.notifier);
     final dim = Theme.of(
       context,
@@ -122,6 +80,7 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         Text(
           'Declare the filters you image with — planning advice (narrowband vs '
           'broadband per target) and the per-filter Optimal Sub read this list. '
@@ -139,7 +98,8 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
             onRemove: () => n.removeAt(i),
           ),
         const SizedBox(height: 8),
-        Row(
+        Wrap(
+          spacing: 12,
           children: [
             TextButton.icon(
               onPressed: () => n.addFilter(
@@ -148,7 +108,6 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add filter'),
             ),
-            const SizedBox(width: 12),
             TextButton.icon(
               onPressed: _seedFromWheel,
               icon: const Icon(Icons.download_outlined, size: 16),
