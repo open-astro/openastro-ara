@@ -119,9 +119,9 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // Offsets drives the same daemon routine; ADR 0009 rule 1).
         if (status.value case final s? when s.isConnected && !s.manual)
           _FocusOffsetsSection(slots: s.slots),
-        // Local slot labels — the user's filter names used when authoring
-        // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
-        // independent of the connected wheel's own names shown live above. Hidden
+        // Slot labels — the user's filter names, loaded from the rig, that the
+        // §38 editor offers (it reads `filterWheelLabelsProvider`); independent
+        // of the connected wheel's own names shown live above. Hidden
         // while a wheel is connected (its driver names take over) to avoid duplication.
         if (showSlotLabels) ...[
           SettingsSectionHeader(

@@ -668,7 +668,8 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
   /// DRIVER's names — two independently editable lists. Prefer an exact name
   /// match on the driver's slots; otherwise resolve the label to its position
   /// in the profile labels and take the wheel slot at that position. Returns
-  /// null when neither matches (no physical filter behind the picked name).
+  /// null when neither matches (no physical filter behind the picked name),
+  /// and skips the position step while the labels are not loaded.
   FilterSlot? _resolveSlot(WidgetRef ref, FilterWheelStatus wheel, String name) {
     for (final s in wheel.slots) {
       if (s.name == name) return s;

@@ -39,8 +39,8 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
 
   void _seedFromWheel() {
     // Prefer the connected wheel's live slot names; fall back to the §37.4
-    // filter-wheel label settings (which carry sensible defaults) so the
-    // button works offline too.
+    // filter-wheel labels loaded from the rig. Not loaded: nothing to seed
+    // (ADR 0015: no reference defaults).
     final wheel = ref
         .read(filterWheelProvider)
         .maybeWhen(data: (v) => v, orElse: () => null);
