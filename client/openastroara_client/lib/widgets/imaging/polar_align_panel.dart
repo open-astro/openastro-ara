@@ -18,6 +18,7 @@ import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
+import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
 import '../adaptive_controls.dart';
@@ -705,6 +706,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ],
         ),
+        // #1736 the routine's four knobs, collapsed.
+        const PolarAdvancedRow(),
       ],
     );
   }

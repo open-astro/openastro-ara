@@ -6191,6 +6191,33 @@ class AppLocalizationsPt extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
+  String get polarAdvancedTitle => 'Advanced';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return '$turn° turn · $step° step · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Out of range: use $range';
+  }
+
+  @override
+  String get polarAdvancedRunning =>
+      'The routine is running: a change applies from the next stage or frame.';
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason The field is back to the rig\'s value.';
+  }
+
+  @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
 }
@@ -12428,6 +12455,33 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobAlignerAutoOff =>
       'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get polarAdvancedTitle => 'Avançado';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return 'giro de $turn° · passo de $step° · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min a $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Fora da faixa: use $range';
+  }
+
+  @override
+  String get polarAdvancedRunning =>
+      'A rotina está em execução: a mudança vale a partir da próxima etapa ou quadro.';
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason O campo voltou ao valor do setup.';
+  }
 
   @override
   String get estopFailPolarAligner =>

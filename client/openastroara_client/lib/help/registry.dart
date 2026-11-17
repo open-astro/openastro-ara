@@ -1124,6 +1124,12 @@ const Map<String, Help> helpRegistry = {
         '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
         '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
+    relatedHelpKeys: [
+      'img.polar.use_home',
+      'img.polar.seed_rotation_deg',
+      'img.polar.check_step_deg',
+      'img.polar.coarse_exposure_seconds',
+    ],
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
     keywords: ['polar', 'alignment', 'home', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west'],
   ),
@@ -2401,24 +2407,47 @@ const Map<String, Help> helpRegistry = {
         'Tracking Probe\'s ceiling for the whole loop — the probe and the re-centre stay.',
     relatedSettings: ['img.unguided.guard_enabled', 'img.unguided.step_down_after', 'img.unguided.step_up_after'],
   ),
-  'img.polar.knobs': Help(
-    key: 'img.polar.knobs',
-    title: 'Polar align settings',
+  'img.polar.target_tolerance_arcmin': Help(
+    key: 'img.polar.target_tolerance_arcmin',
+    title: 'Polar align tolerance',
     body:
-        'The **tolerance** is how close to the pole counts as aligned: Done turns on inside it, in the rough step too. '
-        '**Send the mount Home first** off uses where the mount points now as Home (a mount whose Home is not on the pole, '
-        'or whose Find Home is unreliable). The **turn** is how far the mount turns in RA to measure its axis, and the '
-        '**Verify step** is the turn between Verify\'s three frames: smaller turns suit a mount with limited RA travel. '
-        'The **rough exposure** is the main camera\'s: longer for a slow camera. '
-        '**Correct with the Polar Aligner\'s motors** only matters on a rig with a Polar Aligner: off, you turn the bolts.',
-    relatedSettings: [
-      'img.polar.target_tolerance_arcmin',
-      'img.polar.use_home',
-      'img.polar.polar_aligner_auto',
-      'img.polar.seed_rotation_deg',
-      'img.polar.check_step_deg',
-      'img.polar.coarse_exposure_seconds',
-    ],
+        'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step too.',
+    relatedSettings: ['img.polar.target_tolerance_arcmin'],
+  ),
+  'img.polar.use_home': Help(
+    key: 'img.polar.use_home',
+    title: 'Send the mount Home first',
+    body:
+        'On, every stage starts by sending the mount Home. Off, the mount\'s current pointing is taken as Home: put the mount where you want Home to be right before each stage. Use it for a mount whose Home is not on the pole, or whose Find Home is unreliable.',
+    relatedSettings: ['img.polar.use_home'],
+  ),
+  'img.polar.polar_aligner_auto': Help(
+    key: 'img.polar.polar_aligner_auto',
+    title: "Correct with the Polar Aligner's motors",
+    body:
+        'Only matters on a rig with a Polar Aligner. On, Polar align turns its motors after each measurement. Off, it shows the turns and you make them by hand.',
+    relatedSettings: ['img.polar.polar_aligner_auto'],
+  ),
+  'img.polar.seed_rotation_deg': Help(
+    key: 'img.polar.seed_rotation_deg',
+    title: 'Polar align turn',
+    body:
+        'How far the mount turns in RA to measure its axis, from 5° to 120°. A smaller turn suits a mount with limited RA travel.',
+    relatedSettings: ['img.polar.seed_rotation_deg'],
+  ),
+  'img.polar.check_step_deg': Help(
+    key: 'img.polar.check_step_deg',
+    title: 'Verify step',
+    body:
+        'The RA turn between the three frames of Verify, from 5° to 60°. A smaller step suits a mount with limited RA travel.',
+    relatedSettings: ['img.polar.check_step_deg'],
+  ),
+  'img.polar.coarse_exposure_seconds': Help(
+    key: 'img.polar.coarse_exposure_seconds',
+    title: 'Rough step exposure',
+    body:
+        'The main camera\'s exposure in the rough step, from 0.1 to 60 seconds. The pole field is sparse, so use a longer one for a slow camera.',
+    relatedSettings: ['img.polar.coarse_exposure_seconds'],
   ),
   'img.unguided.eccentricity': Help(
     key: 'img.unguided.eccentricity',
