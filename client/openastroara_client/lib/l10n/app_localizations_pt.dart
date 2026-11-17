@@ -4255,8 +4255,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorUntilFlip => 'until the flip';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Frame $frame of $frames · about $left left on $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Frame $frame of $frames · about $left left';
   }
 
   @override
@@ -4266,8 +4266,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorTonightsBest => 'Tonight\'s best';
 
   @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Frame $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Frame $frame';
   }
 
   @override
@@ -4401,7 +4401,49 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since';
+    return 'Autofocus $time · $delta since then';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n saved';
+  }
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'session start $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % since session start';
+  }
+
+  @override
+  String get monitorDrifting => 'Drifting';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Imaging $start to $end';
+  }
+
+  @override
+  String get monitorSkyOwnScale => 'Sky (own scale)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS per saved frame';
+
+  @override
+  String get monitorFixedScale => 'fixed ±2.5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'flip $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'park $time';
   }
 
   @override
@@ -6200,6 +6242,29 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarKnobAlignerAutoOff =>
       'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get polarAdvancedTitle => 'Advanced';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return '$turn° turn · $step° step · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Out of range: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason The field is back to the rig\'s value.';
+  }
 
   @override
   String get estopFailPolarAligner =>
@@ -10492,8 +10557,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorUntilFlip => 'até a virada';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Quadro $frame de $frames · cerca de $left restantes em $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Quadro $frame de $frames · cerca de $left restantes';
   }
 
   @override
@@ -10503,8 +10568,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorTonightsBest => 'Melhores de hoje';
 
   @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Quadro $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Quadro $frame';
   }
 
   @override
@@ -10638,6 +10703,48 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String monitorAutofocusSince(String time, String delta) {
     return 'Foco automático $time · $delta desde então';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n salvos';
+  }
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'início da sessão $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % desde o início da sessão';
+  }
+
+  @override
+  String get monitorDrifting => 'Variando';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Captura $start a $end';
+  }
+
+  @override
+  String get monitorSkyOwnScale => 'Céu (escala própria)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS por quadro salvo';
+
+  @override
+  String get monitorFixedScale => 'escala fixa ±2,5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'inversão $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'estacionar $time';
   }
 
   @override
@@ -12450,6 +12557,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobAlignerAutoOff =>
       'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get polarAdvancedTitle => 'Avançado';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return 'giro de $turn° · passo de $step° · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min a $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Fora da faixa: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason O campo voltou ao valor do setup.';
+  }
 
   @override
   String get estopFailPolarAligner =>

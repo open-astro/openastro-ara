@@ -280,3 +280,9 @@ dotnet_diagnostic.CA1062.severity = none
 # convention; underscores there aid readability. Production code still honors
 # CA1707 (this relaxation is scoped to the test projects only).
 dotnet_diagnostic.CA1707.severity = none
+# CA2026 / CA2027 (new in the .NET 11 SDK): JsonDocument.Parse(...).RootElement
+# and Task.WhenAny(x, Task.Delay(t)) as a bounded test wait. A test process is
+# short-lived, so the undisposed document or the leftover timer costs nothing.
+# Production code still honors both rules.
+dotnet_diagnostic.CA2026.severity = none
+dotnet_diagnostic.CA2027.severity = none

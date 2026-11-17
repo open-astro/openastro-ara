@@ -211,7 +211,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
             ref.read(cameraElectronicsProvider).value ??
             const CameraElectronics(),
         site: ref.read(siteSettingsProvider),
-        filterSet: ref.read(filterSetProvider),
+        filterSet:
+            ref.read(filterSetProvider).value ?? const FilterSetSettings(),
         filterName: widget.filterName,
         noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
         skyCalibrationK: skyCalibrationK,

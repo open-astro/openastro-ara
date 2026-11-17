@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_equipment_choices.dart';
+import '../../models/guider_pick.dart';
+
+export '../../models/guider_pick.dart' show parseAlpacaChoiceEndpoint;
 import '../../services/alpaca_device_names_api.dart';
 import '../../util/host_port.dart';
 import '../saved_server_state.dart';
@@ -121,6 +124,18 @@ String alpacaCameraUniqueIdFor(String choice, Map<String, String> uniqueIds) {
   return uniqueIds['${e.host}:${e.port}|camera/${e.device}'] ?? '';
 }
 
+/// Applies [pick] to [s]: camera and UniqueID always; host and port only when
+/// the pick has an endpoint, so clearing the camera or choosing a non-Alpaca
+/// one leaves the guider's one Alpaca server (shared with the mount and
+/// rotator picks) as stored. Pure — shared by the settings notifier and the
+/// setup wizard's draft.
+Phd2Settings applyGuiderPick(Phd2Settings s, GuiderPick pick) => s.copyWith(
+  guiderCamera: pick.camera.trim(),
+  guiderCameraAlpacaUniqueId: pick.uniqueId.trim(),
+  guiderAlpacaHost: pick.host?.trim(),
+  guiderAlpacaPort: pick.port,
+);
+
 /// True for the daemon's "Alpaca …" choice strings, bare or suffixed.
 bool isAlpacaChoice(String selection) =>
     selection.trim().toLowerCase().startsWith('alpaca ');
@@ -128,19 +143,6 @@ bool isAlpacaChoice(String selection) =>
 /// True for the daemon's generic "Alpaca …" choice string with no endpoint.
 bool isBareAlpacaChoice(String selection) =>
     isAlpacaChoice(selection) && parseAlpacaChoiceEndpoint(selection.trim()) == null;
-
-/// Parsed Alpaca endpoint from a daemon camera-choice string, e.g.
-/// `"Alpaca Camera [rc91.lan:6800/1]"` → host `rc91.lan`, port `6800`,
-/// device `1`. Null when the choice doesn't carry the `[host:port/N]` suffix
-/// (non-Alpaca drivers, `"None"`). Pure — unit-tested.
-({String host, int port, int device})? parseAlpacaChoiceEndpoint(String choice) {
-  final m = RegExp(r'\[([^\[\]:]+):(\d+)/(\d+)\]\s*$').firstMatch(choice);
-  if (m == null) return null;
-  final port = int.tryParse(m.group(2)!);
-  final device = int.tryParse(m.group(3)!);
-  if (port == null || port < 1 || port > 65535 || device == null) return null;
-  return (host: m.group(1)!, port: port, device: device);
-}
 
 /// True when the guide-camera [guideChoice] is the same Alpaca device as one of
 /// the Main Camera's [mainEndpoints] ("host:port/N"): same port, device number
@@ -183,6 +185,24 @@ typedef GuiderAlpacaDevices = ({
   Map<String, String> uniqueIds,
 });
 
+/// Whether an Alpaca sweep is running and the servers the last one found
+/// ("host:port"; null before any sweep or while one runs), for every surface.
+typedef GuiderDiscovery = ({bool running, List<String>? servers});
+
+final guiderDiscoveryProvider =
+    NotifierProvider<GuiderDiscoveryNotifier, GuiderDiscovery>(
+      GuiderDiscoveryNotifier.new,
+    );
+
+class GuiderDiscoveryNotifier extends Notifier<GuiderDiscovery> {
+  /// Another rig has its own servers: a server switch starts over.
+  @override
+  GuiderDiscovery build() {
+    ref.watch(activeServerProvider);
+    return (running: false, servers: null);
+  }
+}
+
 final guiderAlpacaDevicesProvider =
     NotifierProvider<GuiderAlpacaDevicesNotifier, GuiderAlpacaDevices>(
       GuiderAlpacaDevicesNotifier.new,
@@ -206,6 +226,19 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   String uniqueIdFor(String choice) =>
       alpacaCameraUniqueIdFor(choice, state.uniqueIds);
 
+  /// The whole pick for a camera [choice]: name, UniqueID and server endpoint,
+  /// from what this module has resolved. No network call: an id not yet known
+  /// is "" and pins on the next pick (#1861).
+  GuiderPick pick(String choice) {
+    final e = parseAlpacaChoiceEndpoint(choice);
+    return GuiderPick(
+      camera: choice,
+      uniqueId: uniqueIdFor(choice),
+      host: e?.host,
+      port: e?.port,
+    );
+  }
+
   /// Read the device names on each "host:port" not yet named (in parallel: an
   /// unreachable server costs only its own timeout). A server that answered
   /// nothing is asked again next time, so a brief outage does not leave the
@@ -214,6 +247,9 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   /// UniqueID, as each surface's own fetch did before.
   Future<void> resolve(Iterable<String> endpoints, {bool fresh = false}) async {
     final namesApi = ref.read(alpacaDeviceNamesApiProvider);
+    // The Ref of this build: a rig switch rebuilds the notifier under a new
+    // Ref, so `ref.mounted` read after the await would still be true.
+    final buildRef = ref;
     final targets = <({String endpoint, String host, int port})>[];
     for (final endpoint in endpoints.toSet()) {
       if ((!fresh && _named.contains(endpoint)) || _resolving.contains(endpoint)) {
@@ -237,9 +273,12 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
     } finally {
       _resolving.removeAll(targets.map((t) => t.endpoint));
     }
-    if (!ref.mounted) return;
-    final names = {...state.names};
-    final uniqueIds = {...state.uniqueIds};
+    // Reading `state` runs a rebuild a rig switch left pending (no listener),
+    // which makes [buildRef] stale; only then is the guard true to its name.
+    final current = state;
+    if (!buildRef.mounted) return;
+    final names = {...current.names};
+    final uniqueIds = {...current.uniqueIds};
     for (final result in fetched) {
       if (result.devices.isEmpty) continue;
       _named.add(result.endpoint);
@@ -258,11 +297,26 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   /// [resolve]: the wizards ask every server again, Settings' Discover keeps
   /// what its panel already named, as each did on its own.
   Future<List<String>> discover({bool fresh = true}) async {
-    final servers = await ref
-        .read(guiderEquipmentProvider.notifier)
-        .discoverAlpaca();
-    await resolve(servers, fresh: fresh);
-    return servers;
+    final discovery = ref.read(guiderDiscoveryProvider.notifier);
+    final discoveryRef = discovery.ref; // before the await, see [resolve]
+    final buildRef = ref;
+    discovery.state = (running: true, servers: null);
+    try {
+      final servers = await ref
+          .read(guiderEquipmentProvider.notifier)
+          .discoverAlpaca();
+      // A rig switched during the sweep: its servers are not the new rig's.
+      if (buildRef.mounted) await resolve(servers, fresh: fresh);
+      if (discoveryRef.mounted) {
+        discovery.state = (running: false, servers: servers);
+      }
+      return servers;
+    } catch (_) {
+      if (discoveryRef.mounted) {
+        discovery.state = (running: false, servers: null);
+      }
+      rethrow;
+    }
   }
 }
 

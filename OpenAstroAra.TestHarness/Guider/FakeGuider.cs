@@ -332,7 +332,9 @@ public sealed class FakeGuider : IAsyncDisposable {
         // could block uncancellably — cap the wait so a stuck handler makes teardown
         // diagnosable rather than hanging the test forever.
         var drain = Task.WhenAll(_inFlight.Keys).ContinueWith(static _ => { }, TaskScheduler.Default);
-        if (await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false) != drain) {
+        try {
+            await drain.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        } catch (TimeoutException) {
             System.Diagnostics.Trace.TraceWarning("FakeGuider dispose: in-flight handler drain timed out after 10s.");
         }
         _listener.Dispose();

@@ -22,7 +22,7 @@ Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
   final cam =
       ref.read(cameraElectronicsProvider).value ?? const CameraElectronics();
   final site = ref.read(siteSettingsProvider);
-  final filters = ref.read(filterSetProvider).filters;
+  final filters = ref.read(filterSetProvider).value?.filters ?? const [];
   final k =
       ref.read(skyModelCalibrationProvider).asData?.value?.appliedK ??
       const <String, double>{};

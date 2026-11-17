@@ -7236,8 +7236,8 @@ abstract class AppLocalizations {
   /// Monitor Now tile: progress on the Target
   ///
   /// In en, this message translates to:
-  /// **'Frame {frame} of {frames} · about {left} left on {target}'**
-  String monitorFrameOf(int frame, int frames, String left, String target);
+  /// **'Frame {frame} of {frames} · about {left} left'**
+  String monitorFrameOf(int frame, int frames, String left);
 
   /// Monitor Now tile: the upcoming steps
   ///
@@ -7251,11 +7251,11 @@ abstract class AppLocalizations {
   /// **'Tonight\'s best'**
   String get monitorTonightsBest;
 
-  /// Monitor Up next row: the next frame and filter
+  /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
-  /// **'Frame {frame} · {filter}'**
-  String monitorUpFrame(int frame, String filter);
+  /// **'Frame {frame}'**
+  String monitorUpFrame(int frame);
 
   /// Monitor Up next row: the park at the end
   ///
@@ -7476,8 +7476,68 @@ abstract class AppLocalizations {
   /// Monitor Last frame: the last autofocus and the temperature change since
   ///
   /// In en, this message translates to:
-  /// **'Autofocus {time} · {delta} since'**
+  /// **'Autofocus {time} · {delta} since then'**
   String monitorAutofocusSince(String time, String delta);
+
+  /// Monitor Now tile: frames saved so far
+  ///
+  /// In en, this message translates to:
+  /// **'{n} saved'**
+  String monitorSaved(int n);
+
+  /// Monitor Last frame tile: the HFR the session started at
+  ///
+  /// In en, this message translates to:
+  /// **'session start {value}'**
+  String monitorStartedAt(String value);
+
+  /// Monitor deviation flag: a reading's change against the session's own start
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} {pct} % since session start'**
+  String monitorChangeSinceStart(String metric, String pct);
+
+  /// Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start
+  ///
+  /// In en, this message translates to:
+  /// **'Drifting'**
+  String get monitorDrifting;
+
+  /// Monitor altitude graph key: the plan's imaging span
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging {start} to {end}'**
+  String monitorImagingSpan(String start, String end);
+
+  /// Monitor stars graph key: the sky background line has its own scale
+  ///
+  /// In en, this message translates to:
+  /// **'Sky (own scale)'**
+  String get monitorSkyOwnScale;
+
+  /// Monitor guider tile: the session's guiding RMS graph
+  ///
+  /// In en, this message translates to:
+  /// **'RMS per saved frame'**
+  String get monitorRmsPerFrame;
+
+  /// Monitor guider tile key: the live trace's fixed scale
+  ///
+  /// In en, this message translates to:
+  /// **'fixed ±2.5″'**
+  String get monitorFixedScale;
+
+  /// Monitor Tonight timeline: the meridian flip's label
+  ///
+  /// In en, this message translates to:
+  /// **'flip {time}'**
+  String monitorFlipPin(String time);
+
+  /// Monitor Tonight timeline: the mount park's label
+  ///
+  /// In en, this message translates to:
+  /// **'park {time}'**
+  String monitorParkPin(String time);
 
   /// Monitor tile: tonight's timeline
   ///
@@ -10442,6 +10502,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
+
+  /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get polarAdvancedTitle;
+
+  /// Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure
+  ///
+  /// In en, this message translates to:
+  /// **'{turn}° turn · {step}° step · {exposure} s'**
+  String polarAdvancedSummary(String turn, String step, String exposure);
+
+  /// Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '
+  ///
+  /// In en, this message translates to:
+  /// **'{min} to {max}'**
+  String polarAdvancedRange(String min, String max);
+
+  /// Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Out of range: use {range}'**
+  String polarAdvancedOutOfRange(String range);
+
+  /// Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} The field is back to the rig\'s value.'**
+  String polarAdvancedSaveFailed(String reason);
 
   /// Emergency stop: the Polar Aligner's stop failed
   ///

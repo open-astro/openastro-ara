@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/adaptive_dialog.dart';
 
 void main() {
@@ -46,5 +48,41 @@ void main() {
       TargetPlatform.android,
       TargetPlatform.macOS,
     }),
+  );
+
+  // #1843 A4: the theme error is error-text now; a filled destructive action
+  // stays Fault Red, a text one takes the theme error as its label.
+  testWidgets(
+    'a destructive dialog action fills Fault Red and labels a text one in error-text',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAraTheme().copyWith(platform: TargetPlatform.android),
+          home: Builder(
+            builder: (context) => Column(
+              children: [
+                adaptiveDialogAction(
+                  context,
+                  onPressed: () {},
+                  isDestructive: true,
+                  filled: true,
+                  child: const Text('Stop'),
+                ),
+                adaptiveDialogAction(
+                  context,
+                  onPressed: () {},
+                  isDestructive: true,
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final filled = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(filled.style?.backgroundColor?.resolve({}), AraColors.accentError);
+      final text = tester.widget<TextButton>(find.byType(TextButton));
+      expect(text.style?.foregroundColor?.resolve({}), AraColors.errorText);
+    },
   );
 }

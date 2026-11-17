@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/safety_alarm_listener.dart';
 
 /// Drives alarm state manually — no WS, no player, no prefs.
@@ -118,5 +120,42 @@ void main() {
 
     expect(find.text('SAFETY ALERT'), findsNothing);
     expect(find.text('UNDERLYING SCREEN'), findsOneWidget);
+  });
+
+  // #1843 A4: the theme error is error-text now; the alarm stays Fault Red.
+  testWidgets('the alarm icon and Silence button stay Fault Red', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [safetyAlarmProvider.overrideWith(_ManualAlarm.new)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: buildAraTheme(),
+          home: const Scaffold(
+            body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
+          ),
+        ),
+      ),
+    );
+
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm).startPending(
+      'unsafe',
+    );
+    await tester.pumpAndSettle();
+
+    final icon = tester.widget<Icon>(find.byIcon(Icons.notifications_active));
+    expect(icon.color, AraColors.accentError);
+    final silence = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Silence alarm'),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(silence.style?.backgroundColor?.resolve({}), AraColors.accentError);
   });
 }

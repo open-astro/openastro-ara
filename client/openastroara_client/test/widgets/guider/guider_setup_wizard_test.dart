@@ -509,6 +509,17 @@ void main() {
     expect(h.profile.lastPut?.guiderAlpacaPort, 11111);
   });
 
+  testWidgets('#1861 a sweep another surface runs disables Search', (tester) async {
+    await _pump(tester);
+    await _next(tester); // camera
+    final container = ProviderScope.containerOf(tester.element(find.byType(GuiderSetupWizard)));
+    container.read(guiderDiscoveryProvider.notifier).state = (running: true, servers: null);
+    await tester.pump();
+    final button = find.ancestor(
+        of: find.text('Search network for Alpaca servers'), matching: find.byWidgetPredicate((w) => w is TextButton));
+    expect(tester.widget<TextButton>(button).onPressed, isNull, reason: 'a sweep the module runs disables Search');
+  });
+
   testWidgets('final step offers a filled Finish, not a dead Next',
       (tester) async {
     await _pump(tester);

@@ -238,6 +238,7 @@ String designationKey(String s) {
 // Built once: the search keys every id and alias of the bundle on a miss.
 final RegExp _spaces = RegExp(r'[\s_]');
 final RegExp _zeroPad = RegExp(r'([A-Z])0+(\d)');
+final RegExp _nameNoise = RegExp(r'[\s\-_]');
 
 /// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
 /// Sh2-117). A query that carries a dash is never matched loosely.
@@ -264,8 +265,19 @@ class CatalogNameIndex {
   // A dashless key two different rows share answers nothing, as in the
   // merge ("WR 2-1" and "WR 21" are two stars; review r8).
   final Set<String> _looseAmbiguous = {};
+  // Lower-cased common names without spaces, dashes or underscores, in
+  // catalog order: the last fallback of [lookupOrContains], plain strings so
+  // a miss is one `contains` pass with no RegExp work per row.
+  final List<String> _names = [];
+  final List<PlanningDso> _nameRows = [];
 
   CatalogNameIndex(List<PlanningDso> catalog) {
+    for (final o in catalog) {
+      final n = o.name.toLowerCase().replaceAll(_nameNoise, '');
+      if (n.isEmpty) continue;
+      _names.add(n);
+      _nameRows.add(o);
+    }
     void add(String designation, PlanningDso o) {
       final k = designationKey(designation);
       if (k.isEmpty) return;
@@ -300,6 +312,20 @@ class CatalogNameIndex {
     final hit = _exact[k];
     if (hit != null || k.contains('-')) return hit;
     return _looseAmbiguous.contains(k) ? null : _loose[k];
+  }
+
+  /// [lookup], then on a miss the first row whose common name contains
+  /// [query] (the last fallback of [findCatalogObject]: "Rosette" finds the
+  /// Rosette Nebula). Kept for parity with it: no minimum query length.
+  PlanningDso? lookupOrContains(String query) {
+    final hit = lookup(query);
+    if (hit != null) return hit;
+    final q = query.toLowerCase().replaceAll(_nameNoise, '');
+    if (q.isEmpty) return null;
+    for (var i = 0; i < _names.length; i++) {
+      if (_names[i].contains(q)) return _nameRows[i];
+    }
+    return null;
   }
 }
 
