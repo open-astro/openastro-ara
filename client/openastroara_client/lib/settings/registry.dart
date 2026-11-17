@@ -84,9 +84,10 @@ class SettingType {
       enumValues = null;
 }
 
-/// #1544 — which mode's Settings show an entry by default. [simple] entries
-/// are the few a user is expected to touch (and Simple Mode itself offers);
-/// [advanced] entries show when the one global Advanced toggle is on.
+/// #1544 — [simple] entries are the few a user is expected to touch (and
+/// Simple Mode itself offers). With the one global Advanced toggle off, the
+/// Autofocus panel shows only its [simple] rows and any row a search hit
+/// opens; the other panels show every row.
 enum SettingTier { simple, advanced }
 
 class Setting {
@@ -103,9 +104,9 @@ class Setting {
   /// #1544 — see [SettingTier].
   final SettingTier tier;
 
-  /// #1544 — what computes the value when the user does not override it, shown
-  /// beside the override ("Automatic step size: ..."). Null when nothing
-  /// derives it; the UI then shows no derived-by line.
+  /// #1544 — what computes the value when the user does not override it
+  /// ("Automatic step size: ..."); null when nothing derives it. Registry
+  /// metadata: the panel shows the derived value itself, not this text.
   final String? derivedBy;
 
   const Setting({
