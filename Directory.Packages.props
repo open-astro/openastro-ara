@@ -6,8 +6,8 @@
     bump, no two projects drifting apart on the same package (CPM refuses a version
     attribute in a project with NU1008, so drift cannot creep back in).
 
-    The ranges are deliberate: SharpGIS.NmeaParser and Microsoft.OpenApi are pinned to
-    the exact version their call sites were verified against; FluentAssertions stays
+    The ranges are deliberate: Microsoft.OpenApi is pinned to
+    the exact version its call sites were verified against; FluentAssertions stays
     on the last Apache-licensed line.
 
     xunit 2.9.3 is NuGet-deprecated as "legacy" (superseded by xunit.v3), not vulnerable.
@@ -53,7 +53,6 @@
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="SharpGIS.NmeaParser" Version="[2.2.2]" />
     <PackageVersion Include="SkiaSharp" Version="4.156.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.156.0" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
