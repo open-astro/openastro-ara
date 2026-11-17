@@ -265,8 +265,9 @@ public sealed partial class EmergencyStopService {
             // touches in-memory run state today, but "no single dead
             // component may wedge this button" must hold for every rung.
             var work = RunOnOwnThread(() => sequencer.AbortActiveRunsAsync(CancellationToken.None));
-            var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
-            if (!ReferenceEquals(completed, work)) {
+            // WaitAsync, not WhenAny + Task.Delay: no 10 s timer left running (CA2027); a fault surfaces at `await work`.
+            await ((Task)work).WaitAsync(RungTimeout).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (!work.IsCompleted) {
                 LogRungTimedOut("abort runs", RungTimeout.TotalSeconds);
                 ObserveQuietly("abort runs", work);
                 return (0, RungOutcome.Failed);
@@ -303,8 +304,8 @@ public sealed partial class EmergencyStopService {
                 await action(CancellationToken.None).ConfigureAwait(false);
                 return RungOutcome.Done;
             });
-            var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
-            if (!ReferenceEquals(completed, work)) {
+            await ((Task)work).WaitAsync(RungTimeout).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (!work.IsCompleted) {
                 LogRungTimedOut(rung, RungTimeout.TotalSeconds);
                 ObserveQuietly(rung, work);
                 return RungOutcome.Failed;
