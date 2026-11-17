@@ -18,8 +18,9 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>Start the guide-camera focus loop. <c>ExposureSec</c> 0.05–30 s (guide cameras are fast; a
-/// focus loop wants ~1–3 s). <c>Binning</c> null = the guider's own.</summary>
-public sealed record GuideFocusStartRequestDto(double ExposureSec = 2.0, int? Binning = null);
+/// focus loop wants ~1–3 s); omitted, it is the profile's autofocus exposure (clamped to that range), else
+/// 2 s. <c>Binning</c> null = the guider's own.</summary>
+public sealed record GuideFocusStartRequestDto(double? ExposureSec = null, int? Binning = null);
 
 /// <summary>One measured guide frame. <c>Hfr</c> is 0 when the frame had no measurable star (see
 /// <c>Stars</c>); <c>PeakAdu</c> is the brightest star's peak so the user sees saturation coming as the

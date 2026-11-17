@@ -84,6 +84,12 @@ class SettingType {
       enumValues = null;
 }
 
+/// #1544 — [simple] entries are the few a user is expected to touch (and
+/// Simple Mode itself offers). With the one global Advanced toggle off, the
+/// Autofocus panel shows only its [simple] rows and any row a search hit
+/// opens; the other panels show every row.
+enum SettingTier { simple, advanced }
+
 class Setting {
   final String id;
   final String label;
@@ -95,6 +101,14 @@ class Setting {
   final String? profilePath;
   final List<String> relatedSettings;
 
+  /// #1544 — see [SettingTier].
+  final SettingTier tier;
+
+  /// #1544 — what computes the value when the user does not override it
+  /// ("Automatic step size: ..."); null when nothing derives it. Registry
+  /// metadata: the panel shows the derived value itself, not this text.
+  final String? derivedBy;
+
   const Setting({
     required this.id,
     required this.label,
@@ -105,15 +119,30 @@ class Setting {
     required this.defaultValue,
     this.profilePath,
     this.relatedSettings = const <String>[],
+    required this.tier,
+    this.derivedBy,
   });
 }
 
 /// The canonical settings registry.
 const List<Setting> settingsRegistry = [
+  // #1544 — the Settings header's one Advanced toggle, a view preference of
+  // this device (`advancedSettingsProvider`), not in the profile.
+  Setting(
+    id: 'app.settings.advanced',
+    tier: SettingTier.simple,
+    label: 'Advanced settings',
+    description: 'On (the default), every setting shows. Off, the Autofocus panel shows only its Simple tier (autofocus during plans, Keep focus sharp and the AF filter) and Equipment › Focuser hides the derived step size. Kept on this device.',
+    keywords: ['advanced', 'simple', 'tier', 'show all', 'hide', 'toggle'],
+    path: ['Settings'],
+    type: SettingType.bool(),
+    defaultValue: true,
+  ),
   // §35 Safety Policies — 12 fields covering unsafe weather + meridian flip
   // + altitude limit + guider loss. State lives in `safetyPoliciesProvider`.
   Setting(
     id: 'safety.policies.on_unsafe',
+    tier: SettingTier.advanced,
     label: 'On unsafe weather',
     description: 'What action to take when the safety monitor reports unsafe conditions (rain, wind, clouds, humidity past dew point).',
     keywords: [
@@ -139,6 +168,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'timesync.client_gps.enabled',
+    tier: SettingTier.advanced,
     label: 'GPS on this computer',
     description: 'Read a USB GPS dongle plugged into the computer running the app and send its time and position to the rig. Frees a USB port on the Pi; the receiver fix also feeds Fill from GPS.',
     keywords: [
@@ -160,6 +190,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'timesync.client_gps.port',
+    tier: SettingTier.advanced,
     label: 'GPS serial port',
     description: 'The serial port the USB GPS dongle appears on (for example /dev/cu.usbserial-1420 on a Mac, COM3 on Windows, /dev/ttyUSB0 on Linux).',
     keywords: ['gps', 'serial', 'port', 'com', 'tty', 'usb'],
@@ -170,6 +201,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.auto_resume',
+    tier: SettingTier.advanced,
     label: 'Auto-resume when safe',
     description: 'Automatically resume the paused sequence when the safety monitor reports safe again. Off = manual unpause required.',
     keywords: ['resume', 'safe', 'automatic', 'weather', 'restart'],
@@ -180,6 +212,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.weather_triggers',
+    tier: SettingTier.advanced,
     label: 'React to weather-station thresholds',
     description: 'With an ObservingConditions weather station connected, a breached wind / humidity / dew-delta threshold makes conditions unsafe and runs your on-unsafe action — same reaction path as the safety monitor. Default off so an upgraded rig never surprise-parks.',
     keywords: [
@@ -199,6 +232,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.max_wind_kmh',
+    tier: SettingTier.advanced,
     label: 'Max wind (km/h)',
     description: 'Wind above this — sustained speed or gust, whichever is worse — is a breach. Typical guided setups misbehave well before 40 km/h.',
     keywords: ['wind', 'gust', 'speed', 'kmh', 'threshold', 'weather'],
@@ -209,6 +243,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.max_humidity_pct',
+    tier: SettingTier.advanced,
     label: 'Max humidity (%)',
     description: 'Relative humidity above this is a breach — condensation territory for optics and electronics.',
     keywords: [
@@ -226,6 +261,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.min_dew_delta_c',
+    tier: SettingTier.advanced,
     label: 'Min dew delta (°C)',
     description: 'When ambient temperature drops to within this many degrees of the dew point, optics are about to fog — breach. Needs a station that reports both temperature and dew point.',
     keywords: [
@@ -244,6 +280,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.resume_delay',
+    tier: SettingTier.advanced,
     label: 'Resume delay (min)',
     description: 'Minutes to wait after the "safe" signal before actually resuming. Lets a passing cloud bank fully clear.',
     keywords: ['delay', 'wait', 'resume', 'safe', 'minutes'],
@@ -254,6 +291,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_flip_auto',
+    tier: SettingTier.advanced,
     label: 'Auto meridian flip',
     description: 'Automatically execute the meridian flip when the target crosses the meridian. Off = the run never flips and does not pause at the meridian; it keeps imaging.',
     keywords: [
@@ -272,6 +310,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_pause_min',
+    tier: SettingTier.advanced,
     label: 'Pause after meridian flip (min)',
     description: 'Minutes to wait after a meridian flip before resuming exposures, so the mount can settle + the guider can re-lock.',
     keywords: ['meridian', 'flip', 'pause', 'wait', 'settle', 'minutes'],
@@ -282,6 +321,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_recenter',
+    tier: SettingTier.advanced,
     label: 'Re-center after meridian flip',
     description: 'Plate-solve and re-center the target after a meridian flip. Compensates for pointing shifts caused by the mount\'s pier-side swap.',
     keywords: [
@@ -299,6 +339,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_refocus',
+    tier: SettingTier.advanced,
     label: 'Re-focus after meridian flip',
     description: 'Whether the flip recovery re-runs autofocus: only when the focuser temperature drifted past the threshold since the session\'s last autofocus (default), always, or never. A failed re-focus never aborts the night.',
     keywords: [
@@ -317,6 +358,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_refocus_temp_threshold_c',
+    tier: SettingTier.advanced,
     label: 'Re-focus drift threshold (°C)',
     description: 'In "only if drifted" mode, the focuser-temperature change since the last autofocus that triggers a re-focus after the flip.',
     keywords: [
@@ -335,6 +377,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.meridian_guider_recal',
+    tier: SettingTier.advanced,
     label: 'Guiding after flip',
     description: 'How guiding comes back after the flip: restore the existing calibration with the reverse-Dec flag (fast, default), run a full recalibration (5-10 min), or do not resume guiding.',
     keywords: [
@@ -354,6 +397,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_window_start',
+    tier: SettingTier.advanced,
     label: 'Unattended from (HH:mm)',
     description: 'Start of an explicit site-local window during which alerts ride one severity higher; it may wrap past midnight. Blank (with a blank end) uses astronomical dusk at the site.',
     keywords: [
@@ -378,6 +422,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_window_end',
+    tier: SettingTier.advanced,
     label: 'Unattended until (HH:mm)',
     description: 'End of the explicit unattended window. Both ends must be set for the window to apply; blank uses astronomical dawn at the site.',
     keywords: [
@@ -402,6 +447,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.flip_safety_enabled',
+    tier: SettingTier.advanced,
     label: 'Extra care on flips when you are away',
     description: 'Protects a sleeping user: a pre-flip flight check (target altitude, mount health, required equipment), an in-slew watchdog (stall + timeout abort) and a hard pier-side verification. Turn off only if this mount misreports pier side.',
     keywords: [
@@ -425,6 +471,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.expected_flip_slew_seconds',
+    tier: SettingTier.advanced,
     label: 'Expected flip-slew duration (s)',
     description: 'How long this mount typically takes to complete the meridian-flip slew. The flip watchdog aborts a slew that exceeds 3× this value (capped at 5 minutes) — Alpaca mounts do not report their own estimate.',
     keywords: [
@@ -444,6 +491,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_escalation',
+    tier: SettingTier.advanced,
     label: 'Louder alerts overnight',
     description: 'During the unattended window — astronomical darkness at the site (sun below −18°) unless an explicit from/until window is set — equipment-impacting warnings are raised one severity level (warning→error, error→critical) so the bedside alarm behaviour engages earlier for a sleeping user. Escalated messages say why; outside the window severities are untouched.',
     keywords: [
@@ -468,6 +516,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_shutdown_enabled',
+    tier: SettingTier.advanced,
     label: 'Put the rig to bed if nobody responds',
     description: 'When a run pauses awaiting your attention (a failed meridian flip overnight) and nobody responds within the wait window, Ara puts the rig to bed: guider stopped, mount parked, equipment disconnected, cooler warmed gently, camera disconnected last. Dismissing the alert, any command, or opening the app cancels the countdown. Disabling is allowed but not recommended.',
     keywords: [
@@ -494,6 +543,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.unattended_shutdown_wait_minutes',
+    tier: SettingTier.advanced,
     label: 'Unattended shutdown wait (min)',
     description: 'Minutes of unattended silence after a paused-awaiting-you failure before the graceful shutdown executes. 30 is the default — long enough to step outside and come back; 5 suits battery rigs.',
     keywords: [
@@ -514,6 +564,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.first_flip_confirmed',
+    tier: SettingTier.advanced,
     label: 'First-flip announce',
     description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
     keywords: [
@@ -538,6 +589,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.on_altitude_limit',
+    tier: SettingTier.advanced,
     label: 'On altitude limit',
     description: 'Action when a target drops below the minimum-altitude floor.',
     keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
@@ -552,6 +604,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.park_if_no_more_targets',
+    tier: SettingTier.advanced,
     label: 'Park when no more targets',
     description: 'Park the mount when the sequence runs out of remaining targets (e.g. all targets dropped below altitude floor). Otherwise the mount stays tracking until session end.',
     keywords: ['park', 'no targets', 'sequence end', 'idle'],
@@ -562,6 +615,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.on_guider_lost',
+    tier: SettingTier.advanced,
     label: 'On guider lost',
     description: 'Action when the guider loses lock (clouds, star drift, calibration glitch).',
     keywords: ['guider', 'lost', 'phd2', 'pause', 'retry', 'skip', 'abort'],
@@ -576,6 +630,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.on_disk_space_critical',
+    tier: SettingTier.advanced,
     label: 'On critically-low disk',
     description: 'Action when free space on the save volume hits the critical threshold: warn only, pause the running sequence until you free space, or abort it.',
     keywords: [
@@ -601,6 +656,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.guider_retry_timeout',
+    tier: SettingTier.advanced,
     label: 'Guider retry timeout (s)',
     description: 'How long to keep retrying guider re-acquisition before giving up. Tied to the plate-solve-failed notification trigger.',
     keywords: ['guider', 'retry', 'timeout', 'phd2', 'seconds'],
@@ -611,6 +667,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.policies.skip_target_if_recovery_fails',
+    tier: SettingTier.advanced,
     label: 'Skip target if recovery fails',
     description: 'When guider retry timeout expires, skip the target and try the next instead of aborting the whole sequence.',
     keywords: ['skip', 'target', 'recovery', 'guider', 'fail', 'continue'],
@@ -624,6 +681,7 @@ const List<Setting> settingsRegistry = [
   // `diagnosticsModeProvider`.
   Setting(
     id: 'diagnostics.mode',
+    tier: SettingTier.advanced,
     label: 'Diagnostics mode',
     description: 'How Ara responds to critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
     keywords: [
@@ -649,6 +707,7 @@ const List<Setting> settingsRegistry = [
   // §37.9 Imaging Defaults — 8 fields. State lives in `imagingDefaultsProvider`.
   Setting(
     id: 'imaging.defaults.exposure',
+    tier: SettingTier.advanced,
     label: 'Default exposure (s)',
     description: 'Seed exposure time for the Imaging tab when no target-specific override exists. New sequences inherit this.',
     keywords: ['exposure', 'time', 'seconds', 'default', 'shutter'],
@@ -659,6 +718,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.gain',
+    tier: SettingTier.advanced,
     label: 'Default gain',
     description: 'CMOS sensor gain in camera units. Higher = more sensitivity but more read noise. Range depends on the camera.',
     keywords: ['gain', 'sensitivity', 'iso', 'amplification', 'cmos'],
@@ -669,6 +729,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.offset',
+    tier: SettingTier.advanced,
     label: 'Default offset',
     description: 'Sensor offset (pedestal) — keeps the black level off zero so subtraction operations don\'t clip. Camera-specific.',
     keywords: ['offset', 'pedestal', 'bias', 'black level', 'cmos'],
@@ -679,6 +740,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.bin',
+    tier: SettingTier.advanced,
     label: 'Default binning',
     description: 'Pixel binning factor. 1 = native (full resolution); 2 = 2x2 grouped pixels, more sensitivity, less resolution.',
     keywords: ['bin', 'binning', 'resolution', 'pixel', 'downsample'],
@@ -689,6 +751,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.frame_kind',
+    tier: SettingTier.advanced,
     label: 'Default frame type',
     description: 'Frame type for the next exposure: light (target), dark (calibration with shutter closed), bias (zero-second), flat (uniform field).',
     keywords: ['frame', 'type', 'light', 'dark', 'bias', 'flat', 'calibration'],
@@ -699,6 +762,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.cooler_target_c',
+    tier: SettingTier.advanced,
     label: 'Cooling target (°C)',
     description: 'Sensor target temperature when the cooler is active. Typical: -10°C to -20°C depending on the sensor and ambient.',
     keywords: ['cooler', 'temperature', 'target', 'celsius', 'cooling', 'tec'],
@@ -709,6 +773,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.cooler_ramp_c_per_min',
+    tier: SettingTier.advanced,
     label: 'Cooler ramp rate (°C/min)',
     description: 'How fast to step the cooler toward the target. Slow ramps avoid thermal shock + condensation on the sensor cover.',
     keywords: ['ramp', 'cooler', 'thermal shock', 'condensation', 'cooldown'],
@@ -719,6 +784,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'imaging.defaults.warmup_at_session_end',
+    tier: SettingTier.advanced,
     label: 'Warm-up cooler at session end',
     description: 'Ramp the sensor back to ambient at the end of a session instead of disconnecting cold. CCDs need this; CMOS usually don\'t.',
     keywords: [
@@ -740,6 +806,7 @@ const List<Setting> settingsRegistry = [
   // State lives in `opticsSettingsProvider`; profile section is `optics` (#467).
   Setting(
     id: 'img.optics.focal_length_mm',
+    tier: SettingTier.advanced,
     label: 'Focal length (mm)',
     description: 'Telescope focal length before any reducer or barlow. Sets the image scale and field of view shown in the Planning Frame overlay.',
     keywords: [
@@ -758,6 +825,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.optics.reducer_factor',
+    tier: SettingTier.advanced,
     label: 'Reducer / barlow factor (×)',
     description: 'Multiplier on the focal length: 1.0 for none, 0.8 for a 0.8× reducer, 2.0 for a 2× barlow. Must be greater than 0.',
     keywords: [
@@ -775,6 +843,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.optics.sensor_width_px',
+    tier: SettingTier.advanced,
     label: 'Sensor width (px)',
     description: 'Camera sensor width in pixels. Combined with the pixel size and focal length to draw the field-of-view rectangle on the atlas.',
     keywords: [
@@ -793,6 +862,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.optics.sensor_height_px',
+    tier: SettingTier.advanced,
     label: 'Sensor height (px)',
     description: 'Camera sensor height in pixels. Combined with the pixel size and focal length to draw the field-of-view rectangle on the atlas.',
     keywords: [
@@ -811,6 +881,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.optics.pixel_size_um',
+    tier: SettingTier.advanced,
     label: 'Pixel size (µm)',
     description: 'Sensor pixel pitch in microns. Sets the per-pixel image scale (206.265 × pixel size ÷ focal length) used by the Planning Frame overlay.',
     keywords: [
@@ -829,6 +900,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.optics.aperture_mm',
+    tier: SettingTier.advanced,
     label: 'Aperture (mm)',
     description: 'Telescope objective diameter. Feeds the sky-flux term of the Optimal Sub exposure calculator (Glover read-noise criterion) — framing works without it, exposure advice does not.',
     keywords: [
@@ -855,6 +927,7 @@ const List<Setting> settingsRegistry = [
   // Optimal Sub calculator. State lives in `cameraElectronicsProvider`.
   Setting(
     id: 'img.electronics.sensor_name',
+    tier: SettingTier.advanced,
     label: 'Sensor name',
     description: 'Sensor model reported by the camera driver (e.g. IMX571). Auto-filled when a camera connects; identifies which sensor the electronics values describe.',
     keywords: ['camera', 'sensor', 'name', 'model', 'electronics', 'imx'],
@@ -865,6 +938,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.electronics.read_noise_e',
+    tier: SettingTier.advanced,
     label: 'Read noise (e⁻ RMS)',
     description: 'Camera read noise in electrons at the stated gain, from the manufacturer\'s gain chart or a SharpCap sensor analysis. Sets the Optimal Sub read-noise floor (t = 10·R²/P, criterion popularised by Dr. Robin Glover).',
     keywords: [
@@ -885,6 +959,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.electronics.full_well_e',
+    tier: SettingTier.advanced,
     label: 'Full-well capacity (e⁻)',
     description: 'Sensor full-well depth in electrons for the current readout mode — auto-filled from the connected camera (High Full Well modes re-capture on reconnect). Sets the Optimal Sub saturation ceiling.',
     keywords: [
@@ -904,6 +979,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.electronics.electrons_per_adu',
+    tier: SettingTier.advanced,
     label: 'Conversion gain (e⁻/ADU)',
     description: 'Electrons per ADU at the stated gain — auto-filled from the connected camera. Clips the effective well to what the 16-bit ADC can actually record.',
     keywords: [
@@ -922,6 +998,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.electronics.gain',
+    tier: SettingTier.advanced,
     label: 'Gain these values apply at',
     description: 'The camera gain setting the read noise / full well / e⁻/ADU describe — they change with gain, so exposure advice notes when your sequence uses a different one. −1 means unset.',
     keywords: ['gain', 'camera', 'electronics', 'iso', 'readout'],
@@ -932,6 +1009,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.electronics.qe_peak',
+    tier: SettingTier.advanced,
     label: 'Peak quantum efficiency (0–1)',
     description: 'Sensor peak QE as a fraction, from the manufacturer\'s spec sheet (0.8 is a typical modern CMOS). Scales the sky-flux estimate in the Optimal Sub calculator.',
     keywords: [
@@ -952,6 +1030,7 @@ const List<Setting> settingsRegistry = [
   // is a list editor, not per-field rows). State lives in `filterSetProvider`.
   Setting(
     id: 'img.filterset.filters',
+    tier: SettingTier.advanced,
     label: 'Planning filter set',
     description: 'The filters you image with (name, kind, effective bandwidth). Drives narrowband-vs-broadband planning advice in Tonight\'s Sky and the per-filter Optimal Sub; names match sequences case-insensitively, so mirror your wheel labels.',
     keywords: [
@@ -980,6 +1059,7 @@ const List<Setting> settingsRegistry = [
   // connected drive.
   Setting(
     id: 'session.stats.rebuild_catalog',
+    tier: SettingTier.advanced,
     label: 'Clear & rebuild stats',
     description: 'Clears every cataloged frame and session, then re-reads the connected store drive — stats and the library then describe exactly what\'s on this disk. FITS files are never touched.',
     keywords: [
@@ -1000,6 +1080,7 @@ const List<Setting> settingsRegistry = [
   // §29 Storage — 4 fields. State lives in `storageSettingsProvider`.
   Setting(
     id: 'session.storage.save_directory',
+    tier: SettingTier.advanced,
     label: 'Save directory',
     description: 'Base directory where captured frames are written. The ext4 wizard helps migrate from the SD card to a USB drive.',
     keywords: [
@@ -1019,6 +1100,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.file_format',
+    tier: SettingTier.advanced,
     label: 'File format',
     description: 'On-disk frame format. FITS is the de-facto astronomy standard and is always written uncompressed; XISF is PixInsight\'s native format and can be compressed losslessly; Astro Pixel Processor, DeepSkyStacker and StackingWizard need FITS.',
     keywords: [
@@ -1040,6 +1122,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.compression',
+    tier: SettingTier.advanced,
     label: 'Compression',
     description: 'Lossless Zstandard compression of XISF frames at write time. Shown only for XISF; FITS is always written uncompressed. PixInsight reads compressed XISF directly.',
     keywords: [
@@ -1058,6 +1141,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.filename_template',
+    tier: SettingTier.advanced,
     label: 'Filename template',
     description: 'Pattern for output filenames using \$\$TOKEN\$\$ placeholders. Tokens: DATEMINUS12, DATETIME, IMAGETYPE, FILTER, EXPOSURETIME, TARGETNAME, etc.',
     keywords: [
@@ -1077,6 +1161,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.min_free_disk_warn_gb',
+    tier: SettingTier.advanced,
     label: 'Low-disk warning threshold (GB)',
     description: 'Free space on the save volume below which Ara raises a low-disk warning. Must be above the critical threshold.',
     keywords: [
@@ -1096,6 +1181,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.min_free_disk_critical_gb',
+    tier: SettingTier.advanced,
     label: 'Critical-disk threshold (GB)',
     description: 'Free space on the save volume below which Ara raises a critical low-disk alert. Must be below the warning threshold.',
     keywords: [
@@ -1115,6 +1201,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.capture_default',
+    tier: SettingTier.advanced,
     label: 'Capture calibration after a sequence',
     description: 'The sequence-start behaviour for end-of-night calibration: ask each run (the app prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
     keywords: [
@@ -1140,6 +1227,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.flat_target_adu',
+    tier: SettingTier.advanced,
     label: 'Flat target brightness (% of camera range)',
     description: 'How bright each flat is made, as a share of the camera\'s own full range. Each filter solves its exposure and panel brightness for it. 50% is bright enough for signal and well clear of saturation.',
     keywords: [
@@ -1159,6 +1247,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.flat_target_adu_tolerance_pct',
+    tier: SettingTier.advanced,
     label: 'Flat target tolerance (%)',
     description: 'How close the measured flat brightness must land to the target before the flat set captures. Tighter costs more test exposures; looser risks less-consistent flats.',
     keywords: ['flats', 'tolerance', 'adu', 'target', 'percent'],
@@ -1169,6 +1258,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.flat_frames_per_filter',
+    tier: SettingTier.advanced,
     label: 'Flat frames per filter',
     description: 'Saved FLAT frames each generated per-filter set captures once its exposure converges. 20-30 stacks to a clean master flat on most cameras.',
     keywords: ['flats', 'frames', 'count', 'filter', 'per filter'],
@@ -1179,6 +1269,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.post_flat_park_mount',
+    tier: SettingTier.advanced,
     label: 'Park the mount after flats',
     description: 'For the flats that start on their own when a night\'s run finishes: park the mount after the last flat set. Off by default; flats started from Calibration ask each time.',
     keywords: ['flats', 'park', 'mount', 'end of night'],
@@ -1189,6 +1280,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_target_adu',
+    tier: SettingTier.advanced,
     label: 'Sky flat target brightness (mean ADU)',
     description: 'The mean pixel value the twilight sky-flat probe aims for. It sits between the stop-below and stop-above bounds so Ara has room to re-probe as the sky brightens or darkens.',
     keywords: [
@@ -1207,6 +1299,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_frames_per_filter',
+    tier: SettingTier.advanced,
     label: 'Sky flat frames per filter',
     description: 'Saved FLAT frames each twilight sky-flat set captures per filter. The server re-probes the sky before every frame because the twilight brightness drifts minute to minute.',
     keywords: [
@@ -1224,6 +1317,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_target_azimuth',
+    tier: SettingTier.advanced,
     label: 'Sky flat patch azimuth (deg)',
     description: 'Compass bearing of the blank sky patch the mount slews to for twilight flats. 90 points east; the anti-solar sky opposite the sunset or sunrise gives the most even illumination.',
     keywords: [
@@ -1242,6 +1336,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_target_altitude',
+    tier: SettingTier.advanced,
     label: 'Sky flat patch altitude (deg)',
     description: 'Height above the horizon of the sky patch for twilight flats. 75 degrees keeps the mount well clear of horizon gradients and obstructions while staying off the zenith.',
     keywords: [
@@ -1260,6 +1355,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_stop_at_max_adu',
+    tier: SettingTier.advanced,
     label: 'Sky flat stop-above (ADU)',
     description: 'The server abandons the twilight sky-flat set when the sky reads brighter than this even at the shortest exposure — dawn has grown too bright to flat against.',
     keywords: [
@@ -1278,6 +1374,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_stop_at_min_adu',
+    tier: SettingTier.advanced,
     label: 'Sky flat stop-below (ADU)',
     description: 'The server abandons the twilight sky-flat set when the sky reads darker than this even at the longest exposure — the sky has gone too dark to flat against.',
     keywords: ['sky flats', 'twilight', 'stop', 'floor', 'too dark', 'adu'],
@@ -1288,6 +1385,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.calibration.sky_flat_sun_altitude',
+    tier: SettingTier.advanced,
     label: 'Sky flat wait-for sun altitude (deg)',
     description: 'The sun altitude the generated sky-flat sequence waits for before it starts. Around -9 degrees (nautical twilight) the sky is dim enough for stars yet bright enough to reach the target within the exposure bounds. Negative is below the horizon.',
     keywords: [
@@ -1307,6 +1405,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.backup_stream',
+    tier: SettingTier.advanced,
     label: 'Stream new frames to this device',
     description: 'Real-time backup: this desktop claims Ara\'s backup-stream slot and mirrors every captured FITS as the night runs — verified by SHA-256 — so a mid-session imaging-drive failure costs at most the in-flight frame. One desktop at a time.',
     keywords: [
@@ -1326,6 +1425,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.backup_stream_folder',
+    tier: SettingTier.advanced,
     label: 'Backup folder',
     description: 'Where streamed frames are written on this desktop, organized as <server>/<session>/<frame>.fits, or .xisf for an XISF frame; the extension follows each frame, so frames from before a format switch keep .fits. Defaults to Documents/OpenAstroAra/Backups.',
     keywords: [
@@ -1345,6 +1445,7 @@ const List<Setting> settingsRegistry = [
   // `polarAlignSettingsProvider` (profile section `polar_align`).
   Setting(
     id: 'img.polar.target_tolerance_arcmin',
+    tier: SettingTier.advanced,
     label: 'Polar align tolerance (arcmin)',
     description: 'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step as well as the fine step.',
     keywords: ['polar', 'alignment', 'tolerance', 'done', 'arcmin', 'error'],
@@ -1355,6 +1456,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.polar.use_home',
+    tier: SettingTier.advanced,
     label: 'Send the mount Home first',
     description: 'Every polar align stage starts by sending the mount Home. Off uses where the mount points now as Home, for a mount whose Home is not on the pole or whose Find Home is unreliable.',
     keywords: ['polar', 'alignment', 'home', 'find home', 'paramount'],
@@ -1365,6 +1467,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.polar.polar_aligner_auto',
+    tier: SettingTier.advanced,
     label: "Correct with the Polar Aligner's motors",
     description: 'On a rig with a Polar Aligner, Polar align turns its motors after each measurement until the error is inside the tolerance. Off: Polar align shows the turns and you make them. Simple Mode sets the same thing as Turned by in Settings › Devices.',
     keywords: ['polar', 'alignment', 'polar aligner', 'motors', 'by hand', 'turned by', 'rpa'],
@@ -1375,6 +1478,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.polar.seed_rotation_deg',
+    tier: SettingTier.advanced,
     label: 'Polar align turn (°)',
     description: 'How far the mount turns in RA to measure its axis. 60° passes solve noise through 1:1; a mount with limited RA travel wants less. Kept between 5° and 120°.',
     keywords: ['polar', 'alignment', 'rotation', 'turn', 'ra', 'seed'],
@@ -1385,6 +1489,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.polar.check_step_deg',
+    tier: SettingTier.advanced,
     label: 'Verify step (°)',
     description: 'The RA turn between the three frames of Verify. Kept between 5° and 60°.',
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
@@ -1395,6 +1500,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.polar.coarse_exposure_seconds',
+    tier: SettingTier.advanced,
     label: 'Rough step exposure (s)',
     description: 'The main camera\'s exposure in the rough step. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
     keywords: [
@@ -1415,6 +1521,7 @@ const List<Setting> settingsRegistry = [
   // section `unguided`).
   Setting(
     id: 'img.unguided.guard_enabled',
+    tier: SettingTier.advanced,
     label: 'Unguided exposure guard',
     description: 'On a rig without a guider, watch each imaging loop: trailed lights step the exposure down a rung, round ones step it back up. Off leaves the probe\'s ceiling in place for the whole loop.',
     keywords: ['unguided', 'guard', 'trailing', 'step down', 'eccentricity'],
@@ -1425,6 +1532,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.eccentricity_tolerance',
+    tier: SettingTier.advanced,
     label: 'Trailed above eccentricity',
     description: 'A light counts as trailed when its median star eccentricity is above this. The Tracking Probe\'s pass rule and the guard\'s step-down both use it. 0.5 is the shipped figure.',
     keywords: ['unguided', 'eccentricity', 'trailed', 'tolerance', 'probe'],
@@ -1435,6 +1543,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.good_eccentricity',
+    tier: SettingTier.advanced,
     label: 'Round at or under eccentricity',
     description: 'A light counts as round when its median eccentricity is at or under this; a run of round lights lets the guard step the exposure back up. Must stay below the trailed bar.',
     keywords: ['unguided', 'eccentricity', 'round', 'step up'],
@@ -1445,6 +1554,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.step_down_after',
+    tier: SettingTier.advanced,
     label: 'Step down after N trailed lights',
     description: 'Consecutive trailed lights before the guard shortens the exposure one rung and tags them "trailed".',
     keywords: ['unguided', 'guard', 'step down', 'streak'],
@@ -1455,6 +1565,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.step_up_after',
+    tier: SettingTier.advanced,
     label: 'Step up after N round lights',
     description: 'Consecutive round lights before the guard lengthens the exposure one rung, never past the planned sub.',
     keywords: ['unguided', 'guard', 'step up', 'streak'],
@@ -1465,6 +1576,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.probe_rungs',
+    tier: SettingTier.advanced,
     label: 'Probe ladder (s)',
     description: 'The exposures the Tracking Probe tries, shortest first, before the planned sub or twice the prior caps the ladder. The guard steps along the same rungs. 10, 30, 60, 120 is the shipped ladder.',
     keywords: ['unguided', 'probe', 'ladder', 'rungs', 'exposures'],
@@ -1475,6 +1587,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.recentre_drift_arcmin',
+    tier: SettingTier.advanced,
     label: 'Re-centre past drift (arcmin)',
     description: 'Center After Drift plate-solves the saved lights and re-centres the target once the field has drifted further than this.',
     keywords: [
@@ -1491,6 +1604,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.recentre_solve_every_n',
+    tier: SettingTier.advanced,
     label: 'Solve every N lights',
     description: 'How often Center After Drift plate-solves a saved light to check the drift. 1 checks every light.',
     keywords: ['unguided', 'drift', 'plate solve', 'every'],
@@ -1501,6 +1615,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.unguided.prior_tolerance_basis',
+    tier: SettingTier.advanced,
     label: 'Spec-sheet prior tolerance',
     description: 'How much trailing the mount\'s spec-sheet prior allows before anything is measured: one pixel, half the seeing disc, or whichever is larger (the shipped basis).',
     keywords: [
@@ -1522,6 +1637,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.defaults.noise_tolerance_pct',
+    tier: SettingTier.advanced,
     label: 'Optimal-sub noise tolerance (%)',
     description: 'How much of the stack\'s noise the camera\'s read noise may add before a sub counts as long enough (the Glover criterion). 5 % is the classic figure; lower means longer subs for the same sky. Client-local planning knob — it drives the sub length in Tonight\'s Sky, the plan dialog and the sequence editor\'s sub advisor; the integration budget\'s hours do not depend on it.',
     keywords: [
@@ -1539,6 +1655,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.defaults.tonight_mag_floor_enabled',
+    tier: SettingTier.advanced,
     label: 'Tonight\'s Sky magnitude floor',
     description: 'Hides Tonight\'s Sky targets fainter than the set magnitude. Targets with no catalogued magnitude stay listed. Off by default. Client-local planning knob.',
     keywords: [
@@ -1556,6 +1673,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.defaults.tonight_mag_floor',
+    tier: SettingTier.advanced,
     label: 'Tonight\'s Sky magnitude floor (mag)',
     description: 'The faintest magnitude Tonight\'s Sky lists, 6 to 15 (12 when first switched on). Only used while the magnitude floor is on; targets with no catalogued magnitude stay listed.',
     keywords: [
@@ -1573,6 +1691,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.defaults.tonight_mosaic_tiles_x',
+    tier: SettingTier.advanced,
     label: 'Tonight\'s Sky mosaic tiles across',
     description: 'How many tiles wide a mosaic Tonight\'s Sky ranks the framing for, 1 to 4. 1 is a single frame. Client-local planning knob.',
     keywords: [
@@ -1590,6 +1709,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.defaults.tonight_mosaic_tiles_y',
+    tier: SettingTier.advanced,
     label: 'Tonight\'s Sky mosaic tiles down',
     description: 'How many tiles tall a mosaic Tonight\'s Sky ranks the framing for, 1 to 4. 1 is a single frame. Client-local planning knob.',
     keywords: [
@@ -1607,6 +1727,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.backup_stream_mbps',
+    tier: SettingTier.advanced,
     label: 'Backup bandwidth cap (Mbps)',
     description: 'Average-rate ceiling for the real-time backup stream\'s downloads; 0 (the default) means unlimited. Each frame still moves at link speed — the puller then waits until the average is back under the cap, on top of the built-in pause while an exposure is downloading.',
     keywords: [
@@ -1625,6 +1746,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.backup_retention_count',
+    tier: SettingTier.advanced,
     label: 'Keep backup snapshots',
     description: 'How many configuration backups Ara keeps. After each new backup, older snapshots beyond this count are deleted automatically. 0 keeps every backup forever.',
     keywords: [
@@ -1644,6 +1766,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.storage.fault_log_retention_days',
+    tier: SettingTier.advanced,
     label: 'Keep fault history (days)',
     description: 'How many days of equipment fault history Ara keeps. Once a day, fault log rows detected longer ago than this are deleted. 0 keeps every fault forever.',
     keywords: [
@@ -1673,6 +1796,7 @@ const List<Setting> settingsRegistry = [
   // exists.
   Setting(
     id: 'session.notifications.sound_alert',
+    tier: SettingTier.advanced,
     label: 'Sound alert',
     description: 'Play the alarm sound on safety/critical events. Independent of OS notification sound.',
     keywords: ['sound', 'alarm', 'audio', 'alert', 'beep'],
@@ -1683,6 +1807,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.alarm_delay',
+    tier: SettingTier.advanced,
     label: 'Alarm delay (seconds)',
     description: 'Seconds of silent popup before the safety alarm tone starts looping. A user at the screen can silence it before it ever rings; default 5.',
     keywords: ['alarm', 'delay', 'safety', 'sound', 'siren', 'silent', 'popup'],
@@ -1692,6 +1817,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.alarm_tone',
+    tier: SettingTier.advanced,
     label: 'Alarm tone',
     description: 'Which bundled tone the safety alarm loops: two-tone siren (default), urgent beeps, or a rising chime. Device-local — each desktop picks its own.',
     keywords: ['alarm', 'tone', 'sound', 'siren', 'beep', 'chime', 'safety'],
@@ -1705,6 +1831,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.pushover_token',
+    tier: SettingTier.advanced,
     label: 'Pushover token',
     description: 'Pushover user key for push notifications to phone. Leave empty to disable.',
     keywords: ['pushover', 'token', 'phone', 'mobile', 'push', 'remote'],
@@ -1715,6 +1842,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.pushover_user_key',
+    tier: SettingTier.advanced,
     label: 'Pushover user key',
     description: 'Your Pushover USER key (from your Pushover dashboard). Warning-or-worse notifications push to your phone when both this and the app token are set — critical events ride high priority and bypass device quiet hours.',
     keywords: [
@@ -1735,6 +1863,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.telegram_bot_token',
+    tier: SettingTier.advanced,
     label: 'Telegram bot token',
     description: 'Telegram bot token for sending messages to your chat. Leave empty to disable.',
     keywords: ['telegram', 'bot', 'token', 'chat', 'remote', 'mobile'],
@@ -1745,6 +1874,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.telegram_chat_id',
+    tier: SettingTier.advanced,
     label: 'Telegram chat ID',
     description: 'The chat ID your Telegram bot messages (get it from @userinfobot). Warning-or-worse notifications send when both this and the bot token are set.',
     keywords: [
@@ -1766,6 +1896,7 @@ const List<Setting> settingsRegistry = [
   // Triggers.
   Setting(
     id: 'session.notifications.on_sequence_complete',
+    tier: SettingTier.advanced,
     label: 'Trigger on sequence complete',
     description: 'Notify when a sequence finishes its last instruction.',
     keywords: ['sequence', 'complete', 'finish', 'done', 'trigger'],
@@ -1776,6 +1907,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_sequence_paused',
+    tier: SettingTier.advanced,
     label: 'Trigger on sequence paused',
     description: 'Notify when a sequence pauses (user request, safety policy, or meridian flip wait).',
     keywords: ['sequence', 'paused', 'pause', 'wait', 'trigger'],
@@ -1786,6 +1918,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_critical_diagnostic',
+    tier: SettingTier.advanced,
     label: 'Trigger on critical diagnostic',
     description: 'Notify on critical-severity diagnostic events (sensor temp out of range, mount drift, etc).',
     keywords: [
@@ -1803,6 +1936,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_safety_event',
+    tier: SettingTier.advanced,
     label: 'Trigger on safety event',
     description: 'Notify when the safety monitor reports unsafe weather, an altitude limit, or guider loss.',
     keywords: ['safety', 'weather', 'unsafe', 'park', 'alarm', 'trigger'],
@@ -1813,6 +1947,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_autofocus_failed',
+    tier: SettingTier.advanced,
     label: 'Trigger on autofocus failed',
     description: 'Notify when an autofocus run gives up without converging.',
     keywords: ['autofocus', 'failed', 'focus', 'hfr', 'trigger'],
@@ -1823,6 +1958,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_plate_solve_failed',
+    tier: SettingTier.advanced,
     label: 'Trigger on plate solve failed',
     description: 'Notify when the plate solver fails N times in a row (per guider-lost retry budget).',
     keywords: [
@@ -1840,6 +1976,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.notifications.on_disk_space_low',
+    tier: SettingTier.advanced,
     label: 'Trigger on disk space low',
     description:
         'Notify when free space on the save directory drops below ~10 GB.',
@@ -1853,6 +1990,7 @@ const List<Setting> settingsRegistry = [
   // §37.12 Site preferences — 10 fields. State lives in `siteSettingsProvider`.
   Setting(
     id: 'safety.site.site_name',
+    tier: SettingTier.advanced,
     label: 'Site name',
     description: 'Friendly label for the observing location. Used in session metadata + FITS header SITE keyword.',
     keywords: ['site', 'name', 'location', 'place', 'observatory'],
@@ -1863,6 +2001,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.latitude_deg',
+    tier: SettingTier.advanced,
     label: 'Latitude (°)',
     description: 'Site latitude in decimal degrees. North positive (+), south negative (−). Used for hour-angle, twilight, and altitude calculations.',
     keywords: [
@@ -1880,6 +2019,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.longitude_deg',
+    tier: SettingTier.advanced,
     label: 'Longitude (°)',
     description: 'Site longitude in decimal degrees. East positive (+), west negative (−). Used for sidereal time + meridian flip calculations.',
     keywords: [
@@ -1898,6 +2038,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.elevation_m',
+    tier: SettingTier.advanced,
     label: 'Elevation (m)',
     description: 'Height above sea level. Used for atmospheric refraction corrections in framing + plate-solve fitting.',
     keywords: ['elevation', 'altitude', 'height', 'meters', 'sea level', 'asl'],
@@ -1908,6 +2049,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.time_zone',
+    tier: SettingTier.advanced,
     label: 'Time zone',
     description: 'IANA time zone identifier (e.g. America/Los_Angeles). Used for session-local timestamps + scheduling.',
     keywords: ['time zone', 'timezone', 'iana', 'tz', 'utc', 'dst'],
@@ -1918,6 +2060,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.permanent_pier',
+    tier: SettingTier.advanced,
     label: 'Permanent pier',
     description: 'The mount stays polar aligned between nights, so Simple Mode\'s Night Setup skips polar alignment. Saved in the rig\'s site profile, so every device agrees. Also in Simple Mode\'s Settings.',
     keywords: [
@@ -1934,6 +2077,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.use_custom_horizon',
+    tier: SettingTier.advanced,
     label: 'Use custom horizon polygon',
     description: 'When on, target visibility and the planning chart use your entered azimuth/altitude skyline instead of the flat default-altitude floor. Enter the skyline below the toggle.',
     keywords: [
@@ -1954,6 +2098,7 @@ const List<Setting> settingsRegistry = [
   // vertex-list editor, not per-field rows). State lives in customHorizonProvider.
   Setting(
     id: 'safety.site.custom_horizon_points',
+    tier: SettingTier.advanced,
     label: 'Custom horizon skyline',
     description: 'Your measured skyline: the sky altitude of trees/buildings per compass bearing (azimuth 0-360°, altitude -10..90°). Tonight\'s Sky visibility windows and the chart horizon overlay interpolate between vertices. Stripped from shared profiles.',
     keywords: [
@@ -1975,6 +2120,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.default_horizon_altitude_deg',
+    tier: SettingTier.advanced,
     label: 'Default horizon altitude (°)',
     description: 'Flat horizon floor used when no custom polygon is loaded. Targets below this altitude are flagged as below-horizon.',
     keywords: ['horizon', 'altitude', 'floor', 'minimum', 'limit', 'degrees'],
@@ -1985,6 +2131,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.bortle_class',
+    tier: SettingTier.advanced,
     label: 'Sky brightness (Bortle or SQM)',
     description: 'One sky brightness input: a Bortle class, 1 (excellent dark site) through 9 (inner-city), or a measured SQM reading, 16 to 22.5 mag/arcsec2. In SQM mode the class is derived from the reading.',
     keywords: [
@@ -2004,6 +2151,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.typical_seeing_arcsec',
+    tier: SettingTier.advanced,
     label: 'Typical seeing (″)',
     description: 'Median atmospheric seeing FWHM in arcseconds at this site. Used for quality-score baselining + autofocus convergence.',
     keywords: [
@@ -2021,6 +2169,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.twilight_definition',
+    tier: SettingTier.advanced,
     label: 'Twilight definition',
     description: 'Which twilight threshold counts as "night" for sequence start/end and observation-window calculations.',
     keywords: [
@@ -2044,6 +2193,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.soft_warning_altitude_deg',
+    tier: SettingTier.advanced,
     label: 'Soft warning altitude',
     description: 'Advisory altitude — Tonight\'s Sky tags targets that never clear it (low-elevation seeing softens detail). 0 disables. Distinct from the hard horizon floor.',
     keywords: [
@@ -2063,6 +2213,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.max_sequence_runtime_min',
+    tier: SettingTier.advanced,
     label: 'Max sequence runtime',
     description: 'Whole-run ceiling in minutes — a sequence still running past it is stopped gracefully (0 = no limit).',
     keywords: [
@@ -2087,6 +2238,7 @@ const List<Setting> settingsRegistry = [
   // filename template themselves live in StorageSettings (see registry above).
   Setting(
     id: 'session.filenames.date_separator',
+    tier: SettingTier.advanced,
     label: 'Date separator',
     description: 'How `\$\$DATE*\$\$` tokens render: `/` produces real subdirectories per date; `_` and `-` keep dates inline in flat filenames.',
     keywords: [
@@ -2110,6 +2262,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'session.filenames.compress_darks_and_bias',
+    tier: SettingTier.advanced,
     label: 'Compress bias/dark frames',
     description: 'Applies to XISF: bias and dark frames are compressed (lossless Zstandard) even when Storage compression is off. No effect on FITS, which is always uncompressed.',
     keywords: [
@@ -2136,6 +2289,7 @@ const List<Setting> settingsRegistry = [
   // FITS-header values.
   Setting(
     id: 'eq.filterwheel.slot_labels',
+    tier: SettingTier.advanced,
     label: 'Filter wheel slot labels',
     description: 'Per-slot filter names. Surface in `\$\$FILTER\$\$` filename tokens, FITS-header FILTER values, sequence per-filter exposure blocks, and calibration-set indexing.',
     keywords: [
@@ -2163,6 +2317,7 @@ const List<Setting> settingsRegistry = [
   // State lives in `filterWheelPolicyProvider`.
   Setting(
     id: 'eq.filterwheel.home_on_first_connect',
+    tier: SettingTier.advanced,
     label: 'Park on slot 0 on first connect',
     description: 'The first time the filter wheel connects after Ara starts on the rig (auto or manual), park it on slot 0 (its first position, usually L) unless a filter change is requested first. Off leaves the wheel wherever the driver reports it.',
     keywords: [
@@ -2183,6 +2338,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.filterwheel.use_focus_offsets',
+    tier: SettingTier.advanced,
     label: 'Move the focuser by each filter\'s offset',
     description: 'After a filter change, move the focuser by the difference between the two filters\' focus offsets.',
     keywords: [
@@ -2209,6 +2365,7 @@ const List<Setting> settingsRegistry = [
   // `equipmentConnectionProvider`.
   Setting(
     id: 'eq.camera.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Camera auto-connect on boot',
     description: 'Connect to the camera when Ara starts. Safe — connection only powers up the USB link, no exposure starts.',
     keywords: ['camera', 'auto-connect', 'connect', 'boot', 'startup'],
@@ -2219,6 +2376,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.mount.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Mount auto-connect on boot',
     description: 'Connect to the mount when Ara starts. Sidereal tracking comes on per mount-safety policy.',
     keywords: [
@@ -2236,6 +2394,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.focuser.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Focuser auto-connect on boot',
     description: 'Connect to the focuser when Ara starts. Position is read on connect; no movement triggered.',
     keywords: [
@@ -2253,6 +2412,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.filterwheel.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Filter wheel auto-connect on boot',
     description: 'Connect to the filter wheel when Ara starts. On its first connect after Ara starts, Ara parks the wheel on slot 0 unless "Park on slot 0 on first connect" is off.',
     keywords: [
@@ -2270,6 +2430,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.rotator.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Rotator auto-connect on boot',
     description: 'Connect to the rotator when Ara starts. Position is read on connect; no movement triggered.',
     keywords: ['rotator', 'auto-connect', 'connect', 'boot', 'startup'],
@@ -2280,6 +2441,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Guider auto-connect on boot',
     description: 'Connect to the guider when Ara starts. Starts the OpenAstro Guider client process — defaults off because some users prefer manual OpenAstro Guider launch.',
     keywords: [
@@ -2298,6 +2460,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.flat.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Flat panel auto-connect on boot',
     description: 'Connect to the flat-panel device (Alpaca CoverCalibrator) when Ara starts. Connection alone doesn\'t change cover position.',
     keywords: [
@@ -2316,6 +2479,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Dome auto-connect on boot',
     description: 'Connect to the dome when Ara starts. Defaults off — some dome drivers move the shutter or rotate to home on connect.',
     keywords: ['dome', 'shutter', 'auto-connect', 'connect', 'boot', 'startup'],
@@ -2326,6 +2490,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.follow_mount',
+    tier: SettingTier.advanced,
     label: 'Follow the mount',
     description: 'Turn the dome to keep its slit in front of the telescope: after a slew, after a meridian flip and while tracking. Defaults off; needs a dome that can turn to an azimuth.',
     keywords: ['dome', 'follow', 'slave', 'slit', 'mount', 'sync'],
@@ -2336,6 +2501,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.mount_type',
+    tier: SettingTier.advanced,
     label: 'Dome mount type',
     description: 'Whether the mount is a German equatorial (which adds its axis offsets to the slit math) or a fork or alt-az on a wedge.',
     keywords: ['dome', 'mount', 'equatorial', 'fork', 'geometry'],
@@ -2346,6 +2512,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.radius_mm',
+    tier: SettingTier.advanced,
     label: 'Dome radius',
     description: 'The radius of the dome in millimeters, from its center to the wall. The scope must sit inside it.',
     keywords: ['dome', 'radius', 'geometry', 'follow'],
@@ -2356,6 +2523,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.scope_position',
+    tier: SettingTier.advanced,
     label: 'Scope position in the dome',
     description: 'Where the telescope sits relative to the dome center, in millimeters: north, east and up. Three fields in the Geometry section of the Dome panel.',
     keywords: ['dome', 'scope', 'position', 'offset', 'geometry', 'pier'],
@@ -2366,6 +2534,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.axis_offsets',
+    tier: SettingTier.advanced,
     label: 'Mount axis offsets',
     description: 'The axis length, lateral offset and Dec axis horizontal offset of a German equatorial mount in millimeters, so the slit follows the side of the pier.',
     keywords: ['dome', 'gem', 'axis', 'offset', 'lateral', 'geometry'],
@@ -2376,6 +2545,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.azimuth_tolerance',
+    tier: SettingTier.advanced,
     label: 'Dome azimuth tolerance',
     description: 'How far, in degrees, the slit may fall behind the telescope before the dome turns again.',
     keywords: ['dome', 'tolerance', 'azimuth', 'follow', 'degrees'],
@@ -2386,6 +2556,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.dome.turn_during_slew',
+    tier: SettingTier.advanced,
     label: 'Turn the dome during mount slews',
     description: 'Start turning the dome while the mount is still slewing, so a slow dome and a fast mount arrive together. Off: the dome turns once the mount has finished.',
     keywords: ['dome', 'slew', 'synchronize', 'during', 'follow'],
@@ -2396,6 +2567,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.weather.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Weather auto-connect on boot',
     description: 'Connect to the weather station when Ara starts. Defaults off — keeps the polling loop quiet until you actively want safety-monitor data.',
     keywords: [
@@ -2413,6 +2585,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.safety.auto_connect',
+    tier: SettingTier.advanced,
     label: 'Safety monitor auto-connect on boot',
     description: 'Connect to the safety monitor when Ara starts. Recommended on for unattended observatories.',
     keywords: [
@@ -2429,11 +2602,12 @@ const List<Setting> settingsRegistry = [
     profilePath: 'equipment.safety.auto_connect',
   ),
 
-  // §37.11 Autofocus — 12 fields covering method + V-curve params + triggers
-  // + failure handling. State lives in `autofocusSettingsProvider`.
+  // §37.11 Autofocus — method + V-curve params + triggers + failure handling,
+  // and the Simple tier (#1544). State lives in `autofocusSettingsProvider`.
   // An action, not a stored value: forgets the Smart Focus calibration (#1543).
   Setting(
     id: 'img.autofocus.reset_calibration',
+    tier: SettingTier.advanced,
     label: 'Reset focus calibration',
     description: 'Forgets the stored focus calibration, so the next autofocus runs a full sweep and calibrates again.',
     keywords: [
@@ -2450,6 +2624,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.method',
+    tier: SettingTier.advanced,
     label: 'Autofocus method',
     description: 'Algorithm used to find best-focus position. HFR V-curve is the default for most CMOS cameras.',
     keywords: [
@@ -2472,6 +2647,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.telescope_type',
+    tier: SettingTier.advanced,
     label: 'Telescope type',
     description: 'Your optical design. Smart Focus reads different defocus features per design — donut diameters on obstructed scopes, FWHM patterns on refractors — and can resolve which side of focus you are on. "Other / unknown" keeps the universal HFR-only behaviour.',
     keywords: [
@@ -2498,6 +2674,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.steps',
+    tier: SettingTier.advanced,
     label: 'Number of steps',
     description: 'How many focuser positions to sample around the current position. More steps = more accurate fit but slower runs.',
     keywords: ['steps', 'samples', 'positions', 'count', 'focus'],
@@ -2508,6 +2685,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.step_size_auto',
+    tier: SettingTier.advanced,
     label: 'Automatic step size',
     description: 'Size each sweep from the V-curve the last sweep measured (first sweep wide, at the step size below); off uses the step size as typed.',
     keywords: [
@@ -2526,6 +2704,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.step_size',
+    tier: SettingTier.advanced,
+    derivedBy: 'Automatic step size: the V width of the last sweep, else half the critical focus zone (from the focuser step size and the optics)',
     label: 'Step size (focuser steps)',
     description: 'Distance between sample positions, in focuser native steps. The first sweep\'s step when Automatic step size is on (unless the focuser reports its step size, when the critical focus zone seeds it); every sweep\'s when it is off.',
     keywords: ['step size', 'distance', 'increment', 'focuser', 'cfz'],
@@ -2536,6 +2716,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.exposure_seconds',
+    tier: SettingTier.advanced,
     label: 'Exposure time (s)',
     description: 'Per-sample exposure duration. 3-10s typical — long enough for clean HFR but short enough to keep the AF run under a couple of minutes.',
     keywords: ['exposure', 'time', 'seconds', 'duration', 'focus'],
@@ -2546,6 +2727,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.binning',
+    tier: SettingTier.advanced,
     label: 'Binning',
     description: 'Pixel binning during AF exposures. 1 = native; 2 = 2x2 for faster star detection on long-focal-length setups.',
     keywords: ['binning', 'bin', 'resolution', 'focus'],
@@ -2554,8 +2736,39 @@ const List<Setting> settingsRegistry = [
     defaultValue: 1,
     profilePath: 'autofocus.binning',
   ),
+  // #1544 — the Simple tier's two views over the four triggers below; no
+  // profile field of their own.
+  Setting(
+    id: 'img.autofocus.during_plans',
+    tier: SettingTier.simple,
+    label: 'Autofocus during plans',
+    description: 'Whether a running plan refocuses by itself. Off clears all four refocus triggers, so plans never refocus on their own (the Autofocus button still works); on again applies Keep focus sharp Normal.',
+    keywords: ['autofocus', 'refocus', 'plan', 'automatic', 'off', 'focus'],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.bool(),
+    defaultValue: true,
+  ),
+  Setting(
+    id: 'img.autofocus.keep_focus_sharp',
+    tier: SettingTier.simple,
+    label: 'Keep focus sharp',
+    description: 'How readily a plan refocuses: Relaxed, Normal or Tight, each setting all four refocus triggers (filter change, temperature change, HFR drift, every N hours). Custom shows when the triggers match no preset; picking a preset overwrites them.',
+    keywords: [
+      'keep focus sharp',
+      'preset',
+      'relaxed',
+      'normal',
+      'tight',
+      'refocus',
+      'trigger',
+    ],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.enumValue(['Relaxed', 'Normal', 'Tight']),
+    defaultValue: 'Normal',
+  ),
   Setting(
     id: 'img.autofocus.af_filter',
+    tier: SettingTier.simple,
     label: 'AF filter',
     description: 'Which filter to use during AF runs. L (luminance) is typical for mono setups — brightest signal, fastest convergence.',
     keywords: ['filter', 'af', 'luminance', 'l', 'focus'],
@@ -2566,6 +2779,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.run_after_filter_change',
+    tier: SettingTier.advanced,
+    derivedBy: 'Keep focus sharp preset in Simple Mode (sets all four triggers)',
     label: 'Run AF after filter change',
     description: 'Trigger an AF run automatically when the sequence changes filters. Compensates for filter-thickness focus offsets.',
     keywords: ['filter change', 'trigger', 'auto', 'offset', 'focus'],
@@ -2576,6 +2791,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.trigger_temp_delta_c',
+    tier: SettingTier.advanced,
+    derivedBy: 'Keep focus sharp preset in Simple Mode (sets all four triggers)',
     label: 'Trigger temp delta (°C)',
     description: 'Run AF when the focuser temperature has drifted by this many °C since the last run. Compensates for thermal expansion of the focuser tube.',
     keywords: ['temperature', 'delta', 'trigger', 'thermal', 'drift', 'focus'],
@@ -2586,6 +2803,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.trigger_hfr_drift_pct',
+    tier: SettingTier.advanced,
+    derivedBy: 'Keep focus sharp preset in Simple Mode (sets all four triggers)',
     label: 'Trigger HFR drift threshold (%)',
     description: 'Run AF when the median HFR of recent frames has worsened by this percentage. Catches focus drift between scheduled AF runs.',
     keywords: ['hfr', 'drift', 'trigger', 'percent', 'focus', 'quality'],
@@ -2596,6 +2815,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.every_n_hours',
+    tier: SettingTier.advanced,
+    derivedBy: 'Keep focus sharp preset in Simple Mode (sets all four triggers)',
     label: 'Every N hours (0 = off)',
     description: 'Force an AF run every N hours regardless of temp/HFR triggers. 0 disables the time-based trigger.',
     keywords: ['hours', 'interval', 'periodic', 'time', 'trigger', 'focus'],
@@ -2606,6 +2827,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.abort_sequence_on_af_failure',
+    tier: SettingTier.advanced,
     label: 'Abort sequence if AF fails',
     description: 'When AF can\'t converge, abort the running sequence. Conservative default — bad focus wastes the night.',
     keywords: ['abort', 'sequence', 'failure', 'fail', 'focus'],
@@ -2616,6 +2838,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.autofocus.restore_position_on_failure',
+    tier: SettingTier.advanced,
     label: 'Restore position on failure',
     description: 'On AF failure, return the focuser to the pre-AF position instead of stopping wherever it ended up.',
     keywords: ['restore', 'position', 'failure', 'rollback', 'focus'],
@@ -2629,6 +2852,7 @@ const List<Setting> settingsRegistry = [
   // State lives in `plateSolveSettingsProvider`.
   Setting(
     id: 'img.platesolve.engine',
+    tier: SettingTier.advanced,
     label: 'Solver engine',
     description: 'Plate-solving engine. ASTAP is the only supported engine (fast, local, bundled with the Debian package); a profile still carrying astrometry.net or PlateSolve 2 (e.g. from a NINA import) solves with ASTAP.',
     keywords: ['engine', 'astap', 'astrometry.net', 'platesolve2', 'solver'],
@@ -2639,6 +2863,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.path_or_endpoint',
+    tier: SettingTier.advanced,
     label: 'Where to find the solver',
     description: 'Where the solver lives: the program path for ASTAP or PlateSolve2, or the web address for astrometry.net. Installed with Ara by default; a stock ASTAP path (/usr/bin/astap_cli, /usr/bin/astap, /opt/astap/astap_cli) is moved to the bundled solver when you save, any other path is kept.',
     keywords: ['path', 'endpoint', 'executable', 'url', 'solver'],
@@ -2649,6 +2874,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.index_download_path',
+    tier: SettingTier.advanced,
     label: 'Index download path',
     description: 'Where ASTAP star-index databases are stored. Defaults to `/var/lib/astap` (the Debian package install path).',
     keywords: ['index', 'download', 'database', 'stars', 'catalog', 'path'],
@@ -2659,6 +2885,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.search_radius_deg',
+    tier: SettingTier.advanced,
     label: 'Search radius (°)',
     description: 'How far from the hinted position to search for a solution. Smaller = faster but risk of failure if hint is off.',
     keywords: ['search', 'radius', 'degrees', 'hint', 'blind'],
@@ -2669,6 +2896,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.downsample_factor',
+    tier: SettingTier.advanced,
     label: 'Downsample factor',
     description: 'Pixel downsampling before solve. 0 = automatic from the pixel scale (recommended); 2 = halve resolution → ~4x faster solve with negligible accuracy hit on most setups.',
     keywords: ['downsample', 'factor', 'resolution', 'speed', 'auto'],
@@ -2679,6 +2907,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.timeout_seconds',
+    tier: SettingTier.advanced,
     label: 'Timeout (s)',
     description: 'How long to wait for one hinted solve before giving up; the 90° rescue stage gets 2x and a blind solve 5x. 60s is generous for ASTAP local; bump for astrometry.net online.',
     keywords: ['timeout', 'seconds', 'wait', 'limit'],
@@ -2689,6 +2918,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.use_blind_fallback',
+    tier: SettingTier.advanced,
     label: 'Use blind solve as fallback',
     description: 'If a hint-based solve times out, retry with no hint (search the whole sky). Slower but rescues bad mount alignment.',
     keywords: ['blind', 'fallback', 'retry', 'alignment'],
@@ -2699,6 +2929,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.center_after_slew',
+    tier: SettingTier.advanced,
     label: 'Center target after slew',
     description: 'After a slew, plate-solve and re-slew until the target is within the convergence tolerance. Compensates for mount pointing error. Applies to a sequence\'s Slew step too: if centering does not converge the step fails, and a Slew followed by a Center step centers twice.',
     keywords: ['center', 'slew', 'pointing', 'recenter', 'goto'],
@@ -2709,6 +2940,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.sync_to_coordinates',
+    tier: SettingTier.advanced,
     label: 'Sync mount to solved coords',
     description: 'Push the solved coordinates back to the mount as a sync, improving pointing accuracy for subsequent slews.',
     keywords: ['sync', 'mount', 'coordinates', 'pointing', 'alignment'],
@@ -2719,6 +2951,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.max_iterations',
+    tier: SettingTier.advanced,
     label: 'Max iterations',
     description: 'Maximum number of center-after-slew iterations before giving up. Each iteration solves + slews to refine pointing.',
     keywords: ['iterations', 'max', 'centering', 'refine'],
@@ -2729,6 +2962,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'img.platesolve.convergence_tolerance_arcsec',
+    tier: SettingTier.advanced,
     label: 'Convergence tolerance (″)',
     description: 'Center-after-slew stops once the target is within this many arcseconds of the requested center. Lower = more iterations.',
     keywords: ['convergence', 'tolerance', 'arcsec', 'precision', 'centering'],
@@ -2744,6 +2978,7 @@ const List<Setting> settingsRegistry = [
   // a meridian-flip behaviour, not an OpenAstro Guider-internal one.
   Setting(
     id: 'eq.guider.host',
+    tier: SettingTier.advanced,
     label: 'OpenAstro Guider host',
     description: 'Hostname or IP where OpenAstro Guider is running. Default `localhost` for same-machine setups; use Ara\'s LAN IP for remote OpenAstro Guider.',
     keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
@@ -2754,6 +2989,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.port',
+    tier: SettingTier.advanced,
     label: 'OpenAstro Guider port',
     description: 'TCP port for the OpenAstro Guider server-mode socket. 4400 is the standard default; rebind only if OpenAstro Guider is configured non-standard.',
     keywords: ['phd2', 'port', 'tcp', 'guider', 'network'],
@@ -2764,6 +3000,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.profile',
+    tier: SettingTier.advanced,
     label: 'OpenAstro Guider profile',
     description: 'Which OpenAstro Guider equipment profile to select on connect: Automatic (the one Ara names after the active Ara profile) or one of the guider\'s own profiles.',
     keywords: ['phd2', 'profile', 'equipment', 'guider'],
@@ -2774,6 +3011,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dither_enabled',
+    tier: SettingTier.advanced,
     label: 'Enable dithering',
     description: 'Shift the mount by a few pixels between exposures so fixed-pattern noise (hot pixels, walking noise) randomizes across the stack.',
     keywords: [
@@ -2791,6 +3029,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dither_every_n_frames',
+    tier: SettingTier.advanced,
     label: 'Dither every N frames',
     description: 'How often to dither. 1 = every frame; 3-5 = every few frames (saves settle time on short exposures).',
     keywords: ['dither', 'interval', 'frames', 'every', 'phd2'],
@@ -2801,6 +3040,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dither_pixels',
+    tier: SettingTier.advanced,
     label: 'Dither pixels',
     description: 'How many guide-camera pixels to dither. Larger = more aggressive randomization; smaller = faster settle.',
     keywords: ['dither', 'pixels', 'amplitude', 'phd2'],
@@ -2811,6 +3051,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.settle_pixels',
+    tier: SettingTier.advanced,
     label: 'Settle threshold (pixels)',
     description: 'OpenAstro Guider considers the guider settled once RMS error stays under this many pixels for `settle_time` seconds.',
     keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
@@ -2821,6 +3062,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.settle_time_sec',
+    tier: SettingTier.advanced,
     label: 'Settle time (s)',
     description: 'How long RMS must stay under the settle threshold to count as settled.',
     keywords: ['settle', 'time', 'seconds', 'phd2', 'wait'],
@@ -2831,6 +3073,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.settle_timeout_sec',
+    tier: SettingTier.advanced,
     label: 'Settle timeout (s)',
     description: 'Give up waiting for settle after this many seconds. Resumes the exposure even if RMS is still high.',
     keywords: ['settle', 'timeout', 'seconds', 'phd2', 'limit'],
@@ -2841,6 +3084,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.force_calibration_each_session',
+    tier: SettingTier.advanced,
     label: 'Force calibration each session',
     description: 'Re-run OpenAstro Guider calibration at every session start instead of reusing the previous calibration. Slower but safer for setups where guide-scope orientation may have shifted.',
     keywords: ['calibration', 'force', 'session', 'phd2', 'recalibrate'],
@@ -2853,6 +3097,7 @@ const List<Setting> settingsRegistry = [
   // off-axis guider (focal length derived from the main optics).
   Setting(
     id: 'eq.guider.setup_type',
+    tier: SettingTier.advanced,
     label: 'Guide setup',
     description: 'Whether guiding uses a separate guide scope (enter its focal length yourself) or an off-axis guider behind the main optics (the guide focal length is derived: telescope focal length × reducer factor). Also decides whether the guider gets a rotator: only an OAG turns with the imaging rotator.',
     keywords: [
@@ -2872,6 +3117,7 @@ const List<Setting> settingsRegistry = [
   // §63.5 guider-engine config — pushed to the guider daemon on connect.
   Setting(
     id: 'eq.guider.guide_focal_length',
+    tier: SettingTier.advanced,
     label: 'Guide focal length (mm)',
     description: 'Focal length of the guide scope, pushed to OpenAstro Guider on connect. With the guide pixel size it sets the guider arcsec/pixel scale. 0 leaves the OpenAstro Guider profile default.',
     keywords: ['guide', 'focal', 'length', 'scope', 'phd2', 'scale', 'mm'],
@@ -2882,6 +3128,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.guide_pixel_size',
+    tier: SettingTier.advanced,
     label: 'Guide pixel size (µm)',
     description: 'Pixel size of the guide camera, pushed to OpenAstro Guider on connect. 0 leaves the OpenAstro Guider profile default.',
     keywords: ['guide', 'pixel', 'size', 'camera', 'phd2', 'scale', 'micron'],
@@ -2892,6 +3139,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.ra_aggressiveness',
+    tier: SettingTier.advanced,
     label: 'RA aggressiveness',
     description: 'Fraction (0–1) of each measured RA error OpenAstro Guider corrects per cycle. Lower = gentler guiding; higher = faster tracking of real drift.',
     keywords: ['ra', 'aggressiveness', 'guiding', 'phd2', 'hysteresis', 'gain'],
@@ -2902,6 +3150,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dec_aggressiveness',
+    tier: SettingTier.advanced,
     label: 'Dec aggressiveness',
     description: 'Fraction (0–1) of each measured Dec error OpenAstro Guider corrects per cycle. Often run slightly lower than RA because of Dec backlash.',
     keywords: [
@@ -2919,6 +3168,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.minimum_move',
+    tier: SettingTier.advanced,
     label: 'RA minimum move (px)',
     description: 'Smallest RA guide error (in pixels) OpenAstro Guider reacts to. Errors below this are ignored so the mount doesn\'t chase seeing noise.',
     keywords: [
@@ -2938,6 +3188,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dec_minimum_move',
+    tier: SettingTier.advanced,
     label: 'Dec minimum move (px)',
     description: 'Smallest Dec guide error (in pixels) OpenAstro Guider reacts to. Usually a little larger than RA: Dec backlash turns tiny corrections into noise chasing.',
     keywords: [
@@ -2957,6 +3208,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.dec_guide_mode',
+    tier: SettingTier.advanced,
     label: 'Dec guide mode',
     description: 'How OpenAstro Guider corrects declination: Auto (either direction), North/South only (for backlash-prone mounts), or Off (RA-only). Auto leaves OpenAstro Guider\'s own setting alone.',
     keywords: [
@@ -2980,6 +3232,7 @@ const List<Setting> settingsRegistry = [
   // its own selection).
   Setting(
     id: 'eq.guider.equipment.camera',
+    tier: SettingTier.advanced,
     label: 'Guide camera',
     description: 'Which camera the guider server should use, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
     keywords: [
@@ -2998,6 +3251,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.camera_id',
+    tier: SettingTier.advanced,
     label: 'Guide camera ID',
     description: 'Optional device ID to disambiguate duplicate camera names in the guider server\'s list. Blank keeps Ara\'s current selection.',
     keywords: [
@@ -3016,6 +3270,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.mount',
+    tier: SettingTier.advanced,
     label: 'Guide mount',
     description: 'Which mount connection the guider server should send guide pulses through, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
     keywords: [
@@ -3034,6 +3289,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.aux_mount',
+    tier: SettingTier.advanced,
     label: 'Guider aux mount',
     description: 'Auxiliary mount connection for pointing info when the primary guide "mount" is an on-camera ST-4 link. Blank keeps Ara\'s current selection.',
     keywords: [
@@ -3053,6 +3309,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.rotator',
+    tier: SettingTier.advanced,
     label: 'Guider rotator',
     description: 'Off-axis guider only: the imaging rotator the guide camera turns with, so the guider can rotate its calibration when the camera angle changes. Not offered on a separate guide scope (the guider is told "None" there — it would otherwise rotate a good calibration). Blank keeps Ara\'s current selection.',
     keywords: ['rotator', 'guider', 'equipment', 'phd2', 'angle', 'select'],
@@ -3063,6 +3320,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.alpaca_host',
+    tier: SettingTier.advanced,
     label: 'Guider Alpaca host',
     description: 'Alpaca server host the guider server\'s Alpaca devices connect through. Use "Discover Alpaca" to sweep the guider\'s network. Blank keeps Ara\'s current setting.',
     keywords: [
@@ -3081,6 +3339,7 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.equipment.alpaca_port',
+    tier: SettingTier.advanced,
     label: 'Guider Alpaca port',
     description: 'Alpaca server port for the guider server\'s Alpaca devices. 0 keeps Ara\'s current setting; 11111 is the common Alpaca default.',
     keywords: ['alpaca', 'port', 'guider', 'equipment', 'phd2', 'network'],

@@ -32,7 +32,7 @@ class _GuideFocus extends GuideFocusNotifier {
   @override
   GuideFocusLive build() => live0;
   @override
-  Future<void> start({required double exposureSec, int? binning}) async => calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec, int? binning}) async => calls.add('start $exposureSec');
   @override
   Future<void> stop() async => calls.add('stop');
 }
@@ -138,7 +138,7 @@ void main() {
   testWidgets("the shutter starts the guide camera's live focus, and its square stops it", (tester) async {
     await _pump(tester, child: const SimpleFocusShutter());
     await tester.tap(find.byType(SimpleFocusShutter));
-    expect(_g.calls, ['start 2.0']);
+    expect(_g.calls, ['start null']);
   });
 
   testWidgets('while it reads, the shutter stops it', (tester) async {

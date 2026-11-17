@@ -605,10 +605,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
-  String get deviceNever => 'Never';
+  String get deviceAutofocusDuringPlans => 'Autofocus during plans';
 
   @override
-  String get deviceRefocusTemp => 'Refocus every';
+  String get deviceAutofocusOnHint =>
+      'Ara refocuses on its own while a plan runs.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Plans never refocus by themselves. The Autofocus button still works.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Keep focus sharp';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Relaxed';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Tight';
+
+  @override
+  String get deviceKeepSharpCustom => 'Custom';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocus after a filter change, when the temperature changes by $temp, when stars grow $hfr %, or every $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
+
+  @override
+  String get settingsAdvancedToggle => 'Advanced';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derived: $steps steps, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'set by you';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'from the V width of the last sweep';
+
+  @override
+  String get autofocusStepSourceCfz => 'from half the critical focus zone';
+
+  @override
+  String get autofocusStepSourceDefault => 'the stored first-sweep step';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Keep focus sharp: $preset';
+  }
+
+  @override
+  String get deviceAfFilter => 'AF filter';
+
+  @override
+  String get deviceAfFilterHint =>
+      'Luminance is brightest, so autofocus finishes fastest.';
 
   @override
   String get devicePosition => 'Position';
@@ -6269,4 +6331,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'The rig\'s clock is $amount fast, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String get clockWrongTitle => 'The rig\'s clock is wrong';
+
+  @override
+  String get clockWrongStartAnyway => 'Start anyway';
 }

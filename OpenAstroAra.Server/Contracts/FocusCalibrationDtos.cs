@@ -112,3 +112,9 @@ public sealed record FocusCalibrationDto(
     double? InFocusHfr = null,
     double? BacklashUpSteps = null,
     bool? BacklashVerified = null);
+
+/// <summary>The step size the next autofocus sweep would use and where it comes from (<c>GET
+/// /api/v1/autofocus/step-size</c>). <c>Source</c> is <c>manual</c> (automatic sizing is off: the stored
+/// value), <c>measured</c> (from the last sweep's V width), <c>cfz</c> (half the critical focus zone, from the
+/// focuser's step size and the optics) or <c>default</c> (the stored value as the wide first sweep).</summary>
+public sealed record AutofocusStepSizeDto(int StepSize, string Source);

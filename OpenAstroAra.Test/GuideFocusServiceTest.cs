@@ -68,6 +68,15 @@ namespace OpenAstroAra.Test {
             new("id", "ASI220MM Mini", DeviceType.Camera, host, ip, port, number, false);
 
         [Test]
+        public void An_omitted_exposure_takes_the_profile_autofocus_exposure_clamped_else_two_seconds() {
+            Assert.That(GuideFocusService.ExposureOrDefault(1.5, 5), Is.EqualTo(1.5), "the request wins");
+            Assert.That(GuideFocusService.ExposureOrDefault(null, 5), Is.EqualTo(5));
+            Assert.That(GuideFocusService.ExposureOrDefault(null, 45), Is.EqualTo(GuideFocusService.MaxExposureSec), "clamped to the loop's range");
+            Assert.That(GuideFocusService.ExposureOrDefault(null, null), Is.EqualTo(GuideFocusService.FallbackExposureSec));
+            Assert.DoesNotThrow(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(), profileExposure: 45), "an omitted exposure validates after the fallback");
+        }
+
+        [Test]
         public void Validate_bounds_the_exposure_and_binning() {
             Assert.DoesNotThrow(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(2.0)));
             Assert.DoesNotThrow(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(GuideFocusService.MaxExposureSec, 2)));
