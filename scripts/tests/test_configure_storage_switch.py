@@ -438,6 +438,15 @@ class OsDiskLevels(HelperRig):
             self.assertEqual(result.returncode, 6, f"{args}: {result.stdout}{result.stderr}")
             self.assertIn("ERROR: refused system_disk", result.stdout, str(args))
 
+    def test_an_alias_of_the_root_partition_is_refused_in_every_mode(self) -> None:
+        # /dev/./<node> is the same block device as the root node: a string compare lets it through.
+        (self.shims / "root").write_text(f"{self.NEW[1]}\n")
+        alias = "/dev/." + self.NEW[1][len("/dev"):]
+        for args in ([alias], ["--check", alias], ["--mount-copy", alias], ["--eject", alias]):
+            result = self.run_helper(*args)
+            self.assertEqual(result.returncode, 6, f"{args}: {result.stdout}{result.stderr}")
+            self.assertIn("ERROR: refused system_disk", result.stdout, str(args))
+
     def test_an_ancestor_of_the_root_partition_is_refused_in_every_mode(self) -> None:
         # Root on a mapper node that sits on NEW: NEW is its ancestor, so it is the OS itself.
         (self.shims / "root").write_text("/dev/mapper/shim-crypt\n")

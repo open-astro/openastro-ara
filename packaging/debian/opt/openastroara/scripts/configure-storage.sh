@@ -112,7 +112,7 @@ base_disk() { # deepest ancestor of a device node
 refuse_if_os_partition() {
     dev=$1
     for critical in / /boot /boot/firmware; do
-        node=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)
+        node=$(canon "$(findmnt -no SOURCE "$critical" 2>/dev/null || true)")
         [ -z "$node" ] && continue
         i=0
         while [ -n "$node" ] && [ "$i" -lt 9 ]; do
@@ -391,6 +391,8 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     echo "ERROR: uuid_not_found"
     exit 2
 fi
+# An alias (/dev/./x, /dev/disk/by-*) must compare equal to the node findmnt reports.
+DEVICE=$(canon "$DEVICE")
 refuse_if_os_partition "$DEVICE"
 [ "$FORMAT" -ne 1 ] || refuse_if_os_disk "$DEVICE"
 

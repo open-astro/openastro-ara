@@ -319,9 +319,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public async Task<StorageConfigureResult?> RefuseEraseOnOsDiskAsync(string uuid, CancellationToken ct) {
-            var drive = (await ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(d =>
-                string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase) || string.Equals(d.Path, uuid, StringComparison.Ordinal));
-            return drive is { IsSystemDisk: true } ? new StorageConfigureResult(false, "refused", "system_disk", null) : null;
+            // Any, not the first match: two drives can share a UUID (a cloned card).
+            var onOsDisk = (await ListAsync(ct).ConfigureAwait(false)).Any(d => d.IsSystemDisk &&
+                (string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase) || string.Equals(d.Path, uuid, StringComparison.Ordinal)));
+            return onOsDisk ? new StorageConfigureResult(false, "refused", "system_disk", null) : null;
         }
 
         /// <summary>
