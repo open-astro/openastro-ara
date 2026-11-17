@@ -41,7 +41,8 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
 /// The recommendation + one-line reason, or null when there is nothing honest
 /// to say (empty filter set, unknown emission character).
 (TonightFilterAdvice, String)? adviseFilter(
-    EmissionClass emission, FilterSetSettings filterSet, int bortleClass) {
+    EmissionClass emission, FilterSetSettings filterSet, SkyState sky) {
+  final bortleClass = sky.bortle;
   final filters = filterSet.filters;
   if (filters.isEmpty || emission == EmissionClass.unknown) return null;
 
@@ -68,7 +69,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           TonightFilterAdvice.narrowband,
           'Emission-line target — narrowband (${_filterNames(monoNb)}) sees '
               '${_skyRatio(monoNb)}× less sky glow than broadband, efficient '
-              'even under a Bortle $bortleClass sky.'
+              'even under a ${sky.label} sky.'
         );
       }
       if (duo.isNotEmpty) {
@@ -83,7 +84,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
         TonightFilterAdvice.broadband,
         bortleClass >= brightSkyBortle
             ? 'Emission-line target with broadband-only filters under a '
-                'Bortle $bortleClass sky — expect many hours of integration; '
+                '${sky.label} sky — expect many hours of integration; '
                 'a dual-band filter would cut this dramatically.'
             : 'Emission-line target with broadband-only filters — workable '
                 'under your dark sky, but a narrowband/dual-band filter would '
@@ -96,7 +97,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           'it; shoot '
           '${hasBroadband ? _filterNames(_broadbandOf(filterSet)) : 'broadband'}';
       if (bortleClass >= _veryBrightSkyBortle) {
-        reason += '. Faint under a Bortle $bortleClass sky — plan generous '
+        reason += '. Faint under a ${sky.label} sky — plan generous '
             'integration or a darker site';
       }
       return (TonightFilterAdvice.broadband, '$reason.');
@@ -105,7 +106,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
       if (bortleClass >= brightSkyBortle && monoNb.isNotEmpty) {
         return (
           TonightFilterAdvice.narrowband,
-          'Mixed emission/continuum target under a Bortle $bortleClass sky — '
+          'Mixed emission/continuum target under a ${sky.label} sky — '
               'lead with narrowband (${_filterNames(monoNb)}) for the '
               'emission structure.'
         );
@@ -113,7 +114,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
       if (bortleClass >= brightSkyBortle && duo.isNotEmpty) {
         return (
           TonightFilterAdvice.duoband,
-          'Mixed emission/continuum target under a Bortle $bortleClass sky — '
+          'Mixed emission/continuum target under a ${sky.label} sky — '
               'OSC + ${_filterNames(duo)} favours the emission structure.'
         );
       }

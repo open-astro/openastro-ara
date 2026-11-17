@@ -830,7 +830,7 @@ const Map<String, Help> helpRegistry = {
     key: 'safety.site.bortle_class',
     title: 'Bortle dark-sky class',
     body:
-        'A 1-9 scale rating your site\'s sky darkness, where 1 is an excellent dark site (SQM ≥21.99 mag/arcsec²) and 9 is inner-city light pollution (Milky Way invisible).\n\n'
+        'A 1-9 scale rating your site\'s sky darkness, where 1 is an excellent dark site and 9 is inner-city light pollution (Milky Way invisible). Enter either a Bortle class or an SQM reading, never both: the class sets the sky brightness at 22.0 − 0.5 × (class − 1) mag/arcsec² (Bortle 1 = 22.0, Bortle 6 = 19.5, Bortle 9 = 18.0).\n\n'
         '* **1-2**: Excellent / true dark site\n'
         '* **3-4**: Rural / rural-suburban transition\n'
         '* **5-6**: Suburban / bright suburban (most backyard astrophotographers)\n'
@@ -846,16 +846,19 @@ const Map<String, Help> helpRegistry = {
     body:
         'A MEASURED zenith sky brightness in mag/arcsec² — from an SQM meter, '
         'an all-sky sensor, or lightpollutionmap.info for your location.\n\n'
-        'When set, exposure planning (the Optimal Sub advisor and target plans) '
-        'uses this instead of the coarse Bortle estimate. One Bortle class '
-        'spans about half a magnitude and sky flux is exponential in '
-        'magnitude, so a real reading tightens suggested exposures by up to '
-        '±30%.\n\n'
+        'Choose SQM instead of a Bortle class when you have a reading: exposure '
+        'planning (the Optimal Sub advisor, Tonight\'s Sky and filter advice) '
+        'then runs on it directly. One Bortle class spans about half a '
+        'magnitude and sky flux is exponential in magnitude, so a real reading '
+        'tightens suggested exposures by up to ±30%.\n\n'
+        'The Bortle class shown is derived from the reading on the same ladder '
+        'the Bortle setting uses (22.0 − 0.5 × (class − 1)), rounded to the '
+        'nearest class: SQM 22.0 = Bortle 1, 19.5 = Bortle 6, 18.0 = Bortle 9. '
+        'Valid readings run from 16 to 22.5.\n\n'
         '* **~16-18**: city / inner suburbs\n'
         '* **~19-20**: suburban\n'
         '* **~21-21.7**: rural (Bortle 3-4)\n'
-        '* **~21.8-22.2**: pristine dark site\n\n'
-        'Leave at 0 to keep deriving the sky from the Bortle class.',
+        '* **~21.8-22.2**: pristine dark site',
     learnMoreUrl: 'https://www.lightpollutionmap.info',
     relatedSettings: ['safety.site.bortle_class'],
   ),
