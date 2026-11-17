@@ -267,7 +267,9 @@ void main() {
     test('a sweep started on one rig does not write its servers into the next rig', () async {
       final gate = Completer<List<String>>();
       final eq = _FakeEquipment()..gate = gate;
-      final c = withEquipment(_FakeNames({}), eq);
+      final c = withEquipment(_FakeNames({
+        'rig-a-alpaca.lan:11111': {'camera/0': const AlpacaDeviceInfo(name: 'X', uniqueId: 'rig-a-cam')},
+      }), eq);
       c.listen(guiderDiscoveryProvider, (_, _) {});
       c.listen(guiderAlpacaDevicesProvider, (_, _) {});
       final f = c.read(guiderAlpacaDevicesProvider.notifier).discover();
@@ -277,6 +279,7 @@ void main() {
       gate.complete(['rig-a-alpaca.lan:11111']);
       await f;
       expect(c.read(guiderDiscoveryProvider).servers, isNull, reason: 'rig A\'s servers stay out of rig B');
+      expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty, reason: 'rig A\'s UniqueIDs stay out of rig B');
     });
 
     test('a name lookup started on one rig does not write its UniqueIDs into the next rig', () async {

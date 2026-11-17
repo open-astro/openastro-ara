@@ -273,9 +273,12 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
     } finally {
       _resolving.removeAll(targets.map((t) => t.endpoint));
     }
+    // Reading state first runs a rebuild a rig switch left pending, so the
+    // check below sees it.
+    final current = state;
     if (!buildRef.mounted) return;
-    final names = {...state.names};
-    final uniqueIds = {...state.uniqueIds};
+    final names = {...current.names};
+    final uniqueIds = {...current.uniqueIds};
     for (final result in fetched) {
       if (result.devices.isEmpty) continue;
       _named.add(result.endpoint);
