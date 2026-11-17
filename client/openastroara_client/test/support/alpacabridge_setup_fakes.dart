@@ -169,11 +169,15 @@ class FakeConfiguredApi implements EquipmentDiscoveryApi {
   /// `forceRefresh` of every camera scan, in order (a cached answer is stale after an add).
   final cameraForceRefresh = <bool>[];
 
+  /// `(type, forceRefresh)` of every scan of every type, in order.
+  final scans = <(EquipmentDeviceType, bool)>[];
+
   @override
   Future<List<DiscoveredDevice>> discover(
     EquipmentDeviceType type, {
     bool forceRefresh = false,
   }) async {
+    scans.add((type, forceRefresh));
     if (type != EquipmentDeviceType.camera) return const [];
     cameraScans++;
     cameraForceRefresh.add(forceRefresh);

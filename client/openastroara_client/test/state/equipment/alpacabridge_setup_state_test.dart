@@ -6,6 +6,7 @@ import 'package:openastroara/state/equipment/alpacabridge_setup_state.dart';
 import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart';
 
 import '../../support/alpacabridge_setup_fakes.dart';
 
@@ -212,6 +213,8 @@ void main() {
           t.bridge.addresses,
           everyElement(const BridgeAddress('192.0.2.10', 32323)),
         );
+        expect(t.bridge.addresses, isNotEmpty);
+        expect(t.names.reads, [const BridgeAddress('192.0.2.10', 32323)]);
       },
     );
 
@@ -223,12 +226,16 @@ void main() {
         t.bridge.addresses,
         everyElement(const BridgeAddress('bridge.example', 7000)),
       );
+      expect(t.bridge.addresses, isNotEmpty);
+      expect(t.names.reads, [const BridgeAddress('bridge.example', 7000)]);
       final u = _make(addressOverride: ' bridge.example ');
       await _rows(u.c);
       expect(
         u.bridge.addresses,
         everyElement(const BridgeAddress('bridge.example', 6800)),
       );
+      expect(u.bridge.addresses, isNotEmpty);
+      expect(u.names.reads, [const BridgeAddress('bridge.example', 6800)]);
     });
 
     test('a bad port in the override is an error state and no call', () async {
@@ -352,13 +359,28 @@ void main() {
     final t = _make();
     await _rows(t.c);
     final before = t.daemon.cameraScans;
+    final scansBefore = t.daemon.scans.length;
     await _n(t.c).addSelected();
     expect(t.daemon.cameraScans - before, 1);
+    final reread = t.daemon.scans.skip(scansBefore).toList();
     expect(
-      t.daemon.cameraForceRefresh.last,
-      isTrue,
-      reason: 'a cached answer from before the adds is stale',
+      reread.map((s) => s.$2),
+      everyElement(isTrue),
+      reason: 'a cached answer from before the adds is stale, for every type',
     );
+    expect(reread.map((s) => s.$1).toSet(), {
+      EquipmentDeviceType.camera,
+      EquipmentDeviceType.mount,
+      EquipmentDeviceType.focuser,
+      EquipmentDeviceType.filterWheel,
+      EquipmentDeviceType.rotator,
+      EquipmentDeviceType.flatPanel,
+      EquipmentDeviceType.dome,
+      EquipmentDeviceType.weather,
+      EquipmentDeviceType.safetyMonitor,
+      EquipmentDeviceType.switchDevice,
+    }, reason: 'the types the Connect screen probes (_summaryTypes)');
+    expect(reread.length, 10, reason: 'one scan per type, once');
   });
 
   test('Add selected does not start while a ticked row still needs details; then one sequence and one re-read', () async {
@@ -460,7 +482,9 @@ void main() {
   test('a second Add selected, Retry detection and toggle do nothing while a sequence runs; adds never overlap', () async {
     final t = _make(gated: true);
     await _rows(t.c);
+    // Back to back, no await between: the rows are `waiting` before the first await.
     final first = _n(t.c).addSelected();
+    final second = _n(t.c).addSelected();
     await _settle();
     expect(t.bridge.calls, ['AAAA000000000001']);
     expect(_now(t.c).map((r) => r.status), [
@@ -469,7 +493,6 @@ void main() {
       FoundStatus.waiting,
     ]);
     expect(isRunning(_now(t.c)), isTrue);
-    final second = _n(t.c).addSelected();
     _n(t.c).toggle('zwo:camera:CCCC000000000003');
     final redo = _n(t.c).redetect();
     await _settle();
@@ -512,14 +535,15 @@ void main() {
       await _n(t.c).addSelected();
       t.bridge.outcomes = const {};
       t.bridge.calls.clear();
+      final scansBeforeRetry = t.daemon.cameraScans;
       await _n(t.c).retry(_row(t.c, 'BBBB000000000002').id);
       expect(t.bridge.calls, ['BBBB000000000002']);
       final r = _row(t.c, 'BBBB000000000002');
       expect((r.status, r.error), (FoundStatus.added, null));
       expect(
-        t.daemon.cameraScans,
-        2,
-        reason: 'detection, then the one re-read of this Retry',
+        t.daemon.cameraScans - scansBeforeRetry,
+        1,
+        reason: 'the one re-read of this Retry',
       );
     },
   );
@@ -715,6 +739,10 @@ void main() {
         serial: 'BBBB000000000002',
       ),
     }; // both are configured by the time of the re-read
+    t.daemon.configured = [
+      configuredCamera('ZWO ASI294MC Pro'),
+      configuredCamera('ZWO ASI120MM Mini'),
+    ]; // set after detection, so the address stays localhost:6800; the re-read lists both
     await _n(t.c).addSelected();
     expect(_now(t.c).map((r) => (r.serial, r.status)), [
       ('AAAA000000000001', FoundStatus.added),

@@ -29,6 +29,7 @@ Future<FakeBridgeClient> _pump(
   List<BridgeDriver>? drivers,
   bool gated = false,
   bool camerasThrow = false,
+  FakeConfiguredApi? daemon,
 }) async {
   tester.view.physicalSize = const Size(900, 1400);
   tester.view.devicePixelRatio = 1;
@@ -51,7 +52,7 @@ Future<FakeBridgeClient> _pump(
       alpacaDeviceNamesApiProvider.overrideWithValue(FakeNames()),
       bridgeAddressOverrideProvider.overrideWithValue(null),
       equipmentDiscoveryApiFactoryProvider.overrideWithValue(
-        (_) => FakeConfiguredApi(),
+        (_) => daemon ?? FakeConfiguredApi(),
       ),
     ],
   );
@@ -180,7 +181,7 @@ void main() {
   );
 
   testWidgets(
-    'during a sequence the row says Adding, the rows behind say Waiting, and the buttons are off',
+    'during a sequence the row says Adding…, the rows behind say Waiting, and the buttons are off',
     (tester) async {
       final bridge = await _pump(tester, gated: true);
       await tester.tap(find.byKey(const Key('add-selected')));
@@ -190,7 +191,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const Key('found-status-zwo:camera:AAAA000000000001')),
-          matching: find.text('Adding'),
+          matching: find.text('Adding…'),
         ),
         findsOneWidget,
       );
@@ -286,6 +287,94 @@ void main() {
       }
       expect(bridge.bodies.single['serialNumber'], 'BBBB000000000002');
       expect(bridge.bodies.single['cameraName'], 'ZWO ASI120MM Mini');
+    },
+  );
+
+  Future<void> fill(WidgetTester tester, String value) async {
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('form-field-usbPath')),
+        matching: find.byType(TextField),
+      ),
+      value,
+    );
+  }
+
+  testWidgets(
+    'Add selected walks the needs-details forms one by one; the last Continue starts the one sequence and one re-read',
+    (tester) async {
+      final daemon = FakeConfiguredApi();
+      final bridge = await _pump(
+        tester,
+        drivers: [
+          zwoCameraDriver(extraFields: [requiredNoDefault]),
+        ],
+        daemon: daemon,
+      );
+      final scansBefore = daemon.cameraScans;
+      await tester.tap(find.byKey(const Key('add-selected')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('form-field-usbPath')), findsOneWidget);
+      expect(bridge.calls, isEmpty);
+      await fill(tester, '/dev/a');
+      await tester.tap(find.byKey(const Key('form-submit')));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('form-field-usbPath')),
+        findsOneWidget,
+        reason: 'the second row has its own form',
+      );
+      expect(bridge.calls, isEmpty, reason: 'nothing is sent between forms');
+      await fill(tester, '/dev/b');
+      await tester.tap(find.byKey(const Key('form-submit')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+      expect(bridge.calls, ['AAAA000000000001', 'BBBB000000000002']);
+      expect(bridge.bodies.map((b) => b['usbPath']), ['/dev/a', '/dev/b']);
+      expect(daemon.cameraScans - scansBefore, 1, reason: 'one re-read');
+      expect(find.byKey(const Key('form-field-usbPath')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Back on a form returns to the list with nothing sent; details already entered are kept',
+    (tester) async {
+      final bridge = await _pump(
+        tester,
+        drivers: [
+          zwoCameraDriver(extraFields: [requiredNoDefault]),
+        ],
+      );
+      await tester.tap(find.byKey(const Key('add-selected')));
+      await tester.pump();
+      await tester.pump();
+      await fill(tester, '/dev/a');
+      await tester.tap(find.byKey(const Key('form-submit')));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('form-back')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Found on this rig'), findsOneWidget);
+      expect(find.byKey(const Key('form-field-usbPath')), findsNothing);
+      expect(bridge.calls, isEmpty);
+      await tester.tap(find.byKey(const Key('add-selected')));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('form-field-usbPath')),
+        findsOneWidget,
+        reason: 'only the second row still needs its details',
+      );
+      await fill(tester, '/dev/b');
+      await tester.tap(find.byKey(const Key('form-submit')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump();
+      }
+      expect(bridge.bodies.map((b) => b['usbPath']), ['/dev/a', '/dev/b']);
     },
   );
 
