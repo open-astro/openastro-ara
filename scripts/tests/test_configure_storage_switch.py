@@ -417,12 +417,12 @@ class OsDiskLevels(HelperRig):
         self.assertEqual(self.mounted(), [self.NEW[1]])
 
     def test_the_copy_target_check_and_eject_pass_on_an_os_disk_data_partition(self) -> None:
+        for mode in ("--check", "--eject"):
+            result = self.run_helper(mode, self.NEW[0])
+            self.assertEqual(result.returncode, 0, f"{mode}: {result.stdout}{result.stderr}")
         copy = self.run_helper("--mount-copy", self.NEW[0])
         self.assertEqual(copy.returncode, 0, copy.stdout + copy.stderr)
         self.assertEqual(self.copy_mounted(), [self.NEW[1]])
-        for mode in ("--check", "--eject"):
-            result = self.run_helper(mode, self.NEW[0])
-            self.assertNotIn("system_disk", result.stdout, f"{mode}: {result.stdout}")
 
     def test_erasing_an_os_disk_data_partition_is_refused_untouched(self) -> None:
         result = self.run_helper("--format", "--fs", "ext4", self.NEW[0], "ARA-DISK")
@@ -446,6 +446,35 @@ class OsDiskLevels(HelperRig):
             result = self.run_helper(*args)
             self.assertEqual(result.returncode, 6, f"{args}: {result.stdout}{result.stderr}")
             self.assertIn("ERROR: refused system_disk", result.stdout, str(args))
+
+    def test_a_root_reported_through_a_link_is_refused_in_every_mode(self) -> None:
+        # findmnt reports a LUKS/LVM root as /dev/mapper/<name>, a link to the /dev/dm-N the
+        # canonicalised device resolves to: both sides must compare as the real node.
+        link = self.shims / "mapper-root"
+        link.symlink_to(self.NEW[1])
+        (self.shims / "root").write_text(f"{link}\n")
+        for args in ([self.NEW[0]], ["--check", self.NEW[0]], ["--mount-copy", self.NEW[0]], ["--eject", self.NEW[0]]):
+            result = self.run_helper(*args)
+            self.assertEqual(result.returncode, 6, f"{args}: {result.stdout}{result.stderr}")
+            self.assertIn("ERROR: refused system_disk", result.stdout, str(args))
+
+    def test_an_os_disk_partition_mounted_elsewhere_is_refused(self) -> None:
+        # A separate /var on the OS disk: mounting it again at the store would hand its root to
+        # the daemon, and --check or --eject would unmount it under the running system.
+        self.mounts.write_text(self.mounts.read_text() + f"{self.NEW[1]} /var\n")
+        for args in ([self.NEW[0]], ["--check", self.NEW[0]], ["--eject", self.NEW[0]]):
+            result = self.run_helper(*args)
+            self.assertEqual(result.returncode, 5, f"{args}: {result.stdout}{result.stderr}")
+            self.assertIn("ERROR: device_busy mounted_elsewhere", result.stdout, str(args))
+            self.assertIn(f"{self.NEW[1]} /var", self.mounts.read_text(), f"{args}: /var stays mounted")
+        # Already the store: a re-check still passes.
+        self.mounts.write_text(f"{self.NEW[1]} {self.mount_point}\n")
+        check = self.run_helper("--check", self.NEW[0])
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+        # A drive on another disk keeps today's behaviour: a desktop automount still ejects.
+        self.mounts.write_text(f"{self.OLD[1]} /media/somebody\n")
+        eject = self.run_helper("--eject", self.OLD[0])
+        self.assertEqual(eject.returncode, 0, eject.stdout + eject.stderr)
 
     def test_an_ancestor_of_the_root_partition_is_refused_in_every_mode(self) -> None:
         # Root on a mapper node that sits on NEW: NEW is its ancestor, so it is the OS itself.

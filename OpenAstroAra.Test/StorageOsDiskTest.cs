@@ -104,22 +104,27 @@ namespace OpenAstroAra.Test {
             Assert.That(StorageDeviceService.ProbeMedia(tran, disk, Read), Is.EqualTo(expected));
         }
 
-        [Test]
-        [Platform("Linux")]
-        public async Task Erasing_a_partition_on_the_os_disk_is_refused_without_calling_the_helper() {
-            var calls = new List<string>();
+        // Root on mmcblk0p2; every runner call is recorded so a test can show no helper or sudo ran.
+        private static StorageDeviceService OsDiskService(string lsblkJson, List<string> calls) {
             Task<(int, string)> Run(string file, string[] args, CancellationToken ct) {
                 calls.Add(file);
                 return Task.FromResult(
                     (file, args.Length > 0 ? args[0] : "") switch {
-                        ("lsblk", "-J") => (0, EmmcWithData),
+                        ("lsblk", "-J") => (0, lsblkJson),
                         ("findmnt", _) => args[^1] == "/" ? (0, "/dev/mmcblk0p2\n") : (1, ""),
                         ("lsblk", "-no") => args[^1] == "/dev/mmcblk0p2" ? (0, "mmcblk0\n") : (0, ""),
                         _ => (1, ""),
                     });
             }
             var paths = new StorageHelperPaths("/nonexistent/helper", "/nonexistent/unit", Path.Combine(Path.GetTempPath(), $"oara-osdisk-{Guid.NewGuid():N}"));
-            var svc = new StorageDeviceService(NullLogger<StorageDeviceService>.Instance, paths, Run) { StoreMounted = () => true };
+            return new StorageDeviceService(NullLogger<StorageDeviceService>.Instance, paths, Run) { StoreMounted = () => true };
+        }
+
+        [Test]
+        [Platform("Linux")]
+        public async Task Erasing_a_partition_on_the_os_disk_is_refused_without_calling_the_helper() {
+            var calls = new List<string>();
+            var svc = OsDiskService(EmmcWithData, calls);
 
             var onOsDisk = await svc.RefuseEraseOnOsDiskAsync("DA7A-0001", CancellationToken.None);
             var root = await svc.RefuseEraseOnOsDiskAsync("/dev/mmcblk0p2", CancellationToken.None);
@@ -129,6 +134,22 @@ namespace OpenAstroAra.Test {
             Assert.That(root, Is.EqualTo(new StorageConfigureResult(false, "refused", "system_disk", null)));
             Assert.That(usb, Is.Null, "a drive on another disk may be erased");
             Assert.That(calls, Is.All.Matches<string>(f => f is "lsblk" or "findmnt"), "only reads; no helper or sudo");
+        }
+
+        [Test]
+        [Platform("Linux")]
+        public async Task A_usb_clone_listed_first_does_not_unlock_an_erase_of_the_os_disk_data_partition() {
+            // The eMMC data partition cloned to a USB disk: both carry DA7A-0001, and the clone is listed first.
+            const string clone = """
+                {"name":"sdb","path":"/dev/sdb","type":"disk","size":64000000000,"rm":true,"tran":"usb","children":[
+                  {"name":"sdb1","path":"/dev/sdb1","type":"part","size":40000000000,"uuid":"DA7A-0001","fstype":"exfat","label":"DATA","pkname":"sdb"}
+                ]},
+                """;
+            var svc = OsDiskService(EmmcWithData.Replace("{\"blockdevices\": [", "{\"blockdevices\": [" + clone, StringComparison.Ordinal), []);
+
+            var refusal = await svc.RefuseEraseOnOsDiskAsync("DA7A-0001", CancellationToken.None);
+
+            Assert.That(refusal, Is.EqualTo(new StorageConfigureResult(false, "refused", "system_disk", null)));
         }
     }
 }
