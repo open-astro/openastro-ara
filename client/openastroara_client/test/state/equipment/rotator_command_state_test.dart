@@ -10,8 +10,8 @@ import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 RotatorStatus _rotator({
-  double sky = 92,
-  double mech = 88,
+  double? sky = 92,
+  double? mech = 88,
   String runtime = 'idle',
 }) => RotatorStatus(
   deviceId: 'rot',
@@ -30,6 +30,9 @@ class _Rotator extends RotatorNotifier {
   bool answer = true;
   Object? error;
   int refreshes = 0;
+
+  /// What a refresh reads, 100 ms after it is asked; null reads nothing new.
+  RotatorStatus? onRefresh;
 
   @override
   Future<RotatorStatus?> build() async => _rotator();
@@ -57,7 +60,13 @@ class _Rotator extends RotatorNotifier {
   }
 
   @override
-  Future<void> refresh([client]) async => refreshes++;
+  Future<void> refresh([client]) async {
+    refreshes++;
+    if (onRefresh case final s?) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      state = AsyncData(s);
+    }
+  }
 
   void report(RotatorStatus s) => state = AsyncData(s);
 }
@@ -177,14 +186,17 @@ void main() {
     fakeAsync((async) {
       final (c, rotator) = _rig(async, planRunning: true);
       final cmd = c.read(rotatorCommandProvider.notifier);
-      cmd.request(_to75);
+      final window = Object();
+      final panel = Object();
+      cmd.request(_to75, by: window);
       async.flushMicrotasks();
-      cmd.request(const RotatorTarget.sync(80));
+      cmd.request(const RotatorTarget.sync(80), by: panel);
       async.flushMicrotasks();
       expect(
         c.read(rotatorCommandProvider).target,
         const RotatorTarget.sync(80),
       );
+      expect(c.read(rotatorCommandProvider).by, same(panel));
       cmd.confirm();
       async.flushMicrotasks();
       expect(rotator.sent, ['sync 80.0']);
@@ -209,6 +221,146 @@ void main() {
         isNull,
         reason: 'a sync does not move, so it never stalls',
       );
+    });
+  });
+
+  test('a press while the rotator moves sends nothing more', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      final cmd = c.read(rotatorCommandProvider.notifier);
+      cmd.request(_to75);
+      async.flushMicrotasks();
+      rotator.report(_rotator(sky: 85, runtime: 'moving'));
+      cmd.request(const RotatorTarget.move(40, useSkyAngle: true));
+      async.flushMicrotasks();
+      expect(rotator.sent, ['move 75.0 sky']);
+      expect(c.read(rotatorCommandProvider).target, _to75);
+    });
+  });
+
+  test('a move lands within 0.5 degrees of the angle', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.flushMicrotasks();
+      rotator.report(_rotator(sky: 85, runtime: 'moving'));
+      rotator.report(_rotator(sky: 75.4));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
+    });
+  });
+
+  test(
+    'a move to 0 that stops at 359.8 has landed: the angle wraps through 0',
+    () {
+      fakeAsync((async) {
+        final (c, rotator) = _rig(async);
+        c
+            .read(rotatorCommandProvider.notifier)
+            .request(const RotatorTarget.move(0, useSkyAngle: true));
+        async.flushMicrotasks();
+        rotator.report(_rotator(sky: 10, runtime: 'moving'));
+        rotator.report(_rotator(sky: 359.8));
+        expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
+      });
+    },
+  );
+
+  test('a rotator that turns and stops a degree off ends with no refusal, not landed', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.flushMicrotasks();
+      rotator.report(_rotator(sky: 85, runtime: 'moving'));
+      rotator.report(_rotator(sky: 76));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.idle);
+      expect(c.read(rotatorCommandProvider).refusal, isNull);
+    });
+  });
+
+  test('a rotator that stops with its angle unread has not landed', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.flushMicrotasks();
+      rotator.report(_rotator(sky: 85, runtime: 'moving'));
+      rotator.report(_rotator(sky: null));
+      expect(
+        c.read(rotatorCommandProvider).phase,
+        isNot(DeviceCommandPhase.landed),
+      );
+    });
+  });
+
+  test('a move to the angle the rotator already holds is still sent and fails after 3 s', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c
+          .read(rotatorCommandProvider.notifier)
+          .request(const RotatorTarget.move(92, useSkyAngle: true));
+      async.flushMicrotasks();
+      expect(rotator.sent, ['move 92.0 sky']);
+      rotator.report(_rotator(sky: 92));
+      expect(
+        c.read(rotatorCommandProvider).phase,
+        DeviceCommandPhase.moving,
+        reason: 'on the angle with no motion seen is not a landing',
+      );
+      async.elapse(const Duration(milliseconds: 3100));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.idle);
+      expect(
+        c.read(rotatorCommandProvider).refusal,
+        DeviceCommandRefusal.didntMove,
+      );
+    });
+  });
+
+  test(
+    'a fast move no poll sees turning lands when the angle reads on target',
+    () {
+      fakeAsync((async) {
+        final (c, rotator) = _rig(async);
+        c.read(rotatorCommandProvider.notifier).request(_to75);
+        async.flushMicrotasks();
+        rotator.report(_rotator(sky: 75));
+        expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
+        expect(c.read(rotatorCommandProvider).refusal, isNull);
+      });
+    },
+  );
+
+  test('a rotator that never reads as moving but whose angle changes gets the backstop, not a 3 s failure', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.flushMicrotasks();
+      rotator.report(_rotator(sky: 85));
+      expect(
+        c.read(rotatorCommandProvider).phase,
+        DeviceCommandPhase.moving,
+        reason: 'not seen turning, so not stopped off target either',
+      );
+      async.elapse(const Duration(milliseconds: 3100));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.moving);
+      expect(c.read(rotatorCommandProvider).refusal, isNull);
+      async.elapse(const Duration(seconds: 298));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.moving);
+      rotator.report(_rotator(sky: 75));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
+    });
+  });
+
+  test('a rotator the 3 s check finds turning gets the backstop instead of failing', () {
+    fakeAsync((async) {
+      final (c, rotator) = _rig(async);
+      c.read(rotatorCommandProvider.notifier).request(_to75);
+      async.elapse(const Duration(milliseconds: 2900));
+      rotator.onRefresh = _rotator(sky: 85, runtime: 'moving');
+      async.elapse(const Duration(milliseconds: 300));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.moving);
+      expect(c.read(rotatorCommandProvider).refusal, isNull);
+      rotator.onRefresh = null;
+      rotator.report(_rotator(sky: 75));
+      expect(c.read(rotatorCommandProvider).phase, DeviceCommandPhase.landed);
     });
   });
 
