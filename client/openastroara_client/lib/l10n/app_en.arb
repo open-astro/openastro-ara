@@ -8101,6 +8101,41 @@
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
+  "polarAdvancedTitle": "Advanced",
+  "@polarAdvancedTitle": {
+    "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"
+  },
+  "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
+  "@polarAdvancedSummary": {
+    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure",
+    "placeholders": {
+      "turn": {"type": "String"},
+      "step": {"type": "String"},
+      "exposure": {"type": "String"}
+    }
+  },
+  "polarAdvancedRange": "{min} to {max}",
+  "@polarAdvancedRange": {
+    "description": "Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '",
+    "placeholders": {
+      "min": {"type": "String"},
+      "max": {"type": "String"}
+    }
+  },
+  "polarAdvancedOutOfRange": "Out of range: use {range}",
+  "@polarAdvancedOutOfRange": {
+    "description": "Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "polarAdvancedSaveFailed": "{reason} The field is back to the rig's value.",
+  "@polarAdvancedSaveFailed": {
+    "description": "Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"

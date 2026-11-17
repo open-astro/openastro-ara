@@ -20,9 +20,6 @@ import '../../../widgets/settings/settings_row.dart';
 class ImagingPolarPanel extends ConsumerWidget {
   const ImagingPolarPanel({super.key});
 
-  static String _num(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loaded = ref.watch(polarAlignSettingsProvider);
@@ -53,20 +50,20 @@ class ImagingPolarPanel extends ConsumerWidget {
       double current,
       double Function(PolarAlignSettings) read,
       PolarAlignSettings Function(double) apply, {
-      required double min,
-      required double max,
+      required String helpKey,
+      required PolarKnobRange range,
       String? hint,
     }) => EditableNumberRow(
       label: label,
-      helpKey: 'img.polar.knobs',
+      helpKey: helpKey,
       hint: hint,
-      currentValue: _num(current),
+      currentValue: polarKnobText(current),
       getCanonical: () =>
-          _num(read(ref.read(polarAlignSettingsProvider).value ?? s)),
+          polarKnobText(read(ref.read(polarAlignSettingsProvider).value ?? s)),
       parse: (text) {
         final v = double.tryParse(text);
         final now = ref.read(polarAlignSettingsProvider).value ?? s;
-        if (v != null && v >= min && v <= max && v != read(now)) {
+        if (v != null && v >= range.min && v <= range.max && v != read(now)) {
           save(apply(v));
         }
       },
@@ -81,13 +78,13 @@ class ImagingPolarPanel extends ConsumerWidget {
           s.targetToleranceArcmin,
           (x) => x.targetToleranceArcmin,
           (v) => s.copyWith(targetToleranceArcmin: v),
-          min: 0.1,
-          max: 10,
+          helpKey: 'img.polar.target_tolerance_arcmin',
+          range: (min: 0.1, max: 10),
           hint: l10n.polarKnobToleranceHint,
         ),
         SettingsSwitchRow(
           label: l10n.polarKnobUseHome,
-          helpKey: 'img.polar.knobs',
+          helpKey: 'img.polar.use_home',
           value: s.useHome,
           onChanged: (v) => save(s.copyWith(useHome: v)),
           hint: s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
@@ -95,7 +92,7 @@ class ImagingPolarPanel extends ConsumerWidget {
         // #1971 a profile setting: shown with or without a Polar Aligner connected.
         SettingsSwitchRow(
           label: l10n.polarKnobAlignerAuto,
-          helpKey: 'img.polar.knobs',
+          helpKey: 'img.polar.polar_aligner_auto',
           value: s.polarAlignerAuto,
           onChanged: (v) => save(s.copyWith(polarAlignerAuto: v)),
           hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
@@ -105,8 +102,8 @@ class ImagingPolarPanel extends ConsumerWidget {
           s.seedRotationDeg,
           (x) => x.seedRotationDeg,
           (v) => s.copyWith(seedRotationDeg: v),
-          min: 5,
-          max: 120,
+          helpKey: 'img.polar.seed_rotation_deg',
+          range: polarSeedRotationRange,
           hint: l10n.polarKnobTurnHint,
         ),
         number(
@@ -114,8 +111,8 @@ class ImagingPolarPanel extends ConsumerWidget {
           s.checkStepDeg,
           (x) => x.checkStepDeg,
           (v) => s.copyWith(checkStepDeg: v),
-          min: 5,
-          max: 60,
+          helpKey: 'img.polar.check_step_deg',
+          range: polarCheckStepRange,
           hint: l10n.polarKnobVerifyStepHint,
         ),
         number(
@@ -123,8 +120,8 @@ class ImagingPolarPanel extends ConsumerWidget {
           s.coarseExposureSeconds,
           (x) => x.coarseExposureSeconds,
           (v) => s.copyWith(coarseExposureSeconds: v),
-          min: 0.1,
-          max: 60,
+          helpKey: 'img.polar.coarse_exposure_seconds',
+          range: polarCoarseExposureRange,
         ),
       ],
     );

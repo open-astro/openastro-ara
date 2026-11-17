@@ -1734,7 +1734,11 @@
   "polarKnobAlignerAuto": "Corrigir com os motores do alinhador polar",
   "polarKnobAlignerAutoOn": "Num setup com alinhador polar, o alinhamento polar gira os motores depois de cada medição",
   "polarKnobAlignerAutoOff": "Desligado: o alinhamento polar mostra os giros e você os faz",
-  "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)",
+  "polarAdvancedTitle": "Avançado",
+  "polarAdvancedSummary": "giro de {turn}° · passo de {step}° · {exposure} s",
+  "polarAdvancedRange": "{min} a {max}",
+  "polarAdvancedOutOfRange": "Fora da faixa: use {range}",
+  "polarAdvancedSaveFailed": "{reason} O campo voltou ao valor do setup.",
   "bestNav": "Melhores",
   "bestTitle": "Melhores da Noite",
   "bestSubtitle": "para o resto da noite · atualizado {time}",
@@ -1790,5 +1794,6 @@
   "bestRigOff": "Equipamento não conectado",
   "bestOffline": "Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; o equipamento executa depois.",
   "bestLoadFailed": "Não foi possível classificar os Alvos desta noite.",
-  "bestRetry": "Tentar de novo"
+  "bestRetry": "Tentar de novo",
+  "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
 }

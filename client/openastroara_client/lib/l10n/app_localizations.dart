@@ -10503,6 +10503,36 @@ abstract class AppLocalizations {
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
 
+  /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get polarAdvancedTitle;
+
+  /// Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure
+  ///
+  /// In en, this message translates to:
+  /// **'{turn}° turn · {step}° step · {exposure} s'**
+  String polarAdvancedSummary(String turn, String step, String exposure);
+
+  /// Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '
+  ///
+  /// In en, this message translates to:
+  /// **'{min} to {max}'**
+  String polarAdvancedRange(String min, String max);
+
+  /// Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Out of range: use {range}'**
+  String polarAdvancedOutOfRange(String range);
+
+  /// Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} The field is back to the rig\'s value.'**
+  String polarAdvancedSaveFailed(String reason);
+
   /// Emergency stop: the Polar Aligner's stop failed
   ///
   /// In en, this message translates to:

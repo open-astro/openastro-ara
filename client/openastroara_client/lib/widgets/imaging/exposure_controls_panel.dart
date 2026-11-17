@@ -460,7 +460,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     return null;
   }
 
-  void _onOutcome(DeviceCommand next) {
+  void _onOutcome(DeviceCommand<int> next) {
     if (next.phase == DeviceCommandPhase.landed) {
       // An UNNAMED target slot can never be synced by the follow-logic (it
       // only latches named slots), so tag the picked local label instead.
