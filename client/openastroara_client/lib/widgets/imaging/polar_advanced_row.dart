@@ -28,24 +28,29 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
   bool _open = false;
   String? _saveError;
 
-  /// Each field's refusal, keyed by its field key; absent: no complaint.
-  final _refused = <Key, String>{};
-
   void _retry() => ref.invalidate(polarAlignSettingsProvider);
 
   Future<void> _save(PolarAlignSettings next) async {
     final l10n = context.l10n;
     setState(() => _saveError = null);
-    try {
-      await ref.read(polarAlignSettingsProvider.notifier).save(next);
-    } catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _saveError = l10n.polarAdvancedSaveFailed(
-          friendlyError(l10n, e, action: l10n.polarActionSave),
-        ),
-      );
-    }
+    // Through the routine's action module (ADR 0013 rule 3): busy while the
+    // PUT is in flight, so Start waits for it. The error line sits under the
+    // grid, so describe says it here and returns null.
+    await ref
+        .read(polarAlignActionProvider.notifier)
+        .run(
+          (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
+          describe: (e) {
+            if (mounted) {
+              setState(
+                () => _saveError = l10n.polarAdvancedSaveFailed(
+                  friendlyError(l10n, e, action: l10n.polarActionSave),
+                ),
+              );
+            }
+            return null;
+          },
+        );
   }
 
   @override
@@ -148,7 +153,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
         l10n,
       ),
     ];
-    final running = ref.watch(polarAlignLiveProvider).isActive;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -179,14 +183,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
               ),
             ),
           ],
-          if (running) ...[
-            const SizedBox(height: 8),
-            Text(
-              l10n.polarAdvancedRunning,
-              key: const Key('polar-advanced-running-note'),
-              style: const TextStyle(color: AraColors.textSecondary),
-            ),
-          ],
         ],
       ),
     );
@@ -210,10 +206,13 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
       _label(l10n.polarKnobUseHome, 'img.polar.use_home'),
       Row(
         children: [
-          Switch(
-            key: const Key('polar-advanced-use-home'),
-            value: s.useHome,
-            onChanged: (v) => _save(s.copyWith(useHome: v)),
+          Semantics(
+            label: l10n.polarKnobUseHome,
+            child: Switch(
+              key: const Key('polar-advanced-use-home'),
+              value: s.useHome,
+              onChanged: (v) => _save(s.copyWith(useHome: v)),
+            ),
           ),
           Expanded(
             child: Text(
@@ -246,24 +245,21 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
         const SizedBox(height: 4),
         _KnobField(
           key: key,
+          label: label,
           value: polarKnobText(read(current)),
-          error: _refused[key],
           onCommit: (text) {
             final v = double.tryParse(text.trim());
             if (v == null || v < range.min || v > range.max) {
-              setState(
-                () => _refused[key] = l10n.polarAdvancedOutOfRange(
-                  l10n.polarAdvancedRange(
-                    polarKnobText(range.min),
-                    polarKnobText(range.max),
-                  ),
+              return l10n.polarAdvancedOutOfRange(
+                l10n.polarAdvancedRange(
+                  polarKnobText(range.min),
+                  polarKnobText(range.max),
                 ),
               );
-              return;
             }
-            if (_refused.containsKey(key)) setState(() => _refused.remove(key));
             final now = ref.read(polarAlignSettingsProvider).value ?? current;
             if (v != read(now)) _save(apply(now, v));
+            return null;
           },
         ),
       ],
@@ -273,19 +269,21 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
 
 /// A number field that commits on submit and on leaving it, and follows the
 /// rig's value (a rollback, a save from the Settings panel) when not being
-/// edited. A refused entry stays in the field, with [error] under it, until
+/// edited. A refused entry stays in the field, with its error under it, until
 /// the next edit or a change of the rig's value.
 class _KnobField extends StatefulWidget {
   const _KnobField({
     super.key,
+    required this.label,
     required this.value,
-    required this.error,
     required this.onCommit,
   });
 
+  final String label;
   final String value;
-  final String? error;
-  final void Function(String text) onCommit;
+
+  /// Returns the refusal to show under the field, or null when it took the text.
+  final String? Function(String text) onCommit;
 
   @override
   State<_KnobField> createState() => _KnobFieldState();
@@ -298,19 +296,24 @@ class _KnobFieldState extends State<_KnobField> {
       if (!_focus.hasFocus) _commit();
     });
 
+  String? _error;
+
   void _commit() {
-    widget.onCommit(_controller.text);
+    setState(() => _error = widget.onCommit(_controller.text));
     // After the rebuild: a refusal keeps the entry on screen (its error shows);
     // anything else shows the rig's value, so a rolled-back save puts it back.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.error == null) _controller.text = widget.value;
+      if (mounted && _error == null) _controller.text = widget.value;
     });
   }
 
   @override
   void didUpdateWidget(covariant _KnobField old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value) _controller.text = widget.value;
+    if (old.value != widget.value) {
+      _controller.text = widget.value;
+      _error = null;
+    }
   }
 
   @override
@@ -321,12 +324,15 @@ class _KnobFieldState extends State<_KnobField> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: _controller,
-    focusNode: _focus,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    decoration: InputDecoration(isDense: true, errorText: widget.error),
-    onSubmitted: (_) => _commit(),
-    onTapOutside: (_) => _focus.unfocus(),
+  Widget build(BuildContext context) => Semantics(
+    label: widget.label,
+    child: TextField(
+      controller: _controller,
+      focusNode: _focus,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(isDense: true, errorText: _error),
+      onSubmitted: (_) => _commit(),
+      onTapOutside: (_) => _focus.unfocus(),
+    ),
   );
 }

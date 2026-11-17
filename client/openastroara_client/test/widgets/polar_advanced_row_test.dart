@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,6 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/saved_server_state.dart'
     show activeServerProvider;
-import 'package:openastroara/widgets/imaging/polar_advanced_row.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
 /// The fake Polar Align client of the Settings panel's tests: scripted
@@ -21,6 +21,7 @@ class _Api implements PolarAlignClient {
   final saved = <PolarAlignSettings>[];
   Object? getError;
   Object? putError;
+  Completer<void>? putGate;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
@@ -32,6 +33,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
     saved.add(next);
+    if (putGate != null) await putGate!.future;
     if (putError != null) throw putError!;
     return settings = next;
   }
@@ -234,32 +236,72 @@ void main() {
     },
   );
 
+  testWidgets('Start waits while a knob save is in flight (#1736)', (
+    tester,
+  ) async {
+    final rig = _Api()..putGate = Completer<void>();
+    await _pump(tester, rig: rig);
+    const start = Key('polar-align-start');
+    bool enabled() =>
+        tester.widget<ButtonStyleButton>(find.byKey(start)).enabled;
+    expect(enabled(), isTrue);
+    await tester.ensureVisible(find.byKey(_home));
+    await tester.tap(find.byKey(_home));
+    await tester.pump();
+    expect(rig.saved, hasLength(1));
+    expect(enabled(), isFalse);
+    rig.putGate!.complete();
+    await tester.pumpAndSettle();
+    expect(enabled(), isTrue);
+  });
+
   testWidgets(
-    'while the routine runs the open row says a change applies from the next stage or frame (#1736)',
+    'each of the four controls has its knob name for a screen reader (#1736)',
     (tester) async {
-      final api = _Api();
-      for (final live in [
-        const PolarAlignLive(),
-        const PolarAlignLive(phase: PolarAlignStates.adjusting),
+      final handle = tester.ensureSemantics();
+      await _pump(tester);
+      final l10n = AppLocalizations.of(tester.element(find.byKey(_toggle)))!;
+      for (final (key, name) in [
+        (_home, l10n.polarKnobUseHome),
+        (_seed, l10n.polarKnobTurn),
+        (_check, l10n.polarKnobVerifyStep),
+        (_coarse, l10n.polarKnobRoughExposure),
       ]) {
-        await tester.pumpWidget(
-          ProviderScope(
-            key: UniqueKey(),
-            overrides: [
-              polarAlignApiProvider.overrideWithValue(api),
-              polarAlignLiveProvider.overrideWith(() => _Live(live)),
-            ],
-            child: const MaterialApp(home: Scaffold(body: PolarAdvancedRow())),
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(_toggle));
-        await tester.pumpAndSettle();
         expect(
-          find.byKey(const Key('polar-advanced-running-note')),
-          live.isActive ? findsOneWidget : findsNothing,
+          find.descendant(
+            of: find.byKey(const Key('polar-advanced-row')),
+            matching: find.bySemanticsLabel(name),
+          ),
+          findsWidgets,
+          reason: name,
+        );
+        expect(
+          tester.getSemantics(find.byKey(key)).label,
+          contains(name),
+          reason: name,
         );
       }
+      handle.dispose();
+    },
+  );
+
+  testWidgets(
+    'a refusal goes when the Settings panel saves a new value (#1736)',
+    (tester) async {
+      final api = await _pump(tester);
+      await _enter(tester, _seed, '4');
+      expect(find.text('Out of range: use 5 to 120'), findsOneWidget);
+      final settingsFields = find.descendant(
+        of: find.byType(ImagingPolarPanel),
+        matching: find.byType(TextField),
+      );
+      await tester.ensureVisible(settingsFields.at(1));
+      await tester.enterText(settingsFields.at(1), '45');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.saved.single.seedRotationDeg, 45.0);
+      expect(_text(tester, _seed), '45');
+      expect(find.textContaining('Out of range'), findsNothing);
     },
   );
 }

@@ -1725,7 +1725,6 @@
   "polarAdvancedSummary": "giro de {turn}° · passo de {step}° · {exposure} s",
   "polarAdvancedRange": "{min} a {max}",
   "polarAdvancedOutOfRange": "Fora da faixa: use {range}",
-  "polarAdvancedRunning": "A rotina está em execução: a mudança vale a partir da próxima etapa ou quadro.",
   "polarAdvancedSaveFailed": "{reason} O campo voltou ao valor do setup.",
   "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
 }

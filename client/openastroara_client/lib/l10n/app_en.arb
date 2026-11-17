@@ -8037,10 +8037,6 @@
       "range": {"type": "String"}
     }
   },
-  "polarAdvancedRunning": "The routine is running: a change applies from the next stage or frame.",
-  "@polarAdvancedRunning": {
-    "description": "Advanced Mode Polar Align Start card: note under the open Advanced row while the routine runs"
-  },
   "polarAdvancedSaveFailed": "{reason} The field is back to the rig's value.",
   "@polarAdvancedSaveFailed": {
     "description": "Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why",

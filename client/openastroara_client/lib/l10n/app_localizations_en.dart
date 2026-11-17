@@ -6209,10 +6209,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get polarAdvancedRunning =>
-      'The routine is running: a change applies from the next stage or frame.';
-
-  @override
   String polarAdvancedSaveFailed(String reason) {
     return '$reason The field is back to the rig\'s value.';
   }

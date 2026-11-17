@@ -10449,12 +10449,6 @@ abstract class AppLocalizations {
   /// **'Out of range: use {range}'**
   String polarAdvancedOutOfRange(String range);
 
-  /// Advanced Mode Polar Align Start card: note under the open Advanced row while the routine runs
-  ///
-  /// In en, this message translates to:
-  /// **'The routine is running: a change applies from the next stage or frame.'**
-  String get polarAdvancedRunning;
-
   /// Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why
   ///
   /// In en, this message translates to:

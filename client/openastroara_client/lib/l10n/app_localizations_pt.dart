@@ -6209,10 +6209,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get polarAdvancedRunning =>
-      'The routine is running: a change applies from the next stage or frame.';
-
-  @override
   String polarAdvancedSaveFailed(String reason) {
     return '$reason The field is back to the rig\'s value.';
   }
@@ -12473,10 +12469,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String polarAdvancedOutOfRange(String range) {
     return 'Fora da faixa: use $range';
   }
-
-  @override
-  String get polarAdvancedRunning =>
-      'A rotina está em execução: a mudança vale a partir da próxima etapa ou quadro.';
 
   @override
   String polarAdvancedSaveFailed(String reason) {
