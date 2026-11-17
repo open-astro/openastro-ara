@@ -47,4 +47,36 @@ void main() {
       expect(tester.widget<Switch>(toggle).value, isTrue);
     },
   );
+  testWidgets(
+    'the Settings header fits a narrow window at large text (#1544)',
+    (tester) async {
+      tester.view.physicalSize = const Size(820, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(
+        overrides: [advancedSettingsProvider.overrideWith(_Advanced.new)],
+      );
+      addTearDown(c.dispose);
+      c.read(selectedSettingsPanelProvider.notifier).select('app.changelog');
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+            home: const Scaffold(body: SettingsShell()),
+          ),
+        ),
+      );
+      await tester.pump();
+      // A header row too wide for the window throws a RenderFlex overflow.
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('settings-advanced-toggle')), findsOneWidget);
+    },
+  );
 }

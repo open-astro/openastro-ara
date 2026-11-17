@@ -210,64 +210,81 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
-      child: Row(
-        children: [
-          Text(
-            widget.info?.label ?? 'Settings',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const Spacer(),
-          if (saveAction != null) ...[
-            FilledButton.icon(
-              onPressed: _saving ? null : () => _save(saveAction),
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save, size: 16),
-              label: Text(_saving ? 'Saving…' : 'Save'),
+      // A narrow window or large text: the title ends in an ellipsis and
+      // search shrinks to its icon, so the row never overflows.
+      child: LayoutBuilder(
+        builder: (context, box) => Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.info?.label ?? 'Settings',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (saveAction != null) ...[
+              FilledButton.icon(
+                onPressed: _saving ? null : () => _save(saveAction),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: AdaptiveProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save, size: 16),
+                label: Text(_saving ? 'Saving…' : 'Save'),
+              ),
+              const SizedBox(width: 12),
+            ],
+            // #1544 — the one global Advanced toggle: off shows only each
+            // panel's Simple tier.
+            MergeSemantics(
+              child: Row(
+                children: [
+                  Text(
+                    context.l10n.settingsAdvancedToggle,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  Switch(
+                    key: const Key('settings-advanced-toggle'),
+                    value: ref.watch(advancedSettingsProvider).value ?? false,
+                    onChanged: (v) =>
+                        ref.read(advancedSettingsProvider.notifier).set(v),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 12),
-          ],
-          // #1544 — the one global Advanced toggle: off shows only each
-          // panel's Simple tier.
-          MergeSemantics(
-            child: Row(
-              children: [
-                Text(
-                  context.l10n.settingsAdvancedToggle,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                Switch(
-                  key: const Key('settings-advanced-toggle'),
-                  value: ref.watch(advancedSettingsProvider).value ?? false,
-                  onChanged: (v) =>
-                      ref.read(advancedSettingsProvider.notifier).set(v),
-                ),
-              ],
+            // §61 smart search — opens the global command palette (also
+            // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
+            // adapts to host platform so the displayed shortcut matches
+            // what the user can actually press.
+            Builder(
+              builder: (context) {
+                final shortcutLabel =
+                    Theme.of(context).platform == TargetPlatform.macOS
+                    ? '⌘K'
+                    : 'Ctrl+K';
+                final label = 'Search settings ($shortcutLabel)';
+                if (box.maxWidth <
+                    MediaQuery.textScalerOf(context).scale(640)) {
+                  return IconButton(
+                    key: const Key('settings-search-compact'),
+                    tooltip: label,
+                    onPressed: () => showCommandPalette(context),
+                    icon: const Icon(Icons.search, size: 16),
+                  );
+                }
+                return TextButton.icon(
+                  onPressed: () => showCommandPalette(context),
+                  icon: const Icon(Icons.search, size: 16),
+                  label: Text(label),
+                );
+              },
             ),
-          ),
-          const SizedBox(width: 12),
-          // §61 smart search — opens the global command palette (also
-          // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
-          // adapts to host platform so the displayed shortcut matches
-          // what the user can actually press.
-          Builder(
-            builder: (context) {
-              final shortcutLabel =
-                  Theme.of(context).platform == TargetPlatform.macOS
-                  ? '⌘K'
-                  : 'Ctrl+K';
-              return TextButton.icon(
-                onPressed: () => showCommandPalette(context),
-                icon: const Icon(Icons.search, size: 16),
-                label: Text('Search settings ($shortcutLabel)'),
-              );
-            },
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
