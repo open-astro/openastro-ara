@@ -48,10 +48,11 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     final labels = live.any((s) => s.trim().isNotEmpty)
         ? live
         : () {
-            final stored = ref.read(filterWheelLabelsProvider);
+            final stored = ref.read(filterWheelLabelsProvider).value;
             return [
-              for (var slot = 1; slot <= stored.slotCount; slot++)
-                stored.labelAt(slot),
+              if (stored != null)
+                for (var slot = 1; slot <= stored.slotCount; slot++)
+                  stored.labelAt(slot),
             ];
           }();
     final before = ref.read(filterSetProvider).value!.filters.length;

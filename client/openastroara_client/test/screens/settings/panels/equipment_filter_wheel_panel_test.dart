@@ -14,6 +14,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/widgets/settings/section_load_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
@@ -118,6 +119,9 @@ Future<_FakeFwApi> _pump(
   final api = _FakeFwApi(status);
   final policyRig = FakeSectionRig({
     'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+    'filter-wheel/labels': {
+      'labels': ['L', 'Hα'],
+    },
   });
   if (policyLoadFails) policyRig.failGet.add('filter-wheel/policy');
   await tester.pumpWidget(
@@ -294,26 +298,39 @@ void main() {
     },
   );
 
-  testWidgets('no rig: the policy shows not loaded, no switches', (
-    tester,
-  ) async {
+  testWidgets('no rig: the policy and the slot labels show not loaded, no '
+      'switches or slot fields', (tester) async {
     await _pump(tester, null, rig: false);
-    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.byType(SectionNotLoaded), findsNWidgets(2));
     expect(find.text('Park on slot 0 on first connect'), findsNothing);
     expect(find.text("Move the focuser by each filter's offset"), findsNothing);
+    expect(find.text('Slot 1'), findsNothing);
   });
 
-  testWidgets('no rig: an offline cache copy of the policy is not editable', (
-    tester,
-  ) async {
+  testWidgets('no rig: an offline cache copy of the policy and the labels is '
+      'not editable', (tester) async {
     await _pump(tester, null, rig: false);
     final c = ProviderScope.containerOf(
       tester.element(find.byType(EquipmentFilterWheelPanel)),
     );
+    c
+        .read(filterWheelLabelsProvider.notifier)
+        .seed(FilterWheelLabels(labels: const ['L', 'Hα']));
     c.read(filterWheelPolicyProvider.notifier).seed(const FilterWheelPolicy());
     await tester.pumpAndSettle();
-    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.byType(SectionNotLoaded), findsNWidgets(2));
+    expect(find.text('Slot 1'), findsNothing);
     expect(find.text('Park on slot 0 on first connect'), findsNothing);
+  });
+
+  testWidgets('the slot labels come from the rig, one row per slot', (
+    tester,
+  ) async {
+    await _pump(tester, null);
+    expect(find.byType(SectionNotLoaded), findsNothing);
+    expect(find.text('Slot 1'), findsOneWidget);
+    expect(find.text('Slot 2'), findsOneWidget);
+    expect(find.text('Slot 3'), findsNothing);
   });
 
   testWidgets('the policy not-loaded row lines up with the other rows', (
@@ -321,7 +338,7 @@ void main() {
   ) async {
     await _pump(tester, null, rig: false);
     expect(
-      tester.getTopLeft(find.text('Rig not connected')).dx,
+      tester.getTopLeft(find.text('Rig not connected').first).dx,
       tester.getTopLeft(find.text('Auto-connect on boot')).dx,
     );
   });

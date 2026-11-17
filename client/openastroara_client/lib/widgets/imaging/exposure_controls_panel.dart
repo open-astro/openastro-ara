@@ -673,7 +673,8 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     for (final s in wheel.slots) {
       if (s.name == name) return s;
     }
-    final labels = ref.read(filterWheelLabelsProvider);
+    final labels = ref.read(filterWheelLabelsProvider).value;
+    if (labels == null) return null;
     for (var slot = 1; slot <= labels.slotCount; slot++) {
       if (labels.labelAt(slot) != name) continue;
       for (final s in wheel.slots) {

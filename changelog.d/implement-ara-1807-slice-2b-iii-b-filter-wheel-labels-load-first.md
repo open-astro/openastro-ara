@@ -1,0 +1,3 @@
+### Fixed
+
+- **The filter wheel slot labels load from the rig before they save** (#1807): Settings. A label edit that was never loaded, or follows a failed load, now writes nothing and says why; a reply from the rig with a missing, empty or non-text label list counts as a failed load instead of showing the reference eight names. A copy another device saved in between is refused and the panel offers Reload. The labels reload when the wheel reports a different list of slot names. With no rig, or before the labels load, the panel says so, the filter pickers offer only the wheel's own names, and a target plan assumes no manual filter swap.
