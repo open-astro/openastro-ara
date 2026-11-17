@@ -124,6 +124,21 @@
           "oklch(95% 0.000 90)"
         ]
       },
+      "text-tertiary": {
+        "role": "neutral",
+        "displayName": "Quiet Text",
+        "canonical": "#9B9B9B",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
       "accent-connected": {
         "role": "status",
         "displayName": "Connected Green",
