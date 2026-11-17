@@ -27,6 +27,10 @@ import 'package:openastroara/state/server_state.dart'
     show discoveredServersProvider;
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
 
 // #1911 slice 1: the right rail is a tab list of the six modes, in the order of
 // the night. The shell's own harness lives in simple_shell_test.dart, which
@@ -86,6 +90,19 @@ final _runningPlan = <Override>[
     ),
   ),
 ];
+
+/// The live views with a setter, so a case can fold a later run into them.
+class _FocusLive extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive.idle;
+  void put(AutofocusLive v) => state = v;
+}
+
+class _PolarLive extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() => const PolarAlignLive();
+  void put(PolarAlignLive v) => state = v;
+}
 
 class _StartOnLive extends SelectedTabIndexNotifier {
   @override
@@ -441,6 +458,92 @@ void main() {
           c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.plan);
           await tester.pump();
           expect(find.byType(EmergencyStopButton), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'Focus done, then a failed Focus run: no tick, and no "done tonight" in the label (clears on failure)',
+        (tester) async {
+          final c = await _pump(
+            tester,
+            size,
+            extra: [autofocusLiveProvider.overrideWith(_FocusLive.new)],
+          );
+          final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+          // A run that finished this session: done tonight, tick on.
+          focus.put(
+            AutofocusLive(
+              run: AutofocusRun(
+                state: AutofocusRunStates.complete,
+                startedUtc: DateTime.now().toUtc(),
+                completedUtc: DateTime.now().toUtc(),
+              ),
+              focusedThisSession: true,
+              hydrated: true,
+            ),
+          );
+          await tester.pump();
+          expect(
+            find.byKey(const Key('simple-rail-tick-focus')),
+            findsOneWidget,
+          );
+          // A re-run that fails: focusedThisSession stays true (the Setup
+          // checklist reads it), so the tick must come from the run too.
+          focus.put(
+            AutofocusLive(
+              run: AutofocusRun(
+                state: AutofocusRunStates.failed,
+                startedUtc: DateTime.now().toUtc(),
+              ),
+              focusedThisSession: true,
+              hydrated: true,
+            ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-focus')), findsNothing);
+          expect(
+            tester.getSemantics(_tab('focus')).label,
+            isNot(contains('done tonight')),
+          );
+        },
+      );
+
+      testWidgets(
+        'Polar align done, then a failed routine: no tick, and no "done tonight" in the label (clears on failure)',
+        (tester) async {
+          final c = await _pump(
+            tester,
+            size,
+            extra: [polarAlignLiveProvider.overrideWith(_PolarLive.new)],
+          );
+          final polar = c.read(polarAlignLiveProvider.notifier) as _PolarLive;
+          polar.put(
+            const PolarAlignLive(
+              phase: PolarAlignStates.checked,
+              zone: 'green',
+              stage: PolarAlignStages.fine,
+            ),
+          );
+          await tester.pump();
+          expect(
+            find.byKey(const Key('simple-rail-tick-polar')),
+            findsOneWidget,
+          );
+          // The zone survives a failure, and polarAlignStepState reads a green
+          // zone before the phase.
+          polar.put(
+            const PolarAlignLive(
+              phase: PolarAlignStates.failed,
+              zone: 'green',
+              stage: PolarAlignStages.fine,
+            ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-polar')), findsNothing);
+          expect(
+            tester.getSemantics(_tab('polar')).label,
+            isNot(contains('done tonight')),
+          );
         },
       );
     });
