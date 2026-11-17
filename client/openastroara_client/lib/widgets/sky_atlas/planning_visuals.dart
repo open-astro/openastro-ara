@@ -88,7 +88,7 @@ class DarkWindowStrip extends StatelessWidget {
   }
 
   static const _tinyTime = TextStyle(
-    color: AraColors.textDisabled,
+    color: AraColors.textTertiary,
     fontSize: 9.5,
     fontFeatures: [FontFeature.tabularFigures()],
   );
