@@ -1734,5 +1734,10 @@
   "polarKnobAlignerAuto": "Corrigir com os motores do alinhador polar",
   "polarKnobAlignerAutoOn": "Num setup com alinhador polar, o alinhamento polar gira os motores depois de cada medição",
   "polarKnobAlignerAutoOff": "Desligado: o alinhamento polar mostra os giros e você os faz",
+  "polarAdvancedTitle": "Avançado",
+  "polarAdvancedSummary": "giro de {turn}° · passo de {step}° · {exposure} s",
+  "polarAdvancedRange": "{min} a {max}",
+  "polarAdvancedOutOfRange": "Fora da faixa: use {range}",
+  "polarAdvancedSaveFailed": "{reason} O campo voltou ao valor do setup.",
   "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
 }

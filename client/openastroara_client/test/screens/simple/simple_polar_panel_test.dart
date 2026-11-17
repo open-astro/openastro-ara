@@ -47,6 +47,12 @@ class _Api implements PolarAlignClient {
   void close() {}
 }
 
+/// A rig whose settings read fails.
+class _NoSettingsApi extends _Api {
+  @override
+  Future<PolarAlignSettings> getSettings() async => throw StateError('rig gone');
+}
+
 class _FailingApi extends _Api {
   @override
   Future<void> start({String? stage}) async => throw StateError('no camera');
@@ -419,6 +425,21 @@ void main() {
       expect(find.text('Fine'), findsOneWidget);
     },
   );
+
+  testWidgets('after a failed settings load a changed value sends no PUT (#1736)', (tester) async {
+    final api = _NoSettingsApi();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+  });
 
   testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
     await _pump(tester, const PolarAlignLive());

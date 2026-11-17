@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polar Align Start card: Advanced row</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart), same single dark look as the other mocks in this folder. */
+  :root { color-scheme: dark;
+    --page:#0E0E0E; --bg:#1A1A1A; --panel:#262626; --input:#333; --border:#404040; --text:#E0E0E0; --text2:#A0A0A0;
+    --ok:#4CAF50; --info:#42A5F5; --sel:#1976D2; --warn:#FFB300; --err:#E53935; --errtext:#FF8A80; --btn:#1565C0;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  * { box-sizing: border-box; }
+  body { background:var(--page); color:var(--text); font:14px/1.45 var(--sys); margin:0; padding:28px 16px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width:980px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+  h1 { font-size:22px; font-weight:600; margin:0; text-wrap:balance; }
+  p.note { color:var(--text2); margin:0; max-width:80ch; }
+  .tag { font-size:11px; letter-spacing:.5px; text-transform:uppercase; padding:1px 7px; border-radius:10px; border:1px solid var(--warn); color:var(--warn); margin-left:6px; vertical-align:3px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; }
+  .group { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .lbl { color:var(--text2); font-size:13px; }
+  .seg { display:inline-flex; flex-wrap:wrap; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button { background:transparent; color:var(--text); border:0; padding:8px 14px; font:13px var(--sys); cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background:var(--sel); color:#fff; }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--info); outline-offset:2px; }
+
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; max-width:720px; display:flex; flex-direction:column; gap:12px; }
+  .card h2 { font-size:15px; margin:0; font-weight:600; }
+  .help { color:var(--text2); font-size:14px; margin:0; }
+  .cap { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; }
+  .cap input.exp { width:96px; }
+  input { background:var(--input); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font:14px var(--sys); font-variant-numeric:tabular-nums; min-height:36px; width:100%; }
+  input[aria-invalid="true"] { border-color:var(--err); }
+  .btn { border:0; border-radius:8px; min-height:40px; padding:0 16px; font:600 14px var(--sys); cursor:pointer; background:var(--btn); color:#fff; }
+  .btn.text { background:transparent; color:var(--info); }
+  .btn.sm { min-height:32px; padding:0 12px; background:var(--input); color:var(--text); }
+  .loopseg { display:inline-flex; border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+  .loopseg span { padding:7px 14px; font-size:13px; } .loopseg .on { background:var(--sel); }
+
+  /* The Advanced row */
+  .adv { border-top:1px solid var(--border); padding-top:8px; }
+  .advhead { display:flex; align-items:center; gap:8px; min-height:44px; width:100%; background:transparent; border:0; color:var(--text); font:600 13px var(--sys); cursor:pointer; padding:0; text-align:left; }
+  .advhead .chev { width:12px; transition:transform .15s; color:var(--text2); } .open > .advhead .chev { transform:rotate(90deg); }
+  .advhead .sum { color:var(--text2); font-weight:400; font-size:12px; margin-left:auto; font-variant-numeric:tabular-nums; }
+  .knobs { display:grid; gap:10px 16px; padding:6px 0 4px; }
+  .knobs.grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .knobs.list { grid-template-columns:1fr; }
+  .field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .list .field { flex-direction:row; align-items:flex-start; gap:12px; }
+  .list .field .name { flex:1; padding-top:8px; }
+  .list .field .ctl { width:200px; }
+  .name { font-size:13px; display:flex; align-items:center; gap:6px; }
+  .info { width:16px; height:16px; border-radius:50%; border:1px solid var(--text2); color:var(--text2); font-size:10px; display:inline-flex; align-items:center; justify-content:center; }
+  .unit { color:var(--text2); font-size:12px; }
+  .err { color:var(--errtext); font-size:12px; min-height:16px; }
+  .rng { color:var(--text2); font-size:12px; }
+  .sw { display:inline-flex; border:1px solid var(--border); border-radius:20px; overflow:hidden; width:max-content; }
+  .sw span { padding:7px 16px; font-size:13px; } .sw .on { background:var(--sel); color:#fff; }
+  .notice { display:flex; gap:8px; align-items:flex-start; background:rgba(66,165,245,.12); border-left:3px solid var(--info); border-radius:6px; padding:8px 10px; font-size:12.5px; }
+  .notice.warn { background:rgba(255,179,0,.12); border-color:var(--warn); }
+  .notice.bad { background:rgba(229,57,53,.14); border-color:var(--err); color:var(--errtext); }
+  .skel { height:36px; border-radius:6px; background:linear-gradient(90deg,#2e2e2e,#3a3a3a,#2e2e2e); background-size:200% 100%; animation:sh 1.2s linear infinite; }
+  @keyframes sh { to { background-position:-200% 0; } }
+  .pop { position:relative; }
+  .popbox { position:absolute; left:0; top:48px; z-index:2; width:min(420px,100%); background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 8px 24px #000a; }
+  .hidden { display:none !important; }
+  .notes { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+  .notes div { border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .notes h2 { font-size:14px; margin:0 0 4px; } .notes p { margin:0; color:var(--text2); font-size:13px; }
+  @media (prefers-reduced-motion: reduce) { .skel { animation:none; } .chev { transition:none; } }
+  @media (max-width:560px) { .knobs.grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Polar Align Start card: Advanced row <span class="tag">proposed</span></h1>
+  <p class="note">Advanced Mode, Polar Align, idle (before Start). A collapsed Advanced row holds the four routine knobs: Home start, Check step, Coarse exposure, Seed rotation. They edit the same Polar Align Routine settings as the Settings panel. Controls stay hidden until the section has loaded. Each edit saves at once; a failed save puts the field back to the rig's value. Pick a layout and a state, then try it: type 4 in Seed rotation, tick Fail the next save, or flip Routine running. Recommended: <b>A</b>.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" id="layout" role="group" aria-label="Layout">
+        <button data-v="a" aria-pressed="true">A · Opens in the card, 2 by 2</button>
+        <button data-v="b" aria-pressed="false">B · Opens in the card, one list</button>
+        <button data-v="c" aria-pressed="false">C · Opens a popover</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" id="state" role="group" aria-label="State">
+        <button data-v="collapsed" aria-pressed="true">Collapsed</button>
+        <button data-v="loaded" aria-pressed="false">Open, loaded</button>
+        <button data-v="loading" aria-pressed="false">Loading</button>
+        <button data-v="notloaded" aria-pressed="false">Not loaded</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Try</span>
+      <div class="seg" id="try" role="group" aria-label="Try">
+        <button data-v="range" aria-pressed="false">Out of range</button>
+        <button data-v="fail" aria-pressed="false">Failed save</button>
+        <button data-v="running" aria-pressed="false">Routine running</button>
+        <button data-v="night" aria-pressed="false">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="card"></div>
+
+  <div class="notes">
+    <div><h2>A · Opens in the card, 2 by 2 <span class="tag">chosen 2026-11-17</span></h2><p>The row grows below the Start buttons; the four knobs sit in a two-column grid with the name above each field. Shortest when open, fits the card width, one column on a phone.</p></div>
+    <div><h2>B · Opens in the card, one list</h2><p>Same place, one knob per line, name left and control right, like the Settings panel rows. Easiest to scan and match with Settings, but about twice as tall.</p></div>
+    <div><h2>C · Opens a popover</h2><p>The card never grows: the row opens a floating box over the Start card. Keeps the Start buttons fixed, but covers the card, and a popover is harder to use on a phone and with a keyboard.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const RIG = { use_home:true, check_step_deg:15, coarse_exposure_seconds:2, seed_rotation_deg:30 };
+  const RANGE = { seed_rotation_deg:[5,120,'5 to 120'], check_step_deg:[5,60,'5 to 60'], coarse_exposure_seconds:[0,60,'above 0, up to 60'] };
+  const S = { layout:'a', state:'collapsed', range:false, fail:false, running:false, night:false, vals:{...RIG}, err:{}, saved:'' };
+  const $ = s => document.querySelector(s);
+  const NAMES = { use_home:['Start from Home','Off: the current pointing is taken as Home. Set it right before each stage.'],
+    check_step_deg:['Check step','°'], coarse_exposure_seconds:['Coarse exposure','s'], seed_rotation_deg:['Seed rotation','°'] };
+
+  function seg(id, fn) { $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fn(b); render(); }); }
+  seg('#layout', b => S.layout = b.dataset.v);
+  seg('#state', b => { S.state = b.dataset.v; S.err = {}; S.saved=''; S.vals = {...RIG}; });
+  seg('#try', b => { const v = b.dataset.v; S[v] = !S[v]; if (v==='range'&&S.range) { S.state='loaded'; S.vals.seed_rotation_deg=4; S.vals.check_step_deg=61; S.err={seed_rotation_deg:1,check_step_deg:1}; } if (v==='range'&&!S.range) { S.vals={...RIG}; S.err={}; } if (v==='fail'&&S.fail) S.state='loaded'; });
+
+  function commit(key, raw) {
+    const n = Number(raw), r = RANGE[key];
+    const okLow = key==='coarse_exposure_seconds' ? n>0 : n>=r[0];
+    if (!(raw !== '' && isFinite(n) && okLow && n <= r[1])) { S.vals[key]=raw; S.err[key]=1; S.saved=''; return; }
+    delete S.err[key];
+    if (S.fail) { S.vals[key]=RIG[key]; S.saved='bad'; return; }  // rolled back to the rig's value
+    S.vals[key]=n; RIG[key]=n; S.saved='ok';
+  }
+  function setHome(v) { if (S.fail) { S.saved='bad'; return; } S.vals.use_home=v; RIG.use_home=v; S.saved='ok'; }
+
+  function field(key) {
+    if (key==='use_home') return `<div class="field"><span class="name">Start from Home <span class="info" title="Off: the mount's current pointing is taken as Home, which you must set right before each stage.">i</span></span>
+      <div class="ctl"><span class="sw" role="group" aria-label="Start from Home"><span class="${S.vals.use_home?'on':''}" data-home="1" tabindex="0" role="button">On</span><span class="${S.vals.use_home?'':'on'}" data-home="0" tabindex="0" role="button">Off</span></span>
+      ${S.vals.use_home?'':'<div class="rng">Set the mount to Home yourself before each stage.</div>'}</div></div>`;
+    const [nm,u] = NAMES[key], bad = S.err[key];
+    return `<div class="field"><label class="name" for="k_${key}">${nm} <span class="info" title="${nm}">i</span></label>
+      <div class="ctl"><input id="k_${key}" data-k="${key}" inputmode="decimal" value="${S.vals[key]}" ${bad?'aria-invalid="true" aria-describedby="e_'+key+'"':''}>
+      <div class="${bad?'err':'rng'}" id="e_${key}">${bad?'Out of range: use '+RANGE[key][2]+' '+u:'Range '+RANGE[key][2]+' '+u}</div></div></div>`;
+  }
+  function body() {
+    if (S.state==='loading') return `<div class="knobs ${S.layout==='b'?'list':'grid'}" aria-busy="true"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div><div class="rng">Loading the routine settings…</div>`;
+    if (S.state==='notloaded') return `<div class="notice bad" role="alert">Routine settings not loaded. <button class="btn sm" id="retry">Retry</button></div>`;
+    const keys = ['use_home','seed_rotation_deg','check_step_deg','coarse_exposure_seconds'];
+    return `<div class="knobs ${S.layout==='b'?'list':'grid'}">${keys.map(field).join('')}</div>
+      ${S.saved==='bad'?'<div class="notice bad" role="alert">Could not save. The field is back to the rig\'s value.</div>':''}
+      ${S.saved==='ok'?'<div class="rng" role="status">Saved.</div>':''}
+      ${S.running?'<div class="notice warn">The routine is running: a change applies from the next stage or frame.</div>':''}`;
+  }
+  function render() {
+    document.body.classList.toggle('night', S.night);
+    for (const [id,k] of [['#layout','layout'],['#state','state']]) document.querySelectorAll(id+' button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v===S[k]));
+    document.querySelectorAll('#try button').forEach(b => b.setAttribute('aria-pressed', !!S[b.dataset.v]));
+    const open = S.state!=='collapsed', v = S.vals;
+    const summary = `${v.use_home?'Home':'No Home'} · ${v.seed_rotation_deg}° · ${v.check_step_deg}° · ${v.coarse_exposure_seconds} s`;
+    $('#card').innerHTML = `<h2>Polar alignment <span class="rng">${S.running?'· running':''}</span></h2>
+      <p class="help">Three steps. Rough, Fine, Check.</p>
+      <div class="cap"><label class="name">Exposure <input class="exp" value="2" aria-label="Exposure"> <span class="unit">s</span></label>
+        <span class="loopseg"><span class="on">Loop</span><span>Single</span></span></div>
+      <div class="cap"><button class="btn">Start Polar Alignment</button><button class="btn text">Skip the rough step</button><button class="btn text">Check only</button></div>
+      <div class="adv pop ${open?'open':''}">
+        <button class="advhead" id="adv" aria-expanded="${open}"><svg class="chev" viewBox="0 0 12 12"><path d="M4 2l5 4-5 4z" fill="currentColor"/></svg>Advanced <span class="sum">${open&&S.layout==='c'?'':summary}</span></button>
+        ${open ? (S.layout==='c' ? `<div class="popbox">${body()}</div>` : body()) : ''}
+      </div>`;
+    $('#adv').onclick = () => { S.state = open ? 'collapsed' : 'loaded'; render(); };
+    const r = $('#retry'); if (r) r.onclick = () => { S.state='loading'; render(); setTimeout(() => { S.state='loaded'; render(); }, 700); };
+    document.querySelectorAll('[data-k]').forEach(i => i.addEventListener('change', () => { commit(i.dataset.k, i.value.trim()); render(); }));
+    document.querySelectorAll('[data-home]').forEach(s => { const f = () => { setHome(s.dataset.home==='1'); render(); }; s.onclick = f; s.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); f(); } }; });
+  }
+  render();
+})();
+</script>
+</body>
+</html>
