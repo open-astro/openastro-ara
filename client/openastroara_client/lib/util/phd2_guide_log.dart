@@ -1,5 +1,26 @@
 import '../state/guider/guide_step_state.dart';
 
+/// One guide frame of a log session with the flags the stats need: the raw
+/// pixel error (same signs as [GuideStep]; null on a lost-star frame), the
+/// frame that followed a DITHER line, a frame inside a settling window, and a
+/// lost-star frame.
+class Phd2LogFrame {
+  final DateTime at;
+  final double? raPx;
+  final double? decPx;
+  final bool dither;
+  final bool settling;
+  final bool starLost;
+  const Phd2LogFrame({
+    required this.at,
+    this.raPx,
+    this.decPx,
+    this.dither = false,
+    this.settling = false,
+    this.starLost = false,
+  });
+}
+
 /// One "Guiding Begins … Guiding Ends" session of a PHD2 guide log, in the
 /// client's own [GuideStep] / [GuideMarker] terms.
 class Phd2LogSession {
@@ -7,11 +28,13 @@ class Phd2LogSession {
   final double? pixelScaleArcsec;
   final List<GuideStep> steps;
   final List<GuideMarker> markers;
+  final List<Phd2LogFrame> frames;
   const Phd2LogSession({
     required this.beganAt,
     required this.pixelScaleArcsec,
     required this.steps,
     required this.markers,
+    this.frames = const [],
   });
 }
 
@@ -33,7 +56,9 @@ class Phd2GuideLog {
   List<GuideStep> get allSteps => [for (final s in sessions) ...s.steps];
   List<GuideMarker> get allMarkers => [for (final s in sessions) ...s.markers];
 
-  static final _begins = RegExp(r'^Guiding Begins at (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})');
+  static final _begins = RegExp(
+    r'^Guiding Begins at (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})',
+  );
   static final _scale = RegExp(r'^Pixel scale = ([\d.]+) arc-sec/px');
   static final _dither = RegExp(r'DITHER by ([-\d.]+), ([-\d.]+)');
 
@@ -43,20 +68,37 @@ class Phd2GuideLog {
     double? scale;
     var steps = <GuideStep>[];
     var markers = <GuideMarker>[];
+    var frames = <Phd2LogFrame>[];
+    var settling = false;
+    var pendingDither = false;
     var lastT = 0.0;
     var inRows = false;
 
     void close() {
       final b0 = began; // local copy: a captured variable does not promote
       if (b0 != null && steps.isNotEmpty) {
-        markers.add(GuideMarker(
-            at: _at(b0, lastT + 0.5), kind: GuideMarkerKind.guidingStopped));
-        sessions.add(Phd2LogSession(
-            beganAt: b0, pixelScaleArcsec: scale, steps: steps, markers: markers));
+        markers.add(
+          GuideMarker(
+            at: _at(b0, lastT + 0.5),
+            kind: GuideMarkerKind.guidingStopped,
+          ),
+        );
+        sessions.add(
+          Phd2LogSession(
+            beganAt: b0,
+            pixelScaleArcsec: scale,
+            steps: steps,
+            markers: markers,
+            frames: frames,
+          ),
+        );
       }
       began = null;
       steps = <GuideStep>[];
       markers = <GuideMarker>[];
+      frames = <Phd2LogFrame>[];
+      settling = false;
+      pendingDither = false;
       lastT = 0;
       inRows = false;
     }
@@ -66,9 +108,17 @@ class Phd2GuideLog {
       final b = _begins.firstMatch(line);
       if (b != null) {
         close();
-        began = DateTime(int.parse(b[1]!), int.parse(b[2]!), int.parse(b[3]!),
-            int.parse(b[4]!), int.parse(b[5]!), int.parse(b[6]!));
-        markers.add(GuideMarker(at: began!, kind: GuideMarkerKind.guidingStarted));
+        began = DateTime(
+          int.parse(b[1]!),
+          int.parse(b[2]!),
+          int.parse(b[3]!),
+          int.parse(b[4]!),
+          int.parse(b[5]!),
+          int.parse(b[6]!),
+        );
+        markers.add(
+          GuideMarker(at: began!, kind: GuideMarkerKind.guidingStarted),
+        );
         continue;
       }
       if (began == null) continue; // calibration or preamble
@@ -88,21 +138,45 @@ class Phd2GuideLog {
       if (line.startsWith('INFO:')) {
         final at = _at(began!, lastT + 0.5);
         final d = _dither.firstMatch(line);
+        if (line.contains('Settling started')) {
+          settling = true;
+        } else if (line.contains('Settling complete') ||
+            line.contains('Settling failed')) {
+          settling = false;
+        }
         if (d != null) {
-          markers.add(GuideMarker(
+          pendingDither = true;
+          markers.add(
+            GuideMarker(
               at: at,
               kind: GuideMarkerKind.dithered,
               dxPx: double.tryParse(d[1]!),
-              dyPx: double.tryParse(d[2]!)));
+              dyPx: double.tryParse(d[2]!),
+            ),
+          );
         } else if (line.contains('Settling started')) {
-          markers.add(GuideMarker(at: _at(began!, lastT + 0.6), kind: GuideMarkerKind.settling));
+          markers.add(
+            GuideMarker(
+              at: _at(began!, lastT + 0.6),
+              kind: GuideMarkerKind.settling,
+            ),
+          );
         } else if (line.contains('Settling complete')) {
-          markers.add(GuideMarker(at: at, kind: GuideMarkerKind.settleDone, status: 0));
+          markers.add(
+            GuideMarker(at: at, kind: GuideMarkerKind.settleDone, status: 0),
+          );
         } else if (line.contains('Settling failed')) {
-          markers.add(GuideMarker(
-              at: at, kind: GuideMarkerKind.settleDone, status: 1, error: 'settle failed'));
+          markers.add(
+            GuideMarker(
+              at: at,
+              kind: GuideMarkerKind.settleDone,
+              status: 1,
+              error: 'settle failed',
+            ),
+          );
         } else if (line.toLowerCase().contains('star lost') &&
-            (markers.isEmpty || markers.last.kind != GuideMarkerKind.starLost)) {
+            (markers.isEmpty ||
+                markers.last.kind != GuideMarkerKind.starLost)) {
           markers.add(GuideMarker(at: at, kind: GuideMarkerKind.starLost));
         }
         continue;
@@ -116,9 +190,22 @@ class Phd2GuideLog {
       if (step.$1.raPx == null &&
           (steps.isEmpty || steps.last.raPx != null) &&
           (markers.isEmpty || markers.last.kind != GuideMarkerKind.starLost)) {
-        markers.add(GuideMarker(at: step.$1.at, kind: GuideMarkerKind.starLost));
+        markers.add(
+          GuideMarker(at: step.$1.at, kind: GuideMarkerKind.starLost),
+        );
       }
       steps.add(step.$1);
+      frames.add(
+        Phd2LogFrame(
+          at: step.$1.at,
+          raPx: step.$1.raPx,
+          decPx: step.$1.decPx,
+          dither: pendingDither,
+          settling: settling,
+          starLost: step.$1.raPx == null,
+        ),
+      );
+      pendingDither = false;
     }
     close();
     return Phd2GuideLog._(sessions);
@@ -147,7 +234,8 @@ class Phd2GuideLog {
     final ra = -raRaw;
     final dec = decRaw;
     final raMs = (double.tryParse(f[9]) ?? 0) * (f[10].trim() == 'E' ? -1 : 1);
-    final decMs = (double.tryParse(f[11]) ?? 0) * (f[12].trim() == 'S' ? -1 : 1);
+    final decMs =
+        (double.tryParse(f[11]) ?? 0) * (f[12].trim() == 'S' ? -1 : 1);
     return (
       GuideStep(
         at: at,
