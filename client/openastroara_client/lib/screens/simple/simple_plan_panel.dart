@@ -1103,13 +1103,18 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         Row(
           children: [
             Expanded(
-              child: Text(context.l10n.planTonightsBest, style: AraText.caption),
+              child: Text(
+                context.l10n.planTonightsBest,
+                style: AraText.caption,
+              ),
             ),
             if (widget.onSeeAll != null)
               OutlinedButton(
                 key: const Key('simple-run-best-see-all'),
                 onPressed: widget.onSeeAll,
-                style: OutlinedButton.styleFrom(minimumSize: const Size(44, 44)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                ),
                 child: Text(context.l10n.bestSeeAll),
               ),
           ],
