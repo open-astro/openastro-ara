@@ -164,7 +164,7 @@ jobs:
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Restore the Server project
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
