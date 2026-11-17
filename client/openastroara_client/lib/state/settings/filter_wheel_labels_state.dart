@@ -20,9 +20,9 @@ class FilterWheelLabels {
   // call site that constructs the model directly.
   final List<String> _labels;
 
-  FilterWheelLabels({
-    List<String> labels = const ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
-  }) : _labels = List.unmodifiable(labels.map((s) => s.trim()));
+  // Required: no reference-8 default, labels come only from the rig (ADR 0015).
+  FilterWheelLabels({required List<String> labels})
+    : _labels = List.unmodifiable(labels.map((s) => s.trim()));
 
   int get slotCount => _labels.length;
 
