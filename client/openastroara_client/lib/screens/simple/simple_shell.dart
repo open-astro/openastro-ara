@@ -2884,7 +2884,8 @@ class _RailTabs extends ConsumerWidget {
 
 /// One tab: the mode's icon over its caption. [name] is the open block's
 /// header, which shows the short name alone, as the rail did. [compact] (large
-/// text) drops the icon, so the six tabs and Stop fit the rail's height.
+/// text) drops the icon and keeps the caption to one line; the tab list
+/// scrolls when the tabs outgrow the rail.
 class _RailTab extends StatelessWidget {
   const _RailTab({
     super.key,
@@ -2923,20 +2924,21 @@ class _RailTab extends StatelessWidget {
             constraints: BoxConstraints(
               minWidth: 60 * scale,
               maxWidth: 60 * scale,
-              minHeight: name ? 48 : (compact ? 32 : 46),
+              minHeight: name ? 48 : (compact ? 44 : 46),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (!name && !compact) Icon(mode.icon, size: 20, color: color),
                 // "Polar align" wraps to two lines; a word wider than the
-                // rail shrinks to fit, never cut.
+                // rail shrinks to fit, never cut. Compact keeps one line and
+                // shrinks it whole, so no fixed width there.
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: SizedBox(
-                      width: 60 * scale,
+                      width: compact ? null : 60 * scale,
                       child: Text(
                         label,
                         maxLines: compact ? 1 : 2,

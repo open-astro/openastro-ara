@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart' show RenderFittedBox, RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -563,6 +564,51 @@ void main() {
         },
       );
     });
+  }
+
+  for (final scale in [1.3, 2.0]) {
+    testWidgets(
+      'iPad 1024x768 at ${scale}x text: every rail tab is at least 44 tall',
+      (tester) async {
+        await _pump(tester, ipad, textScale: scale);
+        for (final (_, name) in _order) {
+          expect(
+            tester.getSize(_tab(name)).height,
+            greaterThanOrEqualTo(44),
+            reason: '$name tab is a 44 px touch target',
+          );
+        }
+      },
+    );
+
+    testWidgets(
+      'iPad 1024x768 at ${scale}x text: each compact caption shrinks to its tab, never cut',
+      (tester) async {
+        await _pump(tester, ipad, textScale: scale);
+        // Preview is open: its tab is the open block's header, not compact.
+        for (final tab in [
+          for (final (_, name) in _order.skip(1)) _tab(name),
+          find.byKey(const Key('simple-mode-preflight')),
+        ]) {
+          final text = find.descendant(
+            of: tab,
+            matching: find.byType(RichText),
+          );
+          final paragraph = tester.renderObject<RenderParagraph>(text);
+          final fitted = tester.renderObject<RenderFittedBox>(
+            find.ancestor(of: text, matching: find.byType(FittedBox)),
+          );
+          final shown =
+              paragraph.getMaxIntrinsicWidth(double.infinity) *
+              paragraph.getTransformTo(fitted).entry(0, 0);
+          expect(
+            shown,
+            lessThanOrEqualTo(tester.getSize(tab).width + 0.01),
+            reason: 'the one-line caption in $tab fits its tab',
+          );
+        }
+      },
+    );
   }
 
   for (final (name, size) in [
