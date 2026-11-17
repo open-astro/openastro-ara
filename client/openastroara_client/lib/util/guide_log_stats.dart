@@ -26,8 +26,8 @@ const double kSteadyDriftRatio = 1.0;
 /// the mean offset, which the drift figure explains. Also peak per axis, RA
 /// oscillation index (fraction of consecutive RA samples that changed sign;
 /// like `GuideGraphStats`, a pair is not formed across an excluded frame),
-/// and RA / Dec drift from a least-squares line per minute. Values are arcsec when the log
-/// carries a pixel scale ([inArcsec]), else px.
+/// and RA / Dec drift from a least-squares line per minute. Values are
+/// arcsec when the log carries a pixel scale ([inArcsec]), else px.
 class GuideLogStats {
   final bool inArcsec;
   final int samples;
@@ -86,10 +86,11 @@ class GuideLogStats {
     final rmsDec = _std(dec);
     // Pairs only between frames adjacent in [frames]: an excluded frame
     // between two kept ones resets the pair.
+    final kept = Set<Phd2LogFrame>.identity()..addAll(used);
     var flips = 0, pairs = 0;
     double? prev;
     for (final f in frames) {
-      if (!used.contains(f)) {
+      if (!kept.contains(f)) {
         prev = null;
         continue;
       }
