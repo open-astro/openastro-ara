@@ -63,6 +63,19 @@ class _Stats extends StatsTargetsNotifier {
   Future<List<StatsTarget>?> build() async => _v;
 }
 
+/// Loads a saved Transit only when [gate] opens; saves nothing.
+class _GatedPrefs extends TonightsBestPrefsService {
+  final gate = Completer<void>();
+  @override
+  Future<BestChoices> load() async {
+    await gate.future;
+    return const BestChoices(sort: BestSort.transit);
+  }
+
+  @override
+  Future<void> save(BestChoices c) async {}
+}
+
 void main() {
   // N1: B and C tie on altitude; ranker order C, B disagrees with name and
   // with score order (B 90 > C 70).
@@ -348,11 +361,16 @@ void main() {
     );
 
     test('a change that races the load wins', () async {
-      File('${dir.path}/tonights_best.json')
-          .writeAsStringSync(jsonEncode({'sort': 'transit'}));
-      final c = make();
+      // The load is held until after the change, and the save never reaches
+      // the file, so only the race guard keeps the change.
+      final prefs = _GatedPrefs();
+      final c = ProviderContainer(
+        overrides: [tonightsBestPrefsServiceProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(c.dispose);
       final n = c.read(tonightsBestChoicesProvider.notifier);
       n.setSort(BestSort.altitudeNow);
+      prefs.gate.complete();
       await n.ready;
       expect(c.read(tonightsBestChoicesProvider).sort, BestSort.altitudeNow);
     });
