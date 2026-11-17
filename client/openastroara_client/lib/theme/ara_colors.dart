@@ -28,12 +28,14 @@ class AraColors {
   /// (DESIGN.md `overlay-scrim`), so their text reads over a bright frame too.
   static const overlayScrim = Color(0xE61A1A1A);
 
-  /// Error words on Simple Mode's panels: [accentError] lightened so it reads
+  /// Error text: the theme's error colour in both modes, and on Simple Mode's
+  /// panels: [accentError] lightened so it reads
   /// at 4.5:1 over the scrim on any frame (Fault Red itself falls to 1.6:1
   /// over a bright one).
   static const errorText = Color(0xFFFF8A80);
 
-  /// Text-button labels on Simple Mode's panels and tiles: [accentInfo]
+  /// Text-button labels in both modes (the theme's text-button colour), and on
+  /// Simple Mode's panels and tiles: [accentInfo]
   /// lightened so it reads at 4.5:1 on a tile (#383838) as well as the scrim
   /// (Info Blue itself is 4.4:1 there, the button primary 2:1).
   static const linkText = Color(0xFF64B5F6);
@@ -59,6 +61,11 @@ class AraColors {
   static const textPrimary = Color(0xFFE0E0E0);
   static const textSecondary = Color(0xFFA0A0A0);
   static const textDisabled = Color(0xFF606060);
+
+  /// Quiet text that still reads: hints, secondary icons and captions on
+  /// panel, panel-alt and input fills (4.5:1 or better on each). Between
+  /// [textSecondary] and [textDisabled].
+  static const textTertiary = Color(0xFF9B9B9B);
 
   // Status accents
   static const accentConnected = Color(0xFF4CAF50);

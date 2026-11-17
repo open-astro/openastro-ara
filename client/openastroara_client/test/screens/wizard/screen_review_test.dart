@@ -6,6 +6,8 @@ import 'package:openastroara/models/solver_recommendation.dart';
 import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
 import 'package:openastroara/screens/wizard/screens/screen_data_and_review.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/theme/ara_theme.dart';
 
 import '../../helpers/fake_data_manager_client.dart';
 
@@ -153,11 +155,29 @@ void main() {
       ],
     );
 
+    const tooNarrow = SolverRecommendation(
+      mainFovDeg: 0.05,
+      narrowestFovDeg: 0.05,
+      band: 'too narrow',
+      tooNarrow: true,
+      reason: 'below the floor',
+      packages: [
+        SolverDatabasePick(
+          role: 'camera',
+          fovDeg: 0.05,
+          band: 'too narrow',
+          tooNarrow: true,
+          reason: 'A 0.05° field is below the 0.15° ASTAP can solve.',
+        ),
+      ],
+    );
+
     Future<(ProviderContainer, FakeDataManagerClient)> pump(
       WidgetTester tester, {
       SolverRecommendation rec = twoPicks,
       bool throwOnRecommend = false,
       void Function(ProfileDraft)? seed,
+      ThemeData? theme,
     }) async {
       final api = FakeDataManagerClient(recommendation: rec, throwOnRecommend: throwOnRecommend);
       final container = ProviderContainer(overrides: [
@@ -165,10 +185,15 @@ void main() {
       ]);
       addTearDown(container.dispose);
       seed?.call(container.read(wizardControllerProvider).draft);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: ScreenReview())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: theme,
+            home: const Scaffold(body: ScreenReview()),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       return (container, api);
     }
@@ -216,20 +241,24 @@ void main() {
     });
 
     testWidgets('a field below the solver floor warns instead of offering a download', (tester) async {
-      const tooNarrow = SolverRecommendation(
-        mainFovDeg: 0.05,
-        narrowestFovDeg: 0.05,
-        band: 'too narrow',
-        tooNarrow: true,
-        reason: 'below the floor',
-        packages: [
-          SolverDatabasePick(role: 'camera', fovDeg: 0.05, band: 'too narrow', tooNarrow: true, reason: 'A 0.05° field is below the 0.15° ASTAP can solve.'),
-        ],
-      );
       final (container, _) = await pump(tester, rec: tooNarrow);
       expect(find.textContaining('cannot plate-solve'), findsOneWidget);
       expect(find.byKey(const ValueKey('review-solver-db-download')), findsNothing);
       expect(container.read(wizardControllerProvider).draft.plateSolve.solverDatabasePackageIds, isEmpty);
+    });
+
+    testWidgets('the solver too-narrow warning icon stays Fault Red', (
+      tester,
+    ) async {
+      await pump(tester, rec: tooNarrow, theme: buildAraTheme());
+      final icon = tester.widget<Icon>(
+        find.byIcon(Icons.warning_amber_rounded),
+      );
+      expect(
+        icon.color,
+        AraColors.accentError,
+        reason: 'the theme error is error-text, a text colour',
+      );
     });
 
     testWidgets('an unreachable rig reads as an error, never a crash, and queues nothing', (tester) async {
