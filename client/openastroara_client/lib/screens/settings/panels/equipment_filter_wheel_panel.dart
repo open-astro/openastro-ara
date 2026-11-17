@@ -133,6 +133,8 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
             SectionNotLoaded(
               section: labelsSection,
               onRetry: _reload(ref, filterWheelLabelsProvider),
+              // A row of the list: start where the rows start.
+              padding: const EdgeInsets.symmetric(vertical: AraSpace.s12),
             )
           else ...[
             if (labelsSection.conflict)

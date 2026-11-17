@@ -337,10 +337,10 @@ void main() {
     tester,
   ) async {
     await _pump(tester, null, rig: false);
-    expect(
-      tester.getTopLeft(find.text('Rig not connected').first).dx,
-      tester.getTopLeft(find.text('Auto-connect on boot')).dx,
-    );
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    // Policy row first, slot labels row last: both start where the rows start.
+    expect(tester.getTopLeft(find.text('Rig not connected').first).dx, rowX);
+    expect(tester.getTopLeft(find.text('Rig not connected').last).dx, rowX);
   });
 
   testWidgets('a failed policy load: text and Retry line up with the rows', (

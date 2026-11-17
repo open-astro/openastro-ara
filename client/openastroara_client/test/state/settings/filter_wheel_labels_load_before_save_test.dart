@@ -14,10 +14,9 @@ import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import '../../support/fake_section_rig.dart';
 
 // ADR 0015 for an equipment section: the filter wheel's slot labels. The
-// notifier loads itself from profileApiProvider and keeps the reference-8
-// labels when that load fails, so the next slot edit writes those defaults
-// over every other slot the person named on the rig. Assertions are on what
-// reached the rig only.
+// notifier loads itself from profileApiProvider; when that load fails, a slot
+// edit must not write the reference-8 defaults over every other slot the
+// person named on the rig. Assertions are on what reached the rig only.
 
 const _section = 'filter-wheel/labels';
 
@@ -54,8 +53,8 @@ void main() {
     },
   );
 
-  test('Filter wheel labels load again when the wheel reports its slots, '
-      'not when it connects', () async {
+  test('Filter wheel labels load again '
+      'when the wheel reports its slots', () async {
     final wheel = _Wheel();
     c.dispose();
     c = ProviderContainer(
