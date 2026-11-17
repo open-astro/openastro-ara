@@ -154,22 +154,22 @@ void main() {
   );
 
   testWidgets(
-    'the Polar Corrector switch shows the profile value and saves polar_corrector_auto, keeping the other fields (#1971)',
+    'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
     (tester) async {
       final rig = _Api()
-        ..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false, polarCorrectorAuto: false);
+        ..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false, polarAlignerAuto: false);
       await _pump(tester, rig: rig);
-      expect(find.text("Correct with the Polar Corrector's motors"), findsOneWidget);
+      expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
       expect(find.text('Off: Polar align shows the turns and you make them'), findsOneWidget);
-      final corrector = find.byType(Switch).at(1);
-      expect(tester.widget<Switch>(corrector).value, isFalse);
-      await tester.tap(corrector);
+      final aligner = find.byType(Switch).at(1);
+      expect(tester.widget<Switch>(aligner).value, isFalse);
+      await tester.tap(aligner);
       await tester.pumpAndSettle();
       final saved = rig.saved.single;
-      expect(saved.polarCorrectorAuto, isTrue);
+      expect(saved.polarAlignerAuto, isTrue);
       expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
       expect(
-        find.text('On a rig with a Polar Corrector, Polar align turns its motors after each measurement'),
+        find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
         findsOneWidget,
       );
     },

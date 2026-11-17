@@ -92,13 +92,13 @@ class ImagingPolarPanel extends ConsumerWidget {
           onChanged: (v) => save(s.copyWith(useHome: v)),
           hint: s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
         ),
-        // #1971 a profile setting: shown with or without a Polar Corrector connected.
+        // #1971 a profile setting: shown with or without a Polar Aligner connected.
         SettingsSwitchRow(
-          label: l10n.polarKnobCorrectorAuto,
+          label: l10n.polarKnobAlignerAuto,
           helpKey: 'img.polar.knobs',
-          value: s.polarCorrectorAuto,
-          onChanged: (v) => save(s.copyWith(polarCorrectorAuto: v)),
-          hint: s.polarCorrectorAuto ? l10n.polarKnobCorrectorAutoOn : l10n.polarKnobCorrectorAutoOff,
+          value: s.polarAlignerAuto,
+          onChanged: (v) => save(s.copyWith(polarAlignerAuto: v)),
+          hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
         ),
         number(
           l10n.polarKnobTurn,

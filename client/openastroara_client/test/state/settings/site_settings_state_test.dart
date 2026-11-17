@@ -61,13 +61,30 @@ void main() {
       expect(ProfileApi.siteSettingsFromJson({'elevation_m': 71.6}).elevationM, 72);
     });
 
-    test('setBortleClass clamps to [1, 9]', () {
+    test('setSkyBortle rejects out-of-range and clears the SQM', () {
       final n = container.read(siteSettingsProvider.notifier);
-      n.setBortleClass(0);
-      n.setBortleClass(10);
-      expect(container.read(siteSettingsProvider).bortleClass, 6);
-      n.setBortleClass(2);
-      expect(container.read(siteSettingsProvider).bortleClass, 2);
+      n.setSkySqm(20.3);
+      n.setSkyBortle(0);
+      n.setSkyBortle(10);
+      expect(container.read(siteSettingsProvider).sqmMagPerArcsec2, 20.3);
+      n.setSkyBortle(2);
+      final s = container.read(siteSettingsProvider);
+      expect(s.bortleClass, 2);
+      expect(s.sqmMagPerArcsec2, 0, reason: 'no hidden reading after the switch');
+    });
+
+    test('setSkySqm stores the reading and the derived class; rejects 0 and out-of-range', () {
+      final n = container.read(siteSettingsProvider.notifier);
+      n.setSkySqm(20.3);
+      var s = container.read(siteSettingsProvider);
+      expect(s.sqmMagPerArcsec2, 20.3);
+      expect(s.bortleClass, 4);
+      n.setSkySqm(0);
+      n.setSkySqm(15.9);
+      n.setSkySqm(22.6);
+      s = container.read(siteSettingsProvider);
+      expect(s.sqmMagPerArcsec2, 20.3);
+      expect(s.bortleClass, 4);
     });
 
     test('setTypicalSeeingArcsec rejects non-positive + extreme', () {

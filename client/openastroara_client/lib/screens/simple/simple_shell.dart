@@ -63,12 +63,12 @@ import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
-import '../../models/polar_align.dart' show PolarAlignSettings, PolarCorrector;
+import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
 import '../../state/equipment/camera_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
 import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
-import '../../state/polar_align/polar_corrector_state.dart';
-import '../../widgets/imaging/polar_corrector_block.dart' show polarCorrectorMotorsBusy, polarCorrectorNotDrivableText;
+import '../../state/polar_align/polar_aligner_state.dart';
+import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/equipment_device_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -690,9 +690,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _ => null,
     };
     if (window != null) return _openDevice(window);
-    // The Polar Corrector's line opens the Polar align Screen, where its block is.
+    // The Polar Aligner's line opens the Polar align Screen, where its block is.
     final mode = SimpleScreen.showing(
-        origin == SimpleStatusOrigin.polarCorrector ? SimpleStatusOrigin.polar : origin);
+        origin == SimpleStatusOrigin.polarAligner ? SimpleStatusOrigin.polar : origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
@@ -3589,7 +3589,7 @@ class _Gear extends ConsumerWidget {
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         )),
-      (l10n.polarCorrector, const _PolarCorrectorGearRows()),
+      (l10n.polarAligner, const _PolarAlignerGearRows()),
     ]..sort((a, b) => simpleCompareNames(a.$1, b.$1));
     return Column(
       key: const Key('simple-gear'),
@@ -3603,24 +3603,24 @@ class _Gear extends ConsumerWidget {
   }
 }
 
-/// #1971 the rig's Polar Corrector, read-only: the daemon finds it (a separate
+/// #1971 the rig's Polar Aligner, read-only: the daemon finds it (a separate
 /// base wins over the mount), so there is nothing to pick. Under it, Turned
 /// by (user, 2026-11-16: here, not in the Polar align panel).
-class _PolarCorrectorGearRows extends ConsumerWidget {
-  const _PolarCorrectorGearRows();
+class _PolarAlignerGearRows extends ConsumerWidget {
+  const _PolarAlignerGearRows();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final PolarCorrector? device;
-    switch (ref.watch(polarCorrectorProvider)) {
+    final PolarAligner? device;
+    switch (ref.watch(polarAlignerProvider)) {
       case AsyncData(:final value):
         device = value;
       // A failed read says so, as a device in error does: red dot, Failed and why.
       case AsyncError(:final error):
         return _gearRow(
-          id: 'polarcorrector',
-          title: l10n.polarCorrector,
+          id: 'polaraligner',
+          title: l10n.polarAligner,
           dot: StatusLevel.error,
           word: '${l10n.shellFailed} · ${failureReason(l10n, error)}',
           verb: null,
@@ -3633,28 +3633,28 @@ class _PolarCorrectorGearRows extends ConsumerWidget {
       case AsyncLoading():
         return const SizedBox.shrink();
     }
-    // No rig, or a daemon that predates the Polar Corrector (404).
+    // No rig, or a daemon that predates the Polar Aligner (404).
     if (device == null) return const SizedBox.shrink();
-    final moving = device.moving || polarCorrectorMotorsBusy(ref.watch(polarAlignLiveProvider));
+    final moving = device.moving || polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
     final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
     final (dot, word, caption) = !device.present
-        ? (StatusLevel.disconnected, l10n.polarCorrectorNone, l10n.polarCorrectorFoundNone)
+        ? (StatusLevel.disconnected, l10n.polarAlignerNone, l10n.polarAlignerFoundNone)
         : !device.drivable
         ? (
             StatusLevel.busy,
-            unreadable ? l10n.polarCorrectorCantRead : l10n.polarCorrectorCantDrive,
-            polarCorrectorNotDrivableText(l10n, device),
+            unreadable ? l10n.polarAlignerCantRead : l10n.polarAlignerCantDrive,
+            polarAlignerNotDrivableText(l10n, device),
           )
         : (
             moving ? StatusLevel.active : StatusLevel.connected,
-            moving ? l10n.deviceMoving : l10n.polarCorrectorReady,
-            device.carrier == 'mount' ? l10n.polarCorrectorFoundMount : l10n.polarCorrectorFoundBase,
+            moving ? l10n.deviceMoving : l10n.polarAlignerReady,
+            device.carrier == 'mount' ? l10n.polarAlignerFoundMount : l10n.polarAlignerFoundBase,
           );
     final title = device.name == null || !device.present
-        ? l10n.polarCorrector
-        : l10n.shellGearTitle(l10n.polarCorrector, device.name!);
+        ? l10n.polarAligner
+        : l10n.shellGearTitle(l10n.polarAligner, device.name!);
     final row = _gearRow(
-      id: 'polarcorrector',
+      id: 'polaraligner',
       title: title,
       dot: dot,
       word: '$word · $caption',
@@ -3665,16 +3665,16 @@ class _PolarCorrectorGearRows extends ConsumerWidget {
       toggle: null,
     );
     if (!device.present || !device.drivable) return row;
-    final auto = ref.watch(polarAlignSettingsProvider).value?.polarCorrectorAuto;
+    final auto = ref.watch(polarAlignSettingsProvider).value?.polarAlignerAuto;
     Future<void> pick(bool next) async {
       final notify = userNotifier(context);
       try {
         // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
         final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarCorrectorAuto: next));
+        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarAlignerAuto: next));
       } catch (e) {
         notify(
-          l10n.shellGearActionFailed(l10n.polarCorrectorTurnedBy, l10n.polarCorrector),
+          l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
           detail: failureReason(l10n, e),
           error: true,
         );
@@ -3687,7 +3687,7 @@ class _PolarCorrectorGearRows extends ConsumerWidget {
       children: [
         row,
         Container(
-          key: const Key('simple-gear-polarcorrector-turned-by'),
+          key: const Key('simple-gear-polaraligner-turned-by'),
           padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: AraSpace.s8),
           decoration: BoxDecoration(
             color: AraColors.tileFill,
@@ -3697,18 +3697,18 @@ class _PolarCorrectorGearRows extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: AraSpace.s4,
             children: [
-              Text(l10n.polarCorrectorTurnedBy, style: kSimpleText),
+              Text(l10n.polarAlignerTurnedBy, style: kSimpleText),
               if (auto != null)
                 Text(
-                  auto ? l10n.polarCorrectorMotorsCaption : l10n.polarCorrectorHandCaption,
+                  auto ? l10n.polarAlignerMotorsCaption : l10n.polarAlignerHandCaption,
                   style: AraText.caption,
                 ),
               SimpleSegments<bool>(
-                keyPrefix: 'simple-gear-polarcorrector',
-                group: l10n.polarCorrectorTurnedBy,
+                keyPrefix: 'simple-gear-polaraligner',
+                group: l10n.polarAlignerTurnedBy,
                 options: [
-                  (true, l10n.polarCorrectorMotors, 'motors'),
-                  (false, l10n.polarCorrectorByHandOption, 'hand'),
+                  (true, l10n.polarAlignerMotors, 'motors'),
+                  (false, l10n.polarAlignerByHandOption, 'hand'),
                 ],
                 selected: auto,
                 onPick: pick,

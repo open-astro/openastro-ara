@@ -31,6 +31,7 @@ set -u
 DIR=${DIR:-/run/openastroara/storage}
 HELPER=${HELPER:-/opt/openastroara/scripts/configure-storage.sh}
 MAX_ARGS=8
+MAX_BYTES=4096   # far above any real request (eight short lines); read before the loop
 
 ID=${1:-}
 case "$ID" in
@@ -41,6 +42,11 @@ RES="$DIR/$ID.result"
 
 if [ -L "$REQ" ] || [ ! -f "$REQ" ]; then
     echo "storage-request: $REQ is not a regular file" >&2
+    exit 9
+fi
+# Size cap before any line is read into shell memory (ADR 0017 rule 4).
+if [ "$(wc -c < "$REQ")" -gt "$MAX_BYTES" ]; then
+    echo "storage-request: request $REQ is too large" >&2
     exit 9
 fi
 

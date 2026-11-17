@@ -188,6 +188,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Predicted_rate_is_the_same_for_a_Bortle_class_and_its_SQM_and_follows_the_client_window() {
+            // Client parity (client planning_math_test 'Bortle 6 and SQM 19.5'): Bortle 6 is 19.5 on the
+            // ladder 22.0 - 0.5 (class - 1), so the two entries give one sky rate, in either mode.
+            double Rate(SiteSettingsDto s) => SkyModelCalibrationService.PredictedSkyRateEPerSecPerPx(FilterKind.L, 1, s, Optics, Camera, Filters);
+            var bortle6 = Site with { BortleClass = 6, SqmMagPerArcsec2 = 0 };
+            var sqm195 = Site with { BortleClass = 1, SqmMagPerArcsec2 = 19.5 };
+            Assert.That(Rate(sqm195), Is.EqualTo(Rate(bortle6)).Within(1e-12));
+            // The client window is 16..22.5: outside it the stored Bortle decides.
+            Assert.That(Rate(Site with { BortleClass = 6, SqmMagPerArcsec2 = 15.9 }), Is.EqualTo(Rate(bortle6)).Within(1e-12));
+            Assert.That(Rate(Site with { BortleClass = 6, SqmMagPerArcsec2 = 22.6 }), Is.EqualTo(Rate(bortle6)).Within(1e-12));
+            Assert.That(Rate(Site with { BortleClass = 1, SqmMagPerArcsec2 = 16 }), Is.EqualTo(Rate(Site with { BortleClass = 9, SqmMagPerArcsec2 = 0 }) * Math.Pow(10, 0.4 * 2.0)).Within(1e-9));
+            Assert.That(Rate(Site with { BortleClass = 6, SqmMagPerArcsec2 = 22.5 }), Is.LessThan(Rate(Site with { BortleClass = 1, SqmMagPerArcsec2 = 0 })));
+        }
+
+        [Test]
         public async Task Recalibrate_reads_the_recent_library_pages_and_stores_the_record() {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(Site); store.PutOpticsSettings(Optics); store.PutCameraElectronics(Camera); store.PutFilterSet(Filters);

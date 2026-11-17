@@ -487,6 +487,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult<IReadOnlyList<Guid>>(active);
     }
 
+    public Task<IReadOnlyList<Guid>> UnfinishedRunIdsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => !IsTerminal(kv.Value.State)).Select(kv => kv.Key).ToList());
+
     public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
         var aborted = 0;
         // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while
@@ -796,7 +799,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
-    private static bool IsTerminal(SequenceRunState s) =>
+    public static bool IsTerminal(SequenceRunState s) =>
         s is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped;
 
     /// <summary>

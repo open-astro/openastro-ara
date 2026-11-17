@@ -305,7 +305,7 @@ public static class PolarAlignGeometry {
     /// numbers (east-positive, azimuth cos-scaled to an arc), so this is the one place the
     /// hemisphere and the cosine are undone; the device never learns either.
     /// </summary>
-    public static (double AzMoveArcmin, double AltMoveArcmin) CorrectorMove(
+    public static (double AzMoveArcmin, double AltMoveArcmin) AlignerMove(
             double altErrorArcmin, double azErrorArcmin, double latitudeDeg) {
         RequireFinite(altErrorArcmin, nameof(altErrorArcmin));
         RequireFinite(azErrorArcmin, nameof(azErrorArcmin));

@@ -207,7 +207,7 @@ namespace OpenAstroAra.Server.Services {
             SetTracking(gen, false);
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
-            ResetCorrectorBaseline();
+            ResetAlignerBaseline();
             await SolveLoopAsync(
                 liveCapture ?? capture,
                 toError: (s, at) => {

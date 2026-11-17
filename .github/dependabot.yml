@@ -39,10 +39,6 @@ updates:
       # source generator cannot compile against; see OpenAstroAra.Server.csproj.
       - dependency-name: Microsoft.OpenApi
         update-types: ["version-update:semver-major"]
-      # Pinned to 2.x: 3.0.0 drops SerialPortDevice from modern TFMs;
-      # see OpenAstroAra.Equipment.csproj.
-      - dependency-name: SharpGIS.NmeaParser
-        update-types: ["version-update:semver-major"]
       # Held on the .NET 10 (LTS) line: these packages ship with each .NET
       # release, and an 11.x one on the net10.0 server mixes runtime lines
       # (Microsoft.Data.Sqlite 11 also swaps the bundled native SQLite).

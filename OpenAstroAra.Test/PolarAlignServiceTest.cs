@@ -246,11 +246,11 @@ namespace OpenAstroAra.Test {
                 Mock<ITelescopeMediator>? mount = null, WsRecorder? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
-                IPolarAlignMainCameraSolver? mainCamera = null, IPolarCorrectorSource? corrector = null) {
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
             ws ??= new WsRecorder();
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
-                fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, corrector: corrector) {
+                fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
@@ -1767,7 +1767,7 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.CheckStepDeg, Is.EqualTo(30.0));
             Assert.That(defaults.CoarseExposureSeconds, Is.EqualTo(3.0));
             Assert.That(defaults.UseHome, Is.True);
-            Assert.That(defaults.PolarCorrectorAuto, Is.True, "#1971: a rig with a Polar Corrector uses it unless told not to");
+            Assert.That(defaults.PolarAlignerAuto, Is.True, "#1971: a rig with a Polar Aligner uses it unless told not to");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
 
