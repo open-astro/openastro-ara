@@ -7,7 +7,7 @@ import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../state/simple_mode_state.dart';
-import '../../../theme/ara_colors.dart';
+import '../../../theme/ara_metrics.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
@@ -539,12 +539,11 @@ class _SkyBrightnessRows extends ConsumerWidget {
           // Its own line, not the field's hint: a hint hides once the field
           // holds a value. Follows the saved reading, so it is never stale.
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: AraSpace.s8),
             child: Text(
               'Derived Bortle class: ${sky.bortle}',
               key: const Key('site-sqm-derived-bortle'),
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: AraText.caption,
             ),
           ),
         ] else
