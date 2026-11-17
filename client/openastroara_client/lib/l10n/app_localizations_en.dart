@@ -640,6 +640,32 @@ class AppLocalizationsEn extends AppLocalizations {
       'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
 
   @override
+  String get settingsAdvancedToggle => 'Advanced';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derived: $steps steps, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'set by you';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'from the V width of the last sweep';
+
+  @override
+  String get autofocusStepSourceCfz => 'from half the critical focus zone';
+
+  @override
+  String get autofocusStepSourceDefault => 'the stored first-sweep step';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Keep focus sharp: $preset';
+  }
+
+  @override
   String get deviceAfFilter => 'AF filter';
 
   @override

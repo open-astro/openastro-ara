@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
+import '../../state/settings/advanced_settings_state.dart';
 import '../../state/settings/panel_save_registry.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
@@ -70,9 +72,7 @@ class SettingsShell extends ConsumerWidget {
             child: _SettingsTree(
               selectedId: selectedId,
               companion: companion,
-              onSelect: ref
-                  .read(selectedSettingsPanelProvider.notifier)
-                  .select,
+              onSelect: ref.read(selectedSettingsPanelProvider.notifier).select,
             ),
           ),
         ),
@@ -117,9 +117,9 @@ class _SettingsTree extends StatelessWidget {
             child: Text(
               group.label,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AraColors.textSecondary,
-                    letterSpacing: 0.5,
-                  ),
+                color: AraColors.textSecondary,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
           for (final panel in group.panels)
@@ -162,8 +162,11 @@ class _PanelRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.chevron_right,
-                  size: 16, color: AraColors.textSecondary),
+              const Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: AraColors.textSecondary,
+              ),
           ],
         ),
       ),
@@ -209,8 +212,10 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
       ),
       child: Row(
         children: [
-          Text(widget.info?.label ?? 'Settings',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            widget.info?.label ?? 'Settings',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const Spacer(),
           if (saveAction != null) ...[
             FilledButton.icon(
@@ -226,6 +231,25 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
             ),
             const SizedBox(width: 12),
           ],
+          // #1544 — the one global Advanced toggle: off shows only each
+          // panel's Simple tier.
+          MergeSemantics(
+            child: Row(
+              children: [
+                Text(
+                  context.l10n.settingsAdvancedToggle,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                Switch(
+                  key: const Key('settings-advanced-toggle'),
+                  value: ref.watch(advancedSettingsProvider).value ?? false,
+                  onChanged: (v) =>
+                      ref.read(advancedSettingsProvider.notifier).set(v),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
           // §61 smart search — opens the global command palette (also
           // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
           // adapts to host platform so the displayed shortcut matches
@@ -234,8 +258,8 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
             builder: (context) {
               final shortcutLabel =
                   Theme.of(context).platform == TargetPlatform.macOS
-                      ? '⌘K'
-                      : 'Ctrl+K';
+                  ? '⌘K'
+                  : 'Ctrl+K';
               return TextButton.icon(
                 onPressed: () => showCommandPalette(context),
                 icon: const Icon(Icons.search, size: 16),
@@ -290,11 +314,10 @@ class _PanelBody extends StatelessWidget {
       'app.changelog' => const AboutPanel(),
       'support.logs' => const SupportTab(),
       _ => GenericPlaceholderPanel(
-          panelId: panelId,
-          label: findPanelInfo(panelId)?.label ?? panelId,
-          note:
-              'This section is not available yet.',
-        ),
+        panelId: panelId,
+        label: findPanelInfo(panelId)?.label ?? panelId,
+        note: 'This section is not available yet.',
+      ),
     };
   }
 }

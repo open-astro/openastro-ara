@@ -833,6 +833,31 @@
   "@deviceKeepSharpCustomHint": {
     "description": "Focuser window: under Keep focus sharp when the triggers match no preset"
   },
+  "settingsAdvancedToggle": "Advanced",
+  "@settingsAdvancedToggle": {
+    "description": "Settings header switch: show the Advanced tier of every panel (off shows only the Simple tier)"
+  },
+  "autofocusStepSizeDerived": "Derived: {steps} steps, {source}",
+  "@autofocusStepSizeDerived": {
+    "description": "Autofocus settings, under the step size: the step size the next sweep uses and where it comes from",
+    "placeholders": {
+      "steps": {"type": "int", "example": "26"},
+      "source": {"type": "String", "example": "from half the critical focus zone"}
+    }
+  },
+  "autofocusStepSourceManual": "set by you",
+  "@autofocusStepSourceManual": {"description": "Where the derived autofocus step size comes from: automatic sizing is off"},
+  "autofocusStepSourceMeasured": "from the V width of the last sweep",
+  "@autofocusStepSourceMeasured": {"description": "Where the derived autofocus step size comes from: the last sweep's curve"},
+  "autofocusStepSourceCfz": "from half the critical focus zone",
+  "@autofocusStepSourceCfz": {"description": "Where the derived autofocus step size comes from: the focuser step size and the optics"},
+  "autofocusStepSourceDefault": "the stored first-sweep step",
+  "@autofocusStepSourceDefault": {"description": "Where the derived autofocus step size comes from: no sweep yet and no focuser step size"},
+  "autofocusTriggerSetBy": "Keep focus sharp: {preset}",
+  "@autofocusTriggerSetBy": {
+    "description": "Autofocus settings, under a trigger: the Keep focus sharp preset these four triggers currently match",
+    "placeholders": {"preset": {"type": "String", "example": "Normal"}}
+  },
   "deviceAfFilter": "AF filter",
   "@deviceAfFilter": {
     "description": "Focuser window row: the filter autofocus runs through, one chip per filter in the wheel"

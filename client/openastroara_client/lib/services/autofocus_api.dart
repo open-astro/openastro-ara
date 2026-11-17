@@ -12,6 +12,27 @@ class AutofocusFrame {
   const AutofocusFrame(this.bytes, this.seq);
 }
 
+/// #1544 — the daemon's derived autofocus step size. [source] is `manual`,
+/// `measured`, `cfz` or `default` (an unknown word is kept as sent).
+class AutofocusStepSize {
+  final int stepSize;
+  final String source;
+  const AutofocusStepSize({required this.stepSize, required this.source});
+
+  factory AutofocusStepSize.fromJson(Map<String, dynamic> json) {
+    final step = json['step_size'];
+    if (step is! num) {
+      throw FormatException(
+        'step size missing "step_size" (${step.runtimeType})',
+      );
+    }
+    return AutofocusStepSize(
+      stepSize: step.toInt(),
+      source: json['source'] as String? ?? 'default',
+    );
+  }
+}
+
 /// One §65.5 background job's polled state, as served by `GET /api/v1/jobs/{id}`.
 /// `state` is `queued`/`running`/`complete`/`failed`/`cancelled` on the wire.
 class AutofocusJob {
@@ -29,21 +50,23 @@ class AutofocusJob {
     this.total = 0,
   });
 
-  bool get isTerminal => state == 'complete' || state == 'failed' || state == 'cancelled';
+  bool get isTerminal =>
+      state == 'complete' || state == 'failed' || state == 'cancelled';
 
   static AutofocusJob fromJson(Map<String, dynamic> json) {
     final jobId = json['job_id'];
     if (jobId is! String) {
       throw FormatException(
-          'autofocus job missing string "job_id" (${jobId.runtimeType})');
+        'autofocus job missing string "job_id" (${jobId.runtimeType})',
+      );
     }
     return AutofocusJob(
-        jobId: jobId,
-        state: json['state'] as String? ?? 'unknown',
-        errorMessage: json['error_message'] as String?,
-        done: (json['done'] as num?)?.toInt() ?? 0,
-        total: (json['total'] as num?)?.toInt() ?? 0,
-      );
+      jobId: jobId,
+      state: json['state'] as String? ?? 'unknown',
+      errorMessage: json['error_message'] as String?,
+      done: (json['done'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+    );
   }
 }
 
@@ -75,6 +98,10 @@ abstract interface class AutofocusApi {
   /// full sweep and records a new one.
   Future<void> recalibrate();
 
+  /// #1544 — the step size the next sweep would use and where it comes from
+  /// (`GET /api/v1/autofocus/step-size`).
+  Future<AutofocusStepSize> stepSize();
+
   /// The run's rendered frame, or `null` (204) when none exists yet.
   Future<AutofocusFrame?> fetchFrame();
 
@@ -85,12 +112,14 @@ class DioAutofocusApi implements AutofocusApi {
   final Dio _dio;
 
   DioAutofocusApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
           sendTimeout: const Duration(seconds: 5),
-        ));
+        ),
+      );
 
   @override
   Future<AutofocusJob> start() async {
@@ -106,12 +135,16 @@ class DioAutofocusApi implements AutofocusApi {
   // in-memory and never evicts, so in practice this means the daemon RESTARTED
   // mid-sweep — the caller must treat it as "lost track", not as success.
   static final Options _jobOptions = Options(
-    validateStatus: (status) => status != null && (status < 400 || status == 404),
+    validateStatus: (status) =>
+        status != null && (status < 400 || status == 404),
   );
 
   @override
   Future<AutofocusJob?> job(String jobId) async {
-    final res = await _dio.get<dynamic>('/api/v1/jobs/$jobId', options: _jobOptions);
+    final res = await _dio.get<dynamic>(
+      '/api/v1/jobs/$jobId',
+      options: _jobOptions,
+    );
     if (res.statusCode == 404) return null;
     final data = res.data;
     if (data is! Map<String, dynamic>) {
@@ -124,20 +157,34 @@ class DioAutofocusApi implements AutofocusApi {
   Future<AutofocusRun> state() async {
     final res = await _dio.get<dynamic>('/api/v1/autofocus/state');
     final data = res.data;
-    return data is Map<String, dynamic> ? AutofocusRun.fromJson(data) : AutofocusRun.idle;
+    return data is Map<String, dynamic>
+        ? AutofocusRun.fromJson(data)
+        : AutofocusRun.idle;
   }
 
   @override
   Future<void> cancel() async {
     await _dio.post<void>(
       '/api/v1/autofocus/cancel',
-      options: Options(validateStatus: (s) => s != null && (s < 400 || s == 409)),
+      options: Options(
+        validateStatus: (s) => s != null && (s < 400 || s == 409),
+      ),
     );
   }
 
   @override
   Future<void> recalibrate() async {
     await _dio.post<void>('/api/v1/autofocus/recalibrate');
+  }
+
+  @override
+  Future<AutofocusStepSize> stepSize() async {
+    final res = await _dio.get<dynamic>('/api/v1/autofocus/step-size');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('unexpected step size response — not a JSON object');
+    }
+    return AutofocusStepSize.fromJson(data);
   }
 
   @override

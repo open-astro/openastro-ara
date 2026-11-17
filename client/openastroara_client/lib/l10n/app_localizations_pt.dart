@@ -640,6 +640,32 @@ class AppLocalizationsPt extends AppLocalizations {
       'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
 
   @override
+  String get settingsAdvancedToggle => 'Advanced';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derived: $steps steps, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'set by you';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'from the V width of the last sweep';
+
+  @override
+  String get autofocusStepSourceCfz => 'from half the critical focus zone';
+
+  @override
+  String get autofocusStepSourceDefault => 'the stored first-sweep step';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Keep focus sharp: $preset';
+  }
+
+  @override
   String get deviceAfFilter => 'AF filter';
 
   @override
@@ -6952,6 +6978,33 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceKeepSharpCustomHint =>
       'Definido nas Configurações do Modo Avançado. Escolha um ajuste para substituir esses valores.';
+
+  @override
+  String get settingsAdvancedToggle => 'Avançado';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derivado: $steps passos, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'definido por você';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'da largura do V da última varredura';
+
+  @override
+  String get autofocusStepSourceCfz => 'da metade da zona de foco crítico';
+
+  @override
+  String get autofocusStepSourceDefault =>
+      'o passo guardado da primeira varredura';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Manter o foco nítido: $preset';
+  }
 
   @override
   String get deviceAfFilter => 'Filtro do AF';

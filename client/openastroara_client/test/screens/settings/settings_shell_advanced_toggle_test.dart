@@ -1,0 +1,50 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/screens/settings/settings_shell.dart';
+import 'package:openastroara/state/settings/advanced_settings_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+
+class _Advanced extends AdvancedSettings {
+  @override
+  Future<bool> build() async => false;
+
+  @override
+  Future<void> set(bool on) async => state = AsyncData(on);
+}
+
+void main() {
+  testWidgets(
+    'the Settings header has one Advanced toggle, off to start (#1544)',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(
+        overrides: [advancedSettingsProvider.overrideWith(_Advanced.new)],
+      );
+      addTearDown(c.dispose);
+      // The About panel needs no rig.
+      c.read(selectedSettingsPanelProvider.notifier).select('app.changelog');
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(body: SettingsShell()),
+          ),
+        ),
+      );
+      await tester.pump();
+      final toggle = find.byKey(const Key('settings-advanced-toggle'));
+      expect(find.text('Advanced'), findsOneWidget);
+      expect(tester.widget<Switch>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(c.read(advancedSettingsProvider).value, isTrue);
+      expect(tester.widget<Switch>(toggle).value, isTrue);
+    },
+  );
+}

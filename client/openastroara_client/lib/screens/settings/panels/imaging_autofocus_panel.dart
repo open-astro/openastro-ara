@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
 import '../../../state/equipment/focuser_state.dart';
+import '../../../state/focus/autofocus_step_size_state.dart';
+import '../../../state/focus/focus_presets.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/advanced_settings_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -41,8 +45,11 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
         );
       }
     }
@@ -64,11 +71,19 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     }
     try {
       await ref.read(autofocusSettingsProvider.notifier).persistToServer(api);
+      // The daemon derives the step size from what is now saved.
+      ref.invalidate(autofocusStepSizeProvider);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(
+        () => _lastError = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionSave,
+        ),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -98,13 +113,29 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     try {
       await ref.read(autofocusApiProvider)?.recalibrate();
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(l10n.focusCalibrationResetDone)));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.focusCalibrationResetDone)),
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: l10n.focusCalibrationResetAction));
+      setState(
+        () => _lastError = friendlyError(
+          context.l10n,
+          e,
+          action: l10n.focusCalibrationResetAction,
+        ),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
+
+  static String _sharpName(AppLocalizations l10n, KeepFocusSharp p) =>
+      switch (p) {
+        KeepFocusSharp.relaxed => l10n.deviceKeepSharpRelaxed,
+        KeepFocusSharp.normal => l10n.deviceKeepSharpNormal,
+        KeepFocusSharp.tight => l10n.deviceKeepSharpTight,
+        KeepFocusSharp.custom => l10n.deviceKeepSharpCustom,
+      };
 
   ProfileApi? _api() {
     final server = ref.read(activeServerProvider);
@@ -115,73 +146,41 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
   Widget build(BuildContext context) {
     final s = ref.watch(autofocusSettingsProvider);
     final n = ref.read(autofocusSettingsProvider.notifier);
+    final l10n = context.l10n;
+    // #1544: the Simple tier always; the Advanced tier with the one global toggle.
+    final advanced = ref.watch(advancedSettingsProvider).value ?? false;
+    final derivedStep = ref.watch(autofocusStepSizeProvider).value;
+    final sharp = keepFocusSharpOf(s);
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const SettingsSectionHeader('Algorithm'),
-        SettingsDropdownRow<AutofocusMethod>(
-          label: 'Method',
-          helpKey: 'img.autofocus.method',
-          value: s.method,
-          items: const {
-            AutofocusMethod.hfrVCurve: 'HFR (V-curve)',
-            AutofocusMethod.brightestStarHfr: 'Brightest-star HFR',
-            AutofocusMethod.fwhm: 'FWHM (Gaussian fit)',
-          },
-          onChanged: (v) {
-            if (v != null) n.setMethod(v);
-          },
-        ),
-        SettingsDropdownRow<TelescopeType>(
-          label: 'Telescope type',
-          helpKey: 'img.autofocus.telescope_type',
-          value: s.telescopeType,
-          items: const {
-            TelescopeType.refractor: 'Refractor',
-            TelescopeType.sct: 'Schmidt-Cassegrain (SCT)',
-            TelescopeType.mak: 'Maksutov-Cassegrain',
-            TelescopeType.rc: 'Ritchey-Chrétien (RC)',
-            TelescopeType.newtonian: 'Newtonian',
-            TelescopeType.other: 'Other / unknown',
-          },
-          onChanged: (v) {
-            if (v != null) n.setTelescopeType(v);
-          },
-        ),
-        // §59.8 — the sweep sizes itself from the V-curve it measured; the
-        // raw knobs (how many probes, how far apart) live behind Advanced.
+        // Simple tier: what Simple Mode's Focuser window offers, kept in step
+        // with it (same four triggers, same profile).
         SettingsSwitchRow(
-          label: 'Automatic step size',
-          helpKey: 'img.autofocus.step_size_auto',
-          value: s.stepSizeAuto,
-          onChanged: n.setStepSizeAuto,
-          hint: s.stepSizeAuto
-              ? 'First sweep wide, then sized from the measured V-curve'
-              : 'Every sweep uses the step size under Advanced',
+          label: l10n.deviceAutofocusDuringPlans,
+          value: autofocusDuringPlans(s),
+          onChanged: n.setAutofocusDuringPlans,
+          hint: autofocusDuringPlans(s)
+              ? l10n.deviceAutofocusOnHint
+              : l10n.deviceAutofocusOffHint,
         ),
-        EditableNumberRow(
-          label: 'Exposure time (s)',
-          helpKey: 'img.autofocus.exposure',
-          currentValue: s.exposureSeconds.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).exposureSeconds.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setExposureSeconds(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Binning',
-          helpKey: 'img.autofocus.binning',
-          currentValue: s.binning.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).binning.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setBinning(v);
-          },
-        ),
+        if (sharp != null)
+          SettingsDropdownRow<KeepFocusSharp>(
+            label: l10n.deviceKeepFocusSharp,
+            value: sharp,
+            items: {
+              KeepFocusSharp.relaxed: l10n.deviceKeepSharpRelaxed,
+              KeepFocusSharp.normal: l10n.deviceKeepSharpNormal,
+              KeepFocusSharp.tight: l10n.deviceKeepSharpTight,
+              // Triggers that match no preset; picking one overwrites them.
+              if (sharp == KeepFocusSharp.custom)
+                KeepFocusSharp.custom: l10n.deviceKeepSharpCustom,
+            },
+            onChanged: (v) {
+              if (v != null) n.applyKeepFocusSharp(v);
+            },
+          ),
         EditableTextRow(
           label: 'Filter for AF',
           helpKey: 'img.autofocus.filter',
@@ -189,108 +188,181 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           getCanonical: () => ref.read(autofocusSettingsProvider).afFilter,
           parse: n.setAfFilter,
         ),
-        ExpansionTile(
-          title: Text(
-            'Advanced',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: AraColors.textSecondary),
+        if (advanced) ...[
+          const SettingsSectionHeader('Algorithm'),
+          SettingsDropdownRow<AutofocusMethod>(
+            label: 'Method',
+            helpKey: 'img.autofocus.method',
+            value: s.method,
+            items: const {
+              AutofocusMethod.hfrVCurve: 'HFR (V-curve)',
+              AutofocusMethod.brightestStarHfr: 'Brightest-star HFR',
+              AutofocusMethod.fwhm: 'FWHM (Gaussian fit)',
+            },
+            onChanged: (v) {
+              if (v != null) n.setMethod(v);
+            },
           ),
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: const EdgeInsets.only(bottom: 8),
-          children: [
-            EditableNumberRow(
-              label: 'Number of steps (3..31)',
-              helpKey: 'img.autofocus.steps',
-              currentValue: s.steps.toString(),
-              getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).steps.toString(),
-              parse: (str) {
-                final v = int.tryParse(str);
-                if (v != null) n.setSteps(v);
-              },
-            ),
-            EditableNumberRow(
-              label: s.stepSizeAuto
-                  ? 'First-sweep step size (focuser steps)'
-                  : 'Step size (focuser steps)',
-              helpKey: 'img.autofocus.step_size',
-              currentValue: s.stepSize.toString(),
-              getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).stepSize.toString(),
-              parse: (str) {
-                final v = int.tryParse(str);
-                if (v != null) n.setStepSize(v);
-              },
-            ),
-          ],
-        ),
-        const SettingsSectionHeader('Triggers'),
-        SettingsSwitchRow(
-          label: 'After filter change',
-          value: s.runAfterFilterChange,
-          onChanged: n.setRunAfterFilterChange,
-        ),
-        EditableNumberRow(
-          label: 'After temp delta (°C)',
-          helpKey: 'img.autofocus.trigger_temp_delta_c',
-          currentValue: s.triggerTempDeltaC.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).triggerTempDeltaC.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setTriggerTempDeltaC(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'On HFR drift threshold (%)',
-          helpKey: 'img.autofocus.trigger_hfr_drift_pct',
-          currentValue: s.triggerHfrDriftPct.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).triggerHfrDriftPct.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setTriggerHfrDriftPct(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Every N hours (0 = off)',
-          helpKey: 'img.autofocus.every_n_hours',
-          currentValue: s.everyNHours.toString(),
-          getCanonical: () =>
-              ref.read(autofocusSettingsProvider).everyNHours.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setEveryNHours(v);
-          },
-        ),
-        const SettingsSectionHeader('Safety'),
-        SettingsSwitchRow(
-          label: 'Abort sequence if AF fails',
-          value: s.abortSequenceOnAfFailure,
-          onChanged: n.setAbortSequenceOnAfFailure,
-          hint: 'Safety rules can override this',
-        ),
-        SettingsSwitchRow(
-          label: 'Restore position on failure',
-          value: s.restorePositionOnFailure,
-          onChanged: n.setRestorePositionOnFailure,
-        ),
-        SettingsSectionHeader(context.l10n.focusCalibrationSection),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton(
-            key: const Key('af-reset-calibration'),
-            onPressed: ref.watch(autofocusApiProvider) == null ? null : _resetCalibration,
-            child: Text(context.l10n.focusCalibrationReset),
+          SettingsDropdownRow<TelescopeType>(
+            label: 'Telescope type',
+            helpKey: 'img.autofocus.telescope_type',
+            value: s.telescopeType,
+            items: const {
+              TelescopeType.refractor: 'Refractor',
+              TelescopeType.sct: 'Schmidt-Cassegrain (SCT)',
+              TelescopeType.mak: 'Maksutov-Cassegrain',
+              TelescopeType.rc: 'Ritchey-Chrétien (RC)',
+              TelescopeType.newtonian: 'Newtonian',
+              TelescopeType.other: 'Other / unknown',
+            },
+            onChanged: (v) {
+              if (v != null) n.setTelescopeType(v);
+            },
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          context.l10n.focusCalibrationResetHint,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+          // §59.8 — the sweep sizes itself from the V-curve it measured; the
+          // raw knobs (how many probes, how far apart) live behind Advanced.
+          SettingsSwitchRow(
+            label: 'Automatic step size',
+            helpKey: 'img.autofocus.step_size_auto',
+            value: s.stepSizeAuto,
+            onChanged: n.setStepSizeAuto,
+            hint: s.stepSizeAuto
+                ? 'First sweep wide, then sized from the measured V-curve'
+                : 'Every sweep uses the step size below',
+          ),
+          EditableNumberRow(
+            label: 'Exposure time (s)',
+            helpKey: 'img.autofocus.exposure',
+            currentValue: s.exposureSeconds.toString(),
+            getCanonical: () =>
+                ref.read(autofocusSettingsProvider).exposureSeconds.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setExposureSeconds(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Binning',
+            helpKey: 'img.autofocus.binning',
+            currentValue: s.binning.toString(),
+            getCanonical: () =>
+                ref.read(autofocusSettingsProvider).binning.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setBinning(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Number of steps (3..31)',
+            helpKey: 'img.autofocus.steps',
+            currentValue: s.steps.toString(),
+            getCanonical: () =>
+                ref.read(autofocusSettingsProvider).steps.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setSteps(v);
+            },
+          ),
+          EditableNumberRow(
+            label: s.stepSizeAuto
+                ? 'First-sweep step size (focuser steps)'
+                : 'Step size (focuser steps)',
+            helpKey: 'img.autofocus.step_size',
+            hint: derivedStep == null
+                ? null
+                : derivedStepSizeText(l10n, derivedStep),
+            currentValue: s.stepSize.toString(),
+            getCanonical: () =>
+                ref.read(autofocusSettingsProvider).stepSize.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setStepSize(v);
+            },
+          ),
+          const SettingsSectionHeader('Triggers'),
+          SettingsSwitchRow(
+            label: 'After filter change',
+            hint: sharp == null
+                ? null
+                : l10n.autofocusTriggerSetBy(_sharpName(l10n, sharp)),
+            value: s.runAfterFilterChange,
+            onChanged: n.setRunAfterFilterChange,
+          ),
+          EditableNumberRow(
+            label: 'After temp delta (°C)',
+            hint: sharp == null
+                ? null
+                : l10n.autofocusTriggerSetBy(_sharpName(l10n, sharp)),
+            helpKey: 'img.autofocus.trigger_temp_delta_c',
+            currentValue: s.triggerTempDeltaC.toString(),
+            getCanonical: () => ref
+                .read(autofocusSettingsProvider)
+                .triggerTempDeltaC
+                .toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setTriggerTempDeltaC(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'On HFR drift threshold (%)',
+            hint: sharp == null
+                ? null
+                : l10n.autofocusTriggerSetBy(_sharpName(l10n, sharp)),
+            helpKey: 'img.autofocus.trigger_hfr_drift_pct',
+            currentValue: s.triggerHfrDriftPct.toString(),
+            getCanonical: () => ref
+                .read(autofocusSettingsProvider)
+                .triggerHfrDriftPct
+                .toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setTriggerHfrDriftPct(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Every N hours (0 = off)',
+            hint: sharp == null
+                ? null
+                : l10n.autofocusTriggerSetBy(_sharpName(l10n, sharp)),
+            helpKey: 'img.autofocus.every_n_hours',
+            currentValue: s.everyNHours.toString(),
+            getCanonical: () =>
+                ref.read(autofocusSettingsProvider).everyNHours.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setEveryNHours(v);
+            },
+          ),
+          const SettingsSectionHeader('Safety'),
+          SettingsSwitchRow(
+            label: 'Abort sequence if AF fails',
+            value: s.abortSequenceOnAfFailure,
+            onChanged: n.setAbortSequenceOnAfFailure,
+            hint: 'Safety rules can override this',
+          ),
+          SettingsSwitchRow(
+            label: 'Restore position on failure',
+            value: s.restorePositionOnFailure,
+            onChanged: n.setRestorePositionOnFailure,
+          ),
+          SettingsSectionHeader(context.l10n.focusCalibrationSection),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              key: const Key('af-reset-calibration'),
+              onPressed: ref.watch(autofocusApiProvider) == null
+                  ? null
+                  : _resetCalibration,
+              child: Text(context.l10n.focusCalibrationReset),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.l10n.focusCalibrationResetHint,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(

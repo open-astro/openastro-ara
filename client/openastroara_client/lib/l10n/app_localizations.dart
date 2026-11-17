@@ -1137,6 +1137,48 @@ abstract class AppLocalizations {
   /// **'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.'**
   String get deviceKeepSharpCustomHint;
 
+  /// Settings header switch: show the Advanced tier of every panel (off shows only the Simple tier)
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get settingsAdvancedToggle;
+
+  /// Autofocus settings, under the step size: the step size the next sweep uses and where it comes from
+  ///
+  /// In en, this message translates to:
+  /// **'Derived: {steps} steps, {source}'**
+  String autofocusStepSizeDerived(int steps, String source);
+
+  /// Where the derived autofocus step size comes from: automatic sizing is off
+  ///
+  /// In en, this message translates to:
+  /// **'set by you'**
+  String get autofocusStepSourceManual;
+
+  /// Where the derived autofocus step size comes from: the last sweep's curve
+  ///
+  /// In en, this message translates to:
+  /// **'from the V width of the last sweep'**
+  String get autofocusStepSourceMeasured;
+
+  /// Where the derived autofocus step size comes from: the focuser step size and the optics
+  ///
+  /// In en, this message translates to:
+  /// **'from half the critical focus zone'**
+  String get autofocusStepSourceCfz;
+
+  /// Where the derived autofocus step size comes from: no sweep yet and no focuser step size
+  ///
+  /// In en, this message translates to:
+  /// **'the stored first-sweep step'**
+  String get autofocusStepSourceDefault;
+
+  /// Autofocus settings, under a trigger: the Keep focus sharp preset these four triggers currently match
+  ///
+  /// In en, this message translates to:
+  /// **'Keep focus sharp: {preset}'**
+  String autofocusTriggerSetBy(String preset);
+
   /// Focuser window row: the filter autofocus runs through, one chip per filter in the wheel
   ///
   /// In en, this message translates to:
