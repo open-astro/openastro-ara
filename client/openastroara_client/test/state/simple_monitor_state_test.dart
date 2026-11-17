@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
@@ -11,6 +14,7 @@ import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/stats/guiding_rms.dart';
 import 'package:openastroara/models/weather_status.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show monitorVerdictText;
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
@@ -28,6 +32,7 @@ import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/widgets/imaging/histogram_strip.dart';
 
 // The Monitor state module (#1724): rig, run and frame set through fakes, and
 // the snapshot read as the screen would.
@@ -99,6 +104,9 @@ class _Rms extends GuidingRmsNotifier {
   final GuidingRmsSeries? v;
   @override
   Future<GuidingRmsSeries?> build() async => v;
+  var refreshes = 0;
+  @override
+  Future<void> refresh() async => refreshes++;
 }
 
 class _Clock extends MonitorClock {
@@ -120,6 +128,10 @@ class _Link extends Notifier<bool> {
 final _link = NotifierProvider<_Link, bool>(_Link.new);
 
 final _t0 = DateTime(2026, 11, 11, 23, 52);
+
+final _histogram = FrameHistogram(
+    bins: const [], minAdu: 0, minCount: 0, maxAdu: 65535, maxCount: 0, meanAdu: 900, stdDev: 50, median: 880, mad: 30,
+    lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
 
 const _m42 = SimpleTarget(name: 'Orion Nebula', tag: 'M 42', steps: [
   FilterPlanStep(filterName: 'L', exposureSeconds: 180, frameCount: 2),
@@ -197,6 +209,7 @@ Future<_Rig> _rig({
   int? freeBytes,
   List<TonightSkyObject> sky = const [],
   GuidingRmsSeries? rms,
+  Stream<WsEvent> events = const Stream.empty(),
 }) async {
   late _Rig rig;
   final camN = _Cam(camera ? cam ?? _cam() : null);
@@ -207,7 +220,8 @@ Future<_Rig> _rig({
     monitorClockProvider.overrideWith(_Clock.new),
     serverLinkUpProvider.overrideWith((ref) => ref.watch(_link)),
     skyClockProvider.overrideWith((ref) => const Stream<int>.empty()),
-    wsEventsProvider.overrideWith((ref) => const Stream.empty()),
+    wsEventsProvider.overrideWith((ref) => events),
+    frameHistogramProvider.overrideWith((ref, id) async => _histogram),
     sequenceRunStateProvider.overrideWith(() => runN),
     simpleRunProvider.overrideWith(() => _Plan(plan)),
     cameraStatusProvider.overrideWith(() => camN),
@@ -625,6 +639,18 @@ void main() {
       t.add(const MonitorFrame(id: 'f0'));
       t.add(const MonitorFrame(id: 'f1'));
       expect(r.read().guider!.rmsPerFrame, [1.1, 1.2], reason: 'the last samples, newest last');
+    });
+
+    test("each saved frame's event reads the guider's RMS series again", () async {
+      final ws = StreamController<WsEvent>();
+      addTearDown(ws.close);
+      final r = await _rig(run: _running(), events: ws.stream);
+      final rms = r.c.read(guidingRmsProvider.notifier) as _Rms;
+      ws.add(WsEvent(type: 'frame.complete', ts: DateTime.utc(2026, 11, 11), seq: 1, payload: const {'frame_id': 'f1'}));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(r.read().lastFrame.frames.single.id, 'f1');
+      expect(rms.refreshes, 1, reason: 'otherwise the RMS graph freezes at the series read when Monitor opened');
     });
 
     test("the session start stays the run's first frames after the oldest are dropped", () async {
