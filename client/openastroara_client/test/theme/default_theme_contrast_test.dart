@@ -68,6 +68,11 @@ void main() {
     );
   });
 
+  // A4 moves error to error-text; banners fill with errorContainer and stay red.
+  test('the default theme errorContainer stays Fault Red', () {
+    expect(buildAraTheme().colorScheme.errorContainer, AraColors.accentError);
+  });
+
   // Simple Mode inherits A4 on purpose and keeps its own text-button style.
   for (final (name, frame) in const [
     ('a dark sky', Color(0xFF0A0A0A)),
