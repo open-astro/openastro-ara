@@ -114,15 +114,18 @@ Future<_FakeFwApi> _pump(
   _Offsets? offsets,
   bool rig = true,
   bool policyLoadFails = false,
+  FakeSectionRig? sectionRig,
 }) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
-  final policyRig = FakeSectionRig({
-    'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
-    'filter-wheel/labels': {
-      'labels': ['L', 'Hα'],
-    },
-  });
+  final policyRig =
+      sectionRig ??
+      FakeSectionRig({
+        'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+        'filter-wheel/labels': {
+          'labels': ['L', 'Hα'],
+        },
+      });
   if (policyLoadFails) policyRig.failGet.add('filter-wheel/policy');
   await tester.pumpWidget(
     ProviderScope(
@@ -331,6 +334,30 @@ void main() {
     expect(find.text('Slot 1'), findsOneWidget);
     expect(find.text('Slot 2'), findsOneWidget);
     expect(find.text('Slot 3'), findsNothing);
+  });
+
+  testWidgets('a slot label edit the rig refuses as stale shows the labels '
+      'conflict banner with Reload', (tester) async {
+    final rig = FakeSectionRig({
+      'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+      'filter-wheel/labels': {
+        'labels': ['L', 'Hα'],
+      },
+    });
+    await _pump(tester, null, sectionRig: rig);
+    rig.savedElsewhere('filter-wheel/labels');
+    await tester.enterText(
+      find.descendant(
+        of: find.widgetWithText(EditableTextRow, 'Slot 1'),
+        matching: find.byType(TextField),
+      ),
+      'Lum',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(rig.puts, isEmpty);
+    expect(find.byType(SectionConflictBanner), findsOneWidget);
+    expect(find.byKey(const Key('section-reload')), findsOneWidget);
   });
 
   testWidgets('the policy not-loaded row lines up with the other rows', (
