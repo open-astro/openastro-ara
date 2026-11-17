@@ -6269,6 +6269,32 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'The rig\'s clock is $amount fast, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String get clockWrongTitle => 'The rig\'s clock is wrong';
+
+  @override
+  String get clockWrongStartAnyway => 'Start anyway';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -12584,4 +12610,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'O relógio do setup está $amount adiantado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'O relógio do setup está $amount adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String get clockWrongTitle => 'O relógio do setup está errado';
+
+  @override
+  String get clockWrongStartAnyway => 'Iniciar mesmo assim';
 }

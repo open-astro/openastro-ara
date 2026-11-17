@@ -6269,4 +6269,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'The rig\'s clock is $amount fast, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String get clockWrongTitle => 'The rig\'s clock is wrong';
+
+  @override
+  String get clockWrongStartAnyway => 'Start anyway';
 }

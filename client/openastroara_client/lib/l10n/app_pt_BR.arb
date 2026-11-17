@@ -1739,5 +1739,11 @@
   "polarAdvancedRange": "{min} a {max}",
   "polarAdvancedOutOfRange": "Fora da faixa: use {range}",
   "polarAdvancedSaveFailed": "{reason} O campo voltou ao valor do setup.",
-  "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)"
+  "estopFailPolarAligner": "O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)",
+  "clockWrongSlow": "O relógio do setup está {amount} atrasado, então horários e alvos ficarão errados. Iniciar mesmo assim?",
+  "clockWrongFast": "O relógio do setup está {amount} adiantado, então horários e alvos ficarão errados. Iniciar mesmo assim?",
+  "clockNoticeSlow": "O relógio do setup está {amount} atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.",
+  "clockNoticeFast": "O relógio do setup está {amount} adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.",
+  "clockWrongTitle": "O relógio do setup está errado",
+  "clockWrongStartAnyway": "Iniciar mesmo assim"
 }
