@@ -9,15 +9,17 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
 import 'package:openastroara/state/focus/focus_presets.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
-// §59.8 — the Automatic step size switch and the Advanced disclosure that
-// hides the raw sweep knobs. No server: the panel keeps the notifier's
-// defaults instead of hydrating.
+// §59.8 — the Automatic step size switch; #1544 — the rows the Advanced
+// toggle and a settings search hit show. No server: the panel keeps the
+// notifier's defaults instead of hydrating.
 Future<void> _pump(
   WidgetTester tester, {
   AutofocusApi? api,
   bool advanced = true,
+  String? searchHit,
 }) async {
   // Wide desktop surface + half text scale, as the sibling panel tests do:
   // Ahem renders every glyph at full point size and the fixed labels overflow.
@@ -37,6 +39,9 @@ Future<void> _pump(
         activeServerProvider.overrideWithValue(null),
         autofocusApiProvider.overrideWithValue(api),
         advancedSettingsProvider.overrideWith(() => _Advanced(advanced)),
+        // A ⌘K hit picked before the panel opened (command_palette.dart).
+        if (searchHit != null)
+          highlightedSettingProvider.overrideWith(() => _Hit(searchHit)),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -61,6 +66,13 @@ class _Advanced extends AdvancedSettings {
   final bool on;
   @override
   Future<bool> build() async => on;
+}
+
+class _Hit extends HighlightedSettingNotifier {
+  _Hit(this.id);
+  final String id;
+  @override
+  String? build() => id;
 }
 
 class _StepApi implements AutofocusApi {
@@ -153,6 +165,35 @@ void main() {
           reason: '$hidden is Advanced tier',
         );
       }
+    },
+  );
+
+  testWidgets(
+    'a search hit on an Advanced setting shows it with the toggle off (#1544)',
+    (tester) async {
+      await _pump(tester, advanced: false, searchHit: 'img.autofocus.binning');
+      expect(find.text('Binning'), findsOneWidget);
+      expect(find.text('Algorithm'), findsOneWidget, reason: 'its section');
+      expect(find.text('Method'), findsNothing, reason: 'only the hit shows');
+
+      // A second hit while the panel is open.
+      final c = ProviderScope.containerOf(
+        tester.element(find.byType(ImagingAutofocusPanel)),
+      );
+      c.read(highlightedSettingProvider.notifier).highlight('img.autofocus.method');
+      await tester.pump();
+      expect(find.text('Method'), findsOneWidget);
+
+      // The highlight fades after 2 s; the rows stay while the panel is open.
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.text('Binning'), findsOneWidget);
+      expect(find.text('Method'), findsOneWidget);
+      expect(find.text('Telescope type'), findsNothing);
+      expect(
+        c.read(advancedSettingsProvider).value,
+        isFalse,
+        reason: 'the saved toggle is left alone',
+      );
     },
   );
 
