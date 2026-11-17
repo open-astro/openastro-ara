@@ -266,6 +266,7 @@ public sealed partial class EmergencyStopService {
             // component may wedge this button" must hold for every rung.
             var work = RunOnOwnThread(() => sequencer.AbortActiveRunsAsync(CancellationToken.None));
             // WaitAsync, not WhenAny + Task.Delay: no 10 s timer left running (CA2027); a fault surfaces at `await work`.
+            // The (Task) cast is required: SuppressThrowing throws ArgumentOutOfRangeException on a Task<T>.
             await ((Task)work).WaitAsync(RungTimeout).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             if (!work.IsCompleted) {
                 LogRungTimedOut("abort runs", RungTimeout.TotalSeconds);
