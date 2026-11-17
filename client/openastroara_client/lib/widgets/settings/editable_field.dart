@@ -245,24 +245,33 @@ class SettingsSwitchRow extends StatelessWidget {
                   // Ellipsize rather than overflow the fixed 280px column when the
                   // label is long (or rendered in a wide font).
                   Flexible(
-                    child: Text(label,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AraColors.textSecondary,
-                            )),
+                    // The switch carries the label as its name (below).
+                    child: ExcludeSemantics(
+                      child: Text(label,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AraColors.textSecondary,
+                              )),
+                    ),
                   ),
                   if (helpKey != null) HelpIcon(helpKey: helpKey!),
                 ],
               ),
               if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
+                ExcludeSemantics(
+                  child: Text(hint!,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AraColors.textTertiary,
+                          )),
+                ),
             ],
           ),
         ),
-        Switch(value: value, onChanged: onChanged),
+        Semantics(
+          label: label,
+          hint: hint,
+          child: Switch(value: value, onChanged: onChanged),
+        ),
       ]),
     );
   }
