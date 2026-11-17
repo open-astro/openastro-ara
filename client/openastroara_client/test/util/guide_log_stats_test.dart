@@ -32,6 +32,37 @@ final _clean = [
   _f(4, 1, 4),
 ];
 
+// Single-session excerpts (made-up values), one with a settle and a dither.
+const _head = '''
+Guiding Begins at 2026-10-04 07:12:08
+''';
+const _cols =
+    'Frame,Time,mount,dx,dy,RARawDistance,DECRawDistance,RAGuideDistance,'
+    'DECGuideDistance,RADuration,RADirection,DECDuration,DECDirection,XStep,'
+    'YStep,StarMass,SNR,ErrorCode';
+const _rows = '''
+INFO: SETTLING STATE CHANGE, Settling started
+1,8.408,"Mount",5.0,-4.0,1.601,6.315,1.0,4.4,1227,W,2500,S,,,326811,52.15,0
+2,15.832,"Mount",3.0,-1.9,0.523,3.515,0.4,2.4,487,W,2355,S,,,325311,50.65,0
+INFO: SETTLING STATE CHANGE, Settling complete
+3,19.841,"Mount",1.1,-0.5,0.003,1.307,0.0,0.9,0,,875,S,,,309214,55.10,0
+4,22.900,"Mount",0.1,0.2,-0.286,0.008,-0.1,0.0,157,E,0,,,,208796,43.97,0
+INFO: DITHER by 3.402, -1.056, new lock pos = 1182.649, 267.370
+INFO: SETTLING STATE CHANGE, Settling started
+5,26.100,"Mount",3.0,-1.0,-2.900,-1.100,0.0,0.0,900,E,300,N,,,200000,40.0,0
+6,29.000,"Mount",,,,,,,0,,0,,,,0,0.00,2
+INFO: SETTLING STATE CHANGE, Settling complete
+7,32.000,"Mount",0.1,0.1,0.100,0.100,0.0,0.0,0,,0,,,,210000,41.0,0
+Guiding Ends at 2026-10-04 07:39:51
+''';
+const _log =
+    '$_head'
+    'Pixel scale = 6.45 arc-sec/px, Binning = 1, Focal length = 120 mm\n'
+    '$_cols\n$_rows';
+const _noScaleLog =
+    '$_head'
+    'Binning = 1, Focal length = 120 mm\n$_cols\n$_rows';
+
 void main() {
   test('px stats when the log has no pixel scale', () {
     final s = GuideLogStats.compute(_clean);
@@ -75,6 +106,52 @@ void main() {
     expect(inc.samples, 6);
     expect(inc.peakRa, 5);
     expect(inc.peakDec, 5);
+  });
+
+  test('RA oscillation does not pair frames across an excluded stretch', () {
+    final s = GuideLogStats.compute([
+      _f(0, 1, 0),
+      _f(1, -1, 0),
+      _f(2, 9, 9, dither: true),
+      _f(3, -1, 0),
+      _f(4, 1, 0),
+    ]);
+    expect(s.samples, 4);
+    expect(s.raOscIndex, 1.0); // 2 flips of 2 pairs; (-1, -1) not formed
+  });
+
+  test('parsed log: dither and settling rows left out, arcsec from 6.45', () {
+    final log = Phd2GuideLog.parse(_log).sessions.single;
+    final s = GuideLogStats.compute(
+      log.frames,
+      pixelScaleArcsec: log.pixelScaleArcsec,
+    );
+    // Kept: frames 3, 4, 7 (RA = -RARawDistance). Worked with python
+    // statistics.pstdev and a least-squares fit on minutes since frame 3.
+    expect(s.inArcsec, isTrue);
+    expect(s.samples, 3);
+    expect(s.rmsRa, closeTo(1.0574984326, 1e-8));
+    expect(s.rmsDec, closeTo(3.8175149594, 1e-8));
+    expect(s.rmsTotal, closeTo(3.961278, 1e-6));
+    expect(s.peakRa, closeTo(1.8447, 1e-9));
+    expect(s.peakDec, closeTo(8.43015, 1e-9));
+    expect(s.raDriftPerMin, closeTo(-6.1401306841, 1e-7));
+    expect(s.decDriftPerMin, closeTo(-28.7213722556, 1e-7));
+  });
+
+  test('parsed log without a Pixel scale line gives px figures', () {
+    final log = Phd2GuideLog.parse(_noScaleLog).sessions.single;
+    expect(log.pixelScaleArcsec, isNull);
+    final s = GuideLogStats.compute(
+      log.frames,
+      pixelScaleArcsec: log.pixelScaleArcsec,
+    );
+    expect(s.inArcsec, isFalse);
+    expect(s.samples, 3);
+    expect(s.rmsRa, closeTo(0.1639532453, 1e-8));
+    expect(s.rmsDec, closeTo(0.5918627843, 1e-8));
+    expect(s.peakDec, closeTo(1.307, 1e-12));
+    expect(s.decDriftPerMin, closeTo(-4.4529255, 1e-6));
   });
 
   test('no usable frames gives null figures and no verdict', () {

@@ -20,11 +20,13 @@ class GuideVerdictInputs {
 /// over the selected range.
 const double kSteadyDriftRatio = 1.0;
 
-/// Stats of a guide-log range: RMS per axis and total as PHD2 shows them
-/// (standard deviation about the mean, so it matches the Simple guiding
-/// chip), peak per axis, RA oscillation index (fraction of consecutive RA
-/// samples that changed sign, as in `GuideGraphStats`), and RA / Dec drift
-/// from a least-squares line per minute. Values are arcsec when the log
+/// Stats of a guide-log range: RMS per axis and total as PHD2's own display
+/// has them (standard deviation about the mean). The Simple guiding chip's
+/// RMS is measured from zero (`GuiderService.ComputeRms`), so it differs by
+/// the mean offset, which the drift figure explains. Also peak per axis, RA
+/// oscillation index (fraction of consecutive RA samples that changed sign;
+/// like `GuideGraphStats`, a pair is not formed across an excluded frame),
+/// and RA / Dec drift from a least-squares line per minute. Values are arcsec when the log
 /// carries a pixel scale ([inArcsec]), else px.
 class GuideLogStats {
   final bool inArcsec;
@@ -82,11 +84,21 @@ class GuideLogStats {
 
     final rmsRa = _std(ra);
     final rmsDec = _std(dec);
-    var flips = 0;
-    for (var i = 1; i < n; i++) {
-      if (ra[i] != 0 && ra[i - 1] != 0 && (ra[i] < 0) != (ra[i - 1] < 0)) {
-        flips++;
+    // Pairs only between frames adjacent in [frames]: an excluded frame
+    // between two kept ones resets the pair.
+    var flips = 0, pairs = 0;
+    double? prev;
+    for (final f in frames) {
+      if (!used.contains(f)) {
+        prev = null;
+        continue;
       }
+      final r = f.raPx!;
+      if (prev != null) {
+        pairs++;
+        if (r != 0 && prev != 0 && (r < 0) != (prev < 0)) flips++;
+      }
+      prev = r;
     }
     final raDrift = _slope(t, ra);
     final decDrift = _slope(t, dec);
@@ -113,7 +125,7 @@ class GuideLogStats {
       rmsTotal: math.sqrt(rmsRa * rmsRa + rmsDec * rmsDec),
       peakRa: ra.map((v) => v.abs()).reduce(math.max),
       peakDec: dec.map((v) => v.abs()).reduce(math.max),
-      raOscIndex: n < 2 ? null : flips / (n - 1),
+      raOscIndex: pairs == 0 ? null : flips / pairs,
       raDriftPerMin: raDrift,
       decDriftPerMin: decDrift,
       verdict: GuideVerdictInputs(
