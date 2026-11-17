@@ -104,17 +104,50 @@ const double _adcMaxAdu = 65535;
 double skyMagFromBortle(int bortleClass) =>
     22.0 - (bortleClass.clamp(1, 9) - 1) * 0.5;
 
-/// The sky brightness planning should run on: a MEASURED SQM reading when the
-/// site has one (a real meter/lightpollutionmap value, ~16–22.2 — one Bortle
-/// class spans ~0.5 mag and sky flux is exponential in mag, so a tenth-of-a-
-/// mag reading is the single biggest accuracy upgrade available), else the
-/// coarse Bortle lookup. 0/out-of-range = no reading.
+/// Inverse of [skyMagFromBortle]: the Bortle class whose ladder magnitude is
+/// nearest [skyMag], clamped to 1..9.
+int bortleFromSkyMag(double skyMag) =>
+    (((22.0 - skyMag) / 0.5).round() + 1).clamp(1, 9);
+
+/// A valid SQM reading (mag/arcsec²); 0 or anything else = no reading.
+bool isSqmReading(double sqm) => sqm >= 16 && sqm <= 22.5;
+
+/// The ONE sky state every planning consumer runs on (#1529). The user enters
+/// either an SQM reading or a Bortle class, never both: SQM mode is derived
+/// from a valid reading, else Bortle mode. Thresholds use [bortle] (derived
+/// from the SQM in SQM mode) or [skyMag]; reason text shows [label].
+class SkyState {
+  final bool isSqm;
+  final double skyMag;
+  final int bortle;
+
+  const SkyState._(this.isSqm, this.skyMag, this.bortle);
+
+  factory SkyState({required int bortleClass, double sqmMagPerArcsec2 = 0}) {
+    if (isSqmReading(sqmMagPerArcsec2)) {
+      return SkyState._(
+        true,
+        sqmMagPerArcsec2,
+        bortleFromSkyMag(sqmMagPerArcsec2),
+      );
+    }
+    final b = bortleClass.clamp(1, 9);
+    return SkyState._(false, skyMagFromBortle(b), b);
+  }
+
+  /// What the user entered: "SQM 20.3" or "Bortle 6".
+  String get label =>
+      isSqm ? 'SQM ${skyMag.toStringAsFixed(1)}' : 'Bortle $bortle';
+}
+
+/// The sky brightness planning should run on (see [SkyState]).
 double effectiveSkyMag({
   required int bortleClass,
   double sqmMagPerArcsec2 = 0,
-}) => sqmMagPerArcsec2 >= 16 && sqmMagPerArcsec2 <= 22.5
-    ? sqmMagPerArcsec2
-    : skyMagFromBortle(bortleClass);
+}) => SkyState(
+  bortleClass: bortleClass,
+  sqmMagPerArcsec2: sqmMagPerArcsec2,
+).skyMag;
 
 /// A filter kind's default EFFECTIVE passband (nm) when the profile entry
 /// leaves bandwidth at 0. (Mirrors FilterKind.defaultBandwidthNm — kept as
@@ -183,7 +216,8 @@ void _validateFluxInputs(OptimalSubInput input) {
   _requirePositive(input.quantumEfficiency, 'quantumEfficiency');
   if (input.quantumEfficiency > 1.0) {
     throw ArgumentError(
-        'Quantum efficiency must be in (0, 1] — above 1 is non-physical.');
+      'Quantum efficiency must be in (0, 1] — above 1 is non-physical.',
+    );
   }
   _requirePositive(input.filterBandwidthNm, 'filterBandwidthNm');
   if (!input.skyMagPerArcsec2.isFinite) {

@@ -75,16 +75,16 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (108 packages):
+License summary (107 packages):
     MIT: 72 packages
-    Apache-2.0: 20 packages
+    Apache-2.0: 19 packages
     BSD-3-Clause: 12 packages
     Microsoft .NET Library License: 2 packages
     BSD-2-Clause: 1 package
     MIT AND Ms-PL: 1 package
 
 
-SERVER — OpenAstroAra.Server NuGet dependency graph (85 packages, transitive closure)
+SERVER — OpenAstroAra.Server NuGet dependency graph (84 packages, transitive closure)
 =====================================================================================
 
 ------------------------------------------------------------------------
@@ -155,7 +155,7 @@ License source: https://github.com/net-commons/common-logging (README: Apache So
 Project:        http://net-commons.github.io/common-logging/
 
 ------------------------------------------------------------------------
-Package:        Fastenshtein 1.0.12
+Package:        Fastenshtein 1.1.1
 Authors:        DanHartley
 Copyright:      Copyright © 2017
 License:        MIT
@@ -291,7 +291,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.OpenApi 2.13.0
+Package:        Microsoft.OpenApi 2.13.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -538,7 +538,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.20.0
+Package:        Scalar.AspNetCore 3.0.0
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
@@ -609,14 +609,6 @@ License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-sinks-file
 
 ------------------------------------------------------------------------
-Package:        SharpGIS.NmeaParser 2.2.2
-Authors:        Morten Nielsen
-Copyright:      Copyright © Morten Nielsen 2015-2020
-License:        Apache-2.0
-License source: https://licenses.nuget.org/Apache-2.0
-Project:        https://dotmorten.github.io/NmeaParser/
-
-------------------------------------------------------------------------
 Package:        SimpleBase 1.3.1
 Authors:        Sedat Kapanoglu
 Copyright:      Copyright 2014-2017 Sedat Kapanoglu
@@ -625,7 +617,7 @@ License source: https://github.com/ssg/SimpleBase (README: Apache-2.0)
 Project:        https://github.com/ssg/SimpleBase
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp 4.156.0
+Package:        SkiaSharp 4.156.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -633,7 +625,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Linux 4.156.0
+Package:        SkiaSharp.NativeAssets.Linux 4.156.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -641,7 +633,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.macOS 4.156.0
+Package:        SkiaSharp.NativeAssets.macOS 4.156.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -649,7 +641,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Win32 4.156.0
+Package:        SkiaSharp.NativeAssets.Win32 4.156.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT

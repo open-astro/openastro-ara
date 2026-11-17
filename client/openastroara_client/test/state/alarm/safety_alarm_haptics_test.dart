@@ -32,7 +32,20 @@ void main() {
   setUp(
     () async => dir = await Directory.systemTemp.createTemp('oara-haptics'),
   );
-  tearDown(() => dir.delete(recursive: true));
+  final containers = <ProviderContainer>[];
+  tearDown(() async {
+    // Close the providers first, then delete. A prefs read still holding a
+    // file open makes Windows refuse the delete (errno 32); the folder is a
+    // throwaway under the system temp, so a refusal must not fail the test.
+    for (final c in containers) {
+      c.dispose();
+    }
+    try {
+      await dir.delete(recursive: true);
+    } on FileSystemException {
+      // Left for the OS temp cleaner.
+    }
+  });
 
   Future<(ProviderContainer, _Player, _Haptics)> ring({
     required bool companion,
@@ -49,7 +62,7 @@ void main() {
         ),
       ],
     );
-    addTearDown(c.dispose);
+    containers.add(c);
     await loadSection(c, notificationsSettingsProvider, 'notifications');
     c.read(notificationsSettingsProvider.notifier).setSoundAlert(soundAlert);
     c.listen(safetyAlarmProvider, (_, _) {});

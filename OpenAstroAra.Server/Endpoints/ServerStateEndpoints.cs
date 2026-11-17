@@ -115,8 +115,17 @@ public static class ServerStateEndpoints {
                        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
                        CancellationToken ct) =>
                     Results.Accepted(value: await svc.RestartOnIdleAsync(reason ?? "operator_requested", idempotencyKey, ct)))
-              .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .Produces<RestartOnIdleAcceptedDto>(StatusCodes.Status202Accepted)
               .WithName("RestartServerOnIdle");
+
+        // #1951 — cancels a queued restart-on-idle; 204 either way (nothing queued is a no-op).
+        server.MapDelete("/restart-on-idle",
+                async (IServerStateService svc, CancellationToken ct) => {
+                    await svc.CancelRestartOnIdleAsync(ct);
+                    return Results.NoContent();
+                })
+              .Produces(StatusCodes.Status204NoContent)
+              .WithName("CancelRestartServerOnIdle");
 
         // ─── Logs (§29.9) — Phase 13.8 wired to ILogService ───
         var logs = server.MapGroup("/logs");

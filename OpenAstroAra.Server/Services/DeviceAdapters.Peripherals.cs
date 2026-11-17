@@ -105,7 +105,7 @@ internal interface ISwitchDevice : IDeviceAdapter {
     double SwitchStep(short id);
     bool CanWrite(short id);
     void SetSwitchValue(short id, double value);
-    // The driver's own actions (#1971: a Polar Corrector's PolarAlign:* set).
+    // The driver's own actions (#1971: a Polar Aligner's PolarAlign:* set).
     IList<string> SupportedActions { get; }
     string Action(string actionName, string actionParameters);
 }

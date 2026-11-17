@@ -176,9 +176,9 @@ namespace OpenAstroAra.Server.Services {
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
                 IPolarAlignMainCameraSolver? mainCamera = null,
-                IPolarCorrectorSource? corrector = null) {
+                IPolarAlignerSource? aligner = null) {
             _guider = guider;
-            _correctorSource = corrector;
+            _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
             _solver = solver;
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Server.Services {
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
                     LastResult: _lastResult,
-                    Corrector: _corrector));
+                    Correction: _aligner));
             }
         }
 
@@ -657,7 +657,7 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 _trackingTouched = false;
             }
-            var correctorRun = BeginCorrectorRun(site.LatitudeDeg);
+            var alignerRun = BeginAlignerRun(site.LatitudeDeg);
             try {
                 Directory.CreateDirectory(workDir);
 
@@ -717,7 +717,7 @@ namespace OpenAstroAra.Server.Services {
                 // the session log the successor run now owns — log and drain quietly.
                 LogRoutineFailed("superseded", ex);
             } finally {
-                EndCorrectorRun(correctorRun);
+                EndAlignerRun(alignerRun);
                 // Hand back tracking unless a NEWER RUN has started (it owns the mount now and has
                 // already turned tracking off for its own adjust loop — a zombie's late restore
                 // would silently break the successor's §45.8 stationary-camera assumption). A clean
@@ -1306,7 +1306,7 @@ namespace OpenAstroAra.Server.Services {
                     FinalAzErrorArcmin: _azErrorArcmin,
                     Iterations: _liveIterations,
                     Outcome: outcome,
-                    CorrectorMoves: _correctorMoves);
+                    AlignerMoves: _alignerMoves);
             }
             LogFinalError(outcome, record.FinalErrorArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
             try {

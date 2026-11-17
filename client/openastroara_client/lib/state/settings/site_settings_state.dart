@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
+import '../../util/optimal_sub.dart';
 
 /// §37.12 Site preferences — location + horizon + observing conditions.
 /// Phase 12h.6e wires the daemon round-trip via [ProfileApi]; local state
@@ -28,8 +29,9 @@ class SiteSettings {
   final int bortleClass; // 1..9
 
   /// Measured sky brightness in mag/arcsec2 (SQM meter / lightpollutionmap).
-  /// 0 = not measured -> the exposure math derives the sky from [bortleClass];
-  /// a real reading (~16-22.2) overrides that coarse lookup.
+  /// 0 = Bortle mode (the sky derives from [bortleClass]); a valid reading
+  /// (16-22.5) = SQM mode, and [bortleClass] then holds the class derived from
+  /// it. One input, never both (see `SkyState`).
   final double sqmMagPerArcsec2;
   final double typicalSeeingArcsec;
   final TwilightDefinition twilightDefinition;
@@ -157,20 +159,22 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
 
   static bool isValidBortle(int v) => v >= 1 && v <= 9;
 
-  /// 0 = not measured; else 16..22.5 (shared with the wizard form).
-  static bool isValidSqm(double v) => v == 0 || (v >= 16 && v <= 22.5);
-
-  void setBortleClass(int v) {
+  /// Bortle mode: the class is the one input, so any SQM reading is cleared
+  /// (no hidden value may still affect planning, #1529).
+  void setSkyBortle(int v) {
     if (!isValidBortle(v)) return;
-    state = state.copyWith(bortleClass: v);
+    state = state.copyWith(bortleClass: v, sqmMagPerArcsec2: 0);
   }
 
-  /// 0 clears the reading (back to Bortle-derived); real skies measure
-  /// roughly 16 (city core) to 22.2 (the darkest sites on Earth) - readings
-  /// outside that are meter noise/typos and are rejected.
-  void setSqmMagPerArcsec2(double v) {
-    if (!isValidSqm(v)) return;
-    state = state.copyWith(sqmMagPerArcsec2: v);
+  /// SQM mode: [v] (16..22.5) is the one input and the Bortle class becomes
+  /// the class derived from it. 0 or out-of-range is rejected; switch to
+  /// Bortle mode with [setSkyBortle] instead.
+  void setSkySqm(double v) {
+    if (!isSqmReading(v)) return;
+    state = state.copyWith(
+      sqmMagPerArcsec2: v,
+      bortleClass: bortleFromSkyMag(v),
+    );
   }
 
   void setTypicalSeeingArcsec(double v) {
@@ -202,4 +206,5 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
 
 final siteSettingsProvider =
     NotifierProvider<SiteSettingsNotifier, SiteSettings>(
-        SiteSettingsNotifier.new);
+      SiteSettingsNotifier.new,
+    );

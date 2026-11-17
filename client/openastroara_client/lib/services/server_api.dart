@@ -140,7 +140,7 @@ class EmergencyStopResult {
 
   /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
   /// halt_rotator, abort_exposure, stop_guide_focus, stop_bahtinov,
-  /// cancel_autofocus, stop_polar_align, stop_polar_corrector, stop_guiding, stop_mount, flat_panel_light_off,
+  /// cancel_autofocus, stop_polar_align, stop_polar_aligner, stop_guiding, stop_mount, flat_panel_light_off,
   /// cooler_off). A device
   /// that isn't connected reads false above but is NOT listed here.
   final List<String> failedRungs;
