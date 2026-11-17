@@ -605,10 +605,46 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
-  String get deviceNever => 'Never';
+  String get deviceAutofocusDuringPlans => 'Autofocus during plans';
 
   @override
-  String get deviceRefocusTemp => 'Refocus every';
+  String get deviceAutofocusOnHint =>
+      'Ara refocuses on its own while a plan runs.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Plans never refocus by themselves. The Autofocus button still works.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Keep focus sharp';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Relaxed';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Tight';
+
+  @override
+  String get deviceKeepSharpCustom => 'Custom';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocus after a filter change, after $temp of cooling, when stars grow $hfr %, or every $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
+
+  @override
+  String get deviceAfFilter => 'AF filter';
+
+  @override
+  String get deviceAfFilterHint =>
+      'Luminance is brightest, so autofocus finishes fastest.';
 
   @override
   String get devicePosition => 'Position';
@@ -6883,10 +6919,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceCouldntSaveThat => 'Não foi possível salvar';
 
   @override
-  String get deviceNever => 'Nunca';
+  String get deviceAutofocusDuringPlans => 'Autofoco durante os planos';
 
   @override
-  String get deviceRefocusTemp => 'Refocar a cada';
+  String get deviceAutofocusOnHint =>
+      'O Ara refoca sozinho enquanto um plano roda.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Os planos nunca refocam sozinhos. O botão Autofoco continua funcionando.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Manter o foco nítido';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Folgado';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Rigoroso';
+
+  @override
+  String get deviceKeepSharpCustom => 'Personalizado';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocar após trocar de filtro, após $temp de resfriamento, quando as estrelas crescem $hfr % ou a cada $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Definido nas Configurações do Modo Avançado. Escolha um ajuste para substituir esses valores.';
+
+  @override
+  String get deviceAfFilter => 'Filtro do AF';
+
+  @override
+  String get deviceAfFilterHint =>
+      'A luminância é a mais brilhante, então o autofoco termina mais rápido.';
 
   @override
   String get devicePosition => 'Posição';

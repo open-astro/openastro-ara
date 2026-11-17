@@ -6,11 +6,14 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
@@ -62,17 +65,36 @@ class _Live extends AutofocusLiveNotifier {
   Future<void> start() async => starts++;
 }
 
+class _Wheel extends FilterWheelNotifier {
+  _Wheel(this._v);
+  final FilterWheelStatus _v;
+  @override
+  Future<FilterWheelStatus?> build() async => _v;
+}
+
 late _Live _live;
 late ProviderContainer _c;
 
 Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {double width = 360, String? font, bool scrolling = false, bool inSettings = false}) async {
+    {double width = 360, String? font, bool scrolling = false, bool inSettings = false, List<String>? wheel}) async {
+  // Tall: the window's Simple settings (#1544) make it taller than the default surface; the shell scrolls it.
+  tester.view.physicalSize = const Size(800, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final focuser = _Focuser(wire);
   _live = _Live();
   final c = _c = ProviderContainer(overrides: [
     autofocusLiveProvider.overrideWith(() => _live),
     focuserProvider.overrideWith(() => focuser),
     deviceDriverProvider.overrideWith((ref, type) async => null),
+    if (wheel != null)
+      filterWheelProvider.overrideWith(() => _Wheel(FilterWheelStatus(
+          deviceId: 'fw',
+          name: 'Wheel',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: 0,
+          slots: [for (var i = 0; i < wheel.length; i++) FilterSlot(position: i, name: wheel[i], focusOffset: 0)]))),
   ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -370,22 +392,77 @@ void main() {
     expect(f.moves, isEmpty);
   });
 
-  testWidgets('Refocus every is a slider, 0-10 °C in whole degrees, Never at 0, kept in the profile', (tester) async {
+  Finder _chip(String id) => find.byKey(Key(id));
+
+  testWidgets('autofocus during plans is on with Normal picked by default, and says what Normal does (#1544)', (tester) async {
     await _pump(tester, _wire());
-    expect(find.text('Refocus every'), findsOneWidget);
-    expect(find.text('2 °C'), findsOneWidget, reason: "the profile's default");
-    final slider = tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus')));
-    expect((slider.min, slider.max, slider.divisions, slider.value), (0.0, 10.0, 10, 2.0));
-    slider.onChanged!(3);
+    expect(find.text('Autofocus during plans'), findsOneWidget);
+    expect(find.text('Ara refocuses on its own while a plan runs.'), findsOneWidget);
+    expect(find.text('Keep focus sharp'), findsOneWidget);
+    expect(find.text('Refocus every'), findsNothing, reason: 'the temperature slider is gone');
+    expect(
+      find.text('Refocus after a filter change, after 2 °C of cooling, when stars grow 15 %, or every 2 h.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a Keep focus sharp preset sets all four triggers and is kept (#1544)', (tester) async {
+    await _pump(tester, _wire());
+    await tester.tap(_chip('simple-focuser-sharp-tight'));
     await tester.pump();
-    expect(find.text('3 °C'), findsOneWidget, reason: 'the value follows the thumb');
-    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 2, reason: 'saved on letting go');
-    tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus'))).onChangeEnd!(3);
+    var s = _c.read(autofocusSettingsProvider);
+    expect((s.runAfterFilterChange, s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours), (true, 1.0, 10.0, 1));
+    expect(find.textContaining('after 1 °C of cooling, when stars grow 10 %, or every 1 h'), findsOneWidget);
+    await tester.tap(_chip('simple-focuser-sharp-relaxed'));
     await tester.pump();
-    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 3);
-    tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus'))).onChangeEnd!(0);
+    s = _c.read(autofocusSettingsProvider);
+    expect((s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours), (3.0, 25.0, 4));
+  });
+
+  testWidgets('switching autofocus during plans off clears the triggers and hides the rest; on again is Normal (#1544)', (tester) async {
+    await _pump(tester, _wire());
+    await tester.tap(_chip('simple-focuser-plans-off'));
     await tester.pump();
-    expect(find.text('Never'), findsOneWidget);
+    final s = _c.read(autofocusSettingsProvider);
+    expect((s.runAfterFilterChange, s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours), (false, 0.0, 0.0, 0));
+    expect(find.text('Plans never refocus by themselves. The Autofocus button still works.'), findsOneWidget);
+    expect(find.text('Keep focus sharp'), findsNothing);
+    expect(_chip('simple-focuser-autofocus'), findsOneWidget, reason: 'the Autofocus button still works');
+    await tester.tap(_chip('simple-focuser-plans-on'));
+    await tester.pump();
+    final back = _c.read(autofocusSettingsProvider);
+    expect((back.triggerTempDeltaC, back.triggerHfrDriftPct, back.everyNHours), (2.0, 15.0, 2));
+    expect(find.text('Keep focus sharp'), findsOneWidget);
+  });
+
+  testWidgets('triggers that match no preset show a Custom chip that takes no tap; a preset overwrites them (#1544)', (tester) async {
+    await _pump(tester, _wire());
+    _c.read(autofocusSettingsProvider.notifier)
+      ..setTriggerTempDeltaC(7)
+      ..setEveryNHours(9);
+    await tester.pump();
+    expect(_chip('simple-focuser-sharp-custom'), findsOneWidget);
+    expect(find.text("Set in Advanced Mode's Settings. Pick a preset to replace those values."), findsOneWidget);
+    await tester.tap(_chip('simple-focuser-sharp-custom'));
+    await tester.pump();
+    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 7, reason: 'Custom is never applied');
+    await tester.tap(_chip('simple-focuser-sharp-normal'));
+    await tester.pump();
+    final s = _c.read(autofocusSettingsProvider);
+    expect((s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours), (2.0, 15.0, 2));
+    expect(_chip('simple-focuser-sharp-custom'), findsNothing);
+  });
+
+  testWidgets('the AF filter row lists the wheel\'s filters, and is hidden without a wheel (#1544)', (tester) async {
+    await _pump(tester, _wire());
+    expect(find.text('AF filter'), findsNothing, reason: 'no filter wheel');
+    await _pump(tester, _wire(), wheel: ['L', 'R', 'G', 'B']);
+    await tester.pump();
+    expect(find.text('AF filter'), findsOneWidget);
+    expect(_chip('simple-focuser-af-filter-L'), findsOneWidget);
+    await tester.tap(_chip('simple-focuser-af-filter-G'));
+    await tester.pump();
+    expect(_c.read(autofocusSettingsProvider).afFilter, 'G');
   });
 
   // The test font draws every glyph as a square; fit is measured with the
@@ -401,7 +478,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       // The window's inner width: 360 pt grown with the text, less its padding.
       await _pump(tester, _wire(), width: 360 * (scale / 1.1).clamp(1, 2) - 32, font: 'Roboto');
-      for (final label in ['Temperature', 'Refocus every', 'Autofocus']) {
+      for (final label in ['Temperature', 'Autofocus during plans', 'Keep focus sharp', 'Autofocus']) {
         final p = tester.renderObject<RenderParagraph>(find.text(label));
         expect(p.size.height, lessThan(14 * scale * 2), reason: '$label wraps');
       }

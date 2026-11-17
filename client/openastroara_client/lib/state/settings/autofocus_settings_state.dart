@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../focus/focus_presets.dart';
 import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
@@ -181,6 +182,19 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings>
       state = state.copyWith(restorePositionOnFailure: v);
   void setTelescopeType(TelescopeType v) =>
       state = state.copyWith(telescopeType: v);
+
+  /// #1544 — Simple Mode's "Keep focus sharp": all four triggers at once.
+  void applyKeepFocusSharp(KeepFocusSharp p) =>
+      state = withKeepFocusSharp(state, p);
+
+  /// #1544 — Simple Mode's "Autofocus during plans". On from off applies the
+  /// Normal preset (today's defaults); off clears all four triggers.
+  void setAutofocusDuringPlans(bool on) {
+    if (on == autofocusDuringPlans(state)) return;
+    state = on
+        ? withKeepFocusSharp(state, KeepFocusSharp.onDefault)
+        : withAutofocusDuringPlansOff(state);
+  }
 
   Future<void> hydrateFromServer(ProfileApi api) =>
       hydrateGuarded(() => api.getAutofocusSettings());

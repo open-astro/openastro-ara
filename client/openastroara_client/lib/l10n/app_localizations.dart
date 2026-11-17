@@ -1077,17 +1077,77 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save that'**
   String get deviceCouldntSaveThat;
 
-  /// Focuser window, Refocus temp row: never refocus on temperature
+  /// Focuser window row (on or off): whether a running plan refocuses by itself
   ///
   /// In en, this message translates to:
-  /// **'Never'**
-  String get deviceNever;
+  /// **'Autofocus during plans'**
+  String get deviceAutofocusDuringPlans;
 
-  /// Focuser window row: refocus every time the temperature changes by this much (the value reads e.g. "2 °C", or "Never")
+  /// Focuser window: under Autofocus during plans when it is on
   ///
   /// In en, this message translates to:
-  /// **'Refocus every'**
-  String get deviceRefocusTemp;
+  /// **'Ara refocuses on its own while a plan runs.'**
+  String get deviceAutofocusOnHint;
+
+  /// Focuser window: under Autofocus during plans when it is off
+  ///
+  /// In en, this message translates to:
+  /// **'Plans never refocus by themselves. The Autofocus button still works.'**
+  String get deviceAutofocusOffHint;
+
+  /// Focuser window row: how readily a plan refocuses (Relaxed, Normal or Tight)
+  ///
+  /// In en, this message translates to:
+  /// **'Keep focus sharp'**
+  String get deviceKeepFocusSharp;
+
+  /// Focuser window, Keep focus sharp: refocus rarely
+  ///
+  /// In en, this message translates to:
+  /// **'Relaxed'**
+  String get deviceKeepSharpRelaxed;
+
+  /// Focuser window, Keep focus sharp: today's defaults
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get deviceKeepSharpNormal;
+
+  /// Focuser window, Keep focus sharp: refocus often
+  ///
+  /// In en, this message translates to:
+  /// **'Tight'**
+  String get deviceKeepSharpTight;
+
+  /// Focuser window, Keep focus sharp: the refocus triggers were changed in Advanced Mode and match no preset (shown picked, cannot be tapped)
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get deviceKeepSharpCustom;
+
+  /// Focuser window: what the picked Keep focus sharp preset does
+  ///
+  /// In en, this message translates to:
+  /// **'Refocus after a filter change, after {temp} of cooling, when stars grow {hfr} %, or every {hours} h.'**
+  String deviceKeepSharpHint(String temp, String hfr, String hours);
+
+  /// Focuser window: under Keep focus sharp when the triggers match no preset
+  ///
+  /// In en, this message translates to:
+  /// **'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.'**
+  String get deviceKeepSharpCustomHint;
+
+  /// Focuser window row: the filter autofocus runs through, one chip per filter in the wheel
+  ///
+  /// In en, this message translates to:
+  /// **'AF filter'**
+  String get deviceAfFilter;
+
+  /// Focuser window: under the AF filter chips
+  ///
+  /// In en, this message translates to:
+  /// **'Luminance is brightest, so autofocus finishes fastest.'**
+  String get deviceAfFilterHint;
 
   /// Focuser window row: the focuser's position in steps
   ///

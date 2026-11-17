@@ -605,10 +605,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
-  String get deviceNever => 'Never';
+  String get deviceAutofocusDuringPlans => 'Autofocus during plans';
 
   @override
-  String get deviceRefocusTemp => 'Refocus every';
+  String get deviceAutofocusOnHint =>
+      'Ara refocuses on its own while a plan runs.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Plans never refocus by themselves. The Autofocus button still works.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Keep focus sharp';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Relaxed';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Tight';
+
+  @override
+  String get deviceKeepSharpCustom => 'Custom';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocus after a filter change, after $temp of cooling, when stars grow $hfr %, or every $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
+
+  @override
+  String get deviceAfFilter => 'AF filter';
+
+  @override
+  String get deviceAfFilterHint =>
+      'Luminance is brightest, so autofocus finishes fastest.';
 
   @override
   String get devicePosition => 'Position';

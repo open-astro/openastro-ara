@@ -38,6 +38,7 @@ import '../../state/guider/guider_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
+import '../../state/focus/focus_presets.dart';
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
@@ -710,6 +711,59 @@ class _OnOff extends StatelessWidget {
           ),
       ],
     ),
+  );
+}
+
+/// A name over a wrapping row of tile chips, one pick ([options] as (value,
+/// label, id), keys '[keyPrefix]-id'): for a choice whose chips may not fit
+/// one line (the wheel's filters, the Keep focus sharp presets at large
+/// text). The picked chip takes no tap.
+class _ChipsRow<T> extends StatelessWidget {
+  const _ChipsRow({
+    required this.label,
+    required this.keyPrefix,
+    required this.options,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final String label;
+  final String keyPrefix;
+  final List<(T, String, String)> options;
+  final T? selected;
+  final ValueChanged<T> onPick;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    spacing: AraSpace.s4,
+    children: [
+      Text(label, style: kSimpleText),
+      Wrap(
+        spacing: AraSpace.s4,
+        runSpacing: AraSpace.s4,
+        children: [
+          for (final (value, name, id) in options)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(AraRadius.container),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 52),
+                child: SimpleSegment(
+                  key: Key('$keyPrefix-$id'),
+                  label: name,
+                  group: label,
+                  selected: value == selected,
+                  radius: AraRadius.container,
+                  onTap: value == selected ? null : () => onPick(value),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ],
   );
 }
 
@@ -1590,43 +1644,91 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
-  /// The profile's autofocus temperature trigger: every run Ara builds
-  /// refocuses after the focuser drifts this much (0 = off).
-  /// While the refocus thumb is held: the value it shows, saved on letting go.
-  double? _dragRefocus;
-
-  /// The profile's autofocus temperature trigger as a stepped slider under
-  /// its row: whole degrees, 0 = never.
-  List<Widget> _refocus() {
-    final saved = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
-    final c = _dragRefocus ?? saved;
-    String text(double v) =>
-        v <= 0 ? context.l10n.deviceNever : simpleCelsius(v);
+  /// #1544 — the Simple tier of focus: whether plans refocus by themselves,
+  /// how sharp to keep focus, and the filter autofocus runs through. The
+  /// profile's four triggers, the exposure, binning and step size stay in
+  /// Advanced Mode's Settings.
+  List<Widget> _autofocusSettings() {
+    final l10n = context.l10n;
+    final af = ref.watch(autofocusSettingsProvider);
+    final on = autofocusDuringPlans(af);
+    final sharp = keepFocusSharpOf(af);
+    final slots = ref.watch(filterWheelProvider).value?.slots ?? const [];
     return [
       simpleWindowRow(
-        context.l10n.deviceRefocusTemp,
-        id: 'Refocus temp',
-        Text(text(c), style: kSimpleText),
+        l10n.deviceAutofocusDuringPlans,
+        id: 'Autofocus during plans',
+        _OnOff(
+          id: 'simple-focuser-plans',
+          on: on,
+          group: l10n.deviceAutofocusDuringPlans,
+          onChanged: (v) => _saveAutofocus(
+            () => ref
+                .read(autofocusSettingsProvider.notifier)
+                .setAutofocusDuringPlans(v),
+          ),
+        ),
       ),
-      AdaptiveSlider(
-        key: const Key('simple-focuser-refocus'),
-        min: 0,
-        max: 10,
-        divisions: 10,
-        value: c.clamp(0, 10).roundToDouble(),
-        label: text(c.roundToDouble()),
-        onChanged: (v) => setState(() => _dragRefocus = v),
-        onChangeEnd: (v) {
-          setState(() => _dragRefocus = null);
-          _setRefocus(v.roundToDouble());
-        },
+      Text(
+        on ? l10n.deviceAutofocusOnHint : l10n.deviceAutofocusOffHint,
+        key: const Key('simple-focuser-plans-hint'),
+        style: kSimpleCaption,
       ),
+      if (on) ...[
+        _ChipsRow<KeepFocusSharp>(
+          label: l10n.deviceKeepFocusSharp,
+          keyPrefix: 'simple-focuser-sharp',
+          options: [
+            (KeepFocusSharp.relaxed, l10n.deviceKeepSharpRelaxed, 'relaxed'),
+            (KeepFocusSharp.normal, l10n.deviceKeepSharpNormal, 'normal'),
+            (KeepFocusSharp.tight, l10n.deviceKeepSharpTight, 'tight'),
+            // What the triggers read when they match no preset: shown picked,
+            // takes no tap, and a preset over it overwrites them.
+            if (sharp == KeepFocusSharp.custom)
+              (KeepFocusSharp.custom, l10n.deviceKeepSharpCustom, 'custom'),
+          ],
+          selected: sharp,
+          onPick: (p) => _saveAutofocus(
+            () => ref
+                .read(autofocusSettingsProvider.notifier)
+                .applyKeepFocusSharp(p),
+          ),
+        ),
+        Text(
+          sharp == KeepFocusSharp.custom
+              ? l10n.deviceKeepSharpCustomHint
+              : l10n.deviceKeepSharpHint(
+                  simpleCelsius(sharp!.tempC),
+                  sharp.hfrPct.round().toString(),
+                  sharp.hours.toString(),
+                ),
+          key: const Key('simple-focuser-sharp-hint'),
+          style: kSimpleCaption,
+        ),
+        // Without a wheel there is no filter to pick.
+        if (slots.isNotEmpty) ...[
+          _ChipsRow<String>(
+            label: l10n.deviceAfFilter,
+            keyPrefix: 'simple-focuser-af-filter',
+            options: [
+              for (final f in slots)
+                if (f.name.isNotEmpty) (f.name, f.name, f.name),
+            ],
+            selected: af.afFilter,
+            onPick: (f) => _saveAutofocus(
+              () => ref.read(autofocusSettingsProvider.notifier).setAfFilter(f),
+            ),
+          ),
+          Text(l10n.deviceAfFilterHint, style: kSimpleCaption),
+        ],
+      ],
     ];
   }
 
-  Future<void> _setRefocus(double c) async {
+  /// Applies [change] to the autofocus settings and keeps it in the profile.
+  Future<void> _saveAutofocus(void Function() change) async {
     final af = ref.read(autofocusSettingsProvider.notifier);
-    af.setTriggerTempDeltaC(c.clamp(0, 10).toDouble());
+    change();
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
@@ -1844,7 +1946,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         ),
         const SizedBox(height: AraSpace.s12),
         const _AutofocusButton(),
-        ..._refocus(),
+        ..._autofocusSettings(),
       ]);
     }
     if (widget.inSettings) {
