@@ -91,4 +91,44 @@ void main() {
       reason: 'absent key reads as none',
     );
   });
+
+  group('resolveBridgeAddress (the daemon dials the bridge; HostLocality names the local host "localhost")', () {
+    test('the draft override is host or host:port; a host alone gets 6800', () {
+      expect(
+        resolveBridgeAddress(override: 'b.example:7000'),
+        const BridgeAddress('b.example', 7000),
+      );
+      expect(
+        resolveBridgeAddress(override: ' b.example '),
+        const BridgeAddress('b.example', 6800),
+      );
+      expect(
+        resolveBridgeAddress(override: '192.0.2.10:6800'),
+        const BridgeAddress('192.0.2.10', 6800),
+      );
+    });
+
+    test('with no override a discovered device wins, else localhost:6800', () {
+      expect(
+        resolveBridgeAddress(discovered: [configuredCamera('x')]),
+        const BridgeAddress('192.0.2.10', 32323),
+      );
+      expect(resolveBridgeAddress(), const BridgeAddress('localhost', 6800));
+      expect(
+        resolveBridgeAddress(override: '  '),
+        const BridgeAddress('localhost', 6800),
+        reason: 'blank is none',
+      );
+    });
+
+    test('a bad port is a FormatException, never a guess', () {
+      for (final bad in ['h:abc', 'h:0', 'h:65536', 'h:-1', 'h:', ':6800']) {
+        expect(
+          () => resolveBridgeAddress(override: bad),
+          throwsFormatException,
+          reason: bad,
+        );
+      }
+    });
+  });
 }

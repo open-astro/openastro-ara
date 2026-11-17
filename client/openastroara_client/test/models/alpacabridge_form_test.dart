@@ -221,11 +221,17 @@ void main() {
   test(
     'an unknown field type is kept as unknown and its value is sent as text',
     () {
-      final f = _form([_field('meshAlignment', 'futuretype', def: 'off')]);
+      final f = _form([_field('meshAlignment', 'futuretype', def: 3)]);
       expect(f.driver.fields.single.type, BridgeFieldType.unknown);
-      expect(f.initialValues(), {'meshAlignment': 'off'});
-      expect(f.errors({'meshAlignment': 'on'}), isEmpty);
-      expect(f.body({'meshAlignment': 'on'})['meshAlignment'], 'on');
+      expect(f.initialValues(), {
+        'meshAlignment': '3',
+      }, reason: 'the default (a number here) is held as text');
+      expect(f.errors({'meshAlignment': '4'}), isEmpty);
+      expect(
+        f.body({'meshAlignment': 4})['meshAlignment'],
+        '4',
+        reason: 'sent as text, whatever the value was',
+      );
     },
   );
 }

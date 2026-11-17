@@ -5,6 +5,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_devices_empty.dart';
 import 'package:openastroara/state/equipment/alpacabridge_setup_state.dart';
 import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
+import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
 import '../../support/alpacabridge_setup_fakes.dart';
@@ -28,7 +29,11 @@ Future<FakeBridgeClient> _pump(
     ProviderScope(
       overrides: [
         activeServerProvider.overrideWithValue(_server),
-        alpacaBridgeSetupClientProvider.overrideWithValue(bridge),
+        alpacaBridgeSetupClientFactoryProvider.overrideWithValue(
+          bridge.factory,
+        ),
+        alpacaDeviceNamesApiProvider.overrideWithValue(FakeNames()),
+        bridgeAddressOverrideProvider.overrideWithValue(null),
         equipmentDiscoveryApiFactoryProvider.overrideWithValue(
           (_) => FakeConfiguredApi(),
         ),

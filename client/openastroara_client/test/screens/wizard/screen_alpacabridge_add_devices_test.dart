@@ -6,6 +6,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/screens/screen_equipment_discovery.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/alpacabridge_setup_state.dart';
+import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 
@@ -26,12 +27,16 @@ Future<FakeBridgeClient> _pump(
   WidgetTester tester, {
   List<AttachedCamera>? cameras,
   List<BridgeDriver>? drivers,
+  bool gated = false,
+  bool camerasThrow = false,
 }) async {
   tester.view.physicalSize = const Size(900, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final bridge = FakeBridgeClient(
     drivers: drivers ?? [zwoCameraDriver()],
+    gated: gated,
+    camerasThrow: camerasThrow,
     cameraList:
         cameras ??
         [
@@ -42,7 +47,9 @@ Future<FakeBridgeClient> _pump(
   final c = ProviderContainer(
     overrides: [
       savedServerServiceProvider.overrideWithValue(_Saved()),
-      alpacaBridgeSetupClientProvider.overrideWithValue(bridge),
+      alpacaBridgeSetupClientFactoryProvider.overrideWithValue(bridge.factory),
+      alpacaDeviceNamesApiProvider.overrideWithValue(FakeNames()),
+      bridgeAddressOverrideProvider.overrideWithValue(null),
       equipmentDiscoveryApiFactoryProvider.overrideWithValue(
         (_) => FakeConfiguredApi(),
       ),
@@ -150,17 +157,135 @@ void main() {
   );
 
   testWidgets(
-    'Add a device by hand opens the catalog form for a chosen driver',
+    'Retry detection on the wizard screen also reads the cameras again',
     (tester) async {
-      await _pump(tester);
+      final bridge = await _pump(tester);
+      expect(bridge.cameraReads, 1);
+      await tester.tap(find.text('Retry detection').first);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(bridge.cameraReads, 2);
+    },
+  );
+
+  testWidgets(
+    'while the daemon cannot read the cameras there is an error line and Retry, and no By hand',
+    (tester) async {
+      await _pump(tester, camerasThrow: true);
+      expect(find.byKey(const Key('found-error')), findsOneWidget);
+      expect(find.byKey(const Key('add-by-hand')), findsNothing);
+      expect(find.text('Retry detection'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'during a sequence the row says Adding, the rows behind say Waiting, and the buttons are off',
+    (tester) async {
+      final bridge = await _pump(tester, gated: true);
+      await tester.tap(find.byKey(const Key('add-selected')));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('found-status-zwo:camera:AAAA000000000001')),
+          matching: find.text('Adding'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('found-status-zwo:camera:BBBB000000000002')),
+          matching: find.text('Waiting'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('add-selected')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<ButtonStyleButton>(
+              find.ancestor(
+                of: find.text('Retry detection').first,
+                matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+              ),
+            )
+            .onPressed,
+        isNull,
+      );
+      bridge.release();
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      bridge.release();
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(bridge.calls.length, 2);
+    },
+  );
+
+  testWidgets(
+    'Add a device by hand lists the catalog drivers and opens the form of the chosen one',
+    (tester) async {
+      await _pump(tester, drivers: [zwoCameraDriver(), qhyCameraDriver()]);
+      expect(
+        find.text('ZWO ASI camera'),
+        findsNothing,
+        reason: 'not before the tap',
+      );
       await tester.tap(find.byKey(const Key('add-by-hand')));
       await tester.pump();
       await tester.pump();
+      final list = find.byKey(const Key('by-hand-list'));
       expect(
-        find.text('ZWO ASI camera'),
+        find.descendant(of: list, matching: find.text('ZWO ASI camera')),
         findsOneWidget,
-        reason: 'the driver list comes from the catalog',
       );
+      expect(
+        find.descendant(of: list, matching: find.text('QHY camera')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('by-hand-driver-qhy-camera')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('form-submit')), findsOneWidget);
+      expect(find.byKey(const Key('form-field-cameraIndex')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'by hand, a camera driver asks Which camera? and sends the picked camera\'s serial and name',
+    (tester) async {
+      final bridge = await _pump(tester);
+      await tester.tap(find.byKey(const Key('add-by-hand')));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('by-hand-driver-zwo-camera')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Which camera?'), findsOneWidget);
+      expect(
+        find.byKey(const Key('form-field-serialNumber')),
+        findsNothing,
+        reason: 'the pick fills it',
+      );
+      expect(find.byKey(const Key('form-field-cameraName')), findsNothing);
+      await tester.tap(
+        find.byKey(const Key('by-hand-camera-BBBB000000000002')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('form-submit')));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump();
+      }
+      expect(bridge.bodies.single['serialNumber'], 'BBBB000000000002');
+      expect(bridge.bodies.single['cameraName'], 'ZWO ASI120MM Mini');
     },
   );
 

@@ -31,16 +31,37 @@ class _Stub implements HttpClientAdapter {
   }
 }
 
-AlpacaBridgeSetupApi _api(_Stub stub) {
+/// A transport that fails before any answer (a timeout, a dropped connection).
+class _Throws implements HttpClientAdapter {
+  _Throws(this.type);
+  final DioExceptionType type;
+  @override
+  void close({bool force = false}) {}
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions o,
+    Stream<Uint8List>? s,
+    Future<void>? c,
+  ) async => throw DioException(requestOptions: o, type: type);
+}
+
+/// [lenient] stubs Dio with `validateStatus: (_) => true`; the default (strict) keeps Dio's own
+/// default, which throws on 4xx and 5xx: production must decode those either way.
+AlpacaBridgeSetupApi _api(HttpClientAdapter stub, {bool lenient = false}) {
   const server = AraServer(hostname: 'rig', port: 5555);
   return AlpacaBridgeSetupApi(
     server,
     host: '192.0.2.10',
     port: 32323,
-    dio: Dio(BaseOptions(baseUrl: server.baseUrl, validateStatus: (_) => true))
-      ..httpClientAdapter = stub,
+    dio: Dio(
+      lenient
+          ? BaseOptions(baseUrl: server.baseUrl, validateStatus: (_) => true)
+          : BaseOptions(baseUrl: server.baseUrl),
+    )..httpClientAdapter = stub,
   );
 }
+
+const _body = {'vendor': 'zwo', 'deviceType': 'camera'};
 
 void main() {
   test('catalog dials the daemon route with the bridge host and port, never the bridge', () async {
@@ -100,33 +121,71 @@ void main() {
     },
   );
 
-  test('422 reads as Refused with the bridge\'s detail (the API layer decodes it, ADR 0022 rule 5)', () async {
-    final out = await _api(
-      _Stub({
-        'type': 'https://openastro.net/errors/alpacabridge-refused',
-        'detail': "gpioChip '/dev/gpiochip9' is not in the board allowlist",
-      }, status: 422),
-    ).addDevice({'vendor': 'zwo', 'deviceType': 'switch'});
-    expect(
-      out,
-      isA<AddRefused>().having(
-        (o) => o.detail,
-        'detail',
-        contains('allowlist'),
-      ),
-    );
+  test('add waits longer than the bridge\'s 30 s (the device can land after a short client timeout)', () async {
+    final stub = _Stub({'message': 'ok'});
+    await _api(stub).addDevice(_body);
+    expect(stub.last!.receiveTimeout, greaterThan(const Duration(seconds: 30)));
   });
 
-  test(
-    '502 reads as Unconfirmed, and a thrown transport error does too',
-    () async {
-      final out = await _api(
-        _Stub({
-          'type': 'https://openastro.net/errors/alpacabridge-unconfirmed',
-          'detail': 'did not answer',
-        }, status: 502),
-      ).addDevice({'vendor': 'zwo', 'deviceType': 'camera'});
-      expect(out, isA<AddUnconfirmed>());
-    },
-  );
+  for (final lenient in [false, true]) {
+    final how = lenient ? 'lenient' : 'default';
+    test(
+      '422 reads as Refused with the bridge\'s detail ($how validateStatus; ADR 0022 rule 5)',
+      () async {
+        final out = await _api(
+          _Stub({
+            'type': 'https://openastro.net/errors/alpacabridge-refused',
+            'detail': "gpioChip '/dev/gpiochip9' is not in the board allowlist",
+          }, status: 422),
+          lenient: lenient,
+        ).addDevice({'vendor': 'zwo', 'deviceType': 'switch'});
+        expect(
+          out,
+          isA<AddRefused>().having(
+            (o) => o.detail,
+            'detail',
+            contains('allowlist'),
+          ),
+        );
+      },
+    );
+
+    test('502 and 500 read as Unconfirmed ($how validateStatus)', () async {
+      for (final status in [502, 500]) {
+        final out = await _api(
+          _Stub({'detail': 'did not answer'}, status: status),
+          lenient: lenient,
+        ).addDevice(_body);
+        expect(out, isA<AddUnconfirmed>(), reason: '$status');
+      }
+    });
+
+    test(
+      '400 and 409 read as Refused: nothing reached the bridge ($how validateStatus)',
+      () async {
+        for (final status in [400, 409]) {
+          final out = await _api(
+            _Stub({'detail': 'host is required'}, status: status),
+            lenient: lenient,
+          ).addDevice(_body);
+          expect(
+            out,
+            isA<AddRefused>().having((o) => o.detail, 'detail', isNotEmpty),
+            reason: '$status',
+          );
+        }
+      },
+    );
+  }
+
+  test('a timeout or a dropped connection reads as Unconfirmed: the device may have landed', () async {
+    for (final type in [
+      DioExceptionType.receiveTimeout,
+      DioExceptionType.sendTimeout,
+      DioExceptionType.connectionError,
+    ]) {
+      final out = await _api(_Throws(type)).addDevice(_body);
+      expect(out, isA<AddUnconfirmed>(), reason: '$type');
+    }
+  });
 }
