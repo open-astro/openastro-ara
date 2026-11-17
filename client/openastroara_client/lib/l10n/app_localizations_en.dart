@@ -6281,6 +6281,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
   String get clockWrongTitle => 'The rig\'s clock is wrong';
 
   @override

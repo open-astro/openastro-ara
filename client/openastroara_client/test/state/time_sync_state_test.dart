@@ -87,6 +87,32 @@ void main() {
           .toList();
       expect(api.pushes, 2);
       expect(warnings, hasLength(1));
+      expect(
+        warnings.single.title,
+        "The rig's clock is 2 min slow and could not be set. "
+        'Times and targets will be off.',
+        reason: 'a notice, not the Start question',
+      );
+    },
+  );
+
+  test(
+    'a fresh sync with the clock still wrong (a failed set) warns once (#1945)',
+    () async {
+      final api = _FakeTimeSyncClient(
+        const TimeSyncState(synced: true, systemTimeOffsetSeconds: 120),
+      );
+      final c = _container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(timeSyncOnConnectProvider).syncIfNeeded();
+
+      final warnings = c
+          .read(simpleMessagesProvider)
+          .where((m) => m.kind == SimpleMessageKind.warning)
+          .toList();
+      expect(api.pushes, 0);
+      expect(warnings, hasLength(1));
+      expect(warnings.single.title, contains('2 min slow'));
     },
   );
 

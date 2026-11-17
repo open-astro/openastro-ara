@@ -48,17 +48,30 @@ class TimeSyncClockError {
   String get label {
     final t = seconds.round();
     final h = t ~/ 3600, m = t % 3600 ~/ 60, s = t % 60;
-    return [if (h > 0) '$h h', if (m > 0) '$m min', if (h == 0 && s > 0) '$s s']
-        .join(' ');
+    return [
+      if (h > 0) '$h h',
+      if (m > 0) '$m min',
+      if (h == 0 && s > 0) '$s s',
+    ].join(' ');
   }
 }
 
-/// "The rig's clock is 2 min slow."
+/// "The rig's clock is 2 min slow, ... Start anyway?": the Start question.
 String clockWrongText(AppLocalizations l, TimeSyncClockError e) =>
     e.slow ? l.clockWrongSlow(e.label) : l.clockWrongFast(e.label);
 
+/// "The rig's clock is 2 min slow and could not be set. ...": the notice.
+String clockNoticeText(AppLocalizations l, TimeSyncClockError e) =>
+    e.slow ? l.clockNoticeSlow(e.label) : l.clockNoticeFast(e.label);
+
 /// Smallest tracked offset read as a clock that was not set.
 const kClockErrorThresholdSeconds = 60.0;
+
+/// The error a tracked [offset] means, or null under the threshold.
+TimeSyncClockError? clockErrorFrom(double offset) =>
+    offset.abs() < kClockErrorThresholdSeconds
+    ? null
+    : TimeSyncClockError(seconds: offset.abs(), slow: offset > 0);
 
 /// The rig's clock error read from the daemon's time-sync GET (so every
 /// connected device sees it, not only the one that pushed), or null when the
@@ -66,22 +79,20 @@ const kClockErrorThresholdSeconds = 60.0;
 /// read asks the rig.
 final timeSyncClockErrorProvider =
     FutureProvider.autoDispose<TimeSyncClockError?>((ref) async {
-  final server = ref.watch(activeServerProvider);
-  if (server == null) return null;
-  // Its own short-lived client: this is read once per Start.
-  final api = ref.read(timeSyncApiFactoryProvider)(server);
-  try {
-    final off = (await api.getState()).systemTimeOffsetSeconds;
-    if (off.abs() < kClockErrorThresholdSeconds) return null;
-    return TimeSyncClockError(seconds: off.abs(), slow: off > 0);
-  } catch (_) {
-    return null;
-  } finally {
-    try {
-      api.close();
-    } catch (_) {}
-  }
-});
+      final server = ref.watch(activeServerProvider);
+      if (server == null) return null;
+      // Its own short-lived client: this is read once per Start.
+      final api = ref.read(timeSyncApiFactoryProvider)(server);
+      try {
+        return clockErrorFrom((await api.getState()).systemTimeOffsetSeconds);
+      } catch (_) {
+        return null;
+      } finally {
+        try {
+          api.close();
+        } catch (_) {}
+      }
+    });
 
 /// The §31.1 on-connect push: ask the daemon whether it holds a fresh,
 /// trustworthy sync and, when it doesn't, push this device's clock (waterfall
@@ -128,6 +139,8 @@ class TimeSyncOnConnect {
       final state = await api.getState();
       _ref.read(timeSyncCheckProvider.notifier).record(state.synced);
       if (state.synced) {
+        // A failed set also records a fresh sync (#1945): check its offset.
+        _warnClock(clockErrorFrom(state.systemTimeOffsetSeconds));
         return; // fresh + trustworthy — nothing to do (§31.1 top branch)
       }
       await api.pushClientTime(now());
@@ -135,22 +148,24 @@ class TimeSyncOnConnect {
         '[time-sync] pushed device clock (server was ${state.source}/${state.trust})',
       );
       // The push can succeed and the clock stay wrong (#1945): say so.
-      final err = await _ref.read(timeSyncClockErrorProvider.future);
-      if (err != null) {
-        final text = clockWrongText(l10nFor(_ref.read(appLocaleProvider)), err);
-        // A reconnect pushes again: one copy of the same warning is enough.
-        final shown = _ref
-            .read(simpleMessagesProvider)
-            .any((m) => m.kind == SimpleMessageKind.warning && m.title == text);
-        if (!shown) {
-          _ref
-              .read(simpleMessagesProvider.notifier)
-              .show(SimpleMessageKind.warning, text, sticky: true);
-        }
-      }
+      _warnClock(await _ref.read(timeSyncClockErrorProvider.future));
     } catch (e) {
       // Best-effort: never surface an error for an opportunistic sync.
       debugPrint('[time-sync] on-connect push failed: $e');
+    }
+  }
+
+  /// A sticky warning that the rig clock is wrong; a reconnect adds no copy.
+  void _warnClock(TimeSyncClockError? err) {
+    if (err == null) return;
+    final text = clockNoticeText(l10nFor(_ref.read(appLocaleProvider)), err);
+    final shown = _ref
+        .read(simpleMessagesProvider)
+        .any((m) => m.kind == SimpleMessageKind.warning && m.title == text);
+    if (!shown) {
+      _ref
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.warning, text, sticky: true);
     }
   }
 }

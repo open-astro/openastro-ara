@@ -6281,6 +6281,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
   String get clockWrongTitle => 'The rig\'s clock is wrong';
 
   @override
@@ -12609,6 +12619,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String clockWrongFast(String amount) {
     return 'O relógio do setup está $amount adiantado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'O relógio do setup está $amount adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.';
   }
 
   @override

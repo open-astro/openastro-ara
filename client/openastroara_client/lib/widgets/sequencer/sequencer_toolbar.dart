@@ -583,7 +583,6 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
       ),
     );
     if (go != true) return;
-    if (!context.mounted) return;
   }
   if (!context.mounted) return;
   await runSequenceLifecycle(context, read, (api, id) => api.start(id));
