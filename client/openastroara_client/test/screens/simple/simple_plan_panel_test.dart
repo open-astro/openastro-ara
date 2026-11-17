@@ -13,6 +13,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
@@ -347,6 +348,15 @@ Future<ProviderContainer> _pump(
 }
 
 final _en = lookupAppLocalizations(const Locale('en'));
+
+/// The rig clock 2 min slow, not set (#1945).
+final _wrongClock =
+    timeSyncClockErrorProvider.overrideWith((ref) async => const TimeSyncClockError(seconds: 120, slow: true));
+
+List<SimpleMessage> _clockQuestions(ProviderContainer c) => [
+      for (final m in c.read(simpleMessagesProvider))
+        if (m.kind == SimpleMessageKind.question && m.title.contains('2 min slow')) m,
+    ];
 
 
 
@@ -1709,6 +1719,26 @@ void main() {
       expect(created, 1);
     });
 
+    testWidgets('a wrong rig clock: Create and start asks, Start anyway starts and closes the sheet once (#1945)',
+        (tester) async {
+      var created = 0;
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++),
+          overrides: [_wrongClock]);
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31'], reason: 'nothing starts before the answer');
+      expect(created, 0);
+      _clockQuestions(c).single.actions.last.onPressed();
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1']);
+      expect(created, 1);
+      expect(_clockQuestions(c), isEmpty, reason: 'Start anyway does not ask again');
+    });
+
     group('a scheduled start', () {
       // 20:00 UTC on Jan 14 at the Sydney site (07:00 on Jan 15 there): daylight, dark falls that evening.
       final nowUtc = DateTime.utc(2026, 1, 14, 20);
@@ -2647,6 +2677,22 @@ void main() {
   });
 
   group('the tracker and the shutter', () {
+    testWidgets('plan ready on a wrong rig clock: the shutter asks once and starts only on Start anyway (#1945)',
+        (tester) async {
+      final (c, seq) = await run(tester, overrides: [_wrongClock]);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(_clockQuestions(c), hasLength(1), reason: 'a second tap adds no second pill');
+      expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
+      _clockQuestions(c).single.actions.last.onPressed();
+      await tester.pumpAndSettle();
+      expect(seq.calls.where((call) => call.startsWith('start ')), hasLength(1));
+      expect(_clockQuestions(c), isEmpty, reason: 'Start anyway does not ask again');
+    });
+
     testWidgets('nothing picked: no tracker, and the shutter does nothing but say why', (tester) async {
       final (_, seq) = await run(tester, sel: null);
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing);

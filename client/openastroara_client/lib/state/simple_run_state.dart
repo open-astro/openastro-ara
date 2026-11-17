@@ -904,7 +904,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           sequenceId: id,
           targets: [_calibrationTarget(time)],
         );
-        return await start() ? id : null;
+        // Calibration frames do not depend on the clock: no #1945 question.
+        return await _start() ? id : null;
       } catch (e) {
         _fail(_why(e, (l) => l.calibrationActionShoot), undo: const SimpleRun());
         return null;
@@ -1013,12 +1014,56 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     if (!await create(first: state.sequenceId != null, startsAt: startsAt)) {
       return false;
     }
-    return startQueue(startAt: startAt);
+    // Waits for the #1945 answer: the sheet closes only on a real start.
+    return _askClock(() => _startQueue(startAt));
   }
 
   /// Starts the queue as it stands (Preflight's last Done). With [startAt]
-  /// the run starts at once but waits on the rig until then.
-  Future<bool> startQueue({DateTime? startAt}) async {
+  /// the run starts at once but waits on the rig until then. False while
+  /// the #1945 clock question is open; Start anyway starts it.
+  Future<bool> startQueue({DateTime? startAt}) =>
+      _askClock(() => _startQueue(startAt), wait: false);
+
+  /// The question open on a wrong rig clock, and its pill.
+  Completer<bool>? _clockAsk;
+  int? _clockAskId;
+
+  /// #1945: a rig clock that could not be set. Asks before [go] runs; with
+  /// [wait], gives the answer: Start anyway [go]'s result, Not now false.
+  /// A second Start while the question is open adds no second pill.
+  Future<bool> _askClock(Future<bool> Function() go, {bool wait = true}) async {
+    final clockErr = await ref.read(timeSyncClockErrorProvider.future);
+    if (clockErr == null) return go();
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    final open = _clockAsk;
+    if (open != null && !open.isCompleted) {
+      if (ref.read(simpleMessagesProvider).any((m) => m.id == _clockAskId)) {
+        return false;
+      }
+      open.complete(false); // its pill went unanswered (the shell closed)
+    }
+    final l = l10nFor(ref.read(appLocaleProvider));
+    final answer = _clockAsk = Completer<bool>();
+    int? qid;
+    qid = _clockAskId = messages.show(
+      SimpleMessageKind.question,
+      clockWrongText(l, clockErr),
+      origin: SimpleStatusOrigin.plan,
+      actions: [
+        SimpleMessageAction(l.calibrationNotNow, () {
+          messages.dismiss(qid!);
+          if (!answer.isCompleted) answer.complete(false);
+        }),
+        SimpleMessageAction(l.clockWrongStartAnyway, () {
+          messages.dismiss(qid!);
+          if (!answer.isCompleted) answer.complete(go());
+        }),
+      ],
+    );
+    return wait ? answer.future : false;
+  }
+
+  Future<bool> _startQueue(DateTime? startAt) async {
     // An edit or reorder still on its way: _op would skip the start quietly
     // and this would report success (review of #1486).
     if (state.busy) {
@@ -1053,11 +1098,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       }
     }
     state = state.copyWith(startAt: startAt, startNow: startAt == null);
-    return start();
+    return _start();
   }
 
-  /// The shutter's actions. Starting settles the dawn stop first.
-  Future<bool> start() async {
+  /// The shutter's actions. Starting asks first on a wrong rig clock (#1945)
+  /// and settles the dawn stop.
+  Future<bool> start() => _askClock(_start);
+
+  Future<bool> _start() async {
     if (!await _settleDawn()) return false;
     return _op(
       (api, id) => api.start(id),
