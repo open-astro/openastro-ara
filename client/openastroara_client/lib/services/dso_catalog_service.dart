@@ -238,6 +238,7 @@ String designationKey(String s) {
 // Built once: the search keys every id and alias of the bundle on a miss.
 final RegExp _spaces = RegExp(r'[\s_]');
 final RegExp _zeroPad = RegExp(r'([A-Z])0+(\d)');
+final RegExp _nameNoise = RegExp(r'[\s\-_]');
 
 /// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
 /// Sh2-117). A query that carries a dash is never matched loosely.
@@ -264,8 +265,19 @@ class CatalogNameIndex {
   // A dashless key two different rows share answers nothing, as in the
   // merge ("WR 2-1" and "WR 21" are two stars; review r8).
   final Set<String> _looseAmbiguous = {};
+  // Lower-cased common names without spaces, dashes or underscores, in
+  // catalog order: the last fallback of [lookupOrContains], plain strings so
+  // a miss is one `contains` pass with no RegExp work per row.
+  final List<String> _names = [];
+  final List<PlanningDso> _nameRows = [];
 
   CatalogNameIndex(List<PlanningDso> catalog) {
+    for (final o in catalog) {
+      final n = o.name.toLowerCase().replaceAll(_nameNoise, '');
+      if (n.isEmpty) continue;
+      _names.add(n);
+      _nameRows.add(o);
+    }
     void add(String designation, PlanningDso o) {
       final k = designationKey(designation);
       if (k.isEmpty) return;
@@ -300,6 +312,20 @@ class CatalogNameIndex {
     final hit = _exact[k];
     if (hit != null || k.contains('-')) return hit;
     return _looseAmbiguous.contains(k) ? null : _loose[k];
+  }
+
+  /// [lookup], then on a miss the first row whose common name contains
+  /// [query] (the last fallback of [findCatalogObject]: "Rosette" finds the
+  /// Rosette Nebula). Kept for parity with it: no minimum query length.
+  PlanningDso? lookupOrContains(String query) {
+    final hit = lookup(query);
+    if (hit != null) return hit;
+    final q = query.toLowerCase().replaceAll(_nameNoise, '');
+    if (q.isEmpty) return null;
+    for (var i = 0; i < _names.length; i++) {
+      if (_names[i].contains(q)) return _nameRows[i];
+    }
+    return null;
   }
 }
 
@@ -370,24 +396,56 @@ final RegExp _catalogDesignation = RegExp(r'^[A-Za-z]+[ -]?\d');
 /// "Sh2-129"): letters, then a number. A name or a SIMBAD "NAME ..." is not.
 bool isCatalogDesignation(String s) => _catalogDesignation.hasMatch(s);
 
-/// #1720 display form `designation (name)`: "NGC 246 (Skull Nebula)". Just the
-/// designation when there is no other name; just the name when it already
-/// carries the designation or its own brackets ("Heart Nebula (IC 1805)").
+/// Display form `name (designation)`: "Skull Nebula (NGC 246)" (#1957, was
+/// designation first in #1720). Just the designation when there is no other
+/// name; just the name when it already carries the designation or its own
+/// brackets ("Spaghetti Nebula (Simeis 147)").
 String designationWithName(String designation, String name) {
   final d = prettyDesignation(designation.trim());
   final n = name.trim();
   if (d.isEmpty) return n;
   if (n.isEmpty || designationKey(n) == designationKey(d)) return d;
   if (n.contains('(')) return n;
-  return '$d ($n)';
+  return '$n ($d)';
 }
+
+const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
+final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
+
+/// A designation as the plan square writes it ("M 42", "Sh2-129") and its
+/// rank in M > NGC > IC > Sh2 > B > LBN; null for any other catalog.
+(int, String)? catalogTag(String designation) {
+  final m = _tagKey.firstMatch(designationKey(designation));
+  if (m == null) return null;
+  final p = m[1]!;
+  return (_tagOrder.indexOf(p), p == 'SH2' ? 'Sh2-${m[2]}' : '$p ${m[2]}');
+}
+
+/// The best of [designations], M > NGC > IC > Sh2 > B > LBN, as written
+/// there ("NGC1976" stays padded); the first of a rank wins; null when none
+/// is in those catalogs. Titles lead with it, so a curated Messier region
+/// reads "(M 42)", not "(NGC 1976)" (#1957). Pure.
+String? bestCatalogDesignation(List<String> designations) {
+  String? best;
+  var rank = _tagOrder.length;
+  for (final d in designations) {
+    final t = catalogTag(d);
+    if (t != null && t.$1 < rank) (best, rank) = (d, t.$1);
+  }
+  return best;
+}
+
+/// A ranked object's title, `name (designation)` led by its best designation:
+/// "Orion Nebula + Running Man (M 42)".
+String objectTitle(String id, List<String> aliases, String name) =>
+    designationWithName(bestCatalogDesignation([id, ...aliases]) ?? id, name);
 
 /// The designation a search suggestion shows: the one that matched, or the id
 /// when a name did. A pick hands it to the plan, so its header names the same.
 String suggestionDesignation(DsoSuggestion s) =>
     s.label == s.dso.id || isCatalogDesignation(s.label) ? s.label : s.dso.id;
 
-/// A search suggestion's title, `designation (name)`: the name is a nickname
+/// A search suggestion's title, `name (designation)`: the name is a nickname
 /// that matched, so the row says why it is listed, else the object's name.
 String suggestionTitle(DsoSuggestion s) {
   final d = suggestionDesignation(s);

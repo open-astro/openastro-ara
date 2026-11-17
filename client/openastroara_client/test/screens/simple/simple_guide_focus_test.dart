@@ -70,13 +70,13 @@ Future<void> _pump(WidgetTester tester,
 }
 
 void main() {
-  testWidgets('Main telescope / Guide camera on top; Auto / Manual only under Main', (tester) async {
+  testWidgets('Main telescope / Guide camera on top; Back to Autofocus only under Main', (tester) async {
     await _pump(tester);
-    expect(find.byKey(const Key('simple-focus-method-auto')), findsNothing, reason: 'the guide camera is focused by hand');
+    expect(find.byKey(const Key('simple-focus-back')), findsNothing, reason: 'the guide camera is focused by hand');
     await tester.tap(find.byKey(const Key('simple-focus-scope-main')));
     await tester.pump();
     expect(_c.read(simpleFocusScopeProvider), SimpleFocusScope.main);
-    expect(find.byKey(const Key('simple-focus-method-auto')), findsOneWidget);
+    expect(find.byKey(const Key('simple-focus-back')), findsOneWidget);
   });
 
   testWidgets('ready: what to turn, and the exposure', (tester) async {

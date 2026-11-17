@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-16 — #1952 the instantiate 422 is problem details: `POST /sequences/templates/{name}/instantiate`
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
+
+**Decision:** supersedes the 422 shape in the 2026-11-15 #1859 entry. A body that fails the schema check answers 422 problem details (`application/problem+json`, title `Template body refused`, `detail` = the validator's reason). Only `TemplateBodyRefusedException` maps to 422; no other `ArgumentException` does. Nothing is created. An unknown name stays a 404.
+
+**Reasoning:** the body now matches the route's `ProducesProblem(422)` and the committed `openapi.yaml`, which already described problem details. The create and PATCH routes still answer `{error}`; that is not changed here.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1sequences~1templates~1{name}~1instantiate`
+
+**Related:** #1952, #1859
+
+---
+
 ## 2026-11-15 — #1859 a template that fails the schema check answers 422: `POST /sequences/templates/{name}/instantiate`
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/templates/{name}/instantiate`
@@ -1683,3 +1697,59 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the actions are named by the drivers that offer them (AlpacaBridge's ZWO EAF, ToupTek AAF and iOptron iEAF for `SetZero`, the Celestron focuser for the calibration set), and ADR 0003 rule 2 says to decide from what the driver lists, not its name. The refusals are state conflicts the client can explain, so they are 409, not 500. A zero or a calibration in the middle of a move would leave the reported position meaningless, so those wait; a stop must always get through.
 
 **Spec ref:** `FocuserService.SetZeroAsync`, `FocuserService.CalibrateAsync`, `FocuserService.AbortCalibrationAsync`, `FocuserService.ReadCalibration`, `EquipmentEndpoints.FocuserActionAsync`, `Contracts/EquipmentDtos.cs` (`FocuserCapabilitiesDto`, `FocuserStateDto`)
+
+---
+
+## 2026-11-16 — The rig's Polar Aligner: `GET /equipment/polaraligner`, `POST …/stop`, `POST …/home`; `stop_polar_aligner` (#1972, #1973)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/polaraligner` (`PolarAlignerDto`, `PolarAlignerCapabilitiesDto`), new `POST /api/v1/equipment/polaraligner/stop` and `POST …/home` (202 + `OperationAcceptedDto`, `Idempotency-Key` header); `POST /api/v1/server/emergency-stop` `failed_rungs` gains `stop_polar_aligner`.
+
+**Decision:** a Polar Aligner is a connected Alpaca Switch, or the connected Telescope, whose driver lists `PolarAlign:Info` in `SupportedActions` (any letter case; read once per connect). No profile field names it: a Switch wins over the mount, and among several such switches the lowest `UniqueId` (ordinal) wins. `GET` always answers 200: `present` false (every other field null or false) when no connected device offers the actions. Otherwise `carrier` is `switch` or `mount`, `device_id` the switch's UniqueId (null for the mount), `name` the device's name. `capabilities` comes from `PolarAlign:Info` (read once per connection; null when it fails); `drivable` is true when Info lists tier 1 and describes both axes; `not_drivable_reason` is `device_runs_its_own_loop` (tier 2 only, or an axis missing), `info_unreadable`, or null. `moving`, `azimuth_position_arcmin`, `altitude_position_arcmin`, `azimuth_fault` and `altitude_fault` come from `PolarAlign:Status` on each `GET`; a position or fault the device does not report, or a Status that fails, is null, never 0. A device failure never fails the `GET`. `stop` sends `PolarAlign:Stop` (both axes), `home` sends `PolarAlign:Home`; each answers 409 Problem with the reason in `detail` when no Polar Aligner is connected (`no Polar Aligner is connected`) or when the device refuses, carrying the device's text. The emergency stop sends Stop to a present Polar Aligner right after its first mount stop; a failure adds `stop_polar_aligner` to `failed_rungs`, and no Polar Aligner is not a failure.
+
+**Reasoning:** the interim PolarAlign actions are the only interface such devices offer until the ASCOM aligner interface is final, and ADR 0003 rule 2 says to decide from what the driver lists, not its name. A separate base is added for this job on purpose, so it wins over a mount that also offers the actions. The refusals follow the focuser action routes (409 Problem) while ADR 0022 is only proposed.
+
+**Spec ref:** `Services/PolarAlignerService.cs` (`PolarAlignerService`, `IPolarAlignerService`), `Services/PolarAligner.cs` (`PolarAlignActionsAligner`), `SwitchService.ActionsFor`, `TelescopeService.MountActions`, `EmergencyStopService`, `EquipmentEndpoints` (`/polaraligner`), `Contracts/EquipmentDtos.cs` (`PolarAlignerDto`, `PolarAlignerCapabilitiesDto`)
+
+**Related:** #1971, #1972, #1973
+
+---
+
+## 2026-11-16 — The Polar Align Routine drives the Polar Aligner: `correction` in the status, `polar_align.correction`, stop and resume, `polar_aligner_auto` (#1974, #1975)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` gains `correction` (`PolarAlignCorrectionDto`, null when the rig has no Polar Aligner Ara can drive or the run has not measured yet); new WebSocket event `polar_align.correction` with the same object on every change; new `POST /api/v1/equipment/polaralign/correction/stop` and `POST …/correction/resume` (202 + `OperationAcceptedDto`, 409 Problem when there is nothing to stop or resume); `GET/PUT /api/v1/profile/polar-align` gains `polar_aligner_auto` (default true).
+
+**Decision:** in the live stages the routine turns the Polar Aligner after each measurement: one test move on each axis (+2′, or a quarter of the device's smaller `maxMove` when that is less, never under its resolution), then 80 % of the offset per axis, clamped to the device's `maxMove`, until the total error is inside `target_tolerance_arcmin`. `state` is `manual` (`polar_aligner_auto` off), `probing` / `moving` (with `axis` `azimuth` | `altitude` and the signed `arcmin` sent), `settling` (`seconds`), `measuring`, `converged` or `stopped` (`cause`, and `device_text` / `axis` when there is one); `moves` counts the moves sent. `arcmin` is in the wire convention: positive azimuth increases the azimuth coordinate (clockwise seen from above), positive altitude raises the axis. `cause` is one of `wrong_direction`, `wrong_scale`, `device_fault`, `not_calibrated`, `device_refused`, `diverging`, `timeout`, `link_lost`, `mount_tracking`, `mount_slewing`, `stopped_by_user`. A stop sends the device Stop and leaves the routine running by hand; `converged` does not end the routine, and the motors correct again when the error leaves the tolerance. The `polar_alignments` table gains `aligner_moves` (NULL on older rows).
+
+**Reasoning:** the client must tell a stopped move from a finished one, and say why in the device's own words. The numbers follow N.I.N.A.'s Polar Alignment Correctors plugin, so one device behaves the same under both clients: a +2′ test move, 80 % per correction, and a test move that must land between half and twice the size asked. For an axis whose `Info` does not set `backlashHandled` (absent reads as false) the floor is one fifth, not one half, because such a device loses part of a first move to its own backlash. A stop that comes from outside the routine (the Emergency Stop, `POST /equipment/polaraligner/stop`) marks the run `stopped_by_user` before the device is stopped, and `POST /equipment/polaraligner/home` answers 409 while a routine drives the Polar Aligner, from its first measurement with one until it is stopped (resting inside the tolerance counts, with or without a move made: the motors would correct the Home move away). The cause is a token in the state, not a Refusal: ADR 0022 has no code yet, and a stop is not a refused command.
+
+**Spec ref:** `Services/PolarAlignService.Aligner.cs`, `PolarAlignGeometry.AlignerMove`, `Contracts/EquipmentDtos.cs` (`PolarAlignCorrectionDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`PolarAlignCorrection`), `Contracts/ProfileDtos.cs` (`PolarAlignSettingsDto.PolarAlignerAuto`), `EquipmentEndpoints` (`/polaralign/correction/*`)
+
+**Related:** #1971, #1974, #1975
+
+---
+
+## 2026-11-17 — Polar Corrector is renamed Polar Aligner; the Routine's side is the correction (#1971)
+
+**Endpoint(s) or area:** `/api/v1/equipment/polarcorrector` (and `/stop`, `/home`) is `/api/v1/equipment/polaraligner`; `PolarCorrectorDto` and `PolarCorrectorCapabilitiesDto` are `PolarAlignerDto` and `PolarAlignerCapabilitiesDto`. `POST /api/v1/equipment/polaralign/corrector/stop|resume` is `POST /api/v1/equipment/polaralign/correction/stop|resume`; the status field `corrector` (`PolarAlignCorrectorDto`) is `correction` (`PolarAlignCorrectionDto`); the WebSocket event `polar_align.corrector` is `polar_align.correction`. The `failed_rungs` value `stop_polar_corrector` is `stop_polar_aligner`. The profile field `polar_align.polar_corrector_auto` is `polar_align.polar_aligner_auto`.
+
+**Decision:** the device takes ASCOM's name. The draft interface `IAlignerV1` (Alpaca device type `aligner`) calls a polar device an Aligner whose `AlignerPurpose` is `PolarAligner`. What the Routine does with the device is the correction, so the Routine's routes, status field and event say `correction` and do not read "polar align aligner". The old routes, the old event name and the old profile key are dropped with no alias. A profile saved with `polar_corrector_auto: false` reads as the default (on). The two entries of 2026-11-16 above are rewritten with the new names, because the old names never shipped.
+
+**Reasoning:** one name for the device in Ara, in the standard and on a driver's page. The old names existed on master for two days and in no release, so an alias would be code kept for nobody. The cost is that a daemon and an app built from master on 2026-11-16 or 2026-11-17 must be updated together; the changelog says so.
+
+**Spec ref:** `Endpoints/EquipmentEndpoints.cs`, `Contracts/EquipmentDtos.cs`, `Contracts/ProfileDtos.cs`, `Contracts/WsEvents/WsEventCatalog.cs`, `Services/EmergencyStopService.cs`, `openapi.yaml`, `ws-events.json`
+
+**Related:** #1971, #1988, #1989
+
+---
+
+## 2026-11-17 — Restart when idle says queued or restarting, and can be cancelled: `status`, `DELETE /server/restart-on-idle`, `pending_restart`, `server.restart_cancelled` (#1951)
+
+**Endpoint(s) or area:** the 202 body of `POST /api/v1/server/restart-on-idle` becomes `RestartOnIdleAcceptedDto` (the `OperationAcceptedDto` fields plus `status`); new `DELETE /api/v1/server/restart-on-idle` (204, no body); `GET /api/v1/server/state` fills `pending_restart` while a request is queued; new WebSocket event `server.restart_cancelled` `{ reason, cancelled_utc }`.
+
+**Decision:** `status` is `queued` when a run that is not terminal (running, paused or aborting) holds the restart, and `restarting` when no run is on and the 2 s notice (`server.restart_imminent`) starts at once. A second POST while a request is pending reports the current state, not the first answer: `queued` while the request can still be cancelled, otherwise `restarting` (the notice has started; if a run starts inside the 2 s notice, the daemon waits for that run too, with `pending_restart` null and `DELETE` a no-op, and a repeat POST still answers `restarting`). While a request is queued, `pending_restart` carries its `reason`, `requested_utc` and `restart_on_idle: true` (`planned_at_utc` null); it goes back to null when the request is cancelled or its notice starts. `DELETE` cancels a queued request: the daemon does not restart when the run ends, `pending_restart` goes null and `server.restart_cancelled` is published once with the request's `reason`. With nothing queued, or once the 2 s notice has started, `DELETE` answers 204 and does nothing. "Restart now", its notice and the exit code 75 restart (ADR 0017) do not change.
+
+**Reasoning:** the client must tell the operator whether the daemon is about to go away or is waiting for the run, and offer a way back from a request made by mistake. A cancel with nothing to cancel has already reached the state the caller wants, so it is a 204 no-op, not a 404 or 409: two clients that both press Cancel both succeed. Once the notice has started, clients are already told the daemon is going, so the cancel no longer applies. A paused run holds the restart because the operator may resume it (maintainer decision on #1865: any state that is not terminal), and an aborting run still saves its last frames, so it holds the restart until it is terminal.
+
+**Spec ref:** `Services/PlaceholderServerStateService.cs` (`RestartOnIdleAsync`, `CancelRestartOnIdleAsync`, `RunIsOnAsync`), `ISequencerService.UnfinishedRunIdsAsync`, `Contracts/ServerStateDtos.cs` (`RestartOnIdleAcceptedDto`, `PendingRestartDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`ServerRestartCancelled`), `ServerStateEndpoints` (`/restart-on-idle`)
+
+**Related:** #1865, #1951

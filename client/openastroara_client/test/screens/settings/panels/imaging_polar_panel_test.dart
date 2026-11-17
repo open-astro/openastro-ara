@@ -74,7 +74,7 @@ void main() {
     tester,
   ) async {
     final api = await _pump(tester);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
     expect(api.saved.single.useHome, isFalse);
   });
@@ -150,6 +150,28 @@ void main() {
         expect(find.textContaining(english), findsNothing, reason: english);
       }
       expect(find.text('Alinhamento polar'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
+    (tester) async {
+      final rig = _Api()
+        ..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false, polarAlignerAuto: false);
+      await _pump(tester, rig: rig);
+      expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
+      expect(find.text('Off: Polar align shows the turns and you make them'), findsOneWidget);
+      final aligner = find.byType(Switch).at(1);
+      expect(tester.widget<Switch>(aligner).value, isFalse);
+      await tester.tap(aligner);
+      await tester.pumpAndSettle();
+      final saved = rig.saved.single;
+      expect(saved.polarAlignerAuto, isTrue);
+      expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
+      expect(
+        find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
+        findsOneWidget,
+      );
     },
   );
 }

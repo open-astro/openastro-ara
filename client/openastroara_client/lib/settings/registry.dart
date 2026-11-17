@@ -1364,6 +1364,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.use_home',
   ),
   Setting(
+    id: 'img.polar.polar_aligner_auto',
+    label: "Correct with the Polar Aligner's motors",
+    description: 'On a rig with a Polar Aligner, Polar align turns its motors after each measurement until the error is inside the tolerance. Off: Polar align shows the turns and you make them. Simple Mode sets the same thing as Turned by in Settings › Devices.',
+    keywords: ['polar', 'alignment', 'polar aligner', 'motors', 'by hand', 'turned by', 'rpa'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'polar_align.polar_aligner_auto',
+  ),
+  Setting(
     id: 'img.polar.seed_rotation_deg',
     label: 'Polar align turn (°)',
     description: 'How far the mount turns in RA to measure its axis. 60° passes solve noise through 1:1; a mount with limited RA travel wants less. Kept between 5° and 120°.',
@@ -1975,8 +1985,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'safety.site.bortle_class',
-    label: 'Bortle class',
-    description: 'Bortle dark-sky classification, 1 (excellent dark site) through 9 (inner-city). Used for SNR estimation + suggested exposure ranges.',
+    label: 'Sky brightness (Bortle or SQM)',
+    description: 'One sky brightness input: a Bortle class, 1 (excellent dark site) through 9 (inner-city), or a measured SQM reading, 16 to 22.5 mag/arcsec2. In SQM mode the class is derived from the reading.',
     keywords: [
       'bortle',
       'dark sky',
@@ -1984,6 +1994,8 @@ const List<Setting> settingsRegistry = [
       'sqm',
       'class',
       'sky quality',
+      'sky brightness',
+      'mag/arcsec2',
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 1, max: 9),
@@ -2166,7 +2178,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.home_on_first_connect',
   ),
   Setting(
@@ -2184,7 +2196,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'filter_wheel_policy.use_filter_wheel_offsets',
   ),
 

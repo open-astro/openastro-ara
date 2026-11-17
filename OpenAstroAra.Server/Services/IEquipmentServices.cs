@@ -417,9 +417,18 @@ public interface IPolarAlignService {
     /// stage to the fine stage, Next from the fine stage to the check. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when no routine is running with a Polar Aligner.</summary>
+    Task<OperationAcceptedDto> StopAlignerAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#1971 — after a stop, correct with the motors again (a new probe first). Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when the Polar Aligner is not stopped.</summary>
+    Task<OperationAcceptedDto> ResumeAlignerAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
     /// the mount stays put).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
+    /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>
+    Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct);
     /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
     /// outcome <c>complete</c> (§45.13).</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);

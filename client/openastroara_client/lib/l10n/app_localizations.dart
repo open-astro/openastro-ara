@@ -4053,6 +4053,78 @@ abstract class AppLocalizations {
   /// **'Measured stars'**
   String get focusMeasuredStars;
 
+  /// Simple Focus tool row and its open view's title: the Bahtinov mask readout
+  ///
+  /// In en, this message translates to:
+  /// **'Focus by hand'**
+  String get focusToolManual;
+
+  /// Simple Focus tool row button that opens focus by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get focusToolManualOpen;
+
+  /// Spoken name of the focus by hand button
+  ///
+  /// In en, this message translates to:
+  /// **'Open focus by hand'**
+  String get focusToolManualOpenSemantics;
+
+  /// Simple Focus tool row and its open view's title: the filter offsets measurement
+  ///
+  /// In en, this message translates to:
+  /// **'Filter offsets'**
+  String get focusToolOffsets;
+
+  /// Simple Focus tool row button that opens the filter offsets measurement
+  ///
+  /// In en, this message translates to:
+  /// **'Measure'**
+  String get focusToolOffsetsOpen;
+
+  /// Spoken name of the filter offsets button
+  ///
+  /// In en, this message translates to:
+  /// **'Open filter offsets'**
+  String get focusToolOffsetsOpenSemantics;
+
+  /// Simple Focus: heading of the Tools rows under Autofocus
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get focusToolsHeading;
+
+  /// Simple Focus tool row status: focus by hand is not open
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get focusToolManualStatus;
+
+  /// Simple Focus tool row status: filters whose focus offset is still 0
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 to measure} other{{count} to measure}}'**
+  String focusToolOffsetsToMeasure(int count);
+
+  /// Simple Focus tool row status: every filter has a focus offset
+  ///
+  /// In en, this message translates to:
+  /// **'All measured'**
+  String get focusToolOffsetsAllMeasured;
+
+  /// Simple Focus tool row status: no filter wheel is connected, so there are no offsets to measure. Short, one line.
+  ///
+  /// In en, this message translates to:
+  /// **'No filter wheel'**
+  String get focusToolOffsetsNoWheel;
+
+  /// Spoken name of the back arrow in Simple Focus's tool views
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Autofocus'**
+  String get focusBackToAutofocus;
+
   /// Bahtinov focusing finished in focus, mask taken off
   ///
   /// In en, this message translates to:
@@ -4320,7 +4392,7 @@ abstract class AppLocalizations {
   /// Simple Focus panel: a finished autofocus whose curve fit was weak, short form
   ///
   /// In en, this message translates to:
-  /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
+  /// **'Weak curve fit (R² {r2}): run again if the sky has settled.'**
   String focusWeakFitShort(String r2);
 
   /// Guide camera live focus: starting
@@ -4557,7 +4629,7 @@ abstract class AppLocalizations {
   /// **'Stop the guide camera\'s frames'**
   String get previewGuideLoopStop;
 
-  /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
+  /// Focus panel: focus the main telescope (short, shares a line with Guide)
   ///
   /// In en, this message translates to:
   /// **'Main'**
@@ -5174,6 +5246,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RCW'**
   String get albumBookRcw;
+
+  /// Sky Album: Book switch segment for the NGC catalog (New General Catalogue); the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'NGC'**
+  String get albumBookNgc;
+
+  /// Sky Album: Book switch segment for the IC catalog (Index Catalogue); the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'IC'**
+  String get albumBookIc;
+
+  /// Sky Album: Book switch segment for the Sharpless Sh2 catalog of HII regions; the name is the same in every language
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpless (Sh2)'**
+  String get albumBookSharpless;
 
   /// Deep-sky object type on a Sky Album card back's bio line
   ///
@@ -7146,8 +7236,8 @@ abstract class AppLocalizations {
   /// Monitor Now tile: progress on the Target
   ///
   /// In en, this message translates to:
-  /// **'Frame {frame} of {frames} · about {left} left on {target}'**
-  String monitorFrameOf(int frame, int frames, String left, String target);
+  /// **'Frame {frame} of {frames} · about {left} left'**
+  String monitorFrameOf(int frame, int frames, String left);
 
   /// Monitor Now tile: the upcoming steps
   ///
@@ -7161,11 +7251,11 @@ abstract class AppLocalizations {
   /// **'Tonight\'s best'**
   String get monitorTonightsBest;
 
-  /// Monitor Up next row: the next frame and filter
+  /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
-  /// **'Frame {frame} · {filter}'**
-  String monitorUpFrame(int frame, String filter);
+  /// **'Frame {frame}'**
+  String monitorUpFrame(int frame);
 
   /// Monitor Up next row: the park at the end
   ///
@@ -7386,8 +7476,68 @@ abstract class AppLocalizations {
   /// Monitor Last frame: the last autofocus and the temperature change since
   ///
   /// In en, this message translates to:
-  /// **'Autofocus {time} · {delta} since'**
+  /// **'Autofocus {time} · {delta} since then'**
   String monitorAutofocusSince(String time, String delta);
+
+  /// Monitor Now tile: frames saved so far
+  ///
+  /// In en, this message translates to:
+  /// **'{n} saved'**
+  String monitorSaved(int n);
+
+  /// Monitor Last frame tile: the HFR the session started at
+  ///
+  /// In en, this message translates to:
+  /// **'session start {value}'**
+  String monitorStartedAt(String value);
+
+  /// Monitor deviation flag: a reading's change against the session's own start
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} {pct} % since session start'**
+  String monitorChangeSinceStart(String metric, String pct);
+
+  /// Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start
+  ///
+  /// In en, this message translates to:
+  /// **'Drifting'**
+  String get monitorDrifting;
+
+  /// Monitor altitude graph key: the plan's imaging span
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging {start} to {end}'**
+  String monitorImagingSpan(String start, String end);
+
+  /// Monitor stars graph key: the sky background line has its own scale
+  ///
+  /// In en, this message translates to:
+  /// **'Sky (own scale)'**
+  String get monitorSkyOwnScale;
+
+  /// Monitor guider tile: the session's guiding RMS graph
+  ///
+  /// In en, this message translates to:
+  /// **'RMS per saved frame'**
+  String get monitorRmsPerFrame;
+
+  /// Monitor guider tile key: the live trace's fixed scale
+  ///
+  /// In en, this message translates to:
+  /// **'fixed ±2.5″'**
+  String get monitorFixedScale;
+
+  /// Monitor Tonight timeline: the meridian flip's label
+  ///
+  /// In en, this message translates to:
+  /// **'flip {time}'**
+  String monitorFlipPin(String time);
+
+  /// Monitor Tonight timeline: the mount park's label
+  ///
+  /// In en, this message translates to:
+  /// **'park {time}'**
+  String monitorParkPin(String time);
 
   /// Monitor tile: tonight's timeline
   ///
@@ -9498,7 +9648,7 @@ abstract class AppLocalizations {
   /// Wizard step 1: Bortle helper
   ///
   /// In en, this message translates to:
-  /// **'Sky darkness: 1 darkest, 9 inner city.'**
+  /// **'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.'**
   String get wizardBasicsBortleHelper;
 
   /// Wizard step 1: Bortle validation error
@@ -9510,19 +9660,37 @@ abstract class AppLocalizations {
   /// Wizard step 1: field label
   ///
   /// In en, this message translates to:
-  /// **'SQM reading (mag/arcsec²), optional'**
+  /// **'SQM reading (mag/arcsec²)'**
   String get wizardBasicsSqm;
 
   /// Wizard step 1: SQM helper
   ///
   /// In en, this message translates to:
-  /// **'Leave empty if not measured (Bortle is used). 16 to 22.5.'**
-  String get wizardBasicsSqmHelper;
+  /// **'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.'**
+  String wizardBasicsSqmHelper(int bortle);
+
+  /// Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, Bortle
+  ///
+  /// In en, this message translates to:
+  /// **'Bortle class'**
+  String get wizardBasicsSkyBortle;
+
+  /// Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, SQM
+  ///
+  /// In en, this message translates to:
+  /// **'SQM reading'**
+  String get wizardBasicsSkySqm;
+
+  /// Settings › Safety › Site: the Bortle class derived from the SQM reading, on a line under the SQM field
+  ///
+  /// In en, this message translates to:
+  /// **'Derived Bortle class: {bortle}'**
+  String sitePanelDerivedBortle(int bortle);
 
   /// Wizard step 1: SQM validation error
   ///
   /// In en, this message translates to:
-  /// **'Enter a value from 16 to 22.5, or leave empty.'**
+  /// **'Enter a value from 16 to 22.5.'**
   String get wizardBasicsSqmError;
 
   /// Wizard step 1: field label
@@ -9992,6 +10160,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kept between 5° and 60°'**
   String get polarKnobVerifyStepHint;
+
+  /// The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Aligner'**
+  String get polarAligner;
+
+  /// Polar Aligner block before the routine starts
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.'**
+  String polarAlignerIdle(String tolerance);
+
+  /// Polar Aligner block when Turned by is By hand
+  ///
+  /// In en, this message translates to:
+  /// **'Motors off. Turn the bolts by hand.'**
+  String get polarAlignerByHand;
+
+  /// Polar Aligner block and status line: the test move, e.g. 'Test move · azimuth 2.0′ east'
+  ///
+  /// In en, this message translates to:
+  /// **'Test move · {axis} {amount}′ {direction}'**
+  String polarAlignerTestMove(String axis, String amount, String direction);
+
+  /// Polar Aligner block and status line: a correction, e.g. 'Moving azimuth 6.1′ east'
+  ///
+  /// In en, this message translates to:
+  /// **'Moving {axis} {amount}′ {direction}'**
+  String polarAlignerMoving(String axis, String amount, String direction);
+
+  /// Polar Aligner block and status line: waiting the device's settle time
+  ///
+  /// In en, this message translates to:
+  /// **'Letting the mount settle · {seconds} s'**
+  String polarAlignerSettling(String seconds);
+
+  /// Polar Aligner block and status line: the frame after a move
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring the new error…'**
+  String get polarAlignerMeasuring;
+
+  /// Polar Aligner block: the device is going home
+  ///
+  /// In en, this message translates to:
+  /// **'Going back to its zero…'**
+  String get polarAlignerHoming;
+
+  /// Polar Aligner block: the motors rest inside the tolerance
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
+  String polarAlignerConverged(int moves, String tolerance);
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'azimuth'**
+  String get polarAlignerAxisAzimuth;
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the altitude axis, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'altitude'**
+  String get polarAlignerAxisAltitude;
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving: an azimuth move toward east
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarAlignerEast;
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving: an azimuth move toward west
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarAlignerWest;
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving: an altitude move up
+  ///
+  /// In en, this message translates to:
+  /// **'up'**
+  String get polarAlignerUp;
+
+  /// Fills polarAlignerTestMove / polarAlignerMoving: an altitude move down
+  ///
+  /// In en, this message translates to:
+  /// **'down'**
+  String get polarAlignerDown;
+
+  /// Polar Aligner block: the device's position on each axis, signed arcminutes such as +12.4′ (— for an axis it does not report)
+  ///
+  /// In en, this message translates to:
+  /// **'From its zero: azimuth {azimuth} · altitude {altitude}'**
+  String polarAlignerPosition(String azimuth, String altitude);
+
+  /// Polar Aligner block: the device reports no position
+  ///
+  /// In en, this message translates to:
+  /// **'This device doesn\'t report its position.'**
+  String get polarAlignerNoPosition;
+
+  /// Polar Aligner block after the motors stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Carry on by hand: the arrows show which bolt to turn.'**
+  String get polarAlignerCarryOn;
+
+  /// Polar Aligner block: red button that stops the motors
+  ///
+  /// In en, this message translates to:
+  /// **'Stop motors'**
+  String get polarAlignerStopMotors;
+
+  /// Polar Aligner block: button that sends the device to its zero
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get polarAlignerHome;
+
+  /// Polar Aligner block: green button that corrects with the motors again after a stop
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get polarAlignerResume;
+
+  /// Polar Aligner block: why Resume and Home are off after the link was lost
+  ///
+  /// In en, this message translates to:
+  /// **'Resume once it answers again. Home comes back then.'**
+  String get polarAlignerLinkLostCaption;
+
+  /// Polar Aligner block and Settings > Devices: the device only offers its own loop
+  ///
+  /// In en, this message translates to:
+  /// **'Ara can\'t move this Polar Aligner yet: it only runs its own alignment.'**
+  String get polarAlignerNotDrivableLoop;
+
+  /// Polar Aligner block and Settings > Devices: the device's Info could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Ara couldn\'t read what this Polar Aligner can do, so it won\'t move it.'**
+  String get polarAlignerNotDrivableInfo;
+
+  /// Polar Aligner block: follows a not-drivable sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the bolts by hand.'**
+  String get polarAlignerTurnByHand;
+
+  /// Polar Aligner stop cause wrong_direction
+  ///
+  /// In en, this message translates to:
+  /// **'The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'**
+  String polarAlignerStopWrongDirection(String axis);
+
+  /// Polar Aligner stop cause wrong_scale
+  ///
+  /// In en, this message translates to:
+  /// **'The test move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.'**
+  String polarAlignerStopWrongScale(String axis);
+
+  /// Polar Aligner stop cause device_fault, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner reported a fault: “{text}”.'**
+  String polarAlignerStopDeviceFault(String text);
+
+  /// Polar Aligner stop cause not_calibrated, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner isn\'t calibrated, so it refused to move: “{text}”. Calibrate it in its own app, then Resume.'**
+  String polarAlignerStopNotCalibrated(String text);
+
+  /// Polar Aligner stop cause device_refused, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner refused the move: “{text}”.'**
+  String polarAlignerStopDeviceRefused(String text);
+
+  /// Polar Aligner stop cause diverging
+  ///
+  /// In en, this message translates to:
+  /// **'The error grew after two corrections in a row, so Ara stopped the motors.'**
+  String get polarAlignerStopDiverging;
+
+  /// Polar Aligner stop cause timeout
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner was still moving after 60 s, so Ara stopped it.'**
+  String get polarAlignerStopTimeout;
+
+  /// Polar Aligner stop cause link_lost
+  ///
+  /// In en, this message translates to:
+  /// **'Lost the link to the Polar Aligner. Ara stops its motors as soon as it answers again.'**
+  String get polarAlignerStopLinkLost;
+
+  /// Polar Aligner stop cause mount_tracking
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner can\'t move while the mount tracks. Turn tracking off in the Mount window, then Resume.'**
+  String get polarAlignerStopMountTracking;
+
+  /// Polar Aligner stop cause mount_slewing
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner can\'t move while the mount slews. Resume once the mount stops.'**
+  String get polarAlignerStopMountSlewing;
+
+  /// Polar Aligner stop cause stopped_by_user
+  ///
+  /// In en, this message translates to:
+  /// **'You stopped the motors.'**
+  String get polarAlignerStopByUser;
+
+  /// Polar Aligner stop with a cause this app does not know
+  ///
+  /// In en, this message translates to:
+  /// **'Ara stopped the motors.'**
+  String get polarAlignerStopUnknown;
+
+  /// Polar Aligner stop with a cause this app does not know, with the device's own text
+  ///
+  /// In en, this message translates to:
+  /// **'Ara stopped the motors: “{text}”.'**
+  String polarAlignerStopUnknownText(String text);
+
+  /// Status line: the Polar Aligner's motors stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get polarAlignerStopped;
+
+  /// Settings > Devices: the Polar Aligner can be driven and is still
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get polarAlignerReady;
+
+  /// Settings > Devices: a Polar Aligner Ara cannot drive yet
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t drive yet'**
+  String get polarAlignerCantDrive;
+
+  /// Settings > Devices: a Polar Aligner whose Info could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t read it'**
+  String get polarAlignerCantRead;
+
+  /// Settings > Devices: no Polar Aligner found
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get polarAlignerNone;
+
+  /// Settings > Devices: caption with no Polar Aligner
+  ///
+  /// In en, this message translates to:
+  /// **'No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'**
+  String get polarAlignerFoundNone;
+
+  /// Settings > Devices: caption when the mount carries the Polar Aligner
+  ///
+  /// In en, this message translates to:
+  /// **'Found on the mount: its motors are built in.'**
+  String get polarAlignerFoundMount;
+
+  /// Settings > Devices: caption when a separate base (a Switch) carries the Polar Aligner
+  ///
+  /// In en, this message translates to:
+  /// **'Found on the polar base.'**
+  String get polarAlignerFoundBase;
+
+  /// Settings > Devices, under the Polar Aligner: Motors or By hand
+  ///
+  /// In en, this message translates to:
+  /// **'Turned by'**
+  String get polarAlignerTurnedBy;
+
+  /// Settings > Devices, Turned by: the routine turns the motors
+  ///
+  /// In en, this message translates to:
+  /// **'Motors'**
+  String get polarAlignerMotors;
+
+  /// Settings > Devices, Turned by: the person turns the bolts
+  ///
+  /// In en, this message translates to:
+  /// **'By hand'**
+  String get polarAlignerByHandOption;
+
+  /// Settings > Devices, Turned by Motors: caption
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align turns the motors after each measurement.'**
+  String get polarAlignerMotorsCaption;
+
+  /// Settings > Devices, Turned by By hand: caption
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align shows the turns and you make them.'**
+  String get polarAlignerHandCaption;
+
+  /// Completes 'Couldn't …': Stop motors failed
+  ///
+  /// In en, this message translates to:
+  /// **'stop the motors'**
+  String get polarAlignerActionStop;
+
+  /// Completes 'Couldn't …': Resume failed
+  ///
+  /// In en, this message translates to:
+  /// **'resume the motors'**
+  String get polarAlignerActionResume;
+
+  /// Completes 'Couldn't …': Home failed
+  ///
+  /// In en, this message translates to:
+  /// **'send the Polar Aligner home'**
+  String get polarAlignerActionHome;
+
+  /// Imaging > Polar align settings panel: switch for the profile's polar_aligner_auto
+  ///
+  /// In en, this message translates to:
+  /// **'Correct with the Polar Aligner\'s motors'**
+  String get polarKnobAlignerAuto;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'On a rig with a Polar Aligner, Polar align turns its motors after each measurement'**
+  String get polarKnobAlignerAutoOn;
+
+  /// Imaging > Polar align settings panel hint
+  ///
+  /// In en, this message translates to:
+  /// **'Off: Polar align shows the turns and you make them'**
+  String get polarKnobAlignerAutoOff;
+
+  /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get polarAdvancedTitle;
+
+  /// Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure
+  ///
+  /// In en, this message translates to:
+  /// **'{turn}° turn · {step}° step · {exposure} s'**
+  String polarAdvancedSummary(String turn, String step, String exposure);
+
+  /// Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '
+  ///
+  /// In en, this message translates to:
+  /// **'{min} to {max}'**
+  String polarAdvancedRange(String min, String max);
+
+  /// Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Out of range: use {range}'**
+  String polarAdvancedOutOfRange(String range);
+
+  /// Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} The field is back to the rig\'s value.'**
+  String polarAdvancedSaveFailed(String reason);
+
+  /// Emergency stop: the Polar Aligner's stop failed
+  ///
+  /// In en, this message translates to:
+  /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
+  String get estopFailPolarAligner;
 }
 
 class _AppLocalizationsDelegate

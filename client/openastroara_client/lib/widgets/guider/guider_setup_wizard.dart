@@ -485,17 +485,10 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             options: cameraOptions,
             labels: _labelsFor(cameraOptions, 'camera'),
             onChanged: (v) {
-              _edit((d) => d.copyWith(
-                  guiderCamera: v,
-                  guiderCameraAlpacaUniqueId:
-                      ref.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor(v)));
-              // A camera on another Alpaca server retargets the daemon's
-              // Alpaca config on Apply — keep the profile's host/port in step.
-              final e = parseAlpacaChoiceEndpoint(v);
-              if (e != null) {
-                _edit((d) =>
-                    d.copyWith(guiderAlpacaHost: e.host, guiderAlpacaPort: e.port));
-              }
+              // One pick, one rule (ADR 0013 rule 4): a camera with an
+              // endpoint also retargets the draft's Alpaca host and port.
+              final pick = ref.read(guiderAlpacaDevicesProvider.notifier).pick(v);
+              _edit((d) => applyGuiderPick(d, pick));
               _autofillPixelSize(v);
             },
           ),
@@ -924,7 +917,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               label: const Text('Refresh device list'),
             ),
             TextButton.icon(
-              onPressed: _busy ? null : _discoverAlpacaServers,
+              onPressed: (_busy || ref.watch(guiderDiscoveryProvider).running)
+                  ? null
+                  : _discoverAlpacaServers,
               icon: const Icon(Icons.wifi_find, size: 16),
               label: const Text('Search network for Alpaca servers'),
             ),

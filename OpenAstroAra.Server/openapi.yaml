@@ -2372,6 +2372,91 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/polaralign/correction/stop:
+    post:
+      tags:
+        - Equipment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/polaralign/correction/resume:
+    post:
+      tags:
+        - Equipment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/polaraligner:
+    get:
+      tags:
+        - Equipment
+      summary: 'The rig''s Polar Aligner, its capabilities and its position on each axis.'
+      operationId: GetPolarAligner
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignerDto'
+  /api/v1/equipment/polaraligner/stop:
+    post:
+      tags:
+        - Equipment
+      summary: Stop both axes of the Polar Aligner.
+      operationId: StopPolarAligner
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/polaraligner/home:
+    post:
+      tags:
+        - Equipment
+      summary: Send the Polar Aligner to its home position.
+      operationId: HomePolarAligner
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/autofocus/calibration:
     get:
       tags:
@@ -4700,7 +4785,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationAcceptedDto'
+                $ref: '#/components/schemas/RestartOnIdleAcceptedDto'
+    delete:
+      tags:
+        - Server
+      operationId: CancelRestartServerOnIdle
+      responses:
+        '204':
+          description: No Content
   /api/v1/server/logs/rotate:
     post:
       tags:
@@ -14044,6 +14136,131 @@ components:
             - number
             - string
           format: double
+    PolarAlignerCapabilitiesDto:
+      required:
+        - device_name
+        - device_version
+        - azimuth_max_move_arcmin
+        - azimuth_resolution_arcmin
+        - altitude_max_move_arcmin
+        - altitude_resolution_arcmin
+        - simultaneous_moves
+        - moves_while_tracking
+        - moves_while_slewing
+        - can_stop
+        - settle_seconds
+      type: object
+      properties:
+        device_name:
+          type: string
+        device_version:
+          type: string
+        azimuth_max_move_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        azimuth_resolution_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_max_move_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_resolution_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        simultaneous_moves:
+          type: boolean
+        moves_while_tracking:
+          type: boolean
+        moves_while_slewing:
+          type: boolean
+        can_stop:
+          type: boolean
+        settle_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    PolarAlignerDto:
+      required:
+        - present
+        - carrier
+        - device_id
+        - name
+        - drivable
+        - not_drivable_reason
+        - capabilities
+        - moving
+        - azimuth_position_arcmin
+        - altitude_position_arcmin
+        - azimuth_fault
+        - altitude_fault
+      type: object
+      properties:
+        present:
+          type: boolean
+        carrier:
+          type:
+            - 'null'
+            - string
+        device_id:
+          type:
+            - 'null'
+            - string
+        name:
+          type:
+            - 'null'
+            - string
+        drivable:
+          type: boolean
+        not_drivable_reason:
+          type:
+            - 'null'
+            - string
+        capabilities:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignerCapabilitiesDto'
+        moving:
+          type: boolean
+        azimuth_position_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        altitude_position_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        azimuth_fault:
+          type:
+            - 'null'
+            - string
+        altitude_fault:
+          type:
+            - 'null'
+            - string
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -14107,6 +14324,9 @@ components:
           format: double
           default: 3
         use_home:
+          type: boolean
+          default: true
+        polar_aligner_auto:
           type: boolean
           default: true
     PolarAlignStartRequestDto:
@@ -14652,6 +14872,29 @@ components:
       type: object
       properties:
         name:
+          type: string
+    RestartOnIdleAcceptedDto:
+      required:
+        - operation_id
+        - operation_type
+        - accepted_utc
+        - idempotency_key
+        - status
+      type: object
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+        operation_type:
+          type: string
+        accepted_utc:
+          type: string
+          format: date-time
+        idempotency_key:
+          type:
+            - 'null'
+            - string
+        status:
           type: string
     RestoreRequestDto:
       required:

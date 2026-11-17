@@ -1,8 +1,8 @@
 # Virtual-observatory bench — Linux/arm64 lane (bench-5)
 
 A hardware-free, reproducible **Linux/arm64** lane for the §42.2 virtual-observatory
-bench. It builds and runs the bench suite inside a `linux/arm64` .NET 10 SDK
-container so the bench is exercised on the same kernel + runtime family the §13
+bench. It builds and runs the bench suite inside a `linux/arm64` .NET 11 SDK
+container (with the .NET 10 runtime the tests target) so the bench is exercised on the same kernel + runtime family the §13
 Raspberry Pi deployment targets — not just the developer's macOS host.
 
 ## What it runs

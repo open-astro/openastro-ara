@@ -80,6 +80,18 @@ public sealed record PendingRestartDto(
     DateTimeOffset? PlannedAtUtc,
     bool RestartOnIdle);
 
+/// <summary>202 body of POST /api/v1/server/restart-on-idle (#1951): <c>status</c> is <c>queued</c> while a run
+/// holds the restart and <c>restarting</c> when the 2 s notice starts at once.</summary>
+public sealed record RestartOnIdleAcceptedDto(
+    Guid OperationId,
+    string OperationType,
+    DateTimeOffset AcceptedUtc,
+    string? IdempotencyKey,
+    string Status) {
+    public static RestartOnIdleAcceptedDto From(OperationAcceptedDto a, bool queued) =>
+        new(a.OperationId, a.OperationType, a.AcceptedUtc, a.IdempotencyKey, queued ? "queued" : "restarting");
+}
+
 /// <summary>GET /api/v1/server/versions per §33.2.1.</summary>
 public sealed record ApiVersionsDto(
     string DaemonVersion,
@@ -164,7 +176,7 @@ public sealed record EmergencyStopResultDto(
     bool FlatPanelLightOff,
     // Rungs that were ATTEMPTED and faulted (tokens: abort_runs,
     // halt_rotator, abort_exposure, stop_guide_focus, stop_bahtinov, cancel_autofocus,
-    // stop_polar_align, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
+    // stop_polar_align, stop_polar_aligner, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
     // that isn't connected at all reads false above but is NOT listed here —
     // a rig without a flat panel is not a failure.
     System.Collections.Generic.IReadOnlyList<string> FailedRungs,

@@ -93,6 +93,17 @@ class UpdateRequestWrapper(unittest.TestCase):
                 self.assertFalse((self.dir / f"{rid}.request").exists())
         self.assertEqual(target.read_text(), "x\n", "the symlinked request's target is untouched")
 
+    def test_a_request_larger_than_the_byte_cap_is_refused_with_a_result_and_the_helper_does_not_run(self) -> None:
+        (self.dir / "huge.request").write_text("x" * 5000 + "\n")   # one line, over MAX_BYTES=4096
+        r = self.run_wrapper("huge")
+        self.assertEqual(r.returncode, 9, r.stderr)
+        self.assertIn("too large", r.stderr)
+        self.assertFalse(self.seen.exists(), "helper never ran")
+        res = (self.dir / "huge.result").read_text()
+        self.assertEqual(res.splitlines()[0], "9")
+        self.assertIn("status=failed", res)
+        self.assertFalse((self.dir / "huge.request").exists())
+
     def test_a_planted_symlink_at_the_result_name_is_replaced_not_followed(self) -> None:
         victim = Path(self.tmp.name) / "victim"
         victim.write_text("untouched\n")

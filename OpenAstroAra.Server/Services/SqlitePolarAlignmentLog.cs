@@ -29,7 +29,9 @@ public sealed record PolarAlignmentRecord(
     double? FinalAltErrorArcmin,
     double? FinalAzErrorArcmin,
     int Iterations,
-    string Outcome);
+    string Outcome,
+    // #1971 — moves the Polar Aligner made in this run; 0 = the person turned the bolts.
+    int AlignerMoves = 0);
 
 /// <summary>§45.13 — append-only log of polar-alignment routines, one row per run.</summary>
 public interface IPolarAlignmentLog {
@@ -54,8 +56,8 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
         cmd.CommandText = """
             INSERT INTO polar_alignments
                 (id, session_id, started_at, ended_at, final_error_arcmin,
-                 final_alt_error_arcmin, final_az_error_arcmin, iterations, outcome, notes)
-            VALUES ($id, NULL, $started, $ended, $err, $alt, $az, $iterations, $outcome, NULL);
+                 final_alt_error_arcmin, final_az_error_arcmin, iterations, outcome, notes, aligner_moves)
+            VALUES ($id, NULL, $started, $ended, $err, $alt, $az, $iterations, $outcome, NULL, $moves);
             """;
         cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
         cmd.Parameters.AddWithValue("$started", record.StartedAt.UtcDateTime.ToString("O"));
@@ -65,6 +67,7 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
         cmd.Parameters.AddWithValue("$az", ToDb(record.FinalAzErrorArcmin));
         cmd.Parameters.AddWithValue("$iterations", record.Iterations);
         cmd.Parameters.AddWithValue("$outcome", record.Outcome);
+        cmd.Parameters.AddWithValue("$moves", record.AlignerMoves);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -73,7 +76,7 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT started_at, ended_at, final_error_arcmin, final_alt_error_arcmin, final_az_error_arcmin,
-                   iterations, outcome
+                   iterations, outcome, aligner_moves
             FROM polar_alignments
             WHERE final_error_arcmin IS NOT NULL AND outcome IN ('complete', 'aborted', 'checked') AND ended_at >= $since
             ORDER BY ended_at DESC
@@ -91,7 +94,8 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
             await reader.IsDBNullAsync(3, ct) ? null : reader.GetDouble(3),
             await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
             reader.GetInt32(5),
-            reader.GetString(6));
+            reader.GetString(6),
+            await reader.IsDBNullAsync(7, ct) ? 0 : reader.GetInt32(7));
     }
 
     private static DateTimeOffset ParseIso(string value) =>

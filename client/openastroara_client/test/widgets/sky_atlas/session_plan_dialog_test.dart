@@ -83,6 +83,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('this slice completes its full-structure tier'), findsOneWidget);
   });
+  testWidgets('a planned curated region keeps its catalog number on the card: Skull Nebula (NGC 246) (#1957)',
+      (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+        tonightSkyAtProvider.overrideWith((ref, at) async => [_allNight('NGC0246', 'Skull Nebula', 80)]),
+      ],
+      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+    ));
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+    expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget);
+  });
+
   testWidgets('Plan it ranks at the window midpoint and shows a plan card',
       (tester) async {
     DateTime? rankedAt;

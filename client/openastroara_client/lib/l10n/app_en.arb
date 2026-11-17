@@ -3254,6 +3254,59 @@
   "@focusMeasuredStars": {
     "description": "Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen"
   },
+  "focusToolManual": "Focus by hand",
+  "@focusToolManual": {
+    "description": "Simple Focus tool row and its open view's title: the Bahtinov mask readout"
+  },
+  "focusToolManualOpen": "Open",
+  "@focusToolManualOpen": {
+    "description": "Simple Focus tool row button that opens focus by hand"
+  },
+  "focusToolManualOpenSemantics": "Open focus by hand",
+  "@focusToolManualOpenSemantics": {
+    "description": "Spoken name of the focus by hand button"
+  },
+  "focusToolOffsets": "Filter offsets",
+  "@focusToolOffsets": {
+    "description": "Simple Focus tool row and its open view's title: the filter offsets measurement"
+  },
+  "focusToolOffsetsOpen": "Measure",
+  "@focusToolOffsetsOpen": {
+    "description": "Simple Focus tool row button that opens the filter offsets measurement"
+  },
+  "focusToolOffsetsOpenSemantics": "Open filter offsets",
+  "@focusToolOffsetsOpenSemantics": {
+    "description": "Spoken name of the filter offsets button"
+  },
+  "focusToolsHeading": "Tools",
+  "@focusToolsHeading": {
+    "description": "Simple Focus: heading of the Tools rows under Autofocus"
+  },
+  "focusToolManualStatus": "Not started",
+  "@focusToolManualStatus": {
+    "description": "Simple Focus tool row status: focus by hand is not open"
+  },
+  "focusToolOffsetsToMeasure": "{count, plural, =1{1 to measure} other{{count} to measure}}",
+  "@focusToolOffsetsToMeasure": {
+    "description": "Simple Focus tool row status: filters whose focus offset is still 0",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusToolOffsetsAllMeasured": "All measured",
+  "@focusToolOffsetsAllMeasured": {
+    "description": "Simple Focus tool row status: every filter has a focus offset"
+  },
+  "focusToolOffsetsNoWheel": "No filter wheel",
+  "@focusToolOffsetsNoWheel": {
+    "description": "Simple Focus tool row status: no filter wheel is connected, so there are no offsets to measure. Short, one line."
+  },
+  "focusBackToAutofocus": "Back to Autofocus",
+  "@focusBackToAutofocus": {
+    "description": "Spoken name of the back arrow in Simple Focus's tool views"
+  },
   "bahtinovInFocusMaskOff": "In focus · mask off",
   "@bahtinovInFocusMaskOff": {
     "description": "Bahtinov focusing finished in focus, mask taken off"
@@ -3463,7 +3516,7 @@
   "@focusStopBahtinov": {
     "description": "Screen reader label of Focus's shutter on Manual while it reads"
   },
-  "focusWeakFitShort": "Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.",
+  "focusWeakFitShort": "Weak curve fit (R² {r2}): run again if the sky has settled.",
   "@focusWeakFitShort": {
     "description": "Simple Focus panel: a finished autofocus whose curve fit was weak, short form",
     "placeholders": {
@@ -3680,7 +3733,7 @@
   },
   "focusScopeMain": "Main",
   "@focusScopeMain": {
-    "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"
+    "description": "Focus panel: focus the main telescope (short, shares a line with Guide)"
   },
   "focusScopeGuide": "Guide",
   "@focusScopeGuide": {
@@ -3944,6 +3997,18 @@
   "albumBookRcw": "RCW",
   "@albumBookRcw": {
     "description": "Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language"
+  },
+  "albumBookNgc": "NGC",
+  "@albumBookNgc": {
+    "description": "Sky Album: Book switch segment for the NGC catalog (New General Catalogue); the name is the same in every language"
+  },
+  "albumBookIc": "IC",
+  "@albumBookIc": {
+    "description": "Sky Album: Book switch segment for the IC catalog (Index Catalogue); the name is the same in every language"
+  },
+  "albumBookSharpless": "Sharpless (Sh2)",
+  "@albumBookSharpless": {
+    "description": "Sky Album: Book switch segment for the Sharpless Sh2 catalog of HII regions; the name is the same in every language"
   },
   "dsoTypeGalaxy": "Galaxy",
   "@dsoTypeGalaxy": {
@@ -5285,7 +5350,7 @@
   "@monitorUntilFlip": {
     "description": "Monitor Now tile caption under the meridian wait countdown"
   },
-  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left on {target}",
+  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left",
   "@monitorFrameOf": {
     "description": "Monitor Now tile: progress on the Target",
     "placeholders": {
@@ -5296,9 +5361,6 @@
         "type": "int"
       },
       "left": {
-        "type": "String"
-      },
-      "target": {
         "type": "String"
       }
     }
@@ -5311,15 +5373,12 @@
   "@monitorTonightsBest": {
     "description": "Monitor Now tile with no plan: tonight's best Targets"
   },
-  "monitorUpFrame": "Frame {frame} · {filter}",
+  "monitorUpFrame": "Frame {frame}",
   "@monitorUpFrame": {
-    "description": "Monitor Up next row: the next frame and filter",
+    "description": "Monitor Up next row: the next frame (the filter follows when the camera has one)",
     "placeholders": {
       "frame": {
         "type": "int"
-      },
-      "filter": {
-        "type": "String"
       }
     }
   },
@@ -5520,7 +5579,7 @@
   "@monitorClippedStars": {
     "description": "Monitor Last frame reading: the share of clipped stars"
   },
-  "monitorAutofocusSince": "Autofocus {time} · {delta} since",
+  "monitorAutofocusSince": "Autofocus {time} · {delta} since then",
   "@monitorAutofocusSince": {
     "description": "Monitor Last frame: the last autofocus and the temperature change since",
     "placeholders": {
@@ -5528,6 +5587,82 @@
         "type": "String"
       },
       "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorSaved": "{n} saved",
+  "@monitorSaved": {
+    "description": "Monitor Now tile: frames saved so far",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorStartedAt": "session start {value}",
+  "@monitorStartedAt": {
+    "description": "Monitor Last frame tile: the HFR the session started at",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorChangeSinceStart": "{metric} {pct} % since session start",
+  "@monitorChangeSinceStart": {
+    "description": "Monitor deviation flag: a reading's change against the session's own start",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorDrifting": "Drifting",
+  "@monitorDrifting": {
+    "description": "Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start"
+  },
+  "monitorImagingSpan": "Imaging {start} to {end}",
+  "@monitorImagingSpan": {
+    "description": "Monitor altitude graph key: the plan's imaging span",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorSkyOwnScale": "Sky (own scale)",
+  "@monitorSkyOwnScale": {
+    "description": "Monitor stars graph key: the sky background line has its own scale"
+  },
+  "monitorRmsPerFrame": "RMS per saved frame",
+  "@monitorRmsPerFrame": {
+    "description": "Monitor guider tile: the session's guiding RMS graph"
+  },
+  "monitorFixedScale": "fixed ±2.5″",
+  "@monitorFixedScale": {
+    "description": "Monitor guider tile key: the live trace's fixed scale"
+  },
+  "monitorFlipPin": "flip {time}",
+  "@monitorFlipPin": {
+    "description": "Monitor Tonight timeline: the meridian flip's label",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorParkPin": "park {time}",
+  "@monitorParkPin": {
+    "description": "Monitor Tonight timeline: the mount park's label",
+    "placeholders": {
+      "time": {
         "type": "String"
       }
     }
@@ -7244,7 +7379,7 @@
   "@wizardBasicsBortle": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city.",
+  "wizardBasicsBortleHelper": "Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.",
   "@wizardBasicsBortleHelper": {
     "description": "Wizard step 1: Bortle helper"
   },
@@ -7252,15 +7387,37 @@
   "@wizardBasicsBortleError": {
     "description": "Wizard step 1: Bortle validation error"
   },
-  "wizardBasicsSqm": "SQM reading (mag/arcsec²), optional",
+  "wizardBasicsSqm": "SQM reading (mag/arcsec²)",
   "@wizardBasicsSqm": {
     "description": "Wizard step 1: field label"
   },
-  "wizardBasicsSqmHelper": "Leave empty if not measured (Bortle is used). 16 to 22.5.",
+  "wizardBasicsSqmHelper": "Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: {bortle}.",
   "@wizardBasicsSqmHelper": {
-    "description": "Wizard step 1: SQM helper"
+    "description": "Wizard step 1: SQM helper",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
   },
-  "wizardBasicsSqmError": "Enter a value from 16 to 22.5, or leave empty.",
+  "wizardBasicsSkyBortle": "Bortle class",
+  "@wizardBasicsSkyBortle": {
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, Bortle"
+  },
+  "wizardBasicsSkySqm": "SQM reading",
+  "@wizardBasicsSkySqm": {
+    "description": "Wizard step 1 and Settings › Safety › Site: sky brightness mode selector, SQM"
+  },
+  "sitePanelDerivedBortle": "Derived Bortle class: {bortle}",
+  "@sitePanelDerivedBortle": {
+    "description": "Settings › Safety › Site: the Bortle class derived from the SQM reading, on a line under the SQM field",
+    "placeholders": {
+      "bortle": {
+        "type": "int"
+      }
+    }
+  },
+  "wizardBasicsSqmError": "Enter a value from 16 to 22.5.",
   "@wizardBasicsSqmError": {
     "description": "Wizard step 1: SQM validation error"
   },
@@ -7637,5 +7794,350 @@
   "polarKnobVerifyStepHint": "Kept between 5° and 60°",
   "@polarKnobVerifyStepHint": {
     "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarAligner": "Polar Aligner",
+  "@polarAligner": {
+    "description": "The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line"
+  },
+  "polarAlignerIdle": "Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.",
+  "@polarAlignerIdle": {
+    "description": "Polar Aligner block before the routine starts",
+    "placeholders": {
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerByHand": "Motors off. Turn the bolts by hand.",
+  "@polarAlignerByHand": {
+    "description": "Polar Aligner block when Turned by is By hand"
+  },
+  "polarAlignerTestMove": "Test move · {axis} {amount}′ {direction}",
+  "@polarAlignerTestMove": {
+    "description": "Polar Aligner block and status line: the test move, e.g. 'Test move · azimuth 2.0′ east'",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerMoving": "Moving {axis} {amount}′ {direction}",
+  "@polarAlignerMoving": {
+    "description": "Polar Aligner block and status line: a correction, e.g. 'Moving azimuth 6.1′ east'",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerSettling": "Letting the mount settle · {seconds} s",
+  "@polarAlignerSettling": {
+    "description": "Polar Aligner block and status line: waiting the device's settle time",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerMeasuring": "Measuring the new error…",
+  "@polarAlignerMeasuring": {
+    "description": "Polar Aligner block and status line: the frame after a move"
+  },
+  "polarAlignerHoming": "Going back to its zero…",
+  "@polarAlignerHoming": {
+    "description": "Polar Aligner block: the device is going home"
+  },
+  "polarAlignerConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.",
+  "@polarAlignerConverged": {
+    "description": "Polar Aligner block: the motors rest inside the tolerance",
+    "placeholders": {
+      "moves": {
+        "type": "int"
+      },
+      "tolerance": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerAxisAzimuth": "azimuth",
+  "@polarAlignerAxisAzimuth": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case"
+  },
+  "polarAlignerAxisAltitude": "altitude",
+  "@polarAlignerAxisAltitude": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the altitude axis, lower case"
+  },
+  "polarAlignerEast": "east",
+  "@polarAlignerEast": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving: an azimuth move toward east"
+  },
+  "polarAlignerWest": "west",
+  "@polarAlignerWest": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving: an azimuth move toward west"
+  },
+  "polarAlignerUp": "up",
+  "@polarAlignerUp": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving: an altitude move up"
+  },
+  "polarAlignerDown": "down",
+  "@polarAlignerDown": {
+    "description": "Fills polarAlignerTestMove / polarAlignerMoving: an altitude move down"
+  },
+  "polarAlignerPosition": "From its zero: azimuth {azimuth} · altitude {altitude}",
+  "@polarAlignerPosition": {
+    "description": "Polar Aligner block: the device's position on each axis, signed arcminutes such as +12.4′ (— for an axis it does not report)",
+    "placeholders": {
+      "azimuth": {
+        "type": "String"
+      },
+      "altitude": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerNoPosition": "This device doesn't report its position.",
+  "@polarAlignerNoPosition": {
+    "description": "Polar Aligner block: the device reports no position"
+  },
+  "polarAlignerCarryOn": "Carry on by hand: the arrows show which bolt to turn.",
+  "@polarAlignerCarryOn": {
+    "description": "Polar Aligner block after the motors stopped"
+  },
+  "polarAlignerStopMotors": "Stop motors",
+  "@polarAlignerStopMotors": {
+    "description": "Polar Aligner block: red button that stops the motors"
+  },
+  "polarAlignerHome": "Home",
+  "@polarAlignerHome": {
+    "description": "Polar Aligner block: button that sends the device to its zero"
+  },
+  "polarAlignerResume": "Resume",
+  "@polarAlignerResume": {
+    "description": "Polar Aligner block: green button that corrects with the motors again after a stop"
+  },
+  "polarAlignerLinkLostCaption": "Resume once it answers again. Home comes back then.",
+  "@polarAlignerLinkLostCaption": {
+    "description": "Polar Aligner block: why Resume and Home are off after the link was lost"
+  },
+  "polarAlignerNotDrivableLoop": "Ara can't move this Polar Aligner yet: it only runs its own alignment.",
+  "@polarAlignerNotDrivableLoop": {
+    "description": "Polar Aligner block and Settings > Devices: the device only offers its own loop"
+  },
+  "polarAlignerNotDrivableInfo": "Ara couldn't read what this Polar Aligner can do, so it won't move it.",
+  "@polarAlignerNotDrivableInfo": {
+    "description": "Polar Aligner block and Settings > Devices: the device's Info could not be read"
+  },
+  "polarAlignerTurnByHand": "Turn the bolts by hand.",
+  "@polarAlignerTurnByHand": {
+    "description": "Polar Aligner block: follows a not-drivable sentence"
+  },
+  "polarAlignerStopWrongDirection": "The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.",
+  "@polarAlignerStopWrongDirection": {
+    "description": "Polar Aligner stop cause wrong_direction",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopWrongScale": "The test move on {axis} didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting.",
+  "@polarAlignerStopWrongScale": {
+    "description": "Polar Aligner stop cause wrong_scale",
+    "placeholders": {
+      "axis": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopDeviceFault": "The Polar Aligner reported a fault: “{text}”.",
+  "@polarAlignerStopDeviceFault": {
+    "description": "Polar Aligner stop cause device_fault, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopNotCalibrated": "The Polar Aligner isn't calibrated, so it refused to move: “{text}”. Calibrate it in its own app, then Resume.",
+  "@polarAlignerStopNotCalibrated": {
+    "description": "Polar Aligner stop cause not_calibrated, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopDeviceRefused": "The Polar Aligner refused the move: “{text}”.",
+  "@polarAlignerStopDeviceRefused": {
+    "description": "Polar Aligner stop cause device_refused, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopDiverging": "The error grew after two corrections in a row, so Ara stopped the motors.",
+  "@polarAlignerStopDiverging": {
+    "description": "Polar Aligner stop cause diverging"
+  },
+  "polarAlignerStopTimeout": "The Polar Aligner was still moving after 60 s, so Ara stopped it.",
+  "@polarAlignerStopTimeout": {
+    "description": "Polar Aligner stop cause timeout"
+  },
+  "polarAlignerStopLinkLost": "Lost the link to the Polar Aligner. Ara stops its motors as soon as it answers again.",
+  "@polarAlignerStopLinkLost": {
+    "description": "Polar Aligner stop cause link_lost"
+  },
+  "polarAlignerStopMountTracking": "The Polar Aligner can't move while the mount tracks. Turn tracking off in the Mount window, then Resume.",
+  "@polarAlignerStopMountTracking": {
+    "description": "Polar Aligner stop cause mount_tracking"
+  },
+  "polarAlignerStopMountSlewing": "The Polar Aligner can't move while the mount slews. Resume once the mount stops.",
+  "@polarAlignerStopMountSlewing": {
+    "description": "Polar Aligner stop cause mount_slewing"
+  },
+  "polarAlignerStopByUser": "You stopped the motors.",
+  "@polarAlignerStopByUser": {
+    "description": "Polar Aligner stop cause stopped_by_user"
+  },
+  "polarAlignerStopUnknown": "Ara stopped the motors.",
+  "@polarAlignerStopUnknown": {
+    "description": "Polar Aligner stop with a cause this app does not know"
+  },
+  "polarAlignerStopUnknownText": "Ara stopped the motors: “{text}”.",
+  "@polarAlignerStopUnknownText": {
+    "description": "Polar Aligner stop with a cause this app does not know, with the device's own text",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "polarAlignerStopped": "Stopped",
+  "@polarAlignerStopped": {
+    "description": "Status line: the Polar Aligner's motors stopped"
+  },
+  "polarAlignerReady": "Ready",
+  "@polarAlignerReady": {
+    "description": "Settings > Devices: the Polar Aligner can be driven and is still"
+  },
+  "polarAlignerCantDrive": "Can't drive yet",
+  "@polarAlignerCantDrive": {
+    "description": "Settings > Devices: a Polar Aligner Ara cannot drive yet"
+  },
+  "polarAlignerCantRead": "Can't read it",
+  "@polarAlignerCantRead": {
+    "description": "Settings > Devices: a Polar Aligner whose Info could not be read"
+  },
+  "polarAlignerNone": "None",
+  "@polarAlignerNone": {
+    "description": "Settings > Devices: no Polar Aligner found"
+  },
+  "polarAlignerFoundNone": "No connected device offers polar-alignment moves. Polar align shows the turns and you make them.",
+  "@polarAlignerFoundNone": {
+    "description": "Settings > Devices: caption with no Polar Aligner"
+  },
+  "polarAlignerFoundMount": "Found on the mount: its motors are built in.",
+  "@polarAlignerFoundMount": {
+    "description": "Settings > Devices: caption when the mount carries the Polar Aligner"
+  },
+  "polarAlignerFoundBase": "Found on the polar base.",
+  "@polarAlignerFoundBase": {
+    "description": "Settings > Devices: caption when a separate base (a Switch) carries the Polar Aligner"
+  },
+  "polarAlignerTurnedBy": "Turned by",
+  "@polarAlignerTurnedBy": {
+    "description": "Settings > Devices, under the Polar Aligner: Motors or By hand"
+  },
+  "polarAlignerMotors": "Motors",
+  "@polarAlignerMotors": {
+    "description": "Settings > Devices, Turned by: the routine turns the motors"
+  },
+  "polarAlignerByHandOption": "By hand",
+  "@polarAlignerByHandOption": {
+    "description": "Settings > Devices, Turned by: the person turns the bolts"
+  },
+  "polarAlignerMotorsCaption": "Polar align turns the motors after each measurement.",
+  "@polarAlignerMotorsCaption": {
+    "description": "Settings > Devices, Turned by Motors: caption"
+  },
+  "polarAlignerHandCaption": "Polar align shows the turns and you make them.",
+  "@polarAlignerHandCaption": {
+    "description": "Settings > Devices, Turned by By hand: caption"
+  },
+  "polarAlignerActionStop": "stop the motors",
+  "@polarAlignerActionStop": {
+    "description": "Completes 'Couldn't …': Stop motors failed"
+  },
+  "polarAlignerActionResume": "resume the motors",
+  "@polarAlignerActionResume": {
+    "description": "Completes 'Couldn't …': Resume failed"
+  },
+  "polarAlignerActionHome": "send the Polar Aligner home",
+  "@polarAlignerActionHome": {
+    "description": "Completes 'Couldn't …': Home failed"
+  },
+  "polarKnobAlignerAuto": "Correct with the Polar Aligner's motors",
+  "@polarKnobAlignerAuto": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's polar_aligner_auto"
+  },
+  "polarKnobAlignerAutoOn": "On a rig with a Polar Aligner, Polar align turns its motors after each measurement",
+  "@polarKnobAlignerAutoOn": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobAlignerAutoOff": "Off: Polar align shows the turns and you make them",
+  "@polarKnobAlignerAutoOff": {
+    "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarAdvancedTitle": "Advanced",
+  "@polarAdvancedTitle": {
+    "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"
+  },
+  "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
+  "@polarAdvancedSummary": {
+    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure",
+    "placeholders": {
+      "turn": {"type": "String"},
+      "step": {"type": "String"},
+      "exposure": {"type": "String"}
+    }
+  },
+  "polarAdvancedRange": "{min} to {max}",
+  "@polarAdvancedRange": {
+    "description": "Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '",
+    "placeholders": {
+      "min": {"type": "String"},
+      "max": {"type": "String"}
+    }
+  },
+  "polarAdvancedOutOfRange": "Out of range: use {range}",
+  "@polarAdvancedOutOfRange": {
+    "description": "Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "polarAdvancedSaveFailed": "{reason} The field is back to the rig's value.",
+  "@polarAdvancedSaveFailed": {
+    "description": "Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
+  "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
+  "@estopFailPolarAligner": {
+    "description": "Emergency stop: the Polar Aligner's stop failed"
   }
 }

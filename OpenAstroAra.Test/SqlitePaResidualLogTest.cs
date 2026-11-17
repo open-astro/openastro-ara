@@ -109,5 +109,33 @@ namespace OpenAstroAra.Test {
             Assert.That(latest!.EndedAt, Is.EqualTo(t0.AddMinutes(4)));
             Assert.That(await log.GetLatestMeasuredAsync(t0.AddHours(1), CancellationToken.None), Is.Null, "nothing tonight after that");
         }
+
+        [Test]
+        public async Task The_polar_alignment_row_keeps_the_Polar_Aligners_move_count() {
+            var log = new SqlitePolarAlignmentLog(db);
+            var t0 = new DateTimeOffset(2026, 11, 16, 20, 0, 0, TimeSpan.Zero);
+            await log.InsertAsync(new PolarAlignmentRecord(t0, t0.AddMinutes(4), 0.6, 0.4, 0.4, 9, "complete", AlignerMoves: 7), CancellationToken.None);
+
+            var latest = await log.GetLatestMeasuredAsync(t0.AddHours(-1), CancellationToken.None);
+
+            Assert.That(latest?.AlignerMoves, Is.EqualTo(7));
+        }
+
+        // The column was named corrector_moves for one day on master (2026-11-16).
+        [Test]
+        public async Task A_database_with_the_columns_first_name_keeps_its_move_counts() {
+            var log = new SqlitePolarAlignmentLog(db);
+            var t0 = new DateTimeOffset(2026, 11, 16, 20, 0, 0, TimeSpan.Zero);
+            await log.InsertAsync(new PolarAlignmentRecord(t0, t0.AddMinutes(4), 0.6, 0.4, 0.4, 9, "complete", AlignerMoves: 7), CancellationToken.None);
+            await using (var conn = db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "ALTER TABLE polar_alignments RENAME COLUMN aligner_moves TO corrector_moves;";
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await db.InitializeAsync(CancellationToken.None);
+
+            Assert.That((await log.GetLatestMeasuredAsync(t0.AddHours(-1), CancellationToken.None))?.AlignerMoves, Is.EqualTo(7));
+        }
     }
 }

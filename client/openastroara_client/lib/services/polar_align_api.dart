@@ -141,3 +141,63 @@ class PolarAlignApi implements PolarAlignClient {
   @override
   void close() => _dio.close(force: true);
 }
+
+/// #1971 the rig's Polar Aligner: the device (`/api/v1/equipment/polaraligner`,
+/// its stop and home) and its motors in a running routine
+/// (`/api/v1/equipment/polaralign/correction/{stop,resume}`). The commands are
+/// 202-Accepted; a refusal is a 409 whose detail is a sentence for people.
+abstract interface class PolarAlignerClient {
+  /// Null on a 404: a daemon that predates the Polar Aligner.
+  Future<PolarAligner?> get();
+  Future<void> stop();
+  Future<void> home();
+
+  /// Stop the motors; the routine carries on by hand.
+  Future<void> stopInRoutine();
+
+  /// After a stop: correct with the motors again, from a new test move.
+  Future<void> resumeInRoutine();
+  void close();
+}
+
+class PolarAlignerApi implements PolarAlignerClient {
+  final Dio _dio;
+
+  PolarAlignerApi(AraServer server, {Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          );
+
+  @override
+  Future<PolarAligner?> get() async {
+    try {
+      final res = await _dio.get<dynamic>('/api/v1/equipment/polaraligner');
+      final data = res.data;
+      return data is Map<String, dynamic> ? PolarAligner.fromJson(data) : null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> stop() => _dio.post<void>('/api/v1/equipment/polaraligner/stop');
+
+  @override
+  Future<void> home() => _dio.post<void>('/api/v1/equipment/polaraligner/home');
+
+  @override
+  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/stop');
+
+  @override
+  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
+
+  @override
+  void close() => _dio.close(force: true);
+}

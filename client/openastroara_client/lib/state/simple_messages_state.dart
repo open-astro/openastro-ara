@@ -53,6 +53,9 @@ enum SimpleStatusOrigin {
   guiderCamera,
   focus,
   polar,
+  // #1971 the Polar Aligner's own line beside the routine's: the card keys its
+  // lines by origin, so the two cannot share one.
+  polarAligner,
   guide,
   calibration,
 }

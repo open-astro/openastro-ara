@@ -48,8 +48,16 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
     /// declines an optional property for good (the client raises NotImplementedException).</summary>
     public const string NotImplementedPrefix = "!notimpl:";
 
+    /// <summary>Script-value prefix for an error with a chosen ASCOM number (<c>!errno:1035:msg</c>).</summary>
+    public const string ErrorNumberPrefix = "!errno:";
+
     /// <summary>The script value for a driver error carrying <paramref name="message"/>.</summary>
     public static string Error(string message) => ErrorPrefix + message;
+
+    /// <summary>The script value for an error envelope with ASCOM error number <paramref name="errorNumber"/>
+    /// (e.g. 0x40B InvalidOperation).</summary>
+    public static string Error(int errorNumber, string message) =>
+        $"{ErrorNumberPrefix}{errorNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{message}";
 
     /// <summary>The script value for a not-implemented answer carrying <paramref name="message"/>.</summary>
     public static string NotImplemented(string message) => NotImplementedPrefix + message;
@@ -128,7 +136,9 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                     // serving, or the device silently stops answering for the rest of the test.
                 }
             }
-            var body = value.StartsWith(ErrorPrefix, StringComparison.Ordinal)
+            var body = value.StartsWith(ErrorNumberPrefix, StringComparison.Ordinal)
+                ? ErrorEnvelope(value[ErrorNumberPrefix.Length..])
+                : value.StartsWith(ErrorPrefix, StringComparison.Ordinal)
                 ? Encoding.UTF8.GetBytes(
                     $$"""{"Value":null,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":1280,"ErrorMessage":{{JsonSerializer.Serialize(value[ErrorPrefix.Length..])}}}""")
                 : value.StartsWith(NotImplementedPrefix, StringComparison.Ordinal)
@@ -151,6 +161,13 @@ public sealed class ScriptedAlpacaDevice : IAsyncDisposable {
                 // failed the test at DisposeAsync (CI, A_rotator_disconnect_mid_settle…, #1269).
             }
         }
+    }
+
+    // "<number>:<message>" → an Alpaca error envelope with that ErrorNumber.
+    private static byte[] ErrorEnvelope(string numberAndMessage) {
+        var colon = numberAndMessage.IndexOf(':', StringComparison.Ordinal);
+        return Encoding.UTF8.GetBytes(
+            $$"""{"Value":null,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":{{numberAndMessage[..colon]}},"ErrorMessage":{{JsonSerializer.Serialize(numberAndMessage[(colon + 1)..])}}}""");
     }
 
     public async ValueTask DisposeAsync() {

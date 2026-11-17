@@ -409,10 +409,13 @@ jobs:
           lfs: false
           persist-credentials: false
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK + .NET 10 runtime
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
-          dotnet-version: '10.0.x'
+          # 11.0.x = the SDK global.json requires; 10.0.x = the runtime the net10.0 projects run on.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
@@ -483,10 +486,13 @@ jobs:
           lfs: false
           persist-credentials: false
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK + .NET 10 runtime
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
-          dotnet-version: '10.0.x'
+          # 11.0.x = the SDK global.json requires; 10.0.x = the runtime the net10.0 projects run on.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       # The Image/Fits tests resolve CFITSIO at runtime; the build itself does not
       # need it, but the test step below does. Runtime package only (no -dev) so
@@ -566,10 +572,13 @@ jobs:
           lfs: false
           persist-credentials: false
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK + .NET 10 runtime
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
-          dotnet-version: '10.0.x'
+          # 11.0.x = the SDK global.json requires; 10.0.x = the runtime the net10.0 projects run on.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Install CFITSIO (Linux)
         run: |
@@ -663,10 +672,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 0  # need full history + tags so `git describe --tags --exact-match HEAD` can find the release tag for the .deb version step
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET 11 SDK + .NET 10 runtime
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
-          dotnet-version: '10.0.x'
+          # 11.0.x = the SDK global.json requires; 10.0.x = the runtime the net10.0 projects run on.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       # §72.2 — install CFITSIO for the "dotnet test (Fits, Release)" step
       # below (the build doesn't need it). Runtime package only, matching the

@@ -106,6 +106,7 @@ Future<void> _pump(
   WidgetTester tester, {
   double text = 1,
   Size size = const Size(390, 844),
+  MonitorSnapshot? snap,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -116,7 +117,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         keepAwakeProvider.overrideWithValue(const _KeepAwake()),
-        monitorProvider.overrideWith(() => _Fixed(_busy())),
+        monitorProvider.overrideWith(() => _Fixed(snap ?? _busy())),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -250,6 +251,150 @@ void main() {
           end,
           lessThanOrEqualTo(tester.getRect(label).left),
           reason: '$filter runs into $count',
+        );
+      }
+    },
+    skip: skip,
+  );
+
+  // Seven filters, three-digit totals, long names (#1942).
+  const names = ['Luminance', 'Red', 'Green', 'Blue', 'Ha', 'OIII', 'SII'];
+  for (final size in const [Size(360, 780), Size(390, 844)]) {
+    for (final text in const [1.0, 2.0]) {
+      testWidgets(
+        'the phone Now tile keeps seven filter names and counts readable at ${size.width.toInt()} pt at ${text}x text (#1942)',
+        (tester) async {
+          expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+          final base = _busy();
+          final snap = MonitorSnapshot(
+            asOf: base.asOf,
+            verdict: base.verdict,
+            now: MonitorNow(
+              status: base.now.status,
+              word: base.now.word,
+              target: base.now.target,
+              filter: 'Ha',
+              subSeconds: 300,
+              frameEndsAt: base.now.frameEndsAt,
+              frameSeconds: 300,
+              frame: 42,
+              frames: 110,
+              targetSecondsLeft: 20400,
+              filters: [
+                for (final (i, n) in names.indexed)
+                  (
+                    filter: n,
+                    done: 100 + i,
+                    total: 100 + 111 * i,
+                    inHand: i == 4,
+                  ),
+              ],
+            ),
+            upNext: base.upNext,
+            flip: base.flip,
+            lastFrame: base.lastFrame,
+            night: base.night,
+          );
+          await _pump(tester, text: text, size: size, snap: snap);
+          if (text == 1.0) {
+            // The busy tile with seven filters shows without scrolling at 1x.
+            expect(
+              tester
+                  .state<ScrollableState>(
+                    find.descendant(
+                      of: _tile,
+                      matching: find.byType(Scrollable),
+                    ),
+                  )
+                  .position
+                  .maxScrollExtent,
+              0,
+              reason: 'the Now tile scrolls with seven filters',
+            );
+          }
+          for (final (i, n) in names.indexed) {
+            final name = find.descendant(of: _tile, matching: find.text(n));
+            expect(name, findsOneWidget);
+            final para = tester.renderObject<RenderParagraph>(name);
+            // At least one glyph shows (an ellipsis alone is nothing).
+            expect(
+              tester.getSize(name).width,
+              greaterThanOrEqualTo(
+                (TextPainter(
+                  text: TextSpan(text: n[0], style: para.text.style),
+                  textDirection: TextDirection.ltr,
+                  textScaler: para.textScaler,
+                )..layout()).width,
+              ),
+              reason: '$n shows no glyph',
+            );
+            final label = find.descendant(
+              of: _tile,
+              matching: find.text('${100 + i}/${100 + 111 * i}'),
+            );
+            expect(label, findsOneWidget);
+            // A count is never scaled below its 14 px floor (DESIGN.md).
+            expect(
+              find.ancestor(of: label, matching: find.byType(FittedBox)),
+              findsNothing,
+              reason: '$n count is scaled',
+            );
+            expect(
+              tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+              isFalse,
+            );
+          }
+        },
+        skip: skip,
+      );
+    }
+  }
+  // Four filters keep the side-by-side wrap (#1942).
+  testWidgets(
+    'the phone Now tile keeps four long filter names and three-digit counts unscaled at 360 pt at 1x text (#1942)',
+    (tester) async {
+      expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+      final base = _busy();
+      const names = ['Luminance', 'Red', 'Green', 'Blue'];
+      final snap = MonitorSnapshot(
+        asOf: base.asOf,
+        verdict: base.verdict,
+        now: MonitorNow(
+          status: base.now.status,
+          word: base.now.word,
+          target: base.now.target,
+          filter: 'Red',
+          subSeconds: 300,
+          frameEndsAt: base.now.frameEndsAt,
+          frameSeconds: 300,
+          frame: 42,
+          frames: 110,
+          targetSecondsLeft: 20400,
+          filters: [
+            for (final (i, n) in names.indexed)
+              (filter: n, done: 100 + i, total: 766 + 111 * i, inHand: i == 1),
+          ],
+        ),
+        upNext: base.upNext,
+        flip: base.flip,
+        lastFrame: base.lastFrame,
+        night: base.night,
+      );
+      await _pump(tester, size: const Size(360, 780), snap: snap);
+      for (final (i, n) in names.indexed) {
+        final label = find.descendant(
+          of: _tile,
+          matching: find.text('${100 + i}/${766 + 111 * i}'),
+        );
+        expect(label, findsOneWidget, reason: n);
+        expect(
+          find.ancestor(of: label, matching: find.byType(FittedBox)),
+          findsNothing,
+          reason: '$n count is scaled',
+        );
+        expect(
+          tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+          isFalse,
         );
       }
     },

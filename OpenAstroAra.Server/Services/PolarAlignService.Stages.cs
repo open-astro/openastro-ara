@@ -207,21 +207,25 @@ namespace OpenAstroAra.Server.Services {
             SetTracking(gen, false);
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
+            ResetAlignerBaseline();
             await SolveLoopAsync(
                 liveCapture ?? capture,
                 toError: (s, at) => {
-                    // §45.8 reverse-projection: the pointing's alt/az delta since the seed IS the knob
-                    // adjustment (rigid mount, tracking stopped). Azimuth-knob turns are rotations about
-                    // the vertical, so the azimuth ANGLE delta is shared by pointing and axis; it becomes
-                    // an arc-distance at the AXIS altitude (≈ apparent pole altitude + current alt error),
+                    // §45.8 reverse-projection: the pointing's alt/az delta since the seed is the knob
+                    // adjustment seen from the camera (rigid mount, tracking stopped); far from the pole it
+                    // is mapped back to the axis's shift (AxisShiftFromPointingShift). The azimuth-knob
+                    // shift is an ANGLE about the vertical; it becomes an arc-distance at the AXIS altitude (≈ apparent pole altitude + current alt error),
                     // with the same east-positive sign convention as PolarAlignGeometry.AxisError.
                     var p = PolarAlignGeometry.PointingAltAz(
                         s.RaDegJnow, s.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, at);
-                    var altErr = seedAltErr + (p.AltDeg - seedPointing.AltDeg) * 60.0;
+                    var (altShiftDeg, azShiftDeg) = PolarAlignGeometry.AxisShiftFromPointingShift(
+                        seedPointing.AltDeg, seedPointing.AzDeg, p.AltDeg - seedPointing.AltDeg,
+                        Wrap180(p.AzDeg - seedPointing.AzDeg), site.LatitudeDeg);
+                    var altErr = seedAltErr + altShiftDeg * 60.0;
                     var axisAltDeg = Math.Abs(site.LatitudeDeg)
                         + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(site.LatitudeDeg)) / 60.0
                         + altErr / 60.0;
-                    var azErr = seedAzErr + Wrap180(p.AzDeg - seedPointing.AzDeg)
+                    var azErr = seedAzErr + azShiftDeg
                         * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
                     return (altErr, azErr);
                 },

@@ -300,8 +300,9 @@ class _Grid extends StatelessWidget {
     final night = _NightTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
     const strip = 56.0;
 
-    // A phone (#1775): one column that scrolls, each tile at a fixed height;
-    // the end scrolls clear of Stop in the corner.
+    // A phone (#1775): one column that scrolls, each tile at a fixed height
+    // (a graph tile tall enough for its graph, #1875); the end scrolls clear
+    // of Stop in the corner.
     if (MediaQuery.sizeOf(context).width < kMonitorMinWidth) {
       return ListView(
         key: const Key('simple-monitor-column'),
@@ -309,13 +310,13 @@ class _Grid extends StatelessWidget {
         children: [
           for (final (tile, height) in [
             (now, 440.0),
-            (target, 150.0),
+            (target, 220.0),
             (flip, 150.0),
             if (safety != null) (safety, strip),
             if (weather != null) (weather, 150.0),
-            if (guider != null) (guider, 170.0),
-            (focus, 170.0),
-            (night, 108.0),
+            if (guider != null) (guider, 240.0),
+            (focus, 220.0),
+            (night, 130.0),
           ])
             Padding(
               padding: const EdgeInsets.only(bottom: _kGap),
@@ -424,9 +425,9 @@ Widget? _dot(MonitorStatus s) => switch (s) {
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 TextStyle get _big => kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w300);
 
-/// One tile: its header (icon, name, status word, dot), then its content,
-/// which scrolls inside the tile when larger text no longer fits. Read out as
-/// its name, value and status.
+/// One tile: its header (icon, name, the status word in the right corner,
+/// dot), then its content, which scrolls inside the tile when larger text no
+/// longer fits. Read out as its name, value and status.
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.tileKey,
@@ -434,6 +435,7 @@ class _Tile extends StatelessWidget {
     required this.name,
     required this.status,
     this.word,
+    this.aside,
     required this.value,
     required this.onTap,
     required this.children,
@@ -445,6 +447,10 @@ class _Tile extends StatelessWidget {
   final String name;
   final MonitorStatus status;
   final String? word;
+
+  /// A line in the corner when there is no word and it fits there whole, else
+  /// the content's first row. Not read out: [value] holds it.
+  final String? aside;
 
   /// What a screen reader says after the name.
   final String value;
@@ -481,8 +487,14 @@ class _Tile extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: 10),
-            child: LayoutBuilder(
-              builder: (context, box) => SingleChildScrollView(
+            child: LayoutBuilder(builder: (context, box) {
+              // Cut short, an aside loses its end (Tonight's imaged time): the corner takes it only whole.
+              final bold = MediaQuery.boldTextOf(context) ? const TextStyle(fontWeight: FontWeight.bold) : null;
+              final style = DefaultTextStyle.of(context).style.merge(_dim).merge(bold);
+              final scaler = MediaQuery.textScalerOf(context);
+              final up = aside != null && shown == null && _textSize(aside!, scaler, style).width <= box.maxWidth * 0.6;
+              final corner = up ? aside : shown;
+              return SingleChildScrollView(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: box.maxHeight.isFinite ? box.maxHeight : 0),
                   child: IntrinsicHeight(
@@ -492,23 +504,29 @@ class _Tile extends StatelessWidget {
                         Row(children: [
                           Icon(icon, size: 18, color: accent),
                           const SizedBox(width: 6),
+                          // The name takes what the word leaves; the word sits in the right
+                          // corner at its own width, shortening only past 60 % of the tile (pt-BR).
                           Expanded(child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          // Flexible: a longer word (pt-BR) shortens, never overflows.
-                          if (shown != null && shown.isNotEmpty)
-                            Flexible(
-                              child: Text(shown,
+                          if (corner != null && corner.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                              child: Text(corner,
                                   maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim.copyWith(color: wordColour)),
                             ),
+                          ],
                           // Stale numbers get a grey dot, as off gear does.
                           if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[const SizedBox(width: 6), dot],
                         ]),
+                        // Wrapped, never cut: its own row is there to show it whole.
+                        if (aside != null && !up) Text(aside!, style: kSimpleCaption),
                         ...children,
                       ],
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ),
         ),
       ),
@@ -587,6 +605,9 @@ String _age(Duration d) {
 
 String _n(double? v, [int digits = 1]) => v == null ? '—' : v.toStringAsFixed(digits);
 
+/// A filter name worth showing: a camera with no filter wheel has none.
+bool _named(String? f) => f != null && f.trim().isNotEmpty;
+
 class _NowTile extends StatelessWidget {
   const _NowTile({required this.s, required this.onTap});
 
@@ -609,7 +630,7 @@ class _NowTile extends StatelessWidget {
     };
     final task = n.target == null
         ? l10n.monitorNothingRunning
-        : [n.target!, ?n.filter, if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s'].join(' · ');
+        : [n.target!, if (_named(n.filter)) n.filter!, if (n.subSeconds != null) '${_n(n.subSeconds, 0)} s'].join(' · ');
     // The frame in hand, else a wait counted down, else the state in words.
     final end = n.frameEndsAt ?? n.countdownTo;
     final left = end?.difference(s.asOf).inSeconds;
@@ -659,10 +680,13 @@ class _NowTile extends StatelessWidget {
             if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
               Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
           ]);
+    // One way to count: the frame in hand, and what is saved (#1875).
+    final saved = n.filters.fold<int>(0, (a, f) => a + f.done);
     final sub = n.frame != null && n.frames != null
-        ? l10n.monitorFrameOf(n.frame!.clamp(0, n.frames!), n.frames!,
-            simpleRunDuration(n.targetSecondsLeft ?? 0), n.target ?? '')
+        ? l10n.monitorFrameOf(n.frame!.clamp(0, n.frames!), n.frames!, simpleRunDuration(n.targetSecondsLeft ?? 0))
         : null;
+    // A camera with no filter wheel has one unnamed row: one bar, no name.
+    final named = n.filters.any((f) => _named(f.filter));
     return _Tile(
       tileKey: 'now',
       icon: Icons.photo_camera_outlined,
@@ -674,7 +698,16 @@ class _NowTile extends StatelessWidget {
       onTap: onTap,
       children: [
         Text(task, style: kSimpleReading, maxLines: 2, overflow: TextOverflow.ellipsis),
-        if (sub != null) Text(sub, style: _dim),
+        // A phone's busy tile has no height to spare: with named filters the
+        // counts under it say what is saved, so the line is only the frame.
+        if (sub != null)
+          MediaQuery.sizeOf(context).width < kMonitorMinWidth && named
+              ? Text(sub, style: _dim)
+              : Row(children: [
+                  Expanded(child: Text(sub, style: _dim)),
+                  const SizedBox(width: AraSpace.s8),
+                  Text(l10n.monitorSaved(saved), style: _dim),
+                ]),
         const SizedBox(height: AraSpace.s8),
         // A phone (#1915): Up next goes under the state block, so the countdown
         // and the state word keep the tile's whole width.
@@ -687,7 +720,7 @@ class _NowTile extends StatelessWidget {
                       child: Align(alignment: Alignment.centerLeft, child: big),
                     ),
                     const SizedBox(height: AraSpace.s8),
-                    _UpNext(s: s),
+                    _UpNext(s: s, limit: n.filters.length > 4 ? 1 : null),
                   ],
                 )
               : Row(
@@ -699,9 +732,62 @@ class _NowTile extends StatelessWidget {
                   ],
                 ),
         ),
-        if (n.filters.isNotEmpty) ...[
+        if (n.filters.isNotEmpty && !named && n.frames != null) ...[
           const SizedBox(height: AraSpace.s8),
-          Row(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AraRadius.field),
+            child: LinearProgressIndicator(
+              value: n.frames == 0 ? 0 : (saved / n.frames!).clamp(0.0, 1.0),
+              minHeight: 6,
+              color: AraColors.accentInfo,
+              backgroundColor: AraColors.bgInput,
+            ),
+          ),
+        ],
+        if (named) ...[
+          const SizedBox(height: AraSpace.s8),
+          MediaQuery.sizeOf(context).width < kMonitorMinWidth
+              // A phone (#1942): a count is never scaled below the 14 px floor
+              // and a name keeps at least a glyph. Up to four filters wrap, each
+              // as wide as its name and count; more take a grid of four columns
+              // (two at 2x text), name above count, in two short rows so the
+              // tile does not scroll at 1x (the Up next list shrinks to one row).
+              ? n.filters.length > 4
+                  ? _PhoneFilterGrid(
+                      filters: n.filters,
+                      cols: (4 / MediaQuery.textScalerOf(context).scale(1)).floor().clamp(1, 4),
+                    )
+                  : Wrap(
+                  spacing: 10,
+                  runSpacing: AraSpace.s8,
+                  children: [
+                    for (final f in n.filters)
+                      IntrinsicWidth(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    f.filter,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const SizedBox(width: AraSpace.s8),
+                                Text('${f.done}/${f.total}', maxLines: 1, style: _dim),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            _FilterBar(f),
+                          ],
+                        ),
+                      ),
+                  ],
+                )
+              : Row(
             children: [
               for (final f in n.filters)
                 Expanded(
@@ -753,18 +839,7 @@ class _NowTile extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 3),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AraRadius.field),
-                          child: LinearProgressIndicator(
-                            value: f.total == 0 ? 0 : f.done / f.total,
-                            minHeight: 6,
-                            // Finished green, in hand blue.
-                            color: f.done >= f.total
-                                ? AraColors.accentConnected
-                                : AraColors.accentInfo,
-                            backgroundColor: AraColors.bgInput,
-                          ),
-                        ),
+                        _FilterBar(f),
                       ],
                     ),
                   ),
@@ -777,10 +852,74 @@ class _NowTile extends StatelessWidget {
   }
 }
 
+class _PhoneFilterGrid extends StatelessWidget {
+  const _PhoneFilterGrid({required this.filters, required this.cols});
+
+  final List<({String filter, int done, int total, bool inHand})> filters;
+  final int cols;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var i = 0; i < filters.length; i += cols) ...[
+        if (i > 0) const SizedBox(height: AraSpace.s8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var j = i; j < i + cols; j++) ...[
+              if (j > i) const SizedBox(width: 10),
+              Expanded(
+                child: j >= filters.length
+                    ? const SizedBox.shrink()
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            filters[j].filter,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          Text('${filters[j].done}/${filters[j].total}', maxLines: 1, style: _dim),
+                          const SizedBox(height: 3),
+                          _FilterBar(filters[j]),
+                        ],
+                      ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    ],
+  );
+}
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar(this.f);
+
+  final ({String filter, int done, int total, bool inHand}) f;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(AraRadius.field),
+    child: LinearProgressIndicator(
+      value: f.total == 0 ? 0 : f.done / f.total,
+      minHeight: 6,
+      // Finished green, in hand blue.
+      color: f.done >= f.total ? AraColors.accentConnected : AraColors.accentInfo,
+      backgroundColor: AraColors.bgInput,
+    ),
+  );
+}
+
 class _UpNext extends StatelessWidget {
-  const _UpNext({required this.s});
+  const _UpNext({required this.s, this.limit});
 
   final MonitorSnapshot s;
+
+  /// Rows shown; null shows all. A phone with many filters gives their grid
+  /// the height of the rows past the first (#1942).
+  final int? limit;
 
   @override
   Widget build(BuildContext context) {
@@ -791,7 +930,7 @@ class _UpNext extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(s.tonightsBest ? l10n.monitorTonightsBest : l10n.monitorUpNext, style: kSimpleCaption),
-        for (final u in s.upNext)
+        for (final u in limit == null ? s.upNext : s.upNext.take(limit!))
           Container(
             constraints: const BoxConstraints(minHeight: 30),
             decoration: const BoxDecoration(border: Border(top: BorderSide(color: AraColors.border))),
@@ -799,7 +938,8 @@ class _UpNext extends StatelessWidget {
               Expanded(
                 child: Text(
                   switch (u.kind) {
-                    MonitorUpKind.nextFrame => l10n.monitorUpFrame(u.frame ?? 0, u.name ?? ''),
+                    MonitorUpKind.nextFrame =>
+                      '${l10n.monitorUpFrame(u.frame ?? 0)}${_named(u.name) ? ' · ${u.name}' : ''}',
                     MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
                     MonitorUpKind.nextTarget || MonitorUpKind.best => u.name ?? '',
                     MonitorUpKind.park => l10n.monitorUpPark,
@@ -873,11 +1013,12 @@ class _TargetTile extends StatelessWidget {
         ])),
         if (lines.isNotEmpty) Text(lines, style: _dim),
         if (lines2.isNotEmpty) Text(lines2, style: _dim),
-        if (t.curve.length > 1)
+        if (t.curve.length > 1) ...[
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: AraSpace.s4),
               child: CustomPaint(
+                key: const Key('simple-monitor-altitude'),
                 painter: _AltitudePainter(
                   curve: t.curve,
                   start: s.night.darkStart!,
@@ -885,10 +1026,14 @@ class _TargetTile extends StatelessWidget {
                   now: s.asOf,
                   spanStart: t.spanStart,
                   spanEnd: t.spanEnd,
+                  scaler: MediaQuery.textScalerOf(context),
                 ),
               ),
             ),
           ),
+          if (t.spanStart != null && t.spanEnd != null)
+            Text(l10n.monitorImagingSpan(simpleClockTime(t.spanStart!), simpleClockTime(t.spanEnd!)), style: kSimpleUnit),
+        ],
       ],
     );
   }
@@ -1119,6 +1264,7 @@ class _GuiderTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final g = s.guider!;
+    final narrow = MediaQuery.sizeOf(context).width < kMonitorMinWidth;
     Widget reading(String label, double? v) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text.rich(TextSpan(text: _n(v, 2), style: _big, children: [TextSpan(text: ' ″', style: kSimpleUnit)])),
           Text(label, style: kSimpleUnit),
@@ -1139,29 +1285,120 @@ class _GuiderTile extends StatelessWidget {
       frozen: s.frozen,
       onTap: onTap,
       children: [
+        // The readings, then the live trace on a fixed scale beside the whole
+        // session's RMS, one point per saved frame (#1875); on a phone the
+        // graphs go under the readings.
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            SizedBox(
-              width: 220,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: reading('RMS', g.rms)),
-                  Expanded(child: reading('RA', g.ra)),
-                  Expanded(child: reading('Dec', g.dec)),
+          child: Flex(
+            direction: narrow ? Axis.vertical : Axis.horizontal,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s12,
+            children: [
+              SizedBox(
+                width: narrow ? null : 220,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: reading('RMS', g.rms)),
+                    Expanded(child: reading('RA', g.ra)),
+                    Expanded(child: reading('Dec', g.dec)),
+                  ]),
+                  const SizedBox(height: AraSpace.s4),
+                  Wrap(spacing: AraSpace.s12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    _Key(AraColors.accentInfo, 'RA'),
+                    _Key(AraColors.errorText, 'Dec', dashed: true),
+                    Text(l10n.monitorFixedScale, style: kSimpleUnit),
+                    if (g.rmsPerFrame.length > 1) Text(l10n.monitorRmsPerFrame, style: kSimpleUnit),
+                  ]),
+                  if (!narrow) const Spacer(),
+                  if (g.lastDither != null) Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim),
                 ]),
-                const Spacer(),
-                if (g.lastDither != null) Text(l10n.monitorLastDither(simpleClockTime(g.lastDither!)), style: _dim),
-              ]),
-            ),
-            const SizedBox(width: AraSpace.s12),
-            Expanded(child: CustomPaint(painter: _TracePainter(g.trace))),
-          ]),
+              ),
+              Expanded(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s12, children: [
+                  Expanded(
+                    child: CustomPaint(
+                      key: const Key('simple-monitor-trace'),
+                      painter: _TracePainter(g.trace, MediaQuery.textScalerOf(context)),
+                    ),
+                  ),
+                  if (g.rmsPerFrame.length > 1)
+                    Expanded(
+                      child: CustomPaint(
+                        key: const Key('simple-monitor-rms-chart'),
+                        painter: _SeriesPainter(
+                          scaler: MediaQuery.textScalerOf(context),
+                          values: g.rmsPerFrame,
+                          lo: 0,
+                          ticks: const [1, 2],
+                          decimals: 0,
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
+/// "HFR +18 % since session start", the flag of a reading that moved the
+/// wrong way (#1875).
+class _Flag extends StatelessWidget {
+  const _Flag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+    decoration: BoxDecoration(border: Border.all(color: AraColors.accentWarning), borderRadius: BorderRadius.circular(AraRadius.pill)),
+    child: Text(text, style: kSimpleUnit.copyWith(color: AraColors.accentWarning, fontWeight: FontWeight.w600)),
+  );
+}
+
+String _flagText(AppLocalizations l10n, String metric, MonitorDeviation d) =>
+    l10n.monitorChangeSinceStart(metric, '${d.pct >= 0 ? '+' : '−'}${d.pct.abs().round()}');
+
+/// A graph key entry: a short line (dashed or solid) and its name.
+class _Key extends StatelessWidget {
+  const _Key(this.colour, this.label, {this.dashed = false});
+
+  final Color colour;
+  final String label;
+  final bool dashed;
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    CustomPaint(size: const Size(18, 10), painter: _SwatchPainter(colour, dashed)),
+    const SizedBox(width: AraSpace.s4),
+    Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleUnit)),
+  ]);
+}
+
+class _SwatchPainter extends CustomPainter {
+  _SwatchPainter(this.colour, this.dashed);
+
+  final Color colour;
+  final bool dashed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = colour
+      ..strokeWidth = 1.5;
+    _line(canvas, Offset(0, size.height / 2), Offset(size.width, size.height / 2), paint, dashed: dashed);
+  }
+
+  @override
+  bool shouldRepaint(_SwatchPainter old) => old.colour != colour || old.dashed != dashed;
+}
+
+/// The saved frames of the session: HFR, and stars with the sky background,
+/// each a graph of one point per frame flagged against the session's own
+/// start (#1875).
 class _LastFrameTile extends StatelessWidget {
   const _LastFrameTile({required this.s, required this.onTap});
 
@@ -1173,46 +1410,86 @@ class _LastFrameTile extends StatelessWidget {
     final l10n = context.l10n;
     final f = s.lastFrame;
     final last = f.last;
-    final cols = <(String, String, List<double>)>[
-      (l10n.monitorHfr, _n(last?.hfr, 2), [for (final x in f.frames) ?x.hfr]),
-      (l10n.monitorStars, last?.stars?.toString() ?? '—', [for (final x in f.frames) ?x.stars?.toDouble()]),
-      (l10n.monitorSkyBackground, _n(last?.background, 0), [for (final x in f.frames) ?x.background]),
-      (
-        l10n.monitorClippedStars,
-        last?.clippedShare == null ? '—' : '${_n(last!.clippedShare! * 100)} %',
-        [for (final x in f.frames) ?x.clippedShare],
-      ),
-    ];
+    final hfrDev = f.hfrDeviation, starsDev = f.starsDeviation;
+    String? flag(String metric, MonitorDeviation? d) => d?.flagged ?? false ? _flagText(l10n, metric, d!) : null;
+    final hfrFlag = flag(l10n.monitorHfr, hfrDev);
+    final starsFlags = [?flag(l10n.monitorStars, starsDev), ?flag(l10n.monitorSkyBackground, f.backgroundDeviation)];
+    final flags = [?hfrFlag, ...starsFlags];
+    final hfr = [for (final x in f.frames) ?x.hfr];
+    final stars = [for (final x in f.frames) ?x.stars?.toDouble()];
+    final sky = [for (final x in f.frames) ?x.background];
+    final detail = [
+      if (last?.background != null) '${l10n.monitorSkyBackground} ${_n(last!.background, 0)}',
+      if (last?.clippedShare != null) '${l10n.monitorClippedStars} ${_n(last!.clippedShare! * 100)} %',
+    ].join(' · ');
     final af = f.focuser && f.autofocusAt != null
         ? l10n.monitorAutofocusSince(
             simpleClockTime(f.autofocusAt!),
             f.tempSinceAutofocus == null ? '—' : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
           )
         : null;
+    // [guide] is where the flag starts: 15 % off the start, the wrong way.
+    Widget graph(String id, List<double> values, MonitorDeviation? dev, double? guide, int decimals, [List<double>? own]) =>
+        values.length > 1
+            ? Expanded(
+                child: CustomPaint(
+                  key: Key('simple-monitor-$id-chart'),
+                  size: Size.infinite,
+                  painter: _SeriesPainter(
+                    scaler: MediaQuery.textScalerOf(context),
+                    values: values,
+                    own: own,
+                    guide: guide,
+                    colour: dev?.flagged ?? false ? AraColors.accentWarning : AraColors.textPrimary,
+                    decimals: decimals,
+                    lastLabel: '${values.length}',
+                  ),
+                ),
+              )
+            : const Spacer();
     return _Tile(
       tileKey: 'last-frame',
       icon: Icons.insights,
       name: l10n.monitorLastFrame,
-      status: MonitorStatus.normal,
-      value: [for (final c in cols) '${c.$1} ${c.$2}'].join(', '),
+      status: flags.isEmpty ? MonitorStatus.normal : MonitorStatus.warning,
+      word: flags.isEmpty ? null : l10n.monitorDrifting,
+      value: [
+        '${l10n.monitorHfr} ${_n(last?.hfr, 2)}',
+        '${l10n.monitorStars} ${last?.stars ?? '—'}',
+        if (detail.isNotEmpty) detail,
+        ...flags,
+      ].join(', '),
       frozen: s.frozen,
       onTap: onTap,
       children: [
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            for (final c in cols)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: AraSpace.s12),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.$2, style: _big),
-                    Text(c.$1, style: kSimpleUnit),
-                    // No trend while a value is missing.
-                    if (c.$2 != '—' && c.$3.length > 1)
-                      Expanded(child: CustomPaint(painter: _SparkPainter(c.$3), size: Size.infinite)),
-                  ]),
-                ),
-              ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s16, children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: AraSpace.s8, children: [
+                  Text(_n(last?.hfr, 2), style: _big),
+                  Text(hfrDev == null ? l10n.monitorHfr : '${l10n.monitorHfr} · ${l10n.monitorStartedAt(_n(hfrDev.start, 2))}', style: kSimpleUnit),
+                  if (hfrFlag != null) _Flag(hfrFlag),
+                ]),
+                graph('hfr', hfr, hfrDev, hfrDev == null ? null : hfrDev.start * (1 + kMonitorDeviationPct / 100), 1),
+              ]),
+            ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: AraSpace.s8, children: [
+                  Text(last?.stars?.toString() ?? '—', style: _big),
+                  Text(l10n.monitorStars, style: kSimpleUnit),
+                  if (detail.isNotEmpty) Text(detail, style: kSimpleUnit),
+                  for (final t in starsFlags) _Flag(t),
+                ]),
+                graph('stars', stars, starsDev, starsDev == null ? null : starsDev.start * (1 - kMonitorDeviationPct / 100), 0,
+                    sky.length == stars.length ? sky : null),
+                Wrap(spacing: AraSpace.s12, children: [
+                  _Key(AraColors.textPrimary, l10n.monitorStars),
+                  _Key(AraColors.textSecondary, l10n.monitorSkyOwnScale, dashed: true),
+                ]),
+              ]),
+            ),
           ]),
         ),
         if (af != null) Text(af, style: _dim),
@@ -1240,6 +1517,8 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
+      // In the corner when it fits whole, leaving the timeline room for labels.
+      aside: line,
       // The timeline is painted: a screen reader hears its blocks and markers.
       value: [
         line,
@@ -1250,12 +1529,17 @@ class _NightTile extends StatelessWidget {
       frozen: s.frozen,
       onTap: onTap,
       children: [
-        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption),
         if (start != null && end != null)
           Expanded(
             child: CustomPaint(
               key: const Key('simple-monitor-timeline'),
-              painter: _NightPainter(n, s.asOf, MediaQuery.textScalerOf(context)),
+              painter: _NightPainter(
+                n,
+                s.asOf,
+                MediaQuery.textScalerOf(context),
+                flipLabel: n.flipAt == null ? null : l10n.monitorFlipPin(simpleClockTime(n.flipAt!)),
+                parkLabel: n.parkAt == null ? null : l10n.monitorParkPin(simpleClockTime(n.parkAt!)),
+              ),
             ),
           ),
       ],
@@ -1263,21 +1547,80 @@ class _NightTile extends StatelessWidget {
   }
 }
 
+/// A dashed line from [a] to [b]: 4 px on, 4 px off.
+void _line(Canvas canvas, Offset a, Offset b, Paint paint, {bool dashed = false}) {
+  if (!dashed) return canvas.drawLine(a, b, paint);
+  final len = (b - a).distance;
+  if (len == 0) return;
+  final dir = (b - a) / len;
+  for (var d = 0.0; d < len; d += 8) {
+    canvas.drawLine(a + dir * d, a + dir * math.min(d + 4, len), paint);
+  }
+}
+
+/// Axis text at Simple Mode's caption size, scaled with the user's text:
+/// [at] is its left, centre or right edge, by [align]; its top, or its middle
+/// when [middle]. Left out when it would not fit inside [size]'s height, so
+/// large text on a short canvas never paints over the tile's other text.
+void _text(
+  Canvas canvas,
+  Size size,
+  String t,
+  Offset at,
+  TextScaler scaler, {
+  TextAlign align = TextAlign.left,
+  bool middle = false,
+}) {
+  final tp = _axisText(t, scaler);
+  final x = switch (align) {
+    TextAlign.right || TextAlign.end => at.dx - tp.width,
+    TextAlign.center => at.dx - tp.width / 2,
+    _ => at.dx,
+  };
+  final y = middle ? at.dy - tp.height / 2 : at.dy;
+  if (y >= 0 && y + tp.height <= size.height) tp.paint(canvas, Offset(x, y));
+  tp.dispose();
+}
+
+TextPainter _axisText(String t, TextScaler scaler, [TextStyle style = kSimpleCaption]) => TextPainter(
+  text: TextSpan(text: t, style: style),
+  textScaler: scaler,
+  textDirection: TextDirection.ltr,
+  maxLines: 1,
+)..layout();
+
+/// The size [t] takes in [style], by default as [_text] paints it.
+Size _textSize(String t, TextScaler scaler, [TextStyle style = kSimpleCaption]) {
+  final tp = _axisText(t, scaler, style);
+  final size = tp.size;
+  tp.dispose();
+  return size;
+}
+
 /// Tonight's timeline: one block per Queue Target with progress under the
-/// one in hand, the flip and park markers, and a line at the current time.
+/// one in hand, the flip and park markers with their times above them, hour
+/// marks under the bar, and a line at the current time.
 class _NightPainter extends CustomPainter {
-  _NightPainter(this.n, this.now, this.scaler);
+  _NightPainter(this.n, this.now, this.scaler, {this.flipLabel, this.parkLabel});
 
   final MonitorNight n;
   final DateTime now;
   final TextScaler scaler;
+  final String? flipLabel, parkLabel;
 
   @override
   void paint(Canvas canvas, Size size) {
     final start = n.darkStart!, end = n.darkEnd!;
     double x(DateTime t) =>
         (t.difference(start).inSeconds / math.max(1, end.difference(start).inSeconds)).clamp(0.0, 1.0) * size.width;
-    const top = 4.0, h = 30.0;
+    final top = _textSize('0', scaler).height + 4;
+    const h = 24.0;
+    // Hour marks.
+    final firstHour = DateTime(start.year, start.month, start.day, start.hour).add(const Duration(hours: 1));
+    for (var t = firstHour; t.isBefore(end); t = t.add(const Duration(hours: 1))) {
+      canvas.drawLine(Offset(x(t), top + h), Offset(x(t), top + h + 3), Paint()..color = AraColors.textSecondary);
+      _text(canvas, size, t.hour.toString().padLeft(2, '0'), Offset(x(t), top + h + 4), scaler, align: TextAlign.center);
+    }
     for (final b in n.blocks) {
       final r = Rect.fromLTRB(x(b.start), top, math.max(x(b.start) + 2, x(b.end) - 2), top + h);
       final rr = RRect.fromRectAndRadius(r, const Radius.circular(AraRadius.field));
@@ -1297,72 +1640,172 @@ class _NightPainter extends CustomPainter {
       label.dispose();
       canvas.restore();
     }
-    for (final (t, icon) in [(n.flipAt, Icons.swap_horiz), (n.parkAt, Icons.local_parking)]) {
+    for (final (t, icon, label) in [
+      (n.flipAt, Icons.swap_horiz, flipLabel),
+      (n.parkAt, Icons.local_parking, parkLabel),
+    ]) {
       if (t == null) continue;
       final c = Offset(x(t), top + h / 2);
-      canvas.drawCircle(c, 12, Paint()..color = AraColors.bgPrimary);
-      canvas.drawCircle(c, 12, Paint()
-        ..color = AraColors.textSecondary
-        ..style = PaintingStyle.stroke);
+      canvas.drawCircle(c, 11, Paint()..color = AraColors.bgPrimary);
+      canvas.drawCircle(
+        c,
+        11,
+        Paint()
+          ..color = AraColors.textSecondary
+          ..style = PaintingStyle.stroke,
+      );
       final glyph = TextPainter(
         text: TextSpan(
           text: String.fromCharCode(icon.codePoint),
-          style: TextStyle(fontFamily: icon.fontFamily, package: icon.fontPackage, fontSize: AraFontSize.simpleCaption + 4, color: AraColors.textPrimary),
+          style: TextStyle(
+            fontFamily: icon.fontFamily,
+            package: icon.fontPackage,
+            fontSize: AraFontSize.simpleCaption + 2,
+            color: AraColors.textPrimary,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       glyph.dispose();
+      if (label != null) {
+        _text(canvas, size, label, Offset(c.dx.clamp(30.0, size.width - 30), 0), scaler, align: TextAlign.center);
+      }
     }
-    canvas.drawRect(Rect.fromLTWH(x(now) - 1, 0, 2, top * 2 + h), Paint()..color = AraColors.textPrimary);
+    canvas.drawRect(Rect.fromLTWH(x(now) - 1, top - 4, 2, h + 8), Paint()..color = AraColors.textPrimary);
   }
 
   @override
   bool shouldRepaint(_NightPainter old) => true;
 }
 
-/// A trend scaled to the night's own range, with a minimum span so sensor
-/// noise doesn't look dramatic.
-class _SparkPainter extends CustomPainter {
-  _SparkPainter(this.values);
+/// A per-frame trend: [lo] and [hi] fixed, else the values' own range with a
+/// minimum span so sensor noise doesn't look dramatic. [guide] is a dashed
+/// deviation line, [own] a second series on its own scale, the last point a
+/// dot.
+class _SeriesPainter extends CustomPainter {
+  _SeriesPainter({
+    required this.scaler,
+    required this.values,
+    this.lo,
+    this.ticks = const [],
+    this.guide,
+    this.own,
+    this.colour = AraColors.textPrimary,
+    this.decimals = 1,
+    this.lastLabel,
+  });
 
+  final TextScaler scaler;
   final List<double> values;
+  final double? lo, guide;
+  final List<double> ticks;
+  final List<double>? own;
+  final Color colour;
+  final int decimals;
+
+  /// The x axis' right label (the frame count); the left is "1".
+  final String? lastLabel;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.length < 2 || size.isEmpty) return;
-    final lo = values.reduce(math.min), hi = values.reduce(math.max);
-    final mid = (lo + hi) / 2;
-    final span = math.max(hi - lo, math.max(mid.abs() * 0.1, 1e-6));
+    final axis = lastLabel == null ? 0.0 : _textSize('1', scaler).height;
+    final left = [30.0, for (final t in ticks) _textSize(t.toStringAsFixed(decimals), scaler).width + 6].reduce(math.max);
+    final ph = size.height - axis, pw = size.width - left;
+    if (ph <= 0) return;
+    final all = [...values, ?guide];
+    final dataLo = all.reduce(math.min), dataHi = all.reduce(math.max);
+    final mid = (dataHi + dataLo) / 2;
+    final span = math.max(dataHi - dataLo, math.max(mid.abs() * 0.1, 1e-6));
+    final l = lo ?? mid - span * 0.6, h = mid + span * 0.6;
+    double y(double v) => ph * (1 - (v - l) / (h - l)).clamp(0.0, 1.0);
+    Offset at(int i, double v, int n) => Offset(left + i / (n - 1) * pw, y(v));
+    final grid = Paint()..color = AraColors.border;
+    for (final t in ticks.where((t) => t > l && t < h)) {
+      canvas.drawLine(Offset(left, y(t)), Offset(size.width, y(t)), grid);
+      _text(canvas, size, t.toStringAsFixed(decimals), Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+    }
+    if (guide != null) {
+      _line(
+        canvas,
+        Offset(left, y(guide!)),
+        Offset(size.width, y(guide!)),
+        Paint()..color = AraColors.accentWarning,
+        dashed: true,
+      );
+    }
+    if (own != null && own!.length > 1) {
+      final lo2 = own!.reduce(math.min), hi2 = math.max(own!.reduce(math.max), own!.reduce(math.min) + 1e-6);
+      final path = Path();
+      for (var i = 0; i < own!.length; i++) {
+        final p = Offset(left + i / (own!.length - 1) * pw, ph * (0.9 - (own![i] - lo2) / (hi2 - lo2) * 0.8));
+        i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      }
+      for (final m in path.computeMetrics()) {
+        for (var d = 0.0; d < m.length; d += 8) {
+          canvas.drawPath(
+            m.extractPath(d, math.min(d + 4, m.length)),
+            Paint()
+              ..color = AraColors.textSecondary
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.2,
+          );
+        }
+      }
+    }
     final path = Path();
     for (var i = 0; i < values.length; i++) {
-      final p = Offset(i / (values.length - 1) * size.width, size.height * (0.5 - (values[i] - mid) / span * 0.9));
+      final p = at(i, values[i], values.length);
       i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(path, Paint()
-      ..color = AraColors.textSecondary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = colour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(at(values.length - 1, values.last, values.length), 3.5, Paint()..color = colour);
+    if (lastLabel != null) {
+      _text(canvas, size, '1', Offset(left, ph), scaler);
+      _text(canvas, size, lastLabel!, Offset(size.width, ph), scaler, align: TextAlign.right);
+    }
   }
 
   @override
-  bool shouldRepaint(_SparkPainter old) => old.values != values;
+  bool shouldRepaint(_SeriesPainter old) => true;
 }
 
-/// The guide trace: RA solid, Dec dashed, so they aren't told apart by colour
-/// alone.
+/// The guide trace on a fixed ±2.5″ scale, so a calm night and a runaway
+/// don't look alike: RA solid, Dec dashed, so they aren't told apart by
+/// colour alone.
 class _TracePainter extends CustomPainter {
-  _TracePainter(this.trace);
+  _TracePainter(this.trace, this.scaler);
 
   final List<({double ra, double dec})> trace;
+  final TextScaler scaler;
+
+  /// The scale's half height (″).
+  static const double scale = 2.5;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final mid = size.height / 2;
-    canvas.drawLine(Offset(0, mid), Offset(size.width, mid), Paint()..color = AraColors.border);
+    final left = math.max(30.0, _textSize('-2″', scaler).width + 6);
+    final mid = size.height / 2, pw = size.width - left;
+    double y(double v) => mid - v.clamp(-scale, scale) / scale * mid;
+    final grid = Paint()..color = AraColors.border;
+    for (final t in const [-2.0, -1.0, 1.0, 2.0]) {
+      canvas.drawLine(
+        Offset(left, y(t)),
+        Offset(size.width, y(t)),
+        Paint()..color = AraColors.border.withValues(alpha: 0.5),
+      );
+      _text(canvas, size, '${t.toStringAsFixed(0)}″', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+    }
+    canvas.drawLine(Offset(left, mid), Offset(size.width, mid), grid);
     if (trace.length < 2) return;
-    final peak = math.max(1.0, trace.fold<double>(0, (m, t) => math.max(m, math.max(t.ra.abs(), t.dec.abs()))));
-    Offset at(int i, double v) => Offset(i / (trace.length - 1) * size.width, mid - v / peak * mid * 0.9);
+    Offset at(int i, double v) => Offset(left + i / (trace.length - 1) * pw, y(v));
     final ra = Path(), dec = Path();
     for (var i = 0; i < trace.length; i++) {
       final a = at(i, trace[i].ra), d = at(i, trace[i].dec);
@@ -1386,8 +1829,9 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old.trace != trace;
 }
 
-/// The Target's altitude over the night: its scheduled span shaded, a dashed
-/// 30° line, and the current time.
+/// The Target's altitude over the night: the imaging span shaded under the
+/// curve, now a dot on it, a dashed 30° line, and the dusk, plan start, plan
+/// end and dawn times on the axis.
 class _AltitudePainter extends CustomPainter {
   _AltitudePainter({
     required this.curve,
@@ -1396,38 +1840,87 @@ class _AltitudePainter extends CustomPainter {
     required this.now,
     this.spanStart,
     this.spanEnd,
+    required this.scaler,
   });
 
   final List<double> curve;
   final DateTime start, end, now;
   final DateTime? spanStart, spanEnd;
+  final TextScaler scaler;
 
   @override
   void paint(Canvas canvas, Size size) {
-    double x(DateTime t) =>
-        (t.difference(start).inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0) * size.width;
-    double y(double alt) => size.height * (1 - alt.clamp(0, 90) / 90);
-    if (spanStart != null && spanEnd != null) {
-      canvas.drawRect(Rect.fromLTRB(x(spanStart!), 0, x(spanEnd!), size.height), Paint()..color = AraColors.selectionTint);
-    }
-    final ref = Paint()
-      ..color = AraColors.textDisabled
-      ..strokeWidth = 1;
-    for (var d = 0.0; d < size.width; d += 8) {
-      canvas.drawLine(Offset(d, y(30)), Offset(math.min(d + 4, size.width), y(30)), ref);
-    }
+    final left = math.max(28.0, _textSize('90°', scaler).width + 6), axis = _textSize('0', scaler).height;
+    final ph = size.height - axis, pw = size.width - left;
+    // No room left for the curve under the time labels (large text).
+    if (ph <= 0) return;
+    final total = math.max(1, end.difference(start).inSeconds);
+    double frac(DateTime t) => (t.difference(start).inSeconds / total).clamp(0.0, 1.0);
+    double x(DateTime t) => left + frac(t) * pw;
+    double y(double alt) => ph * (1 - alt.clamp(0, 90) / 90);
+    Offset pt(int i) => Offset(left + i / (curve.length - 1) * pw, y(curve[i]));
     final path = Path();
     for (var i = 0; i < curve.length; i++) {
-      final p = Offset(i / (curve.length - 1) * size.width, y(curve[i]));
+      final p = pt(i);
       i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(path, Paint()
-      ..color = AraColors.textPrimary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5);
-    canvas.drawLine(Offset(x(now), 0), Offset(x(now), size.height), Paint()
-      ..color = AraColors.accentInfo
-      ..strokeWidth = 1.5);
+    if (spanStart != null && spanEnd != null) {
+      final fill = Path.from(path)
+        ..lineTo(left + pw, ph)
+        ..lineTo(left, ph)
+        ..close();
+      canvas.save();
+      canvas.clipRect(Rect.fromLTRB(x(spanStart!), 0, x(spanEnd!), ph));
+      canvas.drawPath(fill, Paint()..color = AraColors.selectionTint);
+      canvas.restore();
+    }
+    for (final t in const [30.0, 60.0, 90.0]) {
+      _text(canvas, size, '${t.round()}°', Offset(left - 4, y(t)), scaler, align: TextAlign.right, middle: true);
+    }
+    _line(
+      canvas,
+      Offset(left, y(30)),
+      Offset(size.width, y(30)),
+      Paint()
+        ..color = AraColors.textDisabled
+        ..strokeWidth = 1,
+      dashed: true,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AraColors.textPrimary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    if (!now.isBefore(start) && !now.isAfter(end)) {
+      final f = frac(now) * (curve.length - 1);
+      final i = f.floor().clamp(0, curve.length - 2);
+      final alt = curve[i] + (curve[i + 1] - curve[i]) * (f - i);
+      canvas.drawCircle(Offset(x(now), y(alt)), 5, Paint()..color = AraColors.accentInfo);
+    }
+    for (final (t, align) in [
+      (start, TextAlign.left),
+      if (spanStart != null) (spanStart!, TextAlign.center),
+      if (spanEnd != null) (spanEnd!, TextAlign.center),
+      (end, TextAlign.right),
+    ]) {
+      _text(
+        canvas,
+        size,
+        simpleClockTime(t),
+        Offset(
+          align == TextAlign.left
+              ? left
+              : align == TextAlign.right
+              ? size.width
+              : x(t),
+          ph,
+        ),
+        scaler,
+        align: align,
+      );
+    }
   }
 
   @override

@@ -51,6 +51,9 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly object _idleGate = new();
     private bool _restartOnIdlePending;
+    private bool _queued; // true from a queued request until its 2 s notice starts: the only time it can be cancelled
+    private PendingRestartDto? _pending;
+    private int _queuedGeneration; // bumped by each queued request and each cancel, so a cancelled waiter sees it is stale
 
     public PlaceholderServerStateService(
             IWsBroadcaster? broadcaster = null,
@@ -91,7 +94,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             Tier: "scaffold",
             CurrentUtc: DateTimeOffset.UtcNow,
             CurrentProfileId: null,
-            PendingRestart: null,
+            PendingRestart: PendingRestartNow(),
             WsResumeToken: resumeToken,
             WsEventCursor: seq,
             // equipment_states + active_sequence_run still empty until
@@ -204,32 +207,67 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         await PublishAsync(WsEventCatalog.ServerRestartImminent,
             new { reason, restart_at_utc = DateTimeOffset.UtcNow.AddSeconds(2).ToString("O") });
 
+    private PendingRestartDto? PendingRestartNow() { lock (_idleGate) { return _pending; } }
+
     // Same rule as ProfilesEndpoints.RunIsOnAsync: a run keeps imaging with no catalog session when the
-    // catalog fails, so the registry alone is not enough.
+    // catalog fails, so the registry alone is not enough. Any run that is not terminal holds the restart:
+    // paused and aborting included (#1951), unlike ActiveRunIdsAsync, which leaves an aborting run out.
     private async Task<bool> RunIsOnAsync() =>
         (_runs?.HasAny ?? false)
         || (_sequencerResolver?.Invoke() is { } sequencer
-            && (await sequencer.ActiveRunIdsAsync(CancellationToken.None).ConfigureAwait(false)).Count > 0);
+            && (await sequencer.UnfinishedRunIdsAsync(CancellationToken.None).ConfigureAwait(false)).Count > 0);
 
-    public async Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) {
+    public async Task<RestartOnIdleAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) {
         var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey);
         lock (_idleGate) {
-            if (_restartOnIdlePending) return accepted; // one pending restart, idempotent
+            if (_restartOnIdlePending) return RestartOnIdleAcceptedDto.From(accepted, _queued); // one pending restart, idempotent
             _restartOnIdlePending = true;
         }
         reason ??= "";
         var announce = await RunIsOnAsync().ConfigureAwait(false);
-        _ = Task.Run(() => RestartWhenIdleAsync(reason, announce), CancellationToken.None);
-        return accepted;
+        var generation = 0;
+        if (announce) {
+            lock (_idleGate) {
+                generation = ++_queuedGeneration;
+                _queued = true;
+                _pending = new PendingRestartDto(reason, DateTimeOffset.UtcNow, PlannedAtUtc: null, RestartOnIdle: true);
+            }
+        }
+        _ = Task.Run(() => RestartWhenIdleAsync(reason, announce, generation), CancellationToken.None);
+        return RestartOnIdleAcceptedDto.From(accepted, announce);
     }
 
-    private async Task RestartWhenIdleAsync(string reason, bool announce) {
+    private bool IsCancelled(int generation) { lock (_idleGate) { return generation != _queuedGeneration; } }
+
+    public async Task CancelRestartOnIdleAsync(CancellationToken ct) {
+        string reason;
+        lock (_idleGate) {
+            if (!_queued) return; // nothing queued, or the notice already started: no-op
+            reason = _pending?.Reason ?? "";
+            _queued = false;
+            _pending = null;
+            _restartOnIdlePending = false;
+            _queuedGeneration++;
+        }
+        await PublishAsync(WsEventCatalog.ServerRestartCancelled,
+            new { reason, cancelled_utc = DateTimeOffset.UtcNow.ToString("O") });
+    }
+
+    private async Task RestartWhenIdleAsync(string reason, bool announce, int generation) {
         if (announce) {
             await PublishAsync(WsEventCatalog.ServerRestartPending,
                 new { reason, requested_utc = DateTimeOffset.UtcNow.ToString("O") });
         }
         while (true) {
-            while (await RunIsOnAsync().ConfigureAwait(false)) await Task.Delay(TimeSpan.FromSeconds(1));
+            while (await RunIsOnAsync().ConfigureAwait(false)) {
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                if (announce && IsCancelled(generation)) return;
+            }
+            lock (_idleGate) {
+                if (announce && generation != _queuedGeneration) return; // cancelled while queued
+                _queued = false; // the notice starts: too late to cancel
+                _pending = null;
+            }
             await EmitRestartImminentAsync(reason);
             await Task.Delay(TimeSpan.FromSeconds(2));
             // A run (auto flats) may start inside the notice window: keep waiting instead of killing it.

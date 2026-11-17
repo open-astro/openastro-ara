@@ -186,6 +186,53 @@ namespace OpenAstroAra.Test {
             Assert.That(Math.Abs(azE), Is.GreaterThan(1.0), "a 0.3° off-pole axis at ±40° HA has a real az component");
         }
 
+        // ── #1971: the Polar Aligner move (PolarAlign actions wire convention) ─────────────
+        // Made-up sites at ±40°. The axis is placed by its alt/az, read back through AxisError
+        // (east-positive, cos-scaled), and the move must undo the azimuth COORDINATE offset.
+
+        private static (double AltErr, double AzErr) ErrorOfAxisAt(double axisAltDeg, double axisAzDeg, double latDeg) {
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(T, Lon);
+            var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(axisAltDeg, axisAzDeg, latDeg, lst);
+            return PolarAlignGeometry.AxisError(ra, dec, latDeg, Lon, T);
+        }
+
+        private static double ApparentPoleAlt(double latDeg) =>
+            Math.Abs(latDeg) + PolarAlignGeometry.BennettRefractionArcmin(Math.Abs(latDeg)) / 60.0;
+
+        [Test]
+        public void Aligner_move_north_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
+            var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(40), 1.0, 40);
+            Assert.That(azErr, Is.GreaterThan(40), "north: clockwise of the pole is east, east-positive");
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, 40);
+            Assert.That(az, Is.EqualTo(-60.0).Within(0.05), "decrease the azimuth coordinate by the full degree");
+            Assert.That(alt, Is.EqualTo(0).Within(0.05));
+        }
+
+        [Test]
+        public void Aligner_move_south_an_axis_one_degree_clockwise_of_the_pole_moves_minus_sixty() {
+            var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(-40), 181.0, -40);
+            Assert.That(azErr, Is.LessThan(-40), "south: clockwise of the pole is west, so east-positive is negative");
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, -40);
+            Assert.That(az, Is.EqualTo(-60.0).Within(0.05), "the wire sign follows the azimuth coordinate, not east");
+            Assert.That(alt, Is.EqualTo(0).Within(0.05));
+        }
+
+        [TestCase(40.0, 0.0)]
+        [TestCase(-40.0, 180.0)]
+        public void Aligner_move_an_axis_thirty_arcmin_below_the_pole_is_raised_by_thirty(double lat, double poleAz) {
+            var (altErr, azErr) = ErrorOfAxisAt(ApparentPoleAlt(lat) - 0.5, poleAz, lat);
+            var (az, alt) = PolarAlignGeometry.AlignerMove(altErr, azErr, lat);
+            Assert.That(alt, Is.EqualTo(30.0).Within(0.05), "positive altitude raises the polar axis");
+            Assert.That(az, Is.EqualTo(0).Within(0.05));
+        }
+
+        [Test]
+        public void Aligner_move_next_to_a_geographic_pole_keeps_its_direction() {
+            // At 89.8° the axis altitude plus refraction and a high axis passes 90°: the cosine must not flip the move.
+            var (az, _) = PolarAlignGeometry.AlignerMove(altErrorArcmin: 30.0, azErrorArcmin: 5.0, latitudeDeg: 89.8);
+            Assert.That(az, Is.LessThan(0), "east of the north pole is still a larger azimuth: the move decreases it");
+        }
+
         [Test]
         public void End_to_end_a_synthetic_misalignment_round_trips_through_fit_and_error() {
             // Generate pointings from a KNOWN slightly-misaligned axis, fit it, decompose the
@@ -429,6 +476,64 @@ namespace OpenAstroAra.Test {
                 worst = Math.Max(worst, SeparationDeg((fitted.RaDeg, fitted.DecDeg), axis) * 60.0);
             }
             Assert.That(worst, Is.LessThan(3.0), "arcmin");
+        }
+
+        // ── §45.8 live readout: the camera's alt/az shift mapped back to the axis's shift ──────
+
+        private static (double X, double Y, double Z) Add((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+            (a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+
+        private static (double X, double Y, double Z) Scale((double X, double Y, double Z) a, double f) =>
+            (a.X * f, a.Y * f, a.Z * f);
+
+        private static (double X, double Y, double Z) Normalize((double X, double Y, double Z) a) =>
+            Scale(a, 1.0 / Math.Sqrt(a.X * a.X + a.Y * a.Y + a.Z * a.Z));
+
+        private static (double X, double Y, double Z) NorthEastUp(double altDeg, double azDeg) {
+            var h = altDeg * Math.PI / 180.0;
+            var a = azDeg * Math.PI / 180.0;
+            return (Math.Cos(h) * Math.Cos(a), Math.Cos(h) * Math.Sin(a), Math.Sin(h));
+        }
+
+        private static (double AltDeg, double AzDeg) AltAzOf((double X, double Y, double Z) v) {
+            var az = Math.Atan2(v.Y, v.X) * 180.0 / Math.PI;
+            return (Math.Asin(Math.Clamp(v.Z, -1, 1)) * 180.0 / Math.PI, az < 0 ? az + 360.0 : az);
+        }
+
+        // A camera `distanceDeg` from the apparent pole at position angle `angleDeg`, then a KNOWN move of
+        // the rigid mount (Rodrigues rotation of the camera): the pole raised by altMoveDeg, then turned
+        // clockwise from above by azMoveDeg. The signs of the two axes are probed on the pole itself.
+        [TestCase(51.477833, 5.0)]
+        [TestCase(51.477833, 15.0)]
+        [TestCase(51.477833, 30.0)]
+        [TestCase(-33.856784, 5.0)]
+        [TestCase(-33.856784, 15.0)]
+        [TestCase(-33.856784, 30.0)]
+        public void The_live_readout_reads_each_axis_move_within_2_percent_far_from_the_pole(double latitudeDeg, double distanceDeg) {
+            const double moveDeg = 0.1;
+            var poleAz = latitudeDeg > 0 ? 0.0 : 180.0;
+            var pole = NorthEastUp(Math.Abs(latitudeDeg), poleAz);
+            var horizontalAcross = Normalize(Cross((0, 0, 1), pole));
+            var vertical = (X: 0.0, Y: 0.0, Z: 1.0);
+            var raiseAxis = AltAzOf(Rotate(pole, horizontalAcross, 1)).AltDeg > Math.Abs(latitudeDeg) ? horizontalAcross : Scale(horizontalAcross, -1);
+            var clockwiseAxis = ((AltAzOf(Rotate(pole, vertical, 1)).AzDeg - poleAz + 540.0) % 360.0) - 180.0 > 0 ? vertical : Scale(vertical, -1);
+            foreach (var positionAngle in new[] { 0.0, 90.0, 180.0, 270.0 }) {
+                var toward = Normalize(Cross(pole, horizontalAcross));
+                var tangent = Add(Scale(toward, Math.Cos(positionAngle * Math.PI / 180.0)), Scale(horizontalAcross, Math.Sin(positionAngle * Math.PI / 180.0)));
+                var d = distanceDeg * Math.PI / 180.0;
+                var camera = Add(Scale(pole, Math.Cos(d)), Scale(tangent, Math.Sin(d)));
+                var seed = AltAzOf(camera);
+                foreach (var (altMove, azMove) in new[] { (moveDeg, 0.0), (0.0, moveDeg), (-moveDeg, 0.0), (0.0, -moveDeg) }) {
+                    var moved = Rotate(Rotate(camera, raiseAxis, altMove), clockwiseAxis, azMove);
+                    var after = AltAzOf(moved);
+                    var dAz = ((after.AzDeg - seed.AzDeg + 540.0) % 360.0) - 180.0;
+                    var (altShift, azShift) = PolarAlignGeometry.AxisShiftFromPointingShift(
+                        seed.AltDeg, seed.AzDeg, after.AltDeg - seed.AltDeg, dAz, latitudeDeg);
+                    var where = $"lat {latitudeDeg}, {distanceDeg}° from the pole, position angle {positionAngle}°, move alt {altMove} az {azMove}";
+                    Assert.That(altShift, Is.EqualTo(altMove).Within(moveDeg * 0.02), where);
+                    Assert.That(azShift, Is.EqualTo(azMove).Within(moveDeg * 0.02), where);
+                }
+            }
         }
     }
 }

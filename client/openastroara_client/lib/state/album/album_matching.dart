@@ -4,6 +4,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:collection/collection.dart' show lowerBound;
+
 import '../../models/preflight_checklist.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
@@ -11,63 +13,99 @@ import 'album_art.dart';
 import 'album_frame.dart';
 
 /// The Books in display order. An object is a Card in every Book that claims it (RCW
-/// overlaps Messier and Caldwell); with several shown, it shows as its first Book's
-/// Card. A fourth Book is one more value here.
-enum AlbumBook { messier, caldwell, rcw }
+/// overlaps Messier and Caldwell, NGC overlaps all three); with several shown, it shows
+/// as its first Book's Card. One more Book is one more value here, its claim pattern and
+/// its label.
+enum AlbumBook { messier, caldwell, rcw, ngc, ic, sharpless }
 
 enum AlbumTier { bronze, silver, gold }
 
-final RegExp _rcwDesignation = RegExp(r'^RCW (\d+)$');
+/// What a catalog-file Book claims through: `RCW n`, `NGC n[A]`, `IC n[A]`, `Sh2-n`, on the
+/// id or an alias, zero padding and a space after the prefix tolerated.
+final Map<AlbumBook, RegExp> _claimPatterns = {
+  AlbumBook.rcw: RegExp(r'^RCW\s?0*(\d+)()$'),
+  AlbumBook.ngc: RegExp(r'^NGC\s?0*(\d+)([A-Z]?)$'),
+  AlbumBook.ic: RegExp(r'^IC\s?0*(\d+)([A-Z]?)$'),
+  AlbumBook.sharpless: RegExp(r'^Sh2-0*(\d+)()$'),
+};
 
-/// The RCW number of [d]: the lowest `RCW n` among its id and aliases (a nebula that
-/// carries two RCW numbers is one Card, labelled by the first), null without one.
-/// Worked out once per row: until its Books are matched the Album asks it of every
-/// catalog row on each build.
-int? rcwNumOf(PlanningDso d) => (_rcwNums[d] ??= (_scanRcwNum(d),)).$1;
+/// [d]'s number and letter suffix in [book] ("" without one).
+typedef _Claim = ({int number, String suffix});
 
-final Expando<(int?,)> _rcwNums = Expando('rcwNum');
+/// Worked out once per row and Book: until its Books are matched the Album asks it of
+/// every catalog row on each build.
+final Map<AlbumBook, Expando<(_Claim?,)>> _claims = {
+  for (final b in _claimPatterns.keys) b: Expando('claim ${b.name}'),
+};
 
-int? _scanRcwNum(PlanningDso d) {
-  int? best;
+_Claim? _claimOf(PlanningDso d, AlbumBook book) =>
+    (_claims[book]![d] ??= (_scanClaim(d, _claimPatterns[book]!),)).$1;
+
+/// The lowest number among [d]'s id and aliases (a row that carries two numbers in a
+/// Book is one Card, labelled by the first); the plain number sorts before its suffixes.
+_Claim? _scanClaim(PlanningDso d, RegExp pattern) {
+  _Claim? best;
   for (final s in [d.id, ...d.aliases]) {
-    final n = int.tryParse(_rcwDesignation.firstMatch(s)?.group(1) ?? '');
-    if (n != null && (best == null || n < best)) best = n;
+    final m = pattern.firstMatch(s);
+    if (m == null) continue;
+    final c = (number: int.parse(m[1]!), suffix: m[2]!);
+    if (best == null || _compareClaims(c, best) < 0) best = c;
   }
   return best;
 }
+
+int _compareClaims(_Claim a, _Claim b) =>
+    a.number != b.number ? a.number.compareTo(b.number) : a.suffix.compareTo(b.suffix);
+
+/// The RCW number of [d]: the lowest `RCW n` among its id and aliases, null without one.
+int? rcwNumOf(PlanningDso d) => _claimOf(d, AlbumBook.rcw)?.number;
 
 /// [d]'s catalog number in [book], null when the Book does not claim it.
 int? bookNumberOf(PlanningDso d, AlbumBook book) => switch (book) {
       AlbumBook.messier => d.messierNum,
       AlbumBook.caldwell => d.caldwellNum,
-      AlbumBook.rcw => rcwNumOf(d),
+      _ => _claimOf(d, book)?.number,
     };
 
-/// The Card label: `M 31`, `C 14`, `RCW 32`.
-String bookLabel(PlanningDso d, AlbumBook book) => switch (book) {
-      AlbumBook.messier => 'M ${d.messierNum}',
-      AlbumBook.caldwell => 'C ${d.caldwellNum}',
-      AlbumBook.rcw => 'RCW ${rcwNumOf(d)}',
-    };
+/// The letter after [bookNumberOf] (`NGC 5194A`): "" for none and for the Books without suffixes.
+String bookSuffixOf(PlanningDso d, AlbumBook book) => _claims[book] == null ? '' : _claimOf(d, book)?.suffix ?? '';
+
+/// The Card label: `M 31`, `C 14`, `RCW 32`, `NGC 224`, `IC 434`, `Sh2-101`.
+String bookLabel(PlanningDso d, AlbumBook book) {
+  final n = '${bookNumberOf(d, book)}${bookSuffixOf(d, book)}';
+  return switch (book) {
+    AlbumBook.messier => 'M $n',
+    AlbumBook.caldwell => 'C $n',
+    AlbumBook.rcw => 'RCW $n',
+    AlbumBook.ngc => 'NGC $n',
+    AlbumBook.ic => 'IC $n',
+    AlbumBook.sharpless => 'Sh2-$n',
+  };
+}
 
 /// A Book's Cards: everything [book] claims in the full bundled catalog, in
 /// catalog-number order, whatever another Book also claims. The grid, the chips and
 /// the aggregates all read this, so their counts agree.
 List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) =>
     [for (final d in catalog) if (bookNumberOf(d, book) != null) d]
-      ..sort((a, b) => bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!));
+      ..sort((a, b) {
+        final n = bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!);
+        return n != 0 ? n : bookSuffixOf(a, book).compareTo(bookSuffixOf(b, book));
+      });
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
 /// circle, half the short side across. Rotation-free, so corners never count.
 /// False for a frame without pointing or pixel scale (those use [targetNames]).
 bool frameContains(AlbumFrame f, PlanningDso o) {
   if (!f.hasPosition) return false;
-  final radiusArcmin =
-      math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60;
-  // 1e-9': the edge itself counts, whatever the last bit of the trigonometry says.
   return separationArcmin(f.raDeg!, f.decDeg!, o.raDeg, o.decDeg) <=
-      radiusArcmin + 1e-9;
+      _reachArcmin(f);
 }
+
+/// How far from a position frame's centre [frameContains] credits: half the short side, plus
+/// 1e-9' so the edge itself counts, whatever the last bit of the trigonometry says.
+double _reachArcmin(AlbumFrame f) =>
+    math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60 + 1e-9;
 
 /// The alias fallback: [target] (a frame's target name) names [o] when it
 /// equals the object's id, name or an alias after folding case, spacing, zero
@@ -179,17 +217,58 @@ Map<String, CardStats> aggregateBook(
       final t = (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch);
       return t != 0 ? t : a.frameId.compareTo(b.frameId);
     });
+  // Indexed once per call, each only if a frame needs it: testing all ~8k objects of a Book
+  // against each of thousands of frames froze the Album.
+  late final contained = _containedIn(book);
+  late final named = _byTargetKey(book);
   final hits = <String, List<AlbumFrame>>{};
   for (final f in ordered) {
-    for (final o in book) {
-      if (f.hasPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
-        hits.putIfAbsent(o.id, () => []).add(f);
-      }
+    for (final i in f.hasPosition ? contained(f) : named[_albumKey(f.targetName)] ?? const <int>[]) {
+      hits.putIfAbsent(book[i].id, () => []).add(f);
     }
   }
   return {
     for (final MapEntry(key: id, value: fs) in hits.entries) id: _stats(fs, siteLongitudeDeg),
   };
+}
+
+/// The [book] indices, ascending, of the objects a position frame contains ([frameContains]).
+/// Only the objects within its reach in declination are tested: no point of its circle is
+/// further than that from the centre in declination.
+List<int> Function(AlbumFrame) _containedIn(List<PlanningDso> book) {
+  final byDec = [for (var i = 0; i < book.length; i++) i]
+    ..sort((a, b) => book[a].decDeg.compareTo(book[b].decDeg));
+  final decs = [for (final i in byDec) book[i].decDeg];
+  // The band rule holds on the sphere only; a declination past a pole is corrupt, so tested
+  // object by object, as before.
+  final onSphere = decs.every((d) => d.abs() <= 90);
+  return (f) {
+    final dec = f.decDeg!;
+    if (!onSphere || dec.abs() > 90) {
+      return [for (var i = 0; i < book.length; i++) if (frameContains(f, book[i])) i];
+    }
+    // 1e-6 deg: far above the rounding of the trigonometry and of the bounds.
+    final band = _reachArcmin(f) / 60 + 1e-6;
+    return [
+      for (var j = lowerBound(decs, dec - band); j < decs.length && decs[j] <= dec + band; j++)
+        if (frameContains(f, book[byDec[j]])) byDec[j],
+    ]..sort();
+  };
+}
+
+/// The [book] indices, ascending, of the objects with an id, name or alias that [targetNames]
+/// folds to each key: a name-only frame is one lookup.
+Map<String, List<int>> _byTargetKey(List<PlanningDso> book) {
+  final out = <String, List<int>>{};
+  for (var i = 0; i < book.length; i++) {
+    final o = book[i];
+    // Each key once per object: a frame credits it once, however many designations fold alike.
+    for (final k in {for (final d in [o.id, o.name, ...o.aliases]) _albumKey(d)}) {
+      // An empty key names nothing ([targetNames]).
+      if (k.isNotEmpty) out.putIfAbsent(k, () => []).add(i);
+    }
+  }
+  return out;
 }
 
 CardStats _stats(List<AlbumFrame> fs, double? siteLongitudeDeg) {

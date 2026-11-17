@@ -430,6 +430,41 @@ public sealed record SwitchPortDto(int Id, string Name, double Value, double Min
 
 public sealed record SwitchValueRequestDto(int PortId, double Value);
 
+// ─── Polar Aligner (#1972) ──────────────────────────────────────────────────
+
+/// <summary>The rig's Polar Aligner: a connected Switch, else the mount, whose driver lists
+/// <c>PolarAlign:Info</c>. <c>Carrier</c> is "switch" | "mount" | null; <c>DeviceId</c> is the
+/// switch's UniqueId (null for the mount). <c>NotDrivableReason</c>: "device_runs_its_own_loop"
+/// (Info lists no tier 1, or an axis is missing) | "info_unreadable" | null. Positions and faults
+/// are null when the device does not report them or Status cannot be read, never 0.</summary>
+public sealed record PolarAlignerDto(
+    bool Present,
+    string? Carrier,
+    string? DeviceId,
+    string? Name,
+    bool Drivable,
+    string? NotDrivableReason,
+    PolarAlignerCapabilitiesDto? Capabilities,
+    bool Moving,
+    double? AzimuthPositionArcmin,
+    double? AltitudePositionArcmin,
+    string? AzimuthFault,
+    string? AltitudeFault);
+
+/// <summary>The device's Info reply. An axis the device does not describe has null figures.</summary>
+public sealed record PolarAlignerCapabilitiesDto(
+    string DeviceName,
+    string DeviceVersion,
+    double? AzimuthMaxMoveArcmin,
+    double? AzimuthResolutionArcmin,
+    double? AltitudeMaxMoveArcmin,
+    double? AltitudeResolutionArcmin,
+    bool SimultaneousMoves,
+    bool MovesWhileTracking,
+    bool MovesWhileSlewing,
+    bool CanStop,
+    double SettleSeconds);
+
 // ─── ObservingConditions (§10.6 row 8) ────────────────────────────────────────
 
 public sealed record ObservingConditionsDto(
@@ -916,7 +951,24 @@ public sealed record PolarAlignStateDto(
     // #1565 — the last routine to stop or finish with an error reading outside the rough stage, kept in memory per
     // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
     // the last finished one.
-    PolarAlignLastResultDto? LastResult = null);
+    PolarAlignLastResultDto? LastResult = null,
+    // #1971 — what the Polar Aligner is doing in this run; null when the rig has none, when Ara cannot
+    // drive the one it has, or before the run's first measurement.
+    PolarAlignCorrectionDto? Correction = null);
+
+/// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.correction</c>.
+/// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>
+/// <c>azimuth</c> | <c>altitude</c> and the signed <c>Arcmin</c> sent), <c>settling</c> (<c>Seconds</c>),
+/// <c>measuring</c>, <c>converged</c> (inside the tolerance), <c>stopped</c> (<c>Cause</c>, the device's own
+/// <c>DeviceText</c> when it gave one, the <c>Axis</c> when one is to blame). <c>Moves</c> counts the moves sent.</summary>
+public sealed record PolarAlignCorrectionDto(
+    string State,
+    string? Axis = null,
+    double? Arcmin = null,
+    double? Seconds = null,
+    string? Cause = null,
+    string? DeviceText = null,
+    int Moves = 0);
 
 /// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended; a Stop in the rough
 /// stage records none. Simple Mode's Night Setup counts polar alignment as done tonight when this is under the green

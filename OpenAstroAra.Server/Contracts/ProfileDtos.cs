@@ -536,7 +536,10 @@ public sealed record PolarAlignSettingsDto(
     double CoarseExposureSeconds = 3.0,
     // Every stage starts by sending the mount Home (Find Home when it can, else the routine waits
     // for the user — needs_home), a fine start included. Off = use the current pointing as "home".
-    bool UseHome = true);
+    bool UseHome = true,
+    // #1971: with a Polar Aligner on the rig, the live stages move its motors after each
+    // measurement. Off = the person turns the bolts, as on a rig without one.
+    bool PolarAlignerAuto = true);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
@@ -634,7 +637,8 @@ public static class PolarAlignLoopModes {
 /// 2× barlow. Sensor dimensions are cached here on first camera connect
 /// (PORT_DECISIONS §36/§25.5) so framing works with the camera
 /// disconnected/offline; the user can override in Settings. The
-/// on-first-connect auto-population is <c>CameraService.MaybeAutoPopulateOptics</c>.
+/// on-first-connect auto-population is <c>CameraService.MaybeAutoPopulateOptics</c>
+/// (sensor fields) and <c>TelescopeService.MaybeAutoPopulateOptics</c> (focal length, aperture).
 /// <para>NEXTGEN §4 — <c>ApertureMm</c> (objective diameter) feeds the Optimal-Sub
 /// sky-flux term (aperture area); it is telescope-owned like focal length, so camera
 /// auto-population never touches it. 0 = unset (optional ctor default keeps a

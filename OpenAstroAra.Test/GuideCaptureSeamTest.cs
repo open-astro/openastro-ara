@@ -330,9 +330,10 @@ namespace OpenAstroAra.Test {
             return File.ReadAllText(Path.Combine(root, relative));
         }
 
-        // The PolarAlignServiceTest.cs row (2 named exceptions) joins when that file leaves the TCP fake
-        // (#1809 slice 2, second PR). maxExceptions caps the marked waits, so a new one needs a reviewed row change.
+        // maxExceptions caps the marked waits, so a new one needs a reviewed row change. The two in
+        // PolarAlignServiceTest.cs each check that a call is still blocked behind a gate, which no signal can show.
         [TestCase("OpenAstroAra.Test/GuideFocusServiceTest.cs", 0)]
+        [TestCase("OpenAstroAra.Test/PolarAlignServiceTest.cs", 2)]
         public void FakeGuider_and_fixed_delays_are_kept_out_of_polar_align_and_guide_focus_tests(string file, int maxExceptions) {
             var lines = RepoFile(file).Split('\n');
 

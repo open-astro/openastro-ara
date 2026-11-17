@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polar Aligner Screen</title>
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart, copied from design/preview/simple-polar-mock.html.
+     Layout: the iPad scene, the Polar align panel left of the right rail; controls above, decisions below. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --hair: #2a2a2a; --text: #E0E0E0; --text2: #A0A0A0; --faint: #606060;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --err: #FF8A80; --stop: #D32F2F; --go: #2E7D32; --tint: rgba(66,165,245,.18);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px; margin: 0;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 76ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .controls[hidden] { display: none; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .ctl { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .ctl.play { border-color: var(--go); color: #9be39f; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .src { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--text2); background: #161616; border: 1px solid var(--hair);
+         border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+  .src b { color: var(--text); font-weight: 500; }
+
+  .ipad { height: 860px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(14,14,14,.9); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 4px 2px; }
+  .chip small { display: block; color: var(--text2); font-size: 11px; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; background: transparent; cursor: pointer; padding: 0; }
+  .shutter b { width: 0; height: 0; border-left: 20px solid #fff; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 6px; }
+  .shutter.run b { width: 24px; height: 24px; border: 0; border-radius: 4px; background: var(--stop); margin: 0; }
+  .estop { position: absolute; right: 22px; bottom: 16px; width: 60px; height: 60px; border-radius: 10px; background: var(--stop); color: #fff;
+           display: grid; place-items: center; font: 700 13px var(--sys); letter-spacing: .5px; }
+  .panel { right: 104px; top: 16px; width: min(420px, calc(100% - 120px)); max-height: calc(100% - 32px); overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: 14px; min-height: 40px; }
+  .head .tot { margin-left: auto; font-weight: 300; font-size: 30px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+  .sect { color: var(--text2); font-size: 12px; margin-top: 8px; display: flex; gap: 8px; align-items: baseline; }
+  .sect span { margin-left: auto; }
+  .stepper { display: flex; gap: 4px; margin: 2px 0; }
+  .stepper span { flex: 1; text-align: center; font-size: 12px; padding: 6px 2px; border-radius: 10px; background: var(--tile); color: var(--text2); }
+  .stepper span.done { color: var(--ok); }
+  .stepper span.cur { background: var(--sel); color: #fff; }
+  .setrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tile { flex: 1; min-height: 44px; border-radius: 10px; background: var(--tile); padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; min-width: 100px; }
+  .tile small { color: var(--text2); font-size: 11px; }
+  .segrow { flex: 1; display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-width: 140px; }
+  .segrow button { flex: 1; text-align: center; padding: 10px 4px; font: 13px var(--sys); background: transparent; color: var(--text); border: 0; min-height: 44px; cursor: pointer; }
+  .segrow button + button { border-left: 1px solid var(--border); }
+  .segrow button.on { background: var(--sel); color: #fff; }
+  .labrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .labrow > span { color: var(--text2); font-size: 13px; min-width: 72px; }
+  .bwrap { display: flex; gap: 10px; align-items: stretch; }
+  .bull { flex: 0 0 180px; height: 180px; display: grid; place-items: center; }
+  .axes { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .ax { flex: 1; border-radius: 10px; background: var(--tile); display: flex; align-items: center; gap: 6px; padding: 4px 8px; min-height: 86px; }
+  .ax small { display: block; color: var(--text2); font-size: 11.5px; }
+  .ax b { font-weight: 400; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .ax .mot { display: block; font-size: 13px; color: var(--ok); margin-top: 2px; }
+  .ax .mot.wait { color: var(--info); }
+  .ax svg.dim { opacity: .3; }
+  .line { font-size: 14px; margin: 2px 0; }
+  .line.warn { color: var(--busy); }
+  .line.err { color: var(--err); }
+  .line.ok { color: var(--ok); }
+  .line.dim { color: var(--text2); }
+  .act { min-height: 44px; flex: 1; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 8px 12px; }
+  .act.out { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .act.go { background: var(--go); color: #fff; }
+  .act.stop { background: var(--stop); color: #fff; }
+  .act[disabled] { opacity: .4; cursor: default; }
+  .acts { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .cap { color: var(--text2); font-size: 12px; margin: 0; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 2px; border-radius: 10px; }
+  .nomark .new { outline: 0; }
+  .corr { border-radius: 10px; background: var(--tile); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .corr .stat { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .corr .pos { color: var(--text2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .corr .pos b { color: var(--text); font-weight: 600; }
+  .bar { height: 3px; border-radius: 2px; background: #2b2b2b; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ok); }
+  .pills { position: absolute; left: 16px; top: 16px; max-width: 360px; display: flex; flex-direction: column; }
+  .pill { padding: 10px 14px; background: rgba(14,14,14,.9); box-shadow: inset 0 0 0 1px var(--border); display: flex; gap: 10px; align-items: center; }
+  .pill:first-child { border-radius: 10px 10px 0 0; } .pill:last-child { border-radius: 0 0 10px 10px; } .pill:only-child { border-radius: 10px; }
+  .pill + .pill { box-shadow: inset 0 0 0 1px var(--border), inset 0 1px 0 var(--hair); }
+  .ring { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--info); flex: none; }
+  .decide { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text2); font-size: 13px; }
+  .decide b { color: var(--text); font-weight: 600; }
+  .decide ul { margin: 6px 0 0; padding-left: 18px; }
+  /* Settings sheet (Settings › Devices), under the gear */
+  .sheet { right: 16px; top: 16px; width: min(640px, calc(100% - 32px)); padding: 16px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100% - 32px); overflow: auto; }
+  .tabs { display: flex; gap: 6px; }
+  .tabs span { padding: 8px 14px; border-radius: 10px; font-size: 14px; color: var(--text2); }
+  .tabs span.on { background: var(--tint); color: var(--link); }
+  .drow { display: flex; align-items: center; gap: 10px; min-height: 48px; border-top: 1px solid var(--hair); flex-wrap: wrap; padding: 4px 0; }
+  .drow:first-child { border-top: 0; }
+  .drow .l { flex: 1; min-width: 160px; }
+  .drow .l small { display: block; color: var(--text2); font-size: 12px; }
+  .rov { min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .dbtn { min-height: 44px; border-radius: 10px; padding: 0 14px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--border); font-size: 14px; }
+  @media (max-width: 720px) {
+    .pills { display: none; } .ipad { height: 1180px; }
+    .panel { right: 96px; width: calc(100% - 108px); padding: 12px; }
+    .rail { right: 12px; } .estop { right: 18px; }
+    .bwrap { flex-direction: column; } .bull { flex-basis: 140px; height: 140px; align-self: center; } .bull svg { width: 140px; height: 140px; }
+    .ax { min-height: 70px; } .ax svg.arr { width: 44px; height: 44px; }
+    .sheet { width: calc(100% - 24px); right: 12px; }
+  }
+  @media (prefers-reduced-motion: no-preference) { .blink { animation: bl 1.2s infinite; } @keyframes bl { 50% { opacity: .35; } } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Polar align with a Polar Aligner, approved 2026-11-16</h1>
+  <p class="note">Simple Mode's Polar align Screen on a rig whose Polar Aligner Ara can drive (#1976, parent #1971). Starts from today's panel (Rough → Fine → Verify stepper, Setup, Error with the bullseye and the two turn tiles). Dashed amber marks what is new. Numbers start from the 13 Nov rig night's rough reading (11.0′); tolerance 2′. Press Play, or tap the shutter, to run a simulated session.</p>
+
+  <div class="controls">
+    <span><span class="lbl">View</span><span class="seg" id="view">
+      <button aria-pressed="true" data-v="screen">Polar align Screen</button><button data-v="settings">Settings › Devices</button>
+    </span></span>
+    <button class="ctl play" id="play">▶ Play session</button>
+    <button class="ctl" id="reset">Reset</button>
+  </div>
+  <div class="controls" id="stateRow">
+    <span><span class="lbl">State</span><span class="seg" id="state">
+      <button data-v="none">No Polar Aligner</button><button aria-pressed="true" data-v="idle">Idle</button><button data-v="homing">Home</button><button data-v="probing">Probing</button><button data-v="moving">Moving</button><button data-v="settling">Settling</button><button data-v="measuring">Measuring</button><button data-v="converged">Converged</button><button data-v="stopped">Stopped</button><button data-v="tier2">Can't drive yet</button>
+    </span></span>
+  </div>
+  <div class="controls" id="causeRow" hidden>
+    <span><span class="lbl">Cause</span><span class="seg" id="cause">
+      <button aria-pressed="true" data-v="wrong_direction">Wrong direction</button><button data-v="wrong_scale">Wrong scale</button><button data-v="device_fault">Device fault</button><button data-v="not_calibrated">Not calibrated</button><button data-v="diverging">Error growing</button><button data-v="timeout">Timeout</button><button data-v="link_lost">Link lost</button><button data-v="device_refused">Device refused</button><button data-v="mount_tracking">Mount tracking</button><button data-v="mount_slewing">Mount slewing</button><button data-v="stopped_by_user">You pressed Stop</button>
+    </span></span>
+  </div>
+  <div class="controls" id="whyRow" hidden>
+    <span><span class="lbl">Why it can't be driven</span><span class="seg" id="why">
+      <button aria-pressed="true" data-v="device_runs_its_own_loop">Runs its own loop</button><button data-v="info_unreadable">Info unreadable</button>
+    </span></span>
+  </div>
+  <div class="controls">
+    <span><span class="lbl">Turned by</span><span class="seg" id="choice">
+      <button aria-pressed="true" data-v="motors">Motors</button><button data-v="hand">By hand</button>
+    </span></span>
+    <span><span class="lbl">Position</span><span class="seg" id="pos">
+      <button aria-pressed="true" data-v="yes">Device reports it</button><button data-v="no">Not reported</button>
+    </span></span>
+    <span><span class="lbl">Detected Polar Aligner</span><span class="seg" id="picked">
+      <button data-v="none">None</button><button data-v="mount">The mount</button><button aria-pressed="true" data-v="switch">A separate base</button><button data-v="both">Both (the base wins)</button>
+    </span></span>
+  </div>
+  <div class="controls">
+    <span><span class="lbl">Motor status</span><span class="seg" id="status">
+      <button aria-pressed="true" data-v="A">A · own block above Error · chosen</button><button data-v="B">B · inside the turn tiles</button>
+    </span></span>
+    <span><span class="lbl">Arrows while motors run</span><span class="seg" id="arrows">
+      <button aria-pressed="true" data-v="dim">A · dimmed · chosen</button><button data-v="hide">B · hidden</button>
+    </span></span>
+    <span><span class="lbl">Motors / by hand lives in</span><span class="seg" id="home">
+      <button data-v="panel">A · panel Setup</button><button aria-pressed="true" data-v="settings">B · Settings › Devices · chosen</button>
+    </span></span>
+    <span><span class="lbl">Mark new</span><span class="seg" id="mark">
+      <button aria-pressed="true" data-v="on">On</button><button data-v="off">Off</button>
+    </span></span>
+  </div>
+  <div class="src" id="src" aria-live="polite"></div>
+
+  <div class="ipad" id="ipad" role="img" aria-label="iPad scene with the Polar align panel"></div>
+  <div class="decide" id="decide"></div>
+</div>
+
+<script>
+const TOL = 2, PROBE = 2, GAIN = 0.8, NAME = { switch: 'Polar base', both: 'Polar base', mount: 'The mount' };
+const START = { alt: -5.52, az: -9.55 }, POS0 = { az: 12.4, alt: -3.0 };
+const S = { view: 'screen', state: 'idle', cause: 'wrong_direction', why: 'device_runs_its_own_loop', choice: 'motors', pos: 'yes', picked: 'switch',
+            status: 'A', arrows: 'dim', home: 'settings', mark: 'on' };
+// Live numbers: errors in arcmin (alt +: above the pole; az +: east of the pole), the device's position, the move in hand.
+let L = fresh();
+function fresh() { return { alt: START.alt, az: START.az, p: { ...POS0 }, axis: 'az', arcmin: 0, moves: 0, settle: 3, prog: 0 }; }
+// Static states draw these numbers.
+const PRESET = {
+  probing:  { alt: -5.52, az: -9.55, axis: 'az', arcmin: 2.0, moves: 0, prog: .5 },
+  moving:   { alt: -3.50, az: -7.61, axis: 'az', arcmin: 6.1, moves: 2, prog: .4 },
+  settling: { alt: -3.50, az: -7.61, axis: 'az', arcmin: 6.1, moves: 3, settle: 2 },
+  measuring:{ alt: -3.50, az: -7.61, moves: 2 },
+  converged:{ alt: -0.71, az: -1.38, moves: 4 },
+  stopped:  { alt: -3.50, az: -7.61, axis: 'az', arcmin: 2.0, moves: 2 },
+};
+
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (seg.id === 'state') { halt(); setState(b.dataset.v, true); return; }
+  set(seg.id, b.dataset.v);
+}));
+function set(k, v) { S[k] = v; sync(); render(); }
+function sync() {
+  document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === S[seg.id])));
+  document.getElementById('causeRow').hidden = S.state !== 'stopped';
+  document.getElementById('whyRow').hidden = S.state !== 'tier2';
+  document.getElementById('play').textContent = timer ? '❚❚ Pause' : '▶ Play session';
+}
+function setState(v, preset) {
+  S.state = v;
+  if (preset) { L = fresh(); if (PRESET[v]) Object.assign(L, PRESET[v]); if (v === 'none' || v === 'tier2') Object.assign(L, PRESET.measuring); }
+  if (v === 'none') S.picked = 'none'; else if (S.picked === 'none') S.picked = 'switch';
+  if (['probing', 'moving', 'settling', 'measuring', 'homing', 'converged'].includes(v)) S.choice = 'motors';
+  sync(); render();
+}
+
+// ---- simulation: probe each axis, then 80 % moves until inside tolerance ----
+let timer = null, steps = [];
+const total = () => Math.hypot(L.alt, L.az);
+const wire = e => -e;             // the move that cancels an error, in the wire's sign (north): see #1971 sign conversion
+function plan() {
+  const out = [{ s: 'measuring' }];
+  for (const axis of ['az', 'alt']) out.push(...moveSteps('probing', axis, () => Math.sign(wire(L[axis])) * PROBE));
+  out.push({ s: 'loop' });
+  return out;
+}
+function moveSteps(kind, axis, size) {
+  const n = 3, st = [];
+  for (let i = 1; i <= n; i++) st.push({ s: kind, axis, size, frac: i / n });
+  st.push({ s: 'settling', settle: 2 }, { s: 'settling', settle: 1 }, { s: 'measuring', apply: axis }, { s: 'measuring' });
+  return st;
+}
+function tick() {
+  if (!steps.length) return halt();
+  const st = steps.shift();
+  if (st.s === 'loop') {
+    if (total() <= TOL) { steps = [{ s: 'converged' }]; return tick(); }
+    for (const axis of ['az', 'alt']) if (Math.abs(L[axis]) >= 0.5) steps.push(...moveSteps('moving', axis, () => GAIN * wire(L[axis])));
+    steps.push({ s: 'loop' }); return tick();
+  }
+  if (st.s === 'probing' || st.s === 'moving') {
+    if (st.frac === 1 / 3) { L.axis = st.axis; L.arcmin = st.size(); L.moves++; }
+    L.prog = st.frac;
+  }
+  if (st.s === 'settling') L.settle = st.settle;
+  if (st.s === 'measuring' && st.apply) {
+    // the motor moved the axis by what it was asked, 3 % short; the error follows on the next solve
+    const k = 0.97 + Math.random() * 0.02, m = L.arcmin * k;
+    L[st.apply] += m; L.p[st.apply] += L.arcmin;
+    L.alt += (Math.random() - .5) * 0.06; L.az += (Math.random() - .5) * 0.06;
+  }
+  setState(st.s === 'converged' ? 'converged' : st.s, false);
+  if (st.s === 'converged') halt();
+}
+function play() {
+  if (timer) return halt();
+  if (!['probing', 'moving', 'settling', 'measuring'].includes(S.state)) { L = fresh(); steps = plan(); }
+  else if (!steps.length) steps = [{ s: 'loop' }];
+  S.choice = 'motors'; if (S.picked === 'none') S.picked = 'switch';
+  timer = setInterval(tick, 700); tick(); sync();
+}
+function halt() { clearInterval(timer); timer = null; sync(); }
+document.getElementById('play').onclick = play;
+document.getElementById('reset').onclick = () => { halt(); steps = []; L = fresh(); setState('idle', true); };
+
+// ---- device actions (inside the frame) ----
+document.getElementById('ipad').addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
+  const a = b.dataset.a;
+  if (a === 'stop') { halt(); steps = []; S.cause = 'stopped_by_user'; setState('stopped', false); }
+  else if (a === 'resume') { steps = [{ s: 'measuring' }, { s: 'loop' }]; play(); }
+  else if (a === 'shutter-start') { if (motorsOn()) play(); else { S.state = has() ? 'measuring' : 'none'; sync(); render(); } }
+  else if (a === 'shutter-stop') { halt(); steps = []; setState(S.picked === 'none' ? 'none' : 'idle', true); }
+  else if (a === 'home') { halt(); steps = []; setState('homing', false); timer = setTimeout(() => { timer = null; L.p = { az: 0, alt: 0 }; setState('idle', false); }, 2500); sync(); }
+  else if (a === 'choice') { if (b.dataset.v === 'hand') { halt(); steps = []; } set('choice', b.dataset.v); }
+});
+
+// ---- drawing ----
+const f1 = v => Math.abs(v).toFixed(1);
+const sgn = v => (v >= 0 ? '+' : '−') + f1(v);
+const zone = t => t == null ? 'var(--text2)' : t < 10 ? 'var(--ok)' : t < 60 ? 'var(--busy)' : 'var(--err)';
+const AXIS = { az: 'Azimuth', alt: 'Altitude' };
+const dirWord = (axis, wireArcmin) => axis === 'az' ? (wireArcmin > 0 ? 'east' : 'west') : (wireArcmin > 0 ? 'up' : 'down');
+const arrow = (size, rot, dim) => `<svg class="arr ${dim ? 'dim' : ''}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${rot}deg);flex:none"><path fill="#E0E0E0" d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`;
+function bull(alt, az) {
+  // shortcut: linear scale with the outer ring at max(5′, the total); the real bullseye is Advanced Mode's BullseyePainter (180 pt).
+  const r = Math.max(5, Math.ceil(Math.hypot(alt, az))), k = 80 / r, cl = v => Math.max(-80, Math.min(80, v * k));
+  const x = 90 + cl(az), y = 90 - cl(alt);
+  return `<svg width="180" height="180" viewBox="0 0 180 180" aria-label="Bullseye">
+    ${[80, 53, 27].map((rr, i) => `<circle cx="90" cy="90" r="${rr}" fill="none" stroke="${i === 2 ? '#4CAF50' : '#555'}" stroke-width="1.5"/>`).join('')}
+    <line x1="10" y1="90" x2="170" y2="90" stroke="#333"/><line x1="90" y1="10" x2="90" y2="170" stroke="#333"/>
+    <circle cx="${x}" cy="${y}" r="7" fill="#E0E0E0"/></svg>`;
+}
+
+const has = () => S.picked !== 'none' && S.state !== 'none';
+const drivable = () => has() && S.state !== 'tier2';
+const motorsOn = () => drivable() && S.choice === 'motors';
+const loopActive = () => motorsOn() && ['probing', 'moving', 'settling', 'measuring', 'homing'].includes(S.state);
+const running = () => S.state !== 'idle' && S.state !== 'homing';  // the routine itself (the shutter's red square); Home is done before a start
+
+function motorLine() {
+  const s = S.state, ax = AXIS[L.axis], dw = dirWord(L.axis, L.arcmin);
+  if (s === 'probing') return { t: `Test move · ${ax.toLowerCase()} ${f1(L.arcmin)}′ ${dw}`, c: 'ok', blink: true, bar: L.prog };
+  if (s === 'moving') return { t: `Moving ${ax.toLowerCase()} ${f1(L.arcmin)}′ ${dw}`, c: 'ok', blink: true, bar: L.prog };
+  if (s === 'settling') return { t: `Letting the mount settle · ${L.settle} s`, c: 'info', ring: true };
+  if (s === 'measuring') return { t: 'Measuring the new error…', c: 'dim', blink: true };
+  if (s === 'homing') return { t: 'Going back to its zero…', c: 'ok', blink: true };
+  if (s === 'converged') return { t: `Inside your ${TOL}′ tolerance after ${L.moves} moves. Finish with Verify or Done. If the error drifts out, the motors correct again.`, c: 'ok' };
+  return null;
+}
+const CAUSE = {
+  wrong_direction: () => `The test move on ${AXIS[L.axis].toLowerCase()} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.`,
+  wrong_scale: () => `The test move on ${AXIS[L.axis].toLowerCase()} went 2.6 times as far as asked, so Ara stopped the motors. Check the Polar Aligner's step setting.`,
+  device_fault: () => `The Polar Aligner reported a fault: “${DEVTEXT.device_fault}”.`,
+  not_calibrated: () => `The Polar Aligner isn't calibrated, so it refused to move: “${DEVTEXT.not_calibrated}”. Calibrate it in its own app, then Resume.`,
+  device_refused: () => `The Polar Aligner refused the move: “${DEVTEXT.device_refused}”.`,
+  diverging: () => `The error grew after two corrections in a row, so Ara stopped the motors.`,
+  timeout: () => `${AXIS[L.axis]} was still moving after 60 s, so Ara stopped it.`,
+  link_lost: () => `Lost the link to the Polar Aligner. Ara stops its motors as soon as it answers again.`,
+  mount_tracking: () => `The Polar Aligner can't move while the mount tracks. Turn tracking off in the Mount window, then Resume.`,
+  mount_slewing: () => `The Polar Aligner can't move while the mount slews. Resume once the mount stops.`,
+  stopped_by_user: () => `You stopped the motors.`,
+};
+const DEVTEXT = { device_fault: 'Azimuth: end of travel', not_calibrated: 'Not calibrated', device_refused: 'Altitude: move exceeds limit' };
+
+const NOTDRIVE = { device_runs_its_own_loop: "Ara can't move this Polar Aligner yet: it only runs its own alignment. Turn the bolts by hand.",
+                   info_unreadable: "Ara couldn't read what this Polar Aligner can do, so it won't move it. Turn the bolts by hand." };
+function posLine() {
+  if (S.pos === 'no') return `<div class="pos">This device doesn't report its position.</div>`;
+  return `<div class="pos">From its zero: azimuth <b>${sgn(L.p.az)}′</b> · altitude <b>${sgn(L.p.alt)}′</b></div>`;
+}
+function corrBlock() {
+  // Variant A: the Polar Aligner's own block, between Setup and Error, in a fixed slot.
+  if (!has()) return '';
+  const name = NAME[S.picked] || NAME.switch, s = S.state;
+  let body = '';
+  if (s === 'tier2') body = `<p class="line dim" style="margin:0">${NOTDRIVE[S.why]}</p>`;
+  else if (S.choice === 'hand') body = `<p class="line dim" style="margin:0">Motors off. Turn the bolts by hand.</p>${posLine()}`;
+  else if (s === 'stopped') {
+    const lost = S.cause === 'link_lost';
+    body = `<p class="line warn" style="margin:0">${CAUSE[S.cause]()}</p>
+      <p class="line" style="margin:0">Carry on by hand: the arrows show which bolt to turn.</p>${lost ? '' : posLine()}
+      <div class="acts"><button class="act out" data-a="home"${lost ? ' disabled' : ''}>Home</button><button class="act go" data-a="resume"${lost ? ' disabled' : ''}>Resume</button></div>
+      ${lost ? '<p class="cap">Resume and Home come back once it answers.</p>' : ''}`;
+  } else if (s === 'idle') {
+    body = `<p class="line" style="margin:0">Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your ${TOL}′ tolerance.</p>${posLine()}
+      <div class="acts"><button class="act out" data-a="home">Home</button></div>`;
+  } else {
+    const m = motorLine();
+    body = `<div class="stat ${m.blink ? 'blink' : ''}" style="color:var(--${m.c === 'dim' ? 'text2' : m.c})">${m.ring ? '<i class="ring"></i>' : `<i class="dot" style="background:var(--${m.c === 'dim' ? 'text2' : m.c})"></i>`}${m.t}</div>
+      ${m.bar != null ? `<div class="bar"><i style="width:${Math.round(m.bar * 100)}%"></i></div>` : ''}${posLine()}
+      ${s === 'converged' ? '' : `<div class="acts"><button class="act stop" data-a="stop">Stop motors</button></div>`}`;
+  }
+  return `<div class="sect">Polar Aligner<span>${name}</span></div><div class="corr new">${body}</div>`;
+}
+
+function turnTiles() {
+  const active = loopActive(), moving = ['probing', 'moving', 'settling'].includes(S.state);
+  const t = (id, name, v, pos, neg, rot) => {
+    const on = Math.abs(v) <= 0.05;
+    const hint = on ? 'On target' : `${v < 0 ? pos : neg} ${f1(v)}′`;
+    let mot = '';
+    if (S.status === 'B' && active && L.axis === id && moving) {
+      mot = S.state === 'settling' ? `<span class="mot wait new">Settling · ${L.settle} s</span>` : `<span class="mot blink new">${S.state === 'probing' ? 'Test move' : 'Motor'} ${f1(L.arcmin)}′ ${dirWord(id, L.arcmin)}</span>`;
+    }
+    if (S.status === 'B' && has() && S.pos === 'yes' && motorsOn() && S.state !== 'stopped' && S.state !== 'idle') mot += `<span class="cap new">At ${sgn(L.p[id])}′ from zero</span>`;
+    const icon = on ? '' : active && S.arrows === 'hide' ? '' : arrow(70, v < 0 ? rot[0] : rot[1], active);
+    return `<div class="ax">${icon}<div><small>${name}</small><b>${hint}</b>${mot}</div></div>`;
+  };
+  return `<div class="axes">${t('alt', 'Altitude', L.alt, 'Raise', 'Lower', [-90, 90])}${t('az', 'Azimuth', L.az, 'Move east', 'Move west', [0, 180])}</div>`;
+}
+
+function setup() {
+  const pick = has() && drivable() && S.home === 'panel'
+    ? `<div class="labrow new"><span>Turned by</span><div class="segrow"><button data-a="choice" data-v="motors" class="${S.choice === 'motors' ? 'on' : ''}">Motors</button><button data-a="choice" data-v="hand" class="${S.choice === 'hand' ? 'on' : ''}">By hand</button></div></div>`
+    : '';
+  return `<div class="sect">Setup</div><div class="setrow"><div class="segrow"><button class="on">Loop</button><button>Single</button></div><div class="tile"><small>Exposure</small>3 s</div></div>${pick}`;
+}
+
+function panelB() {
+  // Variant B: no block; the move in the tile, the sentence and the controls under Error.
+  if (!has()) return { lines: '', acts: '' };
+  const s = S.state;
+  if (s === 'tier2') return { lines: `<p class="line dim new">${NOTDRIVE[S.why]}</p>`, acts: '' };
+  if (S.choice === 'hand') return { lines: '', acts: '' };
+  if (s === 'stopped') {
+    const lost = S.cause === 'link_lost';
+    return { lines: `<p class="line warn new">${CAUSE[S.cause]()} Carry on by hand: the arrows show which bolt to turn.</p>`,
+      acts: `<button class="act out new" data-a="home"${lost ? ' disabled' : ''}>Home</button><button class="act go new" data-a="resume"${lost ? ' disabled' : ''}>Resume motors</button>` };
+  }
+  if (s === 'idle') return { lines: `<p class="cap new">Tap the shutter to start. The motors correct until the error is inside your ${TOL}′ tolerance.</p>`, acts: `<button class="act out new" data-a="home">Home</button>` };
+  if (s === 'converged') return { lines: `<p class="line ok new">Inside your ${TOL}′ tolerance after ${L.moves} moves. Finish with Verify or Done. If the error drifts out, the motors correct again.</p>`, acts: '' };
+  if (s === 'measuring' || s === 'homing') return { lines: `<p class="line dim blink new">${s === 'homing' ? 'Polar Aligner going back to its zero…' : 'Measuring the new error…'}</p>`, acts: `<button class="act stop new" data-a="stop">Stop motors</button>` };
+  return { lines: '', acts: `<button class="act stop new" data-a="stop">Stop motors</button>` };
+}
+
+function screen() {
+  const s = S.state, tot = total(), run = running();
+  const head = run ? `<div class="head">Adjusting<span class="tot"><i class="dot" style="background:${zone(tot)}"></i>${tot.toFixed(1)}′</span></div>` : '';
+  const stepper = run ? `<div class="stepper"><span class="done">✓ Rough</span><span class="cur">Fine</span><span>Verify</span></div>` : '';
+  const err = run ? `<div class="sect">Error</div><div class="bwrap"><div class="bull">${bull(L.alt, L.az)}</div>${turnTiles()}</div>` : '';
+  const inTol = tot <= TOL, busy = loopActive();
+  let lines = '', acts = '';
+  if (run) {
+    lines = busy ? '' : `<p class="cap">Verify moves the mount and takes three frames to confirm the alignment.</p>`;
+    acts = busy ? '' : `<button class="act out"${inTol ? '' : ' disabled'}>Verify</button><button class="act go"${inTol ? '' : ' disabled'}>Done</button>`;
+  }
+  let block = '';
+  if (S.status === 'A') block = corrBlock();
+  else { const b = panelB(); lines = b.lines + lines; acts = b.acts + acts; }
+  const body = `${head}${stepper}${setup()}${block}${err}${lines}${acts ? `<div class="acts">${acts}</div>` : ''}`;
+
+  const pills = [];
+  if (run) pills.push(`<div class="pill"><i class="dot" style="background:${zone(tot)}"></i><div>Polar align · Adjusting · ${tot.toFixed(1)}′</div></div>`);
+  const m = motorsOn() && !['stopped', 'idle', 'converged'].includes(s) ? motorLine() : null;
+  if (m) pills.push(`<div class="pill new">${m.ring ? '<i class="ring"></i>' : `<i class="dot ${m.blink ? 'blink' : ''}" style="background:var(--${m.c === 'dim' ? 'text2' : m.c})"></i>`}<div>Polar Aligner · ${m.t}</div></div>`);
+  if (motorsOn() && s === 'stopped') pills.push(`<div class="pill new"><i class="dot" style="background:var(--busy)"></i><div style="color:var(--busy)">Polar Aligner · Stopped</div></div>`);
+
+  return `<div class="pills">${pills.join('')}</div>
+    <div class="p rail"><div class="chip">P.A.</div><div class="chip">3 s<small>Loop</small></div><button class="shutter ${run ? 'run' : ''}" data-a="${run ? 'shutter-stop' : 'shutter-start'}" aria-label="${run ? 'Stop' : 'Start polar alignment'}"><b></b></button></div>
+    <div class="estop">STOP</div>
+    <div class="p panel">${body}</div>`;
+}
+
+function settings() {
+  // Read-only: the daemon derives the Polar Aligner (any connected device offering the actions; a separate base wins over the mount).
+  const pick = S.picked, t2 = S.state === 'tier2', base = pick === 'switch' || pick === 'both';
+  const dot = c => `<i class="dot" style="background:var(--${c});width:8px;height:8px;margin-right:8px"></i>`;
+  const turnedRow = S.home === 'settings' && pick !== 'none' && !t2
+    ? `<div class="drow new"><div class="l">Turned by<small>${S.choice === 'motors' ? 'Polar align turns the motors after each measurement.' : 'Polar align shows the turns and you make them.'}</small></div>
+       <div class="segrow" style="flex:0 0 200px"><button class="${S.choice === 'motors' ? 'on' : ''}" data-a="choice" data-v="motors">Motors</button><button class="${S.choice === 'hand' ? 'on' : ''}" data-a="choice" data-v="hand">By hand</button></div></div>` : '';
+  const state = t2 ? (S.why === 'info_unreadable' ? "Can't read it" : "Can't drive yet") : S.state === 'homing' || loopActive() ? 'Moving' : 'Ready';
+  const cap = pick === 'none' ? 'No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'
+    : t2 ? NOTDRIVE[S.why].replace(' Turn the bolts by hand.', '')
+    : pick === 'mount' ? 'Found on the mount: its motors are built in.'
+    : pick === 'both' ? 'Found on the polar base and on the mount. The separate base is used.'
+    : 'Found on the polar base.';
+  const tail = !t2 && pick !== 'none' && S.home === 'panel' ? ' Motors or by hand is picked in Polar align, under Setup.' : '';
+  const sepRow = base
+    ? `<div class="drow"><div class="l">${dot('ok')}Polar base<small>Switch · 192.0.2.40:11111</small></div><span class="dbtn">Disconnect</span></div>` : '';
+  const mountNote = pick === 'mount' ? ' · Polar Aligner built in' : pick === 'both' ? ' · offers polar moves, not used' : '';
+  return `<div class="p sheet">
+    <div class="tabs"><span>Rig</span><span class="on">Devices</span></div>
+    <div>
+      <div class="drow"><div class="l">${dot('ok')}Camera (Main)<small>ASI2600MM</small></div><span class="dbtn">Disconnect</span></div>
+      <div class="drow"><div class="l">${dot('ok')}Mount<small>AM5${mountNote}</small></div><span class="dbtn">Disconnect</span></div>
+      <div class="drow"><div class="l">${dot('ok')}Camera (Guide)<small>ASI220MM</small></div><span class="dbtn">Disconnect</span></div>
+      ${sepRow}
+      <div class="drow new"><div class="l">Polar Aligner<small>${cap}${tail}</small></div>
+        <div class="rov">${pick === 'none' ? '<span style="color:var(--text2)">None</span>' : `${dot(t2 ? 'busy' : 'ok')}${NAME[pick]}<span style="color:var(--text2)">· ${state}</span>`}</div></div>
+      ${turnedRow}
+    </div></div>`;
+}
+
+const EV = '<b>polar_align.correction</b>';  // the same object is `correction` in GET /equipment/polaralign/status
+const STOPCMD = ' · Stop motors = POST <b>/equipment/polaralign/correction/stop</b>';
+const SRC = {
+  none: 'GET <b>/equipment/polaraligner</b> { present: false } · no aligner object in the Routine status',
+  idle: () => `GET <b>/equipment/polaraligner</b> { present: true, drivable: true } · no aligner object until the Routine measures · profile <b>polar_aligner_auto</b> = true · Home = POST <b>/equipment/polaraligner/home</b>`,
+  manual: () => `${EV} { state: "manual", moves: ${L.moves} } · profile <b>polar_aligner_auto</b> = false`,
+  homing: 'POST <b>/equipment/polaraligner/home</b> · drawn from GET <b>/equipment/polaraligner</b> { moving: true } (no homing event)',
+  probing: () => `${EV} { state: "probing", axis: "${L.axis === 'az' ? 'azimuth' : 'altitude'}", arcmin: ${L.arcmin >= 0 ? '+' : ''}${L.arcmin.toFixed(1)}, moves: ${L.moves} }${STOPCMD}`,
+  moving: () => `${EV} { state: "moving", axis: "${L.axis === 'az' ? 'azimuth' : 'altitude'}", arcmin: ${L.arcmin >= 0 ? '+' : ''}${L.arcmin.toFixed(1)}, moves: ${L.moves} } (+ = azimuth clockwise / raise)${STOPCMD}`,
+  settling: () => `${EV} { state: "settling", seconds: ${L.settle}, moves: ${L.moves} }${STOPCMD}`,
+  measuring: () => `${EV} { state: "measuring", moves: ${L.moves} } · <b>polar_align.progress</b> altitude_error_arcmin / azimuth_error_arcmin update${STOPCMD}`,
+  converged: () => `${EV} { state: "converged", moves: ${L.moves} } · the Routine goes on: Verify / Done as today`,
+  stopped: () => `${EV} { state: "stopped", cause: "${S.cause}"${DEVTEXT[S.cause] ? `, device_text: "${DEVTEXT[S.cause]}"` : ''}, moves: ${L.moves} } · Resume = POST <b>/equipment/polaralign/correction/resume</b> · Home = POST <b>/equipment/polaraligner/home</b>`,
+  tier2: () => `GET <b>/equipment/polaraligner</b> { present: true, carrier: "${carrier()}", name: "${NAME[S.picked] || NAME.switch}", drivable: false, not_drivable_reason: "${S.why}" }`,
+};
+const carrier = () => S.picked === 'mount' ? 'mount' : 'switch';
+function caption() {
+  if (S.view === 'settings') return S.picked === 'none' ? 'GET <b>/equipment/polaraligner</b> { present: false }'
+    : `GET <b>/equipment/polaraligner</b> { present: true, carrier: "${carrier()}", name: "${NAME[S.picked]}", drivable: ${S.state !== 'tier2'}${S.state === 'tier2' ? `, not_drivable_reason: "${S.why}"` : ''}, moving: ${S.state === 'homing' || loopActive()} }${S.state !== 'tier2' ? ` · profile <b>polar_aligner_auto</b> = ${S.choice === 'motors'}` : ''}`;
+  const st = S.choice === 'hand' && drivable() ? 'manual' : S.state;
+  const x = SRC[st]; let c = typeof x === 'function' ? x() : x;
+  if (has() && S.state !== 'tier2') c += S.pos === 'yes' ? ` · GET <b>/equipment/polaraligner</b> azimuth_position_arcmin: ${L.p.az.toFixed(1)}, altitude_position_arcmin: ${L.p.alt.toFixed(1)}` : ' · GET <b>/equipment/polaraligner</b>: azimuth_position_arcmin / altitude_position_arcmin <b>absent</b>';
+  return c;
+}
+
+function render() {
+  const ipad = document.getElementById('ipad');
+  ipad.classList.toggle('nomark', S.mark === 'off');
+  ipad.innerHTML = S.view === 'settings' ? settings() : screen();
+  document.getElementById('stateRow').style.opacity = S.view === 'settings' ? .5 : 1;
+  document.getElementById('src').innerHTML = caption();
+  document.getElementById('decide').innerHTML = `
+    <b>Choices (user, 2026-11-16: motor status A, arrows dimmed, Motors / by hand in Settings › Devices)</b>
+    <ul>
+      <li><b>Motor status, A (chosen):</b> the Polar Aligner gets its own block in a fixed slot between Setup and Error, so the error numbers and the bullseye never move when the motors start or stop, and Stop motors, Home, Resume and the stop sentence live in one place. B puts the move inside the turn tile it concerns; it saves about 90 pt of height but the sentence and buttons end up under Error, away from the move.</li>
+      <li><b>Arrows while motors run, A dimmed (chosen):</b> the tiles keep their shape (fixed slots), the arrow still says which way the axis goes, and they brighten back the moment the motors stop. Hidden reads cleaner but the tile changes shape twice per move.</li>
+      <li><b>Motors / by hand, B in Settings › Devices (chosen):</b> under the detected Polar Aligner row, as "Turned by". The panel's Setup stays as today. It is one setting (profile <code>polar_aligner_auto</code>) in one place; the panel says "Motors off. Turn the bolts by hand." when it is off.</li>
+      <li>The Polar Aligner is not picked: Settings › Devices shows the one the daemon found (a separate base wins over the mount) and its state, read-only.</li>
+      <li>The status line in the top-left card ("Polar Aligner · Moving azimuth 6.1′ east", blinking green as the filter wheel's) follows DESIGN.md's status-line rule; it is hidden at phone width as in simple-polar-mock.html.</li>
+    </ul>
+    <b>What stays as today</b>
+    <ul>
+      <li>No Polar Aligner, By hand and Can't drive yet show today's panel: stepper, Setup, bullseye, the two 70 pt arrow tiles, Verify and Done. The shutter still starts and stops the routine (stopping it stops the motors), and the Emergency Stop stops the Polar Aligner too.</li>
+      <li>While the motors work, Verify and Done step aside. Converged does not end the Routine: they come back and you finish as today, and if the error leaves the tolerance again the motors correct again.</li>
+    </ul>
+`;
+}
+sync(); render();
+</script>
+</body>
+</html>

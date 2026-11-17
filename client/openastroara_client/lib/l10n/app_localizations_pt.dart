@@ -2328,6 +2328,50 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusMeasuredStars => 'Measured stars';
 
   @override
+  String get focusToolManual => 'Focus by hand';
+
+  @override
+  String get focusToolManualOpen => 'Open';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Open focus by hand';
+
+  @override
+  String get focusToolOffsets => 'Filter offsets';
+
+  @override
+  String get focusToolOffsetsOpen => 'Measure';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Open filter offsets';
+
+  @override
+  String get focusToolsHeading => 'Tools';
+
+  @override
+  String get focusToolManualStatus => 'Not started';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count to measure',
+      one: '1 to measure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'All measured';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'No filter wheel';
+
+  @override
+  String get focusBackToAutofocus => 'Back to Autofocus';
+
+  @override
   String get bahtinovInFocusMaskOff => 'In focus · mask off';
 
   @override
@@ -2481,7 +2525,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
   }
 
   @override
@@ -2995,6 +3039,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get albumBookRcw => 'RCW';
+
+  @override
+  String get albumBookNgc => 'NGC';
+
+  @override
+  String get albumBookIc => 'IC';
+
+  @override
+  String get albumBookSharpless => 'Sharpless (Sh2)';
 
   @override
   String get dsoTypeGalaxy => 'Galaxy';
@@ -4202,8 +4255,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorUntilFlip => 'until the flip';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Frame $frame of $frames · about $left left on $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Frame $frame of $frames · about $left left';
   }
 
   @override
@@ -4213,8 +4266,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorTonightsBest => 'Tonight\'s best';
 
   @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Frame $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Frame $frame';
   }
 
   @override
@@ -4348,7 +4401,49 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since';
+    return 'Autofocus $time · $delta since then';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n saved';
+  }
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'session start $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % since session start';
+  }
+
+  @override
+  String get monitorDrifting => 'Drifting';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Imaging $start to $end';
+  }
+
+  @override
+  String get monitorSkyOwnScale => 'Sky (own scale)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS per saved frame';
+
+  @override
+  String get monitorFixedScale => 'fixed ±2.5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'flip $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'park $time';
   }
 
   @override
@@ -5637,21 +5732,32 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Sky darkness: 1 darkest, 9 inner city.';
+      'Sky darkness: 1 darkest, 9 inner city. Used as the sky brightness.';
 
   @override
   String get wizardBasicsBortleError => 'Enter a whole number from 1 to 9.';
 
   @override
-  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²), optional';
+  String get wizardBasicsSqm => 'SQM reading (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Leave empty if not measured (Bortle is used). 16 to 22.5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Sky brightness from a meter or lightpollutionmap, 16 to 22.5. Derived Bortle class: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Enter a value from 16 to 22.5, or leave empty.';
+  String get wizardBasicsSkyBortle => 'Bortle class';
+
+  @override
+  String get wizardBasicsSkySqm => 'SQM reading';
+
+  @override
+  String sitePanelDerivedBortle(int bortle) {
+    return 'Derived Bortle class: $bortle';
+  }
+
+  @override
+  String get wizardBasicsSqmError => 'Enter a value from 16 to 22.5.';
 
   @override
   String get wizardBasicsTimezone => 'Timezone';
@@ -5919,6 +6025,250 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
+
+  @override
+  String get polarAligner => 'Polar Aligner';
+
+  @override
+  String polarAlignerIdle(String tolerance) {
+    return 'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
+  }
+
+  @override
+  String get polarAlignerByHand => 'Motors off. Turn the bolts by hand.';
+
+  @override
+  String polarAlignerTestMove(String axis, String amount, String direction) {
+    return 'Test move · $axis $amount′ $direction';
+  }
+
+  @override
+  String polarAlignerMoving(String axis, String amount, String direction) {
+    return 'Moving $axis $amount′ $direction';
+  }
+
+  @override
+  String polarAlignerSettling(String seconds) {
+    return 'Letting the mount settle · $seconds s';
+  }
+
+  @override
+  String get polarAlignerMeasuring => 'Measuring the new error…';
+
+  @override
+  String get polarAlignerHoming => 'Going back to its zero…';
+
+  @override
+  String polarAlignerConverged(int moves, String tolerance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your $tolerance′ tolerance after $moves moves.',
+      one: 'Inside your $tolerance′ tolerance after 1 move.',
+    );
+    return '$_temp0 Finish with Verify or Done. If the error drifts out, the motors correct again.';
+  }
+
+  @override
+  String get polarAlignerAxisAzimuth => 'azimuth';
+
+  @override
+  String get polarAlignerAxisAltitude => 'altitude';
+
+  @override
+  String get polarAlignerEast => 'east';
+
+  @override
+  String get polarAlignerWest => 'west';
+
+  @override
+  String get polarAlignerUp => 'up';
+
+  @override
+  String get polarAlignerDown => 'down';
+
+  @override
+  String polarAlignerPosition(String azimuth, String altitude) {
+    return 'From its zero: azimuth $azimuth · altitude $altitude';
+  }
+
+  @override
+  String get polarAlignerNoPosition =>
+      'This device doesn\'t report its position.';
+
+  @override
+  String get polarAlignerCarryOn =>
+      'Carry on by hand: the arrows show which bolt to turn.';
+
+  @override
+  String get polarAlignerStopMotors => 'Stop motors';
+
+  @override
+  String get polarAlignerHome => 'Home';
+
+  @override
+  String get polarAlignerResume => 'Resume';
+
+  @override
+  String get polarAlignerLinkLostCaption =>
+      'Resume once it answers again. Home comes back then.';
+
+  @override
+  String get polarAlignerNotDrivableLoop =>
+      'Ara can\'t move this Polar Aligner yet: it only runs its own alignment.';
+
+  @override
+  String get polarAlignerNotDrivableInfo =>
+      'Ara couldn\'t read what this Polar Aligner can do, so it won\'t move it.';
+
+  @override
+  String get polarAlignerTurnByHand => 'Turn the bolts by hand.';
+
+  @override
+  String polarAlignerStopWrongDirection(String axis) {
+    return 'The test move on $axis went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.';
+  }
+
+  @override
+  String polarAlignerStopWrongScale(String axis) {
+    return 'The test move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.';
+  }
+
+  @override
+  String polarAlignerStopDeviceFault(String text) {
+    return 'The Polar Aligner reported a fault: “$text”.';
+  }
+
+  @override
+  String polarAlignerStopNotCalibrated(String text) {
+    return 'The Polar Aligner isn\'t calibrated, so it refused to move: “$text”. Calibrate it in its own app, then Resume.';
+  }
+
+  @override
+  String polarAlignerStopDeviceRefused(String text) {
+    return 'The Polar Aligner refused the move: “$text”.';
+  }
+
+  @override
+  String get polarAlignerStopDiverging =>
+      'The error grew after two corrections in a row, so Ara stopped the motors.';
+
+  @override
+  String get polarAlignerStopTimeout =>
+      'The Polar Aligner was still moving after 60 s, so Ara stopped it.';
+
+  @override
+  String get polarAlignerStopLinkLost =>
+      'Lost the link to the Polar Aligner. Ara stops its motors as soon as it answers again.';
+
+  @override
+  String get polarAlignerStopMountTracking =>
+      'The Polar Aligner can\'t move while the mount tracks. Turn tracking off in the Mount window, then Resume.';
+
+  @override
+  String get polarAlignerStopMountSlewing =>
+      'The Polar Aligner can\'t move while the mount slews. Resume once the mount stops.';
+
+  @override
+  String get polarAlignerStopByUser => 'You stopped the motors.';
+
+  @override
+  String get polarAlignerStopUnknown => 'Ara stopped the motors.';
+
+  @override
+  String polarAlignerStopUnknownText(String text) {
+    return 'Ara stopped the motors: “$text”.';
+  }
+
+  @override
+  String get polarAlignerStopped => 'Stopped';
+
+  @override
+  String get polarAlignerReady => 'Ready';
+
+  @override
+  String get polarAlignerCantDrive => 'Can\'t drive yet';
+
+  @override
+  String get polarAlignerCantRead => 'Can\'t read it';
+
+  @override
+  String get polarAlignerNone => 'None';
+
+  @override
+  String get polarAlignerFoundNone =>
+      'No connected device offers polar-alignment moves. Polar align shows the turns and you make them.';
+
+  @override
+  String get polarAlignerFoundMount =>
+      'Found on the mount: its motors are built in.';
+
+  @override
+  String get polarAlignerFoundBase => 'Found on the polar base.';
+
+  @override
+  String get polarAlignerTurnedBy => 'Turned by';
+
+  @override
+  String get polarAlignerMotors => 'Motors';
+
+  @override
+  String get polarAlignerByHandOption => 'By hand';
+
+  @override
+  String get polarAlignerMotorsCaption =>
+      'Polar align turns the motors after each measurement.';
+
+  @override
+  String get polarAlignerHandCaption =>
+      'Polar align shows the turns and you make them.';
+
+  @override
+  String get polarAlignerActionStop => 'stop the motors';
+
+  @override
+  String get polarAlignerActionResume => 'resume the motors';
+
+  @override
+  String get polarAlignerActionHome => 'send the Polar Aligner home';
+
+  @override
+  String get polarKnobAlignerAuto => 'Correct with the Polar Aligner\'s motors';
+
+  @override
+  String get polarKnobAlignerAutoOn =>
+      'On a rig with a Polar Aligner, Polar align turns its motors after each measurement';
+
+  @override
+  String get polarKnobAlignerAutoOff =>
+      'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get polarAdvancedTitle => 'Advanced';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return '$turn° turn · $step° step · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Out of range: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason The field is back to the rig\'s value.';
+  }
+
+  @override
+  String get estopFailPolarAligner =>
+      'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8272,6 +8622,50 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusMeasuredStars => 'Estrelas medidas';
 
   @override
+  String get focusToolManual => 'Focar à mão';
+
+  @override
+  String get focusToolManualOpen => 'Abrir';
+
+  @override
+  String get focusToolManualOpenSemantics => 'Abrir focar à mão';
+
+  @override
+  String get focusToolOffsets => 'Offsets de filtro';
+
+  @override
+  String get focusToolOffsetsOpen => 'Medir';
+
+  @override
+  String get focusToolOffsetsOpenSemantics => 'Abrir offsets de filtro';
+
+  @override
+  String get focusToolsHeading => 'Ferramentas';
+
+  @override
+  String get focusToolManualStatus => 'Não iniciado';
+
+  @override
+  String focusToolOffsetsToMeasure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count para medir',
+      one: '1 para medir',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusToolOffsetsAllMeasured => 'Todos medidos';
+
+  @override
+  String get focusToolOffsetsNoWheel => 'Sem roda de filtros';
+
+  @override
+  String get focusBackToAutofocus => 'Voltar ao autofoco';
+
+  @override
   String get bahtinovInFocusMaskOff => 'Em foco · sem máscara';
 
   @override
@@ -8425,7 +8819,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String focusWeakFitShort(String r2) {
-    return 'Ajuste da curva fraco (R² $r2): o foco vem do quadro medido. Rode de novo se o céu estabilizou.';
+    return 'Ajuste da curva fraco (R² $r2): rode de novo se o céu estabilizou.';
   }
 
   @override
@@ -8940,6 +9334,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get albumBookRcw => 'RCW';
+
+  @override
+  String get albumBookNgc => 'NGC';
+
+  @override
+  String get albumBookIc => 'IC';
+
+  @override
+  String get albumBookSharpless => 'Sharpless (Sh2)';
 
   @override
   String get dsoTypeGalaxy => 'Galáxia';
@@ -10154,8 +10557,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorUntilFlip => 'até a virada';
 
   @override
-  String monitorFrameOf(int frame, int frames, String left, String target) {
-    return 'Quadro $frame de $frames · cerca de $left restantes em $target';
+  String monitorFrameOf(int frame, int frames, String left) {
+    return 'Quadro $frame de $frames · cerca de $left restantes';
   }
 
   @override
@@ -10165,8 +10568,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorTonightsBest => 'Melhores de hoje';
 
   @override
-  String monitorUpFrame(int frame, String filter) {
-    return 'Quadro $frame · $filter';
+  String monitorUpFrame(int frame) {
+    return 'Quadro $frame';
   }
 
   @override
@@ -10300,6 +10703,48 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String monitorAutofocusSince(String time, String delta) {
     return 'Foco automático $time · $delta desde então';
+  }
+
+  @override
+  String monitorSaved(int n) {
+    return '$n salvos';
+  }
+
+  @override
+  String monitorStartedAt(String value) {
+    return 'início da sessão $value';
+  }
+
+  @override
+  String monitorChangeSinceStart(String metric, String pct) {
+    return '$metric $pct % desde o início da sessão';
+  }
+
+  @override
+  String get monitorDrifting => 'Variando';
+
+  @override
+  String monitorImagingSpan(String start, String end) {
+    return 'Captura $start a $end';
+  }
+
+  @override
+  String get monitorSkyOwnScale => 'Céu (escala própria)';
+
+  @override
+  String get monitorRmsPerFrame => 'RMS por quadro salvo';
+
+  @override
+  String get monitorFixedScale => 'escala fixa ±2,5″';
+
+  @override
+  String monitorFlipPin(String time) {
+    return 'inversão $time';
+  }
+
+  @override
+  String monitorParkPin(String time) {
+    return 'estacionar $time';
   }
 
   @override
@@ -11598,21 +12043,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get wizardBasicsBortleHelper =>
-      'Escuridão do céu: 1 mais escuro, 9 centro de cidade.';
+      'Escuridão do céu: 1 mais escuro, 9 centro de cidade. Usada como o brilho do céu.';
 
   @override
   String get wizardBasicsBortleError => 'Digite um número inteiro de 1 a 9.';
 
   @override
-  String get wizardBasicsSqm => 'Leitura SQM (mag/arcsec²), opcional';
+  String get wizardBasicsSqm => 'Leitura SQM (mag/arcsec²)';
 
   @override
-  String get wizardBasicsSqmHelper =>
-      'Deixe vazio se não medido (usa-se o Bortle). De 16 a 22,5.';
+  String wizardBasicsSqmHelper(int bortle) {
+    return 'Brilho do céu de um medidor ou do lightpollutionmap, de 16 a 22,5. Classe Bortle derivada: $bortle.';
+  }
 
   @override
-  String get wizardBasicsSqmError =>
-      'Digite um valor de 16 a 22,5 ou deixe vazio.';
+  String get wizardBasicsSkyBortle => 'Classe Bortle';
+
+  @override
+  String get wizardBasicsSkySqm => 'Leitura SQM';
+
+  @override
+  String sitePanelDerivedBortle(int bortle) {
+    return 'Classe Bortle derivada: $bortle';
+  }
+
+  @override
+  String get wizardBasicsSqmError => 'Digite um valor de 16 a 22,5.';
 
   @override
   String get wizardBasicsTimezone => 'Fuso horário';
@@ -11882,4 +12338,250 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarKnobVerifyStepHint => 'Mantido entre 5° e 60°';
+
+  @override
+  String get polarAligner => 'Alinhador polar';
+
+  @override
+  String polarAlignerIdle(String tolerance) {
+    return 'Toque no obturador para começar. O Ara mede, faz um pequeno movimento de teste em cada eixo e depois gira os motores até o erro ficar dentro da sua tolerância de $tolerance′.';
+  }
+
+  @override
+  String get polarAlignerByHand =>
+      'Motores desligados. Gire os parafusos à mão.';
+
+  @override
+  String polarAlignerTestMove(String axis, String amount, String direction) {
+    return 'Movimento de teste · $axis $amount′ $direction';
+  }
+
+  @override
+  String polarAlignerMoving(String axis, String amount, String direction) {
+    return 'Movendo $axis $amount′ $direction';
+  }
+
+  @override
+  String polarAlignerSettling(String seconds) {
+    return 'Deixando a montagem assentar · $seconds s';
+  }
+
+  @override
+  String get polarAlignerMeasuring => 'Medindo o novo erro…';
+
+  @override
+  String get polarAlignerHoming => 'Voltando ao zero…';
+
+  @override
+  String polarAlignerConverged(int moves, String tolerance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Dentro da sua tolerância de $tolerance′ após $moves movimentos.',
+      one: 'Dentro da sua tolerância de $tolerance′ após 1 movimento.',
+    );
+    return '$_temp0 Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
+  }
+
+  @override
+  String get polarAlignerAxisAzimuth => 'azimute';
+
+  @override
+  String get polarAlignerAxisAltitude => 'altitude';
+
+  @override
+  String get polarAlignerEast => 'para leste';
+
+  @override
+  String get polarAlignerWest => 'para oeste';
+
+  @override
+  String get polarAlignerUp => 'para cima';
+
+  @override
+  String get polarAlignerDown => 'para baixo';
+
+  @override
+  String polarAlignerPosition(String azimuth, String altitude) {
+    return 'Desde o zero: azimute $azimuth · altitude $altitude';
+  }
+
+  @override
+  String get polarAlignerNoPosition =>
+      'Este dispositivo não informa a posição.';
+
+  @override
+  String get polarAlignerCarryOn =>
+      'Continue à mão: as setas mostram qual parafuso girar.';
+
+  @override
+  String get polarAlignerStopMotors => 'Parar motores';
+
+  @override
+  String get polarAlignerHome => 'Início';
+
+  @override
+  String get polarAlignerResume => 'Retomar';
+
+  @override
+  String get polarAlignerLinkLostCaption =>
+      'Retome quando ele voltar a responder. Início volta em seguida.';
+
+  @override
+  String get polarAlignerNotDrivableLoop =>
+      'O Ara ainda não consegue mover este alinhador polar: ele só faz o próprio alinhamento.';
+
+  @override
+  String get polarAlignerNotDrivableInfo =>
+      'O Ara não conseguiu ler o que este alinhador polar faz, então não vai movê-lo.';
+
+  @override
+  String get polarAlignerTurnByHand => 'Gire os parafusos à mão.';
+
+  @override
+  String polarAlignerStopWrongDirection(String axis) {
+    return 'O movimento de teste no $axis foi para o lado errado, então o Ara parou os motores. O alinhador polar pode estar configurado invertido nesse eixo.';
+  }
+
+  @override
+  String polarAlignerStopWrongScale(String axis) {
+    return 'O movimento de teste no $axis não percorreu a distância pedida, então o Ara parou os motores. Confira o ajuste de passo do alinhador polar.';
+  }
+
+  @override
+  String polarAlignerStopDeviceFault(String text) {
+    return 'O alinhador polar informou uma falha: “$text”.';
+  }
+
+  @override
+  String polarAlignerStopNotCalibrated(String text) {
+    return 'O alinhador polar não está calibrado, então recusou o movimento: “$text”. Calibre-o no próprio app dele e depois toque em Retomar.';
+  }
+
+  @override
+  String polarAlignerStopDeviceRefused(String text) {
+    return 'O alinhador polar recusou o movimento: “$text”.';
+  }
+
+  @override
+  String get polarAlignerStopDiverging =>
+      'O erro aumentou depois de duas correções seguidas, então o Ara parou os motores.';
+
+  @override
+  String get polarAlignerStopTimeout =>
+      'O alinhador polar ainda estava se movendo depois de 60 s, então o Ara o parou.';
+
+  @override
+  String get polarAlignerStopLinkLost =>
+      'A conexão com o alinhador polar caiu. O Ara para os motores assim que ele responder de novo.';
+
+  @override
+  String get polarAlignerStopMountTracking =>
+      'O alinhador polar não se move enquanto a montagem rastreia. Desligue o rastreamento na janela Montagem e depois toque em Retomar.';
+
+  @override
+  String get polarAlignerStopMountSlewing =>
+      'O alinhador polar não se move enquanto a montagem se desloca. Retome quando a montagem parar.';
+
+  @override
+  String get polarAlignerStopByUser => 'Você parou os motores.';
+
+  @override
+  String get polarAlignerStopUnknown => 'O Ara parou os motores.';
+
+  @override
+  String polarAlignerStopUnknownText(String text) {
+    return 'O Ara parou os motores: “$text”.';
+  }
+
+  @override
+  String get polarAlignerStopped => 'Parado';
+
+  @override
+  String get polarAlignerReady => 'Pronto';
+
+  @override
+  String get polarAlignerCantDrive => 'Ainda não controlável';
+
+  @override
+  String get polarAlignerCantRead => 'Não foi possível ler';
+
+  @override
+  String get polarAlignerNone => 'Nenhum';
+
+  @override
+  String get polarAlignerFoundNone =>
+      'Nenhum dispositivo conectado oferece movimentos de alinhamento polar. O alinhamento polar mostra os giros e você os faz.';
+
+  @override
+  String get polarAlignerFoundMount =>
+      'Encontrado na montagem: os motores são embutidos.';
+
+  @override
+  String get polarAlignerFoundBase => 'Encontrado na base polar.';
+
+  @override
+  String get polarAlignerTurnedBy => 'Girado por';
+
+  @override
+  String get polarAlignerMotors => 'Motores';
+
+  @override
+  String get polarAlignerByHandOption => 'À mão';
+
+  @override
+  String get polarAlignerMotorsCaption =>
+      'O alinhamento polar gira os motores depois de cada medição.';
+
+  @override
+  String get polarAlignerHandCaption =>
+      'O alinhamento polar mostra os giros e você os faz.';
+
+  @override
+  String get polarAlignerActionStop => 'parar os motores';
+
+  @override
+  String get polarAlignerActionResume => 'retomar os motores';
+
+  @override
+  String get polarAlignerActionHome => 'mandar o alinhador polar para o início';
+
+  @override
+  String get polarKnobAlignerAuto =>
+      'Corrigir com os motores do alinhador polar';
+
+  @override
+  String get polarKnobAlignerAutoOn =>
+      'Num setup com alinhador polar, o alinhamento polar gira os motores depois de cada medição';
+
+  @override
+  String get polarKnobAlignerAutoOff =>
+      'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get polarAdvancedTitle => 'Avançado';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return 'giro de $turn° · passo de $step° · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min a $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Fora da faixa: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason O campo voltou ao valor do setup.';
+  }
+
+  @override
+  String get estopFailPolarAligner =>
+      'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
 }

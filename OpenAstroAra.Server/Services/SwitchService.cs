@@ -48,7 +48,7 @@ namespace OpenAstroAra.Server.Services;
 /// switch as its "primary" — see <c>SwitchService.Mediator.cs</c>. Per-device sequencer targeting is a
 /// follow-up.
 /// </summary>
-public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IRecoverableDevice, IDisposable {
+public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IRecoverableDevice, IDriverActionsCarriers, IDisposable {
 
     /// <summary>Unreadable-ports observations a switch gets for free, once per connection,
     /// before they start counting against it (§42.3). Covers USB re-enumeration and drivers
@@ -123,6 +123,8 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         public int UnreadableTicksSinceConnect { get; set; }
         // §42.4 — per-connection commanded-value read-back watch (only ports the daemon wrote).
         public SwitchReadbackWatch Readback { get; }
+        // #1971 — the driver's actions, read once per connect (a Polar Aligner rides on them).
+        public IDriverActions? Actions { get; set; }
 
         // Caller holds Lifecycle.Gate: a fresh, ended or tripped session starts clean.
         public void ResetSessionLocked() {
@@ -214,6 +216,32 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     }
 
     private static string EndpointKey(DiscoveredDeviceDto d) => DiscoveredDeviceEndpoint.KeyOf(d);
+
+    /// <summary>#1971 — the driver actions of a connected switch, or null when it is not connected.</summary>
+    internal IDriverActions? ActionsFor(string deviceId) {
+        lock (_gate) {
+            return _connections.TryGetValue(deviceId, out var conn) ? LiveActionsLocked(conn) : null;
+        }
+    }
+
+    IReadOnlyList<DriverActionsCarrier> IDriverActionsCarriers.ConnectedActionCarriers() {
+        lock (_gate) {
+            var list = new List<DriverActionsCarrier>();
+            foreach (var conn in _connections.Values) {
+                if (LiveActionsLocked(conn) is { } actions) {
+                    list.Add(new DriverActionsCarrier(conn.Device.UniqueId, conn.Device.Name, actions));
+                }
+            }
+            return list;
+        }
+    }
+
+    // Caller holds _gate (then the lifecycle's, the documented order).
+    private static IDriverActions? LiveActionsLocked(SwitchConnection conn) {
+        lock (conn.Lifecycle.Gate) {
+            return conn.Lifecycle.Live is not null ? conn.Actions : null;
+        }
+    }
 
     // Caller holds _gate.
     private static SwitchDto ProjectDto(SwitchConnection conn) {
@@ -318,6 +346,11 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         conn.Lifecycle = new DeviceLifecycle<ISwitchDevice>(this, DeviceType.Switch, "switch",
             d => _createDevice(d), client => ReadPortsRuntime(conn, client), conn.ResetSessionLocked,
             DeviceHealthTracker.DefaultThreshold, _logger, _events, _faults,
+            prepareSession: client => {
+                var actions = new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions),
+                    () => conn.Lifecycle.IsLive(client), client.Action);
+                return () => conn.Actions = actions;
+            },
             // #1076 — the fan's switch connecting AFTER the cooler was turned on: the fan sync only fires on a
             // cooler write, so catch up from the camera's current state (best-effort; a failure is a logged
             // fault like any fan-sync failure).

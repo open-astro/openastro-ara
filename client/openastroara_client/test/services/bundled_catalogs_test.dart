@@ -174,7 +174,7 @@ void main() {
     final rosette = findCatalogObject(curated, 'NGC 2244')!;
     expect(rosette.id, 'NGC2239');
     expect(findCatalogObject(curated, 'Sh2-275')!.id, 'NGC2239');
-    expect(rosette.name, 'Rosette Nebula (NGC 2244)');
+    expect(rosette.name, 'Rosette Nebula');
     // An Arp row naming a PAIR (Arp 281 = NGC 4627 + NGC 4631) is a group,
     // not an identity: both galaxies survive, the Whale keeps its Caldwell
     // number, and the Arp row stands on its own (review r2).
@@ -342,6 +342,29 @@ void main() {
       expect(rcwNumOf(war), 131);
       expect(findCatalogObject(bundle, 'RCW 131')!.id, war.id);
       expect(searchSuggestions(bundle, 'War and Peace').length, 1);
+    });
+
+    test('the NGC, IC and Sharpless Books have the pinned Card counts and known objects (#1887)', () {
+      final counts = {for (final b in AlbumBook.values) b: bookObjects(bundle, b).length};
+      expect(counts, {
+        AlbumBook.messier: 110,
+        AlbumBook.caldwell: 109,
+        AlbumBook.rcw: 181,
+        AlbumBook.ngc: 7996,
+        AlbumBook.ic: 5341,
+        AlbumBook.sharpless: 312,
+      });
+      expect(bookLabel(findCatalogObject(bundle, 'NGC 891')!, AlbumBook.ngc), 'NGC 891');
+      expect(bookLabel(findCatalogObject(bundle, 'IC 1805')!, AlbumBook.ic), 'IC 1805');
+      expect(bookLabel(findCatalogObject(bundle, 'Sh2-129')!, AlbumBook.sharpless), 'Sh2-129');
+    });
+
+    test('every common-names key names a row in the bundle, and a new nickname finds its object (#1887)', () {
+      final ids = {for (final d in bundle) d.id};
+      expect([for (final k in commonNames.keys) if (!ids.contains(k)) k], isEmpty);
+      expect(searchSuggestions(bundle, 'Seagull Nebula').map((s) => s.dso.id), containsAll(['Sh2-292', 'IC2177']));
+      expect(searchSuggestions(bundle, 'Flying Bat').first.dso.id, 'Sh2-129');
+      expect(findCatalogObject(bundle, 'Heart Nebula')!.id, 'IC1805');
     });
 
     test('the Catalogs overlay lists RCW next to Sharpless (#1629)', () {

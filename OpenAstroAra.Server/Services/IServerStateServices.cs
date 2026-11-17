@@ -27,7 +27,10 @@ public interface IServerStateService {
     Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct);
     Task<ReleaseNotesDto?> GetReleaseNotesAsync(string? version, CancellationToken ct);
     Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct);
-    Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct);
+    Task<RestartOnIdleAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>Cancels a queued restart-on-idle request; a no-op when none is queued.</summary>
+    Task CancelRestartOnIdleAsync(CancellationToken ct);
 }
 
 /// <summary>Log endpoints (§29.9).</summary>

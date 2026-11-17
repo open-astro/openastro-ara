@@ -38,6 +38,7 @@ abstract final class WsEventTypes {
   static const String polarAlignStage = 'polar_align.stage';
   static const String polarAlignNeedsHome = 'polar_align.needs_home';
   static const String polarAlignChecked = 'polar_align.checked';
+  static const String polarAlignCorrection = 'polar_align.correction';
   static const String autofocusCollimationVerdict =
       'autofocus.collimation_verdict';
   static const String autofocusStarted = 'autofocus.started';
@@ -99,6 +100,7 @@ abstract final class WsEventTypes {
   static const String clientSettingsUpdated = 'client_settings.updated';
   static const String serverRestartImminent = 'server.restart_imminent';
   static const String serverRestartPending = 'server.restart_pending';
+  static const String serverRestartCancelled = 'server.restart_cancelled';
   static const String storageDevicesChanged = 'storage.devices_changed';
   static const String dataManagerDownloadProgress =
       'data_manager.download.progress';

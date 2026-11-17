@@ -28,6 +28,7 @@ import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/rotator_command_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/switch_state.dart';
@@ -2666,17 +2667,6 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   /// Where the dial was turned to, waiting for Rotate or Sync.
   double? _target;
 
-  /// The last angle sent, for "Moving to …"; cleared once it stops.
-  double? _sent;
-
-  /// A Rotate while a plan runs: the window asks first.
-  double? _asking;
-
-  /// A Sync while a plan runs asks first too: it shifts the sky angle the
-  /// plan frames by (#1670 re-audit). Holds the angle asked about, as
-  /// [_asking] does, so turning the dial meanwhile cannot change what syncs.
-  double? _askingSync;
-
   final _dialFocus = FocusNode(debugLabel: 'simple-rotator-dial');
   bool _dialFocused = false;
 
@@ -2731,51 +2721,52 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     );
   }
 
-  /// Rotate: a move while a plan runs asks first.
-  void _rotate(bool planRunning) {
+  /// Rotate and Sync go through the shared rotator command (ADR 0013): it
+  /// asks first while a plan runs (a Sync shifts the sky angle the plan frames
+  /// by, #1670 re-audit), sends, and reports. The dial's target is spent once
+  /// the command is sent.
+  void _rotate() {
     final t = _target;
     if (t == null) return;
-    if (planRunning) {
-      setState(() => _asking = t);
-    } else {
-      setState(() => _target = null);
-      _go(t);
-    }
+    ref
+        .read(rotatorCommandProvider.notifier)
+        .request(RotatorTarget.move(t, useSkyAngle: true), by: this);
   }
 
-  Future<void> _sync([double? asked]) async {
-    final t = asked ?? _target;
+  void _sync() {
+    final t = _target;
     if (t == null) return;
-    setState(() => _target = null);
-    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
-    final l10n = context.l10n;
-    try {
-      final performed = await ref.read(rotatorProvider.notifier).sync(t);
-      if (!performed) _sayBusy(ref, l10n);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSyncRotator,
-        detail: failureReason(l10n, e),
-        error: true,
-      );
-    }
+    ref
+        .read(rotatorCommandProvider.notifier)
+        .request(RotatorTarget.sync(t), by: this);
   }
 
-  Future<void> _go(double target) async {
-    setState(() => _sent = target);
-    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
+  void _onCommand(
+    DeviceCommand<RotatorTarget>? prev,
+    DeviceCommand<RotatorTarget> next,
+  ) {
+    if (next.by != this) return;
+    if (next.phase == DeviceCommandPhase.moving &&
+        prev?.phase != DeviceCommandPhase.moving) {
+      setState(() => _target = null); // spent, as a plain Start
+    }
+    if (next.outcomes == prev?.outcomes) return;
     final l10n = context.l10n;
-    try {
-      final performed = await ref
-          .read(rotatorProvider.notifier)
-          .move(target, useSkyAngle: true);
-      if (!performed) _sayBusy(ref, l10n);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntMoveRotator,
-        detail: failureReason(l10n, e),
-        error: true,
-      );
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
+    final sync = prev?.target?.isSync ?? false;
+    switch (next.refusal) {
+      case DeviceCommandRefusal.busy:
+        _sayBusy(ref, l10n);
+      case DeviceCommandRefusal.failed:
+        notify(
+          sync ? l10n.deviceCouldntSyncRotator : l10n.deviceCouldntMoveRotator,
+          detail: failureReason(l10n, next.error!),
+          error: true,
+        );
+      case DeviceCommandRefusal.didntMove:
+        notify(l10n.deviceCouldntMoveRotator, error: true);
+      case null:
+        break;
     }
   }
 
@@ -2795,12 +2786,8 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(rotatorProvider, (prev, next) {
-      if ((prev?.value?.isMoving ?? false) &&
-          !(next.value?.isMoving ?? false)) {
-        setState(() => _sent = null);
-      }
-    });
+    ref.listen(rotatorCommandProvider, _onCommand);
+    final command = ref.watch(rotatorCommandProvider);
     final l10n = context.l10n;
     final s = ref.watch(rotatorProvider).value;
     final children = <Widget>[
@@ -2816,9 +2803,11 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
         ),
       );
     } else {
-      // Watched, so it's known by the time the dial is let go.
-      final planRunning =
-          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final sentTo =
+          command.phase == DeviceCommandPhase.moving &&
+              !(command.target?.isSync ?? true)
+          ? command.target!.angleDeg
+          : null;
       final sky = s.skyAngleDeg;
       final mech = s.mechanicalAngleDeg;
       final enabled = sky != null && !s.isMoving;
@@ -2854,8 +2843,8 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                         on: s.isMoving,
                         child: Text(
                           s.isMoving
-                              ? (_sent != null
-                                    ? l10n.deviceMovingTo(simpleDegrees(_sent!))
+                              ? (sentTo != null
+                                    ? l10n.deviceMovingTo(simpleDegrees(sentTo))
                                     : l10n.deviceMoving)
                               : '',
                           style: AraText.caption.copyWith(
@@ -2946,7 +2935,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                         onTap: s.isMoving
                             ? _halt
                             : enabled && _target != null
-                            ? () => _rotate(planRunning)
+                            ? _rotate
                             : null,
                       ),
                     ),
@@ -2957,34 +2946,19 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           },
         ),
       );
-      if (_asking != null) {
-        final target = _asking!;
+      if (command.phase == DeviceCommandPhase.asking &&
+          command.by == this &&
+          command.target != null) {
+        final sync = command.target!.isSync;
+        final cmd = ref.read(rotatorCommandProvider.notifier);
         children.add(
           simpleWindowConfirm(
-            question: l10n.devicePlanRunningRotate,
-            confirm: l10n.deviceRotateAnyway,
-            onCancel: () => setState(() => _asking = null),
-            onConfirm: () {
-              setState(() {
-                _asking = null;
-                _target = null; // spent, as a plain Start
-              });
-              _go(target);
-            },
-          ),
-        );
-      }
-      if (_askingSync != null) {
-        final asked = _askingSync!;
-        children.add(
-          simpleWindowConfirm(
-            question: l10n.devicePlanRunningSync,
-            confirm: l10n.deviceSyncAnyway,
-            onCancel: () => setState(() => _askingSync = null),
-            onConfirm: () {
-              setState(() => _askingSync = null);
-              _sync(asked);
-            },
+            question: sync
+                ? l10n.devicePlanRunningSync
+                : l10n.devicePlanRunningRotate,
+            confirm: sync ? l10n.deviceSyncAnyway : l10n.deviceRotateAnyway,
+            onCancel: cmd.cancel,
+            onConfirm: cmd.confirm,
           ),
         );
       }
@@ -2994,11 +2968,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
         SimpleWindowButton(
           key: const Key('simple-rotator-sync'),
           label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
-          onTap: enabled && _target != null
-              ? () => planRunning
-                    ? setState(() => _askingSync = _target)
-                    : _sync()
-              : null,
+          onTap: enabled && _target != null ? _sync : null,
         ),
       ]);
     }

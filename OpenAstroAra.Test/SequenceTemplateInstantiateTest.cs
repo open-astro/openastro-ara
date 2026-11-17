@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
         // template with no schemaVersion becomes a stored sequence the engine cannot load.
         // Target behaviour: the service validates the substituted body with
         // SequenceSchemaValidator (requireCapturableInstruction: false) and throws
-        // ArgumentException, which the endpoint maps to 422. No sequence is created.
+        // TemplateBodyRefusedException, which the endpoint maps to 422. No sequence is created.
         [Test]
         public async Task InstantiateAsync_refuses_a_disk_template_body_without_schemaVersion() {
             var profileDir = Path.Combine(Path.GetTempPath(), "ara-tpl-" + Guid.NewGuid().ToString("N"));
@@ -114,8 +114,34 @@ namespace OpenAstroAra.Test {
 
                 var request = new TemplateInstantiateRequestDto(NewSequenceName: "x", Parameters: null);
 
-                await Assert.ThrowsAsync<ArgumentException>(() =>
+                await Assert.ThrowsAsync<TemplateBodyRefusedException>(() =>
                     svc.InstantiateAsync("no-schema", request, CancellationToken.None));
+                sequenceService.Verify(s => s.CreateAsync(It.IsAny<SequenceCreateRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            } finally {
+                Directory.Delete(profileDir, recursive: true);
+            }
+        }
+
+        // ↑ara#1952: a body whose schemaVersion is present but wrong is refused too, and nothing is created.
+        [Test]
+        public async Task InstantiateAsync_refuses_a_disk_template_body_with_a_wrong_schemaVersion() {
+            var profileDir = Path.Combine(Path.GetTempPath(), "ara-tpl-" + Guid.NewGuid().ToString("N"));
+            try {
+                var templatesDir = Path.Combine(profileDir, "sequences", FileSequenceService.TemplatesDirName);
+                Directory.CreateDirectory(templatesDir);
+                await File.WriteAllTextAsync(Path.Combine(templatesDir, "wrong-schema.json"), """
+                    { "name": "wrong-schema", "category": "single-target", "description": "d",
+                      "isBuiltIn": false, "body": { "schemaVersion": "openastroara-sequence-v0", "target": "{{target_name}}" } }
+                    """, CancellationToken.None);
+                var sequenceService = new Mock<ISequenceService>();
+                var svc = new PlaceholderSequenceTemplateService(sequenceService.Object, profileDir, seedStarterTemplates: false);
+                Assert.That(svc.TemplateExists("wrong-schema"), Is.True, "fixture template must load from disk");
+
+                var request = new TemplateInstantiateRequestDto(NewSequenceName: "x", Parameters: null);
+
+                var ex = await Assert.ThrowsAsync<TemplateBodyRefusedException>(() =>
+                    svc.InstantiateAsync("wrong-schema", request, CancellationToken.None));
+                Assert.That(ex!.Message, Does.Contain("openastroara-sequence-v0"));
                 sequenceService.Verify(s => s.CreateAsync(It.IsAny<SequenceCreateRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             } finally {
                 Directory.Delete(profileDir, recursive: true);

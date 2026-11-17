@@ -105,6 +105,9 @@ internal interface ISwitchDevice : IDeviceAdapter {
     double SwitchStep(short id);
     bool CanWrite(short id);
     void SetSwitchValue(short id, double value);
+    // The driver's own actions (#1971: a Polar Aligner's PolarAlign:* set).
+    IList<string> SupportedActions { get; }
+    string Action(string actionName, string actionParameters);
 }
 
 internal sealed class AlpacaSwitchDevice(AlpacaSwitch client) : ISwitchDevice {
@@ -128,6 +131,8 @@ internal sealed class AlpacaSwitchDevice(AlpacaSwitch client) : ISwitchDevice {
     public double SwitchStep(short id) => client.SwitchStep(id);
     public bool CanWrite(short id) => client.CanWrite(id);
     public void SetSwitchValue(short id, double value) => client.SetSwitchValue(id, value);
+    public IList<string> SupportedActions => client.SupportedActions;
+    public string Action(string actionName, string actionParameters) => client.Action(actionName, actionParameters);
 }
 
 internal interface ISafetyMonitorDevice : IDeviceAdapter {

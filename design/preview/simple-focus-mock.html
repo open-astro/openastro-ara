@@ -1,0 +1,246 @@
+<title>Ara Focus Panel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart, as in design/preview/simple-guider-tabs-mock.html and simple-calibration-mock.html. Layout: the iPad scene, Mode › Focus panel left of the right rail. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --hair: #2a2a2a; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --err: #FF8A80; --stop: #D32F2F; --tint: rgba(66,165,245,.18);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 76ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .vnote { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text2); font-size: 13px; }
+  .vnote b { color: var(--text); font-weight: 600; }
+
+  .ipad { height: 860px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(14,14,14,.9); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 4px 2px; }
+  .chip.on { background: var(--sel); color: #fff; }
+  .chip small { display: block; opacity: .8; font-size: 11px; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  .shutter b { width: 46px; height: 46px; border-radius: 50%; background: #fff; }
+  .shutter.run b { width: 24px; height: 24px; border-radius: 4px; background: var(--stop); }
+  .panel { right: 104px; top: 16px; width: min(400px, calc(100% - 120px)); max-height: calc(100% - 32px); overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; min-height: 32px; }
+  .head i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .cap { color: var(--text2); font-size: 13px; min-height: 20px; }
+  .tabs { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
+  .tabs button { flex: 1; background: transparent; color: var(--text); border: 0; min-height: 40px; font: 13px var(--sys); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--sel); color: #fff; }
+  .tabs button[disabled] { color: var(--text2); cursor: default; }
+  .sect { color: var(--text2); font-size: 12px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .rows { display: flex; flex-direction: column; }
+  .r { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; border-top: 1px solid var(--hair); }
+  .rows .r:first-child { border-top: 0; }
+  .r .l { flex: 1; min-width: 0; }
+  .r .l small { display: block; color: var(--text2); font-size: 12px; }
+  .v { font-variant-numeric: tabular-nums; color: var(--text2); }
+  .st { font-size: 12px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .st.ok { color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+  .st.busy { color: var(--info); box-shadow: inset 0 0 0 1px var(--info); }
+  .st.warn { color: var(--busy); box-shadow: inset 0 0 0 1px var(--busy); }
+  .st.err { color: var(--err); box-shadow: inset 0 0 0 1px var(--err); }
+  .st.idle { color: var(--text2); box-shadow: inset 0 0 0 1px var(--border); }
+  .stepper { display: inline-flex; align-items: center; background: var(--tile); border-radius: 8px; flex: none; }
+  .stepper button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text); font: 20px var(--sys); cursor: pointer; }
+  .stepper button[disabled] { color: #666; cursor: default; }
+  .stepper output { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; }
+  .segrow { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
+  .segrow button { background: transparent; color: var(--text); border: 0; min-width: 44px; min-height: 40px; font: 13px var(--sys); cursor: pointer; }
+  .segrow button + button { border-left: 1px solid var(--border); }
+  .segrow button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tile { min-height: 48px; border-radius: 10px; background: var(--tile); padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .tile small { color: var(--text2); font-size: 11px; }
+  .chart { border-radius: 10px; background: rgba(255,255,255,.03); }
+  .chart svg { display: block; width: 100%; height: 160px; }
+  .warnbox { border: 1px solid var(--busy); border-radius: 10px; padding: 8px 10px; color: var(--busy); font-size: 12.5px; }
+  .tool { min-height: 44px; min-width: 104px; border: 0; border-radius: 8px; background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--text); font: 600 13px var(--sys); cursor: pointer; padding: 6px 12px; flex: none; }
+  .tool[disabled] { color: var(--text2); cursor: default; }
+  .big { font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .advice { border-radius: 10px; background: var(--tint); color: var(--link); padding: 8px 12px; font-size: 14px; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 2px; border-radius: 8px; }
+  .star { left: 16px; top: 76px; width: 120px; height: 120px; border-radius: 10px; display: grid; place-items: center; }
+  .star div { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle, #fff 0, #fff 18%, rgba(255,255,255,.35) 45%, transparent 70%); box-shadow: 0 0 0 1.5px var(--info); }
+  .status { left: 16px; top: 16px; max-width: 320px; padding: 10px 14px; display: flex; gap: 10px; align-items: center; }
+  .status i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  @media (max-width: 720px) { .status, .star { display: none; } .ipad { height: 980px; } .panel { right: 96px; } }
+</style>
+
+<div class="page">
+  <h1>Mode › Focus, rebuilt like Guider and Calibration</h1>
+  <p class="note">Mock for Diego's 2026-11-13 note "Focus and PA screens need rework/redesign, like we did for Guider and Calibration" and "No way to set the exposure time on the Autofocus routine on the Main camera". Same parts as the Guider and Calibration panels: tabs, section headings, Hairline rows and outlined state pills. Dashed amber marks a control that is new to Simple Mode. All figures are examples (the curve copies the shape of the 13 Nov run).</p>
+
+  <div class="controls">
+    <span><span class="lbl">Layout</span><span class="seg" id="layout"><button data-v="a" aria-pressed="false">A · Tabs first</button><button data-v="b" aria-pressed="true">B · Rows first · chosen</button></span></span>
+    <span><span class="lbl">Camera</span><span class="seg" id="cam"><button data-v="main" aria-pressed="true">Main</button><button data-v="guide" aria-pressed="false">Guide</button></span></span>
+    <span><span class="lbl">Autofocus</span><span class="seg" id="state"><button data-v="idle" aria-pressed="true">Idle</button><button data-v="run" aria-pressed="false">Running</button><button data-v="done" aria-pressed="false">Done</button><button data-v="fail" aria-pressed="false">Failed</button></span></span>
+  </div>
+  <div class="vnote" id="vnote"></div>
+
+  <div class="ipad" id="ipad" role="img" aria-label="iPad scene with the Focus panel"></div>
+</div>
+
+<script>
+const S = { layout: 'b', cam: 'main', state: 'idle', tab: 'auto', exp: 5 };
+const NOTES = {
+  a: '<b>A · Tabs first.</b> Auto, Manual and Offsets become three tabs under Main / Guide, like the Guider\'s Guide / Tuning / Tools. Each tab has its own Hairline rows; Auto keeps its run settings in a "Next run" section under the result.',
+  b: '<b>B · Rows first (chosen, 14 Nov).</b> Autofocus is the panel. Manual (Bahtinov) and Filter offsets move to a Tools section as one row each, like the Guider\'s Tools tab: name, one line, status pill, outlined button. One tab row less; Manual and Offsets open in place with a Back arrow.'
+};
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  S[seg.id] = b.dataset.v; if (seg.id === 'layout') S.tab = 'auto'; render();
+}));
+
+// Example V-curve: probes at 19..313, HFR from the 13 Nov run's shape.
+const CURVE = [[313,3.1],[299,2.7],[285,2.25],[271,1.85],[257,1.5],[243,1.2],[229,0.98],[215,0.82],[201,0.86],[187,0.99],[173,1.25],[159,1.5],[145,1.96],[131,2.24],[117,2.56]];
+function chart(n, fit) {
+  const W = 360, H = 160, L = 34, B = 24, T = 8, R = 8;
+  const x = p => L + (313 - p) / (313 - 117) * (W - L - R);
+  const y = h => T + (1 - h / 3.4) * (H - T - B);
+  const pts = CURVE.slice(0, n);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Focus curve, HFR by focuser position">`;
+  [1, 2, 3].forEach(h => s += `<line x1="${L}" x2="${W - R}" y1="${y(h)}" y2="${y(h)}" stroke="#2a2a2a"/><text x="${L - 6}" y="${y(h) + 4}" fill="#A0A0A0" font-size="10" text-anchor="end">${h}.0</text>`);
+  [313, 215, 117].forEach(p => s += `<text x="${x(p)}" y="${H - 6}" fill="#A0A0A0" font-size="10" text-anchor="middle">${p}</text>`);
+  if (fit) {
+    let d = '';
+    for (let p = 313; p >= 117; p -= 4) { const h = 0.8 + Math.pow((p - 214) / 62, 2) * (p > 214 ? 0.62 : 0.55); d += (d ? 'L' : 'M') + x(p).toFixed(1) + ' ' + y(Math.min(h, 3.4)).toFixed(1); }
+    s += `<path d="${d}" fill="none" stroke="${fit === 'bad' ? '#FFB300' : '#42A5F5'}" stroke-width="2" stroke-dasharray="${fit === 'bad' ? '5 4' : ''}"/>`;
+  }
+  pts.forEach(([p, h], i) => s += `<circle cx="${x(p)}" cy="${y(h)}" r="${i === pts.length - 1 && !fit ? 5 : 3.5}" fill="${i === pts.length - 1 && !fit ? '#42A5F5' : '#E0E0E0'}"/>`);
+  if (fit === 'ok') s += `<line x1="${x(215)}" x2="${x(215)}" y1="${T}" y2="${H - B}" stroke="#4CAF50" stroke-dasharray="3 3"/>`;
+  return s + '</svg>';
+}
+
+const pill = { idle: ['idle', 'Not run tonight'], run: ['busy', 'Running'], done: ['ok', 'In focus'], fail: ['err', 'Failed'] };
+const headline = {
+  idle: ['#A0A0A0', 'Not focused yet', 'Tap the shutter to run autofocus.'],
+  run: ['#42A5F5', 'Sweeping — probe 7 of 15', 'Each probe is one frame at the focuser position shown.'],
+  done: ['#4CAF50', 'In focus · HFR 0.80', 'In focus at 215 in 2 min 40 s.'],
+  fail: ['#FF8A80', 'Autofocus failed', 'Failed: curve fit unusable · focuser restored to 215.']
+};
+
+function nextRun(locked) {
+  const dis = locked ? 'disabled' : '';
+  return `<div class="sect"><span>Next run</span>${locked ? '<span>Locked while it runs</span>' : ''}</div>
+  <div class="rows">
+    <div class="r new"><span class="l">Exposure<small>Each probe frame. New here: today only in Advanced Mode.</small></span>
+      <span class="segrow">${[2, 5, 10, 15].map(s => `<button ${dis} data-exp="${s}" aria-pressed="${s === S.exp}">${s} s</button>`).join('')}</span></div>
+    <div class="r"><span class="l">Filter<small>The profile's autofocus filter</small></span><span class="v">L</span></div>
+  </div>
+  <div class="cap">Steps and step size stay in Advanced Mode.</div>`;
+}
+
+function autoBody() {
+  const st = S.state, run = st === 'run';
+  let out = `<div class="sect"><span>Autofocus</span><span class="st ${pill[st][0]}">${pill[st][1]}</span></div>`;
+  const focuser = `<div class="rows"><div class="r"><span class="l">Focuser<small>ZWO EAF · 2.4 °C</small></span><span class="v">${run ? '229 → 215' : '215'}</span></div></div>`;
+  if (st === 'idle') out += focuser + `<div class="rows"><div class="r"><span class="l">Last run<small>No autofocus yet this session.</small></span></div></div>`;
+  else {
+    out += `<div class="chart">${chart(st === 'run' ? 7 : 15, st === 'done' ? 'ok' : st === 'fail' ? 'bad' : '')}</div>`;
+    if (st === 'run') out += `<div class="tiles"><div class="tile"><small>Probe</small>7 / 15</div><div class="tile"><small>HFR</small>0.98</div><div class="tile"><small>Stars</small>107</div><div class="tile"><small>Left</small>~1 min</div></div>`;
+    if (st === 'done') out += `<div class="tiles"><div class="tile"><small>Best position</small>215</div><div class="tile"><small>HFR</small>0.80</div><div class="tile"><small>Stars</small>94</div><div class="tile"><small>Fit R²</small>0.98</div></div>`;
+    if (st === 'fail') out += `<div class="warnbox">The curve fit was weak (R² 0.61): the outer probes sit on a plateau, so the sweep was wider than the V. Try a longer exposure or a smaller step size, then run it again.</div>`;
+  }
+  return out + nextRun(run);
+}
+
+function manualBody() {
+  return `<div class="sect"><span>Bahtinov mask</span><span class="st idle">Not started</span></div>
+  <div class="rows">
+    <div class="r"><span class="l">Fit the mask, then Start<small>Put the Bahtinov mask over the front of the telescope and point at a bright star.</small></span></div>
+    <div class="r"><span class="l">Exposure</span><span class="segrow">${[1, 2, 3, 5].map(s => `<button aria-pressed="${s === 2}">${s} s</button>`).join('')}</span></div>
+    <div class="r"><span class="l">Focuser</span><span class="v">215</span></div>
+  </div>`;
+}
+
+function offsetsBody() {
+  const rows = [['L', 'Reference', 'ok', 'Reference'], ['R', '+4 steps · 9 Nov', 'ok', 'Measured'], ['G', '+2 steps · 9 Nov', 'ok', 'Measured'], ['B', '', 'warn', 'Not measured'], ['Ha', '', 'warn', 'Not measured']];
+  return `<div class="sect"><span>Filter offsets</span><span class="st warn">2 to measure</span></div>
+  <div class="rows">${rows.map(([f, w, c, t]) => `<div class="r"><span class="l">${f}${w ? `<small>${w}</small>` : ''}</span><span class="st ${c}">${t}</span></div>`).join('')}</div>
+  <div class="cap">The shutter measures the missing filters, one autofocus each.</div>`;
+}
+
+function toolsB(locked) {
+  const dis = locked ? 'disabled' : '';
+  return `<div class="sect"><span>Tools</span></div>
+  <div class="rows new">
+    <div class="r"><span class="l">Focus by hand<small>Bahtinov mask readout while you turn the focuser.</small><small><span class="st idle">Not started</span></small></span><button class="tool" ${dis} data-open="manual">Open</button></div>
+    <div class="r"><span class="l">Filter offsets<small>Focus shift per filter, so a filter change needs no autofocus.</small><small><span class="st warn">2 to measure</span></small></span><button class="tool" ${dis} data-open="offsets">Measure</button></div>
+  </div>
+  ${locked ? '<div class="cap" style="color:var(--busy)">Stop autofocus to use these.</div>' : ''}`;
+}
+
+function guideBody() {
+  return `<div class="sect"><span>Guide camera · turn by hand</span><span class="st busy">Live</span></div>
+  <div class="big">HFR 2.41</div>
+  <div class="tiles" style="grid-template-columns:repeat(2,1fr)"><div class="tile"><small>Stars</small>23</div><div class="tile"><small>Frames</small>41</div></div>
+  <div class="advice">Getting better · keep turning the same way</div>
+  <div class="rows">
+    <div class="r"><span class="l">What to turn<small>Guide scope focuser (no motor)</small></span></div>
+    <div class="r"><span class="l">Exposure</span><span class="segrow">${[1, 2, 3, 5].map(s => `<button aria-pressed="${s === 2}">${s} s</button>`).join('')}</span></div>
+  </div>`;
+}
+
+function render() {
+  document.getElementById('vnote').innerHTML = NOTES[S.layout];
+  const st = S.state, run = st === 'run' && S.cam === 'main';
+  const [dot, title, cap] = S.cam === 'guide' ? ['#42A5F5', 'Guide camera focus', 'The guide camera has no focuser: turn it by hand.'] : headline[st];
+  let body = '';
+  const camSeg = `<div class="tabs"><button aria-selected="${S.cam === 'main'}" data-cam="main">Main</button><button aria-selected="${S.cam === 'guide'}" data-cam="guide">Guide</button></div>`;
+  let back = '';
+  if (S.cam === 'guide') body = guideBody();
+  else if (S.layout === 'a') {
+    body = `<div class="tabs new">${[['auto', 'Auto'], ['manual', 'Manual'], ['offsets', 'Offsets']].map(([t, n]) => `<button data-tab="${t}" aria-selected="${S.tab === t}" ${run && S.tab !== t ? 'disabled' : ''}>${n}</button>`).join('')}</div>`
+      + (S.tab === 'auto' ? autoBody() : S.tab === 'manual' ? manualBody() : offsetsBody());
+  } else {
+    if (S.tab === 'auto') body = autoBody() + toolsB(run);
+    else { back = `<button class="tool" style="min-width:44px;padding:0" data-open="auto" aria-label="Back to Autofocus">‹</button>`; body = S.tab === 'manual' ? manualBody() : offsetsBody(); }
+  }
+  const chipSub = S.cam === 'guide' ? 'Guide' : st === 'run' ? '7/15' : st === 'done' ? '0.80' : 'Auto';
+  const statusTxt = S.cam === 'guide' ? ['#42A5F5', 'Focus · Guide camera · HFR 2.41'] : st === 'run' ? ['#42A5F5', 'Focus · Sweeping — probe 7 of 15'] : st === 'done' ? ['#4CAF50', 'Focus · In focus at 215'] : st === 'fail' ? ['#FF8A80', 'Focus · Autofocus failed'] : ['#A0A0A0', 'Ready'];
+  document.getElementById('ipad').innerHTML = `
+    <div class="p status"><i style="background:${statusTxt[0]}"></i><span>${statusTxt[1]}</span></div>
+    ${S.cam === 'main' && st !== 'idle' ? '<div class="p star"><div></div></div>' : ''}
+    <div class="p panel" aria-label="Focus panel">
+      <div class="head">${back}<i style="background:${dot}"></i><span>${title}</span></div>
+      <div class="cap">${cap}</div>
+      ${camSeg}
+      ${body}
+    </div>
+    <div class="p rail" aria-hidden="true">
+      <div class="chip">Preflight</div><div class="chip">Preview</div>
+      <div class="chip on">Focus<small>${chipSub}</small></div>
+      <div class="chip">P.A.</div><div class="chip">Guider</div><div class="chip">Plan</div>
+      <div class="shutter ${run ? 'run' : ''}"><b></b></div>
+    </div>`;
+}
+
+document.getElementById('ipad').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.tab) S.tab = t.dataset.tab;
+  if (t.dataset.open) S.tab = t.dataset.open;
+  if (t.dataset.cam) { S.cam = t.dataset.cam; document.querySelectorAll('#cam button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S.cam)); }
+  if (t.dataset.exp) S.exp = +t.dataset.exp;
+  if (t.closest('.segrow')) t.parentNode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === t));
+  render();
+});
+render();
+</script>
+

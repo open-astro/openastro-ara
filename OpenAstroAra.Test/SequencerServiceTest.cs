@@ -62,14 +62,49 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null) {
+                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null,
+                IPolarAlignService? polarAlign = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
                 profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications,
-                cameraResolver: () => camera);
+                cameraResolver: () => camera, polarAlignResolver: () => polarAlign);
+        }
+
+        [Test]
+        public async Task A_run_started_over_an_open_polar_align_ends_that_routine_before_its_first_instruction() {
+            var id = Guid.NewGuid();
+            var polar = new Mock<IPolarAlignService>();
+            polar.SetupGet(p => p.IsActive).Returns(true);
+            SequenceRunState? stateAtStop = null;
+            SequencerService? svc = null;
+            polar.Setup(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()))
+                .Returns(async () => {
+                    stateAtStop = (await svc!.GetRunStateAsync(id, CancellationToken.None))?.State;
+                    return PlaceholderEquipmentHelpers.Accepted("polar-align.stop", null);
+                });
+            svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), polarAlign: polar.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
+
+            polar.Verify(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(stateAtStop, Is.Not.EqualTo(SequenceRunState.Running), "stopped before the first instruction runs");
+        }
+
+        [Test]
+        public async Task A_run_started_with_no_polar_align_open_leaves_the_routine_alone() {
+            var id = Guid.NewGuid();
+            var polar = new Mock<IPolarAlignService>();
+            polar.SetupGet(p => p.IsActive).Returns(false);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), polarAlign: polar.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            polar.Verify(p => p.StopForSequenceAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
@@ -238,6 +273,49 @@ namespace OpenAstroAra.Test {
             await svc.ResumeAsync(id, null, null, CancellationToken.None);
             await WaitForTerminalAsync(svc, id);
             Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "a finished run is retained for its state but is not active");
+        }
+
+        [Test]
+        public async Task Unfinished_run_ids_name_a_running_or_paused_run_until_it_is_terminal() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty, "nothing started yet");
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "a paused run holds a restart");
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
+        public async Task Unfinished_run_ids_name_an_aborting_run_until_it_is_terminal() {
+            // The run stays Aborting while its last frames drain; a restart must wait for that too.
+            var id = Guid.NewGuid();
+            var saves = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(saves.Task);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })), camera: camera.Object);
+            svc.StoppedRunSavesWait = TimeSpan.FromMinutes(10);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            for (var i = 0; i < 250 && camera.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            camera.Verify(c => c.FinishPendingSavesAsync(), Times.Once);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "the run is Aborting");
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "an aborting run holds a restart");
+
+            saves.SetResult(0);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty);
         }
 
         [Test]
@@ -1167,22 +1245,28 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Only_an_adoptable_pause_stops_the_frame_in_progress() {
             // The star-lost pause (adoptable) stops a light on a lost star; a safety or user pause lets it finish.
-            var id = Guid.NewGuid();
-            var svc = BuildService(id, BuildBody(c => {
-                c.Items.Add(new WaitForTimeSpan { Time = 2 });
-            }), new RecordingWsBroadcaster());
-            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForInstructionInFlightAsync(svc, id, 0);
+            // The wait never elapses (600 s) and each pause gets its own run, so no timing or resume race decides the result.
+            async Task<(SequencerService Svc, Guid Id)> StartRunAsync() {
+                var id = Guid.NewGuid();
+                var svc = BuildService(id, BuildBody(c => {
+                    c.Items.Add(new WaitForTimeSpan { Time = 600 });
+                }), new RecordingWsBroadcaster());
+                await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+                await WaitForInstructionInFlightAsync(svc, id, 0);
+                return (svc, id);
+            }
 
-            await svc.PauseActiveRunsAsync(CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "a plain daemon pause lets the frame finish");
-            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
+            var (plain, plainId) = await StartRunAsync();
+            await plain.PauseActiveRunsAsync(CancellationToken.None);
+            Assert.That(plain.PauseInterruptsFrame(plainId), Is.False, "a plain daemon pause lets the frame finish");
+            await plain.StopAsync(plainId, null, CancellationToken.None);
+            await WaitForTerminalAsync(plain, plainId);
 
-            await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.True, "the star-lost pause stops the frame");
-            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "Resume clears it");
-            await WaitForTerminalAsync(svc, id);
+            var (star, starId) = await StartRunAsync();
+            await star.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            Assert.That(star.PauseInterruptsFrame(starId), Is.True, "the star-lost pause stops the frame");
+            await star.StopAsync(starId, null, CancellationToken.None);
+            await WaitForTerminalAsync(star, starId);
         }
 
         [Test]

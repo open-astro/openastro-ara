@@ -399,7 +399,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         RunMountOpAsync("telescope.findhome", c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), token);
 
+    public long TrackingWriteCount => Interlocked.Read(ref _trackingWrites);
+
     public bool SetTrackingEnabled(bool trackingEnabled) {
+        Interlocked.Increment(ref _trackingWrites);
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
@@ -409,6 +412,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     public bool SetTrackingMode(TrackingMode trackingMode) {
+        Interlocked.Increment(ref _trackingWrites);
         if (trackingMode == TrackingMode.Custom) {
             // Custom needs the separate RA/Dec offset-rate surface (SiderealShiftTrackingRate) — not
             // wired headless; SetTracking.Validate already excludes it via TrackingModes.

@@ -298,12 +298,37 @@ public static class PolarAlignGeometry {
     }
 
     /// <summary>
+    /// #1971 — the move that brings the polar axis onto the apparent pole, in the PolarAlign
+    /// actions' wire convention: a positive azimuth move INCREASES the azimuth coordinate
+    /// (clockwise seen from above; a rotation about the vertical, in arcminutes of that rotation)
+    /// and a positive altitude move RAISES the axis. The inputs are <see cref="AxisError"/>'s
+    /// numbers (east-positive, azimuth cos-scaled to an arc), so this is the one place the
+    /// hemisphere and the cosine are undone; the device never learns either.
+    /// </summary>
+    public static (double AzMoveArcmin, double AltMoveArcmin) AlignerMove(
+            double altErrorArcmin, double azErrorArcmin, double latitudeDeg) {
+        RequireFinite(altErrorArcmin, nameof(altErrorArcmin));
+        RequireFinite(azErrorArcmin, nameof(azErrorArcmin));
+        if (!(double.IsFinite(latitudeDeg) && Math.Abs(latitudeDeg) is > 0 and <= 90)) {
+            throw new ArgumentOutOfRangeException(nameof(latitudeDeg),
+                "site latitude must be non-zero and within ±90°");
+        }
+        // The axis altitude the error was cos-scaled at, as the live loop computes it.
+        var poleAltDeg = Math.Abs(latitudeDeg);
+        // Short of the zenith: next to a geographic pole the sum passes 90° and the cosine would flip the move.
+        var axisAltDeg = Math.Min(poleAltDeg + BennettRefractionArcmin(poleAltDeg) / 60.0 + altErrorArcmin / 60.0, 89.9);
+        // East of the pole is a larger azimuth facing north and a smaller one facing south.
+        var azimuthOffsetArcmin = azErrorArcmin / Math.Cos(Deg2Rad(axisAltDeg)) * (latitudeDeg > 0 ? 1.0 : -1.0);
+        return (-azimuthOffsetArcmin, -altErrorArcmin);
+    }
+
+    /// <summary>
     /// Horizontal coordinates of a pointing at the site — altitude + azimuth (degrees, azimuth
     /// from north through east) of apparent-of-date (<paramref name="raDeg"/>, <paramref name="decDeg"/>)
     /// at <paramref name="atUtc"/>. The live-adjust loop's reverse-projection needs this: with
     /// tracking stopped the camera direction is FIXED in alt/az, so each new solve's alt/az delta
-    /// from the seed pointing IS the knob adjustment the user just made, and the axis error updates
-    /// by exactly that delta without re-slewing (§45.8).
+    /// from the seed pointing is the knob adjustment the user just made, seen from the camera; the axis
+    /// error updates by that shift mapped through <see cref="AxisShiftFromPointingShift"/>, without re-slewing (§45.8).
     /// </summary>
     public static (double AltDeg, double AzDeg) PointingAltAz(
             double raDeg, double decDeg, double latitudeDeg, double longitudeDeg, DateTimeOffset atUtc) {
@@ -317,6 +342,25 @@ public static class PolarAlignGeometry {
         RequireFinite(longitudeDeg, nameof(longitudeDeg));
         var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, longitudeDeg);
         return AltAz(decDeg, latitudeDeg, lst - raDeg);
+    }
+
+    /// <summary>
+    /// §45.8 — the camera's alt/az shift since the seed (<paramref name="dAltDeg"/>, <paramref name="dAzDeg"/>,
+    /// azimuth wrapped to ±180°) mapped back to the shift of the polar axis: the altitude knob's raise of the
+    /// pole and the azimuth knob's turn about the vertical (both degrees, azimuth increasing). Small-angle
+    /// model of a rigid mount whose camera sits at (<paramref name="seedAltDeg"/>, <paramref name="seedAzDeg"/>):
+    /// with ψ the camera's azimuth from the pole's, Δalt = δalt·cos ψ and Δaz = δaz + δalt·sin ψ·tan alt.
+    /// </summary>
+    public static (double AltShiftDeg, double AzShiftDeg) AxisShiftFromPointingShift(
+            double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
+        var poleAzDeg = latitudeDeg > 0 ? 0.0 : 180.0;
+        var psi = Deg2Rad(seedAzDeg - poleAzDeg);
+        // shortcut: floor on cos ψ, a camera ~90° of azimuth from the pole cannot read the altitude knob; the polar
+        // routine keeps the camera within 30° of the pole, where ψ stays under ~45°. Upgrade if the camera may roam.
+        var cosPsi = Math.Max(Math.Cos(psi), 0.1);
+        var altShiftDeg = dAltDeg / cosPsi;
+        var tanAlt = Math.Tan(Deg2Rad(Math.Min(seedAltDeg, 89.9)));
+        return (altShiftDeg, dAzDeg - altShiftDeg * Math.Sin(psi) * tanAlt);
     }
 
     // ── spherical helpers (unit-vector algebra; RA/Dec degrees) ─────────────────────────────

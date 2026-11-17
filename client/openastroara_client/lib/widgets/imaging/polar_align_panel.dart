@@ -10,6 +10,7 @@ import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/polar_align/polar_aligner_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -17,7 +18,9 @@ import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
+import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
+import 'polar_aligner_block.dart';
 import '../adaptive_controls.dart';
 
 export 'polar_align_readout.dart';
@@ -240,6 +243,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ],
           if (live.isActive || live.phase == PolarAlignStates.checked) ...[
             _stageStrip(live),
+            SizedBox(height: _short ? 8 : 12),
+          ],
+          // #1971 the shared Polar Aligner module, placed with no other layout change.
+          if (polarAlignerShown(ref.watch(polarAlignerProvider))) ...[
+            const PolarAlignerBlock(),
             SizedBox(height: _short ? 8 : 12),
           ],
           FitFill(child: _body(live, api == null, color)),
@@ -698,6 +706,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ],
         ),
+        // #1736 the routine's four knobs, collapsed.
+        const PolarAdvancedRow(),
       ],
     );
   }
@@ -1251,6 +1261,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// routine picks the change up on its next frame.
   Widget _captureSettings() {
     final settings = _settings;
+    // One literal names both the visible label and the field for a screen reader.
+    const exposureLabel = Text(
+      'Exposure',
+      style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
+    );
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 12,
@@ -1259,25 +1274,29 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Exposure',
-                style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
+            exposureLabel,
             const SizedBox(width: 8),
             SizedBox(
               width: 96,
-              child: TextField(
-                key: const Key('polar-align-exposure'),
-                controller: _exposureCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  suffixText: 's',
-                  border: OutlineInputBorder(),
+              child: Semantics(
+                label: exposureLabel.data,
+                child: TextField(
+                  key: const Key('polar-align-exposure'),
+                  controller: _exposureCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    suffixText: 's',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _commitExposure(),
+                  onTapOutside: (_) {
+                    FocusScope.of(context).unfocus();
+                    _commitExposure();
+                  },
                 ),
-                onSubmitted: (_) => _commitExposure(),
-                onTapOutside: (_) {
-                  FocusScope.of(context).unfocus();
-                  _commitExposure();
-                },
               ),
             ),
           ],

@@ -127,7 +127,7 @@ namespace OpenAstroAra.Profile {
                         .ToList()
                         .ForEach(Profiles.Add);
 
-                    if (!Profiles.Any() && !loadSpecificProfile) {
+                    if (Profiles.Count == 0 && !loadSpecificProfile) {
                         AddDefaultProfile(Loc.Instance["LblDefault"]);
                     }
 

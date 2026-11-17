@@ -49,11 +49,11 @@ namespace OpenAstroAra.Server.Services {
     /// <para><b>Fine-stage state machine</b> (the <c>state</c> string in <see cref="PolarAlignStateDto"/>):
     /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA slew Δ away from the meridian → frame B →
     /// two-point axis fit) → <c>adjusting</c> (tracking stopped; continuous capture→solve, each
-    /// solve's alt/az delta from the seed pointing IS the user's knob adjustment — §45.8
+    /// solve's alt/az delta from the seed pointing is the user's knob adjustment seen from the camera — §45.8
     /// reverse-projection, no re-slewing) → Stop → <c>stopped</c>. Five consecutive failed solves
     /// park the loop in <c>paused</c> (it keeps retrying at a slower cadence and resumes on the next
     /// good solve); a fatal error (seed solve failure, mount fault) lands in <c>failed</c>.
-    /// Tracking is restored to its pre-routine value on every exit path.</para>
+    /// Tracking is restored to its pre-routine value on every exit path, unless another caller wrote tracking after the routine's last write.</para>
     /// </summary>
     public sealed partial class PolarAlignService : IPolarAlignService, IDisposable {
 
@@ -116,6 +116,9 @@ namespace OpenAstroAra.Server.Services {
         private double? _fineFinalAzArcmin;
         // Written by the run task only: whether this run changed tracking (then the exit restores it).
         private bool _trackingTouched;
+        // The mount's tracking-write count right after this run's own last write; the exit hands tracking
+        // back only while the count still equals it (no other caller wrote since, even the same value).
+        private long _ownTrackingWrites;
         private readonly IPolarAlignMainCameraSolver? _mainCamera;
 
         // §45.4 — the guide camera's frame size as the daemon reported it at this run's start; null
@@ -172,8 +175,10 @@ namespace OpenAstroAra.Server.Services {
                 IWsBroadcaster? ws = null,
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
-                IPolarAlignMainCameraSolver? mainCamera = null) {
+                IPolarAlignMainCameraSolver? mainCamera = null,
+                IPolarAlignerSource? aligner = null) {
             _guider = guider;
+            _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
             _solver = solver;
@@ -203,7 +208,8 @@ namespace OpenAstroAra.Server.Services {
                     WaitingForHome: _waitingForHome,
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
-                    LastResult: _lastResult));
+                    LastResult: _lastResult,
+                    Correction: _aligner));
             }
         }
 
@@ -454,6 +460,13 @@ namespace OpenAstroAra.Server.Services {
         public Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) =>
             EndRoutineAsync("polar-align.stop", outcome: "aborted", idempotencyKey, ct);
 
+        /// <inheritdoc />
+        public Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct) =>
+            EndRoutineAsync("polar-align.stop", outcome: EndedBySequence, null, ct);
+
+        // Outcome of a run a sequence start ended: stopped like an abort, but with no measured result stored.
+        private const string EndedBySequence = "ended_by_sequence";
+
         /// <summary>
         /// §45 step 9 — the user is satisfied: same unwind as Stop, but the §45.13 session row records
         /// <c>complete</c> with the achieved error. Accepted (without a log row) when no routine is
@@ -500,7 +513,7 @@ namespace OpenAstroAra.Server.Services {
                 lock (_gate) {
                     wasActive = _active;
                     _active = false;
-                    if (wasActive) {
+                    if (wasActive && outcome != EndedBySequence) {
                         RecordLastResultLocked(outcome == "complete");
                     }
                     // The run's own gen-fenced resets are no-ops once the generation moved on above.
@@ -516,7 +529,7 @@ namespace OpenAstroAra.Server.Services {
                         _state = "stopped";
                     }
                 }
-                if (wasActive) {
+                if (wasActive && outcome != EndedBySequence) {
                     // Only a routine this call actually ended gets a session row — a failed routine
                     // already wrote its own, and a repeated Stop must not duplicate.
                     await WriteSessionRowBestEffortAsync(outcome, ct).ConfigureAwait(false);
@@ -594,7 +607,13 @@ namespace OpenAstroAra.Server.Services {
                 throw new OperationCanceledException("the run was superseded before it turned tracking on");
             }
             try {
-                if (!_mount.SetTrackingEnabled(true)) {
+                bool accepted;
+                try {
+                    accepted = _mount.SetTrackingEnabled(true);
+                } finally {
+                    _ownTrackingWrites = _mount.TrackingWriteCount; // a refused or thrown write is still ours
+                }
+                if (!accepted) {
                     return false;
                 }
             } catch (Exception ex) {
@@ -638,6 +657,7 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 _trackingTouched = false;
             }
+            var alignerRun = BeginAlignerRun(site.LatitudeDeg);
             try {
                 Directory.CreateDirectory(workDir);
 
@@ -697,6 +717,7 @@ namespace OpenAstroAra.Server.Services {
                 // the session log the successor run now owns — log and drain quietly.
                 LogRoutineFailed("superseded", ex);
             } finally {
+                EndAlignerRun(alignerRun);
                 // Hand back tracking unless a NEWER RUN has started (it owns the mount now and has
                 // already turned tracking off for its own adjust loop — a zombie's late restore
                 // would silently break the successor's §45.8 stationary-camera assumption). A clean
@@ -720,7 +741,11 @@ namespace OpenAstroAra.Server.Services {
             if (!TryMarkTrackingTouched(gen)) {
                 return;
             }
-            _mount.SetTrackingEnabled(enabled);
+            try {
+                _mount.SetTrackingEnabled(enabled);
+            } finally {
+                _ownTrackingWrites = _mount.TrackingWriteCount;
+            }
         }
 
         /// <summary>Record that the CURRENT run is about to write tracking; false for a superseded
@@ -863,6 +888,8 @@ namespace OpenAstroAra.Server.Services {
                 }
                 await CompleteFrameAsync(gen, frameId, s, timing, consecutiveSolveFailures: 0).ConfigureAwait(false);
                 await PublishProgressAsync(gen, iteration, altErr, azErr, solved: true).ConfigureAwait(false);
+                // #1971: the motors' turn. The frame after it measures what they did.
+                await CorrectAsync(gen, altErr, azErr, settings, ct).ConfigureAwait(false);
 
                 var elapsed = DateTimeOffset.UtcNow - iterationStart;
                 if (settings.LoopMode != PolarAlignLoopModes.SingleFrame && elapsed < cadence) {
@@ -1278,7 +1305,8 @@ namespace OpenAstroAra.Server.Services {
                     FinalAltErrorArcmin: _altErrorArcmin,
                     FinalAzErrorArcmin: _azErrorArcmin,
                     Iterations: _liveIterations,
-                    Outcome: outcome);
+                    Outcome: outcome,
+                    AlignerMoves: _alignerMoves);
             }
             LogFinalError(outcome, record.FinalErrorArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
             try {
@@ -1307,6 +1335,10 @@ namespace OpenAstroAra.Server.Services {
             Justification = "Hand-back is best-effort on every exit path; a mount fault here must not mask the routine's outcome. Log-and-recover boundary.")]
         private void RestoreTrackingBestEffort(bool? priorTracking) {
             if (priorTracking is not bool tracking) {
+                return;
+            }
+            if (_mount.TrackingWriteCount != _ownTrackingWrites) {
+                LogTrackingLeftToOtherCaller();
                 return;
             }
             try {
@@ -1484,6 +1516,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4517, Level = LogLevel.Warning, Message = "§45 polar-align tracking restore failed on hand-back (best-effort)")]
         private partial void LogTrackingRestoreFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4542, Level = LogLevel.Information, Message = "§45 polar-align left tracking as another caller set it (no hand-back)")]
+        private partial void LogTrackingLeftToOtherCaller();
 
         [LoggerMessage(EventId = 4518, Level = LogLevel.Warning, Message = "§45 polar-align run task did not unwind within the stop grace period; abandoning (its cleanup still runs on return)")]
         private partial void LogRunUnwindTimedOut();

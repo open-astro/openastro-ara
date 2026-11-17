@@ -63,7 +63,12 @@ import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
+import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
 import '../../state/equipment/camera_state.dart';
+import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
+import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
+import '../../state/polar_align/polar_aligner_state.dart';
+import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/equipment_device_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -685,7 +690,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _ => null,
     };
     if (window != null) return _openDevice(window);
-    final mode = SimpleScreen.showing(origin);
+    // The Polar Aligner's line opens the Polar align Screen, where its block is.
+    final mode = SimpleScreen.showing(
+        origin == SimpleStatusOrigin.polarAligner ? SimpleStatusOrigin.polar : origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
@@ -1905,6 +1912,46 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 }
 
+/// [thumbnail] with an info mark in its corner that shows the Art's credit
+/// on a tap; the thumbnail alone when the Art has no credit. The Sky Map's
+/// pick and Plan's target card share it (CC BY asks for the credit).
+Widget simpleArtCredit(
+  BuildContext context,
+  AlbumArt art,
+  Key key,
+  Widget thumbnail,
+) {
+  final credit = art.creditLine;
+  if (credit == null) return thumbnail;
+  return Tooltip(
+    key: key,
+    message: context.l10n.albumArtCredit(credit),
+    triggerMode: TooltipTriggerMode.tap,
+    showDuration: const Duration(seconds: 4),
+    child: Stack(
+      children: [
+        thumbnail,
+        const Positioned(
+          right: 2,
+          bottom: 2,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.overlayScrim,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.info_outline,
+              size: 14,
+              color: AraColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+
 /// The object picked in the sky, over it: its Album Art and credit if any,
 /// name, type and altitude, and Image this, which opens Plan's sheet with it.
 class _SkyPick extends ConsumerWidget {
@@ -1925,39 +1972,6 @@ class _SkyPick extends ConsumerWidget {
     return _card(context, art);
   }
 
-  /// [thumbnail] with an info mark in its corner that shows the Art's credit
-  /// on a tap; the thumbnail alone when the Art has no credit.
-  Widget _artCredit(BuildContext context, AlbumArt art, Widget thumbnail) {
-    final credit = art.creditLine;
-    if (credit == null) return thumbnail;
-    return Tooltip(
-      key: const Key('simple-sky-art-credit'),
-      message: context.l10n.albumArtCredit(credit),
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 4),
-      child: Stack(
-        children: [
-          thumbnail,
-          const Positioned(
-            right: 2,
-            bottom: 2,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AraColors.overlayScrim,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.info_outline,
-                size: 14,
-                color: AraColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
@@ -1968,9 +1982,10 @@ class _SkyPick extends ConsumerWidget {
           // A small portrait thumbnail at the Album's aspect, on its backdrop.
           // The credit CC BY asks for is behind the info mark: a tap (or a
           // hover) on the thumbnail shows it.
-          _artCredit(
+          simpleArtCredit(
             context,
             art,
+            const Key('simple-sky-art-credit'),
             Semantics(
               image: true,
               label: selection.name,
@@ -3574,6 +3589,7 @@ class _Gear extends ConsumerWidget {
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         )),
+      (l10n.polarAligner, const _PolarAlignerGearRows()),
     ]..sort((a, b) => simpleCompareNames(a.$1, b.$1));
     return Column(
       key: const Key('simple-gear'),
@@ -3582,6 +3598,124 @@ class _Gear extends ConsumerWidget {
       children: [
         for (final row in rows) row.$2,
         const _AddGearRow(),
+      ],
+    );
+  }
+}
+
+/// #1971 the rig's Polar Aligner, read-only: the daemon finds it (a separate
+/// base wins over the mount), so there is nothing to pick. Under it, Turned
+/// by (user, 2026-11-16: here, not in the Polar align panel).
+class _PolarAlignerGearRows extends ConsumerWidget {
+  const _PolarAlignerGearRows();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final PolarAligner? device;
+    switch (ref.watch(polarAlignerProvider)) {
+      case AsyncData(:final value):
+        device = value;
+      // A failed read says so, as a device in error does: red dot, Failed and why.
+      case AsyncError(:final error):
+        return _gearRow(
+          id: 'polaraligner',
+          title: l10n.polarAligner,
+          dot: StatusLevel.error,
+          word: '${l10n.shellFailed} · ${failureReason(l10n, error)}',
+          verb: null,
+          label: null,
+          action: null,
+          onOpen: null,
+          toggle: null,
+        );
+      // Before the first read, like the other rows.
+      case AsyncLoading():
+        return const SizedBox.shrink();
+    }
+    // No rig, or a daemon that predates the Polar Aligner (404).
+    if (device == null) return const SizedBox.shrink();
+    final moving = device.moving || polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
+    final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
+    final (dot, word, caption) = !device.present
+        ? (StatusLevel.disconnected, l10n.polarAlignerNone, l10n.polarAlignerFoundNone)
+        : !device.drivable
+        ? (
+            StatusLevel.busy,
+            unreadable ? l10n.polarAlignerCantRead : l10n.polarAlignerCantDrive,
+            polarAlignerNotDrivableText(l10n, device),
+          )
+        : (
+            moving ? StatusLevel.active : StatusLevel.connected,
+            moving ? l10n.deviceMoving : l10n.polarAlignerReady,
+            device.carrier == 'mount' ? l10n.polarAlignerFoundMount : l10n.polarAlignerFoundBase,
+          );
+    final title = device.name == null || !device.present
+        ? l10n.polarAligner
+        : l10n.shellGearTitle(l10n.polarAligner, device.name!);
+    final row = _gearRow(
+      id: 'polaraligner',
+      title: title,
+      dot: dot,
+      word: '$word · $caption',
+      verb: null,
+      label: null,
+      action: null,
+      onOpen: null,
+      toggle: null,
+    );
+    if (!device.present || !device.drivable) return row;
+    final auto = ref.watch(polarAlignSettingsProvider).value?.polarAlignerAuto;
+    Future<void> pick(bool next) async {
+      final notify = userNotifier(context);
+      try {
+        // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
+        final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
+        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarAlignerAuto: next));
+      } catch (e) {
+        notify(
+          l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
+          detail: failureReason(l10n, e),
+          error: true,
+        );
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        row,
+        Container(
+          key: const Key('simple-gear-polaraligner-turned-by'),
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: AraSpace.s8),
+          decoration: BoxDecoration(
+            color: AraColors.tileFill,
+            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s4,
+            children: [
+              Text(l10n.polarAlignerTurnedBy, style: kSimpleText),
+              if (auto != null)
+                Text(
+                  auto ? l10n.polarAlignerMotorsCaption : l10n.polarAlignerHandCaption,
+                  style: AraText.caption,
+                ),
+              SimpleSegments<bool>(
+                keyPrefix: 'simple-gear-polaraligner',
+                group: l10n.polarAlignerTurnedBy,
+                options: [
+                  (true, l10n.polarAlignerMotors, 'motors'),
+                  (false, l10n.polarAlignerByHandOption, 'hand'),
+                ],
+                selected: auto,
+                onPick: pick,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

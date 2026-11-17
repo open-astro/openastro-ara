@@ -275,10 +275,22 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 final_az_error_arcmin  REAL,
                 iterations             INTEGER NOT NULL,
                 outcome                TEXT NOT NULL,
-                notes                  TEXT
+                notes                  TEXT,
+                aligner_moves          INTEGER
             );
             """, ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_polar_alignments_started_at ON polar_alignments(started_at);", ct);
+        // #1971 — moves the Polar Aligner made in the run; NULL on a row written before this column (by hand).
+        // The column was named corrector_moves on master for one day (2026-11-16); keep those counts.
+        await using (var old = conn.CreateCommand()) {
+            old.CommandText = "SELECT COUNT(*) FROM pragma_table_info('polar_alignments') WHERE name IN ('corrector_moves', 'aligner_moves');";
+            var names = Convert.ToInt32(await old.ExecuteScalarAsync(ct), System.Globalization.CultureInfo.InvariantCulture);
+            old.CommandText = "SELECT COUNT(*) FROM pragma_table_info('polar_alignments') WHERE name = 'corrector_moves';";
+            if (names == 1 && Convert.ToInt32(await old.ExecuteScalarAsync(ct), System.Globalization.CultureInfo.InvariantCulture) == 1) {
+                await ExecAsync(conn, "ALTER TABLE polar_alignments RENAME COLUMN corrector_moves TO aligner_moves;", ct);
+            }
+        }
+        await AddColumnIfMissingAsync(conn, "polar_alignments", "aligner_moves", "INTEGER", ct);
 
         // #1311 — one row per polar-alignment residual measured from guiding (the first minutes of a
         // guided run). session_id is the imaging session running at the time, when exactly one is.

@@ -51,9 +51,6 @@
     <PackageReference Include="Castle.Core" />
     <PackageReference Include="Castle.Core.AsyncInterceptor" />
     <PackageReference Include="NJsonSchema" />
-    <!-- Pinned to 2.x: 3.0.0 drops SerialPortDevice from the modern-TFM assemblies
-         (net6.0+/netstandard2.0), which NMEAGps.cs depends on for serial GPS. -->
-    <PackageReference Include="SharpGIS.NmeaParser" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

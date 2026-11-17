@@ -624,7 +624,9 @@ Future<TargetPlanChoice?> _choosePlan(
 }) async {
   // The silent (no chooser) choice still guides when the rig has a guider —
   // an OSC rig with a guider skipped guiding for exactly this reason.
-  if (!planOptionsAvailable(container.read(filterSetProvider).filters)) {
+  if (!planOptionsAvailable(
+    container.read(filterSetProvider).value?.filters ?? const [],
+  )) {
     return TargetPlanChoice(guide: rig.guider);
   }
   // No widget (a container caller), or it is gone: the silent choice.

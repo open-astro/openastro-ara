@@ -159,6 +159,9 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
     public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
+    // #1971 — the Polar Aligner's state in a running routine, on every change: {state, moves,
+    // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectionDto).
+    public static readonly WsEvent PolarAlignCorrection = new("polar_align.correction");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
@@ -279,6 +282,8 @@ public static class WsEventCatalog {
     // #1865 — restart-on-idle asked while a run is active: server.restart_pending { reason, requested_utc };
     // the restart follows (server.restart_imminent) when the run ends.
     public static readonly WsEvent ServerRestartPending = new("server.restart_pending");
+    // #1951 — a queued restart-on-idle was cancelled: server.restart_cancelled { reason, cancelled_utc }.
+    public static readonly WsEvent ServerRestartCancelled = new("server.restart_cancelled");
 
     // §29 — a block device appeared or vanished, or the store mount came/went;
     // clients re-fetch device+space state (empty payload by design).
@@ -353,6 +358,7 @@ public static class WsEventCatalog {
         PolarAlignStage,
         PolarAlignNeedsHome,
         PolarAlignChecked,
+        PolarAlignCorrection,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,
@@ -406,6 +412,7 @@ public static class WsEventCatalog {
         ClientSettingsUpdated,
         ServerRestartImminent,
         ServerRestartPending,
+        ServerRestartCancelled,
         StorageDevicesChanged,
         DataManagerDownloadProgress,
         DataManagerDownloadComplete,
