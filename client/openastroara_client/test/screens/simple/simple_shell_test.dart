@@ -3014,7 +3014,7 @@ void main() {
   // Large text, or a window too short for both: the squares sit beside the right rail, never over its
   // settings chip.
   for (final (size, scale) in const [
-    (const Size(1024, 768), 2.0),
+    (Size(1024, 768), 2.0),
     (Size(932, 430), 1.0),
     (Size(390, 844), 2.0),
   ]) {
