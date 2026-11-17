@@ -28,6 +28,17 @@ enum SimpleModeScreen {
   plan,
 }
 
+/// The right rail's tabs, top to bottom: the order of the night (#1911).
+/// Preflight is no tab; it keeps a temporary row under them until it goes.
+const railOrder = <SimpleModeScreen>[
+  SimpleModeScreen.preview,
+  SimpleModeScreen.focus,
+  SimpleModeScreen.polarAlign,
+  SimpleModeScreen.guide,
+  SimpleModeScreen.plan,
+  SimpleModeScreen.calibration,
+];
+
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
     SimpleModeScreen.preflight => l10n.shellModePreflight,

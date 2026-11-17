@@ -1354,6 +1354,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellLibrary => 'Library';
 
   @override
+  String get shellRailTabs => 'Modes';
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }

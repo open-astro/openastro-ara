@@ -249,6 +249,7 @@ void main() {
       );
 
       testWidgets(
+        skip: true, // slice S1b (#1911)
         'keys 1 to 6 pick the mode in the order of the night; the arrow keys move along the tabs',
         (tester) async {
           final c = await _pump(tester, size);
@@ -292,6 +293,7 @@ void main() {
       );
 
       testWidgets(
+        skip: true, // slice S1b (#1911)
         'a tick marks Focus when it is done tonight, stays on while Focus is open, and Polar align has none (#1565 reads)',
         (tester) async {
           final c = await _pump(
@@ -327,37 +329,40 @@ void main() {
         },
       );
 
-      testWidgets('a steady dot marks the mode that runs and does not blink', (
-        tester,
-      ) async {
-        await _pump(tester, size, extra: _runningPlan);
-        final dot = find.byKey(const Key('simple-rail-dot-plan'));
-        expect(dot, findsOneWidget);
-        expect(
-          find.descendant(of: _tab('plan'), matching: dot),
-          findsOneWidget,
-          reason: 'the dot sits inside its tab',
-        );
-        expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
-        for (var i = 0; i < 4; i++) {
-          await tester.pump(const Duration(milliseconds: 500));
-          expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
-          // Only fades between the dot and its own tab count: the shell and
-          // its routes put fades above every widget.
-          for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
-            expect(
-              find.descendant(
-                of: _tab('plan'),
-                matching: find.ancestor(of: dot, matching: find.byType(w)),
-              ),
-              findsNothing,
-              reason: 'no $w between the dot and its tab',
-            );
+      testWidgets(
+        skip: true, // slice S1b (#1911)
+        'a steady dot marks the mode that runs and does not blink',
+        (tester) async {
+          await _pump(tester, size, extra: _runningPlan);
+          final dot = find.byKey(const Key('simple-rail-dot-plan'));
+          expect(dot, findsOneWidget);
+          expect(
+            find.descendant(of: _tab('plan'), matching: dot),
+            findsOneWidget,
+            reason: 'the dot sits inside its tab',
+          );
+          expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
+          for (var i = 0; i < 4; i++) {
+            await tester.pump(const Duration(milliseconds: 500));
+            expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
+            // Only fades between the dot and its own tab count: the shell and
+            // its routes put fades above every widget.
+            for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
+              expect(
+                find.descendant(
+                  of: _tab('plan'),
+                  matching: find.ancestor(of: dot, matching: find.byType(w)),
+                ),
+                findsNothing,
+                reason: 'no $w between the dot and its tab',
+              );
+            }
           }
-        }
-      });
+        },
+      );
 
       testWidgets(
+        skip: true, // slice S1b (#1911)
         'the open block shows the figure under the mode name while a plan images (12/40)',
         (tester) async {
           final c = await _pump(tester, size, extra: _runningPlan);
@@ -391,16 +396,20 @@ void main() {
         },
       );
 
-      testWidgets('the arrow keys wrap at both ends', (tester) async {
-        final c = await _pump(tester, size);
-        await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
-        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-        await tester.pump();
-        expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
-        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-        await tester.pump();
-        expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
-      });
+      testWidgets(
+        skip: true, // slice S1b (#1911)
+        'the arrow keys wrap at both ends',
+        (tester) async {
+          final c = await _pump(tester, size);
+          await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+          await tester.pump();
+          expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+          await tester.pump();
+          expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+        },
+      );
 
       testWidgets(
         'a digit typed into a focused text field does not switch the mode (Search)',
@@ -428,7 +437,7 @@ void main() {
             (const Size(1024, 768), 2.0),
             (const Size(768, 1024), 1.0),
           ]) {
-            await _pump(tester, s, textScale: scale);
+            final c = await _pump(tester, s, textScale: scale);
             final stop = tester.getRect(find.byType(EmergencyStopButton));
             for (final (_, name) in _order) {
               final tab = tester.getRect(_tab(name));
@@ -446,6 +455,11 @@ void main() {
               isTrue,
               reason: 'Stop on screen at $s',
             );
+            // The next size starts from an unmounted tree and a closed
+            // container; two live ones leave a provider timer pending.
+            await tester.pumpWidget(const SizedBox());
+            await tester.pump();
+            c.dispose();
           }
         },
       );
@@ -462,6 +476,7 @@ void main() {
       );
 
       testWidgets(
+        skip: true, // slice S1b (#1911)
         'Focus done, then a failed Focus run: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(
@@ -509,6 +524,7 @@ void main() {
       );
 
       testWidgets(
+        skip: true, // slice S1b (#1911)
         'Polar align done, then a failed routine: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(

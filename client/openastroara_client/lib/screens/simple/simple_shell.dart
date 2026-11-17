@@ -11,6 +11,7 @@ import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderProxyBox;
+import 'package:flutter/semantics.dart' show SemanticsRole;
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -776,6 +777,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  /// A tab on the right rail: what opening the modes did first (the discard
+  /// question, the sheet closed), then the pick itself.
+  void _pickTab(SimpleModeScreen m, {bool discarded = false}) {
+    if (!discarded && _askDiscard(() => _pickTab(m, discarded: true))) return;
+    if (_adding) setState(_closeSheet);
+    _pickFromGrid(m);
+  }
+
   /// The Settings sheet's section to open on (a search hit names one).
   String _menuSection = 'Rig';
 
@@ -1132,6 +1141,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // swipe); with none, the note takes a row of its own so it shows whole at
     // any text size.
     final deck = companionPortrait(context, ref);
+    final railTabs = simpleRailTabs(context, ref);
     final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
     final railTop = kSimpleInset * 2 + barHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
@@ -1603,7 +1613,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: Center(
                                   child: CompositedTransformTarget(
                                     link: _railLink,
-                                    child: _RightRail(
+                                    child: railTabs
+                                        ? _RailTabs(
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onPick: _pickTab,
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                          )
+                                        : _RightRail(
                                       key: _rightRailKey,
                                       mode: shown,
                                       named: pilot != null
@@ -2718,7 +2740,7 @@ class _RightRail extends ConsumerWidget {
             key: const Key('simple-settings'),
             icon: Icons.tune,
             tall: true,
-            label: _chipLabel(context, ref),
+            label: _railChipLabel(context, ref, mode, named),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
@@ -2726,14 +2748,214 @@ class _RightRail extends ConsumerWidget {
       ),
     );
   }
+}
 
-  // In Preflight the chip names the step whose settings it shows ("Focus"
-  // over "Auto"), so they don't read as random.
-  String _chipLabel(BuildContext context, WidgetRef ref) {
-    final label = SimpleScreen.of(mode).caption(context, ref);
-    return named == null
-        ? label
-        : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
+// In Preflight the chip names the step whose settings it shows ("Focus"
+// over "Auto"), so they don't read as random.
+String _railChipLabel(
+  BuildContext context,
+  WidgetRef ref,
+  SimpleModeScreen mode,
+  SimpleModeScreen? named,
+) {
+  final label = SimpleScreen.of(mode).caption(context, ref);
+  return named == null
+      ? label
+      : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
+}
+
+/// Whether the right rail is a tab list of the six modes: every layout but the
+/// Companion portrait deck and a phone held sideways (shortest side under 600),
+/// which keep the mode button and the grid (#1911, slices 1 to 4).
+bool simpleRailTabs(BuildContext context, WidgetRef ref) =>
+    !companionPortrait(context, ref) &&
+    MediaQuery.sizeOf(context).shortestSide >= 600;
+
+String _railSlug(SimpleModeScreen m) => switch (m) {
+  SimpleModeScreen.polarAlign => 'polar',
+  SimpleModeScreen.guide => 'guider',
+  _ => m.name,
+};
+
+/// The right rail as a tab list (#1911): one tap on a tab opens that mode. The
+/// open mode is the selected tab, in place, with the shutter and the settings
+/// chip under its name. Above 1.1x text the open block stays on top while the
+/// other tabs scroll; Stop sits outside the rail either way.
+class _RailTabs extends ConsumerWidget {
+  const _RailTabs({
+    super.key,
+    required this.mode,
+    this.named,
+    required this.popover,
+    required this.onPick,
+    required this.onSettings,
+  });
+
+  final SimpleModeScreen mode;
+  final SimpleModeScreen? named;
+  final _Popover popover;
+  final ValueChanged<SimpleModeScreen> onPick;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pinned = simpleRailScale(context) > 1;
+    final open = _openBlock(context, ref);
+    return SimplePanel(
+      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      // No tabBar role: it allows tab children only, and the open block holds
+      // the shutter and the settings chip too.
+      child: Semantics(
+        container: true,
+        label: context.l10n.shellRailTabs,
+        child: Column(
+          key: const Key('simple-rail-tabs'),
+          mainAxisSize: MainAxisSize.min,
+          spacing: AraSpace.s4,
+          children: [
+            if (pinned) open,
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  spacing: AraSpace.s4,
+                  children: [
+                    for (final m in railOrder)
+                      if (m == mode) ...[
+                        if (!pinned) open,
+                      ] else
+                        _RailTab(
+                          key: Key('simple-rail-tab-${_railSlug(m)}'),
+                          mode: m,
+                          selected: false,
+                          compact: pinned,
+                          onTap: () => onPick(m),
+                        ),
+                    // Temporary: Preflight is no tab, and goes in slice 2.
+                    _RailTab(
+                      key: const Key('simple-mode-preflight'),
+                      mode: SimpleModeScreen.preflight,
+                      selected: named == SimpleModeScreen.preflight,
+                      compact: pinned,
+                      onTap: () => onPick(SimpleModeScreen.preflight),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _openBlock(BuildContext context, WidgetRef ref) => Container(
+    key: const Key('simple-rail-open'),
+    decoration: BoxDecoration(
+      color: AraColors.selectionTint,
+      borderRadius: BorderRadius.circular(AraRadius.container),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: AraSpace.s8,
+      children: [
+        KeyedSubtree(
+          key: const Key('simple-mode'),
+          child: _RailTab(
+            key: Key('simple-rail-tab-${_railSlug(mode)}'),
+            mode: named ?? mode,
+            selected: true,
+            onTap: () => onPick(mode),
+            name: true,
+          ),
+        ),
+        SimpleScreen.of(mode).shutter,
+        _RailButton(
+          key: const Key('simple-settings'),
+          icon: Icons.tune,
+          tall: true,
+          label: _railChipLabel(context, ref, mode, named),
+          selected: popover == _Popover.settings,
+          onTap: onSettings,
+        ),
+      ],
+    ),
+  );
+}
+
+/// One tab: the mode's icon over its caption. [name] is the open block's
+/// header, which shows the short name alone, as the rail did. [compact] (large
+/// text) drops the icon, so the six tabs and Stop fit the rail's height.
+class _RailTab extends StatelessWidget {
+  const _RailTab({
+    super.key,
+    required this.mode,
+    required this.selected,
+    required this.onTap,
+    this.name = false,
+    this.compact = false,
+  });
+
+  final SimpleModeScreen mode;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool name;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = simpleRailScale(context);
+    final color = selected ? AraColors.selectionFg : AraColors.textSecondary;
+    final label = name
+        ? mode.railLabelOf(context.l10n)
+        : mode.labelOf(context.l10n);
+    return Semantics(
+      role: SemanticsRole.tab,
+      selected: selected,
+      enabled: true,
+      label: mode.labelOf(context.l10n),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AraRadius.container),
+        child: ExcludeSemantics(
+          child: ConstrainedBox(
+            // Content-high above its minimum, so large text takes what it
+            // needs and no more.
+            constraints: BoxConstraints(
+              minWidth: 60 * scale,
+              maxWidth: 60 * scale,
+              minHeight: name ? 48 : (compact ? 32 : 46),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!name && !compact) Icon(mode.icon, size: 20, color: color),
+                // "Polar align" wraps to two lines; a word wider than the
+                // rail shrinks to fit, never cut.
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: 60 * scale,
+                      child: Text(
+                        label,
+                        maxLines: compact ? 1 : 2,
+                        softWrap: !compact,
+                        textAlign: TextAlign.center,
+                        style: AraText.caption.copyWith(
+                          color: color,
+                          fontWeight: selected ? FontWeight.w600 : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

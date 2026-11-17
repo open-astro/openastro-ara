@@ -1354,6 +1354,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellLibrary => 'Library';
 
   @override
+  String get shellRailTabs => 'Modes';
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -7639,6 +7642,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellLibrary => 'Biblioteca';
+
+  @override
+  String get shellRailTabs => 'Modos';
 
   @override
   String shellModeSemantics(String mode) {
