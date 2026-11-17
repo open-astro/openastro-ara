@@ -8,6 +8,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import '../../support/fake_section_rig.dart';
 
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
+import 'package:openastroara/state/settings/migrated_sections.dart';
 
 void main() {
   group('FilterWheelPolicyNotifier (#1075)', () {
@@ -91,6 +92,45 @@ void main() {
 
     test('per-filter focus offsets write through the policy', () {
       expect(const FilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
+    });
+  });
+
+  group('FilterWheelPolicyNotifier loads itself', () {
+    setUp(ProfileApi.forgetOwnWrites);
+    FakeSectionRig wheelRig() => FakeSectionRig({
+      'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+      'filter-wheel/labels': rigDefaults['filter-wheel/labels'],
+    });
+
+    test('after the reset point it loads again with no Retry', () async {
+      final c = ProviderContainer(
+        overrides: [profileApiProvider.overrideWithValue(wheelRig().api())],
+      );
+      addTearDown(c.dispose);
+      c.listen(filterWheelPolicyProvider, (_, _) {});
+      await settle(() => c.read(filterWheelPolicyProvider).canSave);
+      expect(c.read(filterWheelPolicyProvider).canSave, isTrue);
+
+      resetMigratedSections(c.read);
+      expect(c.read(filterWheelPolicyProvider).canSave, isFalse);
+      await settle(() => c.read(filterWheelPolicyProvider).canSave);
+      expect(c.read(filterWheelPolicyProvider).canSave, isTrue);
+    });
+
+    test('it loads when the rig connects after it was built', () async {
+      ProfileApi? current;
+      final c = ProviderContainer(
+        overrides: [profileApiProvider.overrideWith((ref) => current)],
+      );
+      addTearDown(c.dispose);
+      c.listen(filterWheelPolicyProvider, (_, _) {});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(c.read(filterWheelPolicyProvider).canSave, isFalse);
+
+      current = wheelRig().api();
+      c.invalidate(profileApiProvider);
+      await settle(() => c.read(filterWheelPolicyProvider).canSave);
+      expect(c.read(filterWheelPolicyProvider).canSave, isTrue);
     });
   });
 }
