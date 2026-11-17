@@ -279,7 +279,6 @@ void main() {
 
       c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
       expect(c.read(guiderDiscoveryProvider).servers, isNull);
-      c.read(guiderAlpacaDevicesProvider); // rig B's state is built before the sweep answers
       gate.complete(['rig-a-alpaca.lan:11111']);
       await f;
       expect(c.read(guiderDiscoveryProvider).servers, isNull, reason: 'rig A\'s servers stay out of rig B');
@@ -296,7 +295,6 @@ void main() {
       final f = c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
 
       c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
-      c.read(guiderAlpacaDevicesProvider); // rig B's state is built before the lookup answers
       gate.complete();
       await f;
       expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty);
