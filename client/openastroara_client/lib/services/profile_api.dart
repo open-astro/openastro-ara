@@ -543,6 +543,27 @@ class ProfileApi {
         ifMatch,
       );
 
+  Future<({FilterSetSettings value, String? etag})> getFilterSetSection() =>
+      _getTagged('filter-set', _filterSetFromRig);
+  Future<({FilterSetSettings value, String? etag})> putFilterSetSection(
+    FilterSetSettings v, {
+    String? ifMatch,
+  }) =>
+      _putTagged('filter-set', filterSetToJson(v), _filterSetFromRig, ifMatch);
+
+  Future<({FilterWheelPolicy value, String? etag})>
+  getFilterWheelPolicySection() =>
+      _getTagged('filter-wheel/policy', _filterWheelPolicyFromRig);
+  Future<({FilterWheelPolicy value, String? etag})> putFilterWheelPolicySection(
+    FilterWheelPolicy v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'filter-wheel/policy',
+    v.toJson(),
+    _filterWheelPolicyFromRig,
+    ifMatch,
+  );
+
   Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
       _getTagged('unguided', _unguidedSettingsFromRig);
   Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
@@ -611,6 +632,30 @@ class ProfileApi {
       priorToleranceBasis: j['prior_tolerance_basis'] as String,
     );
   }
+
+  // Strict like the readers above: an unknown filter kind, a missing name or a
+  // wheel with no slot list fails the load instead of reading as `l`, '' or the
+  // reference wheel (the lenient filterSetFromJson stays for the offline cache).
+  static FilterSetSettings _filterSetFromRig(Map<String, dynamic> j) =>
+      FilterSetSettings(
+        filters: [
+          for (final f in j['filters'] as List)
+            PlanningFilter(
+              name: (f as Map)['name'] as String,
+              kind: FilterKind.values.firstWhere(
+                (k) => k.wire == f['kind'],
+                orElse: () => throw FormatException('unknown kind', f['kind']),
+              ),
+              bandwidthNm: (f['bandwidth_nm'] as num).toDouble(),
+            ),
+        ],
+      );
+
+  static FilterWheelPolicy _filterWheelPolicyFromRig(Map<String, dynamic> j) =>
+      FilterWheelPolicy(
+        homeOnFirstConnect: j['home_on_first_connect'] as bool,
+        useFilterWheelOffsets: j['use_filter_wheel_offsets'] as bool,
+      );
 
   static PlateSolveSettings _plateSolveSettingsFromRig(
     Map<String, dynamic> j,
@@ -784,27 +829,6 @@ class ProfileApi {
       data: phd2SettingsToJson(value),
     );
     return _phd2SettingsFromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's filter-wheel policy (#1075): whether Ara parks
-  /// the wheel on slot 0 (L) the first time it connects after the daemon
-  /// starts.
-  Future<FilterWheelPolicy> getFilterWheelPolicy() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/policy',
-    );
-    return FilterWheelPolicy.fromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's filter-wheel policy. Returns Ara's echo.
-  Future<FilterWheelPolicy> putFilterWheelPolicy(
-    FilterWheelPolicy value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/policy',
-      data: value.toJson(),
-    );
-    return FilterWheelPolicy.fromJson(res.data ?? const {});
   }
 
   /// GET the switch port designated as the profile's cooling fan (#1700).

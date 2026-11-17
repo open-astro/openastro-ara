@@ -15,22 +15,26 @@ class SectionNotLoaded extends ConsumerWidget {
     super.key,
     required this.section,
     required this.onRetry,
+    this.padding = const EdgeInsets.all(24),
   });
 
   final LoadedSection<Object?> section;
   final VoidCallback onRetry;
 
+  /// The default suits a whole panel; a row inside a padded list passes its own.
+  final EdgeInsetsGeometry padding;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (ref.watch(profileApiProvider) == null) {
       return Padding(
-        padding: const EdgeInsets.all(24),
+        padding: padding,
         child: Text(context.l10n.shellRigNotConnected),
       );
     }
     final failure = section.lastFailure;
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

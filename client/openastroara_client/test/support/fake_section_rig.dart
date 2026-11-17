@@ -43,6 +43,14 @@ class FakeSectionRig implements HttpClientAdapter {
   void savedElsewhere(String section) =>
       _versions[section] = (_versions[section] ?? 1) + 1;
 
+  /// The daemon itself wrote [section] outside the profile routes (the wheel's
+  /// slot names mirrored into the labels): the copy and its tag move, no
+  /// client PUT is recorded and no `profile.updated` reaches the client.
+  void daemonWrote(String section, Object? body) {
+    _sections[section] = body;
+    savedElsewhere(section);
+  }
+
   /// A [ProfileApi] whose requests reach this rig and nothing else.
   ProfileApi api({String hostname = 'rig.test'}) => ProfileApi(
     AraServer(hostname: hostname, port: 1),
@@ -120,6 +128,14 @@ const rigDefaults = <String, Map<String, Object?>>{
     'auto_captured': false,
   },
   'custom-horizon': {'points': []},
+  'filter-set': {'filters': []},
+  'filter-wheel/labels': {
+    'labels': ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+  },
+  'filter-wheel/policy': {
+    'home_on_first_connect': true,
+    'use_filter_wheel_offsets': false,
+  },
   'plate-solve': {
     'engine': 'astap',
     'path_or_endpoint': '/opt/openastroara/astap_cli',
@@ -145,3 +161,11 @@ const rigDefaults = <String, Map<String, Object?>>{
     'prior_tolerance_basis': 'max',
   },
 };
+
+/// Wait (real time, at most 2 s) until [done]: the notifiers load on their
+/// own, over a client that answers on later event-loop turns.
+Future<void> settle(bool Function() done) async {
+  for (var i = 0; i < 200 && !done(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}

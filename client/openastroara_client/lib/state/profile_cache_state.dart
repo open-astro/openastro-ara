@@ -170,8 +170,11 @@ Future<bool> seedPlanningFromCache(
   await container
       .read(siteSettingsProvider.notifier)
       .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));
-  await container.read(filterSetProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.filterSetFromJson(sec('filter_set')));
+  if (snap['filter_set'] is Map) {
+    container
+        .read(filterSetProvider.notifier)
+        .seed(ProfileApi.filterSetFromJson(sec('filter_set')));
+  }
   if (snap['camera_electronics'] is Map) {
     container
         .read(cameraElectronicsProvider.notifier)

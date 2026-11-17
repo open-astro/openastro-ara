@@ -11,9 +11,7 @@ import 'settings/autofocus_settings_state.dart';
 import 'settings/cooling_fan_state.dart';
 import 'settings/dome_settings_state.dart';
 import 'settings/equipment_connection_state.dart';
-import 'settings/filter_set_state.dart';
 import 'settings/filter_wheel_labels_state.dart';
-import 'settings/filter_wheel_policy_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/migrated_sections.dart';
 import 'settings/optics_settings_state.dart';
@@ -57,20 +55,14 @@ typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
 // `migratedSections`, so adding one there adds its row here.
 final Map<String, _Hydrate> _hydrators = {
   for (final route in {for (final s in migratedSections) s.route})
-    route: (c, api) => Future.wait([
-      for (final s in migratedSections)
-        if (s.route == route)
-          c.read(s.provider.notifier).hydrateFromServer(api),
-    ]),
+    route: (c, api) => _hydrateMigrated(c, api, route),
   'imaging-defaults': (c, api) =>
       c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
   'autofocus': (c, api) =>
       c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
-  'filter-set': (c, api) =>
-      c.read(filterSetProvider.notifier).hydrateFromServer(api),
-  // One section, two routes: filter-wheel/labels and filter-wheel/policy.
+  // One route, two sections: the migrated policy and the labels.
   'filter-wheel': (c, api) async {
-    await c.read(filterWheelPolicyProvider.notifier).hydrateFromServer(api);
+    await _hydrateMigrated(c, api, 'filter-wheel');
     await c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api);
   },
   'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
@@ -87,3 +79,12 @@ final Map<String, _Hydrate> _hydrators = {
   'equipment-connection': (c, api) =>
       c.read(equipmentConnectionProvider.notifier).hydrateFromServer(api),
 };
+
+Future<void> _hydrateMigrated(
+  ProviderContainer c,
+  ProfileApi api,
+  String route,
+) => Future.wait([
+  for (final s in migratedSections)
+    if (s.route == route) c.read(s.provider.notifier).hydrateFromServer(api),
+]);
