@@ -24,6 +24,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/util/common_names.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 import 'package:openastroara/widgets/album/album_card.dart';
@@ -390,6 +391,19 @@ void main() {
     expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('Silver')), findsOneWidget);
   });
 
+  testWidgets('a new IC Card shows its #1887 nickname on the front and the back', (tester) async {
+    final heart = applyCommonNames([_dso('IC1805', 'IC1805', aliases: ['LBN 654'])]).single;
+    await _pump(tester, catalog: [heart], frames: [
+      AlbumFrame(frameId: 'h', targetName: 'IC 1805', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ]);
+    Finder inFront(String t) => find.descendant(of: find.byType(AlbumCardFront), matching: find.text(t));
+    expect(inFront('Heart Nebula'), findsOneWidget);
+    expect(inFront('IC 1805'), findsOneWidget);
+    await tester.tap(find.text('Heart Nebula'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('HEART NEBULA')), findsOneWidget);
+  });
+
   testWidgets('the flip keeps one image provider for the front art', (tester) async {
     await _pump(tester, frames: _m31Frames, manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')});
     Set<int?> widths() => {
@@ -440,16 +454,54 @@ void main() {
     expect(find.textContaining('well placed tonight'), findsNothing);
   });
 
+  testWidgets('the shelf follows a catalog chip and a refresh while the album stays open (#1887)', (tester) async {
+    // The shelf's lookup of missing cards is kept between builds; it must follow what it came from.
+    var served = const <AlbumFrame>[];
+    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m1],
+        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
+    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+    await tester.tap(find.text('Caldwell · 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 missing card well placed tonight'), findsOneWidget);
+    expect(_onShelf('Double Cluster'), findsOneWidget);
+    await tester.tap(find.text('Caldwell · 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+    // A light of M42 comes in on a pull: the open album takes it off the shelf.
+    served = [
+      AlbumFrame(frameId: 'm42', targetName: 'M 42', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ];
+    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(find.text('2 missing cards well placed tonight'), findsOneWidget);
+    expect(_onShelf('Orion Nebula'), findsNothing);
+  });
+
   testWidgets('each catalog chip shows its collected count, so a card in an unselected catalog shows', (tester) async {
     await _pump(tester, frames: _m31Frames);
     expect(find.text('Messier · 1'), findsOneWidget);
     expect(find.text('Caldwell · 0'), findsOneWidget);
   });
 
-  testWidgets('the Book switch has three segments: Messier, Caldwell, RCW (#1629)', (tester) async {
+  testWidgets('six catalog chips wrap at phone width without overflow, each still 44 px (#1887)', (tester) async {
+    await _pump(tester, frames: _m31Frames, size: const Size(360, 740));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(FilterChip), findsNWidgets(6));
+    for (final chip in find.byType(FilterChip).evaluate()) {
+      expect(tester.getSize(find.byWidget(chip.widget)).height, greaterThanOrEqualTo(44));
+      expect(tester.getRect(find.byWidget(chip.widget)).right, lessThanOrEqualTo(360));
+    }
+  });
+
+  testWidgets('the Book switch has six segments: Messier, Caldwell, RCW, NGC, IC, Sharpless (#1629, #1887)', (tester) async {
     await _pump(tester, frames: _m31Frames);
-    expect(find.byType(FilterChip), findsNWidgets(3));
+    expect(find.byType(FilterChip), findsNWidgets(6));
     expect(find.text('RCW · 0'), findsOneWidget);
+    expect(find.text('NGC · 1'), findsOneWidget, reason: 'M 31 is NGC 224');
+    expect(find.text('IC · 0'), findsOneWidget);
+    expect(find.text('Sharpless (Sh2) · 0'), findsOneWidget);
   });
 
   testWidgets('an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
@@ -588,12 +640,21 @@ void main() {
   });
 
   testWidgets('the catalogs sit left of the filter on one row, the count below', (tester) async {
-    await _pump(tester, frames: _m31Frames);
+    await _pump(tester, frames: _m31Frames, size: const Size(2400, 900));
     final filter = find.byType(SegmentedButton<AlbumFilter>);
     expect(tester.getCenter(find.text('Messier · 1')).dy, closeTo(tester.getCenter(filter).dy, 4));
     expect(tester.getCenter(find.text('Caldwell · 0')).dx, lessThan(tester.getTopLeft(filter).dx));
     expect(tester.getTopLeft(find.text('1 / 4 collected')).dy, greaterThan(tester.getBottomLeft(filter).dy));
     expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(tester.getCenter(find.text('1 / 4 collected')).dy, 4));
+  });
+
+  testWidgets('at 1200 px six chips fill the row and the filter wraps below them, nothing overflows (#1887)',
+      (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    expect(tester.takeException(), isNull);
+    final filter = find.byType(SegmentedButton<AlbumFilter>);
+    expect(tester.getTopLeft(filter).dy, greaterThan(tester.getBottomLeft(find.text('Messier · 1')).dy));
+    expect(tester.getTopLeft(find.text('1 / 4 collected')).dy, greaterThan(tester.getBottomLeft(filter).dy));
   });
 
   testWidgets('a phone keeps the catalogs and the filter above the count, out of the bar', (tester) async {
@@ -811,6 +872,9 @@ void main() {
 
   testWidgets('a flipped card stays inside a landscape phone', (tester) async {
     await _pump(tester, frames: _m31Frames, size: const Size(800, 400));
+    // Six catalog chips wrap the header taller; the grid starts lower.
+    await tester.ensureVisible(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     final back = tester.getRect(find.byType(AlbumCardBack));

@@ -1245,22 +1245,28 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Only_an_adoptable_pause_stops_the_frame_in_progress() {
             // The star-lost pause (adoptable) stops a light on a lost star; a safety or user pause lets it finish.
-            var id = Guid.NewGuid();
-            var svc = BuildService(id, BuildBody(c => {
-                c.Items.Add(new WaitForTimeSpan { Time = 2 });
-            }), new RecordingWsBroadcaster());
-            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await WaitForInstructionInFlightAsync(svc, id, 0);
+            // The wait never elapses (600 s) and each pause gets its own run, so no timing or resume race decides the result.
+            async Task<(SequencerService Svc, Guid Id)> StartRunAsync() {
+                var id = Guid.NewGuid();
+                var svc = BuildService(id, BuildBody(c => {
+                    c.Items.Add(new WaitForTimeSpan { Time = 600 });
+                }), new RecordingWsBroadcaster());
+                await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+                await WaitForInstructionInFlightAsync(svc, id, 0);
+                return (svc, id);
+            }
 
-            await svc.PauseActiveRunsAsync(CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "a plain daemon pause lets the frame finish");
-            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
+            var (plain, plainId) = await StartRunAsync();
+            await plain.PauseActiveRunsAsync(CancellationToken.None);
+            Assert.That(plain.PauseInterruptsFrame(plainId), Is.False, "a plain daemon pause lets the frame finish");
+            await plain.StopAsync(plainId, null, CancellationToken.None);
+            await WaitForTerminalAsync(plain, plainId);
 
-            await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.True, "the star-lost pause stops the frame");
-            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
-            Assert.That(svc.PauseInterruptsFrame(id), Is.False, "Resume clears it");
-            await WaitForTerminalAsync(svc, id);
+            var (star, starId) = await StartRunAsync();
+            await star.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            Assert.That(star.PauseInterruptsFrame(starId), Is.True, "the star-lost pause stops the frame");
+            await star.StopAsync(starId, null, CancellationToken.None);
+            await WaitForTerminalAsync(star, starId);
         }
 
         [Test]

@@ -808,25 +808,25 @@ public static partial class EquipmentEndpoints {
         // Single-frame mode: take the next adjust frame. 409 outside the adjust phase.
         polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignCaptureAsync(svc, key, ct));
-        // #1971 — the Polar Corrector in a running routine: stop its motors (the routine carries on by
+        // #1971 — the Polar Aligner in a running routine: stop its motors (the routine carries on by
         // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume.
-        polar.MapPost("/corrector/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectorAsync(() => svc.StopCorrectorAsync(key, ct)));
-        polar.MapPost("/corrector/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectorAsync(() => svc.ResumeCorrectorAsync(key, ct)));
+        polar.MapPost("/correction/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.StopAlignerAsync(key, ct)));
+        polar.MapPost("/correction/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.ResumeAlignerAsync(key, ct)));
 
-        // ─── Polar Corrector (#1972, #1973) ───
-        var corrector = equipment.MapGroup("/polarcorrector");
-        corrector.MapGet("", async (IPolarCorrectorService svc, CancellationToken ct) => Results.Ok(await svc.GetAsync(ct)))
-            .WithName("GetPolarCorrector").WithSummary("The rig's Polar Corrector, its capabilities and its position on each axis.")
-            .Produces<PolarCorrectorDto>();
-        corrector.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarCorrectorService svc, CancellationToken ct) =>
-            await PolarAlignCorrectorAsync(() => svc.StopAsync(key, ct)))
-            .WithName("StopPolarCorrector").WithSummary("Stop both axes of the Polar Corrector.")
+        // ─── Polar Aligner (#1972, #1973) ───
+        var aligner = equipment.MapGroup("/polaraligner");
+        aligner.MapGet("", async (IPolarAlignerService svc, CancellationToken ct) => Results.Ok(await svc.GetAsync(ct)))
+            .WithName("GetPolarAligner").WithSummary("The rig's Polar Aligner, its capabilities and its position on each axis.")
+            .Produces<PolarAlignerDto>();
+        aligner.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignerService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.StopAsync(key, ct)))
+            .WithName("StopPolarAligner").WithSummary("Stop both axes of the Polar Aligner.")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
-        corrector.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarCorrectorService svc, CancellationToken ct) =>
-            await PolarAlignCorrectorAsync(() => svc.HomeAsync(key, ct)))
-            .WithName("HomePolarCorrector").WithSummary("Send the Polar Corrector to its home position.")
+        aligner.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignerService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.HomeAsync(key, ct)))
+            .WithName("HomePolarAligner").WithSummary("Send the Polar Aligner to its home position.")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
 
         // ─── Manual reconnect (§52.1) ───
@@ -1190,7 +1190,7 @@ public static partial class EquipmentEndpoints {
         }
     }
 
-    public static async Task<IResult> PolarAlignCorrectorAsync(Func<Task<OperationAcceptedDto>> command) {
+    public static async Task<IResult> PolarAlignCorrectionAsync(Func<Task<OperationAcceptedDto>> command) {
         ArgumentNullException.ThrowIfNull(command);
         try {
             return Results.Accepted(value: await command());

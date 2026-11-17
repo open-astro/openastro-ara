@@ -20,7 +20,7 @@ namespace OpenAstroAra.Server.Services;
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
-/// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Corrector, halt the rotator
+/// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Aligner, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
 /// a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment
@@ -46,7 +46,7 @@ public sealed partial class EmergencyStopService {
     private readonly IWsBroadcaster? _ws;
     // #1689 — Func<>: the follower is registered after this service.
     private readonly Func<DomeFollower?>? _domeFollower;
-    private readonly IPolarCorrectorService? _polarCorrector;
+    private readonly IPolarAlignerService? _polarAligner;
     private readonly ILogger<EmergencyStopService> _logger;
 
     // Single-flight: a panicked double-press must not queue a second full
@@ -58,7 +58,14 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 15 rungs, 150 s, inside the client's 160 s receive timeout.
+    // puts the worst-case ladder at 16 rungs (abort runs, 11 single rungs, two
+    // mount passes of two), 160 s on a healthy pool.
+    // #1985 — the window covers the connected probe and the action's synchronous prefix too.
+    // Both run on a dedicated thread, so a probe that never completes or a prefix that blocks
+    // holds neither the caller nor the ladder, and a rung whose work completes synchronously
+    // needs no pool thread. On a starved pool, the work after a rung's first incomplete await
+    // and the timeout timer both wait for a pool thread, so the bound stretches by the pool's
+    // thread-injection delay: the worst case is a rung reported Failed late, never a hang.
     // Internal knob so tests can compress it.
     internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -77,9 +84,9 @@ public sealed partial class EmergencyStopService {
             AutofocusRunTracker? autofocus = null,
             IPolarAlignService? polarAlign = null,
             Func<DomeFollower?>? domeFollower = null,
-            IPolarCorrectorService? polarCorrector = null) {
+            IPolarAlignerService? polarAligner = null) {
         _domeFollower = domeFollower;
-        _polarCorrector = polarCorrector;
+        _polarAligner = polarAligner;
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -151,11 +158,11 @@ public sealed partial class EmergencyStopService {
             return abortSlew is RungOutcome.Done && trackingOff is RungOutcome.Done;
         }
         var mountStoppedFirst = await StopMountAsync("first").ConfigureAwait(false);
-        // #1973 — the Polar Corrector moves the mount's polar axis: stopped right after the mount.
-        var correctorOutcome = await RungAsync("stop polar corrector",
-            _polarCorrector is null ? null : () => Task.FromResult(_polarCorrector.IsPresent),
-            _polarCorrector is null ? null : async ct => await _polarCorrector.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
-        if (correctorOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_corrector"); }
+        // #1973 — the Polar Aligner moves the mount's polar axis: stopped right after the mount.
+        var alignerOutcome = await RungAsync("stop polar aligner",
+            _polarAligner is null ? null : () => Task.FromResult(_polarAligner.IsPresent),
+            _polarAligner is null ? null : async ct => await _polarAligner.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (alignerOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_aligner"); }
         // Left where it stops (§35.3 step 4): Halt sends no target, so a turning rotator just stops.
         var rotatorOutcome = await RungAsync("halt rotator",
             _rotator is null ? null : async () => (await _rotator.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
@@ -257,7 +264,7 @@ public sealed partial class EmergencyStopService {
             // Same hung-component guard as the device rungs: the abort only
             // touches in-memory run state today, but "no single dead
             // component may wedge this button" must hold for every rung.
-            var work = sequencer.AbortActiveRunsAsync(CancellationToken.None);
+            var work = RunOnOwnThread(() => sequencer.AbortActiveRunsAsync(CancellationToken.None));
             var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
             if (!ReferenceEquals(completed, work)) {
                 LogRungTimedOut("abort runs", RungTimeout.TotalSeconds);
@@ -278,31 +285,42 @@ public sealed partial class EmergencyStopService {
             return RungOutcome.NotAvailable;
         }
         try {
+            // #1985 — probe and action run on a dedicated thread inside ONE RungTimeout window, so a probe
+            // that never completes, or an action that blocks its caller before its first await,
+            // cannot hold the ladder (on a starved pool the window can stretch; see RungTimeout).
             // A registered-but-disconnected device is a routine state (a rig
             // without a flat panel, an idle guider), NOT a failure — probing
             // the cached connection state first keeps it out of failed_rungs,
             // where the service's own "is not connected" throw would land it.
             // A disconnect racing the probe still throws below and reads
             // Failed — a device dying mid-stop deserves the loud path.
-            if (connectedProbe is not null && !await connectedProbe().ConfigureAwait(false)) {
-                return RungOutcome.NotAvailable;
-            }
             // CancellationToken.None deliberately: the caller disconnecting
             // must not cancel a half-finished stop.
-            var work = action(CancellationToken.None);
+            var work = RunOnOwnThread(async () => {
+                if (connectedProbe is not null && !await connectedProbe().ConfigureAwait(false)) {
+                    return RungOutcome.NotAvailable;
+                }
+                await action(CancellationToken.None).ConfigureAwait(false);
+                return RungOutcome.Done;
+            });
             var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
             if (!ReferenceEquals(completed, work)) {
                 LogRungTimedOut(rung, RungTimeout.TotalSeconds);
                 ObserveQuietly(rung, work);
                 return RungOutcome.Failed;
             }
-            await work.ConfigureAwait(false);
-            return RungOutcome.Done;
+            return await work.ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed(rung, ex);
             return RungOutcome.Failed;
         }
     }
+
+    // A dedicated thread, not Task.Run: the probe and the synchronous prefix start at once without
+    // waiting for a pool thread, and a blocking prefix does not hold the caller. Only work up to the
+    // first incomplete await runs here; its continuation runs on the pool (see RungTimeout).
+    private static Task<T> RunOnOwnThread<T>(Func<Task<T>> body) =>
+        Task.Factory.StartNew(body, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 
     /// <summary>
     /// A timed-out rung's task keeps running (there is no way to cancel a

@@ -393,11 +393,11 @@ namespace OpenAstroAra.Test {
             Assert.That(calls, Is.EqualTo(MountRightAfterRuns));
         }
 
-        private static readonly string[] PolarCorrectorFailed = { "stop_polar_corrector" };
-        private static readonly string[] CorrectorRightAfterMount = { "abort", "tracking_off", "corrector", "exposure" };
+        private static readonly string[] PolarAlignerFailed = { "stop_polar_aligner" };
+        private static readonly string[] AlignerRightAfterMount = { "abort", "tracking_off", "aligner", "exposure" };
 
         [Test]
-        public async Task Execute_StopsAPresentPolarCorrector_RightAfterTheMount() {
+        public async Task Execute_StopsAPresentPolarAligner_RightAfterTheMount() {
             var calls = new List<string>();
             telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
                 .Callback(() => calls.Add("abort")).Returns(Task.CompletedTask);
@@ -405,48 +405,48 @@ namespace OpenAstroAra.Test {
                 .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
             camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
                 .Callback(() => calls.Add("exposure")).Returns(Task.CompletedTask);
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(true);
-            corrector.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .Callback(() => calls.Add("corrector")).ReturnsAsync(Accepted);
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(true);
+            aligner.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("aligner")).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
-            Assert.That(calls, Is.EqualTo(CorrectorRightAfterMount));
+            Assert.That(calls, Is.EqualTo(AlignerRightAfterMount));
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
         [Test]
-        public async Task Execute_NoPolarCorrector_IsNotPoked() {
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(false);
+        public async Task Execute_NoPolarAligner_IsNotPoked() {
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(false);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
-            corrector.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            aligner.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
         [Test]
-        public async Task Execute_APolarCorrectorThatRefusesToStop_IsCalledOut_AndTheLadderGoesOn() {
-            var corrector = new Mock<IPolarCorrectorService>();
-            corrector.Setup(p => p.IsPresent).Returns(true);
-            corrector.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        public async Task Execute_APolarAlignerThatRefusesToStop_IsCalledOut_AndTheLadderGoesOn() {
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(true);
+            aligner.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("motor driver fault"));
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                polarCorrector: corrector.Object).ExecuteAsync();
+                polarAligner: aligner.Object).ExecuteAsync();
 
             Assert.Multiple(() => {
-                Assert.That(result.FailedRungs, Is.EqualTo(PolarCorrectorFailed));
+                Assert.That(result.FailedRungs, Is.EqualTo(PolarAlignerFailed));
                 Assert.That(result.ExposureAborted, Is.True, "the rungs after it still run");
             });
         }
@@ -664,6 +664,51 @@ namespace OpenAstroAra.Test {
             never.TrySetResult();
         }
 
+        // #1985 — a hung probe or a blocking synchronous prefix must not hold the ladder. The outer
+        // bound keeps a regression from hanging the suite: the ladder runs off the test thread.
+        private static async Task<EmergencyStopResultDto?> RunWithOuterBoundAsync(EmergencyStopService service) {
+            var ladder = Task.Run(() => service.ExecuteAsync());
+            var done = await Task.WhenAny(ladder, Task.Delay(TimeSpan.FromSeconds(10)));
+            return ReferenceEquals(done, ladder) ? await ladder : null;
+        }
+
+        [Test]
+        public async Task Execute_AProbeThatNeverCompletes_FailsTheRung_AndTheLadderGoesOn() {
+            var never = new TaskCompletionSource<CameraDto?>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).Returns(never.Task!);
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(500);
+
+            var result = await RunWithOuterBoundAsync(service);
+
+            never.TrySetResult(null);
+            Assert.That(result, Is.Not.Null, "the ladder must finish within the outer bound");
+            Assert.Multiple(() => {
+                Assert.That(result!.FailedRungs, Does.Contain("abort_exposure"));
+                Assert.That(result.MountStopped, Is.True, "the rungs after the hung probe still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+        }
+
+        [Test]
+        public async Task Execute_AnActionThatBlocksItsCaller_FailsTheRung_AndTheLadderGoesOn() {
+            using var release = new ManualResetEventSlim();
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
+                .Returns(() => { release.Wait(TimeSpan.FromSeconds(30)); return Task.CompletedTask; });
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(500);
+
+            var result = await RunWithOuterBoundAsync(service);
+
+            release.Set();
+            Assert.That(result, Is.Not.Null, "the ladder must finish within the outer bound");
+            Assert.Multiple(() => {
+                Assert.That(result!.FailedRungs, Does.Contain("abort_exposure"));
+                Assert.That(result.MountStopped, Is.True, "the rungs after the blocked action still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+        }
+
         [Test]
         public async Task Execute_NoRunningSequence_ReportsZeroAborted() {
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
@@ -672,6 +717,47 @@ namespace OpenAstroAra.Test {
 
             Assert.That(result.RunsAborted, Is.EqualTo(0));
             Assert.That(result.MountStopped, Is.True, "an idle rig's mount is still stopped — the point is 'nothing moves'");
+        }
+    }
+    /// <summary>
+    /// #1985 — a rung whose work completes synchronously must not need a free pool thread to start
+    /// inside its RungTimeout window: an Emergency Stop has to work while the pool is starved. Own fixture, run alone, because
+    /// it blocks every pool worker for a moment.
+    /// </summary>
+    [TestFixture]
+    [NonParallelizable]
+    public class EmergencyStopServicePoolStarvationTest {
+
+        [Test]
+        public void Execute_WithEveryPoolThreadBlocked_HealthyRungsAreNotTimedOut() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new CameraDto("c1", "Cam", EquipmentConnectionState.Connected, null, null!));
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var service = new EmergencyStopService(camera.Object) { RungTimeout = TimeSpan.FromMilliseconds(200) };
+
+            ThreadPool.GetMinThreads(out var minWorkers, out _);
+            ThreadPool.GetMaxThreads(out var maxWorkers, out _);
+            var toBlock = Math.Min(minWorkers, maxWorkers);
+            using var release = new ManualResetEventSlim();
+            using var started = new CountdownEvent(toBlock);
+            // Block as many workers as the pool's minimum. Above the minimum the pool injects threads
+            // slowly (about one per second), far slower than the 200 ms window. The mocks complete
+            // synchronously, so this pins the dedicated-thread start, not the continuation path.
+            for (var i = 0; i < toBlock; i++) {
+                ThreadPool.QueueUserWorkItem(_ => { started.Signal(); release.Wait(TimeSpan.FromSeconds(30)); });
+            }
+            try {
+                Assert.That(started.Wait(TimeSpan.FromSeconds(10)), Is.True, "every pool worker is blocked");
+                EmergencyStopResultDto? result = null;
+                var caller = new Thread(() => result = service.ExecuteAsync().GetAwaiter().GetResult());
+                caller.Start();
+                Assert.That(caller.Join(TimeSpan.FromSeconds(15)), Is.True, "the ladder finishes");
+                Assert.That(result!.FailedRungs, Is.Empty, "a healthy rung is not failed by a starved pool");
+                Assert.That(result.ExposureAborted, Is.True);
+            } finally {
+                release.Set();
+            }
         }
     }
 }

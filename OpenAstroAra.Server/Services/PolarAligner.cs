@@ -17,23 +17,23 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>#1971 — the two axes a Polar Corrector moves.</summary>
-internal enum PolarCorrectorAxis { Azimuth, Altitude }
+/// <summary>#1971 — the two axes a Polar Aligner moves.</summary>
+internal enum PolarAlignerAxis { Azimuth, Altitude }
 
 /// <summary>What one axis can do: the largest single move the device accepts and its step size
 /// (0 while the device has no calibration), both in arcminutes, and whether the device takes up its
 /// own backlash on a reversal.</summary>
-internal sealed record PolarCorrectorAxisInfo(double MaxMoveArcmin, double ResolutionArcmin, bool BacklashHandled = false);
+internal sealed record PolarAlignerAxisInfo(double MaxMoveArcmin, double ResolutionArcmin, bool BacklashHandled = false);
 
-/// <summary>A Polar Corrector's capabilities, as its <c>Info</c> reply states them. An axis the
+/// <summary>A Polar Aligner's capabilities, as its <c>Info</c> reply states them. An axis the
 /// device does not describe is null. <see cref="HostDriven"/> is the one question the Polar Align
 /// Routine asks: can Ara send the moves itself (tier 1, both axes)?</summary>
-internal sealed record PolarCorrectorInfo(
+internal sealed record PolarAlignerInfo(
     IReadOnlyList<int> Tiers,
     string DeviceName,
     string DeviceVersion,
-    PolarCorrectorAxisInfo? Azimuth,
-    PolarCorrectorAxisInfo? Altitude,
+    PolarAlignerAxisInfo? Azimuth,
+    PolarAlignerAxisInfo? Altitude,
     bool SimultaneousMoves,
     bool MovesWhileTracking,
     bool MovesWhileSlewing,
@@ -45,14 +45,14 @@ internal sealed record PolarCorrectorInfo(
 /// <summary>One axis right now. <c>PositionArcmin</c> and <c>Fault</c> are absent (null), never
 /// zero or empty, when the device does not report them. A fault is the device's own text for a
 /// move that failed; the device clears it on the next move, stop or home.</summary>
-internal sealed record PolarCorrectorAxisStatus(bool Moving, double? PositionArcmin, string? Fault);
+internal sealed record PolarAlignerAxisStatus(bool Moving, double? PositionArcmin, string? Fault);
 
-internal sealed record PolarCorrectorStatus(PolarCorrectorAxisStatus Azimuth, PolarCorrectorAxisStatus Altitude) {
+internal sealed record PolarAlignerStatus(PolarAlignerAxisStatus Azimuth, PolarAlignerAxisStatus Altitude) {
     public bool Moving => Azimuth.Moving || Altitude.Moving;
 }
 
-/// <summary>Why a call to the Polar Corrector did not work.</summary>
-internal enum PolarCorrectorFailure {
+/// <summary>Why a call to the Polar Aligner did not work.</summary>
+internal enum PolarAlignerFailure {
     /// <summary>The device refused a move because it has no calibration yet.</summary>
     NotCalibrated,
     /// <summary>The device answered with any other error.</summary>
@@ -63,83 +63,83 @@ internal enum PolarCorrectorFailure {
     Protocol,
 }
 
-internal sealed class PolarCorrectorException : Exception {
-    public PolarCorrectorException() { }
-    public PolarCorrectorException(string message) : base(message) { }
-    public PolarCorrectorException(string message, Exception innerException) : base(message, innerException) { }
-    public PolarCorrectorException(PolarCorrectorFailure failure, string message, Exception? innerException = null)
+internal sealed class PolarAlignerException : Exception {
+    public PolarAlignerException() { }
+    public PolarAlignerException(string message) : base(message) { }
+    public PolarAlignerException(string message, Exception innerException) : base(message, innerException) { }
+    public PolarAlignerException(PolarAlignerFailure failure, string message, Exception? innerException = null)
         : base(message, innerException) {
         Failure = failure;
     }
-    public PolarCorrectorFailure Failure { get; } = PolarCorrectorFailure.Refused;
+    public PolarAlignerFailure Failure { get; } = PolarAlignerFailure.Refused;
 }
 
 /// <summary>
-/// #1971 — a Polar Corrector: a motorised device that moves the mount's polar axis in azimuth
-/// and altitude. Five calls, and every one throws <see cref="PolarCorrectorException"/> when it
+/// #1971 — a Polar Aligner: a motorised device that moves the mount's polar axis in azimuth
+/// and altitude. Five calls, and every one throws <see cref="PolarAlignerException"/> when it
 /// does not work. Moves are signed arcminutes in the wire convention of
-/// <see cref="PolarAlignGeometry.CorrectorMove"/>: positive azimuth increases the azimuth
+/// <see cref="PolarAlignGeometry.AlignerMove"/>: positive azimuth increases the azimuth
 /// coordinate, positive altitude raises the axis. <see cref="Move"/> returns once the device has
 /// accepted the move, not when it has finished: poll <see cref="Status"/>.
 /// </summary>
-internal interface IPolarCorrector {
-    PolarCorrectorInfo Info();
-    PolarCorrectorStatus Status();
-    void Move(PolarCorrectorAxis axis, double arcmin);
+internal interface IPolarAligner {
+    PolarAlignerInfo Info();
+    PolarAlignerStatus Status();
+    void Move(PolarAlignerAxis axis, double arcmin);
     /// <summary>Stops both axes.</summary>
     void Stop();
     void Home();
 }
 
 /// <summary>The Alpaca driver actions of one connected device: what a Switch or the Telescope
-/// lends to a Polar Corrector adapter. <see cref="Action"/> throws when the device is not
+/// lends to a Polar Aligner adapter. <see cref="Action"/> throws when the device is not
 /// connected or the call fails.</summary>
 internal interface IDriverActions {
     IReadOnlyList<string> SupportedActions { get; }
     string Action(string name, string parameters);
 }
 
-/// <summary>What is driving the Polar Corrector right now, if anything: the Polar Align Routine. A stop
+/// <summary>What is driving the Polar Aligner right now, if anything: the Polar Align Routine. A stop
 /// that comes from outside it (the emergency stop, the device's Stop route) must end its motor loop
 /// first, or the loop reads the stopped move as a finished one and moves the motors again.</summary>
-internal interface IPolarCorrectorDriver {
-    bool DrivesPolarCorrector { get; }
-    Task StopPolarCorrectorAsync();
+internal interface IPolarAlignerDriver {
+    bool DrivesPolarAligner { get; }
+    Task StopPolarAlignerAsync();
 }
 
-/// <summary>Where the Polar Align Routine gets the rig's Polar Corrector: the connected device that
+/// <summary>Where the Polar Align Routine gets the rig's Polar Aligner: the connected device that
 /// offers the actions (a Switch before the mount; no setting names it). Null when there is none.</summary>
-internal interface IPolarCorrectorSource {
-    IPolarCorrector? Current();
+internal interface IPolarAlignerSource {
+    IPolarAligner? Current();
 }
 
 /// <summary>
-/// #1971 — the Polar Corrector over the interim <c>PolarAlign:*</c> Alpaca actions (OpenAstroTech
+/// #1971 — the Polar Aligner over the interim <c>PolarAlign:*</c> Alpaca actions (OpenAstroTech
 /// draft v0.1, with the <c>fault</c> string proposed for v0.2). The only code that knows the
 /// action names and their JSON; when the ASCOM aligner interface is final, a second
-/// <see cref="IPolarCorrector"/> sits beside this one. Unknown fields are ignored and an absent
+/// <see cref="IPolarAligner"/> sits beside this one. Unknown fields are ignored and an absent
 /// optional field stays absent.
 /// </summary>
-internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPolarCorrector {
+internal sealed class PolarAlignActionsAligner(IDriverActions carrier) : IPolarAligner {
     private const string InfoAction = "PolarAlign:Info";
     private const string StatusAction = "PolarAlign:Status";
     private const string MoveAction = "PolarAlign:Move";
     private const string StopAction = "PolarAlign:Stop";
     private const string HomeAction = "PolarAlign:Home";
 
-    /// <summary>A device is a Polar Corrector when its driver lists the Info action (any letter
+    /// <summary>A device is a Polar Aligner when its driver lists the Info action (any letter
     /// case). Nothing else is read: not its name, description or driver string.</summary>
     public static bool IsOfferedBy(IEnumerable<string>? supportedActions) =>
         supportedActions is not null
         && supportedActions.Any(a => string.Equals(a, InfoAction, StringComparison.OrdinalIgnoreCase));
 
-    public PolarCorrectorInfo Info() => ParseInfo(Call(InfoAction, string.Empty));
+    public PolarAlignerInfo Info() => ParseInfo(Call(InfoAction, string.Empty));
 
-    public PolarCorrectorStatus Status() => ParseStatus(Call(StatusAction, string.Empty));
+    public PolarAlignerStatus Status() => ParseStatus(Call(StatusAction, string.Empty));
 
-    public void Move(PolarCorrectorAxis axis, double arcmin) =>
+    public void Move(PolarAlignerAxis axis, double arcmin) =>
         Call(MoveAction, new JsonObject {
-            ["axis"] = axis == PolarCorrectorAxis.Azimuth ? "az" : "alt",
+            ["axis"] = axis == PolarAlignerAxis.Azimuth ? "az" : "alt",
             ["arcmin"] = arcmin,
         }.ToJsonString());
 
@@ -153,19 +153,19 @@ internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPola
         try {
             return carrier.Action(action, parameters);
         } catch (ASCOM.NotConnectedException ex) {
-            throw new PolarCorrectorException(PolarCorrectorFailure.LinkLost, ex.Message, ex);
+            throw new PolarAlignerException(PolarAlignerFailure.LinkLost, ex.Message, ex);
         } catch (ASCOM.InvalidOperationException ex) {
             // The one documented InvalidOperation of a move: the device has no calibration factors.
-            throw new PolarCorrectorException(
-                action == MoveAction ? PolarCorrectorFailure.NotCalibrated : PolarCorrectorFailure.Refused, ex.Message, ex);
+            throw new PolarAlignerException(
+                action == MoveAction ? PolarAlignerFailure.NotCalibrated : PolarAlignerFailure.Refused, ex.Message, ex);
         } catch (ASCOM.DriverException ex) {
-            throw new PolarCorrectorException(PolarCorrectorFailure.Refused, ex.Message, ex);
+            throw new PolarAlignerException(PolarAlignerFailure.Refused, ex.Message, ex);
         } catch (Exception ex) {
-            throw new PolarCorrectorException(PolarCorrectorFailure.LinkLost, ex.Message, ex);
+            throw new PolarAlignerException(PolarAlignerFailure.LinkLost, ex.Message, ex);
         }
     }
 
-    internal static PolarCorrectorInfo ParseInfo(string json) {
+    internal static PolarAlignerInfo ParseInfo(string json) {
         using var doc = Parse(json, InfoAction);
         var root = doc.RootElement;
         var tiers = root.TryGetProperty("tiers", out var t) && t.ValueKind == JsonValueKind.Array
@@ -173,7 +173,7 @@ internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPola
                 .Select(e => e.GetInt32()).ToArray()
             : [];
         var axes = root.TryGetProperty("axes", out var a) && a.ValueKind == JsonValueKind.Object ? a : default;
-        return new PolarCorrectorInfo(
+        return new PolarAlignerInfo(
             tiers,
             Text(root, "deviceName") ?? string.Empty,
             Text(root, "deviceVersion") ?? string.Empty,
@@ -186,28 +186,28 @@ internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPola
             Math.Max(0, Number(root, "settleSeconds") ?? 0));
     }
 
-    internal static PolarCorrectorStatus ParseStatus(string json) {
+    internal static PolarAlignerStatus ParseStatus(string json) {
         using var doc = Parse(json, StatusAction);
-        return new PolarCorrectorStatus(AxisStatus(doc.RootElement, "az"), AxisStatus(doc.RootElement, "alt"));
+        return new PolarAlignerStatus(AxisStatus(doc.RootElement, "az"), AxisStatus(doc.RootElement, "alt"));
     }
 
-    private static PolarCorrectorAxisInfo? AxisInfo(JsonElement axes, string name) {
+    private static PolarAlignerAxisInfo? AxisInfo(JsonElement axes, string name) {
         if (axes.ValueKind != JsonValueKind.Object || !axes.TryGetProperty(name, out var axis)
                 || axis.ValueKind != JsonValueKind.Object || Number(axis, "maxMove") is not { } maxMove || maxMove <= 0) {
             return null;
         }
-        return new PolarCorrectorAxisInfo(maxMove, Math.Max(0, Number(axis, "resolution") ?? 0), Flag(axis, "backlashHandled") ?? false);
+        return new PolarAlignerAxisInfo(maxMove, Math.Max(0, Number(axis, "resolution") ?? 0), Flag(axis, "backlashHandled") ?? false);
     }
 
-    private static PolarCorrectorAxisStatus AxisStatus(JsonElement root, string name) {
+    private static PolarAlignerAxisStatus AxisStatus(JsonElement root, string name) {
         // "Not said" must never read as "not moving": a move in flight would be taken for a finished one.
         if (!root.TryGetProperty(name, out var axis) || axis.ValueKind != JsonValueKind.Object
                 || Flag(axis, "moving") is not { } moving) {
-            throw new PolarCorrectorException(PolarCorrectorFailure.Protocol,
+            throw new PolarAlignerException(PolarAlignerFailure.Protocol,
                 $"the device's {StatusAction} reply does not say whether the {name} axis is moving");
         }
         var fault = Text(axis, "fault");
-        return new PolarCorrectorAxisStatus(moving, Number(axis, "position"), string.IsNullOrWhiteSpace(fault) ? null : fault);
+        return new PolarAlignerAxisStatus(moving, Number(axis, "position"), string.IsNullOrWhiteSpace(fault) ? null : fault);
     }
 
     private static JsonDocument Parse(string json, string action) {
@@ -222,7 +222,7 @@ internal sealed class PolarAlignActionsCorrector(IDriverActions carrier) : IPola
         } catch (ArgumentNullException) {
             // A null reply is no JSON either.
         }
-        throw new PolarCorrectorException(PolarCorrectorFailure.Protocol, $"the device's {action} reply is not a JSON object");
+        throw new PolarAlignerException(PolarAlignerFailure.Protocol, $"the device's {action} reply is not a JSON object");
     }
 
     private static string? Text(JsonElement e, string name) =>

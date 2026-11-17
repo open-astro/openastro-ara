@@ -242,16 +242,28 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Resumed(), Is.Zero, "a guide step 40 px from lock is not settled guiding");
         }
 
+        // The armed star-lost grace timer, read by reflection: a restarted grace replaces the instance.
+        private static object? GraceTimer(GuiderService service) =>
+            typeof(GuiderService).GetField("_starLostTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service);
+
         [Test]
         public async Task A_star_found_far_from_lock_between_losses_does_not_restart_the_grace() {
-            using var rig = new Rig(runActive: true, grace: RoomyWindow, recoverAfter: TimeSpan.FromMinutes(10));
+            // The grace is 10 min and never elapses by itself: the test fires it by hand, so no wall-clock margin.
+            using var rig = new Rig(runActive: true, grace: TimeSpan.FromMinutes(10), recoverAfter: TimeSpan.FromMinutes(10));
             await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            var guider = rig.Service.RequireConnectedGuider();
             await fake.BroadcastAsync(PhdEvents.StarLost(status: "mass changed")).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromMilliseconds(1500)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => GraceTimer(rig.Service) is not null).ConfigureAwait(false), Is.True, "the first loss never armed the grace");
+            var armed = GraceTimer(rig.Service);
+
             await fake.BroadcastAsync(PhdEvents.GuideStep(66.0, 94.0)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.AppState?.State == "Guiding").ConfigureAwait(false), Is.True, "the far step never landed");
             await fake.BroadcastAsync(PhdEvents.StarLost(status: "mass changed")).ConfigureAwait(false);
-            // 2 s after the FIRST loss, with room; a restarted grace would fire only 3.5 s after it.
-            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1, timeoutMs: 1100).ConfigureAwait(false), Is.True,
+            Assert.That(await WaitUntilAsync(() => guider.AppState?.State == "LostLock").ConfigureAwait(false), Is.True, "the second loss never landed");
+
+            Assert.That(GraceTimer(rig.Service), Is.SameAs(armed), "the grace counts from the first loss: a second loss must not restart it");
+            rig.Service.OnStarLostGraceElapsed(null);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True,
                 "the star has been lost for the whole grace, counted from the first loss");
         }
 

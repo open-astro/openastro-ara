@@ -11,9 +11,9 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
-import '../../state/polar_align/polar_corrector_state.dart';
+import '../../state/polar_align/polar_aligner_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
-import '../../widgets/imaging/polar_corrector_block.dart';
+import '../../widgets/imaging/polar_aligner_block.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
@@ -219,10 +219,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final inTolerance =
         total != null && total <= settings.targetToleranceArcmin;
     final color = zoneColor(total);
-    // #1971 while the Polar Corrector's motors work, the arrows dim and
+    // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
-    final motorsBusy = polarCorrectorMotorsBusy(live);
-    final corrector = polarCorrectorShown(ref.watch(polarCorrectorProvider));
+    final motorsBusy = polarAlignerMotorsBusy(live);
+    final aligner = polarAlignerShown(ref.watch(polarAlignerProvider));
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
@@ -394,7 +394,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ],
               ),
               // Its own fixed slot between Setup and Error (user, 2026-11-16).
-              if (corrector) const PolarCorrectorBlock(),
+              if (aligner) const PolarAlignerBlock(),
             ],
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/album/album_art.dart';
@@ -135,6 +137,74 @@ void main() {
     test('an object no frame contains has no stats', () {
       expect(aggregateBook([_frame('x', target: 'M 1')], [m81]), isEmpty);
     });
+
+    test('matching through the index credits exactly the frames a scan of every object does (#1887)', () {
+      // The scan aggregateBook replaced, from the two public rules: every frame against every object.
+      Map<String, List<String>> scan(List<AlbumFrame> frames, List<PlanningDso> book) {
+        final hits = <String, List<String>>{};
+        for (final f in frames) {
+          for (final o in book) {
+            if (f.hasPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
+              hits.putIfAbsent(o.id, () => []).add(f.frameId);
+            }
+          }
+        }
+        return hits;
+      }
+
+      final rnd = math.Random(1887);
+      final book = [
+        // A crowded patch across RA 0h, so frames hold several objects, and a cap round the pole.
+        for (var i = 0; i < 400; i++)
+          _dso('N$i', ra: (350 + rnd.nextDouble() * 20) % 360, dec: 10 + rnd.nextDouble() * 20, aliases: ['X ${'$i'.padLeft(4, '0')}']),
+        for (var i = 0; i < 20; i++) _dso('P$i', ra: rnd.nextDouble() * 360, dec: 89 + rnd.nextDouble()),
+        _dso('EDGE', ra: 100, dec: 20 + 5 / 60),
+        _dso('TOL', ra: 120, dec: 20 + (5 + 0.5e-9) / 60),
+        _dso('OUT', ra: 140, dec: 20 + 5.05 / 60),
+        _dso('WRAP', ra: 0.1, dec: 0),
+        _dso('PASTPOLE', ra: 190, dec: 85),
+        _dso('NGC0224', name: 'Andromeda Galaxy', m: 31, aliases: ['M 31', 'NGC 224']),
+        _dso('T1', aliases: ['Twin']),
+        _dso('T2', aliases: ['twin']),
+        // Away from every circle: only a name could credit it, and an empty one must not.
+        _dso('BLANK', name: '', ra: 200, dec: -40),
+      ];
+      var n = 0;
+      // Each frame its own filter, so a Card's filters list the frames that credited it, in order.
+      AlbumFrame f({double? ra, double? dec, double scale = 1, int px = 600, String target = ''}) {
+        final id = 'f${'${n++}'.padLeft(3, '0')}';
+        return _frame(id, ra: ra, dec: dec, scale: scale, width: px, height: px, target: target, filter: id,
+            captured: DateTime.utc(2026, 3, 2).add(Duration(minutes: n)));
+      }
+
+      final frames = [
+        for (var i = 0; i < 150; i++)
+          f(ra: (350 + rnd.nextDouble() * 20) % 360, dec: 10 + rnd.nextDouble() * 20, scale: 1.5 + rnd.nextDouble() * 13, px: 1000),
+        for (var i = 0; i < 10; i++) f(ra: rnd.nextDouble() * 360, dec: 89.5, scale: 7, px: 1000),
+        // 600 px at 1"/px: a 5' circle, with an object on its edge, one past it by less than the
+        // 1e-9' frameContains allows, and one outside.
+        f(ra: 100, dec: 20),
+        f(ra: 120, dec: 20),
+        f(ra: 140, dec: 20),
+        // A 15' circle at 359.9 deg holds the object at 0.1 deg.
+        f(ra: 359.9, dec: 0, px: 1800),
+        // A corrupt pointing past the pole: the scan's trigonometry reads it as RA 190, dec 85.
+        f(ra: 10, dec: 95, px: 3600),
+        for (final name in ['M31', 'Messier 31', 'ngc 0224', 'Andromeda Galaxy', 'x 7', 'X0012', 'TWIN', 'nothing', ''])
+          f(target: name),
+      ];
+
+      final want = scan(frames, book);
+      expect(want.keys, containsAll(['EDGE', 'TOL', 'WRAP', 'PASTPOLE', 'NGC0224', 'N7', 'N12', 'T1', 'T2']));
+      expect(want.keys, isNot(anyOf(contains('OUT'), contains('BLANK'))));
+      expect(want.length, greaterThan(150), reason: 'most frames hold objects');
+      final got = aggregateBook(frames, book);
+      expect(got.keys.toList(), want.keys.toList(), reason: 'the same Cards, in the same order');
+      expect({for (final MapEntry(:key, :value) in got.entries) key: value.filters}, want);
+      expect({for (final MapEntry(:key, :value) in got.entries) key: value.frameCount},
+          {for (final MapEntry(:key, :value) in want.entries) key: value.length},
+          reason: 'a frame credits a Card once, however many of its designations fold to the name');
+    });
   });
 
   group('merge rule: a high-water mark', () {
@@ -263,6 +333,64 @@ void main() {
       expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
       expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['NGC3114']);
       expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
+    });
+
+    test('the NGC, IC and Sharpless Books claim their own designations, in number-then-suffix order (#1887)', () {
+      final catalog = [
+        _dso('NGC5194A'),
+        _dso('NGC0224', m: 31),
+        _dso('NGC5194'),
+        _dso('IC0434'),
+        _dso('IC0005'),
+        _dso('Sh2-101'),
+        _dso('Sh2-9'),
+        _dso('RCW 5'),
+      ];
+      final ngc = bookObjects(catalog, AlbumBook.ngc);
+      expect(ngc.map((d) => d.id), ['NGC0224', 'NGC5194', 'NGC5194A']);
+      expect(ngc.map((d) => bookLabel(d, AlbumBook.ngc)), ['NGC 224', 'NGC 5194', 'NGC 5194A']);
+      expect(ngc.map((d) => bookNumberOf(d, AlbumBook.ngc)), [224, 5194, 5194]);
+      final ic = bookObjects(catalog, AlbumBook.ic);
+      expect(ic.map((d) => bookLabel(d, AlbumBook.ic)), ['IC 5', 'IC 434']);
+      final sh = bookObjects(catalog, AlbumBook.sharpless);
+      expect(sh.map((d) => bookLabel(d, AlbumBook.sharpless)), ['Sh2-9', 'Sh2-101']);
+    });
+
+    test('a row with two NGC numbers is one Card, labelled by the lowest; an alias with a space still claims (#1887)', () {
+      final row = _dso('NGC0300', aliases: ['NGC 0250', 'NGC 0299B']);
+      expect(bookObjects([row], AlbumBook.ngc), [row]);
+      expect(bookLabel(row, AlbumBook.ngc), 'NGC 250');
+      expect(bookObjects([_dso('NGC1976', aliases: ['IC 434'])], AlbumBook.ic).length, 1);
+    });
+
+    test('M 31 is also NGC 224: a Card in both Books, labelled M 31 by Book order, its Messier label unchanged (#1887)', () {
+      final m31 = _dso('NGC0224', m: 31);
+      expect(bookObjects([m31], AlbumBook.messier), [m31]);
+      expect(bookObjects([m31], AlbumBook.ngc), [m31]);
+      expect(bookLabel(m31, AlbumBook.messier), 'M 31');
+      expect(bookLabel(m31, AlbumBook.ngc), 'NGC 224');
+      expect(AlbumBook.values.first, AlbumBook.messier);
+    });
+
+    test("a row's NGC, IC and Sharpless claim is worked out once per row (#1887)", () {
+      final aliases = <String>[];
+      final row = _dso('NGC0001', aliases: aliases);
+      expect(bookNumberOf(row, AlbumBook.ngc), 1);
+      expect(bookNumberOf(row, AlbumBook.ic), isNull);
+      aliases..add('IC 5')..add('NGC 0000');
+      expect(bookNumberOf(row, AlbumBook.ngc), 1);
+      expect(bookNumberOf(row, AlbumBook.ic), isNull);
+    });
+
+    test('a frame named ngc891 or IC 0434 or sh2-101 fills its Card (#1887)', () {
+      final cards = {
+        'ngc891': _dso('NGC0891'),
+        'IC 434': _dso('IC0434'),
+        'sh2-101': _dso('Sh2-101'),
+      };
+      for (final MapEntry(key: name, value: dso) in cards.entries) {
+        expect(aggregateBook([_frame('a', ra: null, target: name)], [dso]).keys, [dso.id], reason: name);
+      }
     });
 
     test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {
