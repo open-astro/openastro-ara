@@ -4269,11 +4269,11 @@
   },
   "albumImageThis": "Image this target",
   "@albumImageThis": {
-    "description": "Sky Album card back: action on a missing card; hands the object to the planner"
+    "description": "Sky Album card back: action on a card with no lights; hands the object to the planner"
   },
   "albumAddTime": "Add more time",
   "@albumAddTime": {
-    "description": "Sky Album card back: action on a collected card; hands the object to the planner"
+    "description": "Sky Album card back: action on a card with lights, collected or not; hands the object to the planner"
   },
   "albumLoadFailed": "Couldn't load the album: {reason}",
   "@albumLoadFailed": {

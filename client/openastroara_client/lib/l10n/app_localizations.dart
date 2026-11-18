@@ -5577,13 +5577,13 @@ abstract class AppLocalizations {
   /// **'Sky Album'**
   String get shellAlbum;
 
-  /// Sky Album card back: action on a missing card; hands the object to the planner
+  /// Sky Album card back: action on a card with no lights; hands the object to the planner
   ///
   /// In en, this message translates to:
   /// **'Image this target'**
   String get albumImageThis;
 
-  /// Sky Album card back: action on a collected card; hands the object to the planner
+  /// Sky Album card back: action on a card with lights, collected or not; hands the object to the planner
   ///
   /// In en, this message translates to:
   /// **'Add more time'**
