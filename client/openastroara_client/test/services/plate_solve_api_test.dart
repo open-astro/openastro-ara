@@ -5,10 +5,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/services/refusal.dart';
 
 /// §18.I / #1150 — the plate-solve client against a stub daemon: the route it
 /// posts to, the solution it parses, and the two readable failures (404 frame
-/// missing, 422 misconfiguration with the daemon's own detail) versus a plain
+/// missing, 422 a Refusal that keeps the daemon's own detail) versus a plain
 /// transport error that is rethrown.
 class _Daemon implements HttpClientAdapter {
   _Daemon(this.status, this.body);
@@ -72,7 +73,7 @@ void main() {
     );
   });
 
-  test('a 422 surfaces the daemon\'s own detail', () async {
+  test('a 422 is a Refusal that keeps the daemon\'s own detail', () async {
     final daemon = _Daemon(422, {
       'type': 'https://openastro.net/errors/plate-solver-not-configured',
       'title': 'Plate solver not configured',
@@ -81,25 +82,23 @@ void main() {
     expect(
       () => _api(daemon).solve('f'),
       throwsA(
-        isA<PlateSolveException>().having(
-          (e) => e.message,
-          'message',
+        isA<Refusal>().having(
+          (e) => e.detail,
+          'detail',
           contains('focal length'),
         ),
       ),
     );
   });
 
-  test('a 422 without detail falls back to the settings hint', () async {
+  test('a 422 without detail is a Refusal with none, for the app to word', () async {
     final daemon = _Daemon(422, <String, dynamic>{});
     expect(
       () => _api(daemon).solve('f'),
       throwsA(
-        isA<PlateSolveException>().having(
-          (e) => e.message,
-          'message',
-          contains('ASTAP path'),
-        ),
+        isA<Refusal>()
+            .having((e) => e.detail, 'detail', isNull)
+            .having((e) => e.status, 'status', 422),
       ),
     );
   });
@@ -137,7 +136,7 @@ void main() {
       expect(daemon.seen!.data, {'exposure_seconds': 1.5});
     });
 
-    test('a 409 (no camera / busy) and a 422 (unconfigured) become a readable PlateSolveException with the daemon\'s detail', () async {
+    test('a 409 (no camera / busy) and a 422 (unconfigured) become a Refusal with the daemon\'s detail', () async {
       await expectLater(
         _api(
           _Daemon(409, {
@@ -146,9 +145,9 @@ void main() {
           }),
         ).verifyPosition(),
         throwsA(
-          isA<PlateSolveException>().having(
-            (e) => e.message,
-            'message',
+          isA<Refusal>().having(
+            (e) => e.detail,
+            'detail',
             'No camera is connected to take the verification image.',
           ),
         ),
@@ -161,35 +160,27 @@ void main() {
           }),
         ).verifyPosition(),
         throwsA(
-          isA<PlateSolveException>().having(
-            (e) => e.message,
-            'message',
+          isA<Refusal>().having(
+            (e) => e.detail,
+            'detail',
             startsWith('Cannot verify the position'),
           ),
         ),
       );
     });
 
-    test('without a detail the fallback sentence names the status', () async {
+    test('without a detail the Refusal carries the status and anything else is a transport error', () async {
       await expectLater(
         _api(_Daemon(409, {})).verifyPosition(),
         throwsA(
-          isA<PlateSolveException>().having(
-            (e) => e.message,
-            'message',
-            contains('cannot take the verification image'),
-          ),
+          isA<Refusal>()
+              .having((e) => e.detail, 'detail', isNull)
+              .having((e) => e.status, 'status', 409),
         ),
       );
       await expectLater(
         _api(_Daemon(422, {})).verifyPosition(),
-        throwsA(
-          isA<PlateSolveException>().having(
-            (e) => e.message,
-            'message',
-            contains('not configured'),
-          ),
-        ),
+        throwsA(isA<Refusal>().having((e) => e.status, 'status', 422)),
       );
       await expectLater(
         _api(_Daemon(500, {'title': 'boom'})).verifyPosition(),

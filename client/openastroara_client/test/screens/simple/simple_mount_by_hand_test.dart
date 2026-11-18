@@ -16,6 +16,7 @@ import 'package:openastroara/screens/simple/simple_preview_panel.dart' show Simp
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/services/center_api.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
@@ -562,14 +563,14 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'Stop fits its cell at 2x');
     });
 
-    for (final (reason, words, button, shown) in const [
-      ('no-camera', 'No camera connected', true, 'No camera connected'),
-      ('camera-busy', 'The camera is busy with an exposure — try Verify Position again once it has read out.', false, 'The camera is taking another frame. Check again once it finishes.'),
-      ('gate-stuck', "The camera's in-flight gate is stuck — check the daemon log; a restart clears it.", false, "The camera's in-flight gate is stuck — check the daemon log; a restart clears it."),
+    for (final (cause, button, shown) in const [
+      (RefusalCause.noCamera, true, 'No camera is connected. Connect one in Camera settings, then try again.'),
+      (RefusalCause.cameraBusy, false, 'The camera is taking another frame. Check again once it finishes.'),
+      (RefusalCause.gateStuck, false, "The camera is stuck mid-capture. Restart Ara on your rig to clear it."),
     ]) {
-      testWidgets('a 409 for $reason ${button ? 'offers' : 'does not offer'} the camera settings', (tester) async {
+      testWidgets('a refusal for ${cause.token} ${button ? 'offers' : 'does not offer'} the camera settings', (tester) async {
         final (_, _, solver, _) = await _pump(tester, _wire());
-        solver.error = PlateSolveException(words, statusCode: 409, reason: reason);
+        solver.error = Refusal(cause: cause, reason: cause.token, detail: 'Verify Position says so', status: 409);
         await tester.tap(find.byKey(const Key('simple-mount-check')));
         await tester.pump();
         await tester.pump();
@@ -838,7 +839,7 @@ void main() {
 
     testWidgets('a Check that fails after the window closed says so in a message pill', (tester) async {
       final (c, _, solver, _) = await _pump(tester, _wire());
-      solver.error = const PlateSolveException('No star database is installed for ASTAP.', statusCode: 422);
+      solver.error = const Refusal(cause: null, reason: null, detail: 'No star database is installed for ASTAP.', status: 422);
       solver.hold = Completer<void>();
       await tester.tap(find.byKey(const Key('simple-mount-check')));
       await tester.pump();
@@ -882,13 +883,13 @@ void main() {
 
     testWidgets('a solver that is not set up says why and offers its settings', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
-      solver.error = const PlateSolveException('No star database is installed for ASTAP.');
+      solver.error = const Refusal(cause: RefusalCause.solverNotSet, reason: 'solver-not-set', detail: 'No star database is installed for ASTAP.', status: 422);
       await tester.tap(find.byKey(const Key('simple-mount-check')));
       await tester.pump();
       await tester.pump();
-      expect(find.text('No star database is installed for ASTAP.'), findsOneWidget);
+      expect(find.text('The plate solver is not set up. Check its path in Plate solving settings.'), findsOneWidget);
       expect(find.text('Plate solving settings'), findsOneWidget);
-      solver.error = const PlateSolveException('Set the focal length and pixel size first.');
+      solver.error = const Refusal(cause: RefusalCause.opticsNotSet, reason: 'optics-not-set', detail: 'Set the focal length and pixel size first.', parameters: {'missing': ['focal_length', 'pixel_size']}, status: 422);
       await tester.tap(find.byKey(const Key('simple-mount-check')));
       await tester.pump();
       await tester.pump();

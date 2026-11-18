@@ -6526,6 +6526,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bestRetry => 'Try again';
 
   @override
+  String get refusalNoCamera =>
+      'No camera is connected. Connect one in Camera settings, then try again.';
+
+  @override
+  String get refusalCameraBusy =>
+      'The camera is busy with an exposure. Try again once it has read out.';
+
+  @override
+  String get refusalGateStuck =>
+      'The camera is stuck mid-capture. Restart Ara on your rig to clear it.';
+
+  @override
+  String get refusalCenterInProgress =>
+      'Another centering is already running. Wait for it, or cancel it, before centering on a different target.';
+
+  @override
+  String refusalOpticsNotSet(String missing) {
+    String _temp0 = intl.Intl.selectLogic(missing, {
+      'focal_length':
+          'The telescope focal length is not set. Set it in Optics.',
+      'pixel_size': 'The camera pixel size is not set. Set it in Optics.',
+      'other': 'The telescope focal length and camera pixel size are not set. Set them in Optics.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get refusalSolverNotSet =>
+      'The plate solver is not set up. Check its path in Plate solving settings.';
+
+  @override
+  String get refusalCaptureSettingsUnsupported =>
+      'The camera cannot take that exposure or binning. Try a different one.';
+
+  @override
+  String get refusalStorageUnavailable =>
+      'The storage disk is missing. Plug it back in, then try again.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override

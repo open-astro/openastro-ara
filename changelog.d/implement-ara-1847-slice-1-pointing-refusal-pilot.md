@@ -1,0 +1,3 @@
+### Changed (Mount window)
+
+- **Check, Solve and Center say why they refused, in your language** (#1847): when the rig declines a request you can fix (no camera, camera busy, optics not set, plate solver not set up, storage disk missing, another centering running), the daemon now answers with a stable `reason` and the app words it in English or pt-BR and offers the right settings button. Check's other faults now answer 500 instead of "no camera", so a daemon fault no longer sends you to Camera settings. An app newer than the daemon shows no Optics or Plate solving button for a 422 that carries no `reason`; update the daemon too.

@@ -10983,6 +10983,54 @@ abstract class AppLocalizations {
   /// **'Try again'**
   String get bestRetry;
 
+  /// Refusal (no-camera): the daemon has no camera to take the frame with
+  ///
+  /// In en, this message translates to:
+  /// **'No camera is connected. Connect one in Camera settings, then try again.'**
+  String get refusalNoCamera;
+
+  /// Refusal (camera-busy): another exposure holds the camera
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is busy with an exposure. Try again once it has read out.'**
+  String get refusalCameraBusy;
+
+  /// Refusal (gate-stuck): the camera's in-flight gate never released
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is stuck mid-capture. Restart Ara on your rig to clear it.'**
+  String get refusalGateStuck;
+
+  /// Refusal (center-in-progress): a centring job for another target is running
+  ///
+  /// In en, this message translates to:
+  /// **'Another centering is already running. Wait for it, or cancel it, before centering on a different target.'**
+  String get refusalCenterInProgress;
+
+  /// Refusal (optics-not-set): the optics a plate solve needs; missing is focal_length, pixel_size or anything else for both
+  ///
+  /// In en, this message translates to:
+  /// **'{missing, select, focal_length{The telescope focal length is not set. Set it in Optics.} pixel_size{The camera pixel size is not set. Set it in Optics.} other{The telescope focal length and camera pixel size are not set. Set them in Optics.}}'**
+  String refusalOpticsNotSet(String missing);
+
+  /// Refusal (solver-not-set): the plate solver is missing, wrong or too old
+  ///
+  /// In en, this message translates to:
+  /// **'The plate solver is not set up. Check its path in Plate solving settings.'**
+  String get refusalSolverNotSet;
+
+  /// Refusal (capture-settings-unsupported): the exposure or binning is outside the camera's range
+  ///
+  /// In en, this message translates to:
+  /// **'The camera cannot take that exposure or binning. Try a different one.'**
+  String get refusalCaptureSettingsUnsupported;
+
+  /// Refusal (storage-unavailable): the disk frames are saved to is gone
+  ///
+  /// In en, this message translates to:
+  /// **'The storage disk is missing. Plug it back in, then try again.'**
+  String get refusalStorageUnavailable;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:

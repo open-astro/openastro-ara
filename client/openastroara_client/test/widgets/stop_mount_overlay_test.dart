@@ -15,6 +15,7 @@ import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/models/verify_position_result.dart';
 import 'package:openastroara/models/plate_solve_result.dart';
 import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
@@ -601,13 +602,15 @@ void main() {
 
   testWidgets('§57.4 a daemon refusal (no camera / solver unconfigured) is shown in the modal, not thrown', (tester) async {
     await pump(tester);
-    solveApi.error = const PlateSolveException('No camera is connected to take the verification image.');
+    solveApi.error = const Refusal(
+        cause: RefusalCause.noCamera, reason: 'no-camera', detail: 'The daemon\'s own English sentence.', status: 409);
     await fire(tester, _event(SlewWsEvents.started));
     await fire(tester, _event(SlewWsEvents.aborted));
     await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stop_modal_verify_error')), findsOneWidget);
-    expect(find.textContaining('No camera is connected'), findsOneWidget);
+    expect(find.text('No camera is connected. Connect one in Camera settings, then try again.'), findsOneWidget,
+        reason: 'the app words a known cause, not the daemon detail');
     expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget, reason: 'the user can try again');
   });
 }

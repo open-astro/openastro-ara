@@ -19,6 +19,7 @@ using OpenAstroAra.Server;
 using OpenAstroAra.Server.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -92,6 +93,22 @@ namespace OpenAstroAra.Test {
             var seen = await Collect(() => http.PatchAsync(new Uri("/api/v1/client-settings", UriKind.Relative),
                 new StringContent("{\"settings\":{\"k\":1}}", Encoding.UTF8, "application/json")), "client_settings.updated");
             Assert.That(seen, Does.Contain("updated_utc"));
+        }
+
+        /// <summary>ADR 0022 — the RefusalHandler registration in Program.cs: a Check on a fresh profile (optics unset,
+        /// checked before the camera) leaves the real pipeline as a 422 problem+json with a declared <c>reason</c>.
+        /// The unit tests call the middleware directly, so they stay green if its registration is deleted.</summary>
+        [Test]
+        public async Task A_pointing_refusal_over_HTTP_answers_a_problem_with_a_declared_reason() {
+            using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+            using var response = await http.PostAsync(new Uri("/api/v1/platesolve/verify-position", UriKind.Relative), content);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.That((int)response.StatusCode, Is.EqualTo(422), body);
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/problem+json"));
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            var reason = json.RootElement.GetProperty("reason").GetString();
+            Assert.That(reason, Is.EqualTo("optics-not-set"));
+            Assert.That(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All.Select(c => c.Token), Does.Contain(reason));
         }
 
         /// <summary>Subscribes first, sends the request, and returns the payload of the first event of
