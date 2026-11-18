@@ -17200,8 +17200,6 @@ components:
         - transport
         - is_system_disk
         - is_ara_store
-        - system_disk_level
-        - media_kind
       type: object
       properties:
         path:
@@ -17245,10 +17243,10 @@ components:
           type: boolean
         system_disk_level:
           type: string
-          description: 'none, os_partition (carries / or /boot*, or an ancestor of one) or os_disk_data (another partition on the OS disk; is_system_disk is true for both).'
+          default: none
         media_kind:
           type: string
-          description: 'emmc, nvme, sd or unknown.'
+          default: unknown
     StorageRescanResultDto:
       required:
         - ran
