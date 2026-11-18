@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
             var registered = Registered(factory).Select(r => r.Type).ToHashSet();
             foreach (var entry in SequenceKinds.All) {
                 if (!registered.Contains(entry.EngineClass)) {
-                    // A daemon without the astrometry natives skips these two prototypes (DefaultConditions).
+                    // A daemon without the astrometry natives skips these two prototypes (HeadlessSequencerFactory.Instantiate).
                     Assert.That(entry.NeedsAstrometryNatives, Is.True, entry.Kind + " is registered or needs the natives");
                     continue;
                 }
@@ -140,7 +140,7 @@ namespace OpenAstroAra.Test {
         // `HeadlessSequencerFactory.Instantiate(entries, constructors)` walks the entries in order and calls
         // the constructor registered for each entry's class. It skips an entry only when the entry has
         // NeedsAstrometryNatives and its constructor faults on a missing native library (the faults
-        // TryAddCondition filters); every other fault, and an entry with no constructor, propagates.
+        // HeadlessSequencerFactory.IsMissingNativeLibrary names); every other fault, and an entry with no constructor, propagates.
 
         private static readonly string[] SkippedResult = { "LoopCondition", "TimeSpanCondition" };
 

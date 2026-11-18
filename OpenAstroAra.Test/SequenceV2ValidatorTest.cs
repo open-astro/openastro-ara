@@ -441,10 +441,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_null_is_valid_where_the_engine_property_can_hold_null() {
-            // slew-radec.center is bool? and switch-filter.filter is an object reference.
-            Assert.That(CheckItems("""{ "kind": "slew-radec", "center": null }, { "kind": "switch-filter", "filter": null }, """ + Capture), Is.Empty);
+        public void A_null_is_valid_only_where_the_engine_declaration_is_nullable() {
+            // Null is valid when NullabilityInfoContext reads the property as nullable: slew-radec.center
+            // (bool?), switch-filter.filter and capture.calibrationTarget (string?).
+            Assert.That(CheckItems("""{ "kind": "slew-radec", "center": null }, { "kind": "switch-filter", "filter": null }, { "kind": "capture", "calibrationTarget": null, "calibrationNight": null }"""), Is.Empty);
             Assert.That(Pairs(CheckItems("""{ "kind": "capture", "exposureTime": null }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].exposureTime") }), "a double is not nullable");
+            // Non-null references are refused: the engine declares them non-null and the reader would fault.
+            Assert.That(Pairs(CheckItems("""{ "kind": "slew-radec", "coordinates": null }, """ + Capture)), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].coordinates") }));
+            var items = Check(Whole(root: """{ "kind": "root", "items": null }"""), new SequenceV2ValidationOptions { RequireCapturableInstruction = false });
+            Assert.That(Pairs(items), Is.EqualTo(new[] { ("wrong_type", "$.root.items") }));
+        }
+
+        [Test]
+        public void An_integer_field_takes_only_a_number_that_fits_its_CLR_type() {
+            // set-readout-mode.mode is a short; capture.gain is an int.
+            Assert.That(CheckItems("""{ "kind": "set-readout-mode", "mode": 40000 }, """ + Capture).Select(e => (e.Code, e.Path)), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].mode") }));
+            Assert.That(CheckItems("""{ "kind": "set-readout-mode", "mode": 3 }, """ + Capture), Is.Empty);
+            Assert.That(Pairs(CheckItems("""{ "kind": "capture", "gain": 60.0 }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].gain") }), "60.0 is not an integer token");
+            Assert.That(Pairs(CheckItems("""{ "kind": "capture", "gain": 3000000000 }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].gain") }), "does not fit an int");
+        }
+
+        [Test]
+        public void A_document_name_and_a_root_name_are_both_kept_and_sequenceTitle_is_unknown() {
+            // SequenceRootContainer.SequenceTitle has no [JsonProperty]: the document name is the title, the root's
+            // own name is the root container's name, and nothing named sequenceTitle is stored.
+            Assert.That(Check(Whole(root: """{ "kind": "root", "name": "root", "items": [ """ + Capture + " ] }")), Is.Empty);
+            var onRoot = Check(Whole(root: """{ "kind": "root", "sequenceTitle": "x", "items": [ """ + Capture + " ] }"));
+            Assert.That(Pairs(onRoot), Is.EqualTo(new[] { ("unknown_field", "$.root") }));
+            var onDocument = Check(Whole().Replace("\"name\": \"t\"", "\"name\": \"t\", \"sequenceTitle\": \"x\"", System.StringComparison.Ordinal));
+            Assert.That(Pairs(onDocument), Is.EqualTo(new[] { ("unknown_field", "$") }));
         }
 
         [Test]
@@ -453,12 +478,27 @@ namespace OpenAstroAra.Test {
             Assert.That(Pairs(CheckItems("""{ "kind": "capture", "gain": 1.5 }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].gain") }), "an int field takes an integer");
         }
 
+        // Each member sits on a node kind that owns it, so the value code is reached (not an unknown_field answer).
+        private static string OwnerNode(string member, string value) => member switch {
+            "kind" => "{ \"kind\": " + value + " }",
+            "items" => "{ \"kind\": \"sequential\", \"items\": " + value + " }",
+            "conditions" => "{ \"kind\": \"sequential\", \"conditions\": " + value + " }",
+            "triggers" => "{ \"kind\": \"sequential\", \"triggers\": " + value + " }",
+            "run" => "{ \"kind\": \"sequential\", \"triggers\": [ { \"kind\": \"dither-after-exposures\", \"run\": " + value + " } ] }",
+            "targetId" => "{ \"kind\": \"target\", \"targetId\": " + value + " }",
+            "role" => "{ \"kind\": \"unknown\", \"role\": " + value + ", \"originalType\": \"X\", \"originalPayload\": {}, \"reason\": \"r\" }",
+            "originalPayload" => "{ \"kind\": \"unknown\", \"role\": \"instruction\", \"originalType\": \"X\", \"originalPayload\": " + value + ", \"reason\": \"r\" }",
+            "coordinates" => "{ \"kind\": \"slew-radec\", \"coordinates\": " + value + " }",
+            "binning" => "{ \"kind\": \"capture\", \"binning\": " + value + " }",
+            "data" => "{ \"kind\": \"wait-for-sun-altitude\", \"data\": " + value + " }",
+            _ => throw new System.ArgumentOutOfRangeException(nameof(member)),
+        };
+
         [Test]
         public void No_hostile_shape_throws() {
             foreach (var hostile in new[] { "null", "5", "\"s\"", "true", "[]", "{}", "[ null ]" }) {
                 foreach (var member in new[] { "items", "conditions", "triggers", "run", "kind", "targetId", "role", "originalPayload", "coordinates", "binning", "data" }) {
-                    var node = "{ \"kind\": \"sequential\", \"" + member + "\": " + hostile + " }";
-                    var doc = Whole(root: RootOf(node + ", " + Capture));
+                    var doc = Whole(root: RootOf(OwnerNode(member, hostile) + ", " + Capture));
                     Assert.DoesNotThrow(() => Check(doc), member + ": " + hostile);
                 }
             }

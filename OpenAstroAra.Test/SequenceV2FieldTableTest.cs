@@ -134,16 +134,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void The_spec_does_not_map_the_document_name_to_a_stored_SequenceTitle() {
-            // SequenceRootContainer.SequenceTitle has no [JsonProperty]; the title is the document `name`,
-            // the root's own `name` is the root container's name, and both are kept as found (part B
-            // decides how the title is stored).
-            var lines = SequenceV2Spec.Lines().Where(l => l.Contains("SequenceTitle", StringComparison.Ordinal)).ToList();
-            Assert.That(lines, Is.Not.Empty, "the spec says what happens to SequenceTitle");
-            Assert.That(lines.Where(l => !l.Contains("not stored", StringComparison.Ordinal)), Is.Empty);
-        }
-
-        [Test]
         public void The_spec_promises_no_pause_gate_field_the_engine_does_not_store() {
             var root = SequenceV2Spec.KindRows().Single(r => r.Kind == "root");
             Assert.That(root.FieldsCell, Does.Not.Contain("pauseGate"));
@@ -176,6 +166,36 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(seen.Keys, Is.EquivalentTo(SequenceKinds.All.Select(e => e.Kind).Concat(ExtraKinds)));
             Assert.That(schema.RootElement.GetProperty("$schema").GetString(), Is.EqualTo("https://json-schema.org/draft/2020-12/schema"));
+        }
+
+        [Test]
+        public void The_schema_carries_each_fields_type_and_null_from_the_same_mapping_as_the_validator() {
+            using var schema = JsonDocument.Parse(SequenceV2Schema.Generate());
+            var defs = schema.RootElement.GetProperty("$defs");
+            static string Types(JsonElement prop) => string.Join(",", prop.GetProperty("type").ValueKind == JsonValueKind.Array
+                ? prop.GetProperty("type").EnumerateArray().Select(t => t.GetString()!).OrderBy(t => t, StringComparer.Ordinal)
+                : new[] { prop.GetProperty("type").GetString()! });
+            JsonElement Prop(string kind, string field) {
+                foreach (var def in defs.EnumerateObject()) {
+                    if (def.Value.TryGetProperty("properties", out var props) && props.TryGetProperty("kind", out var k)
+                        && k.GetProperty("const").GetString() == kind) return props.GetProperty(field);
+                }
+                throw new KeyNotFoundException(kind);
+            }
+            Assert.That(Types(Prop("capture", "exposureTime")), Is.EqualTo("number"));
+            Assert.That(Types(Prop("capture", "gain")), Is.EqualTo("integer"));
+            Assert.That(Types(Prop("capture", "calibrationTarget")), Is.EqualTo("null,string"));
+            Assert.That(Types(Prop("slew-radec", "center")), Is.EqualTo("boolean,null"));
+            Assert.That(Types(Prop("slew-radec", "coordinates")), Is.EqualTo("object"));
+            Assert.That(Types(Prop("target", "targetId")), Is.EqualTo("string"));
+            Assert.That(Types(Prop("dither-after-exposures", "run")), Is.EqualTo("array"));
+            Assert.That(Types(Prop("sequential", "items")), Is.EqualTo("array"));
+            // Every field of an engine kind carries a type (the glover fields are names only until follow-up (d)).
+            foreach (var entry in SequenceKinds.All) {
+                foreach (var field in SequenceV2Fields.For(entry).Where(f => f != "kind")) {
+                    Assert.That(Prop(entry.Kind, field).TryGetProperty("type", out _), Is.True, entry.Kind + "." + field);
+                }
+            }
         }
     }
 }
