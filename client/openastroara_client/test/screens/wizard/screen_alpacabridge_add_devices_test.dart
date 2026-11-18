@@ -467,7 +467,7 @@ void main() {
     },
   );
 
-  testWidgets('a refusal with no detail shows the app\'s own sentence', (
+  testWidgets('a refusal with no detail shows a translated sentence', (
     tester,
   ) async {
     final bridge = await _pump(tester);
