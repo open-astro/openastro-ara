@@ -53,15 +53,16 @@ public static partial class EquipmentEndpoints {
     /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
     /// with the <c>below-horizon-limit</c> Refusal (#2044); <c>force</c> does not bypass it. Testable
     /// without the host.</summary>
-    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct) {
+    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null) {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
         }
-        if (request.Sync != true) {
+        // An out-of-range target keeps the range path's answer (TelescopeService.SlewAsync throws it).
+        if (request.Sync != true && !TelescopeService.IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
             var target = new Coordinates(request.RightAscensionHours, request.DeclinationDegrees, Epoch.J2000, Coordinates.RAType.Hours);
-            if (HorizonGuard.TargetBelowHorizon(profiles, target) is { } low) {
+            if (HorizonGuard.TargetBelowHorizon(profiles, target, logger) is { } low) {
                 throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
                     string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
                     new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
@@ -349,8 +350,8 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, local => svc.ConnectAsync(local, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, CancellationToken ct) =>
-                SlewAsync(request, key, svc, sequencer, profiles, ct))
+        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
+                SlewAsync(request, key, svc, sequencer, profiles, ct, logger))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced) or the below-horizon-limit Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
