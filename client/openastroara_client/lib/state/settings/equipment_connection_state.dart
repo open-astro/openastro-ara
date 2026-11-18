@@ -5,17 +5,12 @@ import 'loaded_section.dart';
 import '../../services/profile_api.dart';
 
 /// §52.1 connection-lifecycle defaults: which equipment device types
-/// auto-connect when the daemon boots. Phase 12h.6L wires the daemon
-/// round-trip via [ProfileApi] (`/api/v1/profile/equipment-connection`).
+/// auto-connect when the daemon boots (`/api/v1/profile/equipment-connection`).
 ///
-/// Each of the 10 equipment panels has an auto-connect toggle but no
-/// Save button. To keep the existing UX intact, the notifier handles
-/// persistence itself: [build] schedules a one-shot hydrate from the
-/// daemon, and [setAutoConnect] fires-and-forgets a PUT after the
-/// optimistic local update. Save errors are silent (best-effort) — the
-/// trade-off is acceptable for v0.0.1 trusted-LAN. Phase 14 can replace
-/// the silent failure with an error-stream provider the panels watch
-/// for snackbars.
+/// Each equipment panel has an auto-connect switch and no Save button, so a
+/// change saves itself (ADR 0015): nothing is shown or sent until the rig's
+/// copy is loaded, and [EquipmentConnectionNotifier.setAutoConnect] throws
+/// when the rig did not take the change, for the panel to say so.
 
 enum EquipmentDeviceType {
   camera,
