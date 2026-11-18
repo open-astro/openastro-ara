@@ -190,14 +190,14 @@ void main() {
       expect(daemon.count('reset'), 1);
       expect(c.read(simpleLiveStackProvider).on, isTrue);
       expect(c.read(simpleLiveStackProvider).frame, isNull);
-      daemon.stackOne(); // seq 1 again: lower than the frame dropped, not equal
+      daemon.stackOne(); // seq 3: the daemon's seq never goes back on reset
       _tick(async);
-      expect(c.read(simpleLiveStackProvider).frame!.seq, 1);
+      expect(c.read(simpleLiveStackProvider).frame!.seq, 3);
     });
   });
 
-  test('a stack_seq that falls back (a reset from another client) clears the '
-      'frame: the refetch is on any change, not on a rise', () {
+  test('a reset from another client (lights 0, stack_seq unchanged) drops '
+      'the held frame: nothing stacked means nothing shown', () {
     fakeAsync((async) {
       final daemon = FakeSessionLiveStackClient()
         ..enabled = true
@@ -208,31 +208,114 @@ void main() {
       async.flushMicrotasks();
       expect(c.read(simpleLiveStackProvider).frame!.seq, 2);
       daemon
-        ..seq = 0
         ..lights = 0
         ..frameNow = null;
       _tick(async);
       expect(c.read(simpleLiveStackProvider).frame, isNull);
+      expect(daemon.seq, 2, reason: 'the daemon keeps its seq on reset');
     });
   });
 
-  test('the camera session ending (unsupported no_camera) stops the polling '
-      'and clears the frame', () {
+  test('a daemon restart (stack_seq falls, a new frame, no empty status '
+      'between) replaces the held frame: refetch on any change, not on a '
+      'rise', () {
+    fakeAsync((async) {
+      final daemon = FakeSessionLiveStackClient()
+        ..enabled = true
+        ..stackOne()
+        ..stackOne();
+      final c = _container(daemon);
+      _open(async, c);
+      async.flushMicrotasks();
+      expect(c.read(simpleLiveStackProvider).frame!.seq, 2);
+      daemon
+        ..seq = 1
+        ..lights = 1
+        ..frameNow = StackFrame(Uint8List.fromList([9]), 1, 1);
+      _tick(async);
+      final f = c.read(simpleLiveStackProvider).frame!;
+      expect((f.seq, f.bytes.first), (1, 9));
+    });
+  });
+
+  test('the camera session ending (unsupported no_camera, the switch still '
+      'on in the daemon) stops the polling and clears the frame', () {
     fakeAsync((async) {
       final daemon = FakeSessionLiveStackClient()
         ..enabled = true
         ..stackOne();
       final c = _container(daemon);
       _open(async, c);
-      daemon
-        ..unsupported = 'no_camera'
-        ..enabled = false;
+      daemon.unsupported = 'no_camera';
       _tick(async);
       final s = c.read(simpleLiveStackProvider);
       expect((s.supported, s.frame), (false, null));
       final before = daemon.calls.length;
       _tick(async, kSimpleLiveStackPoll * 5);
       expect(daemon.calls.length, before);
+    });
+  });
+
+  test('the camera connects after open (no_camera first): the row appears '
+      'and an enabled stack is adopted, without reopening the screen', () {
+    fakeAsync((async) {
+      final daemon = FakeSessionLiveStackClient()..unsupported = 'no_camera';
+      final c = _container(daemon);
+      expect(_open(async, c).supported, isFalse);
+      daemon
+        ..unsupported = null
+        ..enabled = true
+        ..stackOne();
+      _tick(async, kSimpleLiveStackReprobe);
+      final s = c.read(simpleLiveStackProvider);
+      expect((s.supported, s.on, s.frame?.seq), (true, true, 1));
+    });
+  });
+
+  test('a camera that is not_colour, too_large or not_available stays one '
+      'probe: no re-probe', () {
+    for (final token in ['not_colour', 'too_large', 'not_available']) {
+      fakeAsync((async) {
+        final daemon = FakeSessionLiveStackClient()..unsupported = token;
+        final c = _container(daemon);
+        _open(async, c);
+        _tick(async, kSimpleLiveStackReprobe * 3);
+        expect(daemon.count('status'), 1, reason: token);
+      });
+    }
+  });
+
+  test('a failed start leaves the stack as the daemon reports it (off): the '
+      'error is recorded and nothing polls', () {
+    fakeAsync((async) {
+      final daemon = FakeSessionLiveStackClient()
+        ..startError = StateError('refused');
+      final c = _container(daemon);
+      _open(async, c);
+      c.read(simpleLiveStackProvider.notifier).setOn(true);
+      async.flushMicrotasks();
+      final s = c.read(simpleLiveStackProvider);
+      expect((s.on, s.error != null), (false, true));
+      final before = daemon.calls.length;
+      _tick(async, kSimpleLiveStackPoll * 5);
+      expect(daemon.calls.length, before);
+    });
+  });
+
+  test('a failed stop leaves the stack on and its frame held, as the daemon '
+      'still stacks: the error is recorded', () {
+    fakeAsync((async) {
+      final daemon = FakeSessionLiveStackClient()
+        ..enabled = true
+        ..stackOne()
+        ..stopError = StateError('refused');
+      final c = _container(daemon);
+      _open(async, c);
+      async.flushMicrotasks();
+      c.read(simpleLiveStackProvider.notifier).setOn(false);
+      async.flushMicrotasks();
+      final s = c.read(simpleLiveStackProvider);
+      expect((s.on, s.frame?.seq, s.error != null), (true, 1, true));
     });
   });
 

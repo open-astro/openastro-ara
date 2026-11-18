@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/l10n/app_localizations_en.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_live_stack_row.dart';
 import 'package:openastroara/screens/simple/simple_queue_screen.dart';
+import 'package:openastroara/services/session_live_stack_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/simple_live_stack_state.dart';
@@ -56,14 +58,84 @@ Future<ProviderContainer> _pump(
 final _row = find.byKey(const Key('simple-live-stack-row'));
 
 void main() {
-  testWidgets('a mono camera (not_colour): no Live Stack row at all', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      FakeSessionLiveStackClient()..unsupported = 'not_colour',
+  group('simpleLiveStackReadout', () {
+    final l = AppLocalizationsEn();
+    SessionLiveStackStatus status({
+      int lights = 3,
+      int unregistered = 0,
+      int skipped = 0,
+    }) => SessionLiveStackStatus(
+      enabled: true,
+      stackSeq: lights,
+      lightsStacked: lights,
+      lightsUnregistered: unregistered,
+      lightsSkippedBusy: skipped,
     );
-    expect(_row, findsNothing);
+
+    test('lights only: "Live Stack · N lights", nothing left out', () {
+      expect(simpleLiveStackReadout(l, status()), 'Live Stack · 3 lights');
+    });
+
+    test('one light reads singular', () {
+      expect(
+        simpleLiveStackReadout(l, status(lights: 1)),
+        'Live Stack · 1 light',
+      );
+    });
+
+    test('unregistered plus skipped-busy lights read "· M left out"', () {
+      expect(
+        simpleLiveStackReadout(l, status(unregistered: 2, skipped: 1)),
+        'Live Stack · 3 lights · 3 left out',
+      );
+    });
+
+    test('the reason words for not_colour and too_large, none otherwise', () {
+      expect(simpleLiveStackReason(l, 'not_colour'), isNotEmpty);
+      expect(simpleLiveStackReason(l, 'too_large'), isNotEmpty);
+      expect(
+        simpleLiveStackReason(l, 'not_colour'),
+        isNot(simpleLiveStackReason(l, 'too_large')),
+      );
+      expect(simpleLiveStackReason(l, 'stacked'), isNull);
+      expect(simpleLiveStackReason(l, null), isNull);
+    });
+  });
+
+  for (final token in ['not_colour', 'too_large']) {
+    testWidgets('a camera the daemon calls $token: the row shows unavailable '
+        'with its reason, and no switch', (tester) async {
+      await _pump(tester, FakeSessionLiveStackClient()..unsupported = token);
+      expect(_row, findsOneWidget);
+      final reason = find.byKey(const Key('simple-live-stack-unavailable'));
+      expect(reason, findsOneWidget);
+      expect(
+        tester.widget<Text>(reason).data,
+        simpleLiveStackReason(AppLocalizationsEn(), token),
+      );
+      expect(find.byKey(const Key('simple-live-stack-switch')), findsNothing);
+    });
+  }
+
+  for (final token in ['no_camera', 'not_available']) {
+    testWidgets('$token: no Live Stack row at all', (tester) async {
+      await _pump(tester, FakeSessionLiveStackClient()..unsupported = token);
+      expect(_row, findsNothing);
+    });
+  }
+
+  testWidgets('a binned colour camera (supported, last_outcome not_colour): '
+      'the stack that never starts says why in the row', (tester) async {
+    final daemon = FakeSessionLiveStackClient()
+      ..enabled = true
+      ..lastOutcome = 'not_colour';
+    await _pump(tester, daemon);
+    final why = find.byKey(const Key('simple-live-stack-outcome'));
+    expect(why, findsOneWidget);
+    expect(
+      tester.widget<Text>(why).data,
+      simpleLiveStackReason(AppLocalizationsEn(), 'not_colour'),
+    );
   });
 
   testWidgets('a colour camera: the row shows with the switch off and Reset '
@@ -147,6 +219,34 @@ void main() {
       find.descendant(of: readout, matching: find.textContaining('M31')),
       findsWidgets,
     );
+  });
+
+  testWidgets('the readout carries the same words as its semantics label', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    addTearDown(handle.dispose);
+    final daemon = FakeSessionLiveStackClient()
+      ..enabled = true
+      ..unregistered = 1
+      ..skippedBusy = 1
+      ..stackOne()
+      ..stackOne();
+    await _pump(tester, daemon, child: const SimpleLiveStackReadout());
+    final text = simpleLiveStackReadout(
+      AppLocalizationsEn(),
+      SessionLiveStackStatus(
+        enabled: true,
+        stackSeq: 2,
+        lightsStacked: 2,
+        lightsUnregistered: 1,
+        lightsSkippedBusy: 1,
+      ),
+    );
+    final node = tester.getSemantics(
+      find.byKey(const Key('simple-live-stack-readout')),
+    );
+    expect(node.label, contains(text));
   });
 
   testWidgets('the Queue screen fills the screen with the stacked frame while '

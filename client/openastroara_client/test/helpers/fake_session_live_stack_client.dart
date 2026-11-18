@@ -6,12 +6,17 @@ import 'package:openastroara/services/session_live_stack_api.dart';
 /// The daemon's Session Live Stack as one fake: [enabled], [unsupported],
 /// [seq] and [lights] are what GET /live-stack reports, [frameNow] what
 /// GET /live-stack/frame answers (null = 204). [calls] lists every request.
+/// Like the daemon, reset and stop empty the stack but never take [seq] back:
+/// it falls only when the daemon restarts (set it by hand to model that).
 class FakeSessionLiveStackClient implements SessionLiveStackClient {
   final List<String> calls = [];
   bool enabled = false;
   String? unsupported;
   int seq = 0;
   int lights = 0;
+  int unregistered = 0;
+  int skippedBusy = 0;
+  String? lastOutcome;
   String? target;
   String? filter;
   StackFrame? frameNow;
@@ -19,6 +24,8 @@ class FakeSessionLiveStackClient implements SessionLiveStackClient {
   /// When set, status() answers only once it completes.
   Completer<void>? statusGate;
   Object? statusError;
+  Object? startError;
+  Object? stopError;
 
   int count(String call) => calls.where((c) => c == call).length;
 
@@ -39,6 +46,9 @@ class FakeSessionLiveStackClient implements SessionLiveStackClient {
       unsupported: unsupported,
       stackSeq: seq,
       lightsStacked: lights,
+      lightsUnregistered: unregistered,
+      lightsSkippedBusy: skippedBusy,
+      lastOutcome: lastOutcome,
       targetName: target,
       filterName: filter,
     );
@@ -47,13 +57,13 @@ class FakeSessionLiveStackClient implements SessionLiveStackClient {
   @override
   Future<void> start() async {
     calls.add('start');
+    if (startError != null) throw startError!;
     enabled = true;
   }
 
   @override
   Future<void> reset() async {
     calls.add('reset');
-    seq = 0;
     lights = 0;
     frameNow = null;
   }
@@ -61,8 +71,8 @@ class FakeSessionLiveStackClient implements SessionLiveStackClient {
   @override
   Future<void> stop() async {
     calls.add('stop');
+    if (stopError != null) throw stopError!;
     enabled = false;
-    seq = 0;
     lights = 0;
     frameNow = null;
   }
