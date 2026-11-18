@@ -18,10 +18,10 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -49,21 +49,19 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class FocuserService : IFocuserMediator {
 
-    // Bounded settle wait after a Move: ~60s (600 × 100ms). A move that outlasts this returns early
-    // (the device keeps moving; the cache catches up on the next timer tick) rather than blocking a
-    // sequence thread indefinitely.
-    private const int MoveSettleMaxPolls = 600;
-    // Consecutive unreadable IsMoving polls (~each MoveSettlePollInterval = ~500ms here) after which
-    // we treat the property as unsupported and stop waiting, rather than burning the full bound. Large
-    // enough to ride out a transient read-blip streak on a non-blocking driver, small enough not to
-    // waste ~60s on a driver that genuinely never implements IsMoving.
-    private const int UnknownReadsBeforeSettled = 5;
-    private static readonly TimeSpan MoveSettlePollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for the blocking client.Move() CALL only (not the whole operation): a silent
-    // device must not park a sequence thread until the OS TCP timeout (minutes). The subsequent
-    // settle-wait adds at most MoveSettleMaxPolls × MoveSettlePollInterval (~60s), so the worst-case
-    // total is ~MoveHardTimeout + 60s. Generous — real focuser travel is seconds, not minutes.
-    private static readonly TimeSpan MoveHardTimeout = TimeSpan.FromMinutes(5);
+    // ADR 0011 rule 5: the focuser commands' timeout values and terminal condition. Hard timeout = wall-clock
+    // ceiling for the blocking Move call only (the settle wait adds at most 600 x 100 ms = 60s, so ~6min worst
+    // case). A move that outlasts the settle bound fails as a stall. The motion flag is optional: five
+    // unreadable IsMoving reads in a row mean the driver has no IsMoving (its Move blocks until done), so the
+    // wait ends rather than burning the bound.
+    internal static readonly DeviceCommandPolicy MovePolicy = new(Contracts.DeviceType.Focuser,
+        HardTimeout: TimeSpan.FromMinutes(5), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 600,
+        MotionFlagOptional: true, UnreadableReadsBeforeSettled: 5);
+
+    // Test seam: millisecond timeouts. Production keeps MovePolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; init; } = MovePolicy;
+    private DeviceCommand? _command;
+    private DeviceCommand Command => _command ??= new DeviceCommand(CommandPolicy, _faults, _logger);
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache the background loop
@@ -211,8 +209,6 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer move boundary: the blocking ASCOM Move can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; cancellation is rethrown (the sequence is aborting), and any other escape is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<int> MoveFocuserBlockingAsync(int target, CancellationToken ct) {
         IFocuserDevice? client;
         lock (_gate) {
@@ -228,53 +224,14 @@ public sealed partial class FocuserService : IFocuserMediator {
                 return _runtime.Position ?? 0;
             }
         }
-        try {
-            // The blocking ASCOM Move is launched on the pool; race it against BOTH the sequencer
-            // token and an explicit wall-clock bound (CancelAfter on the linked source) so a hung HTTP
-            // call can't pin the sequence thread "regardless of cancellation" even when ct never fires
-            // and the Alpaca client's own HTTP timeout is generous. The abandoned move is observed so
-            // it can't surface as an unobserved task exception.
-            var moveTask = Task.Run(() => MoveCompensated(client, target), CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(MoveHardTimeout);
-                var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != moveTask) {
-                    ObserveQuietly(moveTask);
-                    ct.ThrowIfCancellationRequested();          // sequencer cancel → propagate
-                    throw new TimeoutException(                 // wall-clock bound → device fault
-                        $"focuser Move to {target} did not complete within {MoveHardTimeout.TotalSeconds:0}s");
-                }
-                await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
-            }
-            await moveTask.ConfigureAwait(false); // observe Move()'s result / surface its exception
-            var reachedRest = await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
-            if (!reachedRest) {
-                // §42.4 — the §42.2 "commanded position not reached" row: the Move dispatched fine
-                // but was never confirmed settled (still moving after the full settle bound, or
-                // the connection dropped mid-move — the publish gate suppresses the latter and
-                // the §42.3 probe owns it). §42.2: fail the instruction — a focuser in an unknown
-                // position must not read as a completed move.
-                var msg = $"focuser Move to {target} was not confirmed settled within the {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s bound";
-                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
-                throw new SequenceEntityFailedException(msg);
-            }
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (SequenceEntityFailedException) {
-            throw; // already classified + published above
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking Move never returned — a stalled op (§42.4).
-            LogMoveFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            throw new SequenceEntityFailedException(ex.Message, ex);
-        } catch (Exception ex) {
-            // Anything else, INCLUDING an OperationCanceledException the Alpaca HTTP client raises for
-            // its OWN internal timeout (ct not cancelled), is a device fault — published and rethrown
-            // as a failed op rather than aborting the autonomous run as if cancelled.
-            LogMoveFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
-            throw new SequenceEntityFailedException($"focuser Move to {target} failed: {ex.Message}", ex);
-        }
+        // Backlash compensation stays in MoveCompensated, inside the call; the module owns the race,
+        // the settle poll (direct IsMoving reads, refreshing the §32.4 cache each tick) and the faults.
+        await Command.RunAsync(new DeviceCommandRequest($"focuser Move to {target}",
+            Call: () => MoveCompensated(client, target),
+            IsLive: () => _lifecycle.IsLive(client),
+            CurrentDevice: () => _lifecycle.DeviceIfCurrent(client),
+            Terminal: () => ReadIsMoving(client) is bool moving ? !moving : null,
+            Polled: _lifecycle.Refresh), ct).ConfigureAwait(false);
         _lifecycle.Refresh();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
         // that no-op'd against a concurrent timer tick can't make us report a stale cache value
@@ -285,71 +242,6 @@ public sealed partial class FocuserService : IFocuserMediator {
         lock (_gate) {
             return settled ?? _runtime.Position ?? 0;
         }
-    }
-
-    // Polls the device's IsMoving directly (not via the single-flight cache, which can no-op against a
-    // concurrent timer tick) until the focuser settles or the bound elapses, refreshing the §32.4
-    // cache each tick so GetInfo/GetAsync stay current. The leading delay gives firmware that asserts
-    // IsMoving asynchronously a chance to do so before the first read, so a just-issued Move is not
-    // mistaken for already-settled. Returns false when the move could not be CONFIRMED settled —
-    // bound exhausted with the device still reporting motion (the §42.4 stall signal), or the device
-    // dropped/was superseded mid-wait (position unknown; the instruction must fail even though the
-    // §42.3 disconnect episode owns the fault/reaction — the publish gate suppresses a spurious
-    // stall event for that case, aligning with the mount/dome/filter settle loops).
-    private async Task<bool> WaitForMoveCompleteAsync(IFocuserDevice client, CancellationToken ct) {
-        var unknownStreak = 0;
-        for (var i = 0; i < MoveSettleMaxPolls; i++) {
-            await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
-            // Stop if the device is gone (disconnected / superseded / disposed): a dropped connection
-            // must NOT be mistaken for "settled" the way a swallowed IsMoving read would be.
-            bool stillOurClient;
-            lock (_gate) {
-                stillOurClient = _lifecycle.IsLive(client);
-            }
-            if (!stillOurClient) {
-                return false;
-            }
-            var moving = ReadIsMoving(client);
-            _lifecycle.Refresh();
-            if (moving == false) {
-                return true; // confirmed settled
-            }
-            if (moving is null) {
-                // A brief streak of nulls is a transient read blip — keep waiting. A persistent
-                // streak means the driver doesn't implement IsMoving at all; for such drivers the
-                // ASCOM Move() blocks until done, so by now it's complete — stop rather than burning
-                // the full ~60s bound on a property that will never report motion. The trade-off: a
-                // NON-blocking driver whose IsMoving is transient-error-prone could also produce a
-                // streak this long mid-move and settle early; the MoveSettleMaxPolls hard bound and
-                // the post-wait direct Position read backstop that (rare) case.
-                if (++unknownStreak >= UnknownReadsBeforeSettled) {
-                    return true;
-                }
-            } else {
-                unknownStreak = 0; // moving == true: a real read; reset the transient counter
-            }
-        }
-        return false; // bound exhausted with the focuser still reporting motion — not confirmed settled
-    }
-
-    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
-    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
-    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
-    // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(IFocuserDevice client, EquipmentFaultKind kind, string details) {
-        if (_faults is null) {
-            return;
-        }
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (!_lifecycle.IsCurrent(client)) {
-                return;
-            }
-            device = _lifecycle.Device;
-        }
-        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Focuser, device?.UniqueId, device?.Name,
-            kind, details, DateTimeOffset.UtcNow));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -370,17 +262,6 @@ public sealed partial class FocuserService : IFocuserMediator {
         } catch (Exception) {
             return null;
         }
-    }
-
-    // Observes an abandoned (cancelled/timed-out) move task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem (the move is already abandoned —
-    // nothing actionable, but a silent device fault should leave a trace).
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedMoveFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
     }
 
     // Connection lifecycle is driven by the REST surface (ConnectAsync/DisconnectAsync), not the
@@ -411,7 +292,4 @@ public sealed partial class FocuserService : IFocuserMediator {
 
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "abandoned focuser move (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedMoveFaulted(Exception ex);
 }

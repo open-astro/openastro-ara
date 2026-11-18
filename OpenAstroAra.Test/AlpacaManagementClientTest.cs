@@ -77,6 +77,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SerialsOf_maps_type_and_number_to_the_serial_and_leaves_out_entries_without_one() {
+            // #1580 — the setup flow hides a found camera by serial, so the names route carries it.
+            const string withSerials = """
+                {"Value":[
+                  {"DeviceName":"ZWO ASI294MC Pro","DeviceType":"Camera","DeviceNumber":0,"Config":{"serialNumber":"AAAA000000000001"}},
+                  {"DeviceName":"ZWO ASI120MM Mini","DeviceType":"Camera","DeviceNumber":1,"Config":{"serialNumber":""}},
+                  {"DeviceName":"AM5N","DeviceType":"Telescope","DeviceNumber":0}
+                ]}
+                """;
+            var devices = AlpacaManagementClient.ParseConfiguredDevices(withSerials);
+            var serials = AlpacaManagementClient.SerialsOf(devices);
+            Assert.That(serials, Has.Count.EqualTo(1), "an empty or absent serial is left out");
+            Assert.That(serials["camera/0"], Is.EqualTo("AAAA000000000001"));
+        }
+
+        [Test]
+        public async Task Endpoint_answers_the_serials_beside_the_names() {
+            using var handler = new CannedHandler {
+                Body = """{"Value":[{"DeviceName":"ZWO ASI294MC Pro","DeviceType":"Camera","DeviceNumber":0,"Config":{"serialNumber":"AAAA000000000001"}}]}""",
+            };
+            using var client = new AlpacaManagementClient(handler: handler);
+            var ok = await EquipmentEndpoints.GetAlpacaDeviceNamesAsync("rig", 6800, client, CancellationToken.None);
+            var body = ((Ok<AlpacaDeviceNamesResponseDto>)ok).Value!;
+            Assert.That(body.Serials!["camera/0"], Is.EqualTo("AAAA000000000001"));
+        }
+
+        [Test]
         public void Parse_of_malformed_or_unexpected_json_is_empty() {
             Assert.That(AlpacaManagementClient.ParseConfiguredDeviceNames("not json"), Is.Empty);
             Assert.That(AlpacaManagementClient.ParseConfiguredDeviceNames("[]"), Is.Empty);

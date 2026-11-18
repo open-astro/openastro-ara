@@ -1211,7 +1211,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | `client-test-linux` | `Client (analyze + test) — ubuntu-latest` ✅ required | `ubuntu-latest` | passes only when every shard passed (or the shards skipped a docs-only change) | never skipped |
 | `client-test-desktop-shard` | `Client (analyze + test) — <os>, shard <n>/3` | `macos-latest`, `windows-latest` (os matrix × shard matrix 1-3) | `flutter pub get`; `flutter test` on every third test file; shard 1 also runs the page-logic tests (no `flutter analyze`: `client-test-shard` 1 runs it on Linux) — on a pull request, on `master` and on a manual run, not in the merge queue | `docs_only` and the event (skipped on a merge group; `merge-gate.sh` holds the queue to their result on the PR head) |
 | `client-test` | `Client (analyze + test) — <os>` ✅ required ×2 | `ubuntu-latest` (os matrix `macos-latest`, `windows-latest`) | passes only when every desktop shard passed (or the shards skipped a merge group or a docs-only change) | never skipped — the job always expands so its two required contexts report (#1025) |
-| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client`, and skipped on `merge_group` (the merge gate checks it on the PR head) |
+| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-24.04` / `windows-latest` / `ubuntu-latest` / `macos-latest` (target matrix `macos` / `linux` / `windows` / `android` / `ios`; the linux leg is pinned to 24.04, #1202) | the linux leg first installs the desktop build dependencies and the android leg caches the NDK and CMake; `flutter build <target> --release` (`apk` for android, up to 3 tries; `ios --no-codesign` for ios); the linux leg then prunes `libdartjni.so`, fails if any bundle ELF needs `libjvm.so` or a `GLIBC_` version above 2.39 (`objdump -T`), uploads the bundle as the `linux-x64-bundle` artifact, and checks the launcher icons match `icon_sources/` | `docs_only`, `client`, and skipped on `merge_group` (the merge gate checks it on the PR head) |
 
 A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 
@@ -2877,7 +2877,7 @@ sudo /opt/openastroara/scripts/configure-storage.sh --mount-copy <uuid>
 sudo /opt/openastroara/scripts/configure-storage.sh --unmount-copy
 ```
 
-Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses any device on the disk holding `/`, `/boot` or `/boot/firmware` (`refused system_disk`, exit 6). The script header is the source of truth; this is the shape.
+Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses the partition holding `/`, `/boot` or `/boot/firmware` and its ancestors in every mode, and any other partition on that disk when it is erased (`refused system_disk`, exit 6); a plain mount, `--check` and `--eject` also refuse such a partition while it is mounted anywhere but the store path (`device_busy mounted_elsewhere`, exit 5), and `--mount-copy` keeps its own check, which accepts only the copy path. The script header is the source of truth; this is the shape.
 
 **Behavior (no `--format`): use a drive as the store**
 
@@ -2924,8 +2924,8 @@ On a packaged install neither line is reachable (NoNewPrivileges, above); the st
 | 2 | UUID not found in `blkid` (`uuid_not_found`) |
 | 3 | Filesystem is neither exFAT nor ext4 (`not_ext4`) |
 | 4 | Label mismatch on `--format` (`label_mismatch`) |
-| 5 | Device busy — unmount failed (`device_busy`) |
-| 6 | Refused: the root or boot disk (`refused system_disk`), or the store as a copy target (`refused is_store`) |
+| 5 | Device busy — unmount failed, or the drive is mounted elsewhere (`device_busy`, `device_busy mounted_elsewhere`) |
+| 6 | Refused: the root or boot partition, or an erase on the OS disk (`refused system_disk`), or the store as a copy target (`refused is_store`) |
 | 7 | mkfs failed (`mkfs_failed`) |
 | 8 | mount failed, or the fstab rebuild could not run (`mount_failed`, `fstab_unreadable`, `fstab_tmp_failed`, `fstab_locked`) |
 | 9 | Usage error — bad or conflicting arguments (`usage`) |
@@ -11339,7 +11339,7 @@ If AlpacaBridge isn't reachable at all (no discovery response, no devices discov
 - Wizard cannot advance past Screen 2 without a successful handshake. User can [Skip to manual entry] only if they need to point to a non-standard AlpacaBridge install (different host, custom port).
 - After first-run setup, if AlpacaBridge goes missing (uninstalled, service stopped), WILMA's Equipment screen shows a critical notification with the same install command + `systemctl status alpaca-bridge` diagnostic snippet.
 
-**Zero devices (#1580).** An AlpacaBridge that answers but has no devices yet is a fresh install: it does not add plugged-in gear on its own, so Retry detection alone cannot help. When the daemon can read the bridge's device catalog (`GET /equipment/alpacabridge/catalog`, API_CONTRACT 2026-11-11), the "found, no devices yet" summary on Screen 2 gains an **Add your devices** action beside Retry detection and Next. The action is offered only when that read succeeds, so reachability stays the only gate (§68.1): a non-AlpacaBridge server, or an AlpacaBridge too old to have the catalog, gets today's message with no button. The missing-bridge panel above is unchanged. *(Client flow: pending the board's review of `design/preview/alpacabridge-add-devices-mock.html`; the daemon routes ship first.)*
+**Zero devices (#1580).** An AlpacaBridge that answers but has no devices yet is a fresh install: it does not add plugged-in gear on its own, so Retry detection alone cannot help. When the daemon can read the bridge's device catalog (`GET /equipment/alpacabridge/catalog`, API_CONTRACT 2026-11-11), Screen 2 shows the **Add your devices** panel (§76.2) under the detection result. The panel is offered only when that read succeeds, so reachability stays the only gate (§68.1): a non-AlpacaBridge server, or an AlpacaBridge too old to have the catalog, gets today's message with no panel. The missing-bridge panel above is unchanged.
 
 ### 68.3 Upgrade path
 
@@ -12820,14 +12820,14 @@ users reach everything through disclosures, not extra steps.
   camera. Autofocus, imaging defaults, safety thresholds, and site
   preferences take thoughtful defaults and live in Options — the wizard never mentions them.
 
-**Adding a device writes through to AlpacaBridge (#1580).** On a fresh rig the wizard can create a device on the bridge (Screen 2, Add your devices): Ara sends the form the bridge's own catalog described and the bridge registers and stores the device. Ara keeps no copy of the device or of what each driver needs, so "device facts live in Alpaca" still holds: AlpacaBridge stores the device, Ara only sends the form. The attached camera a user picks fills the catalog's `serialNumber` and `cameraName` fields (the entry then binds by serial), never `cameraIndex`. *(Client parts pending the board's mock review.)*
+**Adding a device writes through to AlpacaBridge (#1580).** On a fresh rig the wizard can create a device on the bridge (Screen 2, Add your devices): Ara sends the form the bridge's own catalog described and the bridge registers and stores the device. Ara keeps no copy of the device or of what each driver needs, so "device facts live in Alpaca" still holds: AlpacaBridge stores the device, Ara only sends the form. The attached camera a user picks fills the catalog's `serialNumber` and `cameraName` fields (the entry then binds by serial), never `cameraIndex`.
 
 ### 76.2 The five screens
 
 | # | Screen | User does |
 |---|--------|-----------|
 | 1 | Welcome | Profile name; one-tap location (GPS, or mount site lat/long once connected) |
-| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged). An AlpacaBridge with no devices yet offers **Add your devices** beside Retry detection (§68.2 zero-devices case): device type, then driver, then (ZWO cameras) the attached camera, then a form built from the bridge's catalog; Add creates the device on the bridge and the list refreshes. *(Client: pending the mock review.)* |
+| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged). Whenever the bridge answers and the daemon can read its device catalog (§68.2), the screen shows **Add your devices** below the result: a **Found on this rig** list of the attached cameras the bridge has not configured yet, each ticked, and one **Add selected (n)** that adds them one at a time (a row that needs a value opens its form first; each row ends Added or Failed with Retry and Edit). **Add a device by hand** is the fallback: one list of the catalog's drivers, then (cameras) the attached camera, then a form built from the bridge's catalog; Add creates the device on the bridge and the list refreshes. One add runs at a time. The same panel is Simple Mode's empty Devices section. |
 | 3 | Your equipment | Confirm auto-assigned device cards (real names via `/management/v1/configureddevices`); fix gaps in AlpacaBridge via deep link + Recheck; per-card Details disclosure for Ara-only tunables |
 | 4 | Guiding | Guide scope (enter FL) vs OAG (inherits main FL); guide exposure min/max range (drives BOTH dark-library coverage and guider exposure bounds — one choice, two consumers, cannot disagree); "Build dark library now" toggle (default on, "cover the guide scope" prompt); Advanced disclosure: dither, settle, calibration cadence |
 | 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build (§63.6) over the chosen range with live progress streamed via §63.8 ("Building dark library… 12/40 — you're all set, this finishes in the background") |

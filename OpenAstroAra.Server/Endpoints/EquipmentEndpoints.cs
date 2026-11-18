@@ -1322,7 +1322,8 @@ public static partial class EquipmentEndpoints {
         }
         var devices = await alpaca.GetConfiguredDevicesAsync(host!, port!.Value, ct).ConfigureAwait(false);
         return Results.Ok(new AlpacaDeviceNamesResponseDto(
-            AlpacaManagementClient.NamesOf(devices), AlpacaManagementClient.UniqueIdsOf(devices)));
+            AlpacaManagementClient.NamesOf(devices), AlpacaManagementClient.UniqueIdsOf(devices),
+            AlpacaManagementClient.SerialsOf(devices)));
     }
 
     // Manual nudge (extracted for the error-mapping tests). ASCOM axes: 0 = Primary, 1 = Secondary —

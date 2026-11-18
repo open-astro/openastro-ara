@@ -45,9 +45,11 @@ void main() {
     final adapter = _StubAdapter(const {
       'names': {'camera/1': 'ZWO ASI290MM Mini'},
     });
-    final api = AlpacaDeviceNamesApi(server,
-        dio: Dio(BaseOptions(baseUrl: server.baseUrl))
-          ..httpClientAdapter = adapter);
+    final api = AlpacaDeviceNamesApi(
+      server,
+      dio: Dio(BaseOptions(baseUrl: server.baseUrl))
+        ..httpClientAdapter = adapter,
+    );
     final names = await api.fetchNames('192.168.1.118', 6800);
     expect(names, {'camera/1': 'ZWO ASI290MM Mini'});
     final req = adapter.lastRequest!;
@@ -58,47 +60,90 @@ void main() {
     expect(req.uri.port, 5555);
   });
 
-  test('a daemon error is best-effort → empty map (labels stay generic)',
-      () async {
-    final adapter = _StubAdapter(const {'detail': 'host is required'},
-        status: 400);
-    final api = AlpacaDeviceNamesApi(server,
+  test(
+    'a daemon error is best-effort → empty map (labels stay generic)',
+    () async {
+      final adapter = _StubAdapter(const {
+        'detail': 'host is required',
+      }, status: 400);
+      final api = AlpacaDeviceNamesApi(
+        server,
         dio: Dio(BaseOptions(baseUrl: server.baseUrl))
-          ..httpClientAdapter = adapter);
-    expect(await api.fetchNames('', 6800), isEmpty);
-  });
+          ..httpClientAdapter = adapter,
+      );
+      expect(await api.fetchNames('', 6800), isEmpty);
+    },
+  );
 
-  test('no active server → the no-server stand-in, which answers empty',
-      () async {
-    final container = ProviderContainer(overrides: [
-      activeServerProvider.overrideWithValue(null),
-    ]);
-    addTearDown(container.dispose);
-    final client = container.read(alpacaDeviceNamesApiProvider);
-    expect(client, isA<NoServerAlpacaDeviceNames>());
-    expect(await client.fetchNames('rig', 6800), isEmpty);
-  });
+  test(
+    'no active server → the no-server stand-in, which answers empty',
+    () async {
+      final container = ProviderContainer(
+        overrides: [activeServerProvider.overrideWithValue(null)],
+      );
+      addTearDown(container.dispose);
+      final client = container.read(alpacaDeviceNamesApiProvider);
+      expect(client, isA<NoServerAlpacaDeviceNames>());
+      expect(await client.fetchNames('rig', 6800), isEmpty);
+    },
+  );
 
   test('an active server → the daemon-backed client', () {
-    final container = ProviderContainer(overrides: [
-      activeServerProvider.overrideWithValue(server),
-    ]);
+    final container = ProviderContainer(
+      overrides: [activeServerProvider.overrideWithValue(server)],
+    );
     addTearDown(container.dispose);
-    expect(container.read(alpacaDeviceNamesApiProvider),
-        isA<AlpacaDeviceNamesApi>());
+    expect(
+      container.read(alpacaDeviceNamesApiProvider),
+      isA<AlpacaDeviceNamesApi>(),
+    );
   });
 
   group('AlpacaDeviceNamesApi.parseDevices (#1308 unique ids)', () {
-    test('carries unique_ids beside the names and tolerates an older daemon', () {
+    test(
+      'carries unique_ids beside the names and tolerates an older daemon',
+      () {
+        final devices = AlpacaDeviceNamesApi.parseDevices({
+          'names': {
+            'camera/0': 'ZWO ASI120MM Mini',
+            'camera/1': 'ZWO ASI533MC Pro',
+          },
+          'unique_ids': {'camera/1': 'ZWO_SN_0c190e111d020900'},
+        });
+        expect(devices['camera/1']!.uniqueId, 'ZWO_SN_0c190e111d020900');
+        expect(
+          devices['camera/0']!.uniqueId,
+          '',
+          reason: 'serial-less: no id reported',
+        );
+        final old = AlpacaDeviceNamesApi.parseDevices({
+          'names': {'camera/0': 'Cam'},
+        });
+        expect(old['camera/0']!.name, 'Cam');
+        expect(old['camera/0']!.uniqueId, '');
+      },
+    );
+  });
+
+  group('AlpacaDeviceNamesApi.parseDevices (#1580 serials)', () {
+    test('carries serials beside the names and tolerates an older daemon', () {
       final devices = AlpacaDeviceNamesApi.parseDevices({
-        'names': {'camera/0': 'ZWO ASI120MM Mini', 'camera/1': 'ZWO ASI533MC Pro'},
-        'unique_ids': {'camera/1': 'ZWO_SN_0c190e111d020900'},
+        'names': {
+          'camera/0': 'ZWO ASI294MC Pro',
+          'camera/1': 'ZWO ASI120MM Mini',
+        },
+        'serials': {'camera/0': 'AAAA000000000001'},
       });
-      expect(devices['camera/1']!.uniqueId, 'ZWO_SN_0c190e111d020900');
-      expect(devices['camera/0']!.uniqueId, '', reason: 'serial-less: no id reported');
-      final old = AlpacaDeviceNamesApi.parseDevices({'names': {'camera/0': 'Cam'}});
-      expect(old['camera/0']!.name, 'Cam');
-      expect(old['camera/0']!.uniqueId, '');
+      expect(devices['camera/0']!.serial, 'AAAA000000000001');
+      expect(devices['camera/1']!.serial, '', reason: 'no serial reported');
+      final old = AlpacaDeviceNamesApi.parseDevices({
+        'names': {'camera/0': 'Cam'},
+      });
+      expect(
+        old['camera/0']!.serial,
+        '',
+        reason: 'an older daemon sends no serials',
+      );
     });
   });
 

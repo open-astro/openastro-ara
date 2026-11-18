@@ -14,6 +14,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/widgets/settings/section_load_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
@@ -113,12 +114,18 @@ Future<_FakeFwApi> _pump(
   _Offsets? offsets,
   bool rig = true,
   bool policyLoadFails = false,
+  FakeSectionRig? sectionRig,
 }) async {
   await _wideSurface(tester);
   final api = _FakeFwApi(status);
-  final policyRig = FakeSectionRig({
-    'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
-  });
+  final policyRig =
+      sectionRig ??
+      FakeSectionRig({
+        'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+        'filter-wheel/labels': {
+          'labels': ['L', 'Hα'],
+        },
+      });
   if (policyLoadFails) policyRig.failGet.add('filter-wheel/policy');
   await tester.pumpWidget(
     ProviderScope(
@@ -294,36 +301,73 @@ void main() {
     },
   );
 
-  testWidgets('no rig: the policy shows not loaded, no switches', (
-    tester,
-  ) async {
+  testWidgets('no rig: the policy and the slot labels show not loaded, no '
+      'switches or slot fields', (tester) async {
     await _pump(tester, null, rig: false);
-    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.byType(SectionNotLoaded), findsNWidgets(2));
     expect(find.text('Park on slot 0 on first connect'), findsNothing);
     expect(find.text("Move the focuser by each filter's offset"), findsNothing);
+    expect(find.text('Slot 1'), findsNothing);
   });
 
-  testWidgets('no rig: an offline cache copy of the policy is not editable', (
-    tester,
-  ) async {
+  testWidgets('no rig: an offline cache copy of the policy and the labels is '
+      'not editable', (tester) async {
     await _pump(tester, null, rig: false);
     final c = ProviderScope.containerOf(
       tester.element(find.byType(EquipmentFilterWheelPanel)),
     );
+    c
+        .read(filterWheelLabelsProvider.notifier)
+        .seed(FilterWheelLabels(labels: const ['L', 'Hα']));
     c.read(filterWheelPolicyProvider.notifier).seed(const FilterWheelPolicy());
     await tester.pumpAndSettle();
-    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.byType(SectionNotLoaded), findsNWidgets(2));
+    expect(find.text('Slot 1'), findsNothing);
     expect(find.text('Park on slot 0 on first connect'), findsNothing);
+  });
+
+  testWidgets('the slot labels come from the rig, one row per slot', (
+    tester,
+  ) async {
+    await _pump(tester, null);
+    expect(find.byType(SectionNotLoaded), findsNothing);
+    expect(find.text('Slot 1'), findsOneWidget);
+    expect(find.text('Slot 2'), findsOneWidget);
+    expect(find.text('Slot 3'), findsNothing);
+  });
+
+  testWidgets('a slot label edit the rig refuses as stale shows the labels '
+      'conflict banner with Reload', (tester) async {
+    final rig = FakeSectionRig({
+      'filter-wheel/policy': rigDefaults['filter-wheel/policy'],
+      'filter-wheel/labels': {
+        'labels': ['L', 'Hα'],
+      },
+    });
+    await _pump(tester, null, sectionRig: rig);
+    rig.savedElsewhere('filter-wheel/labels');
+    await tester.enterText(
+      find.descendant(
+        of: find.widgetWithText(EditableTextRow, 'Slot 1'),
+        matching: find.byType(TextField),
+      ),
+      'Lum',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(rig.puts, isEmpty);
+    expect(find.byType(SectionConflictBanner), findsOneWidget);
+    expect(find.byKey(const Key('section-reload')), findsOneWidget);
   });
 
   testWidgets('the policy not-loaded row lines up with the other rows', (
     tester,
   ) async {
     await _pump(tester, null, rig: false);
-    expect(
-      tester.getTopLeft(find.text('Rig not connected')).dx,
-      tester.getTopLeft(find.text('Auto-connect on boot')).dx,
-    );
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    // Policy row first, slot labels row last: both start where the rows start.
+    expect(tester.getTopLeft(find.text('Rig not connected').first).dx, rowX);
+    expect(tester.getTopLeft(find.text('Rig not connected').last).dx, rowX);
   });
 
   testWidgets('a failed policy load: text and Retry line up with the rows', (

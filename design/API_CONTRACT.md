@@ -193,6 +193,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-17 — #1769 the OS disk's other partitions: `system_disk_level` and `media_kind` on `GET /api/v1/storage/devices`
+
+**Endpoint(s) or area:** `GET /api/v1/storage/devices` → `StorageDeviceDto` gains `system_disk_level` (`none` | `os_partition` | `os_disk_data`) and `media_kind` (`emmc` | `nvme` | `sd` | `unknown`); `POST /api/v1/storage/configure` with `format: true`.
+
+**Decision:** `os_partition` is a device that carries `/`, `/boot` or `/boot/firmware`, or an ancestor of one (md, LVM, dm-crypt, the physical disk). `os_disk_data` is any other partition on that physical disk. `is_system_disk` stays true for both, so an older client hides exactly what it hides today. `media_kind` is read from sysfs `device/type` (`SD`, `MMC` = eMMC) and lsblk's NVMe transport; anything else, or a failed read, is `unknown`. Both fields are additive; a client that does not know them reads `none` and `unknown`. `POST /storage/configure` with `format: true` on a device of either level answers 422 Problem `title: refused`, `detail: system_disk`, before the erase is noted and before the helper runs. Mount, check and eject on an `os_disk_data` partition are not refused while it is unmounted or mounted at the store; mounted anywhere else (a separate `/var`, `/home` or `/opt`, or the copy path), each answers 422 `title: device_busy`, `detail: mounted_elsewhere`, the code the copy target already uses. The copy target keeps its own check, which accepts a partition that is unmounted or already at the copy path. The root helper refuses every mode on an `os_partition` and the erase of an `os_disk_data` partition.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml` (`StorageDeviceDto`); `Services/StorageDeviceService.cs` (`ParseDevices`, `ProbeMedia`, `RefuseEraseOnOsDiskAsync`), `Endpoints/SystemEndpoints.cs` (`/storage/configure`), `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`refuse_if_os_partition`, `refuse_if_os_disk`, `refuse_if_os_disk_mounted_elsewhere`).
+
+**Related:** #1769, ADR 0017; tests `StorageOsDiskTest`, `StorageCopyEndpointTest`, `scripts/tests/test_configure_storage_switch.py`.
+
+---
+
 ## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.
@@ -1660,7 +1672,19 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** a fresh rig has an AlpacaBridge with no devices and Retry detection cannot help; the add must be an Ara route because the client cannot always reach the bridge and Ara keeps no device facts. The attached camera fills `serialNumber` and `cameraName` (what AlpacaBridge's own web picker saves: the entry then binds by serial), not `cameraIndex`.
 
-**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`. The Flutter client waits for the board's mock review.
+**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`.
+
+---
+
+## 2026-11-17 — `GET /equipment/guider/alpacadevicenames` answers `serials` (#1580)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider/alpacadevicenames?host=&port=` (one optional field on the existing response).
+
+**Decision:** the response gains `serials`: `"type/N"` → the device's serial number (additive, like `unique_ids`; entries the server reports no serial for are left out; absent on an older daemon, which the client reads as no serials). The daemon takes it from the entry's `Config.serialNumber` that an OpenAstro AlpacaBridge already reports.
+
+**Reasoning:** the add-your-devices list hides a camera the bridge already offers. Two cameras of one model have the same name, so the name cannot tell them apart; the serial can. The client falls back to the name only when either side has no serial.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto.Serials`), `Services/AlpacaManagementClient.cs` (`SerialsOf`), `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`); test `AlpacaManagementClientTest`.
 
 ---
 

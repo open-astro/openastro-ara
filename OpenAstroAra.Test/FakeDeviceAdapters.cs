@@ -101,7 +101,11 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeDomeDevice : FakeDeviceAdapter, IDomeDevice {
-        public bool Slewing { get { ThrowIfReadFails(); return false; } }
+        // Scripts: SlewingScript answers (or throws) each Slewing read; OnCommand runs inside a park / home /
+        // slew / shutter call (block it, or throw from it).
+        public Func<bool>? SlewingScript;
+        public Action? OnCommand;
+        public bool Slewing { get { ThrowIfReadFails(); return SlewingScript?.Invoke() ?? false; } }
         public double Azimuth => 180;
         public ShutterState ShutterStatus => ShutterState.Closed;
         public bool AtHome => false;
@@ -112,13 +116,13 @@ namespace OpenAstroAra.Test {
         public bool CanPark => true;
         public bool CanFindHome => true;
         public bool CanSetPark => true;
-        public void SlewToAzimuth(double azimuth) { }
+        public void SlewToAzimuth(double azimuth) => OnCommand?.Invoke();
         public void SyncToAzimuth(double azimuth) { }
-        public void Park() { }
+        public void Park() => OnCommand?.Invoke();
         public void SetPark() { }
-        public void FindHome() { }
-        public void OpenShutter() { }
-        public void CloseShutter() { }
+        public void FindHome() => OnCommand?.Invoke();
+        public void OpenShutter() => OnCommand?.Invoke();
+        public void CloseShutter() => OnCommand?.Invoke();
         public void AbortSlew() { }
     }
 
@@ -183,7 +187,11 @@ namespace OpenAstroAra.Test {
 
     internal sealed class FakeFocuserDevice : FakeDeviceAdapter, IFocuserDevice {
         private int _position = 500;
-        public bool IsMoving => false;
+        // Scripts: IsMovingScript answers (or throws) each IsMoving read; OnMove runs inside a move call
+        // (block it, or throw from it).
+        public Func<bool>? IsMovingScript;
+        public Action<int>? OnMove;
+        public bool IsMoving => IsMovingScript?.Invoke() ?? false;
         public int Position { get { ThrowIfReadFails(); return Volatile.Read(ref _position); } }
         public double Temperature => 8;
         public bool TempComp { get; set; }
@@ -193,7 +201,7 @@ namespace OpenAstroAra.Test {
         public bool Absolute => true;
         /// <summary>When true a move lands at once; by default it changes nothing.</summary>
         public bool MoveLands { get; set; }
-        public void Move(int position) { if (MoveLands) { Volatile.Write(ref _position, position); } }
+        public void Move(int position) { OnMove?.Invoke(position); if (MoveLands) { Volatile.Write(ref _position, position); } }
         public void Halt() { }
         public List<string> Actions { get; } = [];
         public System.Collections.Concurrent.ConcurrentQueue<string> ActionCalls { get; } = new();

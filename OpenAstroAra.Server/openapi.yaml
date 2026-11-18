@@ -17267,6 +17267,12 @@ components:
           type: boolean
         is_ara_store:
           type: boolean
+        system_disk_level:
+          type: string
+          default: none
+        media_kind:
+          type: string
+          default: unknown
     StorageRescanResultDto:
       required:
         - ran

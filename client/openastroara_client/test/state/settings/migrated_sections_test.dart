@@ -7,6 +7,7 @@ import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/diagnostics_mode_state.dart';
 import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
@@ -20,13 +21,14 @@ import '../../support/fake_section_rig.dart';
 // reset and the live-sync table.
 
 /// Every migrated section by the path the rig serves it under (the filter
-/// wheel policy shares the route `filter-wheel` with the slot labels).
+/// wheel's two sections share the route `filter-wheel`).
 const _paths = [
   'camera-electronics',
   'custom-horizon',
   'diagnostics-mode',
   'filenames',
   'filter-set',
+  'filter-wheel/labels',
   'filter-wheel/policy',
   'notifications',
   'plate-solve',
@@ -34,13 +36,14 @@ const _paths = [
   'unguided',
 ];
 
-final _selfLoading = {filterWheelPolicyProvider};
+final _selfLoading = {filterWheelLabelsProvider, filterWheelPolicyProvider};
 
 String _routeOf(String path) => path.split('/').first;
 
 /// The section the rig serves under [path].
 MigratedSection _sectionAt(String path) => migratedSections.firstWhere(
   (s) => switch (path) {
+    'filter-wheel/labels' => s.provider == filterWheelLabelsProvider,
     'filter-wheel/policy' => s.provider == filterWheelPolicyProvider,
     _ => s.route == path,
   },
@@ -130,6 +133,8 @@ void main() {
     'filter-set': (c) => c
         .read(filterSetProvider.notifier)
         .addFilter(const PlanningFilter(name: 'Ha', kind: FilterKind.ha)),
+    'filter-wheel/labels': (c) =>
+        c.read(filterWheelLabelsProvider.notifier).setLabel(1, 'Lum'),
     'filter-wheel/policy': (c) => c
         .read(filterWheelPolicyProvider.notifier)
         .edit((v) => v.copyWith(useFilterWheelOffsets: true)),
@@ -203,6 +208,14 @@ void main() {
         ],
       },
     ],
+    'filter-wheel/labels': [
+      null,
+      <String, Object?>{},
+      {'labels': <String>[]},
+      {
+        'labels': ['L', 3],
+      },
+    ],
     'filter-wheel/policy': [
       null,
       ...without(rigDefaults['filter-wheel/policy']!),
@@ -239,6 +252,7 @@ void main() {
     'camera-electronics': 'read_noise_e',
     'custom-horizon': 'points',
     'filter-set': 'filters',
+    'filter-wheel/labels': 'labels',
     'filter-wheel/policy': 'use_filter_wheel_offsets',
     'plate-solve': 'center_after_slew',
     'unguided': 'guard_enabled',
