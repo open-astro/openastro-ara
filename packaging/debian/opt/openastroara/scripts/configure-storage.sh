@@ -28,7 +28,8 @@
 # it is gone after a reboot; --unmount-copy flushes and releases it.
 #
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
-#             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk,
+#             4 label_mismatch · 5 device_busy (unmount failed, or mounted_elsewhere) ·
+#             6 refused (the root/boot partition, an erase on the OS disk,
 #             or the store itself as a copy target) · 7 mkfs_failed ·
 #             8 mount_failed · 9 usage · 10 chown_failed · 11 fsck_failed ·
 #             12 exfat_unsupported (this kernel cannot mount exFAT)

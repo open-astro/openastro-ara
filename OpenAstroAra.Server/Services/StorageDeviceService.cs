@@ -41,10 +41,9 @@ namespace OpenAstroAra.Server.Services {
         /// via the <c>openastroara-storage@</c> unit, on a dev rig via sudo.</summary>
         Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct);
 
-        /// <summary>Erase guard (ADR 0022 pilot not applied): a refusal
-        /// (<c>refused</c> / <c>system_disk</c>) when the drive is on the OS disk at either level,
-        /// null when it may be erased. Same device facts as <see cref="ListAsync"/>; the helper
-        /// repeats the check as root.</summary>
+        /// <summary>Erase guard: the refusal (<c>refused</c> / <c>system_disk</c>) when the drive is
+        /// an OS partition or another partition on the OS disk, null when it may be erased. It reads
+        /// the same device list as <see cref="ListAsync"/>; the helper repeats the check as root.</summary>
         Task<StorageConfigureResult?> RefuseEraseOnOsDiskAsync(string uuid, CancellationToken ct);
 
         /// <summary>§29 user-triggered disk check: unmount → matching fsck
@@ -58,7 +57,7 @@ namespace OpenAstroAra.Server.Services {
         Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct);
 
         /// <summary>Disk-to-disk copy: mount a second drive (never the store, never the
-        /// system disk) at <c>/media/openastroara-copy</c>, with no fstab entry. Success
+        /// OS partition) at <c>/media/openastroara-copy</c>, with no fstab entry. Success
         /// carries that path as <see cref="StorageConfigureResult.MountPoint"/>.</summary>
         Task<StorageConfigureResult> MountCopyTargetAsync(string uuid, CancellationToken ct);
 
