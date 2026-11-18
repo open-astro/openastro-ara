@@ -413,6 +413,8 @@
   "shellInfo": "Info",
   "shellLibrary": "Biblioteca",
   "shellRailTabs": "Modos",
+  "shellRailTabDone": "{mode}, feito esta noite",
+  "shellRailTabRunning": "{mode}, em andamento",
   "shellModeSemantics": "Modo: {mode}",
   "shellGuiding": "Guiagem",
   "shellGuidingRms": "RMS {rms}",

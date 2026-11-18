@@ -1925,6 +1925,24 @@
   "@shellRailTabs": {
     "description": "Simple Mode screen reader label of the right rail's tab list of the six modes"
   },
+  "shellRailTabDone": "{mode}, done tonight",
+  "@shellRailTabDone": {
+    "description": "Simple Mode screen reader label of a right rail tab whose step is done tonight; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "shellRailTabRunning": "{mode}, running",
+  "@shellRailTabRunning": {
+    "description": "Simple Mode screen reader label of the right rail tab of the mode that runs now; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
   "shellModeSemantics": "Mode: {mode}",
   "@shellModeSemantics": {
     "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",
