@@ -84,6 +84,8 @@ void showHelpSheet(BuildContext context, Help entry, {String? device}) {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
+                    tooltip: MaterialLocalizations.of(context)
+                        .closeButtonTooltip,
                     icon: const Icon(Icons.close),
                   ),
                 ],
