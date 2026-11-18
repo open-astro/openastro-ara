@@ -84,20 +84,18 @@ class AutofocusLive {
     DateTime? staleRunStartedUtc,
     CollimationVerdict? collimation,
     bool clearCollimation = false,
-  }) =>
-      AutofocusLive(
-        run: run ?? this.run,
-        frame: clearFrame ? null : (frame ?? this.frame),
-        frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
-        busy: busy ?? this.busy,
-        error: clearError ? null : (error ?? this.error),
-        focusedThisSession: focusedThisSession ?? this.focusedThisSession,
-        hydrated: hydrated ?? this.hydrated,
-        manualMarkSinceRun: manualMarkSinceRun ?? this.manualMarkSinceRun,
-        staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
-        collimation:
-            clearCollimation ? null : (collimation ?? this.collimation),
-      );
+  }) => AutofocusLive(
+    run: run ?? this.run,
+    frame: clearFrame ? null : (frame ?? this.frame),
+    frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
+    busy: busy ?? this.busy,
+    error: clearError ? null : (error ?? this.error),
+    focusedThisSession: focusedThisSession ?? this.focusedThisSession,
+    hydrated: hydrated ?? this.hydrated,
+    manualMarkSinceRun: manualMarkSinceRun ?? this.manualMarkSinceRun,
+    staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
+    collimation: clearCollimation ? null : (collimation ?? this.collimation),
+  );
 }
 
 /// Pure: fold a run snapshot into the live view (frame handled separately).
@@ -113,7 +111,8 @@ AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) {
     hydrated: true,
     // A new run (another start time) ends the manual mark of the one before;
     // the first snapshot only learns which run is the latest.
-    manualMarkSinceRun: current.manualMarkSinceRun &&
+    manualMarkSinceRun:
+        current.manualMarkSinceRun &&
         (!current.hydrated || _runIdentity(run) == _runIdentity(current.run)),
     staleRunStartedUtc: !current.hydrated && run.isComplete ? _runIdentity(run) : null,
     // A new run drops the previous run's picture until its own arrives.

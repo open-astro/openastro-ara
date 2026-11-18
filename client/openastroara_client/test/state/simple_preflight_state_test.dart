@@ -405,15 +405,24 @@ void main() {
       return c;
     }
 
-    test('Focus: a run that finished tonight counts; a failed re-run clears it', () {
-      final c = container(_StatusApi());
-      final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
-      expect(c.read(doneTonightProvider), isNot(contains(SimpleModeScreen.focus)));
-      focus.put(_focusRun(AutofocusRunStates.complete));
-      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.focus));
-      focus.put(_focusRun(AutofocusRunStates.failed));
-      expect(c.read(doneTonightProvider), isNot(contains(SimpleModeScreen.focus)));
-    });
+    test(
+      'Focus: a run that finished tonight counts; a failed re-run clears it',
+      () {
+        final c = container(_StatusApi());
+        final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+        expect(
+          c.read(doneTonightProvider),
+          isNot(contains(SimpleModeScreen.focus)),
+        );
+        focus.put(_focusRun(AutofocusRunStates.complete));
+        expect(c.read(doneTonightProvider), contains(SimpleModeScreen.focus));
+        focus.put(_focusRun(AutofocusRunStates.failed));
+        expect(
+          c.read(doneTonightProvider),
+          isNot(contains(SimpleModeScreen.focus)),
+        );
+      },
+    );
 
     test('Focus: a manual in-focus mark after the failed run counts again', () {
       final c = container(_StatusApi());
@@ -431,7 +440,10 @@ void main() {
       );
       focus.put(applyRunSnapshot(c.read(autofocusLiveProvider), next));
       expect(c.read(autofocusLiveProvider).manualMarkSinceRun, isFalse);
-      expect(c.read(doneTonightProvider), isNot(contains(SimpleModeScreen.focus)));
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.focus)),
+      );
     });
 
     test('Polar align: a failed routine clears the tick though its zone stays green', () {
@@ -442,13 +454,19 @@ void main() {
         zone: 'green',
         stage: PolarAlignStages.fine,
       );
-      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.polarAlign));
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
       polar.state = const PolarAlignLive(
         phase: PolarAlignStates.failed,
         zone: 'green',
         stage: PolarAlignStages.fine,
       );
-      expect(c.read(doneTonightProvider), isNot(contains(SimpleModeScreen.polarAlign)));
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.polarAlign)),
+      );
     });
 
     test('Polar align after a relaunch: green tonight but the daemon says failed, live idle: no tick', () async {
@@ -459,12 +477,18 @@ void main() {
         );
       final c = container(api);
       await c.read(polarAlignLastResultProvider.future);
-      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.polarAlign));
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
 
       api.state = PolarAlignStates.failed;
       c.invalidate(polarAlignLastResultProvider);
       await c.read(polarAlignLastResultProvider.future);
-      expect(c.read(doneTonightProvider), isNot(contains(SimpleModeScreen.polarAlign)));
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.polarAlign)),
+      );
 
       // A live phase other than idle wins over the fetched status.
       (c.read(polarAlignLiveProvider.notifier) as _Live).state =
@@ -473,7 +497,10 @@ void main() {
             zone: 'green',
             stage: PolarAlignStages.fine,
           );
-      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.polarAlign));
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
     });
   });
 

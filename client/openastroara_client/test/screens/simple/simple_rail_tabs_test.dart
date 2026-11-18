@@ -459,6 +459,33 @@ void main() {
       );
 
       testWidgets(
+        'a digit and the arrows reach a focused text field: the rail keys do not take them',
+        (tester) async {
+          final c = await _pump(tester, size);
+          c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.plan);
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-search-button')));
+          await tester.pump();
+          final field = find.byKey(const Key('simple-search-field'));
+          await tester.tap(field);
+          await tester.pump();
+          await tester.enterText(field, 'abc');
+          final controller = tester.widget<TextField>(field).controller!;
+          controller.selection = const TextSelection.collapsed(offset: 3);
+          await tester.pump();
+          expect(
+            await tester.sendKeyEvent(LogicalKeyboardKey.digit1),
+            isFalse,
+            reason: 'the field gets the digit',
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+          await tester.pump();
+          expect(controller.selection.baseOffset, 2);
+          expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
+        },
+      );
+
+      testWidgets(
         'Emergency Stop stays clear of the rail at 2x text and in portrait (guard for slice 1)',
         (tester) async {
           for (final (s, scale) in [
@@ -719,6 +746,24 @@ void main() {
     },
   );
 
+  testWidgets(
+    'iPad 1024x768 at 2x text: a tab caption stays centred in its tab',
+    (tester) async {
+      await _pump(tester, ipad, textScale: 2);
+      for (final (_, name) in _order.skip(1)) {
+        final caption = find.descendant(
+          of: _tab(name),
+          matching: find.byType(FittedBox),
+        );
+        expect(
+          tester.getCenter(caption).dx,
+          closeTo(tester.getCenter(_tab(name)).dx, 1),
+          reason: 'the $name caption is centred in its tab',
+        );
+      }
+    },
+  );
+
   for (final (name, size) in [
     ('portrait', const Size(390, 844)),
     ('landscape', const Size(844, 390)),
@@ -735,6 +780,11 @@ void main() {
         }
         expect(find.byKey(const Key('simple-rail-tabs')), findsNothing);
         expect(find.byType(EmergencyStopButton), findsWidgets);
+        expect(
+          await tester.sendKeyEvent(LogicalKeyboardKey.digit2),
+          isFalse,
+          reason: 'no rail, no rail key: the digit is left to the app',
+        );
       },
     );
   }

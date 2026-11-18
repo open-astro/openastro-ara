@@ -154,16 +154,16 @@ extension SimplePreflightStepLabel on SimplePreflightStep {
 /// [doneTonightProvider] reads for a failed routine the live view never saw.
 final polarAlignLastResultProvider =
     FutureProvider<({PolarAlignLastResult? last, String? state})>((ref) async {
-  final api = ref.watch(polarAlignApiProvider);
-  ref.watch(polarAlignLiveProvider.select((l) => l.isActive));
-  if (api == null) return (last: null, state: null);
-  try {
-    final status = await api.getStatus();
-    return (last: status?.lastResult, state: status?.state);
-  } catch (_) {
-    return (last: null, state: null);
-  }
-});
+      final api = ref.watch(polarAlignApiProvider);
+      ref.watch(polarAlignLiveProvider.select((l) => l.isActive));
+      if (api == null) return (last: null, state: null);
+      try {
+        final status = await api.getStatus();
+        return (last: status?.lastResult, state: status?.state);
+      } catch (_) {
+        return (last: null, state: null);
+      }
+    });
 
 /// Night Setup's focus step: the shared readiness plus a run the rig kept from
 /// earlier tonight. (The clock is read when a dependency changes, which is
