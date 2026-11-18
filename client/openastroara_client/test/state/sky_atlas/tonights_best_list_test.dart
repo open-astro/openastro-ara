@@ -360,6 +360,22 @@ void main() {
       },
     );
 
+    test(
+      'a Peak altitude saved as 30.0 loads as 30 and keeps the other choices',
+      () async {
+        // A hand edit of the file can write the whole number as a double.
+        File('${dir.path}/tonights_best.json').writeAsStringSync(
+          '{"sort": "transit", "minPeakAltDeg": 30.0, "fitsField": true}',
+        );
+        final c = make();
+        await c.read(tonightsBestChoicesProvider.notifier).ready;
+        final got = c.read(tonightsBestChoicesProvider);
+        expect(got.minPeakAltDeg, 30);
+        expect(got.sort, BestSort.transit);
+        expect(got.fitsField, isTrue);
+      },
+    );
+
     test('a change that races the load wins', () async {
       // The load is held until after the change, and the save never reaches
       // the file, so only the race guard keeps the change.

@@ -104,7 +104,8 @@ class BestChoices {
           for (final t in types) ?BestType.values.asNameMap()[t],
       },
       show: BestShow.values.asNameMap()[raw['show']] ?? BestShow.allNight,
-      minPeakAltDeg: kBestPeakAlts.contains(peak) ? peak as int : 0,
+      // A hand-edited 30.0 equals 30 but is a double, not an int.
+      minPeakAltDeg: kBestPeakAlts.contains(peak) ? (peak as num).toInt() : 0,
       fitsField: raw['fitsField'] is bool ? raw['fitsField'] as bool : false,
     );
   }
