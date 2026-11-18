@@ -49,6 +49,10 @@ namespace OpenAstroAra.Test {
         private static readonly string[] PauseReconnectRecover = ["sequence_paused", "reconnecting", "recovered"];
         private static readonly string[] ReconnectRecover = ["reconnecting", "recovered"];
         private static readonly string[] NotifyOnly = ["notify_only"];
+        private static readonly string[] Skipped = ["skipped"];
+        private static readonly string[] GaveUp = ["gave_up"];
+        private static readonly string[] PausedReleased = ["sequence_paused", "released"];
+        private static readonly string[] GuidingLostTitle = ["Guiding lost"];
         private static readonly string[] NotifyNotifyEscalated = ["notify_only", "notify_only", "escalated"];
         private static readonly string[] PauseReconnectReleased = ["sequence_paused", "reconnecting", "released"];
 
@@ -92,11 +96,11 @@ namespace OpenAstroAra.Test {
         public void TearDown() => service.Dispose();
 
         private void SetPolicy(bool hotReconnect = true, string onCameraLost = "reconnect_then_pause",
-                string onMountLost = "reconnect_then_abort_park") =>
+                string onMountLost = "reconnect_then_abort_park", string onGuiderLost = "pause_and_retry") =>
             profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                 OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 1,
                 MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
-                OnAltitudeLimit: "pause_sequence", ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                OnAltitudeLimit: "pause_sequence", ParkIfNoMoreTargets: true, OnGuiderLost: onGuiderLost,
                 GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false,
                 HotReconnectEnabled: hotReconnect, OnCameraLost: onCameraLost, OnMountLost: onMountLost));
 
@@ -606,14 +610,208 @@ namespace OpenAstroAra.Test {
             Assert.That(Actions(), Does.Contain("recovered"));
         }
 
-        [Test]
-        public async Task A_guider_fault_is_left_entirely_to_the_guider_service() {
-            service.OnFault(Fault(DeviceType.Guider));
-            await service.WhenIdleAsync();
+        // ── §42.2 guider row: the guider's faults enter the hub and the shared reaction runs on_guider_lost ──
 
-            Assert.That(published, Is.Empty, "no reaction events — GuiderService.FaultReaction owns it");
-            Assert.That(posted, Is.Empty);
+        private static EquipmentFaultEvent GuiderFault(EquipmentFaultKind kind, string details) =>
+            new(DeviceType.Guider, null, "PHD2", kind, details, new DateTimeOffset(2026, 7, 10, 4, 0, 0, TimeSpan.Zero));
+
+        private (EquipmentFaultHub Hub, FaultReactionService Service, Mock<IFaultLogService> Log) GuiderRig() {
+            var log = new Mock<IFaultLogService>();
+            log.Setup(l => l.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            log.Setup(l => l.ResolveAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            var hub = new EquipmentFaultHub(ws.Object, logger: null, faultLog: log.Object);
+            var guiderService = new FaultReactionService(hub, reconnector.Object, profiles.Object, () => sequencer.Object,
+                telescope.Object, notifications.Object, ws.Object, faultLog: log.Object) {
+                ReleasePollInterval = TimeSpan.FromMilliseconds(10),
+            };
+            guiderService.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            return (hub, guiderService, log);
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && !condition()) {
+                await Task.Delay(5);
+            }
+            return condition();
+        }
+
+        [Test]
+        public async Task A_guider_star_lost_pauses_adoptably_and_publishes_sequence_paused() {
+            var run = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { run });
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+
+            hub.Publish(GuiderFault(EquipmentFaultKind.TrackingLost, "star_lost"));
+
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Once, "adoptable: safety may take the pause over");
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            var payload = ActionPayload("sequence_paused");
+            Assert.That(payload.GetProperty("device_type").GetString(), Is.EqualTo("guider"));
+            Assert.That(payload.GetProperty("kind").GetString(), Is.EqualTo("tracking_lost"));
+            Assert.That(payload.GetProperty("paused_runs").GetInt32(), Is.EqualTo(1));
+            lock (published) {
+                Assert.That(published.Select(e => e.Type), Does.Contain(WsEventCatalog.EquipmentFault.Token));
+            }
+            Assert.That(posted.Select(n => n.Title), Does.Contain("Guide star lost — sequence paused"));
+        }
+
+        [Test]
+        public async Task A_guider_link_down_pauses_non_adoptably() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+
+            hub.Publish(GuiderFault(EquipmentFaultKind.Disconnected, "link_down"));
+
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Never);
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never,
+                "no Recovery rung in this slice: the guider service runs its own recoveries");
+        }
+
+        [Test]
+        public async Task Recovered_from_the_hub_resumes_exactly_the_paused_runs_and_resolves_the_row() {
+            var run = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { run });
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ids.Count);
+            var (hub, guiderService, log) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.TrackingLost, "star_lost");
+
+            hub.Publish(fault);
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never,
+                "the episode waits for the guider's recovery");
+            hub.Recovered(fault);
+            await guiderService.WhenIdleAsync();
+
+            sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Single() == run), It.IsAny<CancellationToken>()), Times.Once);
+            log.Verify(l => l.ResolveAsync(fault, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(Actions(), Does.Contain("recovered"));
+            Assert.That(posted.Select(n => n.Title), Does.Contain("Guide star back — sequence resumed"));
+        }
+
+        [Test]
+        public async Task A_Recovered_that_lands_while_the_pause_is_still_being_placed_still_resumes() {
+            var run = Guid.NewGuid();
+            var pausing = new TaskCompletionSource<IReadOnlyList<Guid>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).Returns(pausing.Task);
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.TrackingLost, "star_lost");
+
+            hub.Publish(fault);
+            hub.Recovered(fault); // the star is back before the pause landed
+            pausing.SetResult(new List<Guid> { run });
+            await guiderService.WhenIdleAsync();
+
+            sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Single() == run), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_Recovered_for_a_fault_folded_into_the_running_episode_does_not_end_it() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+            var first = GuiderFault(EquipmentFaultKind.Disconnected, "link_down");
+            var duplicate = GuiderFault(EquipmentFaultKind.Disconnected, "equipment_disconnected");
+
+            hub.Publish(first);
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+            hub.Publish(duplicate); // one episode per device type: dropped by the module (the hub still records its row)
+            hub.Recovered(duplicate);
+            await Task.Delay(100);
+
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never,
+                "the episode's own fault has not recovered");
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            hub.Recovered(first);
+            await guiderService.WhenIdleAsync();
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Skip_target_publishes_skipped_with_the_run_count_and_does_not_pause() {
+            SetPolicy(onGuiderLost: "skip_target");
+            sequencer.Setup(s => s.SkipActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(2);
+            var (hub, guiderService, log) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.Disconnected, "equipment_disconnected");
+
+            hub.Publish(fault);
+            await Task.Delay(50);
+            await guiderService.WhenIdleAsync();
+
+            Assert.That(Actions(), Is.EqualTo(Skipped));
+            Assert.That(ActionPayload("skipped").GetProperty("skipped_runs").GetInt32(), Is.EqualTo(2));
+            log.Verify(l => l.RecordActionAsync(fault, "skipped", null, It.IsAny<CancellationToken>()), Times.Once);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Abort_sequence_aborts_the_runs_without_parking_the_mount() {
+            SetPolicy(onGuiderLost: "abort_sequence");
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            var (hub, guiderService, log) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.TrackingLost, "star_lost");
+
+            hub.Publish(fault);
+            await Task.Delay(50);
+            await guiderService.WhenIdleAsync();
+
+            sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
+                "park on abort is not part of the guider row");
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(Actions(), Is.EqualTo(GaveUp));
+            Assert.That(ActionPayload("gave_up").GetProperty("aborted_runs").GetInt32(), Is.EqualTo(1));
+            log.Verify(l => l.RecordActionAsync(fault, "gave_up:abort", null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_guider_fault_with_no_run_active_is_notify_only() {
+            var (hub, guiderService, log) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.Disconnected, "link_down");
+
+            hub.Publish(fault);
+            await Task.Delay(50);
+            await guiderService.WhenIdleAsync();
+
+            Assert.That(Actions(), Is.EqualTo(NotifyOnly));
+            log.Verify(l => l.RecordActionAsync(fault, "notify_only", null, It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(posted.Select(n => n.Title), Is.EqualTo(GuidingLostTitle));
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_user_disconnecting_the_guider_releases_the_episode_and_leaves_the_runs_paused() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var state = EquipmentConnectionState.Error;
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Guider, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => state);
+            var (hub, guiderService, log) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.Disconnected, "link_down");
+
+            hub.Publish(fault);
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+            state = EquipmentConnectionState.Disconnected; // the user pressed Disconnect
+            await guiderService.WhenIdleAsync();
+
+            Assert.That(Actions(), Is.EqualTo(PausedReleased));
+            log.Verify(l => l.RecordActionAsync(fault, "released:user_disconnect", It.Is<DateTimeOffset?>(d => d != null), It.IsAny<CancellationToken>()), Times.Once);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never,
+                "the user took the guider away: the runs stay paused");
         }
 
         [Test]

@@ -194,7 +194,11 @@ public sealed partial class GuiderService {
                 // until it settles (Connected or back to Error) or the grace expires.
                 while (DateTimeOffset.UtcNow < deadline && !token.IsCancellationRequested) {
                     EquipmentConnectionState state;
-                    lock (_gate) { state = _state; }
+                    bool starStillLost;
+                    lock (_gate) {
+                        state = _state;
+                        starStillLost = _starLostFault is not null;
+                    }
                     if (state == EquipmentConnectionState.Connected) {
                         LogReconnectSucceeded();
                         await NotifyFaultQuietlyAsync("Guider reconnected automatically",
@@ -202,7 +206,10 @@ public sealed partial class GuiderService {
                                 ? "The guider process was recovered and ARA reconnected to it. "
                                 : $"The guider at {host}:{port} is reachable again and ARA reconnected to it. ")
                             + "Guiding settings were re-pushed on connect. "
-                            + "If your sequence was paused by the guider loss, Resume it when ready.").ConfigureAwait(false);
+                            // An open star-lost episode outlives the reconnect: its runs wait for the star.
+                            + (starStillLost
+                                ? "Runs the lost guide star paused resume once the star is back, or when you Resume them."
+                                : "Runs the guider loss paused resume on their own.")).ConfigureAwait(false);
                         return;
                     }
                     if (state is EquipmentConnectionState.Error or EquipmentConnectionState.Disconnected) {

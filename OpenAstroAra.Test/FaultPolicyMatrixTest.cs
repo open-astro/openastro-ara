@@ -16,6 +16,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 
 namespace OpenAstroAra.Test {
 
@@ -36,11 +37,77 @@ namespace OpenAstroAra.Test {
                 HotReconnectEnabled: hotReconnect, OnCameraLost: onCameraLost,
                 OnMountLost: onMountLost, OnTrackingLost: onTrackingLost);
 
+        private static SafetyPoliciesDto GuiderPolicies(string? onGuiderLost) =>
+            Policies() with { OnGuiderLost = onGuiderLost! };
+
         [Test]
-        public void The_guider_is_never_the_reaction_services_to_handle() {
-            foreach (var kind in Enum.GetValues<EquipmentFaultKind>()) {
-                Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, kind, Policies()), Is.Null,
-                    $"{kind}: GuiderService.FaultReaction owns guider faults — a duplicate reaction here would double-pause (#760 regression)");
+        public void Pause_and_retry_pauses_a_lost_star_adoptably_with_no_recovery_rung() {
+            var plan = FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.TrackingLost, GuiderPolicies("pause_and_retry"));
+            Assert.Multiple(() => {
+                Assert.That(plan.PauseWhileRecovering, Is.True);
+                Assert.That(plan.Adoptable, Is.True, "a parked, stopped guider sends no guide step: safety must be able to take the pause over");
+                Assert.That(plan.Skip, Is.False);
+                Assert.That(plan.RetrySchedule, Is.Empty, "S1: the guider service runs its own recoveries");
+                Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None), "give-up leaves the runs paused");
+            });
+        }
+
+        [Test]
+        public void Pause_and_retry_pauses_a_link_down_or_camera_drop_non_adoptably() {
+            Assert.Multiple(() => {
+                var plan = FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.Disconnected, GuiderPolicies("pause_and_retry"));
+                Assert.That(plan.PauseWhileRecovering, Is.True);
+                Assert.That(plan.Adoptable, Is.False);
+                Assert.That(plan.Skip, Is.False);
+                Assert.That(plan.RetrySchedule, Is.Empty);
+                Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None));
+            });
+        }
+
+        [Test]
+        public void An_unset_or_unknown_on_guider_lost_token_falls_back_to_pause_and_retry() {
+            foreach (var token in new string?[] { null, "", "do_a_barrel_roll" }) {
+                var plan = FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.TrackingLost, GuiderPolicies(token));
+                Assert.That(plan.PauseWhileRecovering, Is.True, $"token '{token}'");
+            }
+            Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.TrackingLost, policies: null).PauseWhileRecovering, Is.True);
+        }
+
+        [Test]
+        public void Skip_target_skips_for_every_guider_kind_without_pausing() {
+            foreach (var kind in new[] { EquipmentFaultKind.Disconnected, EquipmentFaultKind.TrackingLost }) {
+                var plan = FaultPolicyMatrix.Resolve(DeviceType.Guider, kind, GuiderPolicies("skip_target"));
+                Assert.Multiple(() => {
+                    Assert.That(plan.Skip, Is.True, kind.ToString());
+                    Assert.That(plan.PauseWhileRecovering, Is.False);
+                    Assert.That(plan.Adoptable, Is.False);
+                    Assert.That(plan.RetrySchedule, Is.Empty);
+                    Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None));
+                });
+            }
+        }
+
+        [Test]
+        public void Abort_sequence_aborts_without_park_for_every_guider_kind() {
+            foreach (var kind in new[] { EquipmentFaultKind.Disconnected, EquipmentFaultKind.TrackingLost }) {
+                var plan = FaultPolicyMatrix.Resolve(DeviceType.Guider, kind, GuiderPolicies("abort_sequence"));
+                Assert.Multiple(() => {
+                    Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.Abort), kind.ToString());
+                    Assert.That(plan.TerminalAction, Is.Not.EqualTo(FaultTerminalAction.AbortAndPark), "the mount is not parked for a guider fault");
+                    Assert.That(plan.Skip, Is.False);
+                    Assert.That(plan.PauseWhileRecovering, Is.False);
+                    Assert.That(plan.RetrySchedule, Is.Empty);
+                });
+            }
+        }
+
+        [Test]
+        public void Only_the_guider_star_lost_row_is_adoptable_and_only_skip_target_skips() {
+            foreach (var type in Enum.GetValues<DeviceType>().Where(t => t != DeviceType.Guider)) {
+                foreach (var kind in Enum.GetValues<EquipmentFaultKind>()) {
+                    var plan = FaultPolicyMatrix.Resolve(type, kind, Policies());
+                    Assert.That(plan.Adoptable || plan.Skip, Is.False, $"{type}/{kind}: today's shared rows do not change");
+                }
             }
         }
 
@@ -192,7 +259,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(plan.GiveUpSeverity, Is.EqualTo(NotificationSeverity.Warning));
                 Assert.That(plan.Escalated, Is.False);
             }
-            Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.Degraded, null), Is.Null, "the guider owns its own reactions");
+            var guider = FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.Degraded, null);
+            Assert.That(guider.PauseWhileRecovering, Is.False, "the guider never publishes Degraded; the shared default is notify-only");
         }
     }
 }

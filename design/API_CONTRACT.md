@@ -1726,6 +1726,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #1971, #1974, #1975
 
+## 2026-11-16 — Guider faults use `equipment.fault` and `equipment.fault_action_taken`; `guider.fault_action_taken` retired (#1588)
+
+**Endpoint(s) or area:** WebSocket events `equipment.fault`, `equipment.fault_action_taken`; retired WS event `guider.fault_action_taken`.
+
+**Decision:** the three guider faults (link down, guide camera dropped, guide star lost for more than the 30 s grace) now publish `equipment.fault` with `device_type: "guider"`, `device_name: "PHD2"` and `details` `link_down` | `equipment_disconnected` | `star_lost` (`kind` `disconnected` for the first two, `tracking_lost` for the third). The reaction is `equipment.fault_action_taken` with the shared verbs: `sequence_paused` (`paused_runs`), `recovered`, `gave_up` (abort: `terminal: "abort"`, `aborted_runs`, no park), `released`, `notify_only`, and a new `skipped` (`skipped_runs`) for `on_guider_lost: skip_target`. `guider.fault_action_taken` is removed from the catalog: its `auto_resume` and `runs_affected` payloads have no replacement; the resume shows as `recovered`. The `on_guider_lost` profile tokens do not change. A repeat guide-camera drop while the first fault is open adds nothing; a drop after the recovery is a new fault with its own fault-log row, and a flapping camera now starts a new episode per drop.
+
+**Reasoning:** the guider had its own reaction and event, so its faults never reached the client's fault panel and chips, and "pause the runs, then resume the ones I paused" existed twice. Nothing in the client reads the retired event, so there is no compatibility shim.
+
+**Spec ref:** `Services/FaultPolicyMatrix.cs` (`ResolveGuider`), `Services/FaultReactionService.cs` (`RunGuiderEpisodeAsync`), `Services/EquipmentFaultHub.cs` (`SubscribeRecovered`), `Services/GuiderService.cs` (`PublishFaultLocked`), `Contracts/WsEvents/WsEventCatalog.cs`
+
+**Related:** #1588
+
 ---
 
 ## 2026-11-17 — Polar Corrector is renamed Polar Aligner; the Routine's side is the correction (#1971)

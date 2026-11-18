@@ -19,7 +19,6 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -29,12 +28,12 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §42.2 "Guider (PHD2): loses guide star" — a star that stays lost for longer than the grace period
-/// runs the on_guider_lost reaction (pause by default), and the first settled stretch of guiding
-/// afterwards resumes the runs that pause parked (#1891: a guide step far from the lock is not guiding). Before this the sequencer never heard about a lost star: on
+/// publishes a star-lost fault, so the shared reaction runs the on_guider_lost plan (pause by default), and the first settled stretch of guiding
+/// afterwards recovers the fault, which resumes the runs the shared reaction paused (#1891: a guide step far from the lock is not guiding). Before this the sequencer never heard about a lost star: on
 /// 2026-10-16 the guider chased a lost star for nine minutes after a Home while Ara's run carried on.
 /// Unlike a link or camera drop this is not one-shot per connect: clouds pass more than once a night.
 /// </summary>
-public sealed partial class GuiderService {
+public sealed partial class GuiderService : IGuiderEpisodeListener {
 
     internal static readonly TimeSpan DefaultStarLostGrace = TimeSpan.FromSeconds(30);
 
@@ -46,8 +45,8 @@ public sealed partial class GuiderService {
     private DateTimeOffset? _settledSinceUtc;      // the current run of guide steps inside the settle distance (under _gate)
     private bool _guidingSeen;                     // a guide step or guiding_started since the last guiding_stopped
     private bool _starLostReacted;                 // the reaction ran for the current lost-star episode
-    private EquipmentFaultEvent? _starLostFault;   // its §42.5 row, resolved when the star is back
-    private IReadOnlyList<Guid> _starLostPausedRuns = Array.Empty<Guid>();
+    private EquipmentFaultEvent? _starLostFault;   // the published star-lost fault, recovered when the star is back
+    private IReadOnlyList<Guid> _starLostPausedRuns = []; // the runs the shared reaction paused for that fault
     // IGuiderMediator.GuidingStoppedUtc — the Dither's long-gap read. Deliberately NOT cleared by
     // ResetStarLostWatchLocked: guiding stays off across a guider disconnect and reconnect, so a
     // restart after one measures the gap from the real stop, not from the reconnect.
@@ -102,18 +101,40 @@ public sealed partial class GuiderService {
         _starLostTimer = null;
     }
 
+    // A new guider connection watches afresh. An open episode (its fault, paused runs and recovery state:
+    // a give-up, the failure count and its one warning, our own stop) stays across a reconnect. Settled
+    // guiding, the probe or the runs leaving the daemon's pause end it; a user disconnect or the service's
+    // dispose drops it (DropOpenFaultsLocked). Its probe stops with the old guider; the next Connected re-arms it.
     private void ResetStarLostWatchLocked() {
         DisarmStarLostWatchLocked();
-        ResetStarLostRecoveryLocked();
+        DisarmStarLostRecoveryLocked();
         _guidingSeen = false;
         _settledSinceUtc = null;
+    }
+
+    // Caller holds _gate. The episode is over: the hub hears Recovered and the shared reaction resumes
+    // exactly the runs it paused.
+    private void EndStarLostEpisodeLocked() {
         _starLostReacted = false;
-        _starLostFault = null;
-        _starLostPausedRuns = Array.Empty<Guid>();
+        _starLostPausedRuns = [];
+        RecoverFaultLocked(ref _starLostFault);
+    }
+
+    // The shared reaction paused these runs for the star-lost fault: the long-outage recovery probes and
+    // re-centres for them only. Nothing paused (no run, or another episode holds them) arms nothing.
+    void IGuiderEpisodeListener.Paused(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds) {
+        lock (_gate) {
+            if (!_starLostReacted || !ReferenceEquals(fault, _starLostFault)) {
+                return; // a link or camera fault, or the star is back already
+            }
+            _starLostPausedRuns = runIds;
+            // The long-outage half: after StarLostRecoverAfter the guider's own frames are asked
+            // whether the clouds have gone.
+            ArmStarLostRecoveryLocked(StarLostRecoverAfter);
+        }
     }
 
     internal void OnStarLostGraceElapsed(object? _) {
-        EquipmentFaultEvent fault;
         lock (_gate) {
             DisarmStarLostWatchLocked();
             if (_disposed || _guider is null || _state != EquipmentConnectionState.Connected || _starLostReacted) {
@@ -131,15 +152,12 @@ public sealed partial class GuiderService {
             // A new episode starts clean: a give-up, the failure count, the one-warning latch and the
             // own-stop flags all belong to the previous cloud (review round 3).
             ResetStarLostRecoveryLocked();
-            fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
-                EquipmentFaultKind.TrackingLost,
-                $"guide star lost for more than {(int)StarLostGrace.TotalSeconds} s — the guider is still looking for it",
-                DateTimeOffset.UtcNow);
-            _starLostFault = fault;
+            _starLostPausedRuns = [];
+            // The shared reaction pauses (adoptably), skips or aborts per on_guider_lost; a pause tells
+            // this service which runs it paused (IGuiderEpisodeListener.Paused).
+            _starLostFault = PublishFaultLocked(EquipmentFaultKind.TrackingLost, "star_lost");
         }
         LogStarLostGraceElapsed((int)StarLostGrace.TotalSeconds);
-        RecordFaultQuietly(fault);
-        _ = Task.Run(() => ReactToGuidingLossAsync(GuiderFaultKind.StarLost, fault), CancellationToken.None);
     }
 
     // The profile's settle rule, PHD2's own: the total error (RA and Dec together, pixels) inside
@@ -178,53 +196,13 @@ public sealed partial class GuiderService {
             return; // found again, not yet guiding: the run stays paused
         }
         DisarmStarLostRecoveryLocked();
-        _starLostReacted = false;
-        var fault = _starLostFault;
-        var paused = _starLostPausedRuns;
-        _starLostFault = null;
-        _starLostPausedRuns = Array.Empty<Guid>();
-        _ = Task.Run(() => ResumeAfterStarRecoveredAsync(fault, paused), CancellationToken.None);
+        EndStarLostEpisodeLocked();
+        LogStarRecovered();
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background recovery boundary: a sequencer or notification fault leaves the run paused for the user; logged, never an unobserved task exception.")]
-    private async Task ResumeAfterStarRecoveredAsync(EquipmentFaultEvent? fault, IReadOnlyList<Guid> paused) {
-        try {
-            if (fault is not null) {
-                await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
-            }
-            var resumed = 0;
-            if (paused.Count > 0) {
-                var sequencer = _sequencerResolver?.Invoke();
-                if (sequencer is not null) {
-                    resumed = await sequencer.ResumeRunsAsync(paused, CancellationToken.None).ConfigureAwait(false);
-                }
-            }
-            LogStarRecovered(paused.Count, resumed);
-            if (paused.Count == 0) {
-                return; // nothing was parked by the star loss (skip/abort policy, or no run); the chip already shows guiding
-            }
-            await PublishFaultEventAsync(new JsonObject {
-                ["action"] = "auto_resume",
-                ["runs_affected"] = resumed,
-                ["kind"] = "star_recovered",
-            }).ConfigureAwait(false);
-            await NotifyQuietlyAsync(NotificationSeverity.Info, "Guide star back — sequence resumed",
-                resumed > 0
-                    ? "The guider is guiding again, so the run paused by the lost star continues on its own."
-                    : "The guider is guiding again. The run it had paused was not released by this (it had already been resumed, is stopped, or waits on you).")
-                .ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogStarRecoveryFailed(ex);
-        }
-    }
-
-    [LoggerMessage(EventId = 4228, Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§42.2 guide star lost for more than {GraceSec} s — running the on_guider_lost reaction")]
+    [LoggerMessage(EventId = 4228, Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§42.2 guide star lost for more than {GraceSec} s — publishing the star-lost fault")]
     private partial void LogStarLostGraceElapsed(int graceSec);
 
-    [LoggerMessage(EventId = 4247, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 guide star recovered: runsPaused={Paused} runsResumed={Resumed}")]
-    private partial void LogStarRecovered(int paused, int resumed);
-
-    [LoggerMessage(EventId = 4248, Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§42.2 star-recovered resume failed; the run stays paused for the user")]
-    private partial void LogStarRecoveryFailed(Exception exception);
+    [LoggerMessage(EventId = 4247, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 guide star recovered (guiding settled) — the star-lost fault is recovered")]
+    private partial void LogStarRecovered();
 }

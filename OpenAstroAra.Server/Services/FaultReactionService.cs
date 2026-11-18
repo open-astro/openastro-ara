@@ -29,6 +29,12 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
+/// <summary>§42.2 — the guider learns which runs (possibly none) the shared reaction paused for one of its
+/// faults, so its star-lost recovery probes and re-centres only for the runs its own episode paused.</summary>
+public interface IGuiderEpisodeListener {
+    void Paused(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds);
+}
+
 /// <summary>
 /// §42.3 — executes the <see cref="FaultPolicyMatrix"/> plan for each detected equipment fault:
 /// pause a running sequence immediately when a sequence-critical device (camera/mount) drops,
@@ -36,8 +42,10 @@ namespace OpenAstroAra.Server.Services;
 /// the paused runs on recovery, and fall to the plan's terminal action (stay paused / abort +
 /// best-effort park) when every attempt fails. One episode per device type at a time; each step
 /// is best-effort (SafetyReactionService's rung pattern) and every action is observable via the
-/// <c>equipment.fault_action_taken</c> WS event + a notification. The guider is never handled
-/// here — GuiderService owns its own §42.2 reaction + §63.3 recovery.
+/// <c>equipment.fault_action_taken</c> WS event + a notification. The guider's faults take the same
+/// path with its own row (<c>on_guider_lost</c>) and no Recovery rung yet: GuiderService runs its own
+/// §63.3 / star-lost recoveries and reports <see cref="EquipmentFaultHub.Recovered"/>, which ends the
+/// episode and resumes exactly the runs it paused.
 /// </summary>
 public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
@@ -50,11 +58,16 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<FaultReactionService> _logger;
     private readonly IFaultLogService? _faultLog;
+    private readonly Func<IGuiderEpisodeListener?>? _guiderEpisodes;
 
     private readonly object _gate = new();
     // Keyed by normalized DeviceType for recovery-running kinds (their ladder must not stack);
     // notify-only kinds get a unique key so they always run — see OnFault.
     private readonly Dictionary<object, Task> _episodes = [];
+    // A guider episode waits here for the hub's Recovered (the guider service's own recoveries are
+    // not behind a Recovery rung yet). Registered in OnFault, before the episode task starts, so a
+    // Recovered that lands while the pause is still being placed is not lost. Mutated under _gate.
+    private readonly Dictionary<object, (EquipmentFaultEvent Fault, TaskCompletionSource Recovered)> _recoveryWaiters = [];
     // §42.2 items 2+5 — persistence counter for op-channel faults (mutated under _gate).
     private readonly OpFaultEscalator _escalator = new();
     private readonly CancellationTokenSource _cts = new();
@@ -70,6 +83,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     internal TimeSpan ConnectInFlightTimeout { get; set; } = AlpacaConnect.Timeout + TimeSpan.FromSeconds(5);
     internal TimeSpan ConnectPollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
     // §42.3 linger phase — slow-cadence post-give-up re-adoption (~an hour at the defaults).
+    // How often a guider episode that waits for Recovered checks whether the user disconnected the guider.
+    internal TimeSpan ReleasePollInterval { get; set; } = TimeSpan.FromSeconds(2);
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
     internal int LingerMaxAttempts { get; set; } = 30;
 
@@ -82,7 +97,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
             ILogger<FaultReactionService>? logger = null,
-            IFaultLogService? faultLog = null) {
+            IFaultLogService? faultLog = null,
+            Func<IGuiderEpisodeListener?>? guiderEpisodes = null) {
         _hub = hub;
         _reconnector = reconnector;
         _profiles = profiles;
@@ -92,10 +108,12 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         _ws = ws;
         _logger = logger ?? NullLogger<FaultReactionService>.Instance;
         _faultLog = faultLog;
+        _guiderEpisodes = guiderEpisodes;
     }
 
     public Task StartAsync(CancellationToken cancellationToken) {
         _hub?.Subscribe(OnFault);
+        _hub?.SubscribeRecovered(OnRecovered);
         return Task.CompletedTask;
     }
 
@@ -133,9 +151,23 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             // §42.2 items 2+5 — non-recoverable kinds also feed the persistence counter: the
             // fault that tips its device over the threshold escalates (its episode runs the
             // matrix's escalation plan instead of the plain notify).
+            if (recoverable && fault.DeviceType == DeviceType.Guider) {
+                _recoveryWaiters[key] = (fault, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+            }
             var escalated = !recoverable
                 && _escalator.Observe(NormalizeType(fault.DeviceType), fault.Kind, DateTimeOffset.UtcNow);
             _episodes[key] = Task.Run(() => RunEpisodeAsync(key, fault, escalated), CancellationToken.None);
+        }
+    }
+
+    /// <summary>Hub callback for <see cref="EquipmentFaultHub.Recovered"/>: ends the guider episode
+    /// that fault started. A recovery of a fault folded into the running episode (a duplicate) does
+    /// not end it.</summary>
+    internal void OnRecovered(EquipmentFaultEvent fault) {
+        lock (_gate) {
+            if (_recoveryWaiters.TryGetValue(NormalizeType(fault.DeviceType), out var waiter) && waiter.Fault == fault) {
+                waiter.Recovered.TrySetResult();
+            }
         }
     }
 
@@ -157,14 +189,22 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private async Task RunEpisodeAsync(object key, EquipmentFaultEvent fault, bool escalated = false) {
         try {
             var plan = FaultPolicyMatrix.Resolve(fault.DeviceType, fault.Kind, ReadPolicies(), escalated);
-            if (plan is null) {
-                return; // the guider's — GuiderService.FaultReaction owns it
-            }
             var label = fault.DeviceName ?? fault.DeviceId ?? fault.DeviceType.ToString();
             LogEpisodeStarted(fault.DeviceType, fault.Kind, label, plan.RetrySchedule.Count, plan.TerminalAction);
 
             if (plan.Escalated) {
                 await ExecuteEscalationAsync(fault, plan, label).ConfigureAwait(false);
+                return;
+            }
+
+            Task? guiderRecovered = null;
+            lock (_gate) {
+                if (_recoveryWaiters.TryGetValue(key, out var waiter)) {
+                    guiderRecovered = waiter.Recovered.Task;
+                }
+            }
+            if (guiderRecovered is not null) {
+                await RunGuiderEpisodeAsync(fault, plan, label, guiderRecovered).ConfigureAwait(false);
                 return;
             }
 
@@ -254,8 +294,71 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } finally {
             lock (_gate) {
                 _episodes.Remove(key);
+                _recoveryWaiters.Remove(key);
             }
         }
+    }
+
+    // §42.2 guider row (FaultPolicyMatrix.ResolveGuider): skip / abort act and end; a pause waits for
+    // the guider service's Recovered (or the user taking the guider back) and resumes exactly the runs
+    // it paused. No runs: the fault is recorded and broadcast, the action is notify_only.
+    private async Task RunGuiderEpisodeAsync(EquipmentFaultEvent fault, FaultPlan plan, string label, Task recovered) {
+        var what = fault.Details switch {
+            "star_lost" => "Guide star lost",
+            "equipment_disconnected" => "Guide camera dropped",
+            _ => "Guiding lost",
+        };
+        if (plan.Skip || plan.TerminalAction == FaultTerminalAction.Abort) {
+            var acted = plan.Skip ? await SkipActiveRunsAsync().ConfigureAwait(false) : await AbortActiveRunsAsync().ConfigureAwait(false);
+            if (acted == 0) {
+                await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
+                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+            } else if (plan.Skip) {
+                await PublishActionAsync(fault, "skipped", extra: p => p["skipped_runs"] = acted).ConfigureAwait(false);
+                await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — current target skipped",
+                    $"'{label}' reported {fault.Details} and your safety policy is set to skip: the current instructions were skipped.").ConfigureAwait(false);
+            } else {
+                await PublishActionAsync(fault, "gave_up", persistAs: "gave_up:abort", extra: p => {
+                    p["terminal"] = "abort";
+                    p["aborted_runs"] = acted;
+                }).ConfigureAwait(false);
+                await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence aborted",
+                    $"'{label}' reported {fault.Details} and your safety policy is set to abort: {acted} run(s) aborted, the mount was not parked.").ConfigureAwait(false);
+            }
+            return;
+        }
+
+        var paused = await PauseActiveRunsAsync(plan.Adoptable).ConfigureAwait(false);
+        // Outside _gate: the guider takes its own lock (lock order guider, hub, reaction).
+        _guiderEpisodes?.Invoke()?.Paused(fault, paused);
+        if (paused.Count == 0) {
+            await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
+            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+            return;
+        }
+        await PublishActionAsync(fault, "sequence_paused", extra: p => p["paused_runs"] = paused.Count).ConfigureAwait(false);
+        await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence paused",
+            $"'{label}' reported {fault.Details}: {paused.Count} run(s) paused so no unguided frame burns sky time. "
+            + "They resume on their own once the guider is back; otherwise Resume them.").ConfigureAwait(false);
+
+        while (!recovered.IsCompleted) {
+            await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
+            if (!recovered.IsCompleted && await ReleasedByUserAsync(fault, label, paused).ConfigureAwait(false)) {
+                return;
+            }
+        }
+        var resumed = await ResumeRunsAsync(paused).ConfigureAwait(false);
+        // The hub's Recovered already broadcast `recovered` and resolved the fault-log row.
+        if (resumed == 0) {
+            return; // the user (or safety) already settled the pause: nothing to announce
+        }
+        var back = fault.Details switch {
+            "star_lost" => "Guide star back",
+            "equipment_disconnected" => "Guide camera back",
+            _ => "Guiding restored",
+        };
+        await NotifyQuietlyAsync(NotificationSeverity.Info, $"{back} — sequence resumed",
+            $"'{label}' is guiding again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
     }
 
     // §42.2 items 2+5 — a persistent-op-fault escalation is not a failed recovery: the device is
@@ -540,13 +643,17 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: a sequencer fault must not stop the remaining reaction steps. CA1031's log-and-recover boundary applies.")]
-    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync() {
+    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable = false) {
         var sequencer = _sequencerResolver?.Invoke();
         if (sequencer is null) {
             return [];
         }
         try {
-            return await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+            // An adoptable pause lets the safety engine take the runs over (a parked guider sends no
+            // guide step to resume on).
+            return adoptable
+                ? await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false)
+                : await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("pause", ex);
             return [];
@@ -564,6 +671,21 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return await sequencer.ResumeRunsAsync(ids.ToArray(), CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("resume", ex);
+            return 0;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: a sequencer fault must not stop the remaining reaction steps. CA1031's log-and-recover boundary applies.")]
+    private async Task<int> SkipActiveRunsAsync() {
+        var sequencer = _sequencerResolver?.Invoke();
+        if (sequencer is null) {
+            return 0;
+        }
+        try {
+            return await sequencer.SkipActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed("skip", ex);
             return 0;
         }
     }

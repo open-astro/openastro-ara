@@ -24,7 +24,6 @@ abstract final class WsEventTypes {
   static const String guiderPaResidual = 'guider.pa_residual';
   static const String guiderOperationComplete = 'guider.operation_complete';
   static const String guiderDitherComplete = 'guider.dither_complete';
-  static const String guiderFaultActionTaken = 'guider.fault_action_taken';
   static const String guiderProfilePushed = 'guider.profile_pushed';
   static const String guiderDarkLibraryInvalidated =
       'guider.dark_library.invalidated';

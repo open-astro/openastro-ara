@@ -448,7 +448,7 @@ public partial class Program {
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<IFaultLogService>(),
+                sp.GetService<IEquipmentFaultSink>(),
                 // §30.7.4 — lets the calibration-state stamp detect a profile switch mid-build
                 // (profile select swaps the live store without touching the guider).
                 () => sp.GetService<IProfileRepository>()?.ActiveId,
@@ -1045,7 +1045,9 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetService<ILogger<FaultReactionService>>(),
                 // §42.5 — the reaction outcome lands on the fault-log row.
-                sp.GetService<IFaultLogService>()));
+                sp.GetService<IFaultLogService>(),
+                // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
+                () => sp.GetService<GuiderService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());

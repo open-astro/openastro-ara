@@ -85,15 +85,13 @@ namespace OpenAstroAra.Test {
         public async Task Three_failed_pings_declare_the_wedged_daemon_down_and_trigger_the_fault_flow() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            var sequencer = new Mock<ISequencerService>();
-            var pauseRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
-                .Callback(() => pauseRequested.TrySetResult())
-                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var sink = new Mock<IEquipmentFaultSink>();
+            var published = new TaskCompletionSource<EquipmentFaultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+            sink.Setup(k => k.Publish(It.IsAny<EquipmentFaultEvent>())).Callback<EquipmentFaultEvent>(f => published.TrySetResult(f));
             using var svc = new GuiderService(new HeadlessProfileService(), RecoveredImmediately(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
-                ws: null, profileStore: PolicyStore().Object, sequencerResolver: () => sequencer.Object,
-                notifications: Mock.Of<INotificationService>()) {
+                ws: null, profileStore: PolicyStore().Object, sequencerResolver: null,
+                notifications: Mock.Of<INotificationService>(), faultSink: sink.Object) {
                 PingIntervalIdle = TimeSpan.FromMilliseconds(40),
                 PingIntervalGuiding = TimeSpan.FromMilliseconds(40),
                 // The daemon is "wedged": socket alive (FakeGuider still up), RPC dead.
@@ -109,10 +107,13 @@ namespace OpenAstroAra.Test {
                 "never reached Connected against the fake guider");
 
             // The wedge: pings fail; after the threshold the link is declared down —
-            // the §42.2 fault flow pauses the run even though the socket never died.
-            Assert.That(await Task.WhenAny(pauseRequested.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
-                Is.SameAs(pauseRequested.Task),
-                "the failed-ping streak never reached the §42.2 fault flow");
+            // a link_down fault enters the hub's sink even though the socket never died.
+            Assert.That(await Task.WhenAny(published.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(published.Task),
+                "the failed-ping streak never reached the §42.2 fault sink");
+            var fault = await published.Task.ConfigureAwait(false);
+            Assert.That(fault.DeviceType, Is.EqualTo(DeviceType.Guider));
+            Assert.That(fault.Details, Is.EqualTo("link_down"));
         }
 
         [Test]
@@ -172,6 +173,80 @@ namespace OpenAstroAra.Test {
                 "the auto-reconnect never re-established the session");
             Assert.That(await WaitUntilAsync(() => { lock (posted) { return posted.Exists(n => n.Title.Contains("reconnected", StringComparison.OrdinalIgnoreCase)); } }),
                 Is.True, "the reconnect success notification was never posted");
+            lock (posted) {
+                Assert.That(posted.Find(n => n.Title == "Guider reconnected automatically")?.Message, Does.EndWith("Runs the guider loss paused resume on their own."),
+                    "no guide star is lost: the runs the link loss paused resume with the link");
+            }
+        }
+
+        private static readonly string[] CameraThenLink = ["equipment_disconnected", "link_down"];
+
+        // §42.2 — what the guider hands the hub: the shared reaction ends its guider episode only on a
+        // Recovered for the fault it published.
+        private sealed class RecordingSink : IEquipmentFaultSink {
+            private readonly List<EquipmentFaultEvent> _published = new();
+            private readonly List<EquipmentFaultEvent> _recovered = new();
+            public void Publish(EquipmentFaultEvent fault) { lock (_published) { _published.Add(fault); } }
+            void IEquipmentFaultSink.Recovered(EquipmentFaultEvent fault) { lock (_published) { _recovered.Add(fault); } }
+            public EquipmentFaultEvent[] Published() { lock (_published) { return [.. _published]; } }
+            public EquipmentFaultEvent[] Recovered() { lock (_published) { return [.. _recovered]; } }
+        }
+
+        private static async Task<GuiderService> AutoReconnectingAsync(FakeGuider fake, IEquipmentFaultSink sink) {
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var svc = new GuiderService(new HeadlessProfileService(), RecoveredImmediately(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: PolicyStore(retrySec: 60).Object, sequencerResolver: () => Mock.Of<ISequencerService>(),
+                notifications: Mock.Of<INotificationService>(), faultSink: sink) {
+                ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
+                ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(20),
+            };
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitForStateAsync(svc, EquipmentConnectionState.Connected), Is.EqualTo(EquipmentConnectionState.Connected),
+                "never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1), Is.True, "event stream never settled");
+            return svc;
+        }
+
+        [Test]
+        public async Task The_auto_reconnect_reports_the_link_down_fault_recovered() {
+            // The reconnect disposes the dropped guider before it dials: the open link-down fault must
+            // outlive that dispose, or the next Connected recovers nothing and the guider episode never ends.
+            await using var fake = FakeGuider.Start();
+            var sink = new RecordingSink();
+            using var svc = await AutoReconnectingAsync(fake, sink).ConfigureAwait(false);
+
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            Assert.That(await WaitUntilAsync(() => sink.Published().Length == 1), Is.True, "the link drop never reached the sink");
+            Assert.That(await WaitForStateAsync(svc, EquipmentConnectionState.Connected, timeoutMs: 20000),
+                Is.EqualTo(EquipmentConnectionState.Connected), "the auto-reconnect never re-established the session");
+
+            Assert.That(await WaitUntilAsync(() => sink.Recovered().Length == 1), Is.True,
+                "the guider is Connected again but the link-down fault was never reported Recovered");
+            var published = sink.Published().Single();
+            Assert.That(published.Details, Is.EqualTo("link_down"));
+            Assert.That(sink.Recovered().Single(), Is.SameAs(published), "Recovered names the fault the drop published");
+        }
+
+        [Test]
+        public async Task The_auto_reconnect_reports_an_open_camera_fault_and_the_link_down_fault_recovered() {
+            // A guide camera drop, then a link drop: both faults are still open when the reconnect connects.
+            await using var fake = FakeGuider.Start();
+            var sink = new RecordingSink();
+            using var svc = await AutoReconnectingAsync(fake, sink).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => sink.Published().Length == 1), Is.True, "the camera drop never reached the sink");
+
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            Assert.That(await WaitUntilAsync(() => sink.Published().Length == 2), Is.True, "the link drop never reached the sink");
+            Assert.That(await WaitForStateAsync(svc, EquipmentConnectionState.Connected, timeoutMs: 20000),
+                Is.EqualTo(EquipmentConnectionState.Connected), "the auto-reconnect never re-established the session");
+
+            Assert.That(await WaitUntilAsync(() => sink.Recovered().Length == 2), Is.True,
+                "the guider is Connected again but the open camera and link-down faults were not both reported Recovered");
+            var published = sink.Published();
+            Assert.That(published.Select(f => f.Details), Is.EqualTo(CameraThenLink));
+            Assert.That(sink.Recovered(), Is.EquivalentTo(published), "Recovered names each fault the drops published");
         }
     }
 }

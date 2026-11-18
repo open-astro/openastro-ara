@@ -32,13 +32,14 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §42.2 "Guider (PHD2): loses guide star" against the fake guider: a star lost for longer than the
-    /// grace period pauses the active runs through the on_guider_lost reaction, and a settled stretch of guiding
+    /// grace period publishes a star-lost fault and the shared reaction runs on_guider_lost, and a settled stretch of guiding
     /// afterwards resumes exactly those runs. A star that comes back inside the grace does nothing.
     /// </summary>
     [TestFixture]
     [Category("IO")] // loopback socket against the fake guider
     public class GuiderStarLostWatchTest {
 
+        private static readonly string[] StarLostTitle = ["Guide star lost"];
         private static readonly TimeSpan Grace = TimeSpan.FromMilliseconds(300);
         // For the tests whose guide step must land INSIDE a window (the grace, or the wait before the
         // recovery): with 300 ms a loaded CI runner sometimes delivered the step after the timer fired
@@ -53,7 +54,9 @@ namespace OpenAstroAra.Test {
             public readonly Mock<IProfileStore> Profiles = new();
             public readonly HeadlessProfileService Profile = new();
             public readonly Mock<ICenteringService> Centering = new();
-            public readonly List<string> FaultActions = new();
+            public readonly List<EquipmentFaultEvent> Faults = new(); // what reached the hub's sink
+            public readonly List<EquipmentFaultEvent> Recovered = new(); // what the guider reported Recovered
+            public readonly FaultReactionService Reaction;
             public int Restarts;
             public bool RestartSucceeds = true;
             public bool RestartStartsButFails; // PHD2 guides but the settle timed out: StartGuiding returns false
@@ -75,6 +78,10 @@ namespace OpenAstroAra.Test {
                     .ReturnsAsync(runActive ? new List<Guid> { RunId } : new List<Guid>());
                 Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ids.Count);
+                // Active runs: the guider's custody check does not read them (it asks about the runs the
+                // reaction paused for its episode); a test sets them to model runs another source holds.
+                Sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(runActive ? new List<Guid> { RunId } : new List<Guid>());
                 // Until the user acts, the star-lost pause is still the daemon's.
                 Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => (IReadOnlyList<Guid>)ids.ToList());
@@ -82,10 +89,6 @@ namespace OpenAstroAra.Test {
                     .ReturnsAsync(Target);
                 Centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new PlateSolveResult());
-                var faultLog = new Mock<IFaultLogService>();
-                faultLog.Setup(f => f.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-                    .Callback<EquipmentFaultEvent, string, DateTimeOffset?, CancellationToken>((_, a, _, _) => { lock (FaultActions) { FaultActions.Add(a); } })
-                    .Returns(Task.CompletedTask);
                 var notifications = new Mock<INotificationService>();
                 notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                     .Callback<NotificationDto, CancellationToken>((n, _) => { lock (Notifications) { Notifications.Add(n); } })
@@ -94,12 +97,20 @@ namespace OpenAstroAra.Test {
                 ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
                     .Callback<OpenAstroAra.Server.Contracts.WsEvents.WsEvent, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => { lock (WsTopics) { WsTopics.Add(t); } })
                     .Returns(Task.CompletedTask);
+                // The shared reaction behind the hub: the guider only publishes faults and reports Recovered.
+                var hub = new EquipmentFaultHub(ws.Object);
+                hub.Subscribe(f => { lock (Faults) { Faults.Add(f); } });
+                hub.SubscribeRecovered(f => { lock (Recovered) { Recovered.Add(f); } });
+                // The reaction tells the guider which runs it paused for its fault (as Program.cs wires it).
+                Reaction = new FaultReactionService(hub, reconnector: null, profiles.Object, () => Sequencer.Object,
+                    telescope: null, notifications.Object, ws.Object, guiderEpisodes: () => Service);
+                Reaction.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
                 Service = new GuiderService(
                     Profile,
                     new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                         Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object,
-                    profiles.Object, () => Sequencer.Object, notifications.Object, faultLog.Object) {
+                    profiles.Object, () => Sequencer.Object, notifications.Object, hub) {
                     StarLostGrace = grace ?? Grace,
                     StarLostRecoverAfter = recoverAfter ?? Grace,
                     StarLostProbeInterval = Grace / 2,
@@ -121,7 +132,10 @@ namespace OpenAstroAra.Test {
 
             public int Paused() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync));
             public int Resumed() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.ResumeRunsAsync));
-            public void Dispose() => Service.Dispose();
+            public void Dispose() {
+                Service.Dispose();
+                Reaction.Dispose();
+            }
         }
 
         // Longer than the recovery's own bounds: stopping PHD2 before a re-center waits up to 10 s for the
@@ -214,7 +228,15 @@ namespace OpenAstroAra.Test {
             rig.Sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Once, "a star-lost pause is adoptable by a later daemon pause");
             Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 1).ConfigureAwait(false), Is.True);
             Assert.That(rig.Notifications[0].Title, Is.EqualTo("Guide star lost — sequence paused"));
-            Assert.That(rig.WsTopics, Does.Contain(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.GuiderFaultActionTaken.Token));
+            // The fault reaches the sink once, with the star_lost details, and the retired guider event is gone.
+            lock (rig.Faults) {
+                Assert.That(rig.Faults, Has.Count.EqualTo(1));
+                Assert.That(rig.Faults[0].DeviceType, Is.EqualTo(DeviceType.Guider));
+                Assert.That(rig.Faults[0].Kind, Is.EqualTo(EquipmentFaultKind.TrackingLost));
+                Assert.That(rig.Faults[0].Details, Is.EqualTo("star_lost"));
+            }
+            Assert.That(rig.WsTopics, Does.Contain(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.EquipmentFault.Token));
+            Assert.That(rig.WsTopics, Does.Not.Contain("guider.fault_action_taken"));
 
             // Resumes only after a settled stretch: the error under the settle distance for the settle time.
             rig.Profile.ActiveProfile.GuiderSettings.SettleTime = 1;
@@ -349,6 +371,7 @@ namespace OpenAstroAra.Test {
             await Task.Delay(RoomyWindow + Grace).ConfigureAwait(false);
 
             Assert.That(rig.Paused(), Is.Zero, "a brief loss is PHD2's business");
+            Assert.That(rig.Faults, Is.Empty, "a guide step inside the grace publishes no fault");
             Assert.That(rig.Resumed(), Is.Zero);
             Assert.That(rig.Notifications, Is.Empty);
         }
@@ -383,7 +406,8 @@ namespace OpenAstroAra.Test {
             await Task.Delay(Grace).ConfigureAwait(false);
 
             Assert.That(rig.Resumed(), Is.Zero, "nothing was parked, nothing to resume");
-            Assert.That(rig.Notifications, Is.Empty, "no sequence was affected: the guider chip already shows the state");
+            Assert.That(rig.Notifications.Select(n => n.Title), Is.EqualTo(StarLostTitle),
+                "no run was paused, so the only notice is the shared reaction's notify_only one — no resume notice");
         }
 
         // ── §42.2 long outage: the recovery ───────────────────────────────────────────────────────
@@ -412,9 +436,8 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Restarts, Is.EqualTo(1), "guiding restarted once, after the re-center");
             rig.Sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Single() == rig.RunId), It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
-            Assert.That(rig.Notifications[1].Title, Does.StartWith("Guide star lost for").And.Contains("re-centered, run resumed"));
+            Assert.That(rig.Notifications[1].Title, Does.StartWith("Guide star back").And.Contains("sequence resumed"));
             Assert.That(rig.Notifications[1].Severity, Is.EqualTo(NotificationSeverity.Info));
-            Assert.That(await WaitUntilAsync(() => rig.FaultActions.Contains("recentered")).ConfigureAwait(false), Is.True, "the fault row carries the action");
 
             // Guide steps from the restarted guider are not a second relock: nothing resumes twice.
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
@@ -427,6 +450,56 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 2).ConfigureAwait(false), Is.True, "the second episode recovered too");
             Assert.That(rig.Centered(), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task With_no_run_active_the_probe_does_not_report_the_star_recovered_while_it_is_still_lost() {
+            // The episode paused nothing, so there is nothing for the long-outage recovery to watch: the
+            // fault stays open while the guider is in LostLock (no "no paused run" read as the user acting).
+            using var rig = new Rig(runActive: false);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            var guider = rig.Service.RequireConnectedGuider();
+
+            await Task.Delay(RoomyWindow).ConfigureAwait(false); // well past StarLostRecoverAfter and two probe intervals
+            Assert.That(guider.AppState?.State, Is.EqualTo("LostLock"), "the star is still lost");
+            lock (rig.Recovered) { Assert.That(rig.Recovered, Is.Empty, "a star that is still lost is not recovered"); }
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "nothing paused: no probe");
+        }
+
+        [Test]
+        public async Task A_run_paused_by_another_source_is_not_re_centred_by_the_star_lost_probe() {
+            // Another episode (a mount drop, say) already holds the run paused, so the star-lost episode pauses
+            // none: its probe must not stop the guider and slew the mount for a run it never paused.
+            using var rig = new Rig(runActive: true);
+            rig.Sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid>());
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            await Task.Delay(RoomyWindow).ConfigureAwait(false);
+            Assert.That(rig.Centered(), Is.Zero, "no re-centre for a run this episode did not pause");
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"), "the guider is not stopped for another episode's run");
+            lock (rig.Recovered) { Assert.That(rig.Recovered, Is.Empty, "the star is still lost: its fault stays open"); }
+        }
+
+        [Test]
+        public async Task Once_the_user_resumes_the_episodes_run_a_run_another_source_paused_is_not_re_centred() {
+            // The probe asks only about the runs its own episode paused. Here the user has resumed that run
+            // while another source still holds a second one paused: the episode is handed over, no slew.
+            using var rig = new Rig(runActive: true);
+            var own = Guid.NewGuid();
+            rig.Sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { own });
+            rig.Sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { own, rig.RunId });
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => (IReadOnlyList<Guid>)ids.Where(id => id == rig.RunId).ToList());
+            rig.Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => { lock (rig.Recovered) { return rig.Recovered.Count == 1; } }).ConfigureAwait(false), Is.True,
+                "the episode's own run was resumed by the user: the episode closes");
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+            Assert.That(rig.Centered(), Is.Zero, "the run another source paused is not the episode's to re-centre");
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"));
         }
 
         [Test]
@@ -483,9 +556,8 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 3).ConfigureAwait(false), Is.True);
             Assert.That(rig.Notifications[1].Title, Does.Contain("re-center failed"));
             Assert.That(rig.Notifications[1].Severity, Is.EqualTo(NotificationSeverity.Warning));
-            Assert.That(rig.Notifications[2].Title, Does.Contain("run resumed"));
+            Assert.That(rig.Notifications[2].Title, Does.Contain("sequence resumed"));
             Assert.That(rig.Notifications.Count(n => n.Title.Contains("re-center failed", StringComparison.Ordinal)), Is.EqualTo(1), "one warning per episode, not one per retry");
-            Assert.That(rig.FaultActions, Does.Contain("recenter_failed"));
         }
 
         [Test]
@@ -517,6 +589,8 @@ namespace OpenAstroAra.Test {
             var asked = 0;
             rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ++asked == 1 ? (IReadOnlyList<Guid>)ids.ToList() : Array.Empty<Guid>());
+            // The episode closes through the shared reaction, whose resume releases nothing the user took.
+            rig.Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
@@ -525,8 +599,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"), "the user's run is not the daemon's to stop guiding on");
             Assert.That(rig.Centered(), Is.Zero);
-            Assert.That(rig.Resumed(), Is.Zero);
-            Assert.That(rig.Notifications, Has.Count.EqualTo(1));
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1), "the user settled the pause: no resume notice");
             Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "the episode ended: no more probes");
         }
 
@@ -538,12 +611,12 @@ namespace OpenAstroAra.Test {
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Array.Empty<Guid>());
+            rig.Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
 
             await Task.Delay(Grace * 4).ConfigureAwait(false);
 
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "the episode closed before the first probe");
-            Assert.That(rig.Resumed(), Is.Zero);
-            Assert.That(rig.Notifications, Has.Count.EqualTo(1));
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1), "the user settled the pause: no resume notice");
         }
 
         [Test]
@@ -576,7 +649,6 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Resumed(), Is.Zero);
             Assert.That(rig.Restarts, Is.Zero);
             Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "given up: no more probes this episode");
-            Assert.That(rig.FaultActions, Does.Contain("recenter_unavailable"));
         }
 
         [Test]
@@ -685,6 +757,96 @@ namespace OpenAstroAra.Test {
 
             Assert.That(rig.Centered(), Is.Zero);
             Assert.That(rig.Resumed(), Is.Zero);
+        }
+
+        // ── the episode across a link drop and the §63.3 auto-reconnect ────────────────────────────
+
+        // The PHD2 link drops while the star-lost episode is open, and the auto-reconnect (the rig's
+        // supervisor mock reads the unit active) connects again with PHD2 still hunting the star.
+        private static async Task ReconnectWithTheStarStillLostAsync(Rig rig, FakeGuider fake) {
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("LostLock"));
+            fake.OnRpc("get_app_state", JsonValue.Create("LostLock"));
+            var dropped = rig.Service.RequireConnectedGuider();
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            object? Current() {
+                try {
+                    return rig.Service.RequireConnectedGuider();
+                } catch (InvalidOperationException) {
+                    return null; // not Connected (yet)
+                }
+            }
+            Assert.That(await WaitUntilAsync(() => Current() is { } now && !ReferenceEquals(now, dropped)).ConfigureAwait(false),
+                Is.True, "the auto-reconnect never connected a new guider");
+            Assert.That(await WaitUntilAsync(() => rig.Service.RequireConnectedGuider().AppState?.State == "LostLock").ConfigureAwait(false),
+                Is.True, "the reconnected guider never read LostLock");
+        }
+
+        [Test]
+        public async Task After_a_reconnect_the_probe_sees_the_users_resume_and_reports_the_star_lost_fault_recovered() {
+            // The episode outlives the reconnect's guider dispose, so its probe must come back with the
+            // connection: it alone sees the user's Resume, and the shared reaction waits for that Recovered.
+            using var rig = new Rig(runActive: true, recoverAfter: TimeSpan.FromMinutes(10)); // only the reconnect can arm a probe here
+            rig.Service.StarLostProbeInterval = TimeSpan.FromSeconds(1);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            await ReconnectWithTheStarStillLostAsync(rig, fake).ConfigureAwait(false);
+
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<Guid>()); // the user pressed Resume
+            rig.Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+
+            EquipmentFaultEvent starLost;
+            lock (rig.Faults) { starLost = rig.Faults.Single(f => f.Details == "star_lost"); }
+            Assert.That(await WaitUntilAsync(() => { lock (rig.Recovered) { return rig.Recovered.Exists(f => ReferenceEquals(f, starLost)); } },
+                    timeoutMs: (int)(2 * rig.Service.StarLostProbeInterval.TotalMilliseconds)).ConfigureAwait(false),
+                Is.True, "within two probe intervals of the Resume the star-lost fault is reported Recovered");
+        }
+
+        [Test]
+        public async Task After_a_reconnect_with_the_star_still_lost_the_probe_asks_for_stars_again() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("get_star_centroids")).ConfigureAwait(false), Is.True,
+                "the probe ran before the drop");
+
+            await ReconnectWithTheStarStillLostAsync(rig, fake).ConfigureAwait(false);
+            var probes = fake.ReceivedMethods.Count(m => m == "get_star_centroids");
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Count(m => m == "get_star_centroids") > probes).ConfigureAwait(false), Is.True,
+                "the reconnected guider is still in LostLock: the long-outage probe asks its frames again");
+            Assert.That(rig.Centered(), Is.Zero, "a starless frame moves nothing");
+        }
+
+        [Test]
+        public async Task The_reconnect_notice_says_the_runs_the_lost_star_paused_wait_for_the_star() {
+            using var rig = new Rig(runActive: true, recoverAfter: TimeSpan.FromMinutes(10));
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            await ReconnectWithTheStarStillLostAsync(rig, fake).ConfigureAwait(false);
+
+            NotificationDto? notice = null;
+            Assert.That(await WaitUntilAsync(() => {
+                lock (rig.Notifications) { notice = rig.Notifications.Find(n => n.Title == "Guider reconnected automatically"); }
+                return notice is not null;
+            }).ConfigureAwait(false), Is.True, "the reconnect notice was never posted");
+            Assert.That(notice!.Message, Does.EndWith("Runs the lost guide star paused resume once the star is back, or when you Resume them."),
+                "the link is back but the star is not: the runs it paused do not resume on the reconnect");
+        }
+
+        [Test]
+        public async Task A_given_up_episode_stays_given_up_across_a_reconnect() {
+            // The give-up belongs to the episode, which outlives the reconnect: the probe that comes back on
+            // Connected must not try again, or every reconnect repeats the give-up for the same cloud.
+            using var rig = new Rig(runActive: true);
+            rig.Service.Recenter = null;
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+            int GiveUps() {
+                lock (rig.Notifications) { return rig.Notifications.Count(n => n.Title.Contains("cannot re-center", StringComparison.Ordinal)); }
+            }
+            Assert.That(await WaitUntilAsync(() => GiveUps() == 1).ConfigureAwait(false), Is.True, "the episode never gave up");
+
+            await ReconnectWithTheStarStillLostAsync(rig, fake).ConfigureAwait(false);
+            await Task.Delay(RoomyWindow).ConfigureAwait(false); // many probe intervals
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "given up before the drop: no probe after the reconnect");
+            Assert.That(GiveUps(), Is.EqualTo(1), "the give-up is said once per episode");
         }
     }
 }

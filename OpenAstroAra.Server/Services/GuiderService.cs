@@ -100,6 +100,18 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
 
     private readonly ILogger<GuiderService> _logger;
     private readonly IProfileService _profileService;
+    private readonly IProfileStore? _profileStore;
+    private readonly Func<ISequencerService?>? _sequencerResolver;
+    private readonly INotificationService? _notifications;
+    // §42.2 — all three guider fault kinds (link down, guide camera dropped, star lost after its grace)
+    // are published here, and the shared FaultReactionService runs the on_guider_lost plan. This service
+    // keeps the detection and its two recoveries, and reports Recovered when one succeeds.
+    private readonly IEquipmentFaultSink? _faultSink;
+    // Guarded by _gate. The open link-down / camera-drop faults, held until the guider recovers so the
+    // hub can resolve exactly those rows (SetStateLocked on a connect, EquipmentReconnected for the camera).
+    // They outlive the guider dispose a reconnect does; a user disconnect or the service's dispose drops them (DropOpenFaultsLocked).
+    private EquipmentFaultEvent? _linkFault;
+    private EquipmentFaultEvent? _cameraFault;
     // §63.6: WS sink for guider.dark_library.* events. Optional so the service composes in tests without a hub.
     private readonly IWsBroadcaster? _ws;
     private readonly object _gate = new();
@@ -146,7 +158,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
             IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null,
             IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
-            INotificationService? notifications = null, IFaultLogService? faultLog = null,
+            INotificationService? notifications = null, IEquipmentFaultSink? faultSink = null,
             Func<Guid?>? activeProfileIdResolver = null,
             Func<(Guid Id, string? Name)?>? araProfileResolver = null,
             IDiagnosticsService? diagnostics = null,
@@ -165,7 +177,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         _profileStore = profileStore;
         _sequencerResolver = sequencerResolver;
         _notifications = notifications;
-        _faultLog = faultLog;
+        _faultSink = faultSink;
         _activeProfileIdResolver = activeProfileIdResolver;
         _araProfileResolver = araProfileResolver;
         _diagnostics = diagnostics;
@@ -362,6 +374,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             CancelConnectLocked(); // and cancel its ensure-reachable/start wait immediately
             CancelRecoveryLocked(); // the user gave up on the guider — stop recovering it
             DisposeGuiderLocked();
+            DropOpenFaultsLocked();
             SetStateLocked(EquipmentConnectionState.Disconnected);
         }
         return Task.FromResult(Accepted("guider.disconnect", idempotencyKey));
@@ -642,10 +655,90 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         lock (_gate) {
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected
                     && AffectsGuiding(e.DeviceType)) {
-                BeginFaultReactionLocked(GuiderFaultKind.EquipmentDisconnected);
+                // #1241 — a repeat drop while the first is still open adds no row of its own.
+                _cameraFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected");
             }
         }
     }
+
+    // Caller holds _gate. A disposed service publishes nothing.
+    private EquipmentFaultEvent? PublishFaultLocked(EquipmentFaultKind kind, string details) {
+        if (_disposed) {
+            return null;
+        }
+        var fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2", kind, details, DateTimeOffset.UtcNow);
+        _faultSink?.Publish(fault);
+        return fault;
+    }
+
+    // Caller holds _gate.
+    private void RecoverFaultLocked(ref EquipmentFaultEvent? fault) {
+        if (fault is not null) {
+            _faultSink?.Recovered(fault);
+            fault = null;
+        }
+    }
+
+    // Caller holds _gate. A user disconnect (or the service's dispose) drops the open faults without
+    // Recovered: the shared reaction sees the guider Disconnected and releases its episode by user.
+    private void DropOpenFaultsLocked() {
+        _linkFault = null;
+        _cameraFault = null;
+        _starLostReacted = false;
+        _starLostFault = null;
+        _starLostPausedRuns = [];
+    }
+
+    // #1191 — the guider reports the lost device back: the camera-drop fault is recovered now, not on
+    // the next guider connect (the link never went down).
+    private void OnEquipmentReconnected(object? sender, EquipmentReconnectedEventArgs e) {
+        lock (_gate) {
+            if (_disposed || !ReferenceEquals(sender, _guider) || _state != EquipmentConnectionState.Connected
+                    || !AffectsGuiding(e.DeviceType)) {
+                return;
+            }
+            if (_cameraFault is null) {
+                return; // no open camera-drop fault (an unsolicited or repeated reconnect)
+            }
+            LogCameraReconnected(e.DeviceType);
+            RecoverFaultLocked(ref _cameraFault);
+        }
+    }
+
+    // Moved from the retired FaultReaction partial: the guider's own notifications.
+    private Task NotifyFaultQuietlyAsync(string title, string message) =>
+        NotifyQuietlyAsync(NotificationSeverity.Critical, title, message);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never mask the recovery itself (the §58.7 precedent). Log-and-recover boundary.")]
+    private async Task NotifyQuietlyAsync(NotificationSeverity severity, string title, string message) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: severity,
+                Category: NotificationCategory.Equipment,
+                Title: title,
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFaultNotifyFailed(ex);
+        }
+    }
+
+    [LoggerMessage(EventId = 4226, Level = LogLevel.Warning, Message = "§42.2 fault notification post failed (best-effort)")]
+    private partial void LogFaultNotifyFailed(Exception exception);
+
+    [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — recovering the open camera-drop fault (#1191)")]
+    private partial void LogCameraReconnected(string deviceType);
 
     // The daemon's device-type enum is effectively "camera" today. Treat a missing/blank type as the
     // guide camera (fail toward alerting on the one device we know it emits) and ignore any other named
@@ -663,9 +756,9 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         // §63.3 guider-d: the daemon dropped mid-session — try to recover the process
         // (and, on success, auto-reconnect within the §63.3 grace window).
         BeginRecoveryLocked();
-        // §42.2: guiding is gone NOW — any running sequence is shooting unguided,
-        // so react per the profile's on_guider_lost policy (GuiderService.FaultReaction.cs).
-        BeginFaultReactionLocked(GuiderFaultKind.LinkDown);
+        // §42.2: guiding is gone NOW — any running sequence is shooting unguided, so the shared
+        // reaction runs the profile's on_guider_lost plan.
+        _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down");
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
@@ -895,14 +988,15 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     private void SetStateLocked(EquipmentConnectionState state) {
         _state = state;
         if (state == EquipmentConnectionState.Connected) {
-            // A fresh successful connection starts a new fault episode: the §42.2
-            // reaction may fire again on the next mid-session loss.
-            _latchedFaultKind = null;
-            _openCameraDropFault = null; // #1191 — the connect's ResolveOnReconnectAsync closes it
-            // §42.5 — the reconnect resolves this guider's open disconnect fault rows (the
-            // same observed-reconnect semantics the Alpaca devices get from the publisher
-            // hook); best-effort and off-lock.
-            ResolveGuiderFaultsQuietly();
+            // §42.5 — a connect is the guider's recovery from a link drop (and the backstop for a camera
+            // drop whose EquipmentReconnected never came): the hub resolves those rows.
+            RecoverFaultLocked(ref _linkFault);
+            RecoverFaultLocked(ref _cameraFault);
+            // A star-lost episode stays open across the reconnect (the star may still be lost), but the
+            // dispose stopped its probe: re-arm it, or nothing sees a Resume or a clear sky for its runs.
+            if (_starLostReacted) {
+                ArmStarLostRecoveryLocked(StarLostProbeInterval);
+            }
             StartPingLoopLocked();
         } else {
             StopPingLoopLocked();
@@ -948,6 +1042,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             _shutdownCts.Cancel();
             _shutdownCts.Dispose();
             DisposeGuiderLocked();
+            DropOpenFaultsLocked();
         }
     }
 
