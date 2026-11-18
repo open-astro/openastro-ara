@@ -20,6 +20,7 @@ using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System.Globalization;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -80,8 +81,8 @@ public class PlateSolveService : IPlateSolveService {
         // user fixes) lets the API layer return a narrow 422 without catching unrelated InvalidOperationExceptions.
         var (focalLength, pixelSize) = ResolveSolveGeometry(
             profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
-        if (!(focalLength > 0) || !(pixelSize > 0)) {
-            throw new PlateSolverConfigurationException(
+        if (MissingOptics(focalLength, pixelSize) is { Length: > 0 } missing) {
+            throw OpticsNotSet(missing,
                 $"Cannot plate-solve: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
         }
 
@@ -103,9 +104,37 @@ public class PlateSolveService : IPlateSolveService {
             Timeout = TimeoutFrom(settings),
         };
 
-        return learnOptics
+        return RefusingSolverSetupFaults(() => learnOptics
             ? SolveAndLearnScale(imageSolver, image, parameter, progress, token)
-            : imageSolver.Solve(image, parameter, progress, token);
+            : imageSolver.Solve(image, parameter, progress, token));
+    }
+
+    /// <summary>The optics the solve geometry still lacks, as the wire names (<c>focal_length</c>,
+    /// <c>pixel_size</c>); empty when both are set. The one optics rule of the pointing endpoints (ADR 0022).</summary>
+    internal static string[] MissingOptics(double focalLength, double pixelSize) => [
+        .. !(focalLength > 0) ? new[] { "focal_length" } : [],
+        .. !(pixelSize > 0) ? new[] { "pixel_size" } : [],
+    ];
+
+    internal static RefusalException OpticsNotSet(string[] missing, string detail) =>
+        new(RefusalCatalog.OpticsNotSet, detail, new Dictionary<string, object?> { ["missing"] = missing });
+
+    /// <summary>The solver is not set up (ASTAP missing, wrong or too old): the cause comes from the exception's
+    /// kind, never its words.</summary>
+    internal static RefusalException SolverNotSet(PlateSolverConfigurationException ex) => new(RefusalCatalog.SolverNotSet, ex.Message);
+
+    /// <summary>A non-ASTAP CLI solver whose binary is missing. The framework message embeds the full server-side
+    /// path, so <c>detail</c> is a fixed sentence instead.</summary>
+    internal static RefusalException SolverBinaryMissing(string detail) => new(RefusalCatalog.SolverNotSet, detail);
+
+    private static async Task<PlateSolveResult> RefusingSolverSetupFaults(Func<Task<PlateSolveResult>> solve) {
+        try {
+            return await solve().ConfigureAwait(false);
+        } catch (PlateSolverConfigurationException ex) {
+            throw SolverNotSet(ex);
+        } catch (System.IO.FileNotFoundException) {
+            throw SolverBinaryMissing("Plate-solver executable not found — check the solver path (e.g. ASTAPLocation) in the profile.");
+        }
     }
 
     private async Task<PlateSolveResult> SolveAndLearnScale(IImageSolver imageSolver, IImageData image, PlateSolveParameter parameter,

@@ -110,6 +110,16 @@ public partial class Program {
         builder.Services.AddOpenApi(o => o.AddDocumentTransformer((doc, _, _) => {
             doc.Info.Title = "OpenAstro Ara REST API";
             doc.Info.Version = "v1";
+            // ADR 0022 — the declared refusal causes, built from the catalog (never a second list), so the
+            // client's RefusalCause enum has one contract to be checked against.
+            var components = doc.Components ??= new Microsoft.OpenApi.OpenApiComponents();
+            var schemas = components.Schemas ??= new Dictionary<string, Microsoft.OpenApi.IOpenApiSchema>();
+            schemas["RefusalReason"] = new Microsoft.OpenApi.OpenApiSchema {
+                Type = Microsoft.OpenApi.JsonSchemaType.String,
+                Description = "The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.",
+                Enum = OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All
+                    .Select(c => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(c.Token)!).ToList(),
+            };
             return Task.CompletedTask;
         }).AddOperationTransformer((op, ctx, _) => {
             // ADR 0015 — a section PUT takes the tag of the copy the client loaded (WithSection).
@@ -1314,6 +1324,9 @@ public partial class Program {
         // #1194 — §27 on REST: a mutating request carrying a stale X-Ara-Session is refused (409);
         // header-less requests stay on the documented advisory path.
         app.Use(SessionGuard.Middleware);
+        // ADR 0022 — a module's RefusalException becomes its declared 4xx problem; after the guard, so its
+        // own 409 is never seen here.
+        app.Use(RefusalHandler.Middleware);
 
         // §49 API docs: Scalar UI (AOT-friendly Swagger replacement per §71.3).
         app.MapOpenApi();
