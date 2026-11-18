@@ -360,7 +360,7 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Probing dpkg/systemctl is best-effort: a missing binary must become a typed refusal, never crash the request.")]
-    private static async Task<(int ExitCode, string Output)> RunAsync(string file, string[] args, CancellationToken ct) {
+    internal static async Task<(int ExitCode, string Output)> RunAsync(string file, string[] args, CancellationToken ct) {
         try {
             var info = new ProcessStartInfo(file) {
                 UseShellExecute = false,

@@ -947,6 +947,28 @@ public partial class Program {
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
+        // #1901 — End Night: the shared shutdown ladder, the root-owned poweroff helper (ADR 0017: the daemon only
+        // asks systemd to start the unit) and the action itself.
+        builder.Services.AddSingleton(sp => new ShutdownLadder(
+            sp.GetService<IProfileStore>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            sp.GetService<ICameraService>(),
+            sp.GetService<IFilterWheelService>(),
+            sp.GetService<IFocuserService>(),
+            sp.GetService<IRotatorService>(),
+            sp.GetService<IFlatDeviceService>(),
+            sp.GetService<ILogger<ShutdownLadder>>()));
+        builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
+        builder.Services.AddSingleton(sp => new EndNightService(
+            sp.GetRequiredService<ShutdownLadder>(),
+            sp.GetRequiredService<IHostPoweroffStarter>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetService<UnattendedShutdownService>(),
+            sp.GetService<ILogger<EndNightService>>()));
+
         // #1140 P2 — the sky-model calibration fit reads the catalog's frame rows and writes the profile.
         builder.Services.AddSingleton(sp => new SkyModelCalibrationService(
             sp.GetRequiredService<IProfileStore>(), sp.GetService<IFrameRepository>()));
@@ -1366,6 +1388,7 @@ public partial class Program {
         app.MapDiagnosticsEndpoints();
         app.MapFaultsEndpoints(); // §42.5 — persisted fault history
         app.MapPreflightEndpoints(); // §58.14 — pre-sleep checklist
+        app.MapEndNightEndpoints(); // #1901 — End Night
         app.MapPlanningEndpoints(); // #1140 P2 — sky-model calibration store
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
