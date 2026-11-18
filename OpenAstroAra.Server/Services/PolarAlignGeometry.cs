@@ -355,9 +355,12 @@ public static class PolarAlignGeometry {
             double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
         var poleAzDeg = latitudeDeg > 0 ? 0.0 : 180.0;
         var psi = Deg2Rad(seedAzDeg - poleAzDeg);
-        // shortcut: floor on cos ψ, a camera ~90° of azimuth from the pole cannot read the altitude knob; the polar
-        // routine keeps the camera within 30° of the pole, where ψ stays under ~45°. Upgrade if the camera may roam.
-        var cosPsi = Math.Max(Math.Cos(psi), 0.1);
+        // shortcut: |cos ψ| is floored at 0.1 (keeping its sign), so a camera within ~6° of ψ = ±90° under-reads the
+        // altitude knob; the fine stage can leave the camera there. Upgrade if that band needs a real reading.
+        var cosPsi = Math.Cos(psi);
+        if (Math.Abs(cosPsi) < 0.1) {
+            cosPsi = Math.CopySign(0.1, cosPsi);
+        }
         var altShiftDeg = dAltDeg / cosPsi;
         var tanAlt = Math.Tan(Deg2Rad(Math.Min(seedAltDeg, 89.9)));
         return (altShiftDeg, dAzDeg - altShiftDeg * Math.Sin(psi) * tanAlt);

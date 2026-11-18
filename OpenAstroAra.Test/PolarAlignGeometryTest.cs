@@ -509,6 +509,8 @@ namespace OpenAstroAra.Test {
         [TestCase(-33.856784, 5.0)]
         [TestCase(-33.856784, 15.0)]
         [TestCase(-33.856784, 30.0)]
+        [TestCase(70.0, 30.0)]
+        [TestCase(-70.0, 30.0)]
         public void The_live_readout_reads_each_axis_move_within_2_percent_far_from_the_pole(double latitudeDeg, double distanceDeg) {
             const double moveDeg = 0.1;
             var poleAz = latitudeDeg > 0 ? 0.0 : 180.0;
