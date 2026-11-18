@@ -152,7 +152,7 @@ class AddAdded extends AddOutcome {
   final String? warning;
 }
 
-/// The bridge (or the daemon) said no; [detail] is the sentence to show.
+/// The bridge (or the daemon) said no; [detail] is the sentence to show, empty when none came.
 class AddRefused extends AddOutcome {
   const AddRefused(this.detail);
   final String detail;

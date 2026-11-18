@@ -94,12 +94,9 @@ class AlpacaBridgeSetupApi implements AlpacaBridgeSetupClient {
       );
     }
     // 4xx: nothing reached the bridge (or it said no); 5xx and anything else: unknown.
+    // No detail: an empty one, which the panel words in the app's language.
     if (status != null && status >= 400 && status < 500) {
-      return AddRefused(
-        detail is String && detail.isNotEmpty
-            ? detail
-            : 'Ara refused this device.',
-      ); // l10n-ok
+      return AddRefused(detail is String ? detail : '');
     }
     return const AddUnconfirmed();
   }

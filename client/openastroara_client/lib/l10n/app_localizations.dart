@@ -10539,7 +10539,7 @@ abstract class AppLocalizations {
   /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
   String get estopFailPolarAligner;
 
-  /// Painel Add your devices: heading above the detected devices
+  /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:
   /// **'Found on this rig'**
@@ -10670,6 +10670,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove this row'**
   String get bridgeSetupRemoveRow;
+
+  /// Add your devices: an add was refused and no reason came with it
+  ///
+  /// In en, this message translates to:
+  /// **'Ara refused this device.'**
+  String get bridgeSetupRefused;
 
   /// Start question: the rig's clock could not be set and runs behind; {amount} is like '2 min'
   ///

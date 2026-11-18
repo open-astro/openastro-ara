@@ -127,4 +127,41 @@ void main() {
       expect(sent.single.$2, {'password': 'hunter2'});
     },
   );
+
+  testWidgets('an enum field with no default sends the value it shows', (
+    tester,
+  ) async {
+    final sent = <Map<String, Object?>>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AlpacaBridgeDriverForm(
+            driver: BridgeDriver.fromJson({
+              'vendor': 'acme',
+              'deviceType': 'focuser',
+              'displayName': 'Acme focuser',
+              'vendorLabel': 'Acme',
+              'available': true,
+              'fields': [
+                {
+                  'key': 'baudRate',
+                  'type': 'string',
+                  'required': true,
+                  'secret': false,
+                  'role': 'Plain',
+                  'enum': ['9600', '115200'],
+                },
+              ],
+            }),
+            onSubmit: (v, _) => sent.add(v),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('9600'), findsWidgets);
+    await tester.tap(find.byKey(const Key('form-submit')));
+    await tester.pump();
+    expect(find.text('Required'), findsNothing);
+    expect(sent.single['baudRate'], '9600');
+  });
 }

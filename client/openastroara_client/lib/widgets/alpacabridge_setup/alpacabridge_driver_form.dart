@@ -15,6 +15,7 @@ class AlpacaBridgeDriverForm extends StatefulWidget {
     this.hide = const {},
     this.initialValues = const {},
     this.submitLabel,
+    this.busy = false,
   });
 
   final BridgeDriver driver;
@@ -26,6 +27,9 @@ class AlpacaBridgeDriverForm extends StatefulWidget {
   final Map<String, Object?> initialValues;
   final String? submitLabel;
 
+  /// An add is in flight: the button is off and reads Adding….
+  final bool busy;
+
   @override
   State<AlpacaBridgeDriverForm> createState() => _AlpacaBridgeDriverFormState();
 }
@@ -34,8 +38,15 @@ class _AlpacaBridgeDriverFormState extends State<AlpacaBridgeDriverForm> {
   late final BridgeForm _form = BridgeForm(widget.driver);
   late final Map<String, Object?> _values = {
     ..._form.initialValues(),
+    for (final f in widget.driver.fields) ...?_enumStart(f),
     ...widget.initialValues,
   };
+
+  // An enum with no default holds its first value, so the value shown is the value sent.
+  static Map<String, Object?>? _enumStart(BridgeField f) =>
+      f.defaultValue == null && f.enumValues != null
+      ? {f.key: f.enumValues!.first}
+      : null;
   final _secrets = <String, String>{};
   Map<String, String> _errors = const {};
 
@@ -90,8 +101,12 @@ class _AlpacaBridgeDriverFormState extends State<AlpacaBridgeDriverForm> {
           child: FilledButton(
             key: const Key('form-submit'),
             style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-            onPressed: _submit,
-            child: Text(widget.submitLabel ?? l.bridgeSetupContinue),
+            onPressed: widget.busy ? null : _submit,
+            child: Text(
+              widget.busy
+                  ? l.bridgeSetupAdding
+                  : widget.submitLabel ?? l.bridgeSetupContinue,
+            ),
           ),
         ),
       ],
@@ -207,6 +222,7 @@ class _AlpacaBridgeDriverFormState extends State<AlpacaBridgeDriverForm> {
               <String, Object?>{
                 for (final sub in f.fields)
                   if (sub.defaultValue != null) sub.key: sub.defaultValue,
+                for (final sub in f.fields) ...?_enumStart(sub),
               },
             ];
           }),

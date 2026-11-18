@@ -6341,6 +6341,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get bridgeSetupRemoveRow => 'Remove this row';
 
   @override
+  String get bridgeSetupRefused => 'Ara refused this device.';
+
+  @override
   String clockWrongSlow(String amount) {
     return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
   }
@@ -12750,6 +12753,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get bridgeSetupRemoveRow => 'Remover esta linha';
+
+  @override
+  String get bridgeSetupRefused => 'O Ara recusou este dispositivo.';
 
   @override
   String clockWrongSlow(String amount) {

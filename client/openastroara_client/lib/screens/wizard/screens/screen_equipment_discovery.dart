@@ -207,9 +207,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   Widget build(BuildContext context) {
     final failed = _result != null && !_ok && !_testing && !_noServer;
     final noServer = _result != null && !_testing && _noServer;
-    final running = isRunning(
-      ref.watch(foundDevicesProvider).value ?? const [],
-    );
+    final busy = ref.watch(foundDevicesBusyProvider);
     return WizardScreenScaffold(
       step: 2,
       intro: context.l10n.wizardDiscoveryIntro,
@@ -233,7 +231,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton.tonalIcon(
-            onPressed: _testing || running
+            onPressed: _testing || busy
                 ? null
                 : () {
                     // The Found list reads the bridge again with the probe.

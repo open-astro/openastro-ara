@@ -136,6 +136,21 @@ bool isRunning(List<FoundRow> rows) => rows.any(
   (r) => r.status == FoundStatus.waiting || r.status == FoundStatus.adding,
 );
 
+/// An add, a retry or a detection is in flight: one at a time, never parallel (an add can open a
+/// vendor SDK). The panel greys its buttons while it is set.
+final foundDevicesBusyProvider = NotifierProvider<FoundDevicesBusy, bool>(
+  FoundDevicesBusy.new,
+);
+
+class FoundDevicesBusy extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool v) {
+    if (ref.mounted) state = v;
+  }
+}
+
 final foundDevicesProvider =
     AsyncNotifierProvider<FoundDevicesNotifier, List<FoundRow>>(
       FoundDevicesNotifier.new,
@@ -160,6 +175,20 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
 
   void _patch(String id, FoundRow Function(FoundRow) f) =>
       _set([for (final r in _rows) r.id == id ? f(r) : r]);
+
+  bool get _busy => ref.read(foundDevicesBusyProvider);
+
+  /// Runs [work] as the one operation in flight (null while another runs). The flag is set
+  /// synchronously, before the first await, so a second call sees it.
+  Future<T?> _exclusive<T>(Future<T> Function() work) async {
+    if (_busy) return null;
+    final busy = ref.read(foundDevicesBusyProvider.notifier)..set(true);
+    try {
+      return await work();
+    } finally {
+      busy.set(false);
+    }
+  }
 
   Future<List<FoundRow>> _detect() async {
     final server = ref.read(activeServerProvider);
@@ -259,7 +288,7 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
       _drivers.firstWhere((d) => d.key == row.driverKey);
 
   void toggle(String id) {
-    if (isRunning(_rows)) return;
+    if (_busy) return;
     _patch(
       id,
       (r) =>
@@ -275,7 +304,7 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
     Map<String, Object?> values, {
     Map<String, String> secrets = const {},
   }) {
-    if (isRunning(_rows)) return;
+    if (_busy) return;
     final row = _rows.where((r) => r.id == id).firstOrNull;
     if (row == null || row.status == FoundStatus.added) return;
     final form = BridgeForm(driverOf(row));
@@ -307,8 +336,7 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
 
   Future<void> addSelected() async {
     final rows = _rows;
-    if (isRunning(rows) ||
-        rows.any((r) => r.ticked && r.status == FoundStatus.needsDetails)) {
+    if (rows.any((r) => r.ticked && r.status == FoundStatus.needsDetails)) {
       return;
     }
     final ids = [
@@ -316,12 +344,13 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
         if (r.ticked && r.status == FoundStatus.found) r.id,
     ];
     if (ids.isEmpty) return;
-    // Synchronously, before the first await: a second call sees the running flag.
-    _set([
-      for (final r in rows)
-        ids.contains(r.id) ? r.copyWith(status: FoundStatus.waiting) : r,
-    ]);
-    await _sequence(ids);
+    await _exclusive(() {
+      _set([
+        for (final r in rows)
+          ids.contains(r.id) ? r.copyWith(status: FoundStatus.waiting) : r,
+      ]);
+      return _sequence(ids);
+    });
   }
 
   /// Sends the rows one at a time in order, then re-reads once.
@@ -409,19 +438,21 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
 
   /// Sends one failed (or edited) row again, then re-reads once.
   Future<void> retry(String id) async {
-    final rows = _rows;
-    final row = rows.where((r) => r.id == id).firstOrNull;
-    if (row == null || isRunning(rows)) return;
+    final row = _rows.where((r) => r.id == id).firstOrNull;
+    if (row == null) return;
     if (row.status != FoundStatus.failed && row.status != FoundStatus.found) {
       return;
     }
-    _patch(id, (r) => r.copyWith(status: FoundStatus.waiting));
-    await _sequence([id], checkLanded: true);
+    await _exclusive(() {
+      _patch(id, (r) => r.copyWith(status: FoundStatus.waiting));
+      return _sequence([id], checkLanded: true);
+    });
   }
 
   /// Reads the bridge again and rebuilds the rows (ticks reset, secrets dropped).
-  Future<void> redetect() async {
-    if (isRunning(_rows)) return;
+  Future<void> redetect() => _exclusive(_redetect);
+
+  Future<void> _redetect() async {
     ref.invalidate(bridgeAddressOverrideProvider);
     state = const AsyncLoading<List<FoundRow>>();
     try {
@@ -431,21 +462,24 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
     }
   }
 
-  /// By hand: one body to the bridge; on success the list is read again.
-  Future<AddOutcome> addByHand(Map<String, Object?> body) async {
-    final client = ref.read(alpacaBridgeSetupClientFactoryProvider)(_address);
-    AddOutcome out;
-    try {
-      out = await client.addDevice(body);
-    } catch (_) {
-      out = const AddUnconfirmed();
-    } finally {
-      client.close();
-    }
-    await _reread();
-    if (out is AddAdded) await redetect();
-    return out;
-  }
+  /// By hand: one body to the bridge; on success the list is read again. Null while another
+  /// operation runs (nothing sent).
+  Future<AddOutcome?> addByHand(Map<String, Object?> body) => _exclusive(
+    () async {
+      final client = ref.read(alpacaBridgeSetupClientFactoryProvider)(_address);
+      AddOutcome out;
+      try {
+        out = await client.addDevice(body);
+      } catch (_) {
+        out = const AddUnconfirmed();
+      } finally {
+        client.close();
+      }
+      await _reread();
+      if (out is AddAdded) await _redetect();
+      return out;
+    },
+  );
 
   var _opened = false;
 

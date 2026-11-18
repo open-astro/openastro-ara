@@ -115,11 +115,11 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
       ...secrets,
     };
     final out = await _n.addByHand(body);
-    if (!mounted) return;
+    if (!mounted || out == null) return;
     setState(() {
       _handResult = switch (out) {
         AddAdded() => context.l10n.bridgeSetupAdded,
-        AddRefused(:final detail) => detail,
+        AddRefused(:final detail) => _refusal(detail),
         AddUnconfirmed() => context.l10n.bridgeSetupMayExist,
       };
       _hand = null;
@@ -127,6 +127,10 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
       _picked = null;
     });
   }
+
+  // The bridge's own words, else ours (a 4xx with no detail).
+  String _refusal(String detail) =>
+      detail.isEmpty ? context.l10n.bridgeSetupRefused : detail;
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +175,7 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
     if (_hand == _Hand.form) return _handForm();
 
     final running = isRunning(rows);
+    final busy = ref.watch(foundDevicesBusyProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 8,
@@ -188,13 +193,13 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
             l.bridgeSetupFoundTitle,
             style: Theme.of(context).textTheme.titleSmall,
           ),
-          for (final r in rows) _rowView(r, running),
+          for (final r in rows) _rowView(r, busy),
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton(
               key: const Key('add-selected'),
               style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-              onPressed: running || selectedCount(rows) == 0
+              onPressed: busy || selectedCount(rows) == 0
                   ? null
                   : () => _addSelected(rows),
               child: Text(
@@ -212,10 +217,12 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
           child: OutlinedButton(
             key: const Key('add-by-hand'),
             style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-            onPressed: () => setState(() {
-              _handResult = null;
-              _hand = _Hand.list;
-            }),
+            onPressed: busy
+                ? null
+                : () => setState(() {
+                    _handResult = null;
+                    _hand = _Hand.list;
+                  }),
             child: Text(l.bridgeSetupByHand),
           ),
         ),
@@ -226,21 +233,19 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
   }
 
   Widget _retry() {
-    final running = isRunning(
-      ref.watch(foundDevicesProvider).value ?? const [],
-    );
+    final busy = ref.watch(foundDevicesBusyProvider);
     return TextButton(
       key: const Key('retry-detection'),
       style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-      onPressed: running ? null : () => _n.redetect(),
+      onPressed: busy ? null : () => _n.redetect(),
       child: Text(context.l10n.wizardDiscoveryRetryDetection),
     );
   }
 
-  Widget _rowView(FoundRow r, bool running) {
+  Widget _rowView(FoundRow r, bool busy) {
     final l = context.l10n;
     final canTick =
-        !running &&
+        !busy &&
         (r.status == FoundStatus.found || r.status == FoundStatus.needsDetails);
     final status = switch (r.status) {
       FoundStatus.found => null,
@@ -260,39 +265,56 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           spacing: 8,
           children: [
-            Checkbox(
-              value: r.ticked,
-              onChanged: canTick ? (_) => _n.toggle(r.id) : null,
-            ),
+            // One screen-reader node: the tick with the device's name (Retry and Edit stay apart).
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
+              child: MergeSemantics(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 8,
                   children: [
-                    Text(
-                      r.name,
-                      style: failed
-                          ? const TextStyle(color: AraColors.textDisabled)
-                          : null,
+                    Checkbox(
+                      value: r.ticked,
+                      onChanged: canTick ? (_) => _n.toggle(r.id) : null,
                     ),
-                    if (r.serial.isNotEmpty)
-                      Text(
-                        r.serial,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: AraColors.textSecondary),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              r.name,
+                              style: failed
+                                  ? const TextStyle(
+                                      color: AraColors.textDisabled,
+                                    )
+                                  : null,
+                            ),
+                            if (r.serial.isNotEmpty)
+                              Text(
+                                r.serial,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AraColors.textSecondary),
+                              ),
+                            if (r.error != null)
+                              Text(
+                                _refusal(r.error!),
+                                style: const TextStyle(
+                                  color: AraColors.accentError,
+                                ),
+                              ),
+                            if (r.unconfirmed) Text(l.bridgeSetupMayExist),
+                            if (r.warning != null)
+                              Text(
+                                r.warning!,
+                                style: const TextStyle(
+                                  color: AraColors.accentWarning,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    if (r.error != null)
-                      Text(
-                        r.error!,
-                        style: const TextStyle(color: AraColors.accentError),
-                      ),
-                    if (r.unconfirmed) Text(l.bridgeSetupMayExist),
-                    if (r.warning != null)
-                      Text(
-                        r.warning!,
-                        style: const TextStyle(color: AraColors.accentWarning),
-                      ),
+                    ),
                   ],
                 ),
               ),
@@ -307,14 +329,14 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
               TextButton(
                 key: Key('row-retry-${r.id}'),
                 style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                onPressed: running ? null : () => _n.retry(r.id),
+                onPressed: busy ? null : () => _n.retry(r.id),
                 child: Text(l.bridgeSetupRetry),
               ),
             if (failed || r.status == FoundStatus.needsDetails)
               TextButton(
                 key: Key('row-edit-${r.id}'),
                 style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                onPressed: running ? null : () => _edit(r.id),
+                onPressed: busy ? null : () => _edit(r.id),
                 child: Text(l.bridgeSetupEdit),
               ),
           ],
@@ -332,6 +354,7 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
           driver: _n.driverOf(row),
           hide: _detected,
           initialValues: row.values,
+          busy: ref.watch(foundDevicesBusyProvider),
           onSubmit: (v, s) => _submitRow(row, v, s),
         ),
         _back(() => setState(() => _walk = null)),
@@ -408,6 +431,7 @@ class _PanelState extends ConsumerState<AlpacaBridgeSetupPanel> {
           driver: d,
           hide: _picked == null ? const {} : _detected,
           submitLabel: l.bridgeSetupAdd,
+          busy: ref.watch(foundDevicesBusyProvider),
           onSubmit: _submitHand,
         ),
         _back(_leaveHand),

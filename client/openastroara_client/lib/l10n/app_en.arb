@@ -8142,7 +8142,7 @@
   },
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
-    "description": "Painel Add your devices: heading above the detected devices"
+    "description": "Add your devices: heading above the detected devices"
   },
   "bridgeSetupAddSelected": "Add selected ({count})",
   "@bridgeSetupAddSelected": {
@@ -8230,6 +8230,10 @@
   "bridgeSetupRemoveRow": "Remove this row",
   "@bridgeSetupRemoveRow": {
     "description": "Add your devices: button that removes a row from a list field"
+  },
+  "bridgeSetupRefused": "Ara refused this device.",
+  "@bridgeSetupRefused": {
+    "description": "Add your devices: an add was refused and no reason came with it"
   },
   "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
   "@clockWrongSlow": {

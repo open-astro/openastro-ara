@@ -378,6 +378,107 @@ void main() {
     },
   );
 
+  testWidgets('by-hand Add tapped twice sends one add', (tester) async {
+    final bridge = await _pump(
+      tester,
+      drivers: [zwoFocuserDriver()],
+      gated: true,
+    );
+    await tester.tap(find.byKey(const Key('add-by-hand')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('by-hand-driver-zwo-focuser')));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('form-submit')));
+    await tester.pump();
+    final submit = find.byKey(const Key('form-submit'));
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    expect(
+      find.descendant(of: submit, matching: find.text('Adding…')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<ButtonStyleButton>(
+            find.ancestor(
+              of: find.text('Retry detection').first,
+              matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+      reason: 'the wizard\'s Retry detection waits too',
+    );
+    await tester.tap(submit, warnIfMissed: false);
+    await tester.pump();
+    expect(bridge.calls.length, 1);
+    bridge.release();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump();
+    }
+    expect(find.byKey(const Key('by-hand-result')), findsOneWidget);
+  });
+
+  testWidgets('By hand is disabled while Add selected runs', (tester) async {
+    final bridge = await _pump(tester, gated: true);
+    await tester.tap(find.byKey(const Key('add-selected')));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('add-by-hand')))
+          .onPressed,
+      isNull,
+    );
+    final c = ProviderScope.containerOf(
+      tester.element(find.byType(ScreenAlpacaConnect)),
+    );
+    final byHand = c.read(foundDevicesProvider.notifier).addByHand({
+      'vendor': 'zwo',
+      'deviceType': 'focuser',
+    });
+    await tester.pump();
+    expect(bridge.maxInFlight, 1);
+    expect(await byHand, isNull, reason: 'refused while a sequence runs');
+    for (var i = 0; i < 2; i++) {
+      bridge.release();
+      for (var j = 0; j < 4; j++) {
+        await tester.pump();
+      }
+    }
+    expect(bridge.calls, ['AAAA000000000001', 'BBBB000000000002']);
+    expect(bridge.maxInFlight, 1);
+  });
+
+  testWidgets(
+    'a found row reads its device name and its tick to a screen reader',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester);
+      final node = tester.getSemantics(
+        find.descendant(
+          of: find.byKey(const Key('found-row-zwo:camera:AAAA000000000001')),
+          matching: find.byType(MergeSemantics),
+        ),
+      );
+      expect(node.label, contains('ZWO ASI294MC Pro'));
+      expect(node, isSemantics(hasCheckedState: true, isChecked: true));
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('a refusal with no detail shows the app\'s own sentence', (
+    tester,
+  ) async {
+    final bridge = await _pump(tester);
+    bridge.outcomes = {'AAAA000000000001': const AddRefused('')};
+    await tester.tap(find.byKey(const Key('add-selected')));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+    expect(find.text('Ara refused this device.'), findsOneWidget);
+  });
+
   testWidgets(
     'with no catalog the screen is today\'s: no Found list, no by-hand button',
     (tester) async {

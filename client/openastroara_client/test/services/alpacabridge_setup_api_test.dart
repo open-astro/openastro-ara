@@ -176,6 +176,17 @@ void main() {
         }
       },
     );
+
+    test(
+      'a 4xx with no detail reads as Refused with an empty detail: the panel words it ($how validateStatus)',
+      () async {
+        final out = await _api(
+          _Stub(<String, Object?>{}, status: 422),
+          lenient: lenient,
+        ).addDevice(_body);
+        expect(out, isA<AddRefused>().having((o) => o.detail, 'detail', ''));
+      },
+    );
   }
 
   test('a timeout or a dropped connection reads as Unconfirmed: the device may have landed', () async {
