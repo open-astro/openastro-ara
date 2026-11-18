@@ -162,9 +162,8 @@ void showHelpSheet(BuildContext context, Help entry, {String? device}) {
                 const SizedBox(height: 24),
                 Text(
                   'Related settings:',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AraColors.textTertiary,
-                  ),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textTertiary),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
