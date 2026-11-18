@@ -55,7 +55,7 @@ void _tick(FakeAsync async, [Duration d = kSimpleLiveStackPoll]) {
 
 void main() {
   test('a camera the daemon calls not_colour is unsupported: one probe, no '
-      'polling, so the row stays hidden', () {
+      'polling', () {
     fakeAsync((async) {
       final daemon = FakeSessionLiveStackClient()..unsupported = 'not_colour';
       final c = _container(daemon);
@@ -253,6 +253,31 @@ void main() {
       final before = daemon.calls.length;
       _tick(async, kSimpleLiveStackPoll * 5);
       expect(daemon.calls.length, before);
+      // The USB drop ends: the rig kept stacking, the client re-probes.
+      daemon
+        ..unsupported = null
+        ..stackOne();
+      _tick(async, kSimpleLiveStackReprobe);
+      final back = c.read(simpleLiveStackProvider);
+      expect((back.supported, back.on, back.frame?.seq), (true, true, 2));
+    });
+  });
+
+  test('a failed first probe is retried on the re-probe timer: the row '
+      'appears and an enabled stack is adopted once the rig answers', () {
+    fakeAsync((async) {
+      final daemon = FakeSessionLiveStackClient()
+        ..statusError = StateError('rejoining the hotspot');
+      final c = _container(daemon);
+      final first = _open(async, c);
+      expect((first.supported, first.error != null), (false, true));
+      daemon
+        ..statusError = null
+        ..enabled = true
+        ..stackOne();
+      _tick(async, kSimpleLiveStackReprobe);
+      final s = c.read(simpleLiveStackProvider);
+      expect((s.supported, s.on, s.frame?.seq, s.error), (true, true, 1, null));
     });
   });
 
