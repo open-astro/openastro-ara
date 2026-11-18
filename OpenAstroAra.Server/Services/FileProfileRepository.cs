@@ -25,6 +25,9 @@ using System.Threading;
 
 namespace OpenAstroAra.Server.Services;
 
+/// <summary>One profile file renamed to <c>.corrupt.&lt;ts&gt;</c> at load (#1955).</summary>
+public sealed record ProfileSetAside(Guid Id, string OriginalPath, string SetAsidePath);
+
 /// <summary>
 /// §37 file-backed multi-profile repository. Each saved profile is a
 /// <see cref="StoredProfileDto"/> at <c>{profileDir}/profiles/{id}.json</c>; the active
@@ -43,9 +46,6 @@ namespace OpenAstroAra.Server.Services;
 /// the legacy single <c>profile.json</c> (or defaults) — so pre-multi-profile
 /// settings land in the first profile the user creates.
 /// </summary>
-/// <summary>One profile file renamed to <c>.corrupt.&lt;ts&gt;</c> at load (#1955).</summary>
-public sealed record ProfileSetAside(Guid Id, string OriginalPath, string SetAsidePath);
-
 public sealed partial class FileProfileRepository : IProfileRepository, IDisposable {
 
     private readonly List<ProfileSetAside> _setAside = new();
