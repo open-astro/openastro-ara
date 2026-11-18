@@ -12,15 +12,15 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using NUnit.Framework;
+using OpenAstroAra.Sequencer.Format;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using NUnit.Framework;
-using OpenAstroAra.Sequencer.Format;
 
 namespace OpenAstroAra.Test {
 

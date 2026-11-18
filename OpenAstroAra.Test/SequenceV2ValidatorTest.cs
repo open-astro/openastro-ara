@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Format;
 using OpenAstroAra.Server.Services;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 
 namespace OpenAstroAra.Test {
 
@@ -79,7 +79,7 @@ namespace OpenAstroAra.Test {
         public void The_spec_Example_is_refused_as_an_unknown_kind_today_never_as_a_placeholder() {
             // glover-exposure has no engine class yet (follow-up (d)); a body that names it is a 422.
             var errors = Check(SequenceV2Spec.Example());
-            Assert.That(Pairs(errors), Is.EqualTo(new[] { ("unknown_kind", "$.root.items[2].items[2].items[3]") }));
+            Assert.That(Pairs(errors), Is.EqualTo(new[] { ("unknown_kind", "$.root.items[2].items[3].items[3]") }));
             Assert.That(errors[0].Message, Does.Contain("glover-exposure"));
         }
 
@@ -446,6 +446,9 @@ namespace OpenAstroAra.Test {
             // (bool?), switch-filter.filter and capture.calibrationTarget (string?).
             Assert.That(CheckItems("""{ "kind": "slew-radec", "center": null }, { "kind": "switch-filter", "filter": null }, { "kind": "capture", "calibrationTarget": null, "calibrationNight": null }"""), Is.Empty);
             Assert.That(Pairs(CheckItems("""{ "kind": "capture", "exposureTime": null }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].exposureTime") }), "a double is not nullable");
+            // `provider` is a name string in v2 even though SelectedProvider is declared nullable: null is refused, absent is valid.
+            Assert.That(Pairs(CheckItems("""{ "kind": "wait-for-time", "provider": null }, """ + Capture)), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].provider") }));
+            Assert.That(CheckItems("""{ "kind": "wait-for-time" }, """ + Capture), Is.Empty);
             // Non-null references are refused: the engine declares them non-null and the reader would fault.
             Assert.That(Pairs(CheckItems("""{ "kind": "slew-radec", "coordinates": null }, """ + Capture)), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].coordinates") }));
             var items = Check(Whole(root: """{ "kind": "root", "items": null }"""), new SequenceV2ValidationOptions { RequireCapturableInstruction = false });
