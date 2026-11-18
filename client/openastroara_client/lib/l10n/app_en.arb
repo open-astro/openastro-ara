@@ -4170,7 +4170,7 @@
   },
   "albumTierBronze": "Bronze",
   "@albumTierBronze": {
-    "description": "Sky Album: bronze tier name (at least one light)"
+    "description": "Sky Album: bronze tier name (at least 15 min of lights)"
   },
   "albumTierSilver": "Silver",
   "@albumTierSilver": {

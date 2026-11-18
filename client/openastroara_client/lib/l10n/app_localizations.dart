@@ -5475,7 +5475,7 @@ abstract class AppLocalizations {
   /// **'{collected} / {total} collected'**
   String albumCollected(int collected, int total);
 
-  /// Sky Album: bronze tier name (at least one light)
+  /// Sky Album: bronze tier name (at least 15 min of lights)
   ///
   /// In en, this message translates to:
   /// **'Bronze'**
