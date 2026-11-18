@@ -73,7 +73,7 @@ class _GuideFocus extends GuideFocusNotifier {
   @override
   GuideFocusLive build() => live0;
   @override
-  Future<void> start({required double exposureSec, int? binning}) async => calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec, int? binning}) async => calls.add('start $exposureSec');
   @override
   Future<void> stop() async => calls.add('stop');
 }

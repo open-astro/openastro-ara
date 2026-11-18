@@ -12,6 +12,27 @@ class AutofocusFrame {
   const AutofocusFrame(this.bytes, this.seq);
 }
 
+/// #1544 — the daemon's derived autofocus step size. [source] is `manual`,
+/// `measured`, `cfz` or `default` (an unknown word is kept as sent).
+class AutofocusStepSize {
+  final int stepSize;
+  final String source;
+  const AutofocusStepSize({required this.stepSize, required this.source});
+
+  factory AutofocusStepSize.fromJson(Map<String, dynamic> json) {
+    final step = json['step_size'];
+    if (step is! num) {
+      throw FormatException(
+        'step size missing "step_size" (${step.runtimeType})',
+      );
+    }
+    return AutofocusStepSize(
+      stepSize: step.toInt(),
+      source: json['source'] as String? ?? 'default',
+    );
+  }
+}
+
 /// One §65.5 background job's polled state, as served by `GET /api/v1/jobs/{id}`.
 /// `state` is `queued`/`running`/`complete`/`failed`/`cancelled` on the wire.
 class AutofocusJob {
@@ -74,6 +95,10 @@ abstract interface class AutofocusApi {
   /// #1543 — forget the Smart Focus calibration; the next autofocus runs a
   /// full sweep and records a new one.
   Future<void> recalibrate();
+
+  /// #1544 — the step size the next sweep would use and where it comes from
+  /// (`GET /api/v1/autofocus/step-size`).
+  Future<AutofocusStepSize> stepSize();
 
   /// The run's rendered frame, or `null` (204) when none exists yet.
   Future<AutofocusFrame?> fetchFrame();
@@ -138,6 +163,16 @@ class DioAutofocusApi implements AutofocusApi {
   @override
   Future<void> recalibrate() async {
     await _dio.post<void>('/api/v1/autofocus/recalibrate');
+  }
+
+  @override
+  Future<AutofocusStepSize> stepSize() async {
+    final res = await _dio.get<dynamic>('/api/v1/autofocus/step-size');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('unexpected step size response — not a JSON object');
+    }
+    return AutofocusStepSize.fromJson(data);
   }
 
   @override

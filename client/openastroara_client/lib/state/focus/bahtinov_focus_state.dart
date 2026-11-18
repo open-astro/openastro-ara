@@ -159,7 +159,8 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
-  Future<void> start({required double exposureSec}) async {
+  /// [exposureSec] null: the readout runs at the profile's autofocus exposure.
+  Future<void> start({double? exposureSec}) async {
     final api = ref.read(bahtinovFocusApiProvider);
     if (api == null || state.busy) return;
     // A Bahtinov session keeps the card on Bahtinov after it stops, so the

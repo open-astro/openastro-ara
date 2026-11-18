@@ -25,7 +25,7 @@ class _FakeClient implements BahtinovFocusClient {
     return GuideFocusFrame(Uint8List.fromList([1, 2, 3]), frameSeq);
   }
   @override
-  Future<void> start({required double exposureSec}) async {}
+  Future<void> start({double? exposureSec}) async {}
   @override
   Future<void> stop() async {}
   @override

@@ -541,7 +541,8 @@ public partial class Program {
                 sp.GetRequiredService<IGuideFrameDecoder>(),
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
-                optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));
+                optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>()),
+                defaultExposure: () => sp.GetRequiredService<IProfileStore>().GetAutofocusSettings().ExposureSeconds));
         // #1364 — the live guide-camera view: the guider's picture and star pick, through the daemon.
         builder.Services.AddSingleton<IGuiderLiveService>(sp =>
             new GuiderLiveService(
@@ -1275,7 +1276,9 @@ public partial class Program {
                 () => sp.GetRequiredService<AutofocusRunTracker>().IsRunning ? "an autofocus run is in progress"
                     : sp.GetRequiredService<ActiveRunSessionRegistry>().HasAny ? "a sequence is running"
                     : null,
-                sp.GetRequiredService<ILogger<BahtinovFocusService>>()));
+                sp.GetRequiredService<ILogger<BahtinovFocusService>>(),
+                // The AF exposure stands in when a start leaves its own out.
+                defaultExposure: () => sp.GetRequiredService<IProfileStore>().GetAutofocusSettings().ExposureSeconds));
         // #1675 — the per-filter focus offset calibration (POST /equipment/filterwheel/offsets/calibrate): a
         // background job of autofocus runs, refused while another focus routine or a plan runs.
         builder.Services.AddSingleton<FilterOffsetCalibrationService>();

@@ -33,7 +33,7 @@ class _StubBahtinov extends BahtinovFocusNotifier {
   @override
   Future<void> refresh() async {}
   @override
-  Future<void> start({required double exposureSec}) async => calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec}) async => calls.add('start $exposureSec');
   @override
   Future<void> stop() async {
     calls.add('stop');

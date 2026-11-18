@@ -6,6 +6,8 @@
 //   1. Every Setting(...) entry in lib/settings/registry.dart has non-empty
 //      description AND keywords.
 //   2. No duplicate `id` strings across the registry.
+//   3. Every entry has `tier: SettingTier.simple|advanced` (#1544), and a
+//      `derivedBy`, when present, is not empty.
 //
 // Future work (intentionally NOT in v1):
 //   - Cross-reference panel widgets vs registry IDs (would need a Dart AST
@@ -126,6 +128,13 @@ for (const entry of entries) {
   }
   if (!description || description.trim().length === 0) {
     failures.push(`Entry \`${id}\`: empty or missing \`description\` — §61.4 requires a 1-2 sentence explanation`);
+  }
+  if (!/tier:\s*SettingTier\.(simple|advanced)\b/.test(entry.body)) {
+    failures.push(`Entry \`${id}\`: missing \`tier: SettingTier.simple|advanced\` (#1544)`);
+  }
+  const derivedBy = (entry.body.match(/derivedBy:\s*(?:'([^']*)'|"([^"]*)")/) || []);
+  if (/derivedBy:/.test(entry.body) && !(derivedBy[1] || derivedBy[2] || '').trim()) {
+    failures.push(`Entry \`${id}\`: empty \`derivedBy\` — omit it when nothing derives the value (#1544)`);
   }
   if (keywords.length === 0) {
     failures.push(`Entry \`${id}\`: empty \`keywords\` list — §61.4 requires search terms for discoverability`);
