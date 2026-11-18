@@ -424,6 +424,13 @@ class OsDiskLevels(HelperRig):
         self.assertEqual(copy.returncode, 0, copy.stdout + copy.stderr)
         self.assertEqual(self.copy_mounted(), [self.NEW[1]])
 
+    def test_mounting_an_os_disk_data_partition_as_the_copy_target_twice_is_ok(self) -> None:
+        # An interrupted copy leaves it at the copy path; the next copy to it must still start.
+        for _ in range(2):
+            result = self.run_helper("--mount-copy", self.NEW[0])
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.copy_mounted(), [self.NEW[1]], "no second layer")
+
     def test_erasing_an_os_disk_data_partition_is_refused_untouched(self) -> None:
         result = self.run_helper("--format", "--fs", "ext4", self.NEW[0], "ARA-DISK")
         self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
@@ -460,13 +467,16 @@ class OsDiskLevels(HelperRig):
 
     def test_an_os_disk_partition_mounted_elsewhere_is_refused(self) -> None:
         # A separate /var on the OS disk: mounting it again at the store would hand its root to
-        # the daemon, and --check or --eject would unmount it under the running system.
-        self.mounts.write_text(self.mounts.read_text() + f"{self.NEW[1]} /var\n")
-        for args in ([self.NEW[0]], ["--check", self.NEW[0]], ["--eject", self.NEW[0]]):
-            result = self.run_helper(*args)
-            self.assertEqual(result.returncode, 5, f"{args}: {result.stdout}{result.stderr}")
-            self.assertIn("ERROR: device_busy mounted_elsewhere", result.stdout, str(args))
-            self.assertIn(f"{self.NEW[1]} /var", self.mounts.read_text(), f"{args}: /var stays mounted")
+        # the daemon, and --check or --eject would unmount it under the running system. The copy
+        # path is elsewhere too: --unmount-copy is what takes a copy target off.
+        before = self.mounts.read_text()
+        for elsewhere in ("/var", self.copy_point):
+            self.mounts.write_text(before + f"{self.NEW[1]} {elsewhere}\n")
+            for args in ([self.NEW[0]], ["--check", self.NEW[0]], ["--eject", self.NEW[0]]):
+                result = self.run_helper(*args)
+                self.assertEqual(result.returncode, 5, f"{args}: {result.stdout}{result.stderr}")
+                self.assertIn("ERROR: device_busy mounted_elsewhere", result.stdout, str(args))
+                self.assertIn(f"{self.NEW[1]} {elsewhere}", self.mounts.read_text(), f"{args}: stays mounted")
         # Already the store: a re-check still passes.
         self.mounts.write_text(f"{self.NEW[1]} {self.mount_point}\n")
         check = self.run_helper("--check", self.NEW[0])

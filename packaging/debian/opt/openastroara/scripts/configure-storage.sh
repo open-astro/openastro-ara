@@ -91,9 +91,10 @@ refuse_if_exfat_unsupported() {
 
 # Two levels of "system disk" (#1769). The OS partition, and every ancestor of it
 # (partition -> md/LVM/dm-crypt -> physical disk), is refused in every mode. Any other
-# partition on the OS disk is data: mount, --check, --mount-copy and --eject pass unless
-# it is mounted somewhere other than the store, and the erase path refuses it. The ancestor walk follows the WHOLE parent chain,
-# not one hop, so a stacked root still resolves to its physical holder.
+# partition on the OS disk is data: mount, --check and --eject pass unless it is mounted
+# somewhere other than the store, --mount-copy unless somewhere other than the copy path,
+# and the erase path refuses it. The ancestor walk follows the WHOLE parent chain, not one
+# hop, so a stacked root still resolves to its physical holder.
 # Keep in lock-step with StorageDeviceService.SystemDisksAsync (the OS-partition set)
 # and ParseDevices (os_partition / os_disk_data).
 base_disk() { # deepest ancestor of a device node
@@ -150,7 +151,8 @@ refuse_if_os_disk() {
 # An OS-disk partition mounted anywhere but the store (a separate /var, /home or /opt) belongs
 # to the running system: a second mount at the store would hand its root directory to the
 # daemon, and --check or --eject would unmount it under the system. Drives on other disks keep
-# their automount behaviour; the store itself still passes (boot remount, re-check).
+# their automount behaviour; the store itself still passes (boot remount, re-check). --mount-copy
+# skips this: its own check accepts only the copy path, so an interrupted copy can mount again.
 refuse_if_os_disk_mounted_elsewhere() {
     on_os_disk "$1" || return 0
     findmnt -no TARGET "$1" 2>/dev/null | while read -r target; do
@@ -414,7 +416,7 @@ fi
 DEVICE=$(canon "$DEVICE")
 refuse_if_os_partition "$DEVICE"
 [ "$FORMAT" -ne 1 ] || refuse_if_os_disk "$DEVICE"
-refuse_if_os_disk_mounted_elsewhere "$DEVICE"
+[ "$MOUNT_COPY" -eq 1 ] || refuse_if_os_disk_mounted_elsewhere "$DEVICE"
 
 if [ "$MOUNT_COPY" -eq 1 ]; then
     # The store is the copy SOURCE: copying a drive onto itself would mount it

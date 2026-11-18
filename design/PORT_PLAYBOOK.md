@@ -2877,7 +2877,7 @@ sudo /opt/openastroara/scripts/configure-storage.sh --mount-copy <uuid>
 sudo /opt/openastroara/scripts/configure-storage.sh --unmount-copy
 ```
 
-Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses the partition holding `/`, `/boot` or `/boot/firmware` and its ancestors in every mode, and any other partition on that disk when it is erased (`refused system_disk`, exit 6); such a partition mounted anywhere but the store path is refused in every other mode too (`device_busy mounted_elsewhere`, exit 5). The script header is the source of truth; this is the shape.
+Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses the partition holding `/`, `/boot` or `/boot/firmware` and its ancestors in every mode, and any other partition on that disk when it is erased (`refused system_disk`, exit 6); a plain mount, `--check` and `--eject` also refuse such a partition while it is mounted anywhere but the store path (`device_busy mounted_elsewhere`, exit 5), and `--mount-copy` keeps its own check, which accepts only the copy path. The script header is the source of truth; this is the shape.
 
 **Behavior (no `--format`): use a drive as the store**
 
