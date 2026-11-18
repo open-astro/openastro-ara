@@ -32,6 +32,8 @@ import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/services/polar_align_api.dart'
+    show PolarAlignClient;
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 
 // #1911 slice 1: the right rail is a tab list of the six modes, in the order of
@@ -104,6 +106,20 @@ class _PolarLive extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void put(PolarAlignLive v) => state = v;
+}
+
+/// The daemon's polar status: green tonight, ended `failed`.
+class _FailedPolarApi implements PolarAlignClient {
+  @override
+  Future<PolarAlignStatus?> getStatus() async => PolarAlignStatus(
+    state: PolarAlignStates.failed,
+    lastResult: PolarAlignLastResult(
+      errorArcmin: 4,
+      completedUtc: DateTime.now().toUtc(),
+    ),
+  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _StartOnLive extends SelectedTabIndexNotifier {
@@ -251,7 +267,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'keys 1 to 6 pick the mode in the order of the night; the arrow keys move along the tabs',
         (tester) async {
           final c = await _pump(tester, size);
@@ -295,7 +310,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'a tick marks Focus when it is done tonight, stays on while Focus is open, and Polar align has none (#1565 reads)',
         (tester) async {
           final c = await _pump(
@@ -331,40 +345,37 @@ void main() {
         },
       );
 
-      testWidgets(
-        skip: true, // slice S1b (#1911)
-        'a steady dot marks the mode that runs and does not blink',
-        (tester) async {
-          await _pump(tester, size, extra: _runningPlan);
-          final dot = find.byKey(const Key('simple-rail-dot-plan'));
-          expect(dot, findsOneWidget);
-          expect(
-            find.descendant(of: _tab('plan'), matching: dot),
-            findsOneWidget,
-            reason: 'the dot sits inside its tab',
-          );
-          expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
-          for (var i = 0; i < 4; i++) {
-            await tester.pump(const Duration(milliseconds: 500));
-            expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
-            // Only fades between the dot and its own tab count: the shell and
-            // its routes put fades above every widget.
-            for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
-              expect(
-                find.descendant(
-                  of: _tab('plan'),
-                  matching: find.ancestor(of: dot, matching: find.byType(w)),
-                ),
-                findsNothing,
-                reason: 'no $w between the dot and its tab',
-              );
-            }
+      testWidgets('a steady dot marks the mode that runs and does not blink', (
+        tester,
+      ) async {
+        await _pump(tester, size, extra: _runningPlan);
+        final dot = find.byKey(const Key('simple-rail-dot-plan'));
+        expect(dot, findsOneWidget);
+        expect(
+          find.descendant(of: _tab('plan'), matching: dot),
+          findsOneWidget,
+          reason: 'the dot sits inside its tab',
+        );
+        expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+          expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
+          // Only fades between the dot and its own tab count: the shell and
+          // its routes put fades above every widget.
+          for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
+            expect(
+              find.descendant(
+                of: _tab('plan'),
+                matching: find.ancestor(of: dot, matching: find.byType(w)),
+              ),
+              findsNothing,
+              reason: 'no $w between the dot and its tab',
+            );
           }
-        },
-      );
+        }
+      });
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'the open block shows the figure under the mode name while a plan images (12/40)',
         (tester) async {
           final c = await _pump(tester, size, extra: _runningPlan);
@@ -417,20 +428,16 @@ void main() {
         },
       );
 
-      testWidgets(
-        skip: true, // slice S1b (#1911)
-        'the arrow keys wrap at both ends',
-        (tester) async {
-          final c = await _pump(tester, size);
-          await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-          await tester.pump();
-          expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-          await tester.pump();
-          expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
-        },
-      );
+      testWidgets('the arrow keys wrap at both ends', (tester) async {
+        final c = await _pump(tester, size);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+      });
 
       testWidgets(
         'a digit typed into a focused text field does not switch the mode (Search)',
@@ -448,6 +455,33 @@ void main() {
           await tester.pump();
           expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
           expect(tester.widget<TextField>(field).controller!.text, '1');
+        },
+      );
+
+      testWidgets(
+        'a digit and the arrows reach a focused text field: the rail keys do not take them',
+        (tester) async {
+          final c = await _pump(tester, size);
+          c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.plan);
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-search-button')));
+          await tester.pump();
+          final field = find.byKey(const Key('simple-search-field'));
+          await tester.tap(field);
+          await tester.pump();
+          await tester.enterText(field, 'abc');
+          final controller = tester.widget<TextField>(field).controller!;
+          controller.selection = const TextSelection.collapsed(offset: 3);
+          await tester.pump();
+          expect(
+            await tester.sendKeyEvent(LogicalKeyboardKey.digit1),
+            isFalse,
+            reason: 'the field gets the digit',
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+          await tester.pump();
+          expect(controller.selection.baseOffset, 2);
+          expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
         },
       );
 
@@ -497,7 +531,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'Focus done, then a failed Focus run: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(
@@ -545,7 +578,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'Polar align done, then a failed routine: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(
@@ -574,6 +606,57 @@ void main() {
               zone: 'green',
               stage: PolarAlignStages.fine,
             ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-polar')), findsNothing);
+          expect(
+            tester.getSemantics(_tab('polar')).label,
+            isNot(contains('done tonight')),
+          );
+        },
+      );
+
+      testWidgets(
+        'Focus failed, then a manual focus mark: the tick and "done tonight" are back',
+        (tester) async {
+          final c = await _pump(
+            tester,
+            size,
+            extra: [autofocusLiveProvider.overrideWith(_FocusLive.new)],
+          );
+          final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+          focus.put(
+            AutofocusLive(
+              run: AutofocusRun(
+                state: AutofocusRunStates.failed,
+                startedUtc: DateTime.now().toUtc(),
+              ),
+              focusedThisSession: true,
+              hydrated: true,
+            ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-focus')), findsNothing);
+          focus.markFocusedManually();
+          await tester.pump();
+          expect(
+            find.byKey(const Key('simple-rail-tick-focus')),
+            findsOneWidget,
+          );
+          expect(
+            tester.getSemantics(_tab('focus')).label,
+            contains('Focus, done tonight'),
+          );
+        },
+      );
+
+      testWidgets(
+        'Polar align green tonight, the daemon says failed, live idle after a relaunch: no tick',
+        (tester) async {
+          await _pump(
+            tester,
+            size,
+            extra: [polarAlignApiProvider.overrideWithValue(_FailedPolarApi())],
           );
           await tester.pump();
           expect(find.byKey(const Key('simple-rail-tick-polar')), findsNothing);
@@ -663,6 +746,24 @@ void main() {
     },
   );
 
+  testWidgets(
+    'iPad 1024x768 at 2x text: a tab caption stays centred in its tab',
+    (tester) async {
+      await _pump(tester, ipad, textScale: 2);
+      for (final (_, name) in _order.skip(1)) {
+        final caption = find.descendant(
+          of: _tab(name),
+          matching: find.byType(FittedBox),
+        );
+        expect(
+          tester.getCenter(caption).dx,
+          closeTo(tester.getCenter(_tab(name)).dx, 1),
+          reason: 'the $name caption is centred in its tab',
+        );
+      }
+    },
+  );
+
   for (final (name, size) in [
     ('portrait', const Size(390, 844)),
     ('landscape', const Size(844, 390)),
@@ -679,6 +780,11 @@ void main() {
         }
         expect(find.byKey(const Key('simple-rail-tabs')), findsNothing);
         expect(find.byType(EmergencyStopButton), findsWidgets);
+        expect(
+          await tester.sendKeyEvent(LogicalKeyboardKey.digit2),
+          isFalse,
+          reason: 'no rail, no rail key: the digit is left to the app',
+        );
       },
     );
   }
