@@ -21,21 +21,12 @@ using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
-
-/// <summary>§57.4 — the camera's in-flight gate is held (a sequence sub still exposing, a live-view
-/// frame): Verify-Position fails FAST with this instead of queueing behind it (the sequencer's capture
-/// path waits up to 20 minutes, which no interactive client outlives). The user taps again later.</summary>
-public sealed class CameraBusyException : InvalidOperationException {
-    public const string DefaultMessage = "The camera is busy with an exposure — try Verify Position again once it has read out.";
-    public CameraBusyException() : base(DefaultMessage) { }
-    public CameraBusyException(string message) : base(message) { }
-    public CameraBusyException(string message, Exception innerException) : base(message, innerException) { }
-}
 
 /// <summary>§57.4 Verify-Position — see <see cref="VerifyPositionService"/>.</summary>
 public interface IVerifyPositionService {
@@ -93,7 +84,33 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
         var mount = _solver.MountPointing();
         var intended = _solver.MountTarget();
         // The main-camera capture-and-solve is shared with the polar-align coarse stage.
-        var result = await _solver.CaptureAndSolveRawAsync(exposure, mount, blindFailover: true, "Cannot verify the position", ct).ConfigureAwait(false);
+        PlateSolveResult result;
+        try {
+            result = await _solver.CaptureAndSolveRawAsync(exposure, mount, blindFailover: true, "Cannot verify the position", ct).ConfigureAwait(false);
+        } catch (PlateSolverConfigurationException ex) {
+            // No active profile is a daemon fault (it cannot happen), not a refusal: leave it untranslated.
+            if (!_solver.HasActiveProfile) {
+                throw;
+            }
+            throw _solver.MissingOptics() is { Length: > 0 } missing
+                ? PlateSolveService.OpticsNotSet(missing, ex.Message)
+                : PlateSolveService.SolverNotSet(ex);
+        } catch (System.IO.FileNotFoundException) {
+            // A non-ASTAP CLI solver whose binary is missing. The framework message names the server-side path.
+            throw PlateSolveService.SolverBinaryMissing("Plate-solver executable not found — check the solver path in the profile.");
+        } catch (ArgumentOutOfRangeException ex) {
+            // The exposure or binning is outside the camera's capabilities.
+            throw new RefusalException(RefusalCatalog.CaptureSettingsUnsupported, ex.Message);
+        } catch (TimeoutException) {
+            // The capture path's 20-minute gate wait expired: a leaked in-flight flag, which only a daemon
+            // restart clears. (A gate merely HELD by a long exposure is camera-busy, thrown before any wait.)
+            throw new RefusalException(RefusalCatalog.GateStuck, "The camera's in-flight gate is stuck — check the daemon log; a restart clears it.");
+        } catch (CameraUnavailableException ex) {
+            throw new RefusalException(RefusalCatalog.NoCamera, ex.Message);
+        } catch (StoreUnavailableException ex) {
+            // The sequencer pauses on this type, so the throw sites stay; Check words it for the person at the mount.
+            throw new RefusalException(RefusalCatalog.StorageUnavailable, ex.Message);
+        }
         return Describe(result, mount, intended, exposure, SyncRotator(result, _rotator()));
     }
 

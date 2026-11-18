@@ -11,7 +11,7 @@ import '../../l10n/l10n.dart';
 import '../../models/mount_status.dart';
 import '../../models/verify_position_result.dart';
 import '../../services/center_api.dart';
-import '../../services/plate_solve_api.dart';
+import '../../services/refusal.dart';
 import '../../services/autofocus_api.dart' show AutofocusJob;
 import '../../state/app_locale_state.dart';
 import '../../state/equipment/mount_state.dart';
@@ -759,24 +759,26 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
       state = _movedDuringCheck
           ? const SimplePointing()
           : SimplePointing(phase: SimplePointingPhase.result, result: r);
-    } on PlateSolveException catch (e) {
+    } on Refusal catch (e) {
       if (!ref.mounted) return;
-      // A 409 is the camera, and its reason says what fixes it: only a missing
-      // camera is fixed in Camera settings; a busy one is waited out and a
-      // stuck gate needs a restart (#1786). A 422 names the optics or the
-      // solver (#1650).
-      final m = e.message.toLowerCase();
-      final busy = e.statusCode == 409 && e.reason == 'camera-busy';
+      // The cause says what fixes it (ADR 0022): a missing camera is fixed in
+      // Camera settings, unset optics in Optics, an unset solver in Plate
+      // solving; a busy camera is waited out and a stuck gate or a missing
+      // disk is not a setting. A cause this app does not know offers no fix.
       state = SimplePointing(
         phase: SimplePointingPhase.error,
-        error: busy ? l10n.pointingCameraBusy : e.message,
-        fix: e.statusCode == 409
-            ? (e.reason == 'camera-busy' || e.reason == 'gate-stuck'
-                  ? null
-                  : ('eq.camera', l10n.pointingOpenCamera))
-            : m.contains('focal') || m.contains('pixel') || m.contains('optic')
-            ? ('img.optics', l10n.pointingOpenOptics)
-            : ('img.platesolve', l10n.pointingOpenPlateSolving),
+        error: e.cause == RefusalCause.cameraBusy
+            ? l10n.pointingCameraBusy
+            : failureReason(l10n, e),
+        fix: switch (e.cause) {
+          RefusalCause.noCamera => ('eq.camera', l10n.pointingOpenCamera),
+          RefusalCause.opticsNotSet => ('img.optics', l10n.pointingOpenOptics),
+          RefusalCause.solverNotSet => (
+            'img.platesolve',
+            l10n.pointingOpenPlateSolving,
+          ),
+          _ => null,
+        },
       );
     } catch (e) {
       if (!ref.mounted) return;
