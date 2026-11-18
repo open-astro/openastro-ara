@@ -759,6 +759,35 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Resumed(), Is.Zero);
         }
 
+        [Test]
+        public async Task A_user_disconnect_ends_the_reaction_episode_and_a_later_fault_reacts_again() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+
+            await rig.Service.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            var idle = rig.Reaction.WhenIdleAsync();
+            Assert.That(await Task.WhenAny(idle, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(idle),
+                "the episode must end when the user disconnects the guider, or it holds the guider slot");
+            Assert.That(rig.Resumed(), Is.Zero, "the user took the guider away: the run stays paused");
+
+            // Connected again, a new lost star pauses again: no stale episode swallows it.
+            await GuidingAgainAsync(rig, fake).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True, "the second fault was dropped by a stale episode");
+        }
+
+        private static async Task GuidingAgainAsync(Rig rig, FakeGuider fake) {
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Guiding"));
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.True, "the guider never reached Connected again");
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.05, 0.05)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime.RmsTotal is not null).ConfigureAwait(false),
+                Is.True, "the guide step never landed");
+        }
+
         // ── the episode across a link drop and the §63.3 auto-reconnect ────────────────────────────
 
         // The PHD2 link drops while the star-lost episode is open, and the auto-reconnect (the rig's

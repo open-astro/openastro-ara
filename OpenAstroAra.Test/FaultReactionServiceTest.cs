@@ -815,6 +815,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_paused_guider_episode_ends_at_once_on_daemon_shutdown() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Guider, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((EquipmentConnectionState?)null); // the real guider answers no DTO while it recovers
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+            hub.Publish(GuiderFault(EquipmentFaultKind.TrackingLost, "star_lost"));
+            Assert.That(await WaitUntilAsync(() => Actions().Contains("sequence_paused")), Is.True);
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            await guiderService.StopAsync(CancellationToken.None);
+
+            Assert.That(watch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(1)), "the wait loop must see the cancel, not spin out the 3 s grace");
+            var idle = guiderService.WhenIdleAsync();
+            Assert.That(await Task.WhenAny(idle, Task.Delay(1000)), Is.SameAs(idle));
+        }
+
+        [Test]
         public async Task Notify_only_policy_posts_the_notification_and_touches_nothing() {
             SetPolicy(onCameraLost: "notify_only");
 
