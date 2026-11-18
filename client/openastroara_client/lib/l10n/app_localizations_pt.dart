@@ -1416,6 +1416,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellLibrary => 'Library';
 
   @override
+  String get shellRailTabs => 'Modes';
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -6333,6 +6336,79 @@ class AppLocalizationsPt extends AppLocalizations {
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
 
   @override
+  String get bridgeSetupFoundTitle => 'Found on this rig';
+
+  @override
+  String bridgeSetupAddSelected(int count) {
+    return 'Add selected ($count)';
+  }
+
+  @override
+  String get bridgeSetupAdding => 'Adding…';
+
+  @override
+  String get bridgeSetupWaiting => 'Waiting';
+
+  @override
+  String get bridgeSetupAdded => 'Added';
+
+  @override
+  String get bridgeSetupFailed => 'Failed';
+
+  @override
+  String get bridgeSetupRetry => 'Retry';
+
+  @override
+  String get bridgeSetupEdit => 'Edit';
+
+  @override
+  String get bridgeSetupNeedsDetails => 'Needs details';
+
+  @override
+  String get bridgeSetupMayExist =>
+      'No answer from the bridge: it may already exist. Retry checks first.';
+
+  @override
+  String get bridgeSetupLooking => 'Looking for devices';
+
+  @override
+  String get bridgeSetupContinue => 'Continue';
+
+  @override
+  String get bridgeSetupBack => 'Back';
+
+  @override
+  String get bridgeSetupAdd => 'Add';
+
+  @override
+  String get bridgeSetupByHand => 'Add a device by hand';
+
+  @override
+  String get bridgeSetupWhichCamera => 'Which camera?';
+
+  @override
+  String get bridgeSetupNothingFound =>
+      'No devices found on this rig. Plug in your gear and retry, or add one by hand.';
+
+  @override
+  String get bridgeSetupRequired => 'Required';
+
+  @override
+  String get bridgeSetupOutOfRange => 'Out of range';
+
+  @override
+  String get bridgeSetupNotAllowed => 'Not an allowed value';
+
+  @override
+  String get bridgeSetupAddRow => 'Add a row';
+
+  @override
+  String get bridgeSetupRemoveRow => 'Remove this row';
+
+  @override
+  String get bridgeSetupRefused => 'Ara refused this device.';
+
+  @override
   String clockWrongSlow(String amount) {
     return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
   }
@@ -7790,6 +7866,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellLibrary => 'Biblioteca';
+
+  @override
+  String get shellRailTabs => 'Modos';
 
   @override
   String shellModeSemantics(String mode) {
@@ -12735,6 +12814,79 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String get bridgeSetupFoundTitle => 'Encontrado neste setup';
+
+  @override
+  String bridgeSetupAddSelected(int count) {
+    return 'Adicionar selecionados ($count)';
+  }
+
+  @override
+  String get bridgeSetupAdding => 'Adicionando…';
+
+  @override
+  String get bridgeSetupWaiting => 'Aguardando';
+
+  @override
+  String get bridgeSetupAdded => 'Adicionado';
+
+  @override
+  String get bridgeSetupFailed => 'Falhou';
+
+  @override
+  String get bridgeSetupRetry => 'Tentar de novo';
+
+  @override
+  String get bridgeSetupEdit => 'Editar';
+
+  @override
+  String get bridgeSetupNeedsDetails => 'Precisa de detalhes';
+
+  @override
+  String get bridgeSetupMayExist =>
+      'Sem resposta da ponte: ele pode já existir. Tentar de novo confere antes.';
+
+  @override
+  String get bridgeSetupLooking => 'Procurando dispositivos';
+
+  @override
+  String get bridgeSetupContinue => 'Continuar';
+
+  @override
+  String get bridgeSetupBack => 'Voltar';
+
+  @override
+  String get bridgeSetupAdd => 'Adicionar';
+
+  @override
+  String get bridgeSetupByHand => 'Adicionar um dispositivo manualmente';
+
+  @override
+  String get bridgeSetupWhichCamera => 'Qual câmera?';
+
+  @override
+  String get bridgeSetupNothingFound =>
+      'Nenhum dispositivo encontrado neste setup. Conecte seus dispositivos e tente de novo, ou adicione um manualmente.';
+
+  @override
+  String get bridgeSetupRequired => 'Obrigatório';
+
+  @override
+  String get bridgeSetupOutOfRange => 'Fora da faixa';
+
+  @override
+  String get bridgeSetupNotAllowed => 'Valor não permitido';
+
+  @override
+  String get bridgeSetupAddRow => 'Adicionar uma linha';
+
+  @override
+  String get bridgeSetupRemoveRow => 'Remover esta linha';
+
+  @override
+  String get bridgeSetupRefused => 'O Ara recusou este dispositivo.';
 
   @override
   String clockWrongSlow(String amount) {

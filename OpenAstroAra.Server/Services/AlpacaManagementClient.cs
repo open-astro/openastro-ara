@@ -217,6 +217,17 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         return ids;
     }
 
+    /// <summary>#1580 — the <c>"type/number" → serial</c> view of a devices map (entries without one are left out).</summary>
+    internal static IReadOnlyDictionary<string, string> SerialsOf(IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices) {
+        var serials = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, device) in devices) {
+            if (!string.IsNullOrEmpty(device.SerialNumber)) {
+                serials[key] = device.SerialNumber;
+            }
+        }
+        return serials;
+    }
+
     /// <summary>The management URL for one Alpaca server. Throws <see cref="ArgumentException"/> (→ 400)
     /// for an empty host or a port outside 1..65535 — validated at the edge so a bad request never
     /// dials. Internal for direct unit testing.</summary>

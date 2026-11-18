@@ -80,6 +80,23 @@
   fieldset { border: 1px solid var(--hair); border-radius: 8px; padding: 10px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
   legend { color: var(--text2); font-size: 12px; padding: 0 6px; }
   .rec { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; align-items: end; padding: 8px; background: var(--tile); border-radius: 8px; }
+  /* Found on this rig: one checklist row per detected device. */
+  h3 { margin: 4px 0 0; font-size: 16px; font-weight: 600; }
+  .found { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px; background: var(--tile); border-radius: 10px; color: var(--text); font: inherit; width: 100%; cursor: pointer; }
+  .found input { width: 22px; height: 22px; flex: none; accent-color: var(--sel); }
+  .found .ico { width: 28px; height: 28px; flex: none; color: var(--text2); }
+  .found .who { flex: 1; min-width: 0; }
+  .found .who b { display: block; font-weight: 500; }
+  .found .who span { display: block; color: var(--text2); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .found .who .msg { color: var(--errt); }
+  .found.off .ico, .found.off .who b { opacity: .6; }
+  .st { font-size: 12px; font-weight: 600; white-space: nowrap; padding: 2px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--hair); }
+  .st.ok { color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+  .st.warn, .st.need { color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+  .st.err { color: var(--errt); box-shadow: inset 0 0 0 1px #E53935; }
+  .found .rowact { display: flex; gap: 2px; }
+  .found .rowact .btn { min-height: 44px; }
+  .stub { background: var(--bg); border: 1px dashed var(--warn); border-radius: 10px; padding: 12px 14px; color: var(--warn); font-size: 13px; }
   .legend { color: var(--text2); font-size: 12px; max-width: 80ch; }
   .legend code { color: var(--text); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -94,7 +111,9 @@
     <div><span class="lbl">Look</span><span class="seg" id="look"></span></div>
     <div><span class="lbl">Step</span><span class="seg" id="step"></span></div>
     <div><span class="lbl">Driver</span><span class="seg" id="drv"></span></div>
-    <div><span class="lbl">Answer</span><span class="seg" id="ans"></span></div>
+    <div><span class="lbl">Answer (by hand)</span><span class="seg" id="ans"></span></div>
+    <div><span class="lbl">Detection</span><span class="seg" id="det"></span></div>
+    <div><span class="lbl">Adding</span><span class="seg" id="prog"></span></div>
   </div>
 
   <div class="frame" id="frame"><div class="bar" id="bar"></div><div class="body"><div class="card" id="card"></div></div></div>
@@ -102,6 +121,8 @@
   <div class="decide">
     <div><b>Offered only when the catalog reads</b><span>The action shows only when <code>GET /equipment/alpacabridge/catalog</code> returns drivers. A server that is not AlpacaBridge, or one too old for the catalog, gets today's message and no button (reachability stays the only gate, &sect;68.1).</span></div>
     <div><b>Which field the attached camera fills</b><span><code>serialNumber</code> and <code>cameraName</code>. They are what AlpacaBridge's own web picker saves, so the entry binds by serial and survives a renumber. <code>cameraIndex</code> and <code>cameraId</code> (roles EnumerationIndex and DeviceId) stay behind "Enter the index by hand".</span></div>
+    <div><b>Found on this rig</b><span>The list is the first thing on an empty rig. Today only ZWO cameras can be listed (<code>GET /equipment/alpacabridge/cameras</code>, from <code>GET /management/v1/attachedcameras?vendor=zwo</code>). A device already configured (same serial, or same driver and port) is not a row. A row with a required field that has no default and no detected value says "Needs details"; its form opens when Add selected reaches it. Add selected sends one add per row, one after the other.</span></div>
+    <div id="stubnote" class="stub" hidden><b>Needs AlpacaBridge detection endpoint (not built).</b> <span>The EAF, EFW and mount rows are drawn from a future endpoint that also lists focusers, filter wheels and mounts on a serial adapter. Today AlpacaBridge lists none of them. A serial auto-detect catalog entry is never drawn as "found": only gear a lister really reports.</span></div>
     <div><b>Same flow, two looks</b><span>One shared flow. Simple Mode keeps its own look (frosted sheet, 48 pt targets, no link to the Full UI). It is the empty state of Settings &rsaquo; Devices, reached from "No devices connected".</span></div>
   </div>
   <p class="legend">Form rules shown: defaults filled in, required fields marked and checked before Add, number range enforced, enum as a choice list, <code>appliesWhen</code> shows or hides a field, nested <code>fields</code> as a group, <code>secret</code> obscured, an unknown field type falls back to a text field. Switch Driver to see each.</p>
@@ -132,15 +153,43 @@ const CATALOG = [
     { key: 'password', type: 'string', default: '', required: false, secret: true, role: 'Secret', appliesWhen: { key: 'connectionType', value: 'network' } },
     { key: 'siteLatitude', type: 'double', default: 0, required: false, secret: false, role: 'Plain', range: { min: -90, max: 90 } },
     { key: 'meshAlignment', type: 'futuretype', default: 'off', required: false, secret: false, role: 'Plain' } ] },
+  { vendor: 'zwo', deviceType: 'focuser', displayName: 'ZWO EAF focuser', vendorLabel: 'ZWO', available: true, fields: [
+    { key: 'serialNumber', type: 'string', default: '', required: false, secret: false, role: 'Plain' } ] },
+  { vendor: 'zwo', deviceType: 'filterwheel', displayName: 'ZWO EFW filter wheel', vendorLabel: 'ZWO', available: true, fields: [
+    { key: 'serialNumber', type: 'string', default: '', required: false, secret: false, role: 'Plain' } ] },
+  { vendor: 'skywatcher', deviceType: 'telescope', displayName: 'Sky-Watcher EQ mount', vendorLabel: 'Sky-Watcher', available: true, fields: [
+    { key: 'portPath', type: 'string', default: '', required: true, secret: false, role: 'PortPath' },
+    { key: 'mountModel', type: 'string', default: '', required: true, secret: false, role: 'Plain' } ] },
   { vendor: 'qhy', deviceType: 'camera', displayName: 'QHY camera', vendorLabel: 'QHY', available: false, fields: [] },
 ];
 const TYPES = ['camera', 'telescope', 'focuser', 'filterwheel', 'rotator', 'switch'];
 const TYPE_LABEL = { camera: 'Camera', telescope: 'Mount', focuser: 'Focuser', filterwheel: 'Filter wheel', rotator: 'Rotator', switch: 'Switch / power box' };
-const ATTACHED = [ { index: 0, name: 'ZWO ASI294MC Pro', serial: '0A1B2C3D4E5F6A7B' }, { index: 1, name: 'ZWO ASI120MM Mini', serial: '1B2C3D4E5F6A7B8C' } ];
+const ATTACHED = [ { index: 0, name: 'ZWO ASI294MC Pro', serial: '0A1B2C3D4E5F6A7B' }, { index: 1, name: 'ZWO ASI120MM Mini', serial: '1B2C3D4E5F6A7B8C' }, { index: 2, name: 'ZWO ASI2600MM Pro', serial: '2C3D4E5F6A7B8C9D' } ];
+// Detected rows. Today: the attached ZWO cameras only. Future: an AlpacaBridge detection endpoint (not built) adds the rest.
+const CAMERA_ROWS = ATTACHED.map(c => ({ id: `cam${c.index}`, type: 'camera', name: c.name, driver: 'zwo-camera', serial: c.serial }));
+const FOUND = {
+  zwo: CAMERA_ROWS,
+  future: [CAMERA_ROWS[0], CAMERA_ROWS[1],
+    { id: 'eaf', type: 'focuser', name: 'ZWO EAF', driver: 'zwo-focuser', serial: '3D4E5F6A7B8C9D0E' },
+    { id: 'efw', type: 'filterwheel', name: 'ZWO EFW', driver: 'zwo-filterwheel', serial: '4E5F6A7B8C9D0E1F' },
+    { id: 'eq', type: 'telescope', name: 'Sky-Watcher EQ mount', driver: 'skywatcher-telescope', port: 'Serial adapter on /dev/ttyUSB0', detected: { portPath: '/dev/ttyUSB0' } } ],
+  none: [],
+};
+const ICONS = { camera: '<rect x="3" y="8" width="22" height="15" rx="3"/><circle cx="14" cy="15.5" r="4.5"/><path d="M9 8l2-3h6l2 3"/>',
+  telescope: '<path d="M4 20L20 8l3 4L7 24z"/><path d="M14 18l-3 8M14 18l5 8"/>', focuser: '<circle cx="14" cy="14" r="9"/><circle cx="14" cy="14" r="3"/><path d="M14 5v3M14 20v3M5 14h3M20 14h3"/>',
+  filterwheel: '<circle cx="14" cy="14" r="10"/><circle cx="14" cy="8" r="2.5"/><circle cx="20" cy="17" r="2.5"/><circle cx="8" cy="17" r="2.5"/>' };
+const driverOf = r => CATALOG.find(d => `${d.vendor}-${d.deviceType}` === r.driver);
+// "Needs details": a required field with no default and no detected value.
+const needsDetails = r => driverOf(r).fields.some(f => f.required && (f.default === '' || f.default === undefined) && !(r.detected && f.key in r.detected));
+const icon = t => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 28 28'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true');
+  s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[t]; return s; };
 
-const state = { look: 'full', step: 'connect', drv: 'zwo-camera', ans: 'added', picked: null, values: {}, hand: false };
-const STEPS = [['connect', '1 Connect'], ['type', '2 Type'], ['driver', '3 Driver'], ['camera', '4 Camera'], ['form', '5 Form'], ['done', '6 Added']];
-const DRIVERS = [['zwo-camera', 'ZWO camera'], ['zwo-switch', 'ZWO switch (nested, appliesWhen)'], ['onstep-telescope', 'OnStep (secret, enum, unknown type)']];
+const state = { look: 'full', step: 'connect', drv: 'zwo-camera', ans: 'added', picked: null, values: {}, hand: false, detect: 'zwo', prog: 'running', off: {}, row: null, queue: [] };
+const STEPS = [['connect', '1 Connect'], ['type', '2 Type'], ['driver', '3 Driver'], ['camera', '4 Camera'], ['form', '5 Form'], ['done', '6 Added'], ['progress', 'Add selected']];
+const CRUMBS = STEPS.slice(1, 6);
+const DETECTS = [['zwo', 'Today: ZWO cameras'], ['future', 'Future endpoint (not built)'], ['none', 'Nothing found']];
+const PROGS = [['running', 'In progress, one failed'], ['finished', 'Finished']];
+const DRIVERS = [['zwo-camera', 'ZWO camera'], ['zwo-switch', 'ZWO switch (nested, appliesWhen)'], ['onstep-telescope', 'OnStep (secret, enum, unknown type)'], ['skywatcher-telescope', 'Sky-Watcher (needs details)']];
 const ANSWERS = [['added', 'Added'], ['warning', 'Added with warning'], ['refused', 'Refused'], ['silent', 'No answer']];
 
 // A link can open a state: #look=simple&step=form&drv=onstep-telescope&ans=refused
@@ -161,7 +210,11 @@ function fieldVisible(f, fields) {
   const gate = fields.find(x => x.key === f.appliesWhen.key);
   return String(state.values[gate.key]) === String(f.appliesWhen.value);
 }
-function resetValues(d) { state.values = {}; for (const f of d.fields) if (f.type !== 'recordList') state.values[f.key] = f.default ?? ''; state.picked = null; state.hand = false; }
+function resetValues(d) { state.values = {}; for (const f of d.fields) if (f.type !== 'recordList') state.values[f.key] = f.default ?? ''; Object.assign(state.values, state.row?.detected);
+  state.picked = state.row?.serial && d.deviceType === 'camera' ? { name: state.row.name, serial: state.row.serial } : null; state.hand = false; }
+const rowsNow = () => FOUND[state.detect];
+const ticked = () => rowsNow().filter(r => !state.off[r.id]);
+function openRow(r) { state.row = r; state.drv = r.driver; lastDriver = null; state.step = 'form'; state.fromList = true; render(); }
 let lastDriver = null;
 
 function control(f, scope, values) {
@@ -199,20 +252,42 @@ function record(f, i) {
 function render(keep) {
   seg('look', [['full', 'Full UI (wizard Screen 2)'], ['simple', 'Simple Mode (Settings > Devices)']], 'look');
   seg('step', STEPS, 'step');
-  seg('drv', DRIVERS, 'drv', () => { if (state.step === 'connect' || state.step === 'type') state.step = 'form'; });
+  seg('drv', DRIVERS, 'drv', () => { state.row = null; state.fromList = false; if (state.step === 'connect' || state.step === 'type' || state.step === 'progress') state.step = 'form'; });
   seg('ans', ANSWERS, 'ans');
+  seg('det', DETECTS, 'detect', () => { state.off = {}; });
+  seg('prog', PROGS, 'prog');
+  document.getElementById('stubnote').hidden = state.detect !== 'future';
   const d = current(); if (lastDriver !== state.drv) { resetValues(d); lastDriver = state.drv; }
   document.getElementById('frame').className = `frame ${state.look}`;
-  document.getElementById('bar').textContent = state.look === 'full' ? 'OpenAstro Ara setup  /  2 Connect to AlpacaBridge' : 'Simple Mode  /  Settings  /  Devices';
+  document.getElementById('bar').textContent = (state.look === 'full' ? 'OpenAstro Ara setup  /  2 Connect to AlpacaBridge' : 'Simple Mode  /  Settings  /  Devices') + (state.detect === 'future' ? '   |   needs AlpacaBridge detection endpoint (not built)' : '');
   const card = document.getElementById('card'); card.textContent = '';
   const add = (...n) => card.append(...n);
-  const crumbs = h('div', { className: 'steps' }); STEPS.slice(1).forEach(([k, l], i) => crumbs.append(...(i ? [h('span', { textContent: '›' })] : []), h(k === state.step ? 'b' : 'span', { textContent: l })));
+  const crumbs = h('div', { className: 'steps' }); CRUMBS.forEach(([k, l], i) => crumbs.append(...(i ? [h('span', { textContent: '›' })] : []), h(k === state.step ? 'b' : 'span', { textContent: l })));
   if (state.step === 'connect') {
+    const rows = rowsNow(), sel = ticked(), n = sel.length;
     add(h('h2', { textContent: state.look === 'full' ? 'Connect to AlpacaBridge' : 'Devices' }));
-    add(h('div', { className: 'summary' }, h('p', {}, h('span', { className: 'dot' }), 'AlpacaBridge found at 192.0.2.10:6800. No devices yet.'),
-      h('p', { className: 'sub', textContent: 'AlpacaBridge does not add plugged-in gear on its own. Add each device here, or press Retry detection if you added some another way.' })));
-    add(h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Retry detection' }), h('button', { className: 'btn fill', textContent: 'Add your devices', onclick: () => { state.step = 'type'; render(); } }),
-      state.look === 'full' ? h('button', { className: 'btn text', textContent: 'Next (add later)' }) : ''));
+    add(h('div', { className: 'summary' }, h('p', {}, h('span', { className: 'dot' }), 'AlpacaBridge found at 192.0.2.10:6800. No devices yet.')));
+    const hand = h('button', { className: 'btn text', textContent: 'Add a device by hand', onclick: () => { state.row = null; state.fromList = false; state.step = 'type'; render(); } });
+    if (!rows.length) {
+      add(h('p', { className: 'sub', textContent: 'No devices found. Check cables and power, then Retry detection, or add a device by hand.' }));
+      add(h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Retry detection' }), h('button', { className: 'btn fill', textContent: 'Add a device by hand', onclick: hand.onclick }),
+        state.look === 'full' ? h('button', { className: 'btn text', textContent: 'Next (add later)' }) : ''));
+    } else {
+      add(h('h3', { textContent: 'Found on this rig' }), h('p', { className: 'sub', textContent: 'Plugged in now. Clear a box to leave a device out.' }));
+      const l = h('div', { className: 'list', role: 'group' }); l.setAttribute('aria-label', 'Found on this rig');
+      for (const r of rows) {
+        const cb = h('input', { type: 'checkbox', checked: !state.off[r.id], id: `found-${r.id}` }); cb.onchange = () => { state.off[r.id] = !cb.checked; render(); };
+        const lab = h('label', { className: 'found' + (state.off[r.id] ? ' off' : ''), htmlFor: cb.id }, cb, icon(r.type),
+          h('span', { className: 'who' }, h('b', { textContent: r.name }), h('span', { textContent: `${driverOf(r).displayName}${r.serial ? ` · Serial ${r.serial}` : ''}${r.port ? ` · ${r.port}` : ''}` })));
+        if (needsDetails(r)) lab.append(h('span', { className: 'st need', textContent: 'Needs details' }));
+        l.append(lab);
+      }
+      add(l);
+      add(h('div', { className: 'actions' }, h('button', { className: 'btn fill', id: 'addsel', textContent: `Add selected (${n})`, disabled: !n, onclick: () => {
+        state.queue = sel.filter(needsDetails); if (state.queue.length) openRow(state.queue[0]); else { state.fromList = false; state.step = 'progress'; render(); } } })));
+      add(h('div', { className: 'actions', style: 'justify-content:space-between' }, hand, h('button', { className: 'btn out', textContent: 'Retry detection' })));
+      if (state.look === 'full') add(h('div', { className: 'actions' }, h('button', { className: 'btn text', textContent: 'Next (add later)' })));
+    }
   } else if (state.step === 'type') {
     add(crumbs, h('h2', { textContent: 'What kind of device?' }), h('p', { className: 'sub', textContent: 'Only kinds your AlpacaBridge build has a driver for.' }));
     const l = h('div', { className: 'list' }); for (const t of TYPES) { const n = CATALOG.filter(x => x.deviceType === t && x.available).length;
@@ -228,7 +303,7 @@ function render(keep) {
       h('span', { className: 'who' }, h('b', { textContent: c.name }), h('span', { textContent: `Serial ${c.serial}` })), h('span', { className: 'chev', textContent: '›' }))); add(l);
     add(h('div', { className: 'actions' }, h('button', { className: 'btn text', textContent: 'Enter the index by hand', onclick: () => { state.hand = true; state.step = 'form'; render(); } })));
   } else if (state.step === 'form') {
-    add(crumbs, h('h2', { textContent: d.displayName }));
+    add(state.fromList ? h('p', { className: 'sub', textContent: `Details for ${state.row.name}. The rest are added after this one.` }) : crumbs, h('h2', { textContent: d.displayName }));
     if (state.picked) add(h('p', { className: 'sub', textContent: `${state.picked.name}, serial ${state.picked.serial}. Saved as serialNumber and cameraName; the camera binds by serial.` }));
     const form = h('div', { className: 'form' });
     for (const f of d.fields) {
@@ -238,9 +313,29 @@ function render(keep) {
       if (f.type === 'recordList') { const g = h('fieldset', {}, h('legend', { textContent: `${f.key} (a group of rows)` })); g.append(record(f, 0), record(f, 1)); form.append(g); continue; }
       form.append(control(f, 'top', state.values));
     }
-    add(form, h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Back', onclick: () => { state.step = 'driver'; render(); } }),
-      h('button', { className: 'btn fill', id: 'add', textContent: 'Add', onclick: () => { state.step = 'done'; render(); } })));
+    add(form, h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Back', onclick: () => { state.step = state.fromList ? 'connect' : 'driver'; if (state.fromList) { state.row = null; state.fromList = false; } render(); } }),
+      h('button', { className: 'btn fill', id: 'add', textContent: state.fromList ? 'Continue' : 'Add', onclick: () => {
+        if (state.fromList) { const next = state.queue[state.queue.indexOf(state.row) + 1]; if (next) return openRow(next); state.row = null; state.fromList = false; state.step = 'progress'; } else state.step = 'done'; render(); } })));
     validate();
+  } else if (state.step === 'progress') {
+    const sel = ticked(), fin = state.prog === 'finished';
+    // Rows go one after the other: 1 added, 2 failed, 3 adding (running) or warning (finished), the rest wait or are added.
+    const st = i => i === 0 ? 'added' : i === 1 ? 'failed' : fin ? (i === 2 ? 'warning' : 'added') : i === 2 ? 'adding' : 'waiting';
+    const LBL = { added: 'Added', failed: 'Failed', warning: 'Added, warning', adding: 'Adding...', waiting: 'Waiting' };
+    const CLS = { added: 'ok', failed: 'err', warning: 'warn', adding: '', waiting: '' };
+    const MSG = { failed: `AlpacaBridge: no camera matched serial ${sel[1]?.serial}. Is it plugged in?`, warning: 'AlpacaBridge: Device registered successfully. Warning: no camera matched index 3. Check it before imaging.' };
+    add(h('h2', { textContent: fin ? 'Add selected: done' : 'Adding your devices' }), h('p', { className: 'sub', textContent: fin ? 'AlpacaBridge read again: the devices below are now in its list.' : `Adding one at a time. ${Math.min(sel.length, 3)} of ${sel.length}.` }));
+    const l = h('div', { className: 'list', role: 'list' });
+    sel.forEach((r, i) => { const k = st(i);
+      const who = h('span', { className: 'who' }, h('b', { textContent: r.name }), h('span', { textContent: `${driverOf(r).displayName}${r.serial ? ` · Serial ${r.serial}` : ''}` }));
+      if (MSG[k] && (k === 'failed' || fin)) who.append(h('span', { className: 'msg', textContent: MSG[k], style: k === 'warning' ? 'color:var(--warn)' : '' }));
+      const row = h('div', { className: 'found' + (k === 'failed' ? ' off' : ''), role: 'listitem' }, h('input', { type: 'checkbox', checked: k !== 'failed', disabled: true, ariaLabel: `${r.name} selected` }), icon(r.type), who);
+      row.append(h('span', { className: 'st ' + CLS[k], textContent: LBL[k] }));
+      if (k === 'failed') row.append(h('span', { className: 'rowact' }, h('button', { className: 'btn text', textContent: 'Retry', ariaLabel: `Retry ${r.name}` }), h('button', { className: 'btn text', textContent: 'Edit', ariaLabel: `Edit ${r.name}`, onclick: () => openRow(r) })));
+      l.append(row); });
+    add(l);
+    add(h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Retry detection', disabled: !fin }),
+      fin ? h('button', { className: 'btn fill', textContent: state.look === 'full' ? 'Next' : 'Done' }) : h('button', { className: 'btn fill', textContent: 'Adding...', disabled: true })));
   } else {
     add(h('h2', { textContent: state.ans === 'refused' ? 'AlpacaBridge refused the device' : state.ans === 'silent' ? 'No answer from AlpacaBridge' : 'Device added' }));
     const msg = { added: ['ok', 'Device registered successfully. It is in the list below.'],

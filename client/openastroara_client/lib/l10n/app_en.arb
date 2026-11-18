@@ -1921,6 +1921,10 @@
   "@shellLibrary": {
     "description": "Simple Mode left rail button: open the image library"
   },
+  "shellRailTabs": "Modes",
+  "@shellRailTabs": {
+    "description": "Simple Mode screen reader label of the right rail's tab list of the six modes"
+  },
   "shellModeSemantics": "Mode: {mode}",
   "@shellModeSemantics": {
     "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",
@@ -8209,6 +8213,101 @@
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
+  },
+  "bridgeSetupFoundTitle": "Found on this rig",
+  "@bridgeSetupFoundTitle": {
+    "description": "Add your devices: heading above the detected devices"
+  },
+  "bridgeSetupAddSelected": "Add selected ({count})",
+  "@bridgeSetupAddSelected": {
+    "description": "Add your devices: button that adds every ticked device; count is how many are ticked",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "bridgeSetupAdding": "Adding…",
+  "@bridgeSetupAdding": {
+    "description": "Add your devices: status of the row being added, and the label of the Add selected button while it runs"
+  },
+  "bridgeSetupWaiting": "Waiting",
+  "@bridgeSetupWaiting": {
+    "description": "Add your devices: status of a ticked row not yet reached"
+  },
+  "bridgeSetupAdded": "Added",
+  "@bridgeSetupAdded": {
+    "description": "Add your devices: status of a row the bridge registered"
+  },
+  "bridgeSetupFailed": "Failed",
+  "@bridgeSetupFailed": {
+    "description": "Add your devices: status of a row the bridge refused or did not confirm"
+  },
+  "bridgeSetupRetry": "Retry",
+  "@bridgeSetupRetry": {
+    "description": "Add your devices: button that sends a failed row again"
+  },
+  "bridgeSetupEdit": "Edit",
+  "@bridgeSetupEdit": {
+    "description": "Add your devices: button that opens a row's details"
+  },
+  "bridgeSetupNeedsDetails": "Needs details",
+  "@bridgeSetupNeedsDetails": {
+    "description": "Add your devices: status of a row that needs a value before it can be added"
+  },
+  "bridgeSetupMayExist": "No answer from the bridge: it may already exist. Retry checks first.",
+  "@bridgeSetupMayExist": {
+    "description": "Add your devices: note on a row whose add got no answer"
+  },
+  "bridgeSetupLooking": "Looking for devices",
+  "@bridgeSetupLooking": {
+    "description": "Add your devices: shown while the bridge is read"
+  },
+  "bridgeSetupContinue": "Continue",
+  "@bridgeSetupContinue": {
+    "description": "Add your devices: button that saves a row's details and goes on"
+  },
+  "bridgeSetupBack": "Back",
+  "@bridgeSetupBack": {
+    "description": "Add your devices: button that leaves a form with nothing sent"
+  },
+  "bridgeSetupAdd": "Add",
+  "@bridgeSetupAdd": {
+    "description": "Add your devices: button that adds a device chosen by hand"
+  },
+  "bridgeSetupByHand": "Add a device by hand",
+  "@bridgeSetupByHand": {
+    "description": "Add your devices: button that opens the list of device types"
+  },
+  "bridgeSetupWhichCamera": "Which camera?",
+  "@bridgeSetupWhichCamera": {
+    "description": "Add your devices: heading above the attached cameras of a vendor"
+  },
+  "bridgeSetupNothingFound": "No devices found on this rig. Plug in your gear and retry, or add one by hand.",
+  "@bridgeSetupNothingFound": {
+    "description": "Add your devices: nothing detected"
+  },
+  "bridgeSetupRequired": "Required",
+  "@bridgeSetupRequired": {
+    "description": "Add your devices: a form field that must have a value"
+  },
+  "bridgeSetupOutOfRange": "Out of range",
+  "@bridgeSetupOutOfRange": {
+    "description": "Add your devices: a number outside the range the bridge accepts"
+  },
+  "bridgeSetupNotAllowed": "Not an allowed value",
+  "@bridgeSetupNotAllowed": {
+    "description": "Add your devices: a value not in the list the bridge accepts"
+  },
+  "bridgeSetupAddRow": "Add a row",
+  "@bridgeSetupAddRow": {
+    "description": "Add your devices: button that adds a row to a list field"
+  },
+  "bridgeSetupRemoveRow": "Remove this row",
+  "@bridgeSetupRemoveRow": {
+    "description": "Add your devices: button that removes a row from a list field"
+  },
+  "bridgeSetupRefused": "Ara refused this device.",
+  "@bridgeSetupRefused": {
+    "description": "Add your devices: an add was refused and no reason came with it"
   },
   "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
   "@clockWrongSlow": {

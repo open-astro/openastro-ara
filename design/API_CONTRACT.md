@@ -1660,7 +1660,19 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** a fresh rig has an AlpacaBridge with no devices and Retry detection cannot help; the add must be an Ara route because the client cannot always reach the bridge and Ara keeps no device facts. The attached camera fills `serialNumber` and `cameraName` (what AlpacaBridge's own web picker saves: the entry then binds by serial), not `cameraIndex`.
 
-**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`. The Flutter client waits for the board's mock review.
+**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`.
+
+---
+
+## 2026-11-17 — `GET /equipment/guider/alpacadevicenames` answers `serials` (#1580)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider/alpacadevicenames?host=&port=` (one optional field on the existing response).
+
+**Decision:** the response gains `serials`: `"type/N"` → the device's serial number (additive, like `unique_ids`; entries the server reports no serial for are left out; absent on an older daemon, which the client reads as no serials). The daemon takes it from the entry's `Config.serialNumber` that an OpenAstro AlpacaBridge already reports.
+
+**Reasoning:** the add-your-devices list hides a camera the bridge already offers. Two cameras of one model have the same name, so the name cannot tell them apart; the serial can. The client falls back to the name only when either side has no serial.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto.Serials`), `Services/AlpacaManagementClient.cs` (`SerialsOf`), `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`); test `AlpacaManagementClientTest`.
 
 ---
 
