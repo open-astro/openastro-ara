@@ -230,6 +230,8 @@ class _SkyReady extends PlanetariumReadyNotifier {
 /// button and the grid, as on a phone held sideways (#1911).
 const _gridWindow = Size(1024, 590);
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
     ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true}) async {
@@ -5313,7 +5315,7 @@ void main() {
     expect(find.byKey(const Key('sky')), findsNothing);
   });
 
-  group('guiding and the histogram fill the bottom row, 16 px from the edge and from Stop', () {
+  group('guiding and the histogram fill the bottom row, 16 px from the edge on both sides', () {
     const size = Size(1024, 768);
     final histogram = FrameHistogram(
       bins: List<int>.generate(256, (i) => i < 40 ? 1000 - (i - 20).abs() * 40 : 0),
@@ -5321,7 +5323,8 @@ void main() {
       lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
     Rect guiding(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-guide-trace')));
     Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
-    double end(WidgetTester t) => t.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset;
+    // The Stop sits in the rail's foot (#1911), so the row runs to the right inset.
+    double end(WidgetTester t) => size.width - kSimpleInset;
 
     testWidgets('the graph fills its panel, not half of it (iPad, 2026-11-04)', (tester) async {
       await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
@@ -7458,15 +7461,78 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('Stop is the compact STOP, reading HOLD while held', (tester) async {
-    await _pump(tester, const Size(1024, 768));
-    expect(find.descendant(of: find.byType(EmergencyStopButton), matching: find.text('STOP')), findsOneWidget);
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)));
-    await tester.pump();
-    expect(find.text('HOLD'), findsOneWidget);
-    await gesture.up();
-    await tester.pump(const Duration(seconds: 3));
-    expect(find.text('STOP'), findsOneWidget);
+  group('the rail-foot Stop (#1911, S4a)', () {
+    Future<void> openStop(WidgetTester tester, Size size) async {
+      await _pump(tester, size);
+      await tester.pump();
+    }
+
+    for (final (name, size) in [
+      ('desktop 1280x800', const Size(1280, 800)),
+      ('iPad landscape 1024x768', const Size(1024, 768)),
+      ('iPad portrait 768x1024', const Size(768, 1024)),
+    ]) {
+      testWidgets('$name: exactly one Stop, at the foot of the right rail, and no red block', (tester) async {
+        await openStop(tester, size);
+        expect(find.byType(EmergencyStopButton), findsOneWidget);
+        final stop = find.byKey(const Key('simple-rail-stop'));
+        expect(stop, findsOneWidget);
+        final rail = tester.getRect(find.byKey(const Key('simple-rail-tabs')));
+        final foot = tester.getRect(stop);
+        expect(foot.top, greaterThanOrEqualTo(rail.bottom - 0.5), reason: 'under the tabs, in the rail');
+        expect(foot.right, lessThanOrEqualTo(size.width - kSimpleInset + 0.5));
+        expect(foot.left, greaterThanOrEqualTo(rail.left - 12), reason: 'the rail\'s width, not a block beside it');
+        expect(find.descendant(of: stop, matching: find.text('STOP')), findsOneWidget);
+      });
+    }
+
+    testWidgets('a hold of 99 ms sends nothing; HOLD shows from 500 ms; 2 s fires one Emergency Stop', (tester) async {
+      await openStop(tester, const Size(1280, 800));
+      final centre = tester.getCenter(find.byKey(const Key('simple-rail-stop')));
+      var g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 99));
+      await g.up();
+      await tester.pump();
+      expect(find.text('HOLD'), findsNothing);
+      expect(find.text(_en.estopNoServer), findsNothing);
+
+      g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 499));
+      expect(find.text('HOLD'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 2));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1000));
+      await g.up();
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsNothing, reason: 'released at 1.5 s');
+
+      g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 2000));
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsOneWidget, reason: 'the shared stop ran');
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    });
+
+    testWidgets("the open mode's shutter holds for Emergency Stop too", (tester) async {
+      await openStop(tester, const Size(1280, 800));
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsOneWidget);
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    });
+
+    testWidgets('a phone held sideways keeps its red Stop block (two paths until S5)', (tester) async {
+      await _pump(tester, const Size(844, 390));
+      tester.takeException();
+      expect(find.byKey(const Key('simple-rail-stop')), findsNothing);
+      expect(find.byType(EmergencyStopButton), findsOneWidget);
+      expect(tester.getSize(find.byType(EmergencyStopButton)).width, greaterThanOrEqualTo(kSimpleStopSize));
+    });
   });
 
   testWidgets('the strip has Night mode and Settings, and nothing that leads to the full UI', (tester) async {

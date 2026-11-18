@@ -39,6 +39,10 @@ import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/server_api.dart';
+import 'package:openastroara/state/ws/client_session_state.dart' show serverApiFactoryProvider;
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -345,6 +349,62 @@ Future<ProviderContainer> _pump(
   ));
   await tester.pumpAndSettle();
   return container;
+}
+
+/// Records Emergency Stop calls, as the button's own tests do.
+class _EStopApi implements ServerApi {
+  int calls = 0;
+  @override
+  Future<EmergencyStopResult> emergencyStop() async {
+    calls++;
+    return const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      mountStopped: true,
+      flatPanelLightOff: true,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
+}
+
+/// A rig is plugged in only once the plan runs: a server present from the
+/// start makes the sheet hydrate its settings over the network, and a change
+/// of server clears the selected run.
+class _PluggedIn extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void plug() => state = true;
+}
+
+final _pluggedIn = NotifierProvider<_PluggedIn, bool>(_PluggedIn.new);
+
+List<Object> _estopOverrides(_EStopApi api) => [
+      activeServerProvider.overrideWith(
+        (ref) => ref.watch(_pluggedIn) ? const AraServer(hostname: 'pi-test', port: 5555) : null,
+      ),
+      serverApiFactoryProvider.overrideWithValue((server) => api),
+    ];
+
+/// Ends a test that plugged a rig in: its pollers die with the container.
+Future<void> _unplug(WidgetTester tester, ProviderContainer c) async {
+  await tester.pumpWidget(const SizedBox());
+  c.dispose();
+  await tester.pump(const Duration(seconds: 30));
+}
+
+/// The rig arrives while the plan images: the selected run is re-selected,
+/// as the screen's own selection would be.
+Future<void> _plug(WidgetTester tester, ProviderContainer c) async {
+  c.read(_pluggedIn.notifier).plug();
+  await tester.pump();
+  c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+  await c.read(sequenceRunStateProvider.notifier).refresh();
+  await tester.pumpAndSettle();
 }
 
 final _en = lookupAppLocalizations(const Locale('en'));
@@ -2639,6 +2699,53 @@ void main() {
       expect(find.text('Mount stopped'), findsNothing);
     });
 
+    group('Stop plan… (#1911)', () {
+      Future<(ProviderContainer, _Seq, _EStopApi)> imagingPanel(WidgetTester tester) async {
+        final seq = _Seq();
+        final estop = _EStopApi();
+        final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+            overrides: _estopOverrides(estop));
+        c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        await imaging(tester, c, seq, _imaging(24));
+        await _plug(tester, c);
+        return (c, seq, estop);
+      }
+
+      testWidgets('the panel offers Stop plan…, and it asks in place before anything is sent', (tester) async {
+        final (c, seq, estop) = await imagingPanel(tester);
+        final calls = seq.calls.length;
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        expect(find.text('Stop the plan? The frames taken are kept and the mount keeps tracking.'), findsOneWidget);
+        expect(seq.calls.length, calls, reason: 'asked, not stopped');
+        await tester.tap(find.byKey(const Key('simple-run-stop-keep')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-run-stop-confirm')), findsNothing);
+        expect(find.byKey(const Key('simple-run-stop')), findsOneWidget);
+        expect(seq.calls.length, calls, reason: 'Keep imaging sends nothing');
+        expect(estop.calls, 0);
+        await _unplug(tester, c);
+      });
+
+      testWidgets('confirming stops the plan and is not an Emergency Stop', (tester) async {
+        final (c, seq, estop) = await imagingPanel(tester);
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('simple-run-stop-confirm')));
+        await tester.pumpAndSettle();
+        expect(seq.calls.last, 'stop seq-1');
+        expect(estop.calls, 0);
+        expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty);
+        await _unplug(tester, c);
+      });
+
+      testWidgets('no run, no Stop plan…', (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+        expect(find.byKey(const Key('simple-run-stop')), findsNothing);
+      });
+    });
+
     group('each fact once (#1719)', () {
       Future<void> running(WidgetTester tester, List<SimpleTarget> targets) async {
         final seq = _Seq();
@@ -2825,18 +2932,27 @@ void main() {
       await tester.pump(kSimpleResultLife);
     });
 
-    testWidgets('a slowish tap (0.6 s: gloves, cold hands) still pauses', (tester) async {
+    testWidgets('a slowish tap (0.45 s: gloves, cold hands) still pauses; 0.6 s is a cancelled hold, not a pause (#1911)',
+        (tester) async {
       final (c, seq) = await run(tester);
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
-      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      final calls = seq.calls.length;
+      await imaging(tester, c, seq, _imaging(24));
+      g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await g.up();
       await tester.pumpAndSettle();
-      expect(seq.calls.last, 'pause seq-1');
+      expect(seq.calls.length, calls, reason: 'a release after the fill started sends nothing');
     });
 
     testWidgets('the keyboard reaches the shutter: Enter starts, pauses and resumes the plan', (tester) async {
@@ -2876,46 +2992,71 @@ void main() {
       expect(seq.calls, ['create M31'], reason: 'not started');
     });
 
-    testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {
-      final (c, seq) = await run(tester);
+    testWidgets('holding 2 s is Emergency Stop, not the plan stop; letting go early does nothing (#1911)',
+        (tester) async {
+      final estop = _EStopApi();
+      final (c, seq) = await run(tester, overrides: _estopOverrides(estop));
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
       final before = seq.calls.length;
 
       var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump(); // the hold's first frame
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('Hold to stop'), findsOneWidget);
+      expect(find.text('HOLD'), findsOneWidget);
       await g.up();
       await tester.pumpAndSettle();
       expect(seq.calls.length, before, reason: 'released at 1 s: neither a pause nor a stop');
+      expect(estop.calls, 0);
 
       g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 2100));
       await g.up();
       await tester.pumpAndSettle();
-      expect(seq.calls.sublist(before), ['stop seq-1']);
+      expect(estop.calls, 1, reason: 'one Emergency Stop through the shared path');
+      expect(seq.calls.sublist(before), isNot(contains('stop seq-1')), reason: 'the plan stop is Stop plan…');
+      expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+          reason: 'Emergency Stop never shows the plan-running question (ADR 0013 rule 2)');
+      await _unplug(tester, c);
     });
 
-    testWidgets('on iPhone and iPad the hold-to-stop ring stays the 60 px Material sweep, not a spoke wheel',
-        (tester) async {
-      final (c, seq) = await run(tester);
+    testWidgets('the running plan shows pause bars, and a tap pauses without a stop (#1911)', (tester) async {
+      final estop = _EStopApi();
+      final (c, seq) = await run(tester, overrides: _estopOverrides(estop));
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.pause)), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      expect(seq.calls, isNot(contains('stop seq-1')));
+      expect(estop.calls, 0);
+      await _unplug(tester, c);
+    });
+
+    testWidgets('on iPhone and iPad the hold fill is the same 60 px sweep, not a spoke wheel (#1911)',
+        (tester) async {
+      final (c, seq) = await run(tester, overrides: _estopOverrides(_EStopApi()));
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
       final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
-      final ring = find.byWidgetPredicate((w) => w is CircularProgressIndicator && w.value != null);
-      expect(ring, findsOneWidget);
-      expect(tester.getSize(ring), const Size(60, 60));
+      expect(tester.getSize(find.byKey(const Key('emergency-hold-fill'))), const Size(60, 60));
       await g.up();
       await tester.pumpAndSettle();
+      await _unplug(tester, c);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 }
