@@ -12,6 +12,14 @@ import '../../support/alpacabridge_setup_fakes.dart';
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
+/// The daemon connection a test can change after the list is built.
+final _serverNow = NotifierProvider<_ServerNow, AraServer?>(_ServerNow.new);
+
+class _ServerNow extends Notifier<AraServer?> {
+  @override
+  AraServer? build() => null;
+}
+
 /// Three attached ZWO cameras with made-up serials (the cameras route is the only detection today).
 final _three = [
   camera(0, 'ZWO ASI294MC Pro', 'AAAA000000000001'),
@@ -86,6 +94,31 @@ void main() {
     expect(rows.first.deviceType, 'camera');
     expect(rows.first.vendor, 'zwo');
     expect(selectedCount(rows), 3);
+  });
+
+  test('the list is read again once the daemon connection arrives', () async {
+    final bridge = FakeBridgeClient(
+      drivers: [zwoCameraDriver()],
+      cameraList: _three,
+    );
+    final c = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWith((ref) => ref.watch(_serverNow)),
+        alpacaBridgeSetupClientFactoryProvider.overrideWithValue(
+          bridge.factory,
+        ),
+        alpacaDeviceNamesApiProvider.overrideWithValue(FakeNames()),
+        bridgeAddressOverrideProvider.overrideWithValue(null),
+        equipmentDiscoveryApiFactoryProvider.overrideWithValue(
+          (_) => FakeConfiguredApi(),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(foundDevicesProvider, (_, _) {});
+    expect(await _rows(c), isEmpty, reason: 'no daemon yet');
+    c.read(_serverNow.notifier).state = _server;
+    expect((await _rows(c)).length, 3);
   });
 
   test(
@@ -600,6 +633,34 @@ void main() {
     ], reason: 'no second POST: no duplicate');
     expect(_now(t.c).single.status, FoundStatus.added);
     expect(t.daemon.cameraScans - scans, 1);
+  });
+
+  test('a refused row sent again on Retry drops the old refusal while adding and when it ends unconfirmed', () async {
+    final t = _make(
+      cameras: [_three.first],
+      outcomes: {'AAAA000000000001': const AddRefused('camera busy')},
+    );
+    await _rows(t.c);
+    await _n(t.c).addSelected();
+    expect(_now(t.c).single.error, 'camera busy');
+    t.bridge
+      ..outcomes = {'AAAA000000000001': const AddUnconfirmed()}
+      ..gated = true;
+    final retry = _n(t.c).retry(_now(t.c).single.id);
+    await _settle();
+    expect(_now(t.c).single.status, FoundStatus.adding);
+    expect(
+      _now(t.c).single.error,
+      isNull,
+      reason: 'Adding shows no old refusal',
+    );
+    t.bridge.release();
+    await retry;
+    final r = _now(t.c).single;
+    expect(
+      (r.status, r.unconfirmed, r.error),
+      (FoundStatus.failed, true, null),
+    );
   });
 
   test(

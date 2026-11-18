@@ -290,6 +290,21 @@ void main() {
     },
   );
 
+  testWidgets(
+    'by hand, a camera list that cannot be read opens the form to type the camera in',
+    (tester) async {
+      final bridge = await _pump(tester);
+      bridge.camerasThrow = true;
+      await tester.tap(find.byKey(const Key('add-by-hand')));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('by-hand-driver-zwo-camera')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('form-field-serialNumber')), findsOneWidget);
+    },
+  );
+
   Future<void> fill(WidgetTester tester, String value) async {
     await tester.enterText(
       find.descendant(

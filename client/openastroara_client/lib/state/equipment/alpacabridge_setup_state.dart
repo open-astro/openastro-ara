@@ -165,7 +165,11 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
   final _secrets = <String, Map<String, String>>{};
 
   @override
-  Future<List<FoundRow>> build() => _detect();
+  Future<List<FoundRow>> build() {
+    // Another daemon (or the first one, once the saved list loads) reads the bridge again.
+    ref.watch(activeServerProvider);
+    return _detect();
+  }
 
   List<FoundRow> get _rows => state.value ?? const [];
 
@@ -360,7 +364,11 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
       for (final id in ids) {
         if (!ref.mounted) return;
         final row = _rows.firstWhere((r) => r.id == id);
-        _patch(id, (r) => r.copyWith(status: FoundStatus.adding));
+        // A Retry starts clean: an old refusal shows neither under Adding nor beside a new outcome.
+        _patch(
+          id,
+          (r) => r.copyWith(status: FoundStatus.adding, clearError: true),
+        );
         if (checkLanded && row.unconfirmed && await _landed(row)) {
           _patch(
             id,
@@ -493,11 +501,14 @@ class FoundDevicesNotifier extends AsyncNotifier<List<FoundRow>> {
   /// The drivers the catalog offered, for the by-hand list.
   List<BridgeDriver> get drivers => _drivers;
 
-  /// The cameras a vendor has attached, for By hand's "Which camera?".
+  /// The cameras a vendor has attached, for By hand's "Which camera?" (none when the read
+  /// fails: the form then asks for the camera).
   Future<List<AttachedCamera>> camerasOf(String vendor) async {
     final client = ref.read(alpacaBridgeSetupClientFactoryProvider)(_address);
     try {
       return await client.cameras(vendor);
+    } catch (_) {
+      return const [];
     } finally {
       client.close();
     }
