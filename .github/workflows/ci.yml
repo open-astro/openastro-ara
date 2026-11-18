@@ -1551,7 +1551,8 @@ jobs:
           max=2.39
           bad=0
           while IFS= read -r f; do
-            if readelf -d "$f" | grep -q 'NEEDED.*libjvm\.so'; then
+            # No grep -q: it exits on the first match and readelf then dies of SIGPIPE, which pipefail turns into a miss.
+            if readelf -d "$f" | grep 'NEEDED.*libjvm\.so' >/dev/null; then
               echo "::error::$f needs libjvm.so"
               bad=1
             fi
