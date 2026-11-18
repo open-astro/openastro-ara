@@ -56,13 +56,17 @@ internal readonly record struct DomeCaps(
 /// </summary>
 public sealed partial class DomeService : IDomeMediator {
 
-    private const int DomeOpSettleMaxPolls = 1800; // ~180s at the poll interval — domes are slow
-    private static readonly TimeSpan DomeOpPollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for a single blocking dome call (OpenShutter/Park/...): a silent device must
-    // not park a sequence thread until the OS TCP timeout. The terminal-condition wait adds its own
-    // bound (DomeOpSettleMaxPolls × DomeOpPollInterval ≈ 3min) on top, so the worst-case total before
-    // RunDomeOpAsync returns is ~8min — generous for a physical dome; cancellation (ct) cuts it short.
-    private static readonly TimeSpan DomeOpHardTimeout = TimeSpan.FromMinutes(5);
+    // ADR 0011 rule 5: the dome commands' timeout values and terminal condition. Hard timeout = wall-clock
+    // ceiling for the blocking call only (the settle wait adds at most 1,800 x 100 ms = 180s, so ~8min
+    // worst case for a physical dome). The motion flag is required: an unreadable read keeps polling.
+    internal static readonly DeviceCommandPolicy DomePolicy = new(Contracts.DeviceType.Dome,
+        HardTimeout: TimeSpan.FromMinutes(5), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 1800);
+
+    // Test seam: millisecond timeouts. Production keeps DomePolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; init; } = DomePolicy;
+    private DeviceCommand? _command;
+    private DeviceCommand Command => _command ??= new DeviceCommand(CommandPolicy, _faults, _logger);
+
     // Sanity bound on the post-slew azimuth, paired with the authoritative !Slewing signal. Generous
     // (5°) on purpose: physical domes settle within their own 1–5° positioning accuracy, so a tighter
     // window would let a *completed* slew (Slewing==false) get vetoed and time out. It still guards
@@ -109,22 +113,22 @@ public sealed partial class DomeService : IDomeMediator {
     };
 
     public Task<bool> OpenShutter(CancellationToken cancellationToken) =>
-        RunDomeOpAsync("dome.shutter.open", c => c.OpenShutter(),
+        RunCommandAsync("dome.shutter.open", c => c.OpenShutter(),
             c => ReadShutter(c) == AscomShutter.Open, cancellationToken);
 
     public Task<bool> CloseShutter(CancellationToken cancellationToken) =>
-        RunDomeOpAsync("dome.shutter.close", c => c.CloseShutter(),
+        RunCommandAsync("dome.shutter.close", c => c.CloseShutter(),
             c => ReadShutter(c) == AscomShutter.Closed, cancellationToken);
 
     public Task<bool> Park(CancellationToken cancellationToken) {
         StopFollowing("the dome was parked");
-        return RunDomeOpAsync("dome.park", c => c.Park(),
+        return RunCommandAsync("dome.park", c => c.Park(),
             c => ReadAtPark(c) && !ReadSlewing(c), cancellationToken);
     }
 
     public Task<bool> FindHome(CancellationToken cancellationToken) {
         StopFollowing("the dome was sent home");
-        return RunDomeOpAsync("dome.findhome", c => c.FindHome(),
+        return RunCommandAsync("dome.findhome", c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), cancellationToken);
     }
 
@@ -136,7 +140,7 @@ public sealed partial class DomeService : IDomeMediator {
     // The slew itself, without the stop-following side effect: the follower's own moves and a one-off sync use it.
     internal Task<bool> FollowSlewAsync(double degrees, CancellationToken cancellationToken) {
         var target = NormalizeAzimuth(degrees);
-        return RunDomeOpAsync("dome.slew", c => c.SlewToAzimuth(target),
+        return RunCommandAsync("dome.slew", c => c.SlewToAzimuth(target),
             c => !ReadSlewing(c) && AzimuthReached(c, target), cancellationToken);
     }
 
@@ -168,9 +172,7 @@ public sealed partial class DomeService : IDomeMediator {
         return Task.FromResult(_follower is not null);
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer dome-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunDomeOpAsync(string op, Action<IDomeDevice> action, Func<IDomeDevice, bool> isDone, CancellationToken ct) {
+    private async Task<bool> RunCommandAsync(string op, Action<IDomeDevice> action, Func<IDomeDevice, bool> isDone, CancellationToken ct) {
         if (_lifecycle.IsDisposed) {
             return false;
         }
@@ -178,106 +180,23 @@ public sealed partial class DomeService : IDomeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
-        try {
-            // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
-            // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
-            var opTask = Task.Run(() => action(client), CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(DomeOpHardTimeout);
-                var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != opTask) {
-                    ObserveQuietly(opTask);
-                    ct.ThrowIfCancellationRequested();      // sequencer cancel → propagate
-                    throw new TimeoutException($"dome op {op} did not complete within {DomeOpHardTimeout.TotalSeconds:0}s");
-                }
-                await linked.CancelAsync().ConfigureAwait(false);
-            }
-            await opTask.ConfigureAwait(false); // observe the op's result / surface its exception
-            if (!await WaitForDomeConditionAsync(client, isDone, ct).ConfigureAwait(false)) {
-                // Dispatched but never reached its terminal state (settle exhaustion, or the
-                // connection dropped mid-wait — the publish gate suppresses the latter and the
-                // §42.3 probe owns it). §42.2: fail the instruction rather than report success.
-                var msg = $"dome op {op} dispatched but did not reach its terminal state within the settle bound";
-                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
-                throw new SequenceEntityFailedException(msg);
-            }
-            return true;
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (SequenceEntityFailedException) {
-            throw; // already classified + published above
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
-            LogDomeOpFailed(ex, op);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            throw new SequenceEntityFailedException(ex.Message, ex);
-        } catch (Exception ex) {
-            LogDomeOpFailed(ex, op);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
-            throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
-        }
-    }
-
-    // Polls the device directly until the terminal condition holds (refreshing the §32.4 cache each
-    // tick so GetInfo stays current), or returns false on timeout / a dropped-or-superseded connection.
-    private async Task<bool> WaitForDomeConditionAsync(IDomeDevice client, Func<IDomeDevice, bool> isDone, CancellationToken ct) {
-        var loggedReadFailure = false;
-        for (var i = 0; i < DomeOpSettleMaxPolls; i++) {
-            if (!_lifecycle.IsLive(client)) {
-                return false; // disconnected / superseded — the op can't be confirmed
-            }
-            var done = ReadCondition(client, isDone);
-            if (done is null && !loggedReadFailure) {
-                // A consistently-throwing condition read (e.g. an unsupported property) would
-                // otherwise time out silently after the full bound — log it once so the timeout is
-                // diagnosable, then keep polling (treat as not-yet-met).
-                LogConditionReadFailed();
-                loggedReadFailure = true;
-            }
-            if (done == true) {
-                _lifecycle.Refresh();
-                return true;
-            }
-            _lifecycle.Refresh();
-            await Task.Delay(DomeOpPollInterval, ct).ConfigureAwait(false);
-        }
-        return false; // timed out without reaching the terminal state
+        await Command.RunAsync(new DeviceCommandRequest(op,
+            Call: () => action(client),
+            IsLive: () => _lifecycle.IsLive(client),
+            CurrentDevice: () => _lifecycle.DeviceIfCurrent(client),
+            Terminal: () => ReadCondition(client, isDone),
+            Polled: _lifecycle.Refresh), ct).ConfigureAwait(false);
+        return true;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; report null ('unknown') so the wait keeps polling (and logs once) rather than faulting. CA1031's log-and-recover boundary applies.")]
+        Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; report null ('unknown') so the wait keeps polling rather than faulting. CA1031's log-and-recover boundary applies.")]
     private static bool? ReadCondition(IDomeDevice client, Func<IDomeDevice, bool> isDone) {
         try {
             return isDone(client);
         } catch (Exception) {
             return null;
         }
-    }
-
-    // Observes an abandoned (cancelled/timed-out) op task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem.
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedOpFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-    }
-
-    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
-    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
-    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
-    // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(IDomeDevice client, EquipmentFaultKind kind, string details) {
-        if (_faults is null) {
-            return;
-        }
-        if (_lifecycle.DeviceIfCurrent(client) is not { } device) {
-            return;
-        }
-        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Dome, device?.UniqueId, device?.Name,
-            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an
@@ -324,10 +243,4 @@ public sealed partial class DomeService : IDomeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome mediator op {Op} failed")]
     private partial void LogDomeOpFailed(Exception ex, string op);
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "abandoned dome op (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedOpFaulted(Exception ex);
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "dome terminal-condition read failed during settle-wait (will keep polling)")]
-    private partial void LogConditionReadFailed();
 }
