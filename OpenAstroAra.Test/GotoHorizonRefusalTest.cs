@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.BelowHorizonLimit));
                 Assert.That(refusal.Cause.Status, Is.EqualTo(409));
-                Assert.That((double) refusal.Parameters["altitude_deg"]!, Is.EqualTo(14).Within(0.3));
+                Assert.That((double)refusal.Parameters["altitude_deg"]!, Is.EqualTo(14).Within(0.3));
                 Assert.That(refusal.Parameters["limit_deg"], Is.EqualTo(20.0));
                 Assert.That(refusal.Message, Does.Contain("14").And.Contain("20"), "the detail names the altitude and the limit");
             });
@@ -118,6 +118,14 @@ namespace OpenAstroAra.Test {
             var (telescope, sequencer) = Rig(runs: [Guid.NewGuid()]);
             await Assert.ThrowsAsync<RefusalException>(() => Slew(new SlewRequestDto(5.5, 14, Force: true), telescope, sequencer, Site(floorDeg: 20).Object));
             NothingDispatched(telescope);
+        }
+
+        [Test]
+        public async Task An_out_of_range_declination_is_not_answered_with_the_horizon_refusal() {
+            var (telescope, sequencer) = Rig();
+            telescope.Setup(t => t.SlewAsync(It.Is<SlewRequestDto>(r => r.DeclinationDegrees < -90), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new ArgumentOutOfRangeException("request"));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Slew(new SlewRequestDto(5.5, -95), telescope, sequencer, Site(floorDeg: 20).Object));
         }
 
         [Test]
