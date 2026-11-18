@@ -51,6 +51,9 @@ class FakeSectionRig implements HttpClientAdapter {
     savedElsewhere(section);
   }
 
+  /// The rig's current copy of [section].
+  Object? sectionOf(String section) => _sections[section];
+
   /// A [ProfileApi] whose requests reach this rig and nothing else.
   ProfileApi api({String hostname = 'rig.test'}) => ProfileApi(
     AraServer(hostname: hostname, port: 1),
@@ -127,7 +130,34 @@ const rigDefaults = <String, Map<String, Object?>>{
     'quantum_efficiency_peak': 0,
     'auto_captured': false,
   },
+  'cooling-fan': {'device_id': null, 'port_id': null},
   'custom-horizon': {'points': []},
+  'dome': {
+    'dome_radius_mm': 0,
+    'scope_position_north_south_mm': 0,
+    'scope_position_east_west_mm': 0,
+    'scope_position_up_down_mm': 0,
+    'mount_type': 'equatorial',
+    'gem_axis_mm': 0,
+    'lateral_axis_mm': 0,
+    'dec_offset_horizontal_mm': 0,
+    'azimuth_tolerance_degrees': 2,
+    'synchronize_during_mount_slew': false,
+    'dome_sync_timeout_seconds': 120,
+  },
+  'equipment-connection': {
+    'camera': true,
+    'mount': true,
+    'focuser': true,
+    'filter_wheel': true,
+    'rotator': true,
+    'guider': false,
+    'flat_panel': true,
+    'dome': false,
+    'weather': false,
+    'safety_monitor': true,
+    'switch': true,
+  },
   'filter-set': {'filters': []},
   'filter-wheel/labels': {
     'labels': ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
