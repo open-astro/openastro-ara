@@ -23,12 +23,13 @@
 # the matching fsck (drive briefly unmounted) — exFAT has no journal, so
 # the user-triggered check is its recovery story. --eject flushes and
 # unmounts for safe removal (fstab entry stays — a replug automounts).
-# --mount-copy mounts a second drive (never the store, never the system disk)
+# --mount-copy mounts a second drive (never the store, never the OS partition)
 # at /media/openastroara-copy for a disk-to-disk copy, with no fstab entry, so
 # it is gone after a reboot; --unmount-copy flushes and releases it.
 #
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
-#             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk,
+#             4 label_mismatch · 5 device_busy (unmount failed, or mounted_elsewhere) ·
+#             6 refused (the root/boot partition, an erase on the OS disk,
 #             or the store itself as a copy target) · 7 mkfs_failed ·
 #             8 mount_failed · 9 usage · 10 chown_failed · 11 fsck_failed ·
 #             12 exfat_unsupported (this kernel cannot mount exFAT)
@@ -89,11 +90,14 @@ refuse_if_exfat_unsupported() {
     exit 12
 }
 
-# Refuse anything that carries the running system: the disk holding / or
-# /boot/firmware, and any of its partitions. Formatting those bricks the box.
-# Walks the WHOLE parent chain (partition → md/LVM/dm-crypt → physical disk),
-# not one hop, so a stacked root still resolves to its physical holder.
-# Keep in lock-step with StorageDeviceService.SystemDisksAsync.
+# Two levels of "system disk" (#1769). The OS partition, and every ancestor of it
+# (partition -> md/LVM/dm-crypt -> physical disk), is refused in every mode. Any other
+# partition on the OS disk is data: mount, --check and --eject pass unless it is mounted
+# somewhere other than the store, --mount-copy unless somewhere other than the copy path,
+# and the erase path refuses it. The ancestor walk follows the WHOLE parent chain, not one
+# hop, so a stacked root still resolves to its physical holder.
+# Keep in lock-step with StorageDeviceService.SystemDisksAsync (the OS-partition set)
+# and ParseDevices (os_partition / os_disk_data).
 base_disk() { # deepest ancestor of a device node
     d=$1
     i=0
@@ -106,18 +110,57 @@ base_disk() { # deepest ancestor of a device node
     echo "$d"
 }
 
-refuse_if_system_disk() {
+# Is $1 the node carrying /, /boot or /boot/firmware, or one of its ancestors?
+refuse_if_os_partition() {
     dev=$1
-    base=$(base_disk "$dev")
+    for critical in / /boot /boot/firmware; do
+        node=$(canon "$(findmnt -no SOURCE "$critical" 2>/dev/null || true)")
+        [ -z "$node" ] && continue
+        i=0
+        while [ -n "$node" ] && [ "$i" -lt 9 ]; do
+            if [ "$dev" = "$node" ]; then
+                echo "ERROR: refused system_disk"
+                exit 6
+            fi
+            p=$(lsblk -no PKNAME "$node" 2>/dev/null | head -n1 || true)
+            [ -z "$p" ] && break
+            node="/dev/$p"
+            i=$((i + 1))
+        done
+    done
+}
+
+# Is $1 on the same physical disk as /, /boot or /boot/firmware?
+on_os_disk() {
+    base=$(base_disk "$1")
     for critical in / /boot /boot/firmware; do
         holder=$(findmnt -no SOURCE "$critical" 2>/dev/null || true)
         [ -z "$holder" ] && continue
-        holder_base=$(base_disk "$holder")
-        if [ "$dev" = "$holder" ] || [ "$base" = "$holder_base" ]; then
-            echo "ERROR: refused system_disk"
-            exit 6
-        fi
+        [ "$base" = "$(base_disk "$holder")" ] && return 0
     done
+    return 1
+}
+
+# Erase path only.
+refuse_if_os_disk() {
+    if on_os_disk "$1"; then
+        echo "ERROR: refused system_disk"
+        exit 6
+    fi
+}
+
+# An OS-disk partition mounted anywhere but the store (a separate /var, /home or /opt) belongs
+# to the running system: a second mount at the store would hand its root directory to the
+# daemon, and --check or --eject would unmount it under the system. Drives on other disks keep
+# their automount behaviour; the store itself still passes (boot remount, re-check). --mount-copy
+# skips this: its own check accepts only the copy path, so an interrupted copy can mount again.
+refuse_if_os_disk_mounted_elsewhere() {
+    on_os_disk "$1" || return 0
+    findmnt -no TARGET "$1" 2>/dev/null | while read -r target; do
+        [ "$target" = "$MOUNT_POINT" ] || exit 1
+    done && return 0
+    echo "ERROR: device_busy mounted_elsewhere"
+    exit 5
 }
 
 ensure_fstab_entry() { # $1=uuid $2=fstype
@@ -370,7 +413,11 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     echo "ERROR: uuid_not_found"
     exit 2
 fi
-refuse_if_system_disk "$DEVICE"
+# An alias (/dev/./x, /dev/disk/by-*) must compare equal to the node findmnt reports.
+DEVICE=$(canon "$DEVICE")
+refuse_if_os_partition "$DEVICE"
+[ "$FORMAT" -ne 1 ] || refuse_if_os_disk "$DEVICE"
+[ "$MOUNT_COPY" -eq 1 ] || refuse_if_os_disk_mounted_elsewhere "$DEVICE"
 
 if [ "$MOUNT_COPY" -eq 1 ]; then
     # The store is the copy SOURCE: copying a drive onto itself would mount it
