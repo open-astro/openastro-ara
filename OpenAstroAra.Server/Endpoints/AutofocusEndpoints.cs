@@ -17,6 +17,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -27,6 +30,20 @@ namespace OpenAstroAra.Server.Endpoints;
 /// section, so they live under <c>/api/v1/autofocus</c> per the playbook's endpoint table.
 /// </summary>
 public static class AutofocusEndpoints {
+
+    /// <summary>The step size the next sweep would use: the sweep's own resolver over the stored settings,
+    /// calibration, optics and the focuser's reported µm/step (a focuser read fault leaves that rung out).</summary>
+    internal static async Task<AutofocusStepSizeDto> StepSizeAsync(IProfileStore profiles, IFocuserService focusers, CancellationToken ct) {
+        double? stepUm = null;
+        try {
+            stepUm = await AutofocusSweepService.FocuserStepUmAsync(focusers, ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // Advisory input: a focuser read fault degrades to the stored step size, as in the sweep.
+        }
+        var (step, source) = AutofocusSweepService.ResolveStepSize(
+            profiles.GetAutofocusSettings(), profiles.GetFocusCalibration(), stepUm, profiles.GetOpticsSettings());
+        return new AutofocusStepSizeDto(step, source);
+    }
 
     public static IEndpointRouteBuilder MapAutofocusEndpoints(this IEndpointRouteBuilder app) {
         var autofocus = app.MapGroup("/api/v1/autofocus").WithTags("Autofocus");
@@ -41,6 +58,14 @@ public static class AutofocusEndpoints {
             .Produces<FocusCalibrationDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetAutofocusCalibration");
+
+        // §59.8 — the step size the next sweep would use and where it comes from, so the settings panel can show
+        // the derived value next to the stored override. Same resolver the sweep calls; a focuser that reports
+        // no step size just leaves the cfz rung out.
+        autofocus.MapGet("/step-size", async (IProfileStore profiles, IFocuserService focusers, CancellationToken ct) =>
+            Results.Ok(await StepSizeAsync(profiles, focusers, ct).ConfigureAwait(false)))
+            .Produces<AutofocusStepSizeDto>(StatusCodes.Status200OK)
+            .WithName("GetAutofocusStepSize");
 
         // §59.15 — force a full recalibration. Clearing the stored calibration is the whole mechanism:
         // §59.1 mode routing runs Classic when uncalibrated, and every successful Classic sweep records

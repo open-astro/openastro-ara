@@ -24,7 +24,7 @@ lib/screens/settings/panels/equipment_switch_panel.dart 28
 lib/screens/settings/panels/equipment_weather_panel.dart 16
 lib/screens/settings/panels/experimental_panel.dart 8
 lib/screens/settings/panels/filter_set_panel.dart 15
-lib/screens/settings/panels/imaging_autofocus_panel.dart 20
+lib/screens/settings/panels/imaging_autofocus_panel.dart 19
 lib/screens/settings/panels/imaging_defaults_panel.dart 27
 lib/screens/settings/panels/imaging_plate_solve_panel.dart 18
 lib/screens/settings/panels/imaging_unguided_panel.dart 27
@@ -40,7 +40,7 @@ lib/screens/settings/panels/session_stats_panel.dart 19
 lib/screens/settings/panels/sky_data_panel.dart 6
 lib/screens/settings/panels/storage_panel.dart 41
 lib/screens/settings/profile_management_screen.dart 17
-lib/screens/settings/settings_shell.dart 4
+lib/screens/settings/settings_shell.dart 3
 lib/screens/simple/simple_device_windows.dart 1
 lib/screens/simple/simple_focus_panel.dart 1
 lib/screens/simple/simple_guide_panel.dart 5
@@ -53,7 +53,7 @@ lib/screens/tabs/support_tab.dart 10
 lib/screens/wizard/screens/screen_guiding.dart 41
 lib/screens/wizard/screens/screen_your_equipment.dart 49
 lib/services/target_resolve_api.dart 1
-lib/settings/registry.dart 392
+lib/settings/registry.dart 398
 lib/state/diagnostics/diagnostics_state.dart 2
 lib/state/sequencer/create_imaging_run.dart 7
 lib/state/settings/settings_nav.dart 41

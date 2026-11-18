@@ -7,6 +7,8 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/focuser_status.dart';
 import '../../../services/autofocus_api.dart';
 import '../../../state/equipment/focuser_state.dart';
+import '../../../state/focus/autofocus_step_size_state.dart';
+import '../../../state/settings/advanced_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
 import '../../../theme/ara_colors.dart';
@@ -61,6 +63,19 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         _RunAutofocusRow(
           focuserConnected: status.asData?.value?.isConnected ?? false,
         ),
+        // #1544: the step size the next sweep would use, read beside the
+        // focuser it belongs to; it is edited, with its other inputs, in the
+        // Autofocus panel only.
+        if (ref.watch(advancedSettingsProvider).value ?? true)
+          if (ref.watch(autofocusStepSizeProvider).value case final derived?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                derivedStepSizeText(context.l10n, derived),
+                key: const Key('focuser-derived-step-size'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
         // The editable autofocus settings (temp compensation, AF-after-filter-change,
         // trigger temp delta — saved per profile) live in their own panel; link there
         // rather than duplicate them here.

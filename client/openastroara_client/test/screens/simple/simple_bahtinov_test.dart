@@ -24,7 +24,7 @@ class _Bahtinov extends BahtinovFocusNotifier {
   @override
   BahtinovFocusLive build() => live0;
   @override
-  Future<void> start({required double exposureSec}) async => calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec}) async => calls.add('start $exposureSec');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -134,7 +134,7 @@ void main() {
     await _pump(tester, BahtinovFocusLive.idle, child: const SimpleFocusShutter());
     await tester.tap(find.byType(SimpleFocusShutter));
     await tester.pump();
-    expect(_b.calls, ['start 2.0']);
+    expect(_b.calls, ['start null']);
   });
 
   testWidgets("while it reads, Manual's shutter is a square that stops it", (tester) async {

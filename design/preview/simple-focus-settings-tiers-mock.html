@@ -1,0 +1,136 @@
+<title>Ara Focus Settings Tiers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: mock controls on top, then the Simple Mode Focuser window Today | Proposed, side by side over a night image. DESIGN.md tokens, single dark look on purpose. */
+:root {
+  --page: #0E0E0E; --scrim: rgba(26,26,26,.90); --border: #404040; --input: #333333;
+  --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060; --white: #FFFFFF;
+  --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --busy: #FFB300; --sel: #1976D2; --tint: rgba(25,118,210,.25);
+  --tile: rgba(56,56,56,.55); --btn: #1565C0; --btn2: #424242;
+  --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); font-variant-numeric: tabular-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+p.note { color: var(--text2); margin: 0; max-width: 85ch; font-size: 13.5px; }
+p.note b { color: var(--text); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.lbl { color: var(--text2); font-size: 13px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { background: var(--input); color: var(--text); border: 0; padding: 0 12px; min-height: 40px; font: 13px var(--sys); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--white); }
+.stage { border-radius: 14px; padding: 18px; position: relative; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; align-items: start;
+  background: radial-gradient(ellipse at 30% 40%, #2a1d3d 0%, #11131f 45%, #06070c 100%); }
+.col { display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
+.cap { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+.win { background: var(--scrim); border-radius: 10px; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.title { display: flex; align-items: center; justify-content: space-between; font-size: 16px; font-weight: 600; min-height: 40px; }
+.title .x { color: var(--text2); font-weight: 400; font-size: 20px; }
+.knobs { display: flex; justify-content: center; align-items: flex-end; gap: 14px; padding: 8px 0 4px; }
+.knob { border-radius: 10px; background: repeating-linear-gradient(180deg, #3a3a3a 0 6px, #2c2c2c 6px 12px); border: 1px solid var(--border); }
+.readout { text-align: center; font-size: 30px; font-weight: 300; }
+.readout small { display: block; font-size: 12px; color: var(--text2); }
+.afbtn { min-height: 48px; border-radius: 10px; border: 0; background: var(--btn); color: var(--white); font: 600 14px var(--sys); margin: 8px 0 4px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; min-height: 48px; padding: 6px 0; border-top: 1px solid #ffffff10; }
+.row .name { font-size: 14px; }
+.row .val { font-size: 14px; }
+.row .sub { grid-column: 1 / -1; color: var(--text2); font-size: 12.5px; margin-top: -2px; }
+.row .sub b { color: var(--text); font-weight: 500; }
+.row.off { opacity: .45; pointer-events: none; }
+input[type=range] { width: 100%; accent-color: var(--sel); }
+.sw { position: relative; width: 52px; height: 32px; flex: none; }
+.sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.sw span { position: absolute; inset: 0; border-radius: 16px; background: var(--btn2); transition: background .15s; }
+.sw span::after { content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+.sw input:checked + span { background: var(--sel); }
+.sw input:checked + span::after { transform: translateX(20px); background: var(--white); }
+.sw input:focus-visible + span { outline: 2px solid var(--link); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .sw span, .sw span::after { transition: none; } }
+.chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { min-height: 44px; min-width: 52px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text); font: 14px var(--sys); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--tint); border-color: var(--link); color: var(--link); }
+.chips button:disabled { cursor: default; }
+.foot { color: var(--text3); font-size: 12px; max-width: 85ch; }
+code { font: 11.5px ui-monospace, Menlo, monospace; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <h1>Focus settings in Simple Mode (ara#1544)</h1>
+  <p class="note"><b>Working mock.</b> Simple Mode gets only the Simple tier, in the Focuser window, in place of today's "Refocus every" slider: <b>autofocus during plans</b> on or off, a <b>Keep focus sharp</b> preset that sets all four refocus triggers, and the <b>AF filter</b>. Exposure, binning, step size and each trigger stay in Advanced Mode's Settings, which gets the tiers, the one Advanced toggle and the derived values. The numbers are examples.</p>
+  <div class="controls">
+    <span class="lbl">Rig</span>
+    <div class="seg" id="wheel"><button aria-pressed="true" data-v="mono">Mono, LRGB + Ha wheel</button><button data-v="osc">OSC, no wheel</button></div>
+    <span class="lbl">Triggers in Advanced Mode</span>
+    <div class="seg" id="custom"><button aria-pressed="true" data-v="0">Match a preset</button><button data-v="1">Changed there</button></div>
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <span class="cap">Today</span>
+      <div class="win" aria-label="Focuser window today">
+        <div class="title">Focuser <span class="x" aria-hidden="true">×</span></div>
+        <div class="readout">12 480<small>position · 4.2 °C</small></div>
+        <div class="knobs" aria-hidden="true"><div class="knob" style="width:72px;height:180px"></div><div class="knob" style="width:56px;height:140px"></div></div>
+        <button class="afbtn" tabindex="-1">Autofocus</button>
+        <div class="row"><span class="name">Refocus every</span><span class="val" id="oldVal">2 °C</span></div>
+        <input type="range" min="0" max="10" step="1" value="2" id="oldSlider" aria-label="Refocus every (today)">
+      </div>
+    </div>
+
+    <div class="col">
+      <span class="cap">Proposed</span>
+      <div class="win" aria-label="Focuser window proposed">
+        <div class="title">Focuser <span class="x" aria-hidden="true">×</span></div>
+        <div class="readout">12 480<small>position · 4.2 °C</small></div>
+        <div class="knobs" aria-hidden="true"><div class="knob" style="width:72px;height:180px"></div><div class="knob" style="width:56px;height:140px"></div></div>
+        <button class="afbtn" tabindex="-1">Autofocus</button>
+        <div id="new"></div>
+      </div>
+    </div>
+  </div>
+  <p class="foot">The presets set Ara's four triggers. Relaxed: filter change, 3 °C, 25 % HFR, 4 h. Normal: filter change, 2 °C, 15 % HFR, 2 h (today's defaults). Tight: filter change, 1 °C, 10 % HFR, 1 h. When Advanced Mode's values match none of them, Simple Mode shows <b>Custom</b> and picking a preset overwrites them. The AF filter row is hidden without a filter wheel. Bahtinov and guide focus take their exposure from the AF exposure, and the server falls back to the profile when a request leaves it out. "Re-focus after meridian flip" stays in Safety.</p>
+</div>
+
+<script>
+const PRESETS = {
+  relaxed: { label: "Relaxed", temp: 3, hfr: 25, hours: 4 },
+  normal:  { label: "Normal",  temp: 2, hfr: 15, hours: 2 },
+  tight:   { label: "Tight",   temp: 1, hfr: 10, hours: 1 },
+};
+const st = { on: true, preset: "normal", custom: false, filter: "L", wheel: "mono" };
+const $ = id => document.getElementById(id);
+
+function render() {
+  const p = PRESETS[st.preset], off = st.on ? "" : " off", custom = st.custom;
+  const filters = st.wheel === "mono" ? ["L", "R", "G", "B", "Ha"] : [];
+  $("new").innerHTML = `
+  <div class="row"><span class="name" id="lOn">Autofocus during plans</span>
+    <span class="sw"><input type="checkbox" id="on" ${st.on ? "checked" : ""} aria-labelledby="lOn"><span></span></span>
+    <span class="sub">${st.on ? "Ara refocuses on its own while a plan runs." : "Plans never refocus by themselves. The Autofocus button still works."}</span></div>
+  <div class="row${off}"><span class="name">Keep focus sharp</span><span></span>
+    <span class="chips" role="group" aria-label="Keep focus sharp">${Object.entries(PRESETS).map(([k, v]) => `<button data-preset="${k}" aria-pressed="${!custom && st.preset === k}">${v.label}</button>`).join("")}${custom ? `<button aria-pressed="true" disabled>Custom</button>` : ""}</span>
+    <span class="sub">${custom ? "Set in Advanced Mode's Settings. Pick a preset to replace those values." : `Refocus after a filter change, after <b>${p.temp} °C</b> of cooling, when stars grow <b>${p.hfr} %</b>, or every <b>${p.hours} h</b>.`}</span></div>
+  ${filters.length ? `<div class="row${off}"><span class="name">AF filter</span><span></span>
+    <span class="chips" role="group" aria-label="AF filter">${filters.map(f => `<button data-filter="${f}" aria-pressed="${st.filter === f}">${f}</button>`).join("")}</span>
+    <span class="sub">Luminance is brightest, so autofocus finishes fastest.</span></div>` : ""}`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.preset) { st.preset = b.dataset.preset; st.custom = false; syncSeg("custom", "0"); }
+  else if (b.dataset.filter) st.filter = b.dataset.filter;
+  else if (b.parentElement.id === "wheel") { st.wheel = b.dataset.v; syncSeg("wheel", b.dataset.v); }
+  else if (b.parentElement.id === "custom") { st.custom = b.dataset.v === "1"; syncSeg("custom", b.dataset.v); }
+  else return;
+  render();
+});
+function syncSeg(id, v) { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === v)); }
+document.addEventListener("change", e => { if (e.target.id === "on") { st.on = e.target.checked; render(); } });
+$("oldSlider").addEventListener("input", e => { $("oldVal").textContent = +e.target.value === 0 ? "Never" : e.target.value + " °C"; });
+render();
+</script>
+

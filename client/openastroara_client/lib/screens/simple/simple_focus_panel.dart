@@ -167,19 +167,28 @@ String? simpleOffsetsBlocker(WidgetRef ref, AppLocalizations l10n) {
 /// is 5.
 const kSimpleAutofocusExposures = [2, 5, 10, 15];
 
-/// The guide camera's live-focus exposures, and the one picked (2 s to
-/// start), as the full UI's card offers them.
+/// The guide camera's live-focus exposures, and the one picked, as the full
+/// UI's card offers them. Null until one is picked: the daemon then takes the
+/// profile's autofocus exposure, so Simple Mode sends no default of its own.
 const kSimpleGuideExposures = [1.0, 2.0, 3.0, 5.0];
 
-class SimpleGuideExposure extends Notifier<double> {
+class SimpleGuideExposure extends Notifier<double?> {
   @override
-  double build() => 2;
+  double? build() => null;
 
   void set(double seconds) => state = seconds;
 }
 
 final simpleGuideExposureProvider =
-    NotifierProvider<SimpleGuideExposure, double>(SimpleGuideExposure.new);
+    NotifierProvider<SimpleGuideExposure, double?>(SimpleGuideExposure.new);
+
+/// The exposure a Focus row highlights: the one picked, else the profile's
+/// autofocus exposure (what the daemon uses when the request leaves it out).
+double? simpleFocusExposureShown(WidgetRef ref, double? picked) =>
+    picked ??
+    ref
+        .watch(autofocusSettingsProvider.select((s) => s.exposureSeconds))
+        .toDouble();
 
 /// Whether the focus run's frame, its measured stars circled, fills the screen
 /// behind Focus's panels (session only; off to start).
@@ -194,18 +203,19 @@ final simpleFocusStarsShownProvider =
     NotifierProvider<SimpleFocusStarsShown, bool>(SimpleFocusStarsShown.new);
 
 /// The Bahtinov readout's exposures in Simple Mode, and the one picked
-/// (shared by the panel and the shutter; 2 s to start).
+/// (shared by the panel and the shutter). Null until one is picked: the daemon
+/// then takes the profile's autofocus exposure.
 const kSimpleBahtinovExposures = [1.0, 2.0, 4.0, 8.0];
 
-class SimpleBahtinovExposure extends Notifier<double> {
+class SimpleBahtinovExposure extends Notifier<double?> {
   @override
-  double build() => 2;
+  double? build() => null;
 
   void set(double seconds) => state = seconds;
 }
 
 final simpleBahtinovExposureProvider =
-    NotifierProvider<SimpleBahtinovExposure, double>(
+    NotifierProvider<SimpleBahtinovExposure, double?>(
       SimpleBahtinovExposure.new,
     );
 
@@ -1094,7 +1104,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final steady = status.steady;
     final reading = status.active && steady != null && steady.detected;
     final hint = status.active ? bahtinovHint(l10n, status) : null;
-    final exposure = ref.watch(simpleBahtinovExposureProvider);
+    final exposure = simpleFocusExposureShown(
+      ref,
+      ref.watch(simpleBahtinovExposureProvider),
+    );
     final measured = status.hasMeasurement && !live.finished;
     return [
       _twoLines(headline, kSimpleText.copyWith(color: colour)),
@@ -1208,7 +1221,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     );
     final latest = status.latest;
     final hint = status.active ? guideFocusHint(l10n, status) : null;
-    final exposure = ref.watch(simpleGuideExposureProvider);
+    final exposure = simpleFocusExposureShown(
+      ref,
+      ref.watch(simpleGuideExposureProvider),
+    );
     return [
       _twoLines(headline, kSimpleText.copyWith(color: colour)),
       Text(

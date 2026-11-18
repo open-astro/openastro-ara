@@ -2475,6 +2475,18 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/autofocus/step-size:
+    get:
+      tags:
+        - Autofocus
+      operationId: GetAutofocusStepSize
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutofocusStepSizeDto'
   /api/v1/autofocus/recalibrate:
     post:
       tags:
@@ -8371,6 +8383,20 @@ components:
             - string
           format: int32
           default: 0
+    AutofocusStepSizeDto:
+      required:
+        - step_size
+        - source
+      type: object
+      properties:
+        step_size:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        source:
+          type: string
     BackupStreamAckRequestDto:
       required:
         - frame_id
@@ -8506,10 +8532,10 @@ components:
         exposure_sec:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
+            - 'null'
             - number
             - string
           format: double
-          default: 1
         binning:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -11730,10 +11756,10 @@ components:
         exposure_sec:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
+            - 'null'
             - number
             - string
           format: double
-          default: 2
         binning:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
