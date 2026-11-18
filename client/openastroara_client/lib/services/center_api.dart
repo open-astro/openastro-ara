@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/server.dart';
 import '../state/saved_server_state.dart';
 import 'autofocus_api.dart' show AutofocusJob;
+import 'refusal.dart';
 
 /// `POST /api/v1/platesolve/center`: slew to J2000 coordinates and centre by
 /// iterative plate solves, as a §65.5 background job (polled at
@@ -19,23 +20,35 @@ abstract interface class CenterClient {
 }
 
 class CenterApi implements CenterClient {
-  CenterApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
+  /// [dio] is injectable so tests can supply a stub adapter.
+  CenterApi(AraServer server, {Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 10),
+            ),
+          );
 
   final Dio _dio;
 
   @override
   Future<AutofocusJob> start(double raHoursJ2000, double decDegJ2000) async {
-    final res = await _dio.post<dynamic>(
-      '/api/v1/platesolve/center',
-      data: {'ra_hours': raHoursJ2000, 'dec_degrees': decDegJ2000},
-    );
+    final Response<dynamic> res;
+    try {
+      res = await _dio.post<dynamic>(
+        '/api/v1/platesolve/center',
+        data: {'ra_hours': raHoursJ2000, 'dec_degrees': decDegJ2000},
+      );
+    } on DioException catch (e) {
+      // A 409 while another target is being centred; anything else stays a
+      // transport or server error.
+      final refusal = Refusal.fromDio(e);
+      if (refusal != null) throw refusal;
+      rethrow;
+    }
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw const FormatException('center returned a non-object body');

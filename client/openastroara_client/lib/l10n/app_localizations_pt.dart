@@ -6269,6 +6269,45 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
+
+  @override
+  String get refusalNoCamera =>
+      'No camera is connected. Connect one in Camera settings, then try again.';
+
+  @override
+  String get refusalCameraBusy =>
+      'The camera is busy with an exposure. Try again once it has read out.';
+
+  @override
+  String get refusalGateStuck =>
+      'The camera is stuck mid-capture. Restart Ara on your rig to clear it.';
+
+  @override
+  String get refusalCenterInProgress =>
+      'Another centering is already running. Wait for it, or cancel it, before centering on a different target.';
+
+  @override
+  String refusalOpticsNotSet(String missing) {
+    String _temp0 = intl.Intl.selectLogic(missing, {
+      'focal_length':
+          'The telescope focal length is not set. Set it in Optics.',
+      'pixel_size': 'The camera pixel size is not set. Set it in Optics.',
+      'other': 'The telescope focal length and camera pixel size are not set. Set them in Optics.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get refusalSolverNotSet =>
+      'The plate solver is not set up. Check its path in Plate solving settings.';
+
+  @override
+  String get refusalCaptureSettingsUnsupported =>
+      'The camera cannot take that exposure or binning. Try a different one.';
+
+  @override
+  String get refusalStorageUnavailable =>
+      'The storage disk is missing. Plug it back in, then try again.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -12584,4 +12623,43 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String get refusalNoCamera =>
+      'Nenhuma câmera está conectada. Conecte uma em Configurações da câmera e tente de novo.';
+
+  @override
+  String get refusalCameraBusy =>
+      'A câmera está ocupada com uma exposição. Tente de novo quando terminar a leitura.';
+
+  @override
+  String get refusalGateStuck =>
+      'A câmera travou no meio de uma captura. Reinicie o Ara no seu setup para liberar.';
+
+  @override
+  String get refusalCenterInProgress =>
+      'Outro centramento já está em andamento. Espere por ele, ou cancele, antes de centrar em outro alvo.';
+
+  @override
+  String refusalOpticsNotSet(String missing) {
+    String _temp0 = intl.Intl.selectLogic(missing, {
+      'focal_length': 'A distância focal do telescópio não está definida. Defina em Óptica.',
+      'pixel_size':
+          'O tamanho do pixel da câmera não está definido. Defina em Óptica.',
+      'other': 'A distância focal do telescópio e o tamanho do pixel da câmera não estão definidos. Defina em Óptica.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get refusalSolverNotSet =>
+      'O plate solver não está configurado. Verifique o caminho em Configurações de plate solving.';
+
+  @override
+  String get refusalCaptureSettingsUnsupported =>
+      'A câmera não consegue fazer essa exposição ou binning. Tente outro valor.';
+
+  @override
+  String get refusalStorageUnavailable =>
+      'O disco de armazenamento não foi encontrado. Reconecte-o e tente de novo.';
 }

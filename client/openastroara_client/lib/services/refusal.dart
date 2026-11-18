@@ -1,0 +1,94 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+
+/// The causes the daemon declares for a refusal (ADR 0022): the `reason` of a
+/// 409 or 422 problem. The list must equal the `RefusalReason` schema in
+/// `openapi.yaml` (`refusal_openapi_drift_test.dart`).
+enum RefusalCause {
+  noCamera('no-camera'),
+  cameraBusy('camera-busy'),
+  gateStuck('gate-stuck'),
+  centerInProgress('center-in-progress'),
+  opticsNotSet('optics-not-set'),
+  solverNotSet('solver-not-set'),
+  captureSettingsUnsupported('capture-settings-unsupported'),
+  storageUnavailable('storage-unavailable');
+
+  const RefusalCause(this.token);
+
+  /// The wire spelling of the cause.
+  final String token;
+
+  /// The cause for [token]; null for one this app does not know.
+  static RefusalCause? fromToken(String? token) {
+    for (final c in values) {
+      if (c.token == token) return c;
+    }
+    return null;
+  }
+}
+
+/// The rig declining a request for a reason the user can fix (ADR 0022),
+/// decoded once, in the API layer. [cause] is null for a `reason` this app
+/// does not know and for an answer with none (an older daemon); [detail] is the
+/// daemon's English sentence and shows only then.
+class Refusal implements Exception {
+  const Refusal({
+    required this.cause,
+    required this.reason,
+    required this.detail,
+    this.parameters = const {},
+    this.status,
+  });
+
+  final RefusalCause? cause;
+  final String? reason;
+  final String? detail;
+
+  /// The problem's extensions other than `reason` (`missing`, `job_id`).
+  final Map<String, Object?> parameters;
+  final int? status;
+
+  static const _problemFields = {
+    'type',
+    'title',
+    'status',
+    'detail',
+    'instance',
+    'reason',
+    'traceId',
+  };
+
+  /// The Refusal a 409 or 422 problem answer carries; null for any other
+  /// failure (a transport error, a 5xx, a 404), which stays the caller's.
+  static Refusal? fromDio(DioException e) {
+    final status = e.response?.statusCode;
+    if (status != 409 && status != 422) return null;
+    var body = e.response?.data;
+    if (body is String) {
+      try {
+        body = jsonDecode(body);
+      } on FormatException {
+        return null;
+      }
+    }
+    if (body is! Map) return null;
+    final reason = body['reason'];
+    final detail = body['detail'];
+    return Refusal(
+      cause: reason is String ? RefusalCause.fromToken(reason) : null,
+      reason: reason is String ? reason : null,
+      detail: detail is String && detail.isNotEmpty ? detail : null,
+      parameters: {
+        for (final f in body.entries)
+          if (f.key is String && !_problemFields.contains(f.key))
+            f.key as String: f.value,
+      },
+      status: status,
+    );
+  }
+
+  @override
+  String toString() => detail ?? reason ?? 'Refusal';
+}

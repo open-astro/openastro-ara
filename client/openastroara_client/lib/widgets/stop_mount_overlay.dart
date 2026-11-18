@@ -321,8 +321,8 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   /// §57.4 "Verify Position — show me an image": one quick snapshot, solved by
   /// the daemon, compared with where the mount says it is and where the slew
-  /// was aimed. Null when there is no server; a daemon sentence (422/409) is
-  /// thrown as a [PlateSolveException] for the dialog to show.
+  /// was aimed. Null when there is no server; a 422/409 is thrown as a `Refusal`
+  /// and worded by `friendlyError` for the dialog to show.
   Future<VerifyPositionResult?> _verifyPosition() async {
     final api = ref.read(plateSolveApiProvider);
     if (api == null) return null;
@@ -343,8 +343,8 @@ class _MountStoppedDialog extends StatefulWidget {
   final double? haltedDec;
   final void Function(_StopModalAction action) onAction;
 
-  /// Null = no server to ask. Throws a [PlateSolveException] with the daemon's
-  /// sentence when the look cannot be taken (no camera, solver unconfigured).
+  /// Null = no server to ask. Throws a `Refusal` when the look cannot be
+  /// taken (no camera, solver unconfigured).
   final Future<VerifyPositionResult?> Function() onVerify;
 
   const _MountStoppedDialog({

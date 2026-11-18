@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import '../l10n/l10n.dart';
 import '../services/guider_api.dart' show GuideStartFailed;
+import '../services/refusal.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 
 /// Turns whatever went wrong into a sentence a person can act on.
@@ -62,6 +63,7 @@ String? daemonDetail(Object error) {
 
 /// Words already written for people: the daemon's, the guider's, ours.
 String? _ownWords(AppLocalizations l, Object error) {
+  if (error is Refusal) return _refusalWords(l, error);
   final detail = daemonDetail(error);
   if (detail != null) return detail;
   // #1664 — the guider's own reason, not "Couldn't start guiding."
@@ -73,6 +75,31 @@ String? _ownWords(AppLocalizations l, Object error) {
   // your rig first.") — pass those straight through.
   if (error is StateError) return error.message;
   return null;
+}
+
+/// ADR 0022 — a known cause is worded by the app, in [l]'s language; an unknown
+/// cause or none shows the daemon's own sentence, and null when it has none.
+String? _refusalWords(AppLocalizations l, Refusal r) {
+  final missing = r.parameters['missing'];
+  return switch (r.cause) {
+    RefusalCause.noCamera => l.refusalNoCamera,
+    RefusalCause.cameraBusy => l.refusalCameraBusy,
+    RefusalCause.gateStuck => l.refusalGateStuck,
+    RefusalCause.centerInProgress => l.refusalCenterInProgress,
+    RefusalCause.opticsNotSet => l.refusalOpticsNotSet(
+      missing is List && missing.length == 1 ? '${missing.first}' : 'both',
+    ),
+    RefusalCause.solverNotSet => l.refusalSolverNotSet,
+    RefusalCause.captureSettingsUnsupported =>
+      l.refusalCaptureSettingsUnsupported,
+    RefusalCause.storageUnavailable => l.refusalStorageUnavailable,
+    null => _firstLine(r.detail),
+  };
+}
+
+String? _firstLine(String? text) {
+  final line = text?.trim().split('\n').first.trim();
+  return line == null || line.isEmpty ? null : line;
 }
 
 /// The reason after "Couldn't … —", lower-case; null when nothing is known.
@@ -96,6 +123,10 @@ String? _why(AppLocalizations l, Object error) {
         },
       _ => l.errorConnectionFailed,
     };
+  }
+  // A Refusal with no cause and no detail: say what its status says.
+  if (error is Refusal) {
+    return error.status == 409 ? l.errorBusy : l.errorRefusedValues;
   }
   if (error is SocketException) {
     return l.errorNoAnswer(thisDeviceLabel(clientPlatform));

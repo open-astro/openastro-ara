@@ -8139,5 +8139,24 @@
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
-  }
+  },
+  "refusalNoCamera": "No camera is connected. Connect one in Camera settings, then try again.",
+  "@refusalNoCamera": {"description": "Refusal (no-camera): the daemon has no camera to take the frame with"},
+  "refusalCameraBusy": "The camera is busy with an exposure. Try again once it has read out.",
+  "@refusalCameraBusy": {"description": "Refusal (camera-busy): another exposure holds the camera"},
+  "refusalGateStuck": "The camera is stuck mid-capture. Restart Ara on your rig to clear it.",
+  "@refusalGateStuck": {"description": "Refusal (gate-stuck): the camera's in-flight gate never released"},
+  "refusalCenterInProgress": "Another centering is already running. Wait for it, or cancel it, before centering on a different target.",
+  "@refusalCenterInProgress": {"description": "Refusal (center-in-progress): a centring job for another target is running"},
+  "refusalOpticsNotSet": "{missing, select, focal_length{The telescope focal length is not set. Set it in Optics.} pixel_size{The camera pixel size is not set. Set it in Optics.} other{The telescope focal length and camera pixel size are not set. Set them in Optics.}}",
+  "@refusalOpticsNotSet": {
+    "description": "Refusal (optics-not-set): the optics a plate solve needs; missing is focal_length, pixel_size or anything else for both",
+    "placeholders": {"missing": {"type": "String"}}
+  },
+  "refusalSolverNotSet": "The plate solver is not set up. Check its path in Plate solving settings.",
+  "@refusalSolverNotSet": {"description": "Refusal (solver-not-set): the plate solver is missing, wrong or too old"},
+  "refusalCaptureSettingsUnsupported": "The camera cannot take that exposure or binning. Try a different one.",
+  "@refusalCaptureSettingsUnsupported": {"description": "Refusal (capture-settings-unsupported): the exposure or binning is outside the camera's range"},
+  "refusalStorageUnavailable": "The storage disk is missing. Plug it back in, then try again.",
+  "@refusalStorageUnavailable": {"description": "Refusal (storage-unavailable): the disk frames are saved to is gone"}
 }
