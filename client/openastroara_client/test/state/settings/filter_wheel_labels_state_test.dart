@@ -156,6 +156,29 @@ void main() {
       },
     );
 
+    // The rig answers, but the body is not a usable label list: the strict
+    // reader must fail the load rather than show a wheel the person can save.
+    Future<void> expectFailedLoad(Map<String, Object?> body) async {
+      final c = containerFor(FakeSectionRig({'filter-wheel/labels': body}));
+      await settle(() => c.read(filterWheelLabelsProvider).lastFailure != null);
+      expect(c.read(filterWheelLabelsProvider).value, isNull);
+      expect(c.read(filterWheelLabelsProvider).canSave, isFalse);
+    }
+
+    test('a rig reply with an empty label list fails the load', () {
+      return expectFailedLoad({'labels': <Object?>[]});
+    });
+
+    test('a rig reply with no labels key fails the load', () {
+      return expectFailedLoad({});
+    });
+
+    test('a rig reply with a non-text slot fails the load', () {
+      return expectFailedLoad({
+        'labels': ['L', 2, 'G'],
+      });
+    });
+
     test('no active server -> nothing loads', () async {
       final c = containerFor(null);
       await Future<void>.delayed(Duration.zero);
