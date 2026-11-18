@@ -33,6 +33,12 @@ namespace OpenAstroAra.Server.Services;
 /// faults, so its star-lost recovery probes and re-centres only for the runs its own episode paused.</summary>
 public interface IGuiderEpisodeListener {
     void Paused(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds);
+
+    /// <summary>Counts the user's guider disconnects. A disconnect drops the open faults without
+    /// <c>Recovered</c> and leaves no Disconnected state to read (the guider reads null), so the
+    /// paused episode ends when this count moves. A count, not a flag: a Disconnect then Connect
+    /// between two polls still ends it.</summary>
+    int UserDisconnects => 0;
 }
 
 /// <summary>
@@ -303,6 +309,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // the guider service's Recovered (or the user taking the guider back) and resumes exactly the runs
     // it paused. No runs: the fault is recorded and broadcast, the action is notify_only.
     private async Task RunGuiderEpisodeAsync(EquipmentFaultEvent fault, FaultPlan plan, string label, Task recovered) {
+        var disconnectsAtFault = _guiderEpisodes?.Invoke()?.UserDisconnects ?? 0;
         var what = fault.Details switch {
             "star_lost" => "Guide star lost",
             "equipment_disconnected" => "Guide camera dropped",
@@ -343,7 +350,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
         while (!recovered.IsCompleted) {
             await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
-            if (!recovered.IsCompleted && await ReleasedByUserAsync(fault, label, paused).ConfigureAwait(false)) {
+            if (_cts.IsCancellationRequested) {
+                return; // daemon shutdown: the runs stay paused, as the ladder leaves them
+            }
+            var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
+            if (!recovered.IsCompleted && await ReleasedByUserAsync(fault, label, paused, userDisconnected).ConfigureAwait(false)) {
                 return;
             }
         }
@@ -467,8 +478,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // the linger has always used; the ladder and the terminal action now honour it too.
     // #1539 — a service with the lifecycle module records the user's disconnect, and that answer
     // comes first; the Disconnected state stays the signal for the services without it.
-    private async Task<bool> ReleasedByUserAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> pausedRuns) {
-        if (_reconnector?.GetDesiredConnection(fault.DeviceType) != DesiredConnection.DisconnectedByUser) {
+    // The guider passes its own answer ([userDisconnected], IGuiderEpisodeListener.UserDisconnects).
+    private async Task<bool> ReleasedByUserAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> pausedRuns,
+            bool userDisconnected = false) {
+        if (!userDisconnected && _reconnector?.GetDesiredConnection(fault.DeviceType) != DesiredConnection.DisconnectedByUser) {
             var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
             if (state != EquipmentConnectionState.Disconnected) {
                 return false;

@@ -138,6 +138,10 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
 
     private PHD2Guider? _guider;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+
+    // IGuiderEpisodeListener.UserDisconnects: read without _gate (a torn read only delays the release one poll).
+    private int _userDisconnects;
+    int IGuiderEpisodeListener.UserDisconnects => Volatile.Read(ref _userDisconnects);
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
     // Cancels the in-flight background connect (incl. its systemd-start/reachability wait) when a
     // newer connect or a disconnect supersedes it — so a rapid connect→disconnect can't leave the
@@ -375,6 +379,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             CancelRecoveryLocked(); // the user gave up on the guider — stop recovering it
             DisposeGuiderLocked();
             DropOpenFaultsLocked();
+            Interlocked.Increment(ref _userDisconnects);
             SetStateLocked(EquipmentConnectionState.Disconnected);
         }
         return Task.FromResult(Accepted("guider.disconnect", idempotencyKey));
@@ -680,7 +685,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     }
 
     // Caller holds _gate. A user disconnect (or the service's dispose) drops the open faults without
-    // Recovered: the shared reaction sees the guider Disconnected and releases its episode by user.
+    // Recovered: the user disconnect bumps UserDisconnects, and the shared reaction releases its episode by user.
     private void DropOpenFaultsLocked() {
         _linkFault = null;
         _cameraFault = null;
