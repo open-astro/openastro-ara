@@ -32,7 +32,14 @@ class AutoConnectRow extends ConsumerWidget {
       label: 'Auto-connect on boot',
       helpKey: 'eq.auto_connect_on_boot',
       value: settings?.autoConnect(type) ?? false,
-      hint: hint,
+      // Not loaded: say why the switch is dead rather than show it Off.
+      hint: settings == null
+          ? (ref.watch(profileApiProvider) == null
+                ? l10n.shellRigNotConnected
+                : section.lastFailure == null
+                ? l10n.settingsSectionLoading
+                : l10n.settingsSectionNotLoaded)
+          : hint,
       onChanged: settings == null
           ? null
           : (v) => unawaited(() async {

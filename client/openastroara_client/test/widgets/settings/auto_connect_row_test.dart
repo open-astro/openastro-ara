@@ -48,6 +48,20 @@ void main() {
     expect(rig.puts, isEmpty);
   });
 
+  testWidgets('Auto-connect row: no rig says the rig is not connected', (
+    tester,
+  ) async {
+    await _pump(tester, null);
+    expect(find.text('Rig not connected'), findsOneWidget);
+  });
+
+  testWidgets('Auto-connect row: a failed load says it is not loaded', (
+    tester,
+  ) async {
+    await _pump(tester, _rig()..failGet.add('equipment-connection'));
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+  });
+
   testWidgets("Auto-connect row: shows the rig's value and saves a change", (
     tester,
   ) async {

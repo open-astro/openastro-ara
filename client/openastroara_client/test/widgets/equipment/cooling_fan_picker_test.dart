@@ -20,6 +20,7 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/cooling_fan_prompt_listener.dart';
 import 'package:openastroara/widgets/equipment/cooling_fan_picker.dart';
 
+import '../../support/fake_section_rig.dart';
 import '../../support/section_load.dart';
 
 SwitchDevice _box({
@@ -262,6 +263,55 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+  });
+
+  testWidgets('no rig: the profile picker says the rig is not connected', (
+    tester,
+  ) async {
+    final c = ProviderContainer(
+      overrides: [profileApiProvider.overrideWithValue(null)],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Rig not connected'), findsOneWidget);
+  });
+
+  testWidgets('a failed load: the profile picker says so and Retry loads it', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({'cooling-fan': rigDefaults['cooling-fan']})
+      ..failGet.add('cooling-fan');
+    final c = ProviderContainer(
+      overrides: [profileApiProvider.overrideWithValue(rig.api())],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+    rig.failGet.clear();
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
   });
 
   test('a saved choice takes the daemon echo', () async {

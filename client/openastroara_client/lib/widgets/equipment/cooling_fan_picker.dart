@@ -8,6 +8,8 @@ import '../../state/settings/cooling_fan_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../state/profile_management_state.dart';
+import '../settings/section_load_state.dart';
 
 /// The Cooling fan choice (#1700): None, then each writable port of the
 /// connected switches as "Device › Port", with what the choice does under it.
@@ -84,7 +86,7 @@ class CoolingFanPicker extends ConsumerWidget {
 }
 
 /// The picker on the active profile's fan: Simple Mode's Camera window and the
-/// full UI's camera panel. Nothing until the daemon's answer is in.
+/// full UI's camera panel. Until the daemon's answer is in: the not-loaded notice.
 class ProfileCoolingFanPicker extends ConsumerWidget {
   const ProfileCoolingFanPicker({
     super.key,
@@ -95,8 +97,18 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fan = ref.watch(coolingFanProvider).value;
-    if (fan == null) return const SizedBox.shrink();
+    final section = ref.watch(coolingFanProvider);
+    final fan = section.value;
+    if (fan == null) {
+      return SectionNotLoaded(
+        section: section,
+        padding: EdgeInsets.zero,
+        onRetry: () {
+          final api = ref.read(profileApiProvider);
+          if (api != null) ref.read(coolingFanProvider.notifier).load(api);
+        },
+      );
+    }
     return CoolingFanPicker(
       value: fan,
       style: style,
