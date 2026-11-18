@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using System;
-using System.IO;
-using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace OpenAstroAra.Test;
 
@@ -261,6 +261,53 @@ public class FileProfileRepositoryTest {
         Directory.EnumerateFiles(profilesDir, badId + ".json.corrupt*").Should().ContainSingle()
             .Which.Should().MatchRegex(@"\.json\.corrupt\.\d+$");
         log.Warnings.Should().ContainSingle(w => w.Contains(badId));
+    }
+
+    [Test]
+    public void Corrupt_profile_file_is_reported_once_with_id_original_and_set_aside_path() {
+        var id = Guid.NewGuid();
+        var path = Path.Combine(_dir, "profiles", id.ToString("N") + ".json");
+        File.WriteAllText(path, "not json");
+
+        using var repo2 = new FileProfileRepository(_dir, _store);
+
+        var report = repo2.SetAsideFiles.Should().ContainSingle().Subject;
+        report.Id.Should().Be(id);
+        report.OriginalPath.Should().Be(path);
+        report.SetAsidePath.Should().MatchRegex(@"\.json\.corrupt\.\d+$");
+        File.Exists(report.SetAsidePath).Should().BeTrue();
+
+        using var repo3 = new FileProfileRepository(_dir, _store);
+        repo3.SetAsideFiles.Should().BeEmpty("the file no longer matches *.json");
+    }
+
+    [Test]
+    public void Good_profile_files_report_nothing_set_aside() {
+        using var repo2 = new FileProfileRepository(_dir, _store);
+        repo2.SetAsideFiles.Should().BeEmpty();
+    }
+
+    [Test]
+    public void Set_aside_that_fails_to_rename_reports_nothing() {
+        if (OperatingSystem.IsWindows()) Assert.Ignore("needs a read-only directory (POSIX mode bits)");
+        var profiles = Path.Combine(_dir, "profiles");
+        var path = Path.Combine(profiles, Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, "not json");
+        var mode = File.GetUnixFileMode(profiles);
+        File.SetUnixFileMode(profiles, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try {
+            // Root ignores the mode bits, so the rename would succeed: nothing to prove here.
+            try {
+                File.WriteAllText(Path.Combine(profiles, "probe"), "x");
+                Assert.Ignore("directory permissions are not enforced for this user");
+            } catch (UnauthorizedAccessException) { }
+
+            using var repo2 = new FileProfileRepository(_dir, _store);
+            repo2.SetAsideFiles.Should().BeEmpty();
+            File.Exists(path).Should().BeTrue("the rename failed, the file stays");
+        } finally {
+            File.SetUnixFileMode(profiles, mode);
+        }
     }
 
     [Test]
