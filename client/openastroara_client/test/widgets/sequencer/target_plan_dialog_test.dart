@@ -7,6 +7,7 @@ import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/sequencer/target_plan_dialog.dart';
@@ -31,6 +32,14 @@ class _SeededFilters extends FilterSetNotifier {
   final FilterSetSettings _v;
   @override
   LoadedSection<FilterSetSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
+}
+
+class _SeededLabels extends FilterWheelLabelsNotifier {
+  _SeededLabels(this._v);
+  final FilterWheelLabels _v;
+  @override
+  LoadedSection<FilterWheelLabels> build() =>
       LoadedSection(value: _v, source: SectionSource.rig);
 }
 
@@ -257,6 +266,34 @@ void main() {
         },
       );
       expect(choice!.filterPlan, isNull);
+    });
+
+    testWidgets('filter wheel labels not loaded: no manual filter swap is '
+        'assumed; blank labels loaded from the rig mean a manual swap', (
+      tester,
+    ) async {
+      Future<bool> manualSwap(List<Object> labels) async {
+        final choice = await open(
+          tester,
+          filters: shoSet,
+          overrides: labels,
+          interact: (t) async {
+            await t.tap(find.text('Create run'));
+          },
+        );
+        await tester.pumpWidget(const SizedBox());
+        return choice!.manualFilterSwap;
+      }
+
+      expect(await manualSwap(const []), isFalse);
+      expect(
+        await manualSwap([
+          filterWheelLabelsProvider.overrideWith(
+            () => _SeededLabels(FilterWheelLabels(labels: const ['', ''])),
+          ),
+        ]),
+        isTrue,
+      );
     });
 
     testWidgets('Basic pick returns no plan; cancel returns null',
