@@ -264,13 +264,15 @@ class _Controls extends ConsumerWidget {
       (BestType.planetary, l10n.bestTypePlanetary, 'planetary'),
       (BestType.other, l10n.bestTypeOther, 'other'),
     ];
+    // Each group only as wide as its segments need (the full width when they
+    // need more), so the Wrap can put groups side by side on a wide window.
     Widget group(String label, Widget child) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       spacing: 2,
       children: [
         Text(label, style: kSimpleCaption),
-        child,
+        IntrinsicWidth(child: child),
       ],
     );
     return Column(

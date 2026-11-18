@@ -510,6 +510,14 @@ void main() {
     );
   });
 
+  testWidgets('on a wide window Sort and Show sit side by side', (
+    tester,
+  ) async {
+    await _pump(tester, [a, c, b], size: const Size(1280, 800));
+    final top = tester.getTopLeft(find.byKey(const Key('best-sort-score'))).dy;
+    expect(tester.getTopLeft(find.byKey(const Key('best-show-all'))).dy, top);
+  });
+
   testWidgets(
     'no overflow at 2x text and 390 px, every target at least 44 px',
     (tester) async {
