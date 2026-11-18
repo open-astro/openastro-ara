@@ -229,6 +229,7 @@ void main() {
       _expectFramed(_goTo(body(), 'Andromeda Galaxy'));
     });
 
+    // guard: passes on current code; fails if framing off still sends Center and Rotate.
     test(
       'framing off is a plain centred go-to on the catalogue centre',
       () async {
@@ -239,6 +240,7 @@ void main() {
       },
     );
 
+    // guard: passes on current code; fails if a framing reaches a Target it is not named for.
     test(
       'the framing of another Target does not reach a newly picked Target',
       () async {
