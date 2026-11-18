@@ -81,7 +81,7 @@ public static class StartupNotificationFactory {
             DismissedUtc: null,
             Payload: null,
             RelatedEntityType: "profile",
-            RelatedEntityId: s.Id.ToString("N"))).ToList();
+            RelatedEntityId: s.Id.ToString())).ToList();
     }
 
     /// <summary>
