@@ -1817,3 +1817,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/BahtinovFocusService.cs` (`ExposureOrDefault`), `Services/GuideFocusService.cs` (`ExposureOrDefault`), `Endpoints/AutofocusEndpoints.cs` (`StepSizeAsync`), `Contracts/FocusCalibrationDtos.cs` (`AutofocusStepSizeDto`)
 
 **Related:** #1544
+
+---
+
+## 2026-11-19 — End Night: `POST /end-night`, `GET /end-night/status`, `POST /end-night/cancel`, `end_night.progress`, the `end-night-in-progress` refusal (#1901)
+
+**Endpoint(s) or area:** new `POST /api/v1/end-night` (optional body `{ "shut_down_host": true }`, default true), `GET /api/v1/end-night/status`, `POST /api/v1/end-night/cancel`; the WebSocket event `end_night.progress`; the refusal cause `end-night-in-progress`. Slice 2 of #1901 (the daemon); the client screen is slice 3.
+
+**Decision:** one daemon action puts the rig to bed, open to both shells (ADR 0009 rule 1; it is not the Emergency Stop, rule 3). `POST` answers 202 at once with the status and the work runs on the daemon, so it carries on when the client sleeps or loses Wi-Fi. The steps run in this order, each best-effort and reported as `pending`, `running`, `done`, `skipped` or `failed`: `abort_run` (aborts the run and waits, up to 60 s, until it is over so its Session is closed), `stop_guiding`, `find_home` (skipped when the mount cannot), `park_mount` (or stops tracking when it cannot park), `disconnect_devices` (filter wheel, focuser, rotator, flat panel), `warm_cooler` (the profile's ramp, then cooler off), `disconnect_camera` (skipped when the warm-up failed or was cancelled, so the cooler is never left cold), `notify`, `host_poweroff`. A step that fails is reported and the next safe step still runs. `host_poweroff` runs only when `shut_down_host` is true and the mount ended parked or with tracking off; otherwise it is `skipped` with the reason in `detail`. The status is `{ state: idle|running|complete|cancelled, run_id, shut_down_host, cancellable, cancel_requested, started_utc, ended_utc, steps: [{ id, state, detail }] }`; the finished action stays readable until the next start. `POST /end-night/cancel` stops at the next step boundary (the warm-up checks between ramp steps) and leaves the rig as it is; it never takes effect once the poweroff has started, and then `cancellable` is false. It answers 200 with the status whether or not it took effect. `end_night.progress` carries `{ run_id, state, step, step_state, detail, cancellable }`: `step` and `step_state` are null for a change of the action itself (started, cancel requested, finished). A `POST` while one runs is a 409 with `reason: end-night-in-progress`.
+
+**Reasoning:** the unattended shutdown already parks, warms and disconnects in the right order; End Night shares those steps (`ShutdownLadder`) and adds the run abort, Find Home and the host poweroff around them. The poweroff is the one step that cannot be undone and the Pi then cannot report back, so it is gated on the mount being safe, and a cancel cannot race it. The poweroff goes through the root-owned helper unit of ADR 0017; the daemon only asks systemd to start it.
+
+**Spec ref:** #1901; `Services/EndNightService.cs`, `Services/ShutdownLadder.cs`, `Endpoints/EndNightEndpoints.cs`, `Contracts/EndNightDtos.cs`, `Contracts/WsEvents/EndNightPayloads.cs`, `Services/HostPoweroffStarter.cs`. Tests `EndNightServiceTest`.
+
+**Related:** #1901, ADR 0009, ADR 0014, ADR 0017, ADR 0022, ADR 0023

@@ -8505,6 +8505,8 @@
   "@refusalCaptureSettingsUnsupported": {"description": "Refusal (capture-settings-unsupported): the exposure or binning is outside the camera's range"},
   "refusalStorageUnavailable": "The storage disk is missing. Plug it back in, then try again.",
   "@refusalStorageUnavailable": {"description": "Refusal (storage-unavailable): the disk frames are saved to is gone"},
+  "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
+  "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+
 import '../l10n/l10n.dart';
 import '../services/guider_api.dart' show GuideStartFailed;
 import '../services/refusal.dart';
@@ -44,7 +45,8 @@ String failureReason(AppLocalizations l, Object error) {
 String? daemonDetail(Object error) {
   if (error is! DioException) return null;
   final code = error.response?.statusCode;
-  if (code != 400 && code != 404 && code != 409 && code != 422 && code != 507) return null;
+  if (code != 400 && code != 404 && code != 409 && code != 422 && code != 507)
+    return null;
   // application/problem+json may reach us undecoded, depending on Dio's
   // transformer.
   var data = error.response?.data;
@@ -69,7 +71,9 @@ String? _ownWords(AppLocalizations l, Object error) {
   // #1664 — the guider's own reason, not "Couldn't start guiding."
   if (error is GuideStartFailed) {
     final reason = error.reason;
-    return reason == null ? l.guideStartFailedNoReason : l.guideStartFailed(reason);
+    return reason == null
+        ? l.guideStartFailedNoReason
+        : l.guideStartFailed(reason);
   }
   // StateError carries our own written-for-people messages (e.g. "Connect to
   // your rig first.") — pass those straight through.
@@ -93,6 +97,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.captureSettingsUnsupported =>
       l.refusalCaptureSettingsUnsupported,
     RefusalCause.storageUnavailable => l.refusalStorageUnavailable,
+    RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     null => _firstLine(r.detail),
   };
 }
@@ -106,21 +111,19 @@ String? _firstLine(String? text) {
 String? _why(AppLocalizations l, Object error) {
   if (error is DioException) {
     return switch (error.type) {
-      DioExceptionType.connectionTimeout ||
-      DioExceptionType.connectionError =>
+      DioExceptionType.connectionTimeout || DioExceptionType.connectionError =>
         l.errorNoAnswer(thisDeviceLabel(clientPlatform)),
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        l.errorTooSlow,
+      DioExceptionType.receiveTimeout => l.errorTooSlow,
       DioExceptionType.badCertificate => l.errorUntrusted,
       DioExceptionType.cancel => l.errorCancelled,
       DioExceptionType.badResponse => switch (error.response?.statusCode ?? 0) {
-          404 => l.errorNotFound,
-          409 => l.errorBusy,
-          422 => l.errorRefusedValues,
-          >= 500 => l.errorServer,
-          _ => l.errorRefused,
-        },
+        404 => l.errorNotFound,
+        409 => l.errorBusy,
+        422 => l.errorRefusedValues,
+        >= 500 => l.errorServer,
+        _ => l.errorRefused,
+      },
       _ => l.errorConnectionFailed,
     };
   }

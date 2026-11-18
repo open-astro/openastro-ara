@@ -11031,6 +11031,12 @@ abstract class AppLocalizations {
   /// **'The storage disk is missing. Plug it back in, then try again.'**
   String get refusalStorageUnavailable;
 
+  /// Refusal (end-night-in-progress): End Night was started while it is already running
+  ///
+  /// In en, this message translates to:
+  /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
+  String get refusalEndNightInProgress;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:
