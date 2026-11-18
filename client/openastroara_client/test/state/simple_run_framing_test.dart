@@ -229,12 +229,30 @@ void main() {
       _expectFramed(_goTo(body(), 'Andromeda Galaxy'));
     });
 
-    // guard: passes on current code; fails if framing off still sends Center and Rotate.
+    // guard: passes on current code; fails if a Target with no framing at all gets Center and Rotate.
     test(
       'framing off is a plain centred go-to on the catalogue centre',
       () async {
         pick(_m31);
         frame(PlanFraming.none);
+        expect(await run().create(), isTrue);
+        _expectPlain(_goTo(body(), 'M31'), _m31);
+      },
+    );
+
+    test(
+      'framing switched off in the page is a plain centred go-to even with its centre and name',
+      () async {
+        pick(_m31);
+        frame(
+          const PlanFraming(
+            on: false,
+            raDeg: 11.2,
+            decDeg: 41.9,
+            rotationDeg: 135,
+            name: 'M31',
+          ),
+        );
         expect(await run().create(), isTrue);
         _expectPlain(_goTo(body(), 'M31'), _m31);
       },
