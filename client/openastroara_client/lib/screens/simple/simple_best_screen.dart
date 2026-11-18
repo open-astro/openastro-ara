@@ -675,6 +675,8 @@ class _Row extends ConsumerWidget {
     if (!running) return onImage(o);
     final messages = ref.read(simpleMessagesProvider.notifier);
     final run = ref.read(simpleRunProvider.notifier);
+    // Read before the await: Back may close this page before the rig answers.
+    final container = ProviderScope.containerOf(context, listen: false);
     final added = await run.create();
     if (added) {
       // The person's own tap, so the pill is posted directly (ADR 0021 rule 5).
@@ -683,7 +685,7 @@ class _Row extends ConsumerWidget {
         l10n.bestAdded(selection.name),
         origin: SimpleStatusOrigin.plan,
       );
-    } else if (ref.read(simpleRunProvider).error case final error?) {
+    } else if (container.read(simpleRunProvider).error case final error?) {
       // A refused add says why, through the existing error text.
       messages.show(
         SimpleMessageKind.error,

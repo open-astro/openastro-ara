@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
@@ -90,6 +91,18 @@ class _FakeRun extends SimpleRunNotifier {
   }
 }
 
+/// create() waits for [answer], then the rig refuses the add.
+class _RefusedRun extends SimpleRunNotifier {
+  _RefusedRun(this.answer);
+  final Completer<void> answer;
+  @override
+  Future<bool> create({bool first = false, DateTime? startsAt}) async {
+    await answer.future;
+    state = state.copyWith(error: 'The plan is ending.');
+    return false;
+  }
+}
+
 class _World {
   _World(this.container, this.images);
   final ProviderContainer container;
@@ -107,6 +120,7 @@ Future<_World> _pump(
   List<String> queued = const [],
   List<String> collected = const [],
   List<int>? builds,
+  SimpleRunNotifier Function() simpleRun = _FakeRun.new,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -127,7 +141,7 @@ Future<_World> _pump(
       statsTargetsProvider.overrideWith(() => _Stats(collected)),
       serverLinkUpProvider.overrideWithValue(linkUp),
       sequenceRunStateProvider.overrideWith(() => _Run(run)),
-      simpleRunProvider.overrideWith(_FakeRun.new),
+      simpleRunProvider.overrideWith(simpleRun),
       tonightsBestPrefsServiceProvider.overrideWithValue(
         TonightsBestPrefsService(
           supportDir: () async => throw StateError('no disk'),
@@ -405,6 +419,33 @@ void main() {
       w.container.read(simpleMessagesProvider.notifier).dismiss(pill.id);
     },
   );
+
+  testWidgets('a refused add still says why after Back closes the page', (
+    tester,
+  ) async {
+    final answer = Completer<void>();
+    final w = await _pump(
+      tester,
+      [a],
+      run: SequenceRunState.running,
+      simpleRun: () => _RefusedRun(answer),
+    );
+    await tester.tap(find.byKey(const Key('best-image-A')));
+    await tester.pump();
+    // Back before the rig answers: the page leaves, the providers stay.
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: w.container,
+        child: const SizedBox(),
+      ),
+    );
+    answer.complete();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final pill = w.container.read(simpleMessagesProvider).single;
+    expect(pill.kind, SimpleMessageKind.error);
+    expect(pill.title, 'The plan is ending.');
+  });
 
   testWidgets('a queued Target still opens the plan sheet when no plan runs', (
     tester,
