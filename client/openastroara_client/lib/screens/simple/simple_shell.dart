@@ -795,6 +795,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Open Storage's one scroll: only the sheet it opens jumps to Storage.
   bool _revealStoragePending = false;
 
+  /// Keys 1 to 6 pick a mode, the arrows walk the tabs (wrapping): only where
+  /// the rail is a tab list, and never while a text field has focus.
+  void _railKey(SimpleModeScreen? to, {int step = 0}) {
+    final typing =
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() !=
+        null;
+    if (typing || !simpleRailTabs(context, ref)) return;
+    final at = railOrder.indexOf(ref.read(simpleShowingProvider));
+    final n = railOrder.length;
+    _pickTab(to ?? railOrder[((at < 0 ? 0 : at) + step) % n]);
+  }
+
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
     _toggle(_Popover.menu);
@@ -1384,6 +1397,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     LogicalKeyboardKey.period,
                     control: true,
                   ): _stopRun,
+                  for (final (i, key) in const [
+                    LogicalKeyboardKey.digit1,
+                    LogicalKeyboardKey.digit2,
+                    LogicalKeyboardKey.digit3,
+                    LogicalKeyboardKey.digit4,
+                    LogicalKeyboardKey.digit5,
+                    LogicalKeyboardKey.digit6,
+                  ].indexed)
+                    SingleActivator(key): () => _railKey(railOrder[i]),
+                  for (final key in const [
+                    LogicalKeyboardKey.arrowUp,
+                    LogicalKeyboardKey.arrowLeft,
+                  ])
+                    SingleActivator(key): () =>
+                        _railKey(null, step: railOrder.length - 1),
+                  for (final key in const [
+                    LogicalKeyboardKey.arrowDown,
+                    LogicalKeyboardKey.arrowRight,
+                  ])
+                    SingleActivator(key): () => _railKey(null, step: 1),
                 },
                 child: Focus(
                   focusNode: _focus,
@@ -2801,7 +2834,9 @@ class _RailTabs extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pinned = simpleRailScale(context) > 1;
-    final open = _openBlock(context, ref);
+    final done = ref.watch(doneTonightProvider);
+    final running = ref.watch(railRunningProvider);
+    final open = _openBlock(context, ref, done, running);
     return SimplePanel(
       padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
       // No tabBar role: it allows tab children only, and the open block holds
@@ -2828,6 +2863,8 @@ class _RailTabs extends ConsumerWidget {
                           key: Key('simple-rail-tab-${_railSlug(m)}'),
                           mode: m,
                           selected: false,
+                          done: done.contains(m),
+                          running: running.contains(m),
                           compact: pinned,
                           onTap: () => onPick(m),
                         ),
@@ -2849,7 +2886,17 @@ class _RailTabs extends ConsumerWidget {
     );
   }
 
-  Widget _openBlock(BuildContext context, WidgetRef ref) => Container(
+  Widget _openBlock(
+    BuildContext context,
+    WidgetRef ref,
+    Set<SimpleModeScreen> done,
+    Set<SimpleModeScreen> running,
+  ) {
+    // The plan's frames taken, under the name of the open Plan.
+    final figure = mode == SimpleModeScreen.plan
+        ? ref.watch(railFigureProvider)
+        : null;
+    return Container(
     key: const Key('simple-rail-open'),
     decoration: BoxDecoration(
       color: AraColors.selectionTint,
@@ -2865,11 +2912,19 @@ class _RailTabs extends ConsumerWidget {
             key: Key('simple-rail-tab-${_railSlug(mode)}'),
             mode: named ?? mode,
             selected: true,
+            done: done.contains(mode),
+            running: running.contains(mode),
             // In Preflight a pick of its step's mode would end it.
             onTap: named == null ? () => onPick(mode) : () {},
             name: true,
           ),
         ),
+        if (figure != null)
+          Text(
+            figure,
+            key: const Key('simple-rail-figure'),
+            style: AraText.caption.copyWith(color: AraColors.selectionFg),
+          ),
         SimpleScreen.of(mode).shutter,
         _RailButton(
           key: const Key('simple-settings'),
@@ -2881,13 +2936,15 @@ class _RailTabs extends ConsumerWidget {
         ),
       ],
     ),
-  );
+    );
+  }
 }
 
 /// One tab: the mode's icon over its caption. [name] is the open block's
 /// header, which shows the short name alone, as the rail did. [compact] (large
 /// text) drops the icon and keeps the caption to one line; the tab list
-/// scrolls when the tabs outgrow the rail.
+/// scrolls when the tabs outgrow the rail. [done] draws a tick (done tonight)
+/// and [running] a steady dot in the corner; neither animates.
 class _RailTab extends StatelessWidget {
   const _RailTab({
     super.key,
@@ -2896,10 +2953,14 @@ class _RailTab extends StatelessWidget {
     required this.onTap,
     this.name = false,
     this.compact = false,
+    this.done = false,
+    this.running = false,
   });
 
   final SimpleModeScreen mode;
   final bool selected;
+  final bool done;
+  final bool running;
   final VoidCallback onTap;
   final bool name;
   final bool compact;
@@ -2930,7 +2991,11 @@ class _RailTab extends StatelessWidget {
       role: SemanticsRole.tab,
       selected: selected,
       enabled: true,
-      label: mode.labelOf(context.l10n),
+      label: running
+          ? context.l10n.shellRailTabRunning(mode.labelOf(context.l10n))
+          : done
+          ? context.l10n.shellRailTabDone(mode.labelOf(context.l10n))
+          : mode.labelOf(context.l10n),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AraRadius.container),
@@ -2943,32 +3008,61 @@ class _RailTab extends StatelessWidget {
               maxWidth: 60 * scale,
               minHeight: name ? 48 : (compact ? 44 : 46),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Stack(
               children: [
-                if (!name && !compact) Icon(mode.icon, size: 20, color: color),
-                // "Polar align" wraps to two lines at the rail's width (or
-                // its longest word's), and FittedBox shrinks the caption to
-                // the tab, never cut. Compact keeps one line and shrinks it
-                // whole, so no fixed width there.
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: compact
-                          ? null
-                          : math.max(60 * scale, longestWord.ceilToDouble()),
-                      child: Text(
-                        label,
-                        maxLines: compact ? 1 : 2,
-                        softWrap: !compact,
-                        textAlign: TextAlign.center,
-                        style: style,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!name && !compact) Icon(mode.icon, size: 20, color: color),
+                    // "Polar align" wraps to two lines at the rail's width (or
+                    // its longest word's), and FittedBox shrinks the caption to
+                    // the tab, never cut. Compact keeps one line and shrinks it
+                    // whole, so no fixed width there.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: SizedBox(
+                          width: compact
+                              ? null
+                              : math.max(60 * scale, longestWord.ceilToDouble()),
+                          child: Text(
+                            label,
+                            maxLines: compact ? 1 : 2,
+                            softWrap: !compact,
+                            textAlign: TextAlign.center,
+                            style: style,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (done)
+                  Positioned(
+                    top: 2,
+                    right: 4,
+                    child: Icon(
+                      Icons.check,
+                      key: Key('simple-rail-tick-${_railSlug(mode)}'),
+                      size: 12,
+                      color: AraColors.accentConnected,
+                    ),
+                  ),
+                if (running)
+                  Positioned(
+                    top: 4,
+                    right: 6,
+                    child: Container(
+                      key: Key('simple-rail-dot-${_railSlug(mode)}'),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AraColors.accentConnected,
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

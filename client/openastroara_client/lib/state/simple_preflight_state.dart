@@ -2,12 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
+import 'sequencer/sequence_list_state.dart' show sequenceRunStateProvider;
 import 'simple_run_state.dart'
     show
+        SimpleRunPhase,
         simpleDarkStartProvider,
+        simplePlanTotal,
+        simpleRunPhase,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
 import '../models/polar_align.dart' show PolarAlignLastResult, PolarAlignStates;
+import '../models/autofocus_run.dart' show AutofocusRunStates;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'guider/guider_state.dart';
@@ -143,18 +148,20 @@ extension SimplePreflightStepLabel on SimplePreflightStep {
 
 /// #1565 — the rig's last polar-align routine, read once per server so a
 /// relaunch still knows the mount was aligned tonight, and again each time a
-/// routine starts or ends, so a newer routine replaces it. Null from an older
-/// daemon, before any routine ended, or when the read fails.
-final polarAlignLastResultProvider = FutureProvider<PolarAlignLastResult?>((
-  ref,
-) async {
+/// routine starts or ends, so a newer routine replaces it. [last] is null from
+/// an older daemon, before any routine ended, or when the read fails; [state]
+/// is the daemon's routine state at the read ([PolarAlignStates]), which
+/// [doneTonightProvider] reads for a failed routine the live view never saw.
+final polarAlignLastResultProvider =
+    FutureProvider<({PolarAlignLastResult? last, String? state})>((ref) async {
   final api = ref.watch(polarAlignApiProvider);
   ref.watch(polarAlignLiveProvider.select((l) => l.isActive));
-  if (api == null) return null;
+  if (api == null) return (last: null, state: null);
   try {
-    return (await api.getStatus())?.lastResult;
+    final status = await api.getStatus();
+    return (last: status?.lastResult, state: status?.state);
   } catch (_) {
-    return null;
+    return (last: null, state: null);
   }
 });
 
@@ -170,10 +177,84 @@ final nightFocusStateProvider = Provider<SetupStepState>(
 final nightPolarAlignStateProvider = Provider<SetupStepState>(
   (ref) => polarAlignStepState(
     ref.watch(polarAlignLiveProvider),
-    last: ref.watch(polarAlignLastResultProvider).value,
+    last: ref.watch(polarAlignLastResultProvider).value?.last,
     now: DateTime.now(),
   ),
 );
+
+/// Whether Focus counts as done tonight: the #1565 read AND the latest run did
+/// not fail. A manual "in focus" mark since that run clears the failure.
+bool focusDoneTonight(SetupStepState read, AutofocusLive live) =>
+    read == SetupStepState.done &&
+    !(live.run.state == AutofocusRunStates.failed && !live.manualMarkSinceRun);
+
+/// Whether Polar align counts as done tonight: the #1565 read AND the latest
+/// routine did not fail. A live phase other than idle wins; while it is idle
+/// (a relaunch) the daemon's [fetchedState] says how the last routine ended.
+bool polarDoneTonight(
+  SetupStepState read,
+  PolarAlignLive live,
+  String? fetchedState,
+) {
+  final failed = live.phase == PolarAlignStates.idle
+      ? fetchedState == PolarAlignStates.failed
+      : live.phase == PolarAlignStates.failed;
+  return read == SetupStepState.done && !failed;
+}
+
+/// The modes done tonight (Focus, Polar align), for the rail's ticks (#1911).
+final doneTonightProvider = Provider<Set<SimpleModeScreen>>((ref) {
+  final fetched = ref.watch(polarAlignLastResultProvider).value;
+  return {
+    if (focusDoneTonight(
+      ref.watch(nightFocusStateProvider),
+      ref.watch(autofocusLiveProvider),
+    ))
+      SimpleModeScreen.focus,
+    if (polarDoneTonight(
+      ref.watch(nightPolarAlignStateProvider),
+      ref.watch(polarAlignLiveProvider),
+      fetched?.state,
+    ))
+      SimpleModeScreen.polarAlign,
+  };
+});
+
+/// The modes that run now, for the rail's dots: a plan imaging, Smart Focus,
+/// a polar routine, the guider.
+final railRunningProvider = Provider<Set<SimpleModeScreen>>((ref) {
+  final phase = simpleRunPhase(
+    ref.watch(simpleRunProvider),
+    ref.watch(sequenceRunStateProvider).value,
+  );
+  return {
+    if (phase == SimpleRunPhase.imaging || phase == SimpleRunPhase.pausing)
+      SimpleModeScreen.plan,
+    if (ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning)))
+      SimpleModeScreen.focus,
+    if (ref.watch(polarAlignLiveProvider.select((l) => l.isActive)))
+      SimpleModeScreen.polarAlign,
+    if (ref.watch(guiderStatusProvider.select((s) => s.value?.isBusy ?? false)))
+      SimpleModeScreen.guide,
+  };
+});
+
+/// "12/40": the frames taken of the plan's total while it images; null else.
+final railFigureProvider = Provider<String?>((ref) {
+  final run = ref.watch(simpleRunProvider);
+  final info = ref.watch(sequenceRunStateProvider).value;
+  final phase = simpleRunPhase(run, info);
+  if (run.targets.isEmpty ||
+      info?.sequenceId != run.sequenceId ||
+      (phase != SimpleRunPhase.imaging && phase != SimpleRunPhase.pausing)) {
+    return null;
+  }
+  final total = run.targets.fold(
+    0,
+    (n, t) => n + simplePlanTotal(t.steps) + t.flatFrames,
+  );
+  return '${info?.framesCaptured ?? 0}/$total';
+});
 
 /// The step to start on (always the plan), or go to next from [after]: the
 /// first setup step not done tonight, polar align skipped on a permanent

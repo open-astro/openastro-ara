@@ -32,6 +32,8 @@ import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/services/polar_align_api.dart'
+    show PolarAlignClient;
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 
 // #1911 slice 1: the right rail is a tab list of the six modes, in the order of
@@ -104,6 +106,20 @@ class _PolarLive extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void put(PolarAlignLive v) => state = v;
+}
+
+/// The daemon's polar status: green tonight, ended `failed`.
+class _FailedPolarApi implements PolarAlignClient {
+  @override
+  Future<PolarAlignStatus?> getStatus() async => PolarAlignStatus(
+    state: PolarAlignStates.failed,
+    lastResult: PolarAlignLastResult(
+      errorArcmin: 4,
+      completedUtc: DateTime.now().toUtc(),
+    ),
+  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _StartOnLive extends SelectedTabIndexNotifier {
@@ -251,7 +267,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'keys 1 to 6 pick the mode in the order of the night; the arrow keys move along the tabs',
         (tester) async {
           final c = await _pump(tester, size);
@@ -295,7 +310,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'a tick marks Focus when it is done tonight, stays on while Focus is open, and Polar align has none (#1565 reads)',
         (tester) async {
           final c = await _pump(
@@ -332,7 +346,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'a steady dot marks the mode that runs and does not blink',
         (tester) async {
           await _pump(tester, size, extra: _runningPlan);
@@ -364,7 +377,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'the open block shows the figure under the mode name while a plan images (12/40)',
         (tester) async {
           final c = await _pump(tester, size, extra: _runningPlan);
@@ -418,7 +430,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'the arrow keys wrap at both ends',
         (tester) async {
           final c = await _pump(tester, size);
@@ -497,7 +508,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'Focus done, then a failed Focus run: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(
@@ -545,7 +555,6 @@ void main() {
       );
 
       testWidgets(
-        skip: true, // slice S1b (#1911)
         'Polar align done, then a failed routine: no tick, and no "done tonight" in the label (clears on failure)',
         (tester) async {
           final c = await _pump(
@@ -574,6 +583,57 @@ void main() {
               zone: 'green',
               stage: PolarAlignStages.fine,
             ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-polar')), findsNothing);
+          expect(
+            tester.getSemantics(_tab('polar')).label,
+            isNot(contains('done tonight')),
+          );
+        },
+      );
+
+      testWidgets(
+        'Focus failed, then a manual focus mark: the tick and "done tonight" are back',
+        (tester) async {
+          final c = await _pump(
+            tester,
+            size,
+            extra: [autofocusLiveProvider.overrideWith(_FocusLive.new)],
+          );
+          final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+          focus.put(
+            AutofocusLive(
+              run: AutofocusRun(
+                state: AutofocusRunStates.failed,
+                startedUtc: DateTime.now().toUtc(),
+              ),
+              focusedThisSession: true,
+              hydrated: true,
+            ),
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('simple-rail-tick-focus')), findsNothing);
+          focus.markFocusedManually();
+          await tester.pump();
+          expect(
+            find.byKey(const Key('simple-rail-tick-focus')),
+            findsOneWidget,
+          );
+          expect(
+            tester.getSemantics(_tab('focus')).label,
+            contains('Focus, done tonight'),
+          );
+        },
+      );
+
+      testWidgets(
+        'Polar align green tonight, the daemon says failed, live idle after a relaunch: no tick',
+        (tester) async {
+          await _pump(
+            tester,
+            size,
+            extra: [polarAlignApiProvider.overrideWithValue(_FailedPolarApi())],
           );
           await tester.pump();
           expect(find.byKey(const Key('simple-rail-tick-polar')), findsNothing);

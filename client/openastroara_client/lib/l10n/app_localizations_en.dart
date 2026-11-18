@@ -1419,6 +1419,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellRailTabs => 'Modes';
 
   @override
+  String shellRailTabDone(String mode) {
+    return '$mode, done tonight';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, running';
+  }
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
