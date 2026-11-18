@@ -66,6 +66,24 @@ public static class StartupNotificationFactory {
         };
     }
 
+    /// <summary>One Critical notice per profile file set aside at load (#1955).</summary>
+    public static IReadOnlyList<NotificationDto> ForProfileSetAsides(IEnumerable<ProfileSetAside> setAsides) {
+        var now = DateTimeOffset.UtcNow;
+        return setAsides.Select(s => new NotificationDto(
+            Id: Guid.NewGuid(),
+            PostedUtc: now,
+            Severity: NotificationSeverity.Critical,
+            Category: NotificationCategory.Software,
+            Title: "A profile file was set aside",
+            Message: $"Profile {s.Id:N} could not be read. Its file was renamed to {s.SetAsidePath} and the profile is not in the list; restore it from a backup if you need it.",
+            Read: false,
+            Dismissed: false,
+            DismissedUtc: null,
+            Payload: null,
+            RelatedEntityType: "profile",
+            RelatedEntityId: s.Id.ToString())).ToList();
+    }
+
     /// <summary>
     /// Build the §51 diagnostic event for a Corrupt reconciler outcome. We
     /// don't emit a diagnostic for Interrupted — that's a routine "previous

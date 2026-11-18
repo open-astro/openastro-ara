@@ -380,41 +380,6 @@ class ProfileApi {
     return filterSetFromJson(res.data ?? const {});
   }
 
-  /// GET the active profile's filter-wheel slot labels (§37.4/§46.2 —
-  /// the offline-authoring names the §38 editor's filter picker sources).
-  Future<FilterWheelLabels> getFilterWheelLabels() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/labels',
-    );
-    return _filterWheelLabelsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's filter-wheel slot labels. Returns Ara's
-  /// echo (it trims each label; 400 on >32 slots or a label over 64 chars).
-  Future<FilterWheelLabels> putFilterWheelLabels(
-    FilterWheelLabels value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/labels',
-      data: {
-        'labels': [for (var s = 1; s <= value.slotCount; s++) value.labelAt(s)],
-      },
-    );
-    return _filterWheelLabelsFromJson(res.data ?? const {});
-  }
-
-  static FilterWheelLabels _filterWheelLabelsFromJson(
-    Map<String, dynamic> json,
-  ) {
-    final raw = json['labels'];
-    // Defensive: a malformed/absent list keeps the reference defaults rather
-    // than collapsing the wheel to zero slots.
-    if (raw is! List || raw.isEmpty) return FilterWheelLabels();
-    return FilterWheelLabels(
-      labels: [for (final e in raw) e is String ? e : ''],
-    );
-  }
-
   /// GET the active profile's storage-settings section.
   Future<StorageSettings> getStorageSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
@@ -564,6 +529,21 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({FilterWheelLabels value, String? etag})>
+  getFilterWheelLabelsSection() =>
+      _getTagged('filter-wheel/labels', _filterWheelLabelsFromRig);
+  Future<({FilterWheelLabels value, String? etag})> putFilterWheelLabelsSection(
+    FilterWheelLabels v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'filter-wheel/labels',
+    {
+      'labels': [for (var s = 1; s <= v.slotCount; s++) v.labelAt(s)],
+    },
+    _filterWheelLabelsFromRig,
+    ifMatch,
+  );
+
   Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
       _getTagged('unguided', _unguidedSettingsFromRig);
   Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
@@ -656,6 +636,14 @@ class ProfileApi {
         homeOnFirstConnect: j['home_on_first_connect'] as bool,
         useFilterWheelOffsets: j['use_filter_wheel_offsets'] as bool,
       );
+
+  // Strict like the readers above: a missing, non-list or empty labels value or
+  // a non-string slot fails the load instead of reading as the reference wheel.
+  static FilterWheelLabels _filterWheelLabelsFromRig(Map<String, dynamic> j) {
+    final raw = j['labels'] as List;
+    if (raw.isEmpty) throw const FormatException('labels empty');
+    return FilterWheelLabels(labels: [for (final e in raw) e as String]);
+  }
 
   static PlateSolveSettings _plateSolveSettingsFromRig(
     Map<String, dynamic> j,

@@ -5,6 +5,7 @@ import 'package:openastroara/screens/settings/panels/filter_set_panel.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/widgets/settings/section_load_state.dart';
 
 import '../../../support/fake_section_rig.dart';
@@ -73,6 +74,18 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Add filter'), findsOneWidget);
     expect(find.text('Seed from filter wheel labels'), findsOneWidget);
+  });
+
+  testWidgets('Filter set panel: with the labels not loaded and no wheel, '
+      'Seed adds no filters', (tester) async {
+    // The rig answers the filter set but not the labels: no reference eight.
+    final rig = FakeSectionRig({'filter-set': rigDefaults['filter-set']});
+    final c = await _pump(tester, rig.api());
+    await tester.tap(find.text('Seed from filter wheel labels'));
+    await tester.pumpAndSettle();
+    expect(c.read(filterWheelLabelsProvider).value, isNull);
+    expect(c.read(filterSetProvider).value!.filters, isEmpty);
+    expect(find.textContaining('No new labels to add'), findsOneWidget);
   });
 
   testWidgets('Filter set panel: a Save the rig refuses as stale shows the '
