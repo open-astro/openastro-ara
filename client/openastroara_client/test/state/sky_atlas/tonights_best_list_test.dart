@@ -402,6 +402,8 @@ void main() {
         ..setMinPeakAlt(60)
         ..setFitsField(true)
         ..clearFilters();
+      // Windows cannot delete the dir while a save holds the file open.
+      await n.saved;
       final got = c.read(tonightsBestChoicesProvider);
       expect(got.sort, BestSort.transit);
       expect(got.filtered, isFalse);
