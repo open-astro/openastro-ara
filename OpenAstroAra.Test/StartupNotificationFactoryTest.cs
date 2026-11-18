@@ -46,6 +46,8 @@ namespace OpenAstroAra.Test {
             Assert.That(notes[0].Category, Is.EqualTo(NotificationCategory.Software));
             Assert.That(notes[0].Message, Does.Contain(a.Id.ToString("N")).And.Contain(a.SetAsidePath));
             Assert.That(notes[1].Message, Does.Contain(b.Id.ToString("N")).And.Contain(b.SetAsidePath));
+            // The wire form of a profile id (ProfileMetaDto.Id), as every other Guid RelatedEntityId.
+            Assert.That(notes[0].RelatedEntityId, Is.EqualTo(a.Id.ToString()));
             Assert.That(notes[0].Id, Is.Not.EqualTo(notes[1].Id));
         }
 
