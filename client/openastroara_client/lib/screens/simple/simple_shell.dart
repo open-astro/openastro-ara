@@ -1626,16 +1626,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 _toggle(_Popover.settings),
                                           )
                                         : _RightRail(
-                                      key: _rightRailKey,
-                                      mode: shown,
-                                      named: pilot != null
-                                          ? SimpleModeScreen.preflight
-                                          : null,
-                                      popover: _popover,
-                                      onModes: () => _toggle(_Popover.modes),
-                                      onSettings: () =>
-                                          _toggle(_Popover.settings),
-                                    ),
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onModes: () =>
+                                                _toggle(_Popover.modes),
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                          ),
                                   ),
                                 ),
                               ),
