@@ -68,7 +68,9 @@ class GuideFocusCard extends ConsumerStatefulWidget {
 }
 
 class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
-  double _exposureSec = 2;
+  // Null until a segment is picked: the daemon then takes the profile's autofocus
+  // exposure, so the card sends no default of its own (#1544).
+  double? _exposureSec;
   static const _exposures = [1.0, 2.0, 3.0, 5.0];
 
   @override
@@ -123,10 +125,11 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
           for (final e in _exposures)
             ButtonSegment(value: e, label: Text('${e.round()} s')),
         ],
-        selected: {_exposureSec},
+        selected: {?_exposureSec},
+        emptySelectionAllowed: true,
         showSelectedIcon: false,
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.first),
+        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
       ),
       child: FitColumn(
         children: [

@@ -80,6 +80,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     private readonly IAnalysisFrameSource _frames;
     private readonly Func<BahtinovOptics?> _optics;
     private readonly Func<string?> _busyReason;
+    private readonly Func<double?> _defaultExposure;
     private readonly ILogger<BahtinovFocusService> _logger;
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private readonly object _gate = new();
@@ -120,10 +121,12 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     /// <param name="busyReason">Why the camera is not free for a readout (an autofocus run, a sequence), or
     /// null when it is.</param>
     public BahtinovFocusService(IAnalysisFrameSource frames, Func<BahtinovOptics?> optics,
-            Func<string?>? busyReason = null, ILogger<BahtinovFocusService>? logger = null) {
+            Func<string?>? busyReason = null, ILogger<BahtinovFocusService>? logger = null,
+            Func<double?>? defaultExposure = null) {
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
         _optics = optics ?? throw new ArgumentNullException(nameof(optics));
         _busyReason = busyReason ?? (() => null);
+        _defaultExposure = defaultExposure ?? (() => null);
         _logger = logger ?? NullLogger<BahtinovFocusService>.Instance;
     }
 
@@ -159,6 +162,16 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
         return (FallbackZonePx, false);
     }
 
+    /// <summary>The exposure a start omitting it uses when the profile has no autofocus exposure.</summary>
+    internal const double FallbackExposureSeconds = 1.0;
+
+    /// <summary>The request's exposure, else the profile's autofocus exposure clamped to 0.05–30 s, else
+    /// <see cref="FallbackExposureSeconds"/>. Pure.</summary>
+    internal static double ExposureOrDefault(double? requested, double? profileExposure) =>
+        requested ?? (profileExposure is { } p && double.IsFinite(p) && p > 0
+            ? Math.Clamp(p, MinExposureSeconds, MaxExposureSeconds)
+            : FallbackExposureSeconds);
+
     /// <summary>The request's exposure (finite, 0.05–30 s). Pure.</summary>
     internal static double ResolveExposure(double requested) {
         if (!double.IsFinite(requested) || requested < MinExposureSeconds || requested > MaxExposureSeconds) {
@@ -182,7 +195,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
 
     public async Task StartAsync(BahtinovFocusStartRequestDto request, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        var exposure = ResolveExposure(request.ExposureSec);
+        var exposure = ResolveExposure(ExposureOrDefault(request.ExposureSec, _defaultExposure()));
         var binning = ResolveBinning(request.Binning, _frames.MaxBinning);
         await _opLock.WaitAsync(ct).ConfigureAwait(false);
         try {

@@ -1753,3 +1753,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PlaceholderServerStateService.cs` (`RestartOnIdleAsync`, `CancelRestartOnIdleAsync`, `RunIsOnAsync`), `ISequencerService.UnfinishedRunIdsAsync`, `Contracts/ServerStateDtos.cs` (`RestartOnIdleAcceptedDto`, `PendingRestartDto`), `Contracts/WsEvents/WsEventCatalog.cs` (`ServerRestartCancelled`), `ServerStateEndpoints` (`/restart-on-idle`)
 
 **Related:** #1865, #1951
+
+---
+
+## 2026-11-17 — Focus settings tiers: `GET /autofocus/step-size`; Bahtinov and guide focus take the AF exposure when `exposure_sec` is omitted (#1544)
+
+**Endpoint(s) or area:** new `GET /api/v1/autofocus/step-size`; `exposure_sec` is now optional on `POST /api/v1/bahtinov-focus/start` and `POST /api/v1/equipment/guider/focus/start`.
+
+**Decision:** `step-size` answers `AutofocusStepSizeDto { step_size, source }`, the step the next sweep would use and where it comes from (`manual` | `measured` | `cfz` | `default`), from the same resolver the sweep runs, so Settings can show the derived value next to the stored override. A focuser that reports no step size, or that cannot be read, only leaves the `cfz` rung out. A start request that omits `exposure_sec` (or sends null) uses the profile's `autofocus.exposure_seconds`, clamped to the readout's range (0.05-30 s); with no profile value the old defaults hold (Bahtinov 1 s, guide focus 2 s). A request that sends `exposure_sec` is unchanged, including its 400 for a value out of range. The schema loses its `default` for `exposure_sec` and gains `null`.
+
+**Reasoning:** exposure existed three times on the wire with three defaults; the client no longer repeats a default of its own, and the profile's AF exposure is the one source. An older client that always sends the field behaves as before.
+
+**Spec ref:** `Services/BahtinovFocusService.cs` (`ExposureOrDefault`), `Services/GuideFocusService.cs` (`ExposureOrDefault`), `Endpoints/AutofocusEndpoints.cs` (`StepSizeAsync`), `Contracts/FocusCalibrationDtos.cs` (`AutofocusStepSizeDto`)
+
+**Related:** #1544
