@@ -15,6 +15,7 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
     show
         SimpleModeScreen,
+        SimplePreflightStep,
         nightFocusStateProvider,
         nightPolarAlignStateProvider,
         simplePreflightProvider,
@@ -394,6 +395,25 @@ void main() {
           await tester.tap(find.byKey(const Key('simple-mode-preflight')));
           await tester.pump();
           expect(c.read(simplePreflightProvider), isNotNull);
+        },
+      );
+
+      testWidgets(
+        'a tap on the open tab in Preflight keeps Preflight on its step',
+        (tester) async {
+          final c = await _pump(tester, size);
+          await tester.tap(find.byKey(const Key('simple-mode-preflight')));
+          await tester.pump();
+          expect(c.read(simplePreflightProvider), SimplePreflightStep.plan);
+          // The open tab of Preflight's Plan step, which reads Preflight.
+          await tester.tap(_tab('plan'));
+          await tester.pump();
+          expect(
+            c.read(simplePreflightProvider),
+            SimplePreflightStep.plan,
+            reason: 'Preflight goes on',
+          );
+          expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
         },
       );
 

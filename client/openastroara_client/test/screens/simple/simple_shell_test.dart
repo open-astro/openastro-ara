@@ -1507,6 +1507,8 @@ void main() {
     expect(_panelOf(tester, find.text('Fit the mask, then Start')).center.dy, closeTo(centre, 1),
         reason: "Preflight's Focus step: centred");
     final rail = _panelOf(tester, find.byKey(const Key('simple-rail-tabs')));
+    // Preflight's open tab keeps Preflight: another tab leaves it.
+    await openMode(tester, 'preview');
     await openMode(tester, 'focus');
     // Level with the tab list's top, or under the status pill when the list reaches higher.
     expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, math.max(rail.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8), reason: 'Focus on its own: by the rail');

@@ -2865,7 +2865,8 @@ class _RailTabs extends ConsumerWidget {
             key: Key('simple-rail-tab-${_railSlug(mode)}'),
             mode: named ?? mode,
             selected: true,
-            onTap: () => onPick(mode),
+            // In Preflight a pick of its step's mode would end it.
+            onTap: named == null ? () => onPick(mode) : () {},
             name: true,
           ),
         ),
