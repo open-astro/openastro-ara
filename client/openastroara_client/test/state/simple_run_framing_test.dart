@@ -240,23 +240,20 @@ void main() {
       },
     );
 
-    test(
-      'framing switched off in the page is a plain centred go-to even with its centre and name',
-      () async {
-        pick(_m31);
-        frame(
-          const PlanFraming(
-            on: false,
-            raDeg: 11.2,
-            decDeg: 41.9,
-            rotationDeg: 135,
-            name: 'M31',
-          ),
-        );
-        expect(await run().create(), isTrue);
-        _expectPlain(_goTo(body(), 'M31'), _m31);
-      },
-    );
+    test('framing switched off in the page is a plain centred go-to even with its centre and name', () async {
+      pick(_m31);
+      frame(
+        const PlanFraming(
+          on: false,
+          raDeg: 11.2,
+          decDeg: 41.9,
+          rotationDeg: 135,
+          name: 'M31',
+        ),
+      );
+      expect(await run().create(), isTrue);
+      _expectPlain(_goTo(body(), 'M31'), _m31);
+    });
 
     // guard: passes on current code; fails if a framing reaches a Target it is not named for.
     test(
