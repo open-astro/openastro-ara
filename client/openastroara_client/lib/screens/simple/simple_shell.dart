@@ -2951,17 +2951,8 @@ class _RailTabs extends ConsumerWidget {
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
-        SimpleScreen.of(mode).shutter,
-        _RailButton(
-          key: const Key('simple-settings'),
-          icon: Icons.tune,
-          tall: true,
-          label: _railChipLabel(context, ref, mode, named),
-          selected: popover == _Popover.settings,
-          onTap: onSettings,
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 }
