@@ -123,7 +123,7 @@ public sealed partial class GuiderService {
             _starLostProbeTimer?.Dispose();
             _starLostProbeTimer = null;
             if (_disposed || _guider is null || _state != EquipmentConnectionState.Connected
-                || !_starLostReacted || _starLostPausedRuns.Count == 0 || _recoveryGaveUp) {
+                || !_starLostReacted || _recoveryGaveUp) {
                 return;
             }
             if (_recoveryInFlight) {
@@ -213,16 +213,15 @@ public sealed partial class GuiderService {
         }
     }
 
-    /// <summary>Which of the episode's runs are still paused under daemon custody. Empty = the user
-    /// resumed, paused or stopped the run (or it finished): the episode is closed here, its fault row
-    /// resolved, and the caller stops. Asked before every probe and again right before the slew, so
+    /// <summary>Which of the runs the episode paused (the shared reaction tells this service, see
+    /// <see cref="IGuiderEpisodeListener"/>) are still under daemon custody. Empty = the user resumed,
+    /// paused or stopped the run (or it finished): the episode is closed here, its fault recovered, and
+    /// the caller stops. Asked before every probe and again right before the slew, so
     /// a Resume pressed during the wait or the stop never meets a mount in motion.</summary>
     private async Task<IReadOnlyList<Guid>> StillDaemonPausedAsync(ISequencerService sequencer, CancellationToken ct) {
         IReadOnlyList<Guid> paused;
-        EquipmentFaultEvent? fault;
         lock (_gate) {
             paused = _starLostPausedRuns;
-            fault = _starLostFault;
         }
         var still = await sequencer.DaemonPausedRunsAsync(paused, ct).ConfigureAwait(false);
         if (still.Count > 0) {
@@ -232,15 +231,10 @@ public sealed partial class GuiderService {
             if (!_starLostReacted) {
                 return still;
             }
-            _starLostReacted = false;
-            _starLostFault = null;
-            _starLostPausedRuns = Array.Empty<Guid>();
             _recoveryStoppedGuiding = false;
+            EndStarLostEpisodeLocked();
         }
         LogStarLostRecoveryUserActed();
-        if (fault is not null) {
-            await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
-        }
         return still;
     }
 
@@ -261,7 +255,6 @@ public sealed partial class GuiderService {
             return null;
         }
         EquipmentFaultEvent? fault;
-        IReadOnlyList<Guid> paused;
         lock (_gate) {
             fault = _starLostFault;
         }
@@ -270,7 +263,7 @@ public sealed partial class GuiderService {
             // Nothing to re-center with: say so and leave the guider as it is (no stop has happened,
             // so _recoveryStoppedGuiding is false and GiveUpAsync restarts nothing), so a star that
             // drifts back into the box still relocks and resumes the run once guiding settles.
-            return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
+            return await GiveUpAsync(guider, "Run stays paused — Ara cannot re-center on this rig",
                 $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
                 + "This daemon has no plate solver wired, so Ara cannot re-center the target itself. Check the sky and press Resume.").ConfigureAwait(false);
         }
@@ -307,13 +300,13 @@ public sealed partial class GuiderService {
             case TargetRecenterOutcome.Cancelled:
                 throw new OperationCanceledException(ct);
             case TargetRecenterOutcome.TargetTooLow:
-                return await GiveUpAsync(guider, fault, "Run stays paused — target is low",
+                return await GiveUpAsync(guider, "Run stays paused — target is low",
                     $"The guide star has been lost for {lostMinutes} min. The target now sits at {result.AltitudeDeg:F0}°, below your "
                     + $"{result.LimitDeg:F0}° horizon limit, so Ara did not re-center on it. The plan's altitude conditions decide what's next, or press Resume.").ConfigureAwait(false);
             case TargetRecenterOutcome.NoCenteringService:
             case TargetRecenterOutcome.Unconfigured:
             case TargetRecenterOutcome.NotAttempted:
-                return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
+                return await GiveUpAsync(guider, "Run stays paused — Ara cannot re-center on this rig",
                     $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
                     + (result.Outcome == TargetRecenterOutcome.NotAttempted
                         ? "The paused run carries no coordinate target to re-center on. "
@@ -344,30 +337,10 @@ public sealed partial class GuiderService {
             if (!_starLostReacted) {
                 return null; // released by another path meanwhile
             }
-            _starLostReacted = false;
-            paused = _starLostPausedRuns;
-            fault = _starLostFault;
-            _starLostFault = null;
-            _starLostPausedRuns = Array.Empty<Guid>();
             _recoveryStoppedGuiding = false;
+            EndStarLostEpisodeLocked();
         }
-        if (fault is not null) {
-            await RecordActionQuietlyAsync(fault, "recentered").ConfigureAwait(false);
-            await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
-        }
-        var resumed = await sequencer.ResumeRunsAsync(paused, CancellationToken.None).ConfigureAwait(false);
-        LogStarLostRecovered(lostMinutes, paused.Count, resumed);
-        await PublishFaultEventAsync(new JsonObject {
-            ["action"] = "auto_resume",
-            ["runs_affected"] = resumed,
-            ["kind"] = "star_recentered",
-            ["lost_minutes"] = lostMinutes,
-        }).ConfigureAwait(false);
-        await NotifyQuietlyAsync(NotificationSeverity.Info, $"Guide star lost for {lostMinutes} min — re-centered, run resumed",
-            resumed > 0
-                ? "The guider never found its star again after the clouds passed, so Ara re-centered the target by plate solve, restarted guiding and resumed the run."
-                : "Ara re-centered the target by plate solve and restarted guiding. The run it had paused was not released by this (it had already been resumed, is stopped, or waits on you).")
-            .ConfigureAwait(false);
+        LogStarLostRecovered(lostMinutes);
         return null;
     }
 
@@ -393,7 +366,6 @@ public sealed partial class GuiderService {
     private async Task<TimeSpan?> OnAttemptFailedAsync(PHD2Guider guider, string why) {
         int failures;
         bool notify;
-        EquipmentFaultEvent? fault;
         lock (_gate) {
             if (!_starLostReacted) {
                 return null;
@@ -401,7 +373,6 @@ public sealed partial class GuiderService {
             failures = ++_recoveryFailures;
             notify = !_recoveryFailureNotified;
             _recoveryFailureNotified = true;
-            fault = _starLostFault;
         }
         var backoff = StarLostRetryBackoff.Count == 0
             ? StarLostProbeInterval
@@ -421,9 +392,6 @@ public sealed partial class GuiderService {
             }
         }
         if (notify) {
-            if (fault is not null) {
-                await RecordActionQuietlyAsync(fault, "recenter_failed").ConfigureAwait(false);
-            }
             await NotifyQuietlyAsync(NotificationSeverity.Warning, "Guide star still lost — re-center failed, Ara keeps trying",
                 $"Stars are back on the guide frames but the recovery did not go through ({why}). The run stays paused; "
                 + $"Ara tries again in {(int)backoff.TotalMinutes} min and keeps trying until the run resumes, you act, or the safety engine takes over.")
@@ -438,7 +406,7 @@ public sealed partial class GuiderService {
     /// can still relock and resume the run once guiding settles (a stopped guider never relocks).</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The restart is best-effort: a guider that will not start leaves the run paused for the user, which is the give-up outcome anyway.")]
-    private async Task<TimeSpan?> GiveUpAsync(PHD2Guider guider, EquipmentFaultEvent? fault, string title, string message) {
+    private async Task<TimeSpan?> GiveUpAsync(PHD2Guider guider, string title, string message) {
         bool restart;
         lock (_gate) {
             _recoveryGaveUp = true;
@@ -446,9 +414,6 @@ public sealed partial class GuiderService {
             _recoveryStoppedGuiding = false;
         }
         LogStarLostRecoveryGaveUp(title);
-        if (fault is not null) {
-            await RecordActionQuietlyAsync(fault, "recenter_unavailable").ConfigureAwait(false);
-        }
         await NotifyQuietlyAsync(NotificationSeverity.Warning, title, message).ConfigureAwait(false);
         if (restart) {
             // After the notice: a relock from the restarted guider resumes the run once guiding settles, with
@@ -482,8 +447,8 @@ public sealed partial class GuiderService {
     [LoggerMessage(EventId = 4235, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 star-lost recovery: the user acted on the paused run — episode handed over")]
     private partial void LogStarLostRecoveryUserActed();
 
-    [LoggerMessage(EventId = 4236, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 star-lost recovery done after {LostMinutes} min: runsPaused={Paused} runsResumed={Resumed}")]
-    private partial void LogStarLostRecovered(int lostMinutes, int paused, int resumed);
+    [LoggerMessage(EventId = 4236, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 star-lost recovery done after {LostMinutes} min — the star-lost fault is recovered")]
+    private partial void LogStarLostRecovered(int lostMinutes);
 
     [LoggerMessage(EventId = 4237, Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§42.2 star-lost recovery attempt failed ({Why}); attempt {Attempt}, next probe in {BackoffMin} min")]
     private partial void LogStarLostRecoveryAttemptFailed(string why, int attempt, int backoffMin);

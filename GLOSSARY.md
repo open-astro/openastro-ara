@@ -78,6 +78,18 @@ _Avoid_: operation, action, move (when the wait is meant)
 The rig declining a command, with a stable cause that the app puts into words.
 _Avoid_: error (for a declined command), rejection, failure (that is a device fault)
 
+**Fault**:
+A device failure the daemon detected and recorded in the fault log.
+_Avoid_: error, alarm
+
+**Fault Episode**:
+One Fault from detection to its end: recovered, gave up, or released by the user.
+_Avoid_: incident, event (for the episode)
+
+**Recovery**:
+What an adapter tries during a Fault Episode: an Alpaca reconnect, a guider process restart, a star-lost re-centre.
+_Avoid_: retry (for the whole attempt)
+
 ### Presentations
 
 **Advanced Mode**:

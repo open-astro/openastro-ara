@@ -5777,12 +5777,23 @@ Per-fault action is configurable in profile safety policies (§35 extension), wi
 | Rotator (CAA) runaway / position drift | Reported angle differs from commanded > tolerance (default 0.5°) | Re-issue → Notify | Mechanical issues |
 | Guider (PHD2): loses calibration | PHD2 calibration-failed event | Recalibrate → Pause if persistent | Common after meridian flip |
 | Guider (PHD2): loses guide star | PHD2 star-lost event for > 30s | Pause (the frame in progress stops and is taken again) → wait for recovery (clouds passing) → after 3 min, probe the guide frame once a minute (`get_star_centroids`); stars back → stop guiding, re-center by plate solve, restart guiding, resume once guiding has settled (SettlePixels for SettleTime), as a relock does; a failed attempt retries after 5/10/15 min, never parks | Often transient. This is the safety-policy fault for a guided run; a dither that meets the lost star has its own handling in the dither row below. The long-outage half (2026-10-20): a star that returns outside the search box never relocks, so the relock-only resume left the run paused all night. The recovery defers to the safety engine, hands over on any user action, skips the slew below the horizon limit, and the resumed run's flip trigger evaluates on its next tick |
+| Guider (PHD2): link down / guide camera dropped | The socket dropped or the ping streak failed (link down); the guider reports `EquipmentDisconnected` for the guide camera | `on_guider_lost` (default `pause_and_retry`) | Same shared path as every other device: the guider publishes `equipment.fault` (`device_type` `guider`, details `link_down` / `equipment_disconnected` / `star_lost`) and the reaction service runs the plan below; the guider service keeps its own recoveries (§63.3 process restart, star-lost re-center) and reports the recovery to the hub, which resumes exactly the runs the reaction paused. The retired `guider.fault_action_taken` event is gone |
 | Guider (PHD2): dither timeout | Dither not settled within the settle timeout | Warning, then the next frame starts | A settle timeout is never a reason to pause: no second dither, no pause (2026-11-15, #1894); a lost star or runaway is the star-lost watch's. A dither refused with the star lost waits up to 20 s for it (2026-10-18); one refused because the guider is stopped restarts guiding once (re-centering by plate solve first when guiding has been off for 3 min or more, whatever stopped it: a star loss, a park, or a plan that left guiding off between targets, 2026-10-20) and dithers when that works, and parks the run only when the restart fails; Resume restarts guiding itself. A guider that is calibrating or deliberately paused is never restarted: the run parks with that reason |
 | Plate solve failure | After §28.2 retries (3 attempts) | Pause + notify | User can re-frame target or skip |
 | ASTAP / Astrometry.net executable crash | Process exit code != 0 | Retry once → Notify | Re-invoke; bad images usually cause this |
 | **External dew heater (Alpaca Switch) commanded ON but reporting OFF** (boolean switch) | Switch read-back mismatch | Re-command → Notify if still off | Power-port dew straps |
 | **External switch value mismatch** (PWM heater, dimmable flat panel, etc. — value-based ISwitch) | Commanded value vs read-back outside tolerance (default ±5%) | Re-command → Notify | Pegasus PowerBox-style devices |
 | **Dew formation suspected** | Pattern: humidity near 100% AND ambient at dew point AND HFR rising gradually (halos forming) | Notify | Advisory only — no auto-abort. User intervention required (wipe optics, enable heaters) |
+
+The guider rows above follow the profile's `on_guider_lost` token (an unknown token falls back to `pause_and_retry`):
+
+| `on_guider_lost` | Plan for a lost star, a link drop or a camera drop |
+|---|---|
+| `pause_and_retry` (default) | Pause the active runs (adoptable by the safety engine for a lost star only: a parked, stopped guider sends no guide step to resume on) and wait for the guider's recovery; the reaction service then resumes exactly the runs it paused. Nothing recovers: the runs stay paused |
+| `skip_target` | Skip the active runs' current instructions (`equipment.fault_action_taken` action `skipped`, `skipped_runs`); nothing is paused |
+| `abort_sequence` | Abort the active runs, no park (action `gave_up`, `aborted_runs`) |
+
+With no run active the fault is recorded and broadcast and the action is `notify_only`. A user disconnecting the guider while the episode waits ends it with action `released` and leaves the runs paused. Not applied to the guider: the one-hour linger re-adoption, op-fault escalation, park on abort.
 
 ### 42.3 Hot-reconnect on disconnect
 

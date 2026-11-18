@@ -19,7 +19,6 @@
     { "name": "GuiderPaResidual", "type": "guider.pa_residual" },
     { "name": "GuiderOperationComplete", "type": "guider.operation_complete" },
     { "name": "GuiderDitherComplete", "type": "guider.dither_complete" },
-    { "name": "GuiderFaultActionTaken", "type": "guider.fault_action_taken" },
     { "name": "GuiderProfilePushed", "type": "guider.profile_pushed" },
     { "name": "GuiderDarkLibraryInvalidated", "type": "guider.dark_library.invalidated" },
     { "name": "PolarAlignStarted", "type": "polar_align.started" },

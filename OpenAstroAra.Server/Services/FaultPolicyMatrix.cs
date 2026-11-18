@@ -28,6 +28,9 @@ public enum FaultTerminalAction {
 
     /// <summary>Abort active runs and best-effort park the mount.</summary>
     AbortAndPark,
+
+    /// <summary>Abort active runs and nothing else (the guider's <c>abort_sequence</c>: no park).</summary>
+    Abort,
 }
 
 /// <summary>
@@ -38,14 +41,19 @@ public enum FaultTerminalAction {
 /// while recovery runs — the runs are resumed if recovery succeeds. <see cref="Escalated"/>
 /// marks a §42.2 persistent-op-fault escalation: there is nothing to recover (the device is
 /// still connected — it keeps failing its ops), so the terminal action runs immediately and the
-/// episode reports as an escalation, not a failed recovery.
+/// episode reports as an escalation, not a failed recovery. <see cref="Adoptable"/> makes the
+/// up-front pause adoptable by the safety engine (the guider's star-lost row); <see cref="Skip"/>
+/// skips the active runs' current instructions instead of pausing them (the guider's
+/// <c>skip_target</c>).
 /// </summary>
 public sealed record FaultPlan(
     IReadOnlyList<TimeSpan> RetrySchedule,
     FaultTerminalAction TerminalAction,
     NotificationSeverity GiveUpSeverity,
     bool PauseWhileRecovering,
-    bool Escalated = false);
+    bool Escalated = false,
+    bool Adoptable = false,
+    bool Skip = false);
 
 /// <summary>
 /// §42.2 — the pure policy table mapping (device type, fault kind, profile policies) to a
@@ -75,16 +83,15 @@ public static class FaultPolicyMatrix {
     private static readonly TimeSpan[] NoRetries = [];
 
     /// <summary>
-    /// Resolve the plan for a fault. Returns <c>null</c> when the fault is NOT the reaction
-    /// service's to handle: the guider owns its own §42.2 reaction + §63.3 recovery
-    /// (GuiderService.FaultReaction — its hub publishes are for logging/broadcast only).
+    /// Resolve the plan for a fault. The guider's row is keyed on the profile's
+    /// <c>on_guider_lost</c> token (<see cref="ResolveGuider"/>).
     /// <paramref name="persistentOpFault"/> is the <see cref="OpFaultEscalator"/>'s verdict that
     /// this op fault tipped its device over the persistence threshold.
     /// </summary>
-    public static FaultPlan? Resolve(DeviceType deviceType, EquipmentFaultKind kind, SafetyPoliciesDto? policies,
+    public static FaultPlan Resolve(DeviceType deviceType, EquipmentFaultKind kind, SafetyPoliciesDto? policies,
             bool persistentOpFault = false) {
-        if (deviceType == DeviceType.Guider) {
-            return null;
+        if (deviceType == DeviceType.Guider && kind is EquipmentFaultKind.Disconnected or EquipmentFaultKind.TrackingLost) {
+            return ResolveGuider(kind, policies);
         }
         var hot = policies?.HotReconnectEnabled ?? true;
         switch (kind) {
@@ -142,6 +149,21 @@ public static class FaultPolicyMatrix {
                     NotificationSeverity.Warning, PauseWhileRecovering: false);
         }
     }
+
+    /// <summary>§42.2 guider row. <c>skip_target</c> skips and <c>abort_sequence</c> aborts (no park)
+    /// whatever the kind; <c>pause_and_retry</c> (the default, and the fallback for an unknown token)
+    /// pauses, adoptably for a lost star only (a parked, stopped guider sends no guide step to resume on).
+    /// There is no Recovery rung: the guider service runs its own recoveries and reports
+    /// <see cref="IEquipmentFaultSink.Recovered"/>.</summary>
+    private static FaultPlan ResolveGuider(EquipmentFaultKind kind, SafetyPoliciesDto? policies) =>
+        policies?.OnGuiderLost?.Trim() switch {
+            "skip_target" => new FaultPlan(NoRetries, FaultTerminalAction.None, NotificationSeverity.Error,
+                PauseWhileRecovering: false, Skip: true),
+            "abort_sequence" => new FaultPlan(NoRetries, FaultTerminalAction.Abort, NotificationSeverity.Error,
+                PauseWhileRecovering: false),
+            _ => new FaultPlan(NoRetries, FaultTerminalAction.None, NotificationSeverity.Error,
+                PauseWhileRecovering: true, Adoptable: kind == EquipmentFaultKind.TrackingLost),
+        };
 
     private static FaultPlan FromPolicy(string? policy, string defaultPolicy, bool hotReconnectEnabled,
             NotificationSeverity giveUpSeverity, bool pauseWhileRecovering) {

@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
                 INotificationService? notifications = null) =>
             new(profile, recovery, NullLogger<GuiderService>.Instance, supervisor.Object,
                 ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
-                notifications: notifications ?? Mock.Of<INotificationService>(), faultLog: null,
+                notifications: notifications ?? Mock.Of<INotificationService>(), faultSink: null,
                 activeProfileIdResolver: activeProfileId) {
                 ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
                 ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(20),
@@ -278,7 +278,7 @@ namespace OpenAstroAra.Test {
             Assert.That(accepted.OperationType, Is.EqualTo("guider.restart"));
             supervisor.Verify(s => s.RequestRestart(), Times.Never, "the local unit is not the guider this profile uses");
         }
-    
+
 
         [Test]
         public void SameMachineName_compares_the_domain_when_the_profile_host_carries_one() {
@@ -368,7 +368,7 @@ namespace OpenAstroAra.Test {
             var profile = new HeadlessProfileService();
             using var svc = new GuiderService(profile, GatedRecovery(Task.CompletedTask, supervisor), NullLogger<GuiderService>.Instance, supervisor.Object,
                 ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
-                notifications: Mock.Of<INotificationService>(), faultLog: null, activeProfileIdResolver: () => ProfileA,
+                notifications: Mock.Of<INotificationService>(), faultSink: null, activeProfileIdResolver: () => ProfileA,
                 diagnostics: diagnostics.Object) {
                 ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
                 ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(1),

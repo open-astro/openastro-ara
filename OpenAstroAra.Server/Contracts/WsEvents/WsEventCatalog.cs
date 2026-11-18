@@ -129,9 +129,6 @@ public static class WsEventCatalog {
     // #1156 — one per dither, REST or sequencer-driven: payload { ok, operation_id? (REST only),
     // error? }. Published after SettleDone or the settle failsafe, so `ok` is the settle verdict.
     public static readonly WsEvent GuiderDitherComplete = new("guider.dither_complete");
-    // §42.2 — the mid-sequence guider fault flow reports the executed
-    // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
-    public static readonly WsEvent GuiderFaultActionTaken = new("guider.fault_action_taken");
     // §63.17 — an on-demand POST /guider/profile/push completed; payload carries the RPC method names
     // attempted so the client can show what reached the daemon.
     public static readonly WsEvent GuiderProfilePushed = new("guider.profile_pushed");
@@ -345,7 +342,6 @@ public static class WsEventCatalog {
         GuiderPaResidual,
         GuiderOperationComplete,
         GuiderDitherComplete,
-        GuiderFaultActionTaken,
         GuiderProfilePushed,
         GuiderDarkLibraryInvalidated,
         PolarAlignStarted,
