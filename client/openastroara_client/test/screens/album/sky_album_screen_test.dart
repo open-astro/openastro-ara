@@ -471,7 +471,7 @@ void main() {
 
     // A light of M42 comes in on a pull: the open album takes it off the shelf.
     served = [
-      AlbumFrame(frameId: 'm42', targetName: 'M 42', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+      AlbumFrame(frameId: 'm42', targetName: 'M 42', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
     ];
     await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
@@ -508,7 +508,7 @@ void main() {
       (tester) async {
     final m8 = _dso('NGC6523', 'Lagoon Nebula', m: 8, aliases: ['RCW 146']);
     final m8Frames = [
-      AlbumFrame(frameId: 'l', targetName: 'M 8', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+      AlbumFrame(frameId: 'l', targetName: 'M 8', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
     ];
     const art = AlbumArt(asset: 'assets/album/art/m008.webp', credit: 'ESO', licence: 'CC BY 4.0');
     await _pump(tester, frames: m8Frames, catalog: [m8, _m42], tonight: [m8, _m42], manifest: const {'M8': art});
@@ -618,6 +618,25 @@ void main() {
     expect(inGrid('Andromeda Galaxy'), findsOneWidget);
   });
 
+  testWidgets('a Card under 15 min of lights is not collected: Missing, not counted, no Tier', (tester) async {
+    // One stray 60 s frame on M 42, two hours on M 31.
+    await _pump(tester, frames: [
+      ..._m31Frames,
+      AlbumFrame(frameId: 'stray', targetName: 'M 42', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ]);
+    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+    expect(find.text('Messier · 1'), findsOneWidget);
+    expect(albumTierNameFinder(AlbumTier.bronze), findsNothing);
+
+    await tester.tap(find.text('Collected'));
+    await tester.pumpAndSettle();
+    expect(inGrid('Orion Nebula'), findsNothing);
+
+    await tester.tap(find.text('Missing'));
+    await tester.pumpAndSettle();
+    expect(inGrid('Orion Nebula'), findsOneWidget);
+  });
+
   testWidgets('the title carries the album icon', (tester) async {
     await _pump(tester, frames: const []);
     expect(find.descendant(of: find.byType(AppBar), matching: find.byIcon(Icons.style_outlined)), findsOneWidget);
@@ -719,7 +738,7 @@ void main() {
     // A night later: M31 reached silver and M1 is new.
     served = [
       ..._m31Frames,
-      AlbumFrame(frameId: 'm1', targetName: 'M 1', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 9, 22).toUtc()),
+      AlbumFrame(frameId: 'm1', targetName: 'M 1', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 9, 22).toUtc()),
     ];
     await reopen();
     expect(find.byKey(const Key('album-card-reveal')), findsNWidgets(2), reason: 'M31 and M1 animate');

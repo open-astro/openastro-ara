@@ -85,9 +85,11 @@ void main() {
   });
 
   group('tiers', () {
-    test('none below one light, bronze at one, silver at 1 h, gold at 5 h', () {
+    test('none below 15 min, bronze at 15 min, silver at 1 h, gold at 5 h', () {
       expect(tierFor(lights: 0, hours: 0), isNull);
-      expect(tierFor(lights: 1, hours: 0.01), AlbumTier.bronze);
+      expect(tierFor(lights: 1, hours: 0.01), isNull, reason: 'a stray frame collects nothing');
+      expect(tierFor(lights: 4, hours: 0.249), isNull);
+      expect(tierFor(lights: 5, hours: 0.25), AlbumTier.bronze);
       expect(tierFor(lights: 12, hours: 0.999), AlbumTier.bronze);
       expect(tierFor(lights: 12, hours: 1), AlbumTier.silver);
       expect(tierFor(lights: 60, hours: 4.999), AlbumTier.silver);
