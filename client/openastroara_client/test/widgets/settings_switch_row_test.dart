@@ -64,13 +64,15 @@ void main() {
   );
 
   testWidgets(
-    'the switch is named by the row label, which is not a second node',
+    'the switch is named by the label and described by the hint, each read once',
     (t) async {
       final h = t.ensureSemantics();
       await _pump(t);
       final sw = t.getSemantics(find.byType(Switch));
       expect(sw.label, 'Alarm delay');
+      expect(sw.hint, 'Wait before sounding');
       expect(find.bySemanticsLabel('Alarm delay'), findsOneWidget);
+      expect(find.bySemanticsLabel('Wait before sounding'), findsNothing);
       h.dispose();
     },
   );
@@ -104,4 +106,14 @@ void main() {
       h.dispose();
     },
   );
+
+  testWidgets('the help sheet close button is named', (t) async {
+    final h = t.ensureSemantics();
+    await _pump(t);
+    await t.tap(find.byIcon(Icons.info_outline));
+    await t.pumpAndSettle();
+    final close = t.getSemantics(find.byIcon(Icons.close));
+    expect(close.getSemanticsData().tooltip, 'Close');
+    h.dispose();
+  });
 }
