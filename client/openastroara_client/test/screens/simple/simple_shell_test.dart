@@ -36,6 +36,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/services/sequence_api.dart' show SequenceClient;
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/screens/simple/simple_devices_empty.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
@@ -1415,6 +1416,8 @@ void main() {
     await tester.tap(note);
     await tester.pump();
     expect(find.byKey(const Key('simple-gear')), findsOneWidget, reason: 'Settings opens on Devices');
+    expect(find.byType(SimpleDevicesEmpty), findsOneWidget,
+        reason: 'with nothing connected the add-your-devices panel leads Devices (#1580)');
   });
 
   // ALP-4998: Ara keeps its last run until it restarts, so a launch (or a

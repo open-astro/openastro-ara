@@ -7,6 +7,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/screens/screen_equipment_discovery.dart';
 import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/equipment/alpacabridge_setup_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
@@ -60,11 +61,21 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
+/// The add-your-devices list (#1580) is not under test here: a bridge with no catalog, nothing dialled,
+/// so the probe's scan counts stay the screen's own.
+class _NoCatalog extends FoundDevicesNotifier {
+  @override
+  Future<List<FoundRow>> build() async => const [];
+  @override
+  Future<void> redetect() async {}
+}
+
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeDiscoveryApi api,
     {List<AraServer> servers = const [_server]}) async {
   final container = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
     equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => api),
+    foundDevicesProvider.overrideWith(_NoCatalog.new),
   ]);
   addTearDown(container.dispose);
   // Keep the autoDispose validity provider alive the way the live WizardShell

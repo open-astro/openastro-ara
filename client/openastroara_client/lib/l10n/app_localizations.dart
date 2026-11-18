@@ -10647,6 +10647,144 @@ abstract class AppLocalizations {
   /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
   String get estopFailPolarAligner;
 
+  /// Add your devices: heading above the detected devices
+  ///
+  /// In en, this message translates to:
+  /// **'Found on this rig'**
+  String get bridgeSetupFoundTitle;
+
+  /// Add your devices: button that adds every ticked device; count is how many are ticked
+  ///
+  /// In en, this message translates to:
+  /// **'Add selected ({count})'**
+  String bridgeSetupAddSelected(int count);
+
+  /// Add your devices: status of the row being added, and the label of the Add selected button while it runs
+  ///
+  /// In en, this message translates to:
+  /// **'Adding…'**
+  String get bridgeSetupAdding;
+
+  /// Add your devices: status of a ticked row not yet reached
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get bridgeSetupWaiting;
+
+  /// Add your devices: status of a row the bridge registered
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get bridgeSetupAdded;
+
+  /// Add your devices: status of a row the bridge refused or did not confirm
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get bridgeSetupFailed;
+
+  /// Add your devices: button that sends a failed row again
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get bridgeSetupRetry;
+
+  /// Add your devices: button that opens a row's details
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get bridgeSetupEdit;
+
+  /// Add your devices: status of a row that needs a value before it can be added
+  ///
+  /// In en, this message translates to:
+  /// **'Needs details'**
+  String get bridgeSetupNeedsDetails;
+
+  /// Add your devices: note on a row whose add got no answer
+  ///
+  /// In en, this message translates to:
+  /// **'No answer from the bridge: it may already exist. Retry checks first.'**
+  String get bridgeSetupMayExist;
+
+  /// Add your devices: shown while the bridge is read
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for devices'**
+  String get bridgeSetupLooking;
+
+  /// Add your devices: button that saves a row's details and goes on
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get bridgeSetupContinue;
+
+  /// Add your devices: button that leaves a form with nothing sent
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get bridgeSetupBack;
+
+  /// Add your devices: button that adds a device chosen by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get bridgeSetupAdd;
+
+  /// Add your devices: button that opens the list of device types
+  ///
+  /// In en, this message translates to:
+  /// **'Add a device by hand'**
+  String get bridgeSetupByHand;
+
+  /// Add your devices: heading above the attached cameras of a vendor
+  ///
+  /// In en, this message translates to:
+  /// **'Which camera?'**
+  String get bridgeSetupWhichCamera;
+
+  /// Add your devices: nothing detected
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found on this rig. Plug in your gear and retry, or add one by hand.'**
+  String get bridgeSetupNothingFound;
+
+  /// Add your devices: a form field that must have a value
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get bridgeSetupRequired;
+
+  /// Add your devices: a number outside the range the bridge accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Out of range'**
+  String get bridgeSetupOutOfRange;
+
+  /// Add your devices: a value not in the list the bridge accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Not an allowed value'**
+  String get bridgeSetupNotAllowed;
+
+  /// Add your devices: button that adds a row to a list field
+  ///
+  /// In en, this message translates to:
+  /// **'Add a row'**
+  String get bridgeSetupAddRow;
+
+  /// Add your devices: button that removes a row from a list field
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this row'**
+  String get bridgeSetupRemoveRow;
+
+  /// Add your devices: an add was refused and no reason came with it
+  ///
+  /// In en, this message translates to:
+  /// **'Ara refused this device.'**
+  String get bridgeSetupRefused;
+
   /// Start question: the rig's clock could not be set and runs behind; {amount} is like '2 min'
   ///
   /// In en, this message translates to:
