@@ -71,6 +71,7 @@ void main() {
       final sw = t.getSemantics(find.byType(Switch));
       expect(sw.label, 'Alarm delay');
       expect(sw.hint, 'Wait before sounding');
+      expect(sw.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(find.bySemanticsLabel('Alarm delay'), findsOneWidget);
       expect(find.bySemanticsLabel('Wait before sounding'), findsNothing);
       h.dispose();
