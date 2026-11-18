@@ -163,7 +163,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       builder: (dialogContext) => adaptiveAlertDialog(
         icon: Icon(
           Icons.warning_amber_rounded,
-          color: Theme.of(dialogContext).colorScheme.error,
+          color: AraColors.accentError,
           size: 32,
         ),
         title: Text(l10n.estopConfirmTitle),

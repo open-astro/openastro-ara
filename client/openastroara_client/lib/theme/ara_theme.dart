@@ -11,7 +11,10 @@ ThemeData buildAraTheme() {
     primary: AraColors.buttonPrimary,
     onPrimary: AraColors.selectionFg,
     secondary: AraColors.accentInfo,
-    error: AraColors.accentError,
+    error: AraColors.errorText,
+    // Banners fill with errorContainer, which falls back to error: keep them
+    // Fault Red rather than the lighter error text colour.
+    errorContainer: AraColors.accentError,
     outline: AraColors.border,
     // ChoiceChips/outlined controls key off outlineVariant — pin it to the app
     // border token so every control's border matches (M3's default outlineVariant
@@ -51,6 +54,9 @@ ThemeData buildAraTheme() {
       filled: true,
       fillColor: AraColors.bgInput,
       border: OutlineInputBorder(),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: AraColors.linkText),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(

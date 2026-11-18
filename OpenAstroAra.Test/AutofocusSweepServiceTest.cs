@@ -22,6 +22,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -1148,6 +1149,25 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[0], Is.EqualTo(StartPosition + 4 * 23 + 23));
             Assert.That(tracker.Snapshot().StepSize, Is.EqualTo(23));
             Assert.That(tracker.Snapshot().StepSizeSource, Is.EqualTo("cfz"));
+        }
+
+        [Test]
+        public async Task The_step_size_endpoint_reports_the_resolver_s_step_and_source() {
+            var store = new InMemoryProfileStore();
+            var focusers = new Mock<IFocuserService>();
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((FocuserDto?)null);
+
+            store.PutAutofocusSettings(store.GetAutofocusSettings() with { StepSizeAuto = false, StepSize = 80 });
+            Assert.That(await AutofocusEndpoints.StepSizeAsync(store, focusers.Object, CancellationToken.None), Is.EqualTo(new AutofocusStepSizeDto(80, "manual")));
+
+            store.PutAutofocusSettings(store.GetAutofocusSettings() with { StepSizeAuto = true, Steps = 7, StepSize = 50 });
+            Assert.That(await AutofocusEndpoints.StepSizeAsync(store, focusers.Object, CancellationToken.None), Is.EqualTo(new AutofocusStepSizeDto(50, "default")), "no sweep, no focuser step size: the stored wide first sweep");
+
+            store.PutFocusCalibration(new FocusCalibrationDto(Array.Empty<FocusCalibrationSampleDto>(), DateTimeOffset.UtcNow, null, null, CurveHalfWidthSteps: 100));
+            Assert.That(await AutofocusEndpoints.StepSizeAsync(store, focusers.Object, CancellationToken.None), Is.EqualTo(new AutofocusStepSizeDto(21, "measured")));
+
+            focusers.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("focuser fault"));
+            Assert.That((await AutofocusEndpoints.StepSizeAsync(store, focusers.Object, CancellationToken.None)).Source, Is.EqualTo("measured"), "a focuser read fault leaves its rung out");
         }
 
         [Test]

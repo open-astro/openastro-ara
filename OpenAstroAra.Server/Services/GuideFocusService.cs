@@ -89,6 +89,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
     private readonly Func<(ushort[] Pixels, int Width, int Height)>? _syntheticFrames;
     // The guide optics (focal length mm, pixel µm, aperture mm) read from the profile at status time.
     private readonly Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? _optics;
+    private readonly Func<double?>? _defaultExposure;
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private readonly object _gate = new();
 
@@ -116,13 +117,15 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             IGuideFrameDecoder? decoder = null,
             ILogger<GuideFocusService>? logger = null,
             Func<(ushort[] Pixels, int Width, int Height)>? syntheticFrames = null,
-            Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null) {
+            Func<(double FocalLengthMm, double PixelSizeUm, double ApertureMm)?>? optics = null,
+            Func<double?>? defaultExposure = null) {
         _guider = guider ?? throw new ArgumentNullException(nameof(guider));
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
         _decoder = decoder ?? new CfitsioGuideFrameDecoder();
         _logger = logger ?? NullLogger<GuideFocusService>.Instance;
         _syntheticFrames = syntheticFrames;
         _optics = optics;
+        _defaultExposure = defaultExposure;
     }
 
     /// <summary>Seeing FWHM assumed for the expected-HFR target; a typical backyard night.</summary>
@@ -175,11 +178,22 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
+    /// <summary>The exposure a start omitting it uses when the profile has no autofocus exposure.</summary>
+    internal const double FallbackExposureSec = 2.0;
+
+    /// <summary>The request's exposure, else the profile's autofocus exposure clamped to the loop's range, else
+    /// <see cref="FallbackExposureSec"/>. Pure.</summary>
+    internal static double ExposureOrDefault(double? requested, double? profileExposure) =>
+        requested ?? (profileExposure is { } p && double.IsFinite(p) && p > 0
+            ? Math.Clamp(p, MinExposureSec, MaxExposureSec)
+            : FallbackExposureSec);
+
     /// <summary>Validate a start request before anything touches the guider. Pure — unit-tested.</summary>
-    internal static void Validate(GuideFocusStartRequestDto request) {
+    internal static void Validate(GuideFocusStartRequestDto request, double? profileExposure = null) {
         ArgumentNullException.ThrowIfNull(request);
-        if (!(request.ExposureSec >= MinExposureSec && request.ExposureSec <= MaxExposureSec)) {
-            throw new ArgumentOutOfRangeException(nameof(request), request.ExposureSec,
+        var exposure = ExposureOrDefault(request.ExposureSec, profileExposure);
+        if (!(exposure >= MinExposureSec && exposure <= MaxExposureSec)) {
+            throw new ArgumentOutOfRangeException(nameof(request), exposure,
                 $"exposure must be {MinExposureSec}–{MaxExposureSec} s.");
         }
         if (request.Binning is int b && b < 1) {
@@ -197,7 +211,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             : $"gave up after {failures} failed frames — last: {last.Message}";
 
     public async Task StartAsync(GuideFocusStartRequestDto request, CancellationToken ct) {
-        Validate(request);
+        ArgumentNullException.ThrowIfNull(request);
+        Validate(request, _defaultExposure?.Invoke());
+        // From here on the request carries the exposure the loop uses.
+        request = request with { ExposureSec = ExposureOrDefault(request.ExposureSec, _defaultExposure?.Invoke()) };
         await _opLock.WaitAsync(ct).ConfigureAwait(false);
         try {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -225,7 +242,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             }
             lock (_gate) {
                 _state = "running";
-                _exposureSec = request.ExposureSec;
+                _exposureSec = request.ExposureSec ?? FallbackExposureSec;
                 _started = DateTimeOffset.UtcNow;
                 _latest = null;
                 _bestHfr = null;
@@ -247,7 +264,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             _loopCts = new CancellationTokenSource();
             var token = _loopCts.Token;
             _loop = Task.Run(() => RunLoopAsync(guider, claim, request, token), CancellationToken.None);
-            LogStarted(request.ExposureSec);
+            LogStarted(request.ExposureSec ?? FallbackExposureSec);
         } finally {
             _opLock.Release();
         }
@@ -379,7 +396,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
 
     // Development only: one synthetic frame, paced like an exposure.
     private async Task<(GuideFocusSampleDto Sample, byte[]? Jpeg)> SyntheticSampleAsync(GuideFocusStartRequestDto request, CancellationToken ct) {
-        await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(request.ExposureSec, 0.05, 1.0)), ct).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(request.ExposureSec ?? FallbackExposureSec, 0.05, 1.0)), ct).ConfigureAwait(false);
         var (pixels, width, height) = _syntheticFrames!();
         var (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, width, height, bayerPattern: null, annotate: true);
         // The seq is taken last: a frame that fails to render never advances it past the stored picture.
@@ -394,10 +411,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         using var subscription = guider.OnFrameComplete(e => OnComplete(guider, e));
         string? localPath = null;
         try {
-            var exposureMs = Math.Max(1, (int)Math.Round(request.ExposureSec * 1000.0));
+            var exposureMs = Math.Max(1, (int)Math.Round((request.ExposureSec ?? FallbackExposureSec) * 1000.0));
             await guider.CaptureFrameAsync(exposureMs, request.Binning is > 1 ? request.Binning : null, ct).ConfigureAwait(false);
             // Not cancellable mid-exposure on purpose (see StopAsync): the daemon owes exactly one event.
-            var completed = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(request.ExposureSec + 30), CancellationToken.None).ConfigureAwait(false);
+            var completed = await tcs.Task.WaitAsync(TimeSpan.FromSeconds((request.ExposureSec ?? FallbackExposureSec) + 30), CancellationToken.None).ConfigureAwait(false);
             // Only the bare name: an absolute or ../ value from the guider must not place the download (or the
             // delete in the finally) outside workDir.
             var filename = Path.GetFileName(completed.Filename ?? completed.Path ?? "");

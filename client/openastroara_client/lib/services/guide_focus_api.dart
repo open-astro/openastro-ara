@@ -15,7 +15,8 @@ class GuideFocusFrame {
 /// The guide-camera focus loop's client surface. An interface so the notifier
 /// can be unit-tested with a fake.
 abstract interface class GuideFocusClient {
-  Future<void> start({required double exposureSec, int? binning});
+  /// [exposureSec] null = the server takes the profile's autofocus exposure.
+  Future<void> start({double? exposureSec, int? binning});
   Future<void> stop();
   Future<GuideFocusStatus> status();
   Future<GuideFocusFrame?> fetchFrame();
@@ -35,11 +36,11 @@ class GuideFocusApi implements GuideFocusClient {
         ));
 
   @override
-  Future<void> start({required double exposureSec, int? binning}) async {
+  Future<void> start({double? exposureSec, int? binning}) async {
     await _dio.post<void>(
       '/api/v1/equipment/guider/focus/start',
       data: <String, dynamic>{
-        'exposure_sec': exposureSec,
+        'exposure_sec': ?exposureSec,
         'binning': ?binning,
       },
     );

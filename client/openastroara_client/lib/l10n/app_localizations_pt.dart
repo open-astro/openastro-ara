@@ -605,10 +605,72 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
-  String get deviceNever => 'Never';
+  String get deviceAutofocusDuringPlans => 'Autofocus during plans';
 
   @override
-  String get deviceRefocusTemp => 'Refocus every';
+  String get deviceAutofocusOnHint =>
+      'Ara refocuses on its own while a plan runs.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Plans never refocus by themselves. The Autofocus button still works.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Keep focus sharp';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Relaxed';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Tight';
+
+  @override
+  String get deviceKeepSharpCustom => 'Custom';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocus after a filter change, when the temperature changes by $temp, when stars grow $hfr %, or every $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.';
+
+  @override
+  String get settingsAdvancedToggle => 'Advanced';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derived: $steps steps, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'set by you';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'from the V width of the last sweep';
+
+  @override
+  String get autofocusStepSourceCfz => 'from half the critical focus zone';
+
+  @override
+  String get autofocusStepSourceDefault => 'the stored first-sweep step';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Keep focus sharp: $preset';
+  }
+
+  @override
+  String get deviceAfFilter => 'AF filter';
+
+  @override
+  String get deviceAfFilterHint =>
+      'Luminance is brightest, so autofocus finishes fastest.';
 
   @override
   String get devicePosition => 'Position';
@@ -6244,8 +6306,57 @@ class AppLocalizationsPt extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
+  String get polarAdvancedTitle => 'Advanced';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return '$turn° turn · $step° step · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Out of range: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason The field is back to the rig\'s value.';
+  }
+
+  @override
   String get estopFailPolarAligner =>
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'The rig\'s clock is $amount fast, so times and targets will be off. Start anyway?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'The rig\'s clock is $amount slow and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'The rig\'s clock is $amount fast and could not be set. Times and targets will be off.';
+  }
+
+  @override
+  String get clockWrongTitle => 'The rig\'s clock is wrong';
+
+  @override
+  String get clockWrongStartAnyway => 'Start anyway';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6860,10 +6971,73 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceCouldntSaveThat => 'Não foi possível salvar';
 
   @override
-  String get deviceNever => 'Nunca';
+  String get deviceAutofocusDuringPlans => 'Autofoco durante os planos';
 
   @override
-  String get deviceRefocusTemp => 'Refocar a cada';
+  String get deviceAutofocusOnHint =>
+      'O Ara refoca sozinho enquanto um plano roda.';
+
+  @override
+  String get deviceAutofocusOffHint =>
+      'Os planos nunca refocam sozinhos. O botão Autofoco continua funcionando.';
+
+  @override
+  String get deviceKeepFocusSharp => 'Manter o foco nítido';
+
+  @override
+  String get deviceKeepSharpRelaxed => 'Folgado';
+
+  @override
+  String get deviceKeepSharpNormal => 'Normal';
+
+  @override
+  String get deviceKeepSharpTight => 'Rigoroso';
+
+  @override
+  String get deviceKeepSharpCustom => 'Personalizado';
+
+  @override
+  String deviceKeepSharpHint(String temp, String hfr, String hours) {
+    return 'Refocar após trocar de filtro, quando a temperatura varia $temp, quando as estrelas crescem $hfr % ou a cada $hours h.';
+  }
+
+  @override
+  String get deviceKeepSharpCustomHint =>
+      'Definido nas Configurações do Modo Avançado. Escolha um ajuste para substituir esses valores.';
+
+  @override
+  String get settingsAdvancedToggle => 'Avançado';
+
+  @override
+  String autofocusStepSizeDerived(int steps, String source) {
+    return 'Derivado: $steps passos, $source';
+  }
+
+  @override
+  String get autofocusStepSourceManual => 'definido por você';
+
+  @override
+  String get autofocusStepSourceMeasured =>
+      'da largura do V da última varredura';
+
+  @override
+  String get autofocusStepSourceCfz => 'da metade da zona de foco crítico';
+
+  @override
+  String get autofocusStepSourceDefault =>
+      'o passo guardado da primeira varredura';
+
+  @override
+  String autofocusTriggerSetBy(String preset) {
+    return 'Manter o foco nítido: $preset';
+  }
+
+  @override
+  String get deviceAfFilter => 'Filtro do AF';
+
+  @override
+  String get deviceAfFilterHint =>
+      'A luminância é a mais brilhante, então o autofoco termina mais rápido.';
 
   @override
   String get devicePosition => 'Posição';
@@ -12536,6 +12710,55 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Desligado: o alinhamento polar mostra os giros e você os faz';
 
   @override
+  String get polarAdvancedTitle => 'Avançado';
+
+  @override
+  String polarAdvancedSummary(String turn, String step, String exposure) {
+    return 'giro de $turn° · passo de $step° · $exposure s';
+  }
+
+  @override
+  String polarAdvancedRange(String min, String max) {
+    return '$min a $max';
+  }
+
+  @override
+  String polarAdvancedOutOfRange(String range) {
+    return 'Fora da faixa: use $range';
+  }
+
+  @override
+  String polarAdvancedSaveFailed(String reason) {
+    return '$reason O campo voltou ao valor do setup.';
+  }
+
+  @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String clockWrongSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockWrongFast(String amount) {
+    return 'O relógio do setup está $amount adiantado, então horários e alvos ficarão errados. Iniciar mesmo assim?';
+  }
+
+  @override
+  String clockNoticeSlow(String amount) {
+    return 'O relógio do setup está $amount atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String clockNoticeFast(String amount) {
+    return 'O relógio do setup está $amount adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.';
+  }
+
+  @override
+  String get clockWrongTitle => 'O relógio do setup está errado';
+
+  @override
+  String get clockWrongStartAnyway => 'Iniciar mesmo assim';
 }

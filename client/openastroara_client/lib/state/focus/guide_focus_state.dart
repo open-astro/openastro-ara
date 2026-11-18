@@ -117,7 +117,8 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
-  Future<void> start({required double exposureSec, int? binning}) async {
+  /// [exposureSec] null: the loop runs at the profile's autofocus exposure.
+  Future<void> start({double? exposureSec, int? binning}) async {
     final api = ref.read(guideFocusApiProvider);
     if (api == null || state.busy) return;
     state = state.copyWith(busy: true, clearError: true, clearFrame: true);

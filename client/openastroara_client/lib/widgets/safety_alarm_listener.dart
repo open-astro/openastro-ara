@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../state/alarm/safety_alarm_state.dart';
+import '../theme/ara_colors.dart';
 
 /// §35.5 — surfaces the safety alarm as a modal the moment the flow starts
 /// (during the silent-delay window, before the tone), so a user at the screen
@@ -56,7 +57,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
           icon: Icon(Icons.notifications_active,
-              color: Theme.of(dialogContext).colorScheme.error, size: 32),
+              color: AraColors.accentError, size: 32),
           title: Text(dialogContext.l10n.safetyAlertTitle),
           // Live-read: an emergency stop arriving mid-episode escalates the
           // reason in place — the open modal must show it.
@@ -68,7 +69,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
           actions: [
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                backgroundColor: AraColors.accentError,
               ),
               // Only mutates state — the ref.listen branch above owns the
               // pop, so Silence and safety.safe share one dismissal path.

@@ -9,7 +9,8 @@ import 'guide_focus_api.dart' show GuideFocusFrame;
 /// The Bahtinov readout's client surface (#1299). An interface so the notifier
 /// can be unit-tested with a fake.
 abstract interface class BahtinovFocusClient {
-  Future<void> start({required double exposureSec});
+  /// [exposureSec] null = the server takes the profile's autofocus exposure.
+  Future<void> start({double? exposureSec});
   Future<void> stop();
   /// Lock the readout on the star at (x, y) frame pixels.
   Future<void> pick({required int x, required int y});
@@ -35,10 +36,10 @@ class BahtinovFocusApi implements BahtinovFocusClient {
         ));
 
   @override
-  Future<void> start({required double exposureSec}) async {
+  Future<void> start({double? exposureSec}) async {
     await _dio.post<void>(
       '/api/v1/bahtinov-focus/start',
-      data: <String, dynamic>{'exposure_sec': exposureSec},
+      data: <String, dynamic>{'exposure_sec': ?exposureSec},
     );
   }
 

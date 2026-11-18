@@ -788,13 +788,83 @@
   "@deviceCouldntSaveThat": {
     "description": "Error message when a focuser or guider setting could not be saved"
   },
-  "deviceNever": "Never",
-  "@deviceNever": {
-    "description": "Focuser window, Refocus temp row: never refocus on temperature"
+  "deviceAutofocusDuringPlans": "Autofocus during plans",
+  "@deviceAutofocusDuringPlans": {
+    "description": "Focuser window row (on or off): whether a running plan refocuses by itself"
   },
-  "deviceRefocusTemp": "Refocus every",
-  "@deviceRefocusTemp": {
-    "description": "Focuser window row: refocus every time the temperature changes by this much (the value reads e.g. \"2 °C\", or \"Never\")"
+  "deviceAutofocusOnHint": "Ara refocuses on its own while a plan runs.",
+  "@deviceAutofocusOnHint": {
+    "description": "Focuser window: under Autofocus during plans when it is on"
+  },
+  "deviceAutofocusOffHint": "Plans never refocus by themselves. The Autofocus button still works.",
+  "@deviceAutofocusOffHint": {
+    "description": "Focuser window: under Autofocus during plans when it is off"
+  },
+  "deviceKeepFocusSharp": "Keep focus sharp",
+  "@deviceKeepFocusSharp": {
+    "description": "Focuser window row: how readily a plan refocuses (Relaxed, Normal or Tight)"
+  },
+  "deviceKeepSharpRelaxed": "Relaxed",
+  "@deviceKeepSharpRelaxed": {
+    "description": "Focuser window, Keep focus sharp: refocus rarely"
+  },
+  "deviceKeepSharpNormal": "Normal",
+  "@deviceKeepSharpNormal": {
+    "description": "Focuser window, Keep focus sharp: today's defaults"
+  },
+  "deviceKeepSharpTight": "Tight",
+  "@deviceKeepSharpTight": {
+    "description": "Focuser window, Keep focus sharp: refocus often"
+  },
+  "deviceKeepSharpCustom": "Custom",
+  "@deviceKeepSharpCustom": {
+    "description": "Focuser window, Keep focus sharp: the refocus triggers were changed in Advanced Mode and match no preset (shown picked, cannot be tapped)"
+  },
+  "deviceKeepSharpHint": "Refocus after a filter change, when the temperature changes by {temp}, when stars grow {hfr} %, or every {hours} h.",
+  "@deviceKeepSharpHint": {
+    "description": "Focuser window: what the picked Keep focus sharp preset does",
+    "placeholders": {
+      "temp": {"type": "String", "example": "2 °C"},
+      "hfr": {"type": "String", "example": "15"},
+      "hours": {"type": "String", "example": "2"}
+    }
+  },
+  "deviceKeepSharpCustomHint": "Set in Advanced Mode's Settings. Pick a preset to replace those values.",
+  "@deviceKeepSharpCustomHint": {
+    "description": "Focuser window: under Keep focus sharp when the triggers match no preset"
+  },
+  "settingsAdvancedToggle": "Advanced",
+  "@settingsAdvancedToggle": {
+    "description": "Settings header switch, on by default: on shows every setting; off shows only the Autofocus panel's Simple tier and hides the derived step size in Equipment › Focuser"
+  },
+  "autofocusStepSizeDerived": "Derived: {steps} steps, {source}",
+  "@autofocusStepSizeDerived": {
+    "description": "Autofocus settings, under the step size: the step size the next sweep uses and where it comes from",
+    "placeholders": {
+      "steps": {"type": "int", "example": "26"},
+      "source": {"type": "String", "example": "from half the critical focus zone"}
+    }
+  },
+  "autofocusStepSourceManual": "set by you",
+  "@autofocusStepSourceManual": {"description": "Where the derived autofocus step size comes from: automatic sizing is off"},
+  "autofocusStepSourceMeasured": "from the V width of the last sweep",
+  "@autofocusStepSourceMeasured": {"description": "Where the derived autofocus step size comes from: the last sweep's curve"},
+  "autofocusStepSourceCfz": "from half the critical focus zone",
+  "@autofocusStepSourceCfz": {"description": "Where the derived autofocus step size comes from: the focuser step size and the optics"},
+  "autofocusStepSourceDefault": "the stored first-sweep step",
+  "@autofocusStepSourceDefault": {"description": "Where the derived autofocus step size comes from: no sweep yet and no focuser step size"},
+  "autofocusTriggerSetBy": "Keep focus sharp: {preset}",
+  "@autofocusTriggerSetBy": {
+    "description": "Autofocus settings, under a trigger: the Keep focus sharp preset these four triggers currently match",
+    "placeholders": {"preset": {"type": "String", "example": "Normal"}}
+  },
+  "deviceAfFilter": "AF filter",
+  "@deviceAfFilter": {
+    "description": "Focuser window row: the filter autofocus runs through, one chip per filter in the wheel"
+  },
+  "deviceAfFilterHint": "Luminance is brightest, so autofocus finishes fastest.",
+  "@deviceAfFilterHint": {
+    "description": "Focuser window: under the AF filter chips"
   },
   "devicePosition": "Position",
   "@devicePosition": {
@@ -8101,8 +8171,71 @@
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
+  "polarAdvancedTitle": "Advanced",
+  "@polarAdvancedTitle": {
+    "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"
+  },
+  "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
+  "@polarAdvancedSummary": {
+    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure",
+    "placeholders": {
+      "turn": {"type": "String"},
+      "step": {"type": "String"},
+      "exposure": {"type": "String"}
+    }
+  },
+  "polarAdvancedRange": "{min} to {max}",
+  "@polarAdvancedRange": {
+    "description": "Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '",
+    "placeholders": {
+      "min": {"type": "String"},
+      "max": {"type": "String"}
+    }
+  },
+  "polarAdvancedOutOfRange": "Out of range: use {range}",
+  "@polarAdvancedOutOfRange": {
+    "description": "Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range",
+    "placeholders": {
+      "range": {"type": "String"}
+    }
+  },
+  "polarAdvancedSaveFailed": "{reason} The field is back to the rig's value.",
+  "@polarAdvancedSaveFailed": {
+    "description": "Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
+  },
+  "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
+  "@clockWrongSlow": {
+    "description": "Start question: the rig's clock could not be set and runs behind; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongFast": "The rig's clock is {amount} fast, so times and targets will be off. Start anyway?",
+  "@clockWrongFast": {
+    "description": "Start question: the rig's clock could not be set and runs ahead; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockNoticeSlow": "The rig's clock is {amount} slow and could not be set. Times and targets will be off.",
+  "@clockNoticeSlow": {
+    "description": "Notice on connect: the rig's clock could not be set and runs behind; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockNoticeFast": "The rig's clock is {amount} fast and could not be set. Times and targets will be off.",
+  "@clockNoticeFast": {
+    "description": "Notice on connect: the rig's clock could not be set and runs ahead; {amount} is like '2 min'",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "clockWrongTitle": "The rig's clock is wrong",
+  "@clockWrongTitle": {
+    "description": "Advanced Mode Run dialog title when the rig's clock could not be set"
+  },
+  "clockWrongStartAnyway": "Start anyway",
+  "@clockWrongStartAnyway": {
+    "description": "Button: start the run although the rig's clock is wrong"
   }
 }

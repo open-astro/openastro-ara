@@ -42,10 +42,21 @@ List<RecentTarget> mergeRecentTargets(
   for (final t in saved) {
     add(t.name, t.raDeg, t.decDeg, t.savedUtc);
   }
-  for (final t in stats) {
-    final when = t.lastImagedUtc;
-    final d = when == null ? null : resolve(t.targetName);
-    if (d != null) add(t.targetName, d.raDeg, d.decDeg, when!);
+  // Newest first, and stop once [kRecentTargets] entries are strictly newer
+  // than the row: it (and every older one) can no longer reach the top five,
+  // so old misses cost no catalog work.
+  final imaged = [
+    for (final t in stats)
+      if (t.lastImagedUtc != null) t,
+  ]..sort((a, b) => b.lastImagedUtc!.compareTo(a.lastImagedUtc!));
+  for (final t in imaged) {
+    final when = t.lastImagedUtc!;
+    if (byKey.values.where((e) => e.when.isAfter(when)).length >=
+        kRecentTargets) {
+      break;
+    }
+    final d = resolve(t.targetName);
+    if (d != null) add(t.targetName, d.raDeg, d.decDeg, when);
   }
   return ([
     ...byKey.values,
@@ -56,14 +67,15 @@ List<RecentTarget> mergeRecentTargets(
 /// [findCatalogObject] scan per imaged target froze the Plan window (a miss
 /// walks all 17k rows several times, ~190 ms each in debug).
 final bundledNameIndexProvider = Provider<CatalogNameIndex>(
-  (ref) => CatalogNameIndex(ref.watch(bundledCatalogProvider).value ?? const []),
+  (ref) =>
+      CatalogNameIndex(ref.watch(bundledCatalogProvider).value ?? const []),
 );
 
 final simpleRecentProvider = Provider.autoDispose<List<RecentTarget>>((ref) {
   return mergeRecentTargets(
     ref.watch(statsTargetsProvider).value ?? const [],
     ref.watch(customTargetsProvider).value ?? const [],
-    ref.watch(bundledNameIndexProvider).lookup,
+    ref.watch(bundledNameIndexProvider).lookupOrContains,
   );
 });
 

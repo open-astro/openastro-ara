@@ -1077,17 +1077,119 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save that'**
   String get deviceCouldntSaveThat;
 
-  /// Focuser window, Refocus temp row: never refocus on temperature
+  /// Focuser window row (on or off): whether a running plan refocuses by itself
   ///
   /// In en, this message translates to:
-  /// **'Never'**
-  String get deviceNever;
+  /// **'Autofocus during plans'**
+  String get deviceAutofocusDuringPlans;
 
-  /// Focuser window row: refocus every time the temperature changes by this much (the value reads e.g. "2 °C", or "Never")
+  /// Focuser window: under Autofocus during plans when it is on
   ///
   /// In en, this message translates to:
-  /// **'Refocus every'**
-  String get deviceRefocusTemp;
+  /// **'Ara refocuses on its own while a plan runs.'**
+  String get deviceAutofocusOnHint;
+
+  /// Focuser window: under Autofocus during plans when it is off
+  ///
+  /// In en, this message translates to:
+  /// **'Plans never refocus by themselves. The Autofocus button still works.'**
+  String get deviceAutofocusOffHint;
+
+  /// Focuser window row: how readily a plan refocuses (Relaxed, Normal or Tight)
+  ///
+  /// In en, this message translates to:
+  /// **'Keep focus sharp'**
+  String get deviceKeepFocusSharp;
+
+  /// Focuser window, Keep focus sharp: refocus rarely
+  ///
+  /// In en, this message translates to:
+  /// **'Relaxed'**
+  String get deviceKeepSharpRelaxed;
+
+  /// Focuser window, Keep focus sharp: today's defaults
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get deviceKeepSharpNormal;
+
+  /// Focuser window, Keep focus sharp: refocus often
+  ///
+  /// In en, this message translates to:
+  /// **'Tight'**
+  String get deviceKeepSharpTight;
+
+  /// Focuser window, Keep focus sharp: the refocus triggers were changed in Advanced Mode and match no preset (shown picked, cannot be tapped)
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get deviceKeepSharpCustom;
+
+  /// Focuser window: what the picked Keep focus sharp preset does
+  ///
+  /// In en, this message translates to:
+  /// **'Refocus after a filter change, when the temperature changes by {temp}, when stars grow {hfr} %, or every {hours} h.'**
+  String deviceKeepSharpHint(String temp, String hfr, String hours);
+
+  /// Focuser window: under Keep focus sharp when the triggers match no preset
+  ///
+  /// In en, this message translates to:
+  /// **'Set in Advanced Mode\'s Settings. Pick a preset to replace those values.'**
+  String get deviceKeepSharpCustomHint;
+
+  /// Settings header switch, on by default: on shows every setting; off shows only the Autofocus panel's Simple tier and hides the derived step size in Equipment › Focuser
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get settingsAdvancedToggle;
+
+  /// Autofocus settings, under the step size: the step size the next sweep uses and where it comes from
+  ///
+  /// In en, this message translates to:
+  /// **'Derived: {steps} steps, {source}'**
+  String autofocusStepSizeDerived(int steps, String source);
+
+  /// Where the derived autofocus step size comes from: automatic sizing is off
+  ///
+  /// In en, this message translates to:
+  /// **'set by you'**
+  String get autofocusStepSourceManual;
+
+  /// Where the derived autofocus step size comes from: the last sweep's curve
+  ///
+  /// In en, this message translates to:
+  /// **'from the V width of the last sweep'**
+  String get autofocusStepSourceMeasured;
+
+  /// Where the derived autofocus step size comes from: the focuser step size and the optics
+  ///
+  /// In en, this message translates to:
+  /// **'from half the critical focus zone'**
+  String get autofocusStepSourceCfz;
+
+  /// Where the derived autofocus step size comes from: no sweep yet and no focuser step size
+  ///
+  /// In en, this message translates to:
+  /// **'the stored first-sweep step'**
+  String get autofocusStepSourceDefault;
+
+  /// Autofocus settings, under a trigger: the Keep focus sharp preset these four triggers currently match
+  ///
+  /// In en, this message translates to:
+  /// **'Keep focus sharp: {preset}'**
+  String autofocusTriggerSetBy(String preset);
+
+  /// Focuser window row: the filter autofocus runs through, one chip per filter in the wheel
+  ///
+  /// In en, this message translates to:
+  /// **'AF filter'**
+  String get deviceAfFilter;
+
+  /// Focuser window: under the AF filter chips
+  ///
+  /// In en, this message translates to:
+  /// **'Luminance is brightest, so autofocus finishes fastest.'**
+  String get deviceAfFilterHint;
 
   /// Focuser window row: the focuser's position in steps
   ///
@@ -10503,11 +10605,77 @@ abstract class AppLocalizations {
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
 
+  /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get polarAdvancedTitle;
+
+  /// Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure
+  ///
+  /// In en, this message translates to:
+  /// **'{turn}° turn · {step}° step · {exposure} s'**
+  String polarAdvancedSummary(String turn, String step, String exposure);
+
+  /// Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '
+  ///
+  /// In en, this message translates to:
+  /// **'{min} to {max}'**
+  String polarAdvancedRange(String min, String max);
+
+  /// Advanced Mode Polar Align Start card: under a knob field that holds a value the rig would refuse; range is the accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Out of range: use {range}'**
+  String polarAdvancedOutOfRange(String range);
+
+  /// Advanced Mode Polar Align Start card: a knob save failed; reason is the sentence saying why
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} The field is back to the rig\'s value.'**
+  String polarAdvancedSaveFailed(String reason);
+
   /// Emergency stop: the Polar Aligner's stop failed
   ///
   /// In en, this message translates to:
   /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
   String get estopFailPolarAligner;
+
+  /// Start question: the rig's clock could not be set and runs behind; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} slow, so times and targets will be off. Start anyway?'**
+  String clockWrongSlow(String amount);
+
+  /// Start question: the rig's clock could not be set and runs ahead; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} fast, so times and targets will be off. Start anyway?'**
+  String clockWrongFast(String amount);
+
+  /// Notice on connect: the rig's clock could not be set and runs behind; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} slow and could not be set. Times and targets will be off.'**
+  String clockNoticeSlow(String amount);
+
+  /// Notice on connect: the rig's clock could not be set and runs ahead; {amount} is like '2 min'
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is {amount} fast and could not be set. Times and targets will be off.'**
+  String clockNoticeFast(String amount);
+
+  /// Advanced Mode Run dialog title when the rig's clock could not be set
+  ///
+  /// In en, this message translates to:
+  /// **'The rig\'s clock is wrong'**
+  String get clockWrongTitle;
+
+  /// Button: start the run although the rig's clock is wrong
+  ///
+  /// In en, this message translates to:
+  /// **'Start anyway'**
+  String get clockWrongStartAnyway;
 }
 
 class _AppLocalizationsDelegate
