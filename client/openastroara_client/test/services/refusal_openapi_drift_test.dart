@@ -7,7 +7,8 @@ import 'package:openastroara/services/refusal.dart';
 /// daemon publishes in the committed `openapi.yaml` (schema `RefusalReason`).
 /// A cause on one side only fails here.
 Set<String> _publishedCauses(String yaml) {
-  final lines = yaml.split('\n');
+  // A Windows checkout (`* text=auto`) has CRLF line ends.
+  final lines = yaml.split(RegExp(r'\r?\n'));
   final start = lines.indexOf('    RefusalReason:');
   if (start < 0) return const {};
   final causes = <String>{};
