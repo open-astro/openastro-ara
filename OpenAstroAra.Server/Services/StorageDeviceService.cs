@@ -32,7 +32,7 @@ namespace OpenAstroAra.Server.Services {
 
     public interface IStorageDeviceService {
         /// <summary>§29.1.1 — connected block devices that could hold ARA data,
-        /// with the running system's own disk excluded.</summary>
+        /// with the running system's own disk flagged (<c>SystemDiskLevel</c>).</summary>
         Task<IReadOnlyList<StorageDeviceDto>> ListAsync(CancellationToken ct);
 
         /// <summary>Mount (and optionally reformat — exFAT by default, ext4 on
@@ -40,6 +40,11 @@ namespace OpenAstroAra.Server.Services {
         /// the root-run <c>configure-storage.sh</c> helper: on a packaged install
         /// via the <c>openastroara-storage@</c> unit, on a dev rig via sudo.</summary>
         Task<StorageConfigureResult> ConfigureAsync(string uuid, bool format, string? expectedLabel, string? filesystem, CancellationToken ct);
+
+        /// <summary>Erase guard: the refusal (<c>refused</c> / <c>system_disk</c>) when the drive is
+        /// an OS partition or another partition on the OS disk, null when it may be erased. It reads
+        /// the same device list as <see cref="ListAsync"/>; the helper repeats the check as root.</summary>
+        Task<StorageConfigureResult?> RefuseEraseOnOsDiskAsync(string uuid, CancellationToken ct);
 
         /// <summary>§29 user-triggered disk check: unmount → matching fsck
         /// (fsck.exfat / e2fsck) → remount. exFAT has no journal, so this is
@@ -52,7 +57,7 @@ namespace OpenAstroAra.Server.Services {
         Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct);
 
         /// <summary>Disk-to-disk copy: mount a second drive (never the store, never the
-        /// system disk) at <c>/media/openastroara-copy</c>, with no fstab entry. Success
+        /// OS partition) at <c>/media/openastroara-copy</c>, with no fstab entry. Success
         /// carries that path as <see cref="StorageConfigureResult.MountPoint"/>.</summary>
         Task<StorageConfigureResult> MountCopyTargetAsync(string uuid, CancellationToken ct);
 
@@ -211,27 +216,29 @@ namespace OpenAstroAra.Server.Services {
         /// probe's verdict on the store path (#1231); without it the root partition reads as the
         /// ARA store after a restart with no disk. Internal for the unit tests (the OS guard in
         /// <see cref="ListAsync"/> keeps the live path Linux-only).</summary>
-        internal static IReadOnlyList<StorageDeviceDto> ParseDevices(string json, IReadOnlySet<string> systemDisks, bool storeMounted) {
+        internal static IReadOnlyList<StorageDeviceDto> ParseDevices(string json, IReadOnlySet<string> systemDisks, bool storeMounted,
+                Func<string, string?>? readSysfs = null) {
+            readSysfs ??= ReadSysfs;
             var devices = new List<StorageDeviceDto>();
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("blockdevices", out var roots)) {
                 return [];
             }
             foreach (var disk in roots.EnumerateArray()) {
-                Collect(disk, parentModel: Text(disk, "model"), systemDisks, storeMounted, devices);
+                Collect(disk, parentModel: Text(disk, "model"), systemDisks, storeMounted, readSysfs, devices);
             }
             return devices;
         }
 
         private static void Collect(JsonElement node, string? parentModel,
-                IReadOnlySet<string> systemDisks, bool storeMounted, List<StorageDeviceDto> into) {
+                IReadOnlySet<string> systemDisks, bool storeMounted, Func<string, string?> readSysfs, List<StorageDeviceDto> into) {
             var type = Text(node, "type");
             var path = Text(node, "path");
             var name = Text(node, "name");
 
             if (node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array) {
                 foreach (var child in children.EnumerateArray()) {
-                    Collect(child, parentModel ?? Text(node, "model"), systemDisks, storeMounted, into);
+                    Collect(child, parentModel ?? Text(node, "model"), systemDisks, storeMounted, readSysfs, into);
                 }
                 // A disk with partitions is never itself a candidate — the
                 // partitions are what get mounted.
@@ -257,8 +264,12 @@ namespace OpenAstroAra.Server.Services {
                 return;
             }
             var parent = Text(node, "pkname");
-            var isSystem = systemDisks.Contains(path)
-                || (!string.IsNullOrEmpty(parent) && systemDisks.Contains("/dev/" + parent));
+            // The set holds the OS partitions and their ancestors; a partition whose parent disk is in it,
+            // and that is not itself in it, is another partition on the OS disk.
+            var level = systemDisks.Contains(path) ? SystemLevelOsPartition
+                : !string.IsNullOrEmpty(parent) && systemDisks.Contains("/dev/" + parent) ? SystemLevelOsDiskData
+                : SystemLevelNone;
+            var tran = NullIfEmpty(Text(node, "tran"));
 
             into.Add(new StorageDeviceDto(
                 Path: path,
@@ -269,21 +280,57 @@ namespace OpenAstroAra.Server.Services {
                 SizeBytes: size,
                 MountPoint: NullIfEmpty(Text(node, "mountpoint")),
                 Removable: Bool(node, "rm"),
-                Transport: NullIfEmpty(Text(node, "tran")),
-                IsSystemDisk: isSystem,
+                Transport: tran,
+                IsSystemDisk: level != SystemLevelNone,
                 // #1231 — the mountpoint column AND the probe: after a restart with no disk the root
                 // partition shows the store path (systemd's self-bind) and must not be offered as the store.
-                IsAraStore: storeMounted && string.Equals(Text(node, "mountpoint"), MountPoint, StringComparison.Ordinal)));
+                IsAraStore: storeMounted && string.Equals(Text(node, "mountpoint"), MountPoint, StringComparison.Ordinal),
+                SystemDiskLevel: level,
+                MediaKind: ProbeMedia(tran, type == "disk" ? name : parent, readSysfs)));
+        }
+
+        internal const string SystemLevelNone = "none";
+        internal const string SystemLevelOsPartition = "os_partition";
+        internal const string SystemLevelOsDiskData = "os_disk_data";
+
+        private static string? ReadSysfs(string path) {
+            try {
+                return File.ReadAllText(path);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return null;
+            }
+        }
+
+        /// <summary>Media kind of a disk: sysfs <c>device/type</c> says "SD" or "MMC" (eMMC),
+        /// lsblk's transport says NVMe; anything else, or a read failure, is "unknown".</summary>
+        internal static string ProbeMedia(string? transport, string? disk, Func<string, string?> readSysfs) {
+            if (string.Equals(transport, "nvme", StringComparison.OrdinalIgnoreCase)) {
+                return "nvme";
+            }
+            if (string.IsNullOrEmpty(disk) || disk.Contains('/', StringComparison.Ordinal) || disk.Contains("..", StringComparison.Ordinal)) {
+                return "unknown";
+            }
+            return readSysfs($"/sys/block/{disk}/device/type")?.Trim() switch {
+                "SD" => "sd",
+                "MMC" => "emmc",
+                _ => "unknown",
+            };
+        }
+
+        public async Task<StorageConfigureResult?> RefuseEraseOnOsDiskAsync(string uuid, CancellationToken ct) {
+            // Any, not the first match: two drives can share a UUID (a cloned card).
+            var onOsDisk = (await ListAsync(ct).ConfigureAwait(false)).Any(d => d.IsSystemDisk &&
+                (string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase) || string.Equals(d.Path, uuid, StringComparison.Ordinal)));
+            return onOsDisk ? new StorageConfigureResult(false, "refused", "system_disk", null) : null;
         }
 
         /// <summary>
-        /// Devices carrying / or /boot* — never offered as candidates.
-        /// Assumes a plainly partitioned root (the Pi image default): one
-        /// PKNAME hop from findmnt's source. Root on LVM/dm-crypt would need
-        /// the full parent chain walked — every ancestor lands in the set, so
-        /// root on md/LVM/dm-crypt still resolves to its physical holder.
-        /// Keep in lock-step with the helper's refuse_if_system_disk: a miss
-        /// here offers the system disk for format.
+        /// The OS-partition set: the partitions carrying / or /boot* plus every ancestor
+        /// (partition → md/LVM/dm-crypt → physical disk, up to 8 hops). <see cref="ParseDevices"/>
+        /// reads it in two levels: a device in the set is an OS partition, any other partition whose
+        /// parent disk is in the set is OS-disk data (erase refused, mount allowed).
+        /// Keep in lock-step with the helper's refuse_if_os_partition (set) and
+        /// refuse_if_os_disk (base disk): a miss here offers the system disk for format.
         /// </summary>
         private async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
             var set = new HashSet<string>(StringComparer.Ordinal);

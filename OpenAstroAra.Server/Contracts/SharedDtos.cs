@@ -59,7 +59,12 @@ public sealed record StorageSpaceDto(
     long? TotalBytes);
 
 /// <summary>§29.1.1 — a block device the daemon could use for ARA data.
-/// System disks are listed but flagged so the UI can grey them out.</summary>
+/// System disks are listed but flagged so the UI can grey them out.
+/// <c>IsSystemDisk</c> is true for both <c>SystemDiskLevel</c> values other than
+/// "none" ("os_partition": carries / or /boot*, or is an ancestor of one;
+/// "os_disk_data": another partition on the same physical disk), so an older
+/// client hides exactly what it hid before. <c>MediaKind</c> is "emmc", "nvme",
+/// "sd" or "unknown".</summary>
 public sealed record StorageDeviceDto(
     string Path,
     string? Uuid,
@@ -71,7 +76,9 @@ public sealed record StorageDeviceDto(
     bool Removable,
     string? Transport,
     bool IsSystemDisk,
-    bool IsAraStore);
+    bool IsAraStore,
+    string SystemDiskLevel = "none",
+    string MediaKind = "unknown");
 
 /// <summary>§29.1.1/§29.1.3 — mount a drive as the ARA store, optionally
 /// reformatting it as ext4 first (destructive; the caller must echo the
