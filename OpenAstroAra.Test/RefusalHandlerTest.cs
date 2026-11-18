@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class RefusalHandlerTest {
 
-        // The slice-1 (pointing) causes: token, status, parameter names. A row changed here is a wire change.
+        // The declared causes (pointing, then GoTo): token, status, parameter names. A row changed here is a wire change.
         private static readonly object[] Slice1 = {
             new object[] { "no-camera", 409, Array.Empty<string>() },
             new object[] { "camera-busy", 409, Array.Empty<string>() },
@@ -45,6 +45,7 @@ namespace OpenAstroAra.Test {
             new object[] { "solver-not-set", 422, Array.Empty<string>() },
             new object[] { "capture-settings-unsupported", 422, Array.Empty<string>() },
             new object[] { "storage-unavailable", 409, Array.Empty<string>() },
+            new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };
@@ -69,7 +70,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void The_catalog_declares_exactly_the_pointing_causes_each_once() {
+        public void The_catalog_declares_exactly_the_table_causes_each_once() {
             Assert.That(RefusalCatalog.All.Select(c => c.Token),
                 Is.EquivalentTo(Slice1.Cast<object[]>().Select(r => (string)r[0])));
             Assert.That(RefusalCatalog.All.Select(c => c.Token), Is.Unique);

@@ -61,15 +61,15 @@ namespace OpenAstroAra.Test {
             var idle = new Mock<ISequencerService>();
             idle.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
 
-            var refused = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, busy.Object, CancellationToken.None);
+            var refused = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, busy.Object, null, CancellationToken.None);
             Assert.That((refused as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
             Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("run_in_progress"));
             Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Detail, Does.Contain("force"));
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "a refused slew never reaches the mount");
 
-            var forced = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Force: true), "k1", telescope.Object, busy.Object, CancellationToken.None);
+            var forced = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Force: true), "k1", telescope.Object, busy.Object, null, CancellationToken.None);
             Assert.That(forced, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
-            var quiet = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, idle.Object, CancellationToken.None);
+            var quiet = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, idle.Object, null, CancellationToken.None);
             Assert.That(quiet, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), "k1", It.IsAny<CancellationToken>()), Times.Once, "the idempotency key rides through");
         }
