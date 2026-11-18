@@ -1925,6 +1925,28 @@ void main() {
       expect(seq.calls, ['create M31', 'start seq-1'], reason: 'no waits the daemon would read as yesterday');
     });
 
+    testWidgets("See all on the Tonight's Best row opens the Best screen", (tester) async {
+      var seeAll = 0;
+      final o = TonightSkyObject(
+          id: 'M31', name: 'M31', type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: 60, maxAltitudeDeg: 70);
+      await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onSeeAll: () => seeAll++),
+          sel: null, tonight: [o]);
+      final button = find.byKey(const Key('simple-run-best-see-all'));
+      expect(find.descendant(of: button, matching: find.text('See all')), findsOneWidget);
+      expect(tester.getSize(button).height, greaterThanOrEqualTo(44));
+      await tester.tap(button);
+      expect(seeAll, 1);
+    });
+
+    testWidgets("the Tonight's Best row has no See all where nothing opens the list", (tester) async {
+      final o = TonightSkyObject(
+          id: 'M31', name: 'M31', type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: 60, maxAltitudeDeg: 70);
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null, tonight: [o]);
+      expect(find.byKey(const Key('simple-run-best-see-all')), findsNothing);
+    });
+
     testWidgets('tonight\'s best: up to four suggestions, one tap picks the target', (tester) async {
       TonightSkyObject o(String name, double alt) => TonightSkyObject(
           id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);

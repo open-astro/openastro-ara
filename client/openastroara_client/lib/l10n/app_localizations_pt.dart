@@ -6336,6 +6336,196 @@ class AppLocalizationsPt extends AppLocalizations {
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
 
   @override
+  String get bestNav => 'Best';
+
+  @override
+  String get bestTitle => 'Tonight\'s Best';
+
+  @override
+  String bestSubtitle(String time) {
+    return 'for the rest of tonight · updated $time';
+  }
+
+  @override
+  String get bestSeeAll => 'See all';
+
+  @override
+  String get bestBack => 'Back';
+
+  @override
+  String get bestRefresh => 'Refresh';
+
+  @override
+  String get bestSort => 'Sort';
+
+  @override
+  String get bestSortScore => 'Score';
+
+  @override
+  String get bestSortTransit => 'Transit';
+
+  @override
+  String get bestSortAltitude => 'Altitude now';
+
+  @override
+  String get bestType => 'Type';
+
+  @override
+  String get bestTypeAll => 'All';
+
+  @override
+  String get bestTypeGalaxy => 'Galaxy';
+
+  @override
+  String get bestTypeNebula => 'Nebula';
+
+  @override
+  String get bestTypeCluster => 'Cluster';
+
+  @override
+  String get bestTypePlanetary => 'Planetary nebula';
+
+  @override
+  String get bestTypeOther => 'Other';
+
+  @override
+  String get bestShow => 'Show';
+
+  @override
+  String get bestShowAll => 'All night';
+
+  @override
+  String get bestShowUp => 'Up now';
+
+  @override
+  String get bestPeak => 'Peak altitude (at transit)';
+
+  @override
+  String get bestPeakAny => 'Any';
+
+  @override
+  String bestPeakDeg(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get bestField => 'Field';
+
+  @override
+  String get bestFitsOn => 'Fits my field';
+
+  @override
+  String get bestFitsOff => 'All fields';
+
+  @override
+  String get bestFieldUnknown =>
+      'Field not known. Set your camera and telescope in Settings > Rig.';
+
+  @override
+  String bestCount(int shown, int total) {
+    return '$shown of $total Targets';
+  }
+
+  @override
+  String get bestKept => 'Sort and filters are kept on this device.';
+
+  @override
+  String get bestFitTooSmall => 'Too small';
+
+  @override
+  String get bestFitFills => 'Fills the frame';
+
+  @override
+  String get bestFitMosaic => 'Needs a mosaic';
+
+  @override
+  String bestWindow(String range) {
+    return 'Best $range';
+  }
+
+  @override
+  String bestTransitAt(String time) {
+    return 'Transit $time';
+  }
+
+  @override
+  String bestHighest(int deg) {
+    return 'Highest $deg°';
+  }
+
+  @override
+  String bestNow(int deg) {
+    return 'Now $deg°';
+  }
+
+  @override
+  String get bestNowBelow => 'Now: below the horizon';
+
+  @override
+  String bestMoon(int deg) {
+    return 'Moon $deg° away: brighter sky';
+  }
+
+  @override
+  String get bestInQueue => 'In Queue';
+
+  @override
+  String get bestCollected => 'Collected';
+
+  @override
+  String get bestImage => 'Image this';
+
+  @override
+  String get bestAddToQueue => 'Add to Queue';
+
+  @override
+  String bestAdded(String name) {
+    return '$name added to the Queue';
+  }
+
+  @override
+  String get bestNoneTitle => 'Nothing well placed tonight';
+
+  @override
+  String get bestNoneBody =>
+      'No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.';
+
+  @override
+  String get bestSearch => 'Search';
+
+  @override
+  String get bestNoSiteTitle => 'Set your site';
+
+  @override
+  String get bestNoSiteBody =>
+      'Tonight\'s Best ranks by where you are. Add your site and the list fills in.';
+
+  @override
+  String get bestSetSite => 'Set site';
+
+  @override
+  String get bestNoMatchTitle => 'No Targets match';
+
+  @override
+  String get bestNoMatchBody => 'Your filters hide every Target.';
+
+  @override
+  String get bestClearFilters => 'Clear filters';
+
+  @override
+  String get bestRigOff => 'Rig not connected';
+
+  @override
+  String get bestOffline =>
+      'Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.';
+
+  @override
+  String get bestLoadFailed => 'Could not rank tonight\'s Targets.';
+
+  @override
+  String get bestRetry => 'Try again';
+
+  @override
   String get refusalNoCamera =>
       'No camera is connected. Connect one in Camera settings, then try again.';
 
@@ -12853,6 +13043,197 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String get bestNav => 'Melhores';
+
+  @override
+  String get bestTitle => 'Melhores da Noite';
+
+  @override
+  String bestSubtitle(String time) {
+    return 'para o resto da noite · atualizado $time';
+  }
+
+  @override
+  String get bestSeeAll => 'Ver tudo';
+
+  @override
+  String get bestBack => 'Voltar';
+
+  @override
+  String get bestRefresh => 'Atualizar';
+
+  @override
+  String get bestSort => 'Ordem';
+
+  @override
+  String get bestSortScore => 'Nota';
+
+  @override
+  String get bestSortTransit => 'Trânsito';
+
+  @override
+  String get bestSortAltitude => 'Altura agora';
+
+  @override
+  String get bestType => 'Tipo';
+
+  @override
+  String get bestTypeAll => 'Todos';
+
+  @override
+  String get bestTypeGalaxy => 'Galáxia';
+
+  @override
+  String get bestTypeNebula => 'Nebulosa';
+
+  @override
+  String get bestTypeCluster => 'Aglomerado';
+
+  @override
+  String get bestTypePlanetary => 'Nebulosa planetária';
+
+  @override
+  String get bestTypeOther => 'Outros';
+
+  @override
+  String get bestShow => 'Mostrar';
+
+  @override
+  String get bestShowAll => 'A noite toda';
+
+  @override
+  String get bestShowUp => 'Visíveis agora';
+
+  @override
+  String get bestPeak => 'Altitude máxima (no trânsito)';
+
+  @override
+  String get bestPeakAny => 'Qualquer';
+
+  @override
+  String bestPeakDeg(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get bestField => 'Campo';
+
+  @override
+  String get bestFitsOn => 'Cabe no meu campo';
+
+  @override
+  String get bestFitsOff => 'Todos os campos';
+
+  @override
+  String get bestFieldUnknown =>
+      'Campo desconhecido. Defina a câmera e o telescópio em Ajustes > Equipamento.';
+
+  @override
+  String bestCount(int shown, int total) {
+    return '$shown de $total Alvos';
+  }
+
+  @override
+  String get bestKept => 'Ordem e filtros ficam salvos neste aparelho.';
+
+  @override
+  String get bestFitTooSmall => 'Pequeno demais';
+
+  @override
+  String get bestFitFills => 'Preenche o quadro';
+
+  @override
+  String get bestFitMosaic => 'Precisa de mosaico';
+
+  @override
+  String bestWindow(String range) {
+    return 'Melhor $range';
+  }
+
+  @override
+  String bestTransitAt(String time) {
+    return 'Trânsito $time';
+  }
+
+  @override
+  String bestHighest(int deg) {
+    return 'Máxima $deg°';
+  }
+
+  @override
+  String bestNow(int deg) {
+    return 'Agora $deg°';
+  }
+
+  @override
+  String get bestNowBelow => 'Agora: abaixo do horizonte';
+
+  @override
+  String bestMoon(int deg) {
+    return 'Lua a $deg° de distância: céu mais claro';
+  }
+
+  @override
+  String get bestInQueue => 'Na Fila';
+
+  @override
+  String get bestCollected => 'Coletado';
+
+  @override
+  String get bestImage => 'Fotografar';
+
+  @override
+  String get bestAddToQueue => 'Adicionar à Fila';
+
+  @override
+  String bestAdded(String name) {
+    return '$name adicionado à Fila';
+  }
+
+  @override
+  String get bestNoneTitle => 'Nada bem posicionado esta noite';
+
+  @override
+  String get bestNoneBody =>
+      'Nenhum Alvo fica acima de 30° por tempo suficiente para esta configuração esta noite. Tente amanhã ou busque um Alvo pelo nome.';
+
+  @override
+  String get bestSearch => 'Buscar';
+
+  @override
+  String get bestNoSiteTitle => 'Defina seu local';
+
+  @override
+  String get bestNoSiteBody =>
+      'Melhores da Noite classifica pelo lugar onde você está. Adicione seu local e a lista aparece.';
+
+  @override
+  String get bestSetSite => 'Definir local';
+
+  @override
+  String get bestNoMatchTitle => 'Nenhum Alvo corresponde';
+
+  @override
+  String get bestNoMatchBody => 'Seus filtros escondem todos os Alvos.';
+
+  @override
+  String get bestClearFilters => 'Limpar filtros';
+
+  @override
+  String get bestRigOff => 'Equipamento não conectado';
+
+  @override
+  String get bestOffline =>
+      'Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; a configuração executa depois.';
+
+  @override
+  String get bestLoadFailed =>
+      'Não foi possível classificar os Alvos desta noite.';
+
+  @override
+  String get bestRetry => 'Tentar de novo';
 
   @override
   String get refusalNoCamera =>

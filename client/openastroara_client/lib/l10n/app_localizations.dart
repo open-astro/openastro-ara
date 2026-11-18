@@ -10647,6 +10647,342 @@ abstract class AppLocalizations {
   /// **'POLAR ALIGNER MAY STILL BE MOVING (stop failed)'**
   String get estopFailPolarAligner;
 
+  /// Rail and deck word for Tonight's Best
+  ///
+  /// In en, this message translates to:
+  /// **'Best'**
+  String get bestNav;
+
+  /// Tonight's Best screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Best'**
+  String get bestTitle;
+
+  /// Subtitle: when the list was ranked (HH:MM)
+  ///
+  /// In en, this message translates to:
+  /// **'for the rest of tonight · updated {time}'**
+  String bestSubtitle(String time);
+
+  /// Plan sheet button that opens Tonight's Best
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get bestSeeAll;
+
+  /// Tonight's Best: back button
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get bestBack;
+
+  /// Tonight's Best: rank again
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get bestRefresh;
+
+  /// Sort control label
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get bestSort;
+
+  /// Sort by score
+  ///
+  /// In en, this message translates to:
+  /// **'Score'**
+  String get bestSortScore;
+
+  /// Sort by transit time; also the transit label
+  ///
+  /// In en, this message translates to:
+  /// **'Transit'**
+  String get bestSortTransit;
+
+  /// Sort by altitude now
+  ///
+  /// In en, this message translates to:
+  /// **'Altitude now'**
+  String get bestSortAltitude;
+
+  /// Type chips label
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get bestType;
+
+  /// Type chip: every type
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get bestTypeAll;
+
+  /// Type chip
+  ///
+  /// In en, this message translates to:
+  /// **'Galaxy'**
+  String get bestTypeGalaxy;
+
+  /// Type chip
+  ///
+  /// In en, this message translates to:
+  /// **'Nebula'**
+  String get bestTypeNebula;
+
+  /// Type chip
+  ///
+  /// In en, this message translates to:
+  /// **'Cluster'**
+  String get bestTypeCluster;
+
+  /// Type chip
+  ///
+  /// In en, this message translates to:
+  /// **'Planetary nebula'**
+  String get bestTypePlanetary;
+
+  /// Type chip
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get bestTypeOther;
+
+  /// Show control label
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get bestShow;
+
+  /// Show: the whole night
+  ///
+  /// In en, this message translates to:
+  /// **'All night'**
+  String get bestShowAll;
+
+  /// Show: only Targets up now
+  ///
+  /// In en, this message translates to:
+  /// **'Up now'**
+  String get bestShowUp;
+
+  /// Peak altitude control label
+  ///
+  /// In en, this message translates to:
+  /// **'Peak altitude (at transit)'**
+  String get bestPeak;
+
+  /// Peak altitude: no minimum
+  ///
+  /// In en, this message translates to:
+  /// **'Any'**
+  String get bestPeakAny;
+
+  /// Peak altitude minimum
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}°'**
+  String bestPeakDeg(int deg);
+
+  /// Fits my field control label
+  ///
+  /// In en, this message translates to:
+  /// **'Field'**
+  String get bestField;
+
+  /// Only Targets that fit the field
+  ///
+  /// In en, this message translates to:
+  /// **'Fits my field'**
+  String get bestFitsOn;
+
+  /// Every Target, whatever its fit
+  ///
+  /// In en, this message translates to:
+  /// **'All fields'**
+  String get bestFitsOff;
+
+  /// Why Fits my field is off
+  ///
+  /// In en, this message translates to:
+  /// **'Field not known. Set your camera and telescope in Settings > Rig.'**
+  String get bestFieldUnknown;
+
+  /// Count line
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total} Targets'**
+  String bestCount(int shown, int total);
+
+  /// Note under the controls
+  ///
+  /// In en, this message translates to:
+  /// **'Sort and filters are kept on this device.'**
+  String get bestKept;
+
+  /// Framing fit
+  ///
+  /// In en, this message translates to:
+  /// **'Too small'**
+  String get bestFitTooSmall;
+
+  /// Framing fit
+  ///
+  /// In en, this message translates to:
+  /// **'Fills the frame'**
+  String get bestFitFills;
+
+  /// Framing fit
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a mosaic'**
+  String get bestFitMosaic;
+
+  /// Best dark window, e.g. 20:40-03:20
+  ///
+  /// In en, this message translates to:
+  /// **'Best {range}'**
+  String bestWindow(String range);
+
+  /// Transit time
+  ///
+  /// In en, this message translates to:
+  /// **'Transit {time}'**
+  String bestTransitAt(String time);
+
+  /// Peak altitude of the Target
+  ///
+  /// In en, this message translates to:
+  /// **'Highest {deg}°'**
+  String bestHighest(int deg);
+
+  /// Altitude now
+  ///
+  /// In en, this message translates to:
+  /// **'Now {deg}°'**
+  String bestNow(int deg);
+
+  /// Altitude line of a Target under the horizon
+  ///
+  /// In en, this message translates to:
+  /// **'Now: below the horizon'**
+  String get bestNowBelow;
+
+  /// Moon distance on a Target the Moon affects
+  ///
+  /// In en, this message translates to:
+  /// **'Moon {deg}° away: brighter sky'**
+  String bestMoon(int deg);
+
+  /// Marker and disabled button
+  ///
+  /// In en, this message translates to:
+  /// **'In Queue'**
+  String get bestInQueue;
+
+  /// Marker: already imaged
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get bestCollected;
+
+  /// Opens the plan sheet on the Target
+  ///
+  /// In en, this message translates to:
+  /// **'Image this'**
+  String get bestImage;
+
+  /// Adds the Target while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Queue'**
+  String get bestAddToQueue;
+
+  /// Pill after the add
+  ///
+  /// In en, this message translates to:
+  /// **'{name} added to the Queue'**
+  String bestAdded(String name);
+
+  /// Empty state
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing well placed tonight'**
+  String get bestNoneTitle;
+
+  /// Empty state text
+  ///
+  /// In en, this message translates to:
+  /// **'No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.'**
+  String get bestNoneBody;
+
+  /// Empty state action
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bestSearch;
+
+  /// Empty state
+  ///
+  /// In en, this message translates to:
+  /// **'Set your site'**
+  String get bestNoSiteTitle;
+
+  /// Empty state text
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Best ranks by where you are. Add your site and the list fills in.'**
+  String get bestNoSiteBody;
+
+  /// Empty state action
+  ///
+  /// In en, this message translates to:
+  /// **'Set site'**
+  String get bestSetSite;
+
+  /// Filters hide every Target
+  ///
+  /// In en, this message translates to:
+  /// **'No Targets match'**
+  String get bestNoMatchTitle;
+
+  /// Empty state text
+  ///
+  /// In en, this message translates to:
+  /// **'Your filters hide every Target.'**
+  String get bestNoMatchBody;
+
+  /// Resets the four filters
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get bestClearFilters;
+
+  /// Strip text
+  ///
+  /// In en, this message translates to:
+  /// **'Rig not connected'**
+  String get bestRigOff;
+
+  /// Note when the rig is not connected
+  ///
+  /// In en, this message translates to:
+  /// **'Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.'**
+  String get bestOffline;
+
+  /// Error text
+  ///
+  /// In en, this message translates to:
+  /// **'Could not rank tonight\'s Targets.'**
+  String get bestLoadFailed;
+
+  /// Error action
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get bestRetry;
+
   /// Refusal (no-camera): the daemon has no camera to take the frame with
   ///
   /// In en, this message translates to:

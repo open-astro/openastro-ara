@@ -1,5 +1,6 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_best_screen.dart';
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
@@ -756,6 +757,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ),
   );
 
+  /// Tonight's Best (#1900): a page over the shell like Monitor, not a Screen.
+  /// Image this closes it and opens Plan's sheet on the Target; Search and
+  /// Set site close it and open what owns them.
+  void _openBest() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (bestContext) => TonightsBestScreen(
+          onBack: () => Navigator.of(bestContext).pop(),
+          onImage: (_) {
+            Navigator.of(bestContext).pop();
+            // The screen already set the selection.
+            _imagePick();
+          },
+          onSearch: () {
+            Navigator.of(bestContext).pop();
+            _toggle(_Popover.search);
+          },
+          onSetSite: () {
+            Navigator.of(bestContext).pop();
+            _openMenu();
+          },
+        ),
+      ),
+    ),
+  );
+
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.preflight) return _startSimplePreflight();
     setState(() => _popover = _Popover.none);
@@ -1123,6 +1150,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
+      onSeeAll: _openBest,
     );
     final sheet = screen.overlay(screenHost);
     final runActive =
@@ -1569,6 +1597,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       info: ref.watch(simpleInfoShownProvider),
                                       onSection: _pickFromGrid,
                                       onMonitor: _openMonitor,
+                                      onBest: _openBest,
                                       onSky: () => setState(() => _sky = !_sky),
                                       onInfo: () => ref
                                           .read(simpleInfoShownProvider.notifier)
@@ -1592,6 +1621,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       sky: _sky,
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
+                                      onBest: _openBest,
                                       // The grid needs the room.
                                       onMonitor:
                                           MediaQuery.sizeOf(context).width >=
@@ -2601,12 +2631,16 @@ class _LeftRail extends StatelessWidget {
     required this.sky,
     required this.onSky,
     required this.onAlbum,
+    required this.onBest,
     this.onMonitor,
   });
 
   final bool sky;
   final VoidCallback? onSky;
   final VoidCallback onAlbum;
+
+  /// Tonight's Best: offered at every width (Monitor needs 900 pt).
+  final VoidCallback onBest;
 
   /// Null: the window is too narrow for Monitor, so it isn't offered.
   final VoidCallback? onMonitor;
@@ -2662,6 +2696,12 @@ class _LeftRail extends StatelessWidget {
             label: context.l10n.monitorTitle,
             onTap: onMonitor,
           ),
+        _RailButton(
+          key: const Key('simple-best-open'),
+          icon: Icons.star_outline,
+          label: context.l10n.bestNav,
+          onTap: onBest,
+        ),
       ],
       ),
     ),

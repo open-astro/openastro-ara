@@ -185,7 +185,7 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('on a phone held upright (390x844) both rails fold into one deck with the six section words, '
+  testWidgets('on a phone held upright (390x844) both rails fold into one deck with the seven section words, '
       'the shutter, the chip and STOP', (tester) async {
     await _pump(tester, _portrait);
     expect(find.byKey(const Key('companion-deck')), findsOneWidget);
@@ -194,6 +194,8 @@ void main() {
     }
     expect(section('monitor'), findsOneWidget);
     expect(find.text('Monitor'), findsOneWidget, reason: 'the sixth word');
+    expect(section('best'), findsOneWidget);
+    expect(find.text('Best'), findsOneWidget, reason: 'the seventh word');
     expect(
       find.byKey(const Key('simple-mode')),
       findsNothing,
@@ -568,6 +570,7 @@ void main() {
           'simple-settings',
           'companion-section-preview',
           'companion-section-monitor',
+          'companion-section-best',
         ]) {
           final r = tester.getRect(find.byKey(Key(k)));
           expect(r.height, greaterThanOrEqualTo(44), reason: '$k height');

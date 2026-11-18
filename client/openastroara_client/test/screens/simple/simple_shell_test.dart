@@ -2509,7 +2509,8 @@ void main() {
   });
 
   testWidgets('with Preflight showing, the status card starts under the step strip', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
+    // 880 high: with Best the left rail has six items, and a card taller than the room above it moves beside it (below).
+    final c = await _pump(tester, const Size(1024, 880));
     await _startPreflight(tester);
     c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
     await tester.pump();

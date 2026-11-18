@@ -48,6 +48,7 @@ class CompanionDeck extends ConsumerWidget {
     required this.info,
     required this.onSection,
     required this.onMonitor,
+    required this.onBest,
     required this.onSky,
     required this.onInfo,
     required this.onLibrary,
@@ -62,6 +63,7 @@ class CompanionDeck extends ConsumerWidget {
   final bool info;
   final ValueChanged<SimpleModeScreen> onSection;
   final VoidCallback onMonitor;
+  final VoidCallback onBest;
   final VoidCallback onSky;
   final VoidCallback onInfo;
   final VoidCallback onLibrary;
@@ -153,6 +155,12 @@ class CompanionDeck extends ConsumerWidget {
                   label: l10n.monitorTitle,
                   selected: false,
                   onTap: onMonitor,
+                ),
+                _Section(
+                  key: const Key('companion-section-best'),
+                  label: l10n.bestNav,
+                  selected: false,
+                  onTap: onBest,
                 ),
               ],
             ),
