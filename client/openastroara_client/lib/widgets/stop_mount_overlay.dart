@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/verify_position_result.dart';
-import '../services/plate_solve_api.dart';
 import '../state/equipment/mount_state.dart';
 import '../state/plate_solve/plate_solve_api_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
@@ -375,9 +374,6 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
         _verified = result;
         if (result == null) _verifyError = 'No server connection — cannot take a verification image.';
       });
-    } on PlateSolveException catch (e) {
-      if (!mounted) return;
-      setState(() => _verifyError = e.message);
     } catch (e) {
       if (!mounted) return;
       setState(() => _verifyError = friendlyError(context.l10n, e, action: context.l10n.actionTakeVerification));
