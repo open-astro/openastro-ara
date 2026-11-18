@@ -234,36 +234,49 @@ class SettingsSwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Ellipsize rather than overflow the fixed 280px column when the
-                  // label is long (or rendered in a wide font).
-                  Flexible(
-                    child: Text(label,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AraColors.textSecondary,
-                            )),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    // Ellipsize rather than overflow the fixed 280px column when the
+                    // label is long (or rendered in a wide font).
+                    Flexible(
+                      // The switch carries the label as its name (below).
+                      child: ExcludeSemantics(
+                        child: Text(
+                          label,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AraColors.textSecondary),
+                        ),
+                      ),
+                    ),
+                    if (helpKey != null) HelpIcon(helpKey: helpKey!),
+                  ],
+                ),
+                if (hint != null)
+                  ExcludeSemantics(
+                    child: Text(
+                      hint!,
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AraColors.textTertiary),
+                    ),
                   ),
-                  if (helpKey != null) HelpIcon(helpKey: helpKey!),
-                ],
-              ),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
+              ],
+            ),
           ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
+          Semantics(
+            label: label,
+            hint: hint,
+            child: Switch(value: value, onChanged: onChanged),
+          ),
+        ],
+      ),
     );
   }
 }
