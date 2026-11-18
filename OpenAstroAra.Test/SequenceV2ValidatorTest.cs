@@ -229,13 +229,22 @@ namespace OpenAstroAra.Test {
         public void A_capture_only_inside_a_trigger_run_or_a_placeholder_is_not_capturable() {
             var trigger = """{ "kind": "sequential", "items": [ { "kind": "annotation" } ], "triggers": [ { "kind": "dither-after-exposures", "run": [ """ + Capture + " ] } ] }";
             Assert.That(Pairs(CheckItems(trigger)), Is.EqualTo(new[] { ("no_capturable_instruction", "$.root") }));
-            var placeholder = """{ "kind": "unknown", "role": "instruction", "originalType": "X", "originalPayload": {}, "reason": "r" }""";
+        }
+
+        [TestCase("instruction")]
+        [TestCase("container")]
+        public void A_capture_inside_a_placeholders_payload_is_not_capturable_and_not_walked(string role) {
+            // The payload is opaque: a walker that descends into it would count the capture, or report
+            // the payload's unknown kind and fields.
+            var placeholder = "{ \"kind\": \"unknown\", \"role\": \"" + role + "\", \"originalType\": \"X\", \"reason\": \"r\", "
+                + "\"originalPayload\": { \"items\": [ { \"kind\": \"capture\", \"bogus\": 1 } ] } }";
             Assert.That(Pairs(CheckItems(placeholder)), Is.EqualTo(new[] { ("no_capturable_instruction", "$.root") }));
         }
 
         [Test]
         public void The_capturable_rule_can_be_waived_for_a_template_body() {
-            Assert.That(CheckItems("""{ "kind": "annotation" }"""), Is.Not.Empty);
+            // Exact pairs, not "not empty": the refusal is the capturable rule and nothing else.
+            Assert.That(Pairs(CheckItems("""{ "kind": "annotation" }""")), Is.EqualTo(new[] { ("no_capturable_instruction", "$.root") }));
             Assert.That(Check(Document("""{ "kind": "annotation" }"""), new SequenceV2ValidationOptions { RequireCapturableInstruction = false }), Is.Empty);
         }
 
@@ -328,10 +337,156 @@ namespace OpenAstroAra.Test {
             Assert.That(Pairs(CheckItems(Capture + ", " + node)), Is.EqualTo(new[] { ("unknown_field", "$.root.items[1]") }));
         }
 
+        // --- Validation rule: the role of a node matches the list it sits in (all 11 refused pairs) ---
+
+        private static string NodeOfRole(string role, bool placeholder) {
+            if (placeholder) {
+                return "{ \"kind\": \"unknown\", \"role\": \"" + role + "\", \"originalType\": \"X\", \"originalPayload\": {}, \"reason\": \"r\" }";
+            }
+            return role switch {
+                "container" => """{ "kind": "sequential" }""",
+                "instruction" => """{ "kind": "annotation" }""",
+                "condition" => """{ "kind": "loop-iterations" }""",
+                _ => """{ "kind": "dither-after-exposures" }""",
+            };
+        }
+
+        private static (string Doc, string Path) InList(string list, string node) => list switch {
+            "items" => (Document(Capture + ", " + node), "$.root.items[1]"),
+            "conditions" => (Document("""{ "kind": "sequential", "items": [ """ + Capture + " ], \"conditions\": [ " + node + " ] }"), "$.root.items[0].conditions[0]"),
+            "triggers" => (Document("""{ "kind": "sequential", "items": [ """ + Capture + " ], \"triggers\": [ " + node + " ] }"), "$.root.items[0].triggers[0]"),
+            _ => (Document("""{ "kind": "sequential", "items": [ """ + Capture + """ ], "triggers": [ { "kind": "dither-after-exposures", "run": [ """ + node + " ] } ] }"), "$.root.items[0].triggers[0].run[0]"),
+        };
+
+        [TestCase("items", "condition")]
+        [TestCase("items", "trigger")]
+        [TestCase("conditions", "container")]
+        [TestCase("conditions", "instruction")]
+        [TestCase("conditions", "trigger")]
+        [TestCase("triggers", "container")]
+        [TestCase("triggers", "instruction")]
+        [TestCase("triggers", "condition")]
+        [TestCase("run", "container")]
+        [TestCase("run", "condition")]
+        [TestCase("run", "trigger")]
+        public void A_node_of_a_refused_role_is_wrong_role_in_that_list_as_a_kind_and_as_a_placeholder(string list, string role) {
+            foreach (var placeholder in new[] { false, true }) {
+                var (doc, path) = InList(list, NodeOfRole(role, placeholder));
+                Assert.That(Pairs(Check(doc)), Is.EqualTo(new[] { ("wrong_role", path) }), list + " <- " + role + (placeholder ? " (placeholder)" : ""));
+            }
+        }
+
+        [TestCase("items", "container")]
+        [TestCase("items", "instruction")]
+        [TestCase("conditions", "condition")]
+        [TestCase("triggers", "trigger")]
+        [TestCase("run", "instruction")]
+        public void A_node_of_an_accepted_role_is_valid_in_that_list(string list, string role) {
+            foreach (var placeholder in new[] { false, true }) {
+                var (doc, _) = InList(list, NodeOfRole(role, placeholder));
+                Assert.That(Check(doc), Is.Empty, list + " <- " + role + (placeholder ? " (placeholder)" : ""));
+            }
+        }
+
+        [Test]
+        public void A_placeholder_role_outside_the_four_is_wrong_role() {
+            var node = """{ "kind": "unknown", "role": "widget", "originalType": "X", "originalPayload": {}, "reason": "r" }""";
+            Assert.That(Pairs(CheckItems(Capture + ", " + node)), Is.EqualTo(new[] { ("wrong_role", "$.root.items[1]") }));
+        }
+
+        // --- Validation rule: the document's required members ---
+
+        [Test]
+        public void A_document_without_a_name_or_without_targets_is_refused() {
+            var noName = Check("""{ "schemaVersion": "openastroara-sequence-v2", "targets": [], "root": { "kind": "root", "items": [ """ + Capture + " ] } }");
+            Assert.That(Pairs(noName), Is.EqualTo(new[] { ("missing_field", "$") }));
+            Assert.That(noName[0].Message, Does.Contain("name"));
+            var noTargets = Check("""{ "schemaVersion": "openastroara-sequence-v2", "name": "t", "root": { "kind": "root", "items": [ """ + Capture + " ] } }");
+            Assert.That(Pairs(noTargets), Is.EqualTo(new[] { ("missing_field", "$") }));
+            Assert.That(noTargets[0].Message, Does.Contain("targets"));
+        }
+
+        // --- Value kinds: a member of the wrong JSON kind is one wrong_type at its path, never an exception ---
+
+        private static string Whole(string? schemaVersion = null, string? name = null, string? targets = null, string? root = null) =>
+            "{ \"schemaVersion\": " + (schemaVersion ?? "\"openastroara-sequence-v2\"") + ", \"name\": " + (name ?? "\"t\"")
+            + ", \"targets\": " + (targets ?? "[ " + T1 + " ]") + ", \"root\": " + (root ?? "{ \"kind\": \"root\", \"items\": [ " + Capture + " ] }") + " }";
+
+        private static string RootOf(string items) => "{ \"kind\": \"root\", \"items\": [ " + items + " ] }";
+
+        [TestCase("5", null, null, null, "$.schemaVersion")]
+        [TestCase(null, "5", null, null, "$.name")]
+        [TestCase(null, null, "5", null, "$.targets")]
+        [TestCase(null, null, "[ 5 ]", null, "$.targets[0]")]
+        [TestCase(null, null, """[ { "id": 5, "coordinates": {} } ]""", null, "$.targets[0].id")]
+        [TestCase(null, null, """[ { "id": "t1", "coordinates": 5 } ]""", null, "$.targets[0].coordinates")]
+        [TestCase(null, null, null, "5", "$.root")]
+        [TestCase(null, null, null, """{ "kind": 5 }""", "$.root.kind")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": 5 }""", "$.root.items")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": 5 } ] }""", "$.root.items[0].kind")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "sequential", "conditions": "x" } ] }""", "$.root.items[0].conditions")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "sequential", "conditions": [ 5 ] } ] }""", "$.root.items[0].conditions[0]")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "sequential", "triggers": {} } ] }""", "$.root.items[0].triggers")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "sequential", "triggers": [ { "kind": "dither-after-exposures", "run": 5 } ] } ] }""", "$.root.items[0].triggers[0].run")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "sequential", "triggers": [ { "kind": "dither-after-exposures", "run": [ 5 ] } ] } ] }""", "$.root.items[0].triggers[0].run[0]")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "target", "targetId": 5 } ] }""", "$.root.items[0].targetId")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "unknown", "role": 5, "originalType": "X", "originalPayload": {}, "reason": "r" } ] }""", "$.root.items[0].role")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "unknown", "role": "instruction", "originalType": 5, "originalPayload": {}, "reason": "r" } ] }""", "$.root.items[0].originalType")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "unknown", "role": "instruction", "originalType": "X", "originalPayload": [], "reason": "r" } ] }""", "$.root.items[0].originalPayload")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "unknown", "role": "instruction", "originalType": "X", "originalPayload": {}, "reason": 5 } ] }""", "$.root.items[0].reason")]
+        [TestCase(null, null, null, """{ "kind": "root", "items": [ { "kind": "capture", "exposureTime": "60" } ] }""", "$.root.items[0].exposureTime")]
+        public void A_member_of_the_wrong_JSON_kind_is_one_wrong_type_at_its_path(string? schemaVersion, string? name, string? targets, string? root, string path) {
+            var errors = Check(Whole(schemaVersion, name, targets, root), new SequenceV2ValidationOptions { RequireCapturableInstruction = false });
+            Assert.That(Pairs(errors), Is.EqualTo(new[] { ("wrong_type", path) }));
+        }
+
+        [Test]
+        public void A_null_is_valid_where_the_engine_property_can_hold_null() {
+            // slew-radec.center is bool? and switch-filter.filter is an object reference.
+            Assert.That(CheckItems("""{ "kind": "slew-radec", "center": null }, { "kind": "switch-filter", "filter": null }, """ + Capture), Is.Empty);
+            Assert.That(Pairs(CheckItems("""{ "kind": "capture", "exposureTime": null }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].exposureTime") }), "a double is not nullable");
+        }
+
+        [Test]
+        public void A_number_where_a_string_belongs_and_a_string_where_a_number_belongs_are_wrong_type() {
+            Assert.That(Pairs(CheckItems("""{ "kind": "annotation", "text": 5 }, """ + Capture)), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].text") }));
+            Assert.That(Pairs(CheckItems("""{ "kind": "capture", "gain": 1.5 }""")), Is.EqualTo(new[] { ("wrong_type", "$.root.items[0].gain") }), "an int field takes an integer");
+        }
+
+        [Test]
+        public void No_hostile_shape_throws() {
+            foreach (var hostile in new[] { "null", "5", "\"s\"", "true", "[]", "{}", "[ null ]" }) {
+                foreach (var member in new[] { "items", "conditions", "triggers", "run", "kind", "targetId", "role", "originalPayload", "coordinates", "binning", "data" }) {
+                    var node = "{ \"kind\": \"sequential\", \"" + member + "\": " + hostile + " }";
+                    var doc = Whole(root: RootOf(node + ", " + Capture));
+                    Assert.DoesNotThrow(() => Check(doc), member + ": " + hostile);
+                }
+            }
+        }
+
+        // --- The error list is bounded and a client name is not echoed whole ---
+
+        [Test]
+        public void At_most_100_errors_are_returned() {
+            var bad = string.Join(", ", Enumerable.Repeat("""{ "kind": "frobnicate" }""", 150));
+            Assert.That(CheckItems(Capture + ", " + bad), Has.Count.EqualTo(100));
+        }
+
+        [Test]
+        public void A_client_supplied_name_is_truncated_to_64_characters_in_the_message() {
+            var huge = new string('x', 1000);
+            var kind = CheckItems("{ \"kind\": \"" + huge + "\" }, " + Capture);
+            var field = CheckItems("{ \"kind\": \"capture\", \"" + huge + "\": 1 }");
+            foreach (var errors in new[] { kind, field }) {
+                Assert.That(errors, Has.Count.EqualTo(1));
+                Assert.That(errors[0].Message, Does.Contain(new string('x', 64)).And.Not.Contain(new string('x', 65)));
+            }
+        }
+
         // --- What the validator returns ---
 
         [Test]
-        public void Every_error_is_reported_in_document_order_not_only_the_first() {
+        public void Every_error_is_reported_in_walk_order_not_only_the_first() {
             var errors = CheckItems("""{ "kind": "capture", "exposureTim": 1 }, { "kind": "frobnicate" }, { "kind": "target", "targetId": "t9" }""");
             Assert.That(Pairs(errors), Is.EqualTo(new[] {
                 ("unknown_field", "$.root.items[0]"), ("unknown_kind", "$.root.items[1]"), ("unknown_target", "$.root.items[2]"),

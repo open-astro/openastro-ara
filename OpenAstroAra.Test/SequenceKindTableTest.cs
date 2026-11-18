@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Format;
 using OpenAstroAra.Server.Services;
 
@@ -91,11 +92,15 @@ namespace OpenAstroAra.Test {
 
         // Characterization: the class set `WithDefaults` registers at master (7356fefa4938). Green before
         // the change and after it; building the registrations from the table must not add, drop or
-        // reorder one. The two astrometry conditions are checked apart because a host without the natives
-        // skips them.
+        // reorder one. A host without the astrometry natives skips the two astrometry conditions, so the
+        // condition list is the five of master or, without the natives, the three.
         private static readonly string[] NativeKinds = { "loop-while-above-horizon", "loop-while-altitude" };
 
         private static readonly string[] MasterConditions = { "LoopCondition", "TimeSpanCondition", "TimeCondition" };
+
+        private static readonly string[] MasterFiveConditions = {
+            "LoopCondition", "TimeSpanCondition", "AboveHorizonCondition", "AltitudeCondition", "TimeCondition",
+        };
 
         private static readonly string[] MasterContainers = {
             "SequenceRootContainer", "SequentialContainer", "ParallelContainer", "DeepSkyObjectContainer", "SmartExposure",
@@ -125,9 +130,62 @@ namespace OpenAstroAra.Test {
             Assert.That(f.Containers.Select(x => x.GetType().Name), Is.EqualTo(MasterContainers));
             Assert.That(f.Items.Select(x => x.GetType().Name), Is.EqualTo(MasterItems));
             Assert.That(f.Triggers.Select(x => x.GetType().Name), Is.EqualTo(MasterTriggers));
+            // With the natives the list is the five of master in master's order (the astrometry pair
+            // sits between TimeSpanCondition and TimeCondition); without them, the three.
             var conditions = f.Conditions.Select(x => x.GetType().Name).ToList();
-            Assert.That(conditions.Where(c => c is not ("AboveHorizonCondition" or "AltitudeCondition")),
-                Is.EqualTo(MasterConditions));
+            Assert.That(conditions, Is.EqualTo(conditions.Count == 5 ? MasterFiveConditions : MasterConditions));
+        }
+
+        // --- The table-driven build: the native-less skip is the factory's, tested through the build path ---
+        // `HeadlessSequencerFactory.Instantiate(entries, constructors)` walks the entries in order and calls
+        // the constructor registered for each entry's class. It skips an entry only when the entry has
+        // NeedsAstrometryNatives and its constructor faults on a missing native library (the faults
+        // TryAddCondition filters); every other fault, and an entry with no constructor, propagates.
+
+        private static readonly string[] SkippedResult = { "LoopCondition", "TimeSpanCondition" };
+
+        private static SequenceKindEntry Entry(string kind, Type type, bool needsNatives) =>
+            new(kind, type, SequenceNodeRole.Condition, needsNatives);
+
+        [Test]
+        public void A_flagged_entry_whose_constructor_faults_on_a_missing_native_library_is_skipped() {
+            var entries = new[] {
+                Entry("loop-iterations", typeof(LoopCondition), false),
+                Entry("loop-while-altitude", typeof(AltitudeCondition), true),
+                Entry("loop-for-duration", typeof(TimeSpanCondition), false),
+            };
+            var constructors = new Dictionary<Type, Func<object>> {
+                [typeof(LoopCondition)] = () => new LoopCondition(),
+                [typeof(AltitudeCondition)] = () => throw new DllNotFoundException("libsupernovas.so"),
+                [typeof(TimeSpanCondition)] = () => new TimeSpanCondition(),
+            };
+            var built = HeadlessSequencerFactory.Instantiate(entries, constructors);
+            Assert.That(built.Select(x => x.GetType().Name), Is.EqualTo(SkippedResult));
+        }
+
+        [Test]
+        public void An_unflagged_entry_that_faults_the_same_way_fails_the_build() {
+            var entries = new[] { Entry("loop-iterations", typeof(LoopCondition), false) };
+            var constructors = new Dictionary<Type, Func<object>> {
+                [typeof(LoopCondition)] = () => throw new DllNotFoundException("libsupernovas.so"),
+            };
+            Assert.Throws<DllNotFoundException>(() => HeadlessSequencerFactory.Instantiate(entries, constructors));
+        }
+
+        [Test]
+        public void A_flagged_entry_that_faults_for_another_reason_fails_the_build() {
+            var entries = new[] { Entry("loop-while-altitude", typeof(AltitudeCondition), true) };
+            var constructors = new Dictionary<Type, Func<object>> {
+                [typeof(AltitudeCondition)] = () => throw new InvalidOperationException("bug"),
+            };
+            Assert.Throws<InvalidOperationException>(() => HeadlessSequencerFactory.Instantiate(entries, constructors));
+        }
+
+        [Test]
+        public void A_table_entry_with_no_constructor_fails_the_build() {
+            var entries = new[] { Entry("loop-iterations", typeof(LoopCondition), false) };
+            Assert.Throws<InvalidOperationException>(() =>
+                HeadlessSequencerFactory.Instantiate(entries, new Dictionary<Type, Func<object>>()));
         }
 
         [Test]

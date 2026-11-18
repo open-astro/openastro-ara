@@ -16,9 +16,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.Json;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Format;
 
@@ -52,16 +52,16 @@ namespace OpenAstroAra.Test {
 
         private static string LowerCamel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 
+        // The write set: what Newtonsoft's contract writes for the class (readable, not ignored). The
+        // setter-only NINA shims (`Comparator`, `UserSunAltitude`, ... on the altitude base classes) are
+        // readable-only-by-old-files members that the engine never writes, so they are not v2 fields.
         private static HashSet<string> EngineFields(Type type) {
+            var contract = (JsonObjectContract)new DefaultContractResolver().ResolveContract(type);
             var names = new HashSet<string> { "kind" };
-            for (var t = type; t != null && t != typeof(object); t = t.BaseType) {
-                foreach (var member in t.GetMembers(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)) {
-                    var attribute = member.GetCustomAttribute<JsonPropertyAttribute>(true);
-                    if (attribute == null) continue;
-                    var engineName = attribute.PropertyName ?? member.Name;
-                    if (NotStored.Contains(engineName)) continue;
-                    names.Add(Renamed.TryGetValue(engineName, out var v2) ? v2 : LowerCamel(engineName));
-                }
+            foreach (var property in contract.Properties.Where(p => p.Readable && !p.Ignored)) {
+                var engineName = property.PropertyName!;
+                if (NotStored.Contains(engineName)) continue;
+                names.Add(Renamed.TryGetValue(engineName, out var v2) ? v2 : LowerCamel(engineName));
             }
             return names;
         }
@@ -73,6 +73,18 @@ namespace OpenAstroAra.Test {
                 Assert.That(SequenceV2Fields.For(entry).OrderBy(f => f, StringComparer.Ordinal),
                     Is.EqualTo(EngineFields(entry.EngineClass).OrderBy(f => f, StringComparer.Ordinal)),
                     entry.Kind + " (" + entry.EngineClass.Name + ")");
+            }
+        }
+
+        [Test]
+        public void The_setter_only_NINA_shims_are_not_fields_of_the_altitude_kinds() {
+            // WaitForAltitudeBase / LoopForAltitudeBase carry write-only [JsonProperty] shims so old NINA
+            // files still read; the engine never writes them. The part B importer folds them into `data`.
+            foreach (var kind in new[] { "wait-for-sun-altitude", "loop-while-above-horizon", "loop-while-altitude" }) {
+                var fields = SequenceV2Fields.For(SequenceKinds.ForKind(kind)!);
+                Assert.That(fields, Does.Contain("data"), kind);
+                Assert.That(fields, Does.Not.Contain("comparator").And.Not.Contain("userSunAltitude").And.Not.Contain("altitudeOffset")
+                    .And.Not.Contain("userMoonAltitude").And.Not.Contain("coordinates").And.Not.Contain("altitude"), kind);
             }
         }
 
@@ -96,6 +108,39 @@ namespace OpenAstroAra.Test {
                 }
             }
             Assert.That(missing, Is.Empty, "a field the spec does not list goes into the spec in the same PR (Known limits)");
+        }
+
+        // The ExposureInfo row keys the `target` cell describes; they are nested keys, not node fields.
+        private static readonly HashSet<string> ExposureInfoKeys = new() {
+            "count", "filter", "exposureTime", "gain", "offset", "imageType", "binningX", "binningY", "roi",
+        };
+
+        [Test]
+        public void Every_field_the_spec_row_names_is_in_the_table_of_its_kind() {
+            // A backticked lowerCamel token directly followed by " (" in a field cell names a field
+            // (`exposureTime` (double, ...)); values such as `Sidereal`, `LIGHT` and `-1` do not match.
+            var token = new System.Text.RegularExpressions.Regex("`([a-z][A-Za-z0-9]*)` \\(");
+            var stray = new List<string>();
+            Assert.That(SequenceKinds.All, Has.Count.EqualTo(67));
+            foreach (var row in SequenceV2Spec.KindRows()) {
+                var fields = SequenceV2Fields.For(SequenceKinds.ForKind(row.Kind)!);
+                foreach (System.Text.RegularExpressions.Match m in token.Matches(row.FieldsCell)) {
+                    var name = m.Groups[1].Value;
+                    if (row.Kind == "target" && ExposureInfoKeys.Contains(name)) continue;
+                    if (!fields.Contains(name)) stray.Add(row.Kind + "." + name);
+                }
+            }
+            Assert.That(stray, Is.Empty, "the spec promises a field the engine does not store");
+        }
+
+        [Test]
+        public void The_spec_does_not_map_the_document_name_to_a_stored_SequenceTitle() {
+            // SequenceRootContainer.SequenceTitle has no [JsonProperty]; the title is the document `name`,
+            // the root's own `name` is the root container's name, and both are kept as found (part B
+            // decides how the title is stored).
+            var lines = SequenceV2Spec.Lines().Where(l => l.Contains("SequenceTitle", StringComparison.Ordinal)).ToList();
+            Assert.That(lines, Is.Not.Empty, "the spec says what happens to SequenceTitle");
+            Assert.That(lines.Where(l => !l.Contains("not stored", StringComparison.Ordinal)), Is.Empty);
         }
 
         [Test]
