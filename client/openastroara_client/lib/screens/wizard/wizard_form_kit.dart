@@ -117,6 +117,9 @@ class WizardTextField extends StatefulWidget {
   final String? errorText;
   final String? initialValue;
   final bool required;
+
+  /// Hides the text as typed (a secret, #1580).
+  final bool obscureText;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String> onChanged;
@@ -138,6 +141,7 @@ class WizardTextField extends StatefulWidget {
     this.errorText,
     this.initialValue,
     this.required = false,
+    this.obscureText = false,
     this.keyboardType,
     this.inputFormatters,
     this.onCleared,
@@ -168,6 +172,7 @@ class _WizardTextFieldState extends State<WizardTextField> {
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: _controller,
+        obscureText: widget.obscureText,
         keyboardType: widget.keyboardType,
         inputFormatters: widget.inputFormatters,
         onChanged: widget.onChanged,

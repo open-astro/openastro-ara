@@ -1416,6 +1416,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellLibrary => 'Library';
 
   @override
+  String get shellRailTabs => 'Modes';
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -6370,6 +6373,79 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalStorageUnavailable =>
       'The storage disk is missing. Plug it back in, then try again.';
+
+  @override
+  String get bridgeSetupFoundTitle => 'Found on this rig';
+
+  @override
+  String bridgeSetupAddSelected(int count) {
+    return 'Add selected ($count)';
+  }
+
+  @override
+  String get bridgeSetupAdding => 'Adding…';
+
+  @override
+  String get bridgeSetupWaiting => 'Waiting';
+
+  @override
+  String get bridgeSetupAdded => 'Added';
+
+  @override
+  String get bridgeSetupFailed => 'Failed';
+
+  @override
+  String get bridgeSetupRetry => 'Retry';
+
+  @override
+  String get bridgeSetupEdit => 'Edit';
+
+  @override
+  String get bridgeSetupNeedsDetails => 'Needs details';
+
+  @override
+  String get bridgeSetupMayExist =>
+      'No answer from the bridge: it may already exist. Retry checks first.';
+
+  @override
+  String get bridgeSetupLooking => 'Looking for devices';
+
+  @override
+  String get bridgeSetupContinue => 'Continue';
+
+  @override
+  String get bridgeSetupBack => 'Back';
+
+  @override
+  String get bridgeSetupAdd => 'Add';
+
+  @override
+  String get bridgeSetupByHand => 'Add a device by hand';
+
+  @override
+  String get bridgeSetupWhichCamera => 'Which camera?';
+
+  @override
+  String get bridgeSetupNothingFound =>
+      'No devices found on this rig. Plug in your gear and retry, or add one by hand.';
+
+  @override
+  String get bridgeSetupRequired => 'Required';
+
+  @override
+  String get bridgeSetupOutOfRange => 'Out of range';
+
+  @override
+  String get bridgeSetupNotAllowed => 'Not an allowed value';
+
+  @override
+  String get bridgeSetupAddRow => 'Add a row';
+
+  @override
+  String get bridgeSetupRemoveRow => 'Remove this row';
+
+  @override
+  String get bridgeSetupRefused => 'Ara refused this device.';
 
   @override
   String clockWrongSlow(String amount) {
