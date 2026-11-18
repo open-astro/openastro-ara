@@ -1513,7 +1513,19 @@ public partial class Program {
         // §37: eagerly construct the multi-profile repository at boot (not on first request) so it
         // migrates the legacy profile.json into the profiles/ set and loads the active profile into
         // the live store before any request is served.
-        _ = app.Services.GetRequiredService<IProfileRepository>();
+        var profileRepo = app.Services.GetRequiredService<IProfileRepository>();
+
+        // #1955 — a profile file the repository set aside while loading gets one Critical inbox notice;
+        // the file no longer matches *.json, so the next start does not repeat it.
+        if (profileRepo is FileProfileRepository fileProfileRepo) {
+            foreach (var notif in StartupNotificationFactory.ForProfileSetAsides(fileProfileRepo.SetAsideFiles)) {
+                try {
+                    notificationSvc.CreateAsync(notif, CancellationToken.None).GetAwaiter().GetResult();
+                } catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or System.Text.Json.JsonException) {
+                    LogNotificationEmitFailed(app.Services.GetRequiredService<ILogger<Program>>(), ex);
+                }
+            }
+        }
 
         // #1121 — say at boot when the configured plate-solver binary is missing (after the
         // normalizer's stock-solver-path → bundled astap_cli migration had its chance): otherwise

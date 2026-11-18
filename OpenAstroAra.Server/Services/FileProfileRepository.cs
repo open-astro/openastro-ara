@@ -48,8 +48,13 @@ public sealed record ProfileSetAside(Guid Id, string OriginalPath, string SetAsi
 
 public sealed partial class FileProfileRepository : IProfileRepository, IDisposable {
 
-    /// <summary>Profile files set aside while loading at construction; empty after a clean load.</summary>
-    public IReadOnlyList<ProfileSetAside> SetAsideFiles => Array.Empty<ProfileSetAside>();
+    private readonly List<ProfileSetAside> _setAside = new();
+
+    /// <summary>
+    /// Profile files set aside while loading at construction; empty after a clean load. The
+    /// caller posts the inbox notice (#1955): the repository stays out of the notification store.
+    /// </summary>
+    public IReadOnlyList<ProfileSetAside> SetAsideFiles => _setAside;
 
     private readonly object _lock = new();
     private readonly string _dir;
@@ -318,13 +323,15 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     }
 
     // A file that cannot be read as a profile is renamed so it neither matches *.json (no
-    // warning at every start) nor *.tmp (the boot sweep would delete it). One Warning, once.
+    // warning at every start) nor *.tmp (the boot sweep would delete it). One Warning, once; a
+    // successful rename is also recorded in SetAsideFiles for the startup notice (#1955).
     // Name is <file>.corrupt.<unix-ts>, append-only, never overwritten (§28.15, as in
     // SequenceStartupReconciler).
     private void SetAside(string path, Guid id, Exception? cause) {
         var aside = $"{path}.corrupt.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         try {
             File.Move(path, aside, overwrite: false);
+            _setAside.Add(new ProfileSetAside(id, path, aside));
             LogSetAside(cause, id, path, aside);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogLoadFailed(ex, path);
