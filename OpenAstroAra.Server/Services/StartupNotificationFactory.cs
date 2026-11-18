@@ -66,6 +66,10 @@ public static class StartupNotificationFactory {
         };
     }
 
+    /// <summary>One Critical notice per profile file set aside at load (#1955).</summary>
+    public static IReadOnlyList<NotificationDto> ForProfileSetAsides(IEnumerable<ProfileSetAside> setAsides) =>
+        throw new NotImplementedException();
+
     /// <summary>
     /// Build the §51 diagnostic event for a Corrupt reconciler outcome. We
     /// don't emit a diagnostic for Interrupted — that's a routine "previous
