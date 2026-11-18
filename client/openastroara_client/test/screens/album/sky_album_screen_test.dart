@@ -626,6 +626,7 @@ void main() {
     ]);
     Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
     expect(find.text('Messier · 1'), findsOneWidget);
+    expect(find.text('1 / 4 collected'), findsOneWidget);
     expect(albumTierNameFinder(AlbumTier.bronze), findsNothing);
 
     await tester.tap(find.text('Collected'));
@@ -635,6 +636,14 @@ void main() {
     await tester.tap(find.text('Missing'));
     await tester.pumpAndSettle();
     expect(inGrid('Orion Nebula'), findsOneWidget);
+  });
+
+  testWidgets('the tonight shelf offers a Card under 15 min of lights', (tester) async {
+    await _pump(tester, frames: [
+      AlbumFrame(frameId: 'stray', targetName: 'M 42', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ], tonight: [_m42]);
+    expect(find.text('1 missing card well placed tonight'), findsOneWidget);
+    expect(_onShelf('Orion Nebula'), findsOneWidget);
   });
 
   testWidgets('the title carries the album icon', (tester) async {
