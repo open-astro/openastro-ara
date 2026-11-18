@@ -105,7 +105,7 @@ void main() {
         PlanningDso(id: id, name: id, type: 'G', magnitude: 5, raDeg: 10, decDeg: 20, messierNum: m, caldwellNum: c);
     final c = container(
         (baseUrl, {since}) async => const AlbumFramesPage(totalLights: 1, frames: [
-              AlbumFrame(frameId: 'f', raDeg: 10, decDeg: 20, width: 100, height: 100, pixelScaleArcsec: 1, exposureSeconds: 60),
+              AlbumFrame(frameId: 'f', raDeg: 10, decDeg: 20, width: 100, height: 100, pixelScaleArcsec: 1, exposureSeconds: 900),
             ]),
         more: [
           bundledCatalogProvider.overrideWith((ref) async => [dso('NGC2', m: 2), dso('NGC1', m: 1), dso('NGC9', c: 9)]),
