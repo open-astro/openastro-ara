@@ -18,6 +18,7 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sky_atlas/tonights_best_list_state.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/theme/ara_metrics.dart';
 
 final _now = DateTime.utc(2026, 11, 17, 22);
 
@@ -252,6 +253,17 @@ void main() {
       findsOneWidget,
       reason: 'the list shows in full',
     );
+  });
+
+  testWidgets('the offline note, the controls and the rows sit s8 apart', (
+    tester,
+  ) async {
+    await _pump(tester, [a], linkUp: false);
+    final note = tester.getRect(find.byKey(const Key('best-offline')));
+    expect(tester.getTopLeft(find.text('Sort')).dy - note.bottom, AraSpace.s8);
+    final count = tester.getRect(find.byKey(const Key('best-count')));
+    final row = tester.getRect(find.byKey(const Key('best-row-A')));
+    expect(row.top - count.bottom, AraSpace.s8);
   });
 
   testWidgets('a Target below the horizon now says so in the altitude line', (
@@ -575,11 +587,21 @@ void main() {
           ),
           _o('M 31', name: 'Andromeda Galaxy'),
         ],
+        size: const Size(390, 844),
         text: 2,
+        // Offline, so the note is on the page too.
+        linkUp: false,
         queued: ['M 31'],
         collected: ['M 31'],
       );
       expect(tester.takeException(), isNull);
+      // A phone's height leaves the lower rows unbuilt until scrolled to.
+      final list = find
+          .descendant(
+            of: find.byKey(const Key('best-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
       for (final k in [
         'best-back',
         'best-refresh',
@@ -591,7 +613,7 @@ void main() {
         'best-image-NGC 7000',
       ]) {
         final f = find.byKey(Key(k));
-        await tester.ensureVisible(f);
+        await tester.scrollUntilVisible(f, 100, scrollable: list);
         final r = tester.getRect(f);
         expect(r.height, greaterThanOrEqualTo(44), reason: '$k height');
         expect(r.width, greaterThanOrEqualTo(44), reason: '$k width');

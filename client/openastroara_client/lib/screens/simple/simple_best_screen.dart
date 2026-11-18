@@ -116,15 +116,23 @@ class TonightsBestScreen extends ConsumerWidget {
                       key: const Key('best-list'),
                       padding: EdgeInsets.only(bottom: stop + AraSpace.s12),
                       children: [
-                        if (!linkUp) const _OfflineNote(),
+                        // Blocks sit s8 apart, as the rows do.
+                        if (!linkUp)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: AraSpace.s8),
+                            child: _OfflineNote(),
+                          ),
                         if (showControls)
-                          _Controls(
-                            choices: choices,
-                            fieldKnown: fieldKnown(ranked.value ?? const []),
-                            shown: rows?.length,
-                            total: ranked.value
-                                ?.where((o) => o.maxAltitudeDeg > 0)
-                                .length,
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: AraSpace.s8),
+                            child: _Controls(
+                              choices: choices,
+                              fieldKnown: fieldKnown(ranked.value ?? const []),
+                              shown: rows?.length,
+                              total: ranked.value
+                                  ?.where((o) => o.maxAltitudeDeg > 0)
+                                  .length,
+                            ),
                           ),
                         ?empty,
                         if (!noSite && empty == null)
@@ -227,9 +235,12 @@ class _OfflineNote extends StatelessWidget {
               size: 16,
               color: AraColors.accentWarning,
             ),
-            Text(
-              l10n.bestRigOff,
-              style: kSimpleText.copyWith(color: AraColors.accentWarning),
+            // Wraps at large text instead of running off a phone.
+            Flexible(
+              child: Text(
+                l10n.bestRigOff,
+                style: kSimpleText.copyWith(color: AraColors.accentWarning),
+              ),
             ),
           ],
         ),
