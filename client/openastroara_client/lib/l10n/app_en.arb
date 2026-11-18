@@ -1921,6 +1921,10 @@
   "@shellLibrary": {
     "description": "Simple Mode left rail button: open the image library"
   },
+  "shellRailTabs": "Modes",
+  "@shellRailTabs": {
+    "description": "Simple Mode screen reader label of the right rail's tab list of the six modes"
+  },
   "shellModeSemantics": "Mode: {mode}",
   "@shellModeSemantics": {
     "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",

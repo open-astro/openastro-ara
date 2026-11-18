@@ -412,6 +412,7 @@
   "shellStats": "Números",
   "shellInfo": "Info",
   "shellLibrary": "Biblioteca",
+  "shellRailTabs": "Modos",
   "shellModeSemantics": "Modo: {mode}",
   "shellGuiding": "Guiagem",
   "shellGuidingRms": "RMS {rms}",

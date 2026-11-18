@@ -2529,6 +2529,12 @@ abstract class AppLocalizations {
   /// **'Library'**
   String get shellLibrary;
 
+  /// Simple Mode screen reader label of the right rail's tab list of the six modes
+  ///
+  /// In en, this message translates to:
+  /// **'Modes'**
+  String get shellRailTabs;
+
   /// Simple Mode screen reader label of the mode button on the right rail; mode is the mode name
   ///
   /// In en, this message translates to:

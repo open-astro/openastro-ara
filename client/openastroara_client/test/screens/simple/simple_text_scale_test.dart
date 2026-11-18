@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
+
+import 'simple_open_mode.dart';
+
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -247,10 +250,7 @@ void main() {
         ));
         await tester.pump();
         if (open == 'Plan') {
-          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
-          await tester.pump();
-          await tester.tap(find.text(l.shellModePlan).first, warnIfMissed: false);
-          await tester.pump();
+          await openMode(tester, 'plan', warnIfMissed: false);
           c.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
               name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
               altDeg: 62, maxAltDeg: 74));
@@ -361,10 +361,7 @@ void main() {
             }
           }
           // Started from the modes (the Start banner went, user 2026-11-04).
-          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
-          await tester.pump();
-          await tester.tap(find.byKey(const Key('simple-mode-preflight')), warnIfMissed: false);
-          await tester.pump();
+          await openMode(tester, 'preflight', warnIfMissed: false);
           final strip = find.byKey(const Key('preflight-strip'));
           if (size.width >= 768) expect(strip, findsOneWidget);
           whole(strip);
@@ -372,15 +369,7 @@ void main() {
           // A mode panel: picking the mode from the grid opens it.
           final focus = open.startsWith('Focus');
           final guide = open == 'Guide';
-          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
-          await tester.pump();
-          await tester.tap(
-              guide
-                  // pt-BR's guiding bar reads Guiagem too: the tile by its key.
-                  ? find.byKey(const Key('simple-mode-guide'))
-                  : find.text(focus ? l.shellModeFocus : l.shellModePolarAlign).first,
-              warnIfMissed: false);
-          await tester.pump();
+          await openMode(tester, guide ? 'guide' : focus ? 'focus' : 'polarAlign', warnIfMissed: false);
           final panel = find.byType(focus ? SimpleFocusPanel : guide ? SimpleGuidePanel : SimplePolarPanel);
           // (The one-third width has no panel layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) expect(panel, findsOneWidget);
@@ -415,10 +404,7 @@ void main() {
           }
         } else if (open.startsWith('Calibration')) {
           // Each tab, the shutter's caption under it, and the guide Delete's question.
-          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
-          await tester.pump();
-          await tester.tap(find.byKey(const Key('simple-mode-calibration')), warnIfMissed: false);
-          await tester.pump();
+          await openMode(tester, 'calibration', warnIfMissed: false);
           final panel = find.byType(SimpleCalibrationPanel);
           // (The one-third width has no panel layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) {
