@@ -290,7 +290,7 @@ The device windows' drawings (the Dome window's clamshell and dial, the Flat pan
 - **Starlight Text** (`text-primary`): primary text and icons.
 - **Dim Text** (`text-secondary`): labels, captions, secondary lines. The most-used colour in the app.
 - **Faint Text** (`text-disabled`): disabled text and empty values.
-- **Quiet Text** (`text-tertiary`, #9B9B9B): hints, secondary icons, captions, the Settings switch rows' hints and their ⓘ icons (and the help sheet's "Related settings:" caption) and the Dark Window strip times. Reads at 4.5:1 or better on `bg-panel`, `bg-panel-alt` and `bg-input`; sits between Dim Text and Faint Text.
+- **Quiet Text** (`text-tertiary`, #9B9B9B): hints, secondary icons, captions, the Settings switch rows' hints, the ⓘ help icon and the help sheet's "Related settings:" caption, and the Dark Window strip times. Reads at 4.5:1 or better on `bg-panel`, `bg-panel-alt` and `bg-input`; sits between Dim Text and Faint Text.
 
 ### Named Rules
 **The State-Only Colour Rule.** An accent appears only through a semantic role: a state dot, a state chip, a category hue or a destructive action. If it doesn't mean something, it is grey.
