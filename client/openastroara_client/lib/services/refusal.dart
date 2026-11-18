@@ -13,7 +13,8 @@ enum RefusalCause {
   opticsNotSet('optics-not-set'),
   solverNotSet('solver-not-set'),
   captureSettingsUnsupported('capture-settings-unsupported'),
-  storageUnavailable('storage-unavailable');
+  storageUnavailable('storage-unavailable'),
+  belowHorizonLimit('below-horizon-limit');
 
   const RefusalCause(this.token);
 
@@ -46,7 +47,7 @@ class Refusal implements Exception {
   final String? reason;
   final String? detail;
 
-  /// The problem's extensions other than `reason` (`missing`, `job_id`).
+  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`).
   final Map<String, Object?> parameters;
   final int? status;
 

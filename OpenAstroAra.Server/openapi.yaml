@@ -14877,6 +14877,7 @@ components:
         - solver-not-set
         - capture-settings-unsupported
         - storage-unavailable
+        - below-horizon-limit
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

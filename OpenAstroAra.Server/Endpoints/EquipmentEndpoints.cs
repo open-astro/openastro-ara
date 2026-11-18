@@ -13,9 +13,12 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Mvc;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
+using System.Globalization;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -47,12 +50,22 @@ public static partial class EquipmentEndpoints {
     /// <summary><c>POST /equipment/telescope/slew</c>: 409 <c>run_in_progress</c> while a sequence run is
     /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
-    /// service answers. Testable without the host.</summary>
-    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, CancellationToken ct) {
+    /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
+    /// with the <c>below-horizon-limit</c> Refusal (#2044); <c>force</c> does not bypass it. Testable
+    /// without the host.</summary>
+    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
+        }
+        if (request.Sync != true) {
+            var target = new Coordinates(request.RightAscensionHours, request.DeclinationDegrees, Epoch.J2000, Coordinates.RAType.Hours);
+            if (HorizonGuard.TargetBelowHorizon(profiles, target) is { } low) {
+                throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
+                    string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
+                    new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
+            }
         }
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
     }
@@ -336,10 +349,10 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, local => svc.ConnectAsync(local, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) =>
-                SlewAsync(request, key, svc, sequencer, ct))
+        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, CancellationToken ct) =>
+                SlewAsync(request, key, svc, sequencer, profiles, ct))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress: a slew during a sequence run that was neither a sync nor forced
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced) or the below-horizon-limit Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.

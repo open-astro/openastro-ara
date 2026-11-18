@@ -6565,6 +6565,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'The storage disk is missing. Plug it back in, then try again.';
 
   @override
+  String refusalBelowHorizonLimit(String altitude, String limit) {
+    return 'That target is at $altitude°, below your $limit° horizon limit. Pick a higher target, or lower the horizon limit.';
+  }
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
