@@ -345,36 +345,35 @@ void main() {
         },
       );
 
-      testWidgets(
-        'a steady dot marks the mode that runs and does not blink',
-        (tester) async {
-          await _pump(tester, size, extra: _runningPlan);
-          final dot = find.byKey(const Key('simple-rail-dot-plan'));
-          expect(dot, findsOneWidget);
-          expect(
-            find.descendant(of: _tab('plan'), matching: dot),
-            findsOneWidget,
-            reason: 'the dot sits inside its tab',
-          );
-          expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
-          for (var i = 0; i < 4; i++) {
-            await tester.pump(const Duration(milliseconds: 500));
-            expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
-            // Only fades between the dot and its own tab count: the shell and
-            // its routes put fades above every widget.
-            for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
-              expect(
-                find.descendant(
-                  of: _tab('plan'),
-                  matching: find.ancestor(of: dot, matching: find.byType(w)),
-                ),
-                findsNothing,
-                reason: 'no $w between the dot and its tab',
-              );
-            }
+      testWidgets('a steady dot marks the mode that runs and does not blink', (
+        tester,
+      ) async {
+        await _pump(tester, size, extra: _runningPlan);
+        final dot = find.byKey(const Key('simple-rail-dot-plan'));
+        expect(dot, findsOneWidget);
+        expect(
+          find.descendant(of: _tab('plan'), matching: dot),
+          findsOneWidget,
+          reason: 'the dot sits inside its tab',
+        );
+        expect(find.byKey(const Key('simple-rail-dot-focus')), findsNothing);
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+          expect(dot, findsOneWidget, reason: 'visible at ${i * 500} ms');
+          // Only fades between the dot and its own tab count: the shell and
+          // its routes put fades above every widget.
+          for (final w in [FadeTransition, AnimatedOpacity, Opacity]) {
+            expect(
+              find.descendant(
+                of: _tab('plan'),
+                matching: find.ancestor(of: dot, matching: find.byType(w)),
+              ),
+              findsNothing,
+              reason: 'no $w between the dot and its tab',
+            );
           }
-        },
-      );
+        }
+      });
 
       testWidgets(
         'the open block shows the figure under the mode name while a plan images (12/40)',
@@ -429,19 +428,16 @@ void main() {
         },
       );
 
-      testWidgets(
-        'the arrow keys wrap at both ends',
-        (tester) async {
-          final c = await _pump(tester, size);
-          await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-          await tester.pump();
-          expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-          await tester.pump();
-          expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
-        },
-      );
+      testWidgets('the arrow keys wrap at both ends', (tester) async {
+        final c = await _pump(tester, size);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.calibration);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+      });
 
       testWidgets(
         'a digit typed into a focused text field does not switch the mode (Search)',
