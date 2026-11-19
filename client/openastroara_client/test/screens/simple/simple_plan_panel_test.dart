@@ -1244,14 +1244,28 @@ void main() {
   });
 
   group('the sheet', () {
-    testWidgets('the target card\'s Pick in Sky reads 4.5:1 on the selection tint', (tester) async {
-      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}), overrides: _rig);
-      expectReadsOnSelectionTint(
+    testWidgets(
+      'the target card\'s Pick in Sky reads 4.5:1 on the selection tint',
+      (tester) async {
+        await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(
+            onShowSky: () {},
+            onPickInSky: () {},
+            onCreated: () {},
+          ),
+          overrides: _rig,
+        );
+        expectReadsOnSelectionTint(
           tester,
           find.descendant(
-              of: find.byKey(const Key('simple-run-target-card')),
-              matching: find.text('Pick in Sky')));
-    });
+            of: find.byKey(const Key('simple-run-target-card')),
+            matching: find.text('Pick in Sky'),
+          ),
+        );
+      },
+    );
 
     testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
       var showSky = 0, pick = 0;
