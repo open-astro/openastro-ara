@@ -50,11 +50,22 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class FilterWheelService : IFilterWheelMediator {
 
-    internal int FilterChangeSettleMaxPolls { get; set; } = 600; // ~60s at the poll interval — wheels take seconds
+    // ADR 0011 rule 5: the filter-change command's timeout values and terminal condition. Hard timeout = wall-clock
+    // ceiling for the blocking Position write (a hung HTTP call must not pin the sequence thread); the settle
+    // wait adds at most 600 x 100 ms = 60s (wheels take seconds). The motion flag is required: an unreadable
+    // Position read keeps polling, and the command fails at the bound.
+    internal static readonly DeviceCommandPolicy ChangePolicy = new(Contracts.DeviceType.FilterWheel,
+        HardTimeout: TimeSpan.FromMinutes(1), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 600);
+
     private static readonly TimeSpan FilterChangePollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for the blocking ASCOM Position write (the rotation itself is tracked by
-    // the settle-wait): a hung HTTP call must not pin the sequence thread.
-    private static readonly TimeSpan FilterChangeHardTimeout = TimeSpan.FromMinutes(1);
+
+    // Test seam: millisecond timeouts. Production keeps ChangePolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; set; } = ChangePolicy;
+    internal int FilterChangeSettleMaxPolls {
+        get => CommandPolicy.MaxPolls;
+        set => CommandPolicy = CommandPolicy with { MaxPolls = value };
+    }
+    private DeviceCommand Command => new(CommandPolicy, _faults, _logger);
     // Guards every access to the active profile's FilterWheelFilters collection within the daemon:
     // ObservableCollection is not safe for concurrent read+write, the import-on-connect mutates it
     // on the refresh thread, and GetInfo/ChangeFilter iterate it on the sequence thread. Deliberately
@@ -135,16 +146,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             LogFilterChangeSkipped(inputFilter.Name, target);
             return inputFilter;
         }
-        var reached = await RunFilterChangeAsync(client, target, token).ConfigureAwait(false);
-        if (!reached) {
-            // §42.2: the wheel never confirmed the slot (jam / stalled write / dropped link) —
-            // fail the instruction so Attempts retries + instruction_failed engage, instead of
-            // handing back the requested filter as if the change happened. Safe to retry: the
-            // §42.4 fault was published at the failure site, and re-issuing the same target
-            // against a wheel that DID land settles immediately.
-            throw new SequenceEntityFailedException(
-                $"filter change to '{inputFilter.Name}' (position {target}) was not confirmed by the wheel");
-        }
+        // §42.2: an unconfirmed change (jam / stalled write / dropped link) throws
+        // SequenceEntityFailedException from the module, so Attempts retries + instruction_failed engage.
+        // Safe to retry: re-issuing the same target against a wheel that DID land settles immediately.
+        await RunFilterChangeAsync(client, target, token).ConfigureAwait(false);
         await ApplyFocusOffsetAsync(target, token).ConfigureAwait(false); // before the run's next exposure
         var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
@@ -208,43 +213,43 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer filter-change boundary: the blocking ASCOM Position write can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-change; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and reported as an unconfirmed change — which ChangeFilter converts into a SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify boundary applies.")]
-    private async Task<bool> RunFilterChangeAsync(IFilterWheelDevice client, short target, CancellationToken ct) {
-        try {
-            // Race the blocking ASCOM write against both the sequencer token and a wall-clock bound
-            // so a hung HTTP call can't pin the sequence thread. The abandoned write is observed.
-            var changeTask = Task.Run(() => client.Position = target, CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(FilterChangeHardTimeout);
-                var completed = await Task.WhenAny(changeTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != changeTask) {
-                    ObserveQuietly(changeTask);
-                    ct.ThrowIfCancellationRequested();      // sequencer cancel → propagate
-                    throw new TimeoutException(
-                        $"filter change to position {target} did not complete within {FilterChangeHardTimeout.TotalSeconds:0}s");
+    // The module owns the race, the settle poll and the faults. The terminal condition is the wheel's own
+    // position read (ASCOM: -1 while rotating) equal to the target; each polled read is folded straight into
+    // the §32.4 runtime cache so GetInfo stays current WITHOUT a second Position read per tick. A failed
+    // read keeps the prior cached runtime and the wait polling.
+    private Task RunFilterChangeAsync(IFilterWheelDevice client, short target, CancellationToken ct) {
+        short? polled = null;
+        var loggedReadFailure = false;
+        return Command.RunAsync(new DeviceCommandRequest($"filter change to position {target}",
+            Call: () => client.Position = target,
+            IsLive: () => _lifecycle.IsLive(client),
+            CurrentDevice: () => _lifecycle.DeviceIfCurrent(client),
+            Terminal: () => {
+                polled = ReadPositionSafe(client);
+                if (polled is null && !loggedReadFailure) {
+                    LogPositionPollFailed();
+                    loggedReadFailure = true;
                 }
-                await linked.CancelAsync().ConfigureAwait(false);
-            }
-            await changeTask.ConfigureAwait(false); // observe the write's result / surface its exception
-            return await WaitForPositionAsync(client, target, ct).ConfigureAwait(false);
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking write never returned — a stalled op (§42.4).
-            LogFilterChangeFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            return false;
-        } catch (Exception ex) {
-            LogFilterChangeFailed(ex, target);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"filter change to position {target} failed: {ex.Message}");
-            return false;
-        }
+                return polled is short position ? position == target : null;
+            },
+            Polled: () => {
+                if (polled is not short position) {
+                    return;
+                }
+                lock (_gate) {
+                    if (_lifecycle.IsLive(client)) {
+                        _runtime = position < 0
+                            ? new FilterWheelStateDto("moving", null)
+                            : new FilterWheelStateDto("idle", position);
+                    }
+                }
+            }), ct);
     }
 
     // Polls the device directly until it reports the target position (ASCOM: -1 while rotating),
     // folding each polled value straight into the §32.4 runtime cache so GetInfo stays current
-    // WITHOUT a second Position read per tick (one network call per poll). Delay-before-check gives
+    // WITHOUT a second Position read per tick (one network call per poll). Now only the REST background change
+    // waits this way (ChangeInBackgroundAsync); the Sequencer's ChangeFilter runs through the command module. Delay-before-check gives
     // the driver one poll interval to leave the old position before the first read. False on
     // timeout / a dropped-or-superseded connection.
     private async Task<bool> WaitForPositionAsync(IFilterWheelDevice client, short target, CancellationToken ct) {
@@ -313,16 +318,6 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         } catch (Exception) {
             return null;
         }
-    }
-
-    // Observes an abandoned (cancelled/timed-out) change task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem.
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedChangeFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
     }
 
     private OpenAstroAra.Core.Utility.ObserveAllCollection<FilterInfo>? ProfileFilters() =>
@@ -458,9 +453,6 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     public event Func<object, EventArgs, Task>? Disconnected;
     public event Func<object, FilterChangedEventArgs, Task>? FilterChanged;
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Filter change to position {Position} failed")]
-    private partial void LogFilterChangeFailed(Exception ex, short position);
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Filter change to '{Name}' (position {Position}) skipped (not connected or position out of range)")]
     private partial void LogFilterChangeSkipped(string? name, short position);
 
@@ -478,7 +470,4 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "filter-wheel position poll failed during settle-wait (will keep polling)")]
     private partial void LogPositionPollFailed();
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "abandoned filter change (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedChangeFaulted(Exception ex);
 }
