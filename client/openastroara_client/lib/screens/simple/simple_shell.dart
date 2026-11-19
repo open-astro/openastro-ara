@@ -745,6 +745,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 _openFromPill(SimpleStatusOrigin.safetyMonitor);
               case MonitorDestination.weather:
                 _openDevice('eq.weather');
+              case MonitorDestination.camera:
+                _openDevice('eq.camera');
               case MonitorDestination.sky:
                 setState(() => _sky = true);
               case MonitorDestination.frameInfo:

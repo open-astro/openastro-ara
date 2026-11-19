@@ -7219,9 +7219,9 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+    testWidgets("the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
       await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
-      final tile = find.byKey(const Key('simple-monitor-weather'));
+      final tile = find.byKey(const Key('simple-monitor-conditions'));
       expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
       for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
         expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');
