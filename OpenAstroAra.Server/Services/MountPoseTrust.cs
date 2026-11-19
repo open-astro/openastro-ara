@@ -27,7 +27,8 @@ namespace OpenAstroAra.Server.Services;
 /// blip while at a real Home stays trusted);</item>
 /// <item>the first read of a session is more than <see cref="PoseJumpDeg"/> in Dec from the last
 /// trusted pose (<see cref="PoseJumpOnReconnect"/>; Dec does not move with tracking, so a jump
-/// means the mount's model reset);</item>
+/// means the mount's model reset). Only a pose the mount had settled at counts: a session that ended
+/// mid-move (a link trip during a GoTo) leaves none, so the finished slew is not read as a jump;</item>
 /// <item>inside a session, AtHome turns true (<see cref="AtHomeWithoutCommand"/>) or Dec jumps
 /// (<see cref="PoseJumpInSession"/>) between two still ticks with no Ara mount command and no
 /// slewing tick within <see cref="QuietWindow"/> (a power blip the session survived).</item>
@@ -60,6 +61,10 @@ internal sealed class MountPoseTrust {
     private string? _reason;
     // The last still pose read while the position was trusted, for the same device (survives sessions).
     private (bool AtHome, double DecDeg)? _lastTrusted;
+    // True when the mount may have moved since _lastTrusted was read (an Ara command, a slewing tick or an
+    // axis move came after it, or within QuietWindow before it). A session that ends so (a link trip in the
+    // middle of a GoTo) leaves no settled pose: the next session must not read the finished slew as a jump.
+    private bool _motionSinceTrusted;
     // The previous observed tick of this session, for the in-session checks.
     private (bool AtHome, double DecDeg)? _previous;
     private DateTimeOffset _lastMotionAt = DateTimeOffset.MinValue;
@@ -88,7 +93,12 @@ internal sealed class MountPoseTrust {
             _deviceId = deviceId;
             _reason = restoredReason;
             _lastTrusted = null;
+        } else if (_motionSinceTrusted) {
+            // The last session ended with the mount (possibly) moving: its last pose says nothing about where
+            // the mount is now. With no history, a Home read on connect is unverified again (fail-safe).
+            _lastTrusted = null;
         }
+        _motionSinceTrusted = false;
         _observed = false;
         _previous = null;
         _lastMotionAt = DateTimeOffset.MinValue;
@@ -96,11 +106,15 @@ internal sealed class MountPoseTrust {
     }
 
     /// <summary>An Ara mount command (goto, sync, park, home, axis move, abort, tracking) is about to be sent.</summary>
-    public void NoteCommand(DateTimeOffset now) => _lastMotionAt = now;
+    public void NoteCommand(DateTimeOffset now) {
+        _lastMotionAt = now;
+        _motionSinceTrusted = true;
+    }
 
     /// <summary>An Ara MoveAxis started (or renewed) <paramref name="moving"/> = true, or stopped one axis.</summary>
     public void NoteAxisMove(int axis, bool moving, DateTimeOffset now) {
         _lastMotionAt = now;
+        _motionSinceTrusted = true;
         if (axis is < 0 or > 30) {
             return;
         }
@@ -110,6 +124,7 @@ internal sealed class MountPoseTrust {
     /// <summary>An abort stopped every axis.</summary>
     public void NoteAllAxesStopped(DateTimeOffset now) {
         _lastMotionAt = now;
+        _motionSinceTrusted = true;
         _movingAxes = 0;
     }
 
@@ -122,6 +137,7 @@ internal sealed class MountPoseTrust {
         }
         if (slewing || _movingAxes != 0) {
             _lastMotionAt = now;
+            _motionSinceTrusted = true;
         }
         var flagged = false;
         if (!_observed) {
@@ -145,6 +161,7 @@ internal sealed class MountPoseTrust {
         _previous = slewing ? null : (atHome, dec);
         if (_reason is null && !slewing) {
             _lastTrusted = (atHome, dec);
+            _motionSinceTrusted = _movingAxes != 0 || now - _lastMotionAt <= QuietWindow;
         }
         return flagged;
     }
@@ -158,6 +175,7 @@ internal sealed class MountPoseTrust {
         if (decDeg is double dec && double.IsFinite(dec)) {
             _lastTrusted = (true, dec);
             _previous = (true, dec);
+            _motionSinceTrusted = false; // the owner read the mount at Home and not slewing
         }
         return cleared;
     }

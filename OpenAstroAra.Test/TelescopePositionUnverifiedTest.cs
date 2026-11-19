@@ -206,8 +206,13 @@ namespace OpenAstroAra.Test {
         public async Task A_sequence_park_or_find_home_is_refused_without_an_op_fault() {
             using var svc = await ConnectedAtFalseZeroAsync();
 
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Current.TrackingOn = true;
+            var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(Current.TrackingOn, Is.False, "a refused park does not leave the mount tracking unattended");
+            Assert.That(park!.Message, Does.Contain("NOT parked"));
+            Current.TrackingOn = true;
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).FindHome(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(Current.TrackingOn, Is.True, "a refused Home changes nothing");
 
             Assert.That(Current.Parks, Is.Zero);
             Assert.That(Current.Homes, Is.Zero);

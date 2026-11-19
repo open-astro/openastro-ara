@@ -505,7 +505,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
-            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct).ConfigureAwait(false);
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
+                // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
+                // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
+                stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
         }
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is

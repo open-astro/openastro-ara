@@ -113,6 +113,44 @@ namespace OpenAstroAra.Test {
             Assert.That(trust.BlockReason, Is.Null);
         }
 
+        // A link trip in the middle of a GoTo: the mount finishes the slew while Ara reconnects. The pose
+        // before the slew says nothing about where it is now, so the finished slew is no power loss.
+        [Test]
+        public void A_session_that_ended_mid_slew_leaves_no_pose_to_compare() {
+            var trust = Session();
+            trust.Observe(false, false, 5, T0);
+            trust.NoteCommand(T0 + TimeSpan.FromSeconds(1));
+            trust.Observe(false, true, 20, T0 + TimeSpan.FromSeconds(2)); // the trip lands mid-slew
+            trust.BeginSession("mount-1", null);
+
+            Assert.That(trust.Observe(false, false, 60, T0 + TimeSpan.FromSeconds(90)), Is.False);
+            Assert.That(trust.BlockReason, Is.Null);
+        }
+
+        [Test]
+        public void A_session_that_ended_mid_move_away_from_a_trusted_home_keeps_no_home_exception() {
+            var trust = Session();
+            trust.Observe(false, false, 5, T0);
+            trust.Confirm(90);
+            trust.NoteCommand(T0 + TimeSpan.FromSeconds(1)); // a GoTo away from Home, then the trip
+            trust.BeginSession("mount-1", null);
+
+            Assert.That(trust.Observe(atHome: true, slewing: false, decDeg: 90, T0 + TimeSpan.FromSeconds(90)), Is.True);
+            Assert.That(trust.Reason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        [Test]
+        public void A_pose_settled_after_a_slew_is_still_compared_on_reconnect() {
+            var trust = Session();
+            trust.Observe(false, false, 5, T0);
+            trust.Observe(false, true, 20, T0 + TimeSpan.FromSeconds(2));
+            trust.Observe(false, false, 40, T0 + TimeSpan.FromSeconds(3) + MountPoseTrust.QuietWindow); // settled
+            trust.BeginSession("mount-1", null);
+
+            Assert.That(trust.Observe(false, false, 90, T0 + TimeSpan.FromMinutes(5)), Is.True);
+            Assert.That(trust.Reason, Is.EqualTo(MountPoseTrust.PoseJumpOnReconnect));
+        }
+
         [Test]
         public void A_restored_flag_holds_for_its_device() {
             var trust = Session(restored: MountPoseTrust.AtHomeOnConnect);

@@ -171,10 +171,24 @@ public sealed partial class TelescopeService {
 
     // Sequencer moves: a failed instruction with the same words. Never an op fault (§42.4): a refusal must
     // not count toward the abort-and-park escalation, whose park would be refused in turn.
-    private async Task ThrowIfPoseUnverifiedForSequenceAsync(ITelescopeDevice client, string op, CancellationToken ct) {
+    // stopTrackingOnRefusal: a refused park stops tracking first (best effort, bounded), so the mount is not left
+    // tracking unattended when the park the plan asked for did not happen.
+    private async Task ThrowIfPoseUnverifiedForSequenceAsync(ITelescopeDevice client, string op, CancellationToken ct,
+            bool stopTrackingOnRefusal = false) {
         if (await PoseBlockReasonAsync(client, ct).ConfigureAwait(false) is { } reason) {
             LogMoveRefusedUnverified(op, reason);
-            throw new SequenceEntityFailedException(PositionUnverifiedDetail(reason));
+            var detail = PositionUnverifiedDetail(reason);
+            if (stopTrackingOnRefusal) {
+                var stopped = false;
+                try {
+                    stopped = await Task.Run(() => SetTrackingEnabled(false), CancellationToken.None)
+                        .WaitAsync(PoseReadTimeout, CancellationToken.None).ConfigureAwait(false);
+                } catch (TimeoutException) {
+                    stopped = false;
+                }
+                detail = (stopped ? "The mount was NOT parked; tracking was stopped instead. " : "The mount was NOT parked, and stopping tracking failed. ") + detail;
+            }
+            throw new SequenceEntityFailedException(detail);
         }
     }
 

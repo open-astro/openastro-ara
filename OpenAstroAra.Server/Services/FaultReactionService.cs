@@ -739,23 +739,32 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    // #2070 — the park was refused because the mount's position is unverified: stop tracking (best effort)
-    // and say so loudly, since the run ended with the mount unparked.
+    // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
+    // tracking (best effort) and say so loudly, since the run ended with the mount unparked. The abort
+    // also ends any axis lease (a pad move): the refused park no longer cancels them itself.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort rung: a tracking stop that fails is logged and named in the alert, never thrown.")]
+        Justification = "Best-effort rung: a motion or tracking stop that fails is logged and named in the alert, never thrown.")]
     private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
+        var motionStopped = false;
         var stopped = false;
-        try {
-            if (_telescope is not null) {
+        if (_telescope is not null) {
+            try {
+                await _telescope.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
+                motionStopped = true;
+            } catch (Exception ex) {
+                LogRungFailed("abort_slew", ex);
+            }
+            try {
                 await _telescope.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
                 stopped = true;
+            } catch (Exception ex) {
+                LogRungFailed("tracking_off", ex);
             }
-        } catch (Exception ex) {
-            LogRungFailed("tracking_off", ex);
         }
         LogParkRefusedUnverified(stopped);
         await NotifyQuietlyAsync(NotificationSeverity.Critical, "Mount NOT parked (position unverified)",
             "An equipment fault asked for a park, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "
+            + (motionStopped ? "Its motion was stopped. " : "Stopping its motion FAILED. ")
             + (stopped ? "Tracking was stopped instead. " : "Stopping tracking FAILED too. ")
             + "Check the rig. " + refusal.Message).ConfigureAwait(false);
     }
