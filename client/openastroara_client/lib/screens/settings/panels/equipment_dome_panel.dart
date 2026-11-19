@@ -11,6 +11,7 @@ import '../../../state/profile_management_state.dart';
 import '../../../state/settings/dome_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../theme/ara_metrics.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -77,7 +78,12 @@ class _DomeFollowSection extends ConsumerWidget {
     final section = ref.watch(domeSettingsProvider);
     final settings = section.value;
     if (settings == null) {
-      return SectionNotLoaded(section: section, onRetry: _reload(ref));
+      return SectionNotLoaded(
+        section: section,
+        onRetry: _reload(ref),
+        // A row of the list: start where the rows start.
+        padding: const EdgeInsets.symmetric(vertical: AraSpace.s12),
+      );
     }
     final dome = ref.watch(domeProvider).value;
     final canTurn = dome?.capabilities?.canSetAzimuth ?? false;

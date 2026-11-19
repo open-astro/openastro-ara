@@ -350,6 +350,22 @@ void main() {
     expect(autoConnect.value, isFalse);
   });
 
+  testWidgets('a failed geometry load: text and Retry line up with the rows', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({
+      'dome': rigDefaults['dome'],
+      'equipment-connection': rigDefaults['equipment-connection'],
+    })..failGet.add('dome');
+    await _pump(tester, _status(), profile: rig.api());
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    expect(
+      tester.getTopLeft(find.textContaining('Not loaded — these settings')).dx,
+      rowX,
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);
+  });
+
   testWidgets('a copy another device replaced: the edit is refused with a '
       'reload, and nothing is written', (tester) async {
     final rig = FakeSectionRig({'dome': rigDefaults['dome']});
