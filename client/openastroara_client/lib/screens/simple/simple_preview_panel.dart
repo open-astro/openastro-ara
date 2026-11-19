@@ -979,6 +979,10 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   FixedExtentScrollController? _wheel;
   late T _spun;
 
+  /// The value when the wheel opened: a fold applies only a spin away from
+  /// it, so a value moved elsewhere meanwhile is not set back.
+  late T _opened;
+
   List<T> get _items => widget.options.contains(widget.value)
       ? widget.options
       : [widget.value, ...widget.options];
@@ -988,7 +992,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
     _wheel?.dispose();
     _wheel = null;
     if (_open) {
-      _spun = widget.value;
+      _spun = _opened = widget.value;
       _wheel = FixedExtentScrollController(
         initialItem: _items.indexOf(widget.value),
       );
@@ -1000,8 +1004,9 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   void _onTileTap() {
     if (!_open) return _toggle();
     final spun = _spun;
+    final opened = _opened;
     _toggle();
-    if (spun != widget.value) widget.onSelected?.call(spun);
+    if (spun != opened && spun != widget.value) widget.onSelected?.call(spun);
   }
 
   void _pick(T v) {
