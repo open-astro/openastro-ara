@@ -199,6 +199,27 @@ namespace OpenAstroAra.Test {
             Assert.That(log.Snapped, Is.EqualTo(1));
         }
 
+        // Stop Mount cancels a routine's lease; the routine's next renewal would reach the driver as a new move and
+        // start the motor again. A renewal tagged with the abort count it began under is refused instead.
+        [Test]
+        public async Task A_renewal_from_before_Stop_Mount_does_not_restart_the_motor() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            await svc.AbortSlewAsync(CancellationToken.None);
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            Assert.That(svc.AbortEpoch, Is.Not.EqualTo(since));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(1), "only the first start reached the driver");
+            await svc.MoveAxisAsync(0, 0, null, since, CancellationToken.None); // a stop is always allowed
+            await svc.MoveAxisAsync(0, 1.0, 1000, svc.AbortEpoch, CancellationToken.None); // a new move after the abort is fine
+            Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(2));
+        }
+
         [Test]
         public async Task A_leased_move_with_no_renewal_is_stopped_after_the_lease() {
             var (box, svc, clock) = await ArmedAsync();

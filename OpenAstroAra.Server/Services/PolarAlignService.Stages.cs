@@ -499,15 +499,17 @@ namespace OpenAstroAra.Server.Services {
         /// the last move left, not where it is. The tilt is measured RELATIVE to the reading — the same 5° whatever
         /// the model believes — instead of being skipped because the reading already looks off-axis.</param>
         private async Task LeaveTheAxisAsync(bool afterManualHome, int gen, CancellationToken ct) {
-            var (_, decDeg) = CurrentMountPointingJnow()
+            // A fresh read: right after Find Home the 2 s cached reading can still say Dec 85° and skip the tilt.
+            var (_, decDeg) = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             if (!afterManualHome && Math.Abs(decDeg) <= OnAxisDecDeg) {
                 return;
             }
             var aimDecDeg = Math.CopySign(SeedDecDeg, decDeg == 0 ? 1.0 : decDeg);
             LogLeavingAxis(decDeg, aimDecDeg);
-            // Progress is the gain in distance from the pole, so a tilt that heads over the pole (from Dec 88°, say)
-            // is reversed rather than ending 3° off the axis on the far side. From the reading's start the tube goes
+            // Progress is the gain in distance from the pole, so a tilt that heads over the pole from Dec 88°, say,
+            // is reversed rather than ending 3° off the axis on the far side (from within 0.5° of the pole it can
+            // still cross before the reversal threshold, which ends 5° off on the far side: harmless). From the reading's start the tube goes
             // to 5° from the pole; after a hand-set Home the reading is stale, so the tilt is 5° relative to it.
             var startPoleDistDeg = 90.0 - Math.Abs(decDeg);
             var tiltDeg = afterManualHome ? 90.0 - SeedDecDeg : Math.Max(1.0, 90.0 - SeedDecDeg - startPoleDistDeg);
@@ -585,6 +587,9 @@ namespace OpenAstroAra.Server.Services {
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
             var direction = (sign >= 0 ? 1.0 : -1.0) * (axis == TelescopeAxes.Primary ? _raMotorSign : 1.0);
+            // Stop Mount (or Emergency Stop) during the move aborts the mount from outside this routine: every
+            // renewal checks for it, and the telescope service refuses a renewal that would restart the motor.
+            var abortEpoch = (_mount as ITelescopeService)?.AbortEpoch;
             var fast = degrees > AxisSlowZoneDeg;
             double Rate() => direction * (fast ? AxisFastRateDegPerSec : AxisSlowRateDegPerSec);
             var began = Stopwatch.GetTimestamp();
@@ -595,11 +600,14 @@ namespace OpenAstroAra.Server.Services {
             var startRate = Rate();
             LogAxisMove(axis, degrees, startRate);
             try {
-                await RunAxisAsync(axis, Rate()).ConfigureAwait(false);
+                await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                 while (true) {
                     await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
                     if (!IsCurrent(gen)) {
                         throw new OperationCanceledException("the run was superseded while the mount moved");
+                    }
+                    if (AbortedSince(abortEpoch)) {
+                        throw new RoutineFailedException("slew_failed", ExternalStopMessage);
                     }
                     var now = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                         ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
@@ -616,7 +624,7 @@ namespace OpenAstroAra.Server.Services {
                         var reversedRate = Rate();
                         LogAxisMoveReversed(axis, reversedRate);
                         await RunAxisAsync(axis, 0).ConfigureAwait(false);
-                        await RunAxisAsync(axis, Rate()).ConfigureAwait(false);
+                        await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                         best = p;
                         bestAt = Stopwatch.GetTimestamp();
                         continue;
@@ -635,12 +643,14 @@ namespace OpenAstroAra.Server.Services {
                     if (fast && degrees - p <= AxisSlowZoneDeg) {
                         fast = false; // the last few degrees at the slow speed: the stop lands close to the target
                     }
-                    await RunAxisAsync(axis, Rate()).ConfigureAwait(false); // a new speed, or the lease renewed
+                    await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
                 }
             } catch (RoutineFailedException) {
                 throw;
             } catch (OperationCanceledException) {
                 throw;
+            } catch (Exception) when (AbortedSince(abortEpoch)) {
+                throw new RoutineFailedException("slew_failed", ExternalStopMessage);
             } catch (Exception ex) {
                 // #1536 — the user gets the recovery; the driver's own text goes to the log.
                 LogAxisMoveRefused(axis, ex);
@@ -661,10 +671,16 @@ namespace OpenAstroAra.Server.Services {
         /// mount is the daemon's telescope service; the mediator's own call otherwise (tests). Production always
         /// takes the first branch: <c>TelescopeService</c>'s mediator <c>MoveAxis</c> is a no-op stub, so never
         /// route a real move through the fallback.</summary>
-        private Task RunAxisAsync(TelescopeAxes axis, double rate) =>
+        private Task RunAxisAsync(TelescopeAxes axis, double rate, long? abortEpoch = null) =>
             _mount is ITelescopeService service
-                ? service.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, CancellationToken.None)
+                ? service.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, rate == 0 ? null : abortEpoch, CancellationToken.None)
                 : Task.Run(() => _mount.MoveAxis(axis, rate));
+
+        private const string ExternalStopMessage =
+            "the mount was stopped from outside polar alignment (Stop Mount) — start again when ready";
+
+        private bool AbortedSince(long? abortEpoch) =>
+            abortEpoch is long since && _mount is ITelescopeService service && service.AbortEpoch != since;
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The stop is best-effort on every exit; its fault must not mask the move's outcome, and the lease stops the axis anyway.")]

@@ -414,7 +414,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
     }
 
-    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
+    private long _abortEpoch;
+
+    public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
+
+    public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
+
+    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
         // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
@@ -452,6 +459,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
             return;
+        }
+        // A routine's renewal after Stop Mount finds its lease gone and would start the motor again: refuse it.
+        if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
+            throw new InvalidOperationException("the mount was stopped (Stop Mount) after this move began; the move is not restarted");
         }
         // Logged once per driver call, not on every lease renewal (a polar-align move renews four times a second).
         if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
@@ -631,6 +642,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
     private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
+        Interlocked.Increment(ref _abortEpoch); // before the lease goes: a routine's renewal must see the abort first
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount

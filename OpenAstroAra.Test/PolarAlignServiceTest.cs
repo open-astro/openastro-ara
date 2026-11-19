@@ -1313,8 +1313,8 @@ namespace OpenAstroAra.Test {
             service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
             var calls = new ConcurrentQueue<(int Axis, double Rate, int? LeaseMs)>();
-            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-                .Callback<int, double, int?, CancellationToken>((axis, rate, lease, _) => {
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((axis, rate, lease, _, _) => {
                     calls.Enqueue((axis, rate, lease));
                     if (rate != 0) {
                         freshRaHours = (freshRaHours + (Math.Sign(rate) * MotorStepDeg / 15.0) + 24.0) % 24.0;
@@ -1351,6 +1351,82 @@ namespace OpenAstroAra.Test {
 
             Assert.That(axis.DecDeg, Is.EqualTo(90.0).Within(1e-6));
             Assert.That(mismatch, Is.EqualTo(0.0).Within(1e-6));
+        }
+
+        // Stop Mount in the app aborts the mount from outside the routine and cancels the motor's lease. The routine's
+        // next renewal must not start the motor again: the run ends, and nothing after the abort moves the mount.
+        [Test]
+        public async Task Stop_Mount_during_a_turn_ends_the_run_and_the_motor_is_not_restarted() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var abortEpoch = 7L;
+            var afterAbort = new ConcurrentQueue<(double Rate, long? Since)>();
+            var service = mount.As<ITelescopeService>();
+            service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref abortEpoch));
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var moves = 0;
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
+                    if (Interlocked.Read(ref abortEpoch) != 7L) {
+                        afterAbort.Enqueue((rate, since));
+                        return;
+                    }
+                    if (rate != 0) {
+                        freshRaHours += MotorStepDeg / 15.0;
+                        if (++moves == 5) {
+                            Interlocked.Increment(ref abortEpoch); // the user taps Stop Mount mid-turn
+                        }
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Stop Mount"));
+            Assert.That(afterAbort.Where(c => c.Rate != 0), Is.Empty, "no motor command after the abort");
+            Assert.That(afterAbort.Count(c => c.Rate == 0), Is.GreaterThanOrEqualTo(1), "the routine's own stop still goes out");
+            Assert.That(freshRaHours * 15.0, Is.LessThan(2.0), "the turn ended where the abort caught it");
+        }
+
+        // The routine hands the telescope service the abort count it started under, so the service itself can refuse a
+        // renewal that races the abort.
+        [Test]
+        public async Task Each_motor_command_of_a_turn_carries_the_abort_count_it_started_under() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.SetupGet(s => s.AbortEpoch).Returns(42L);
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var guards = new ConcurrentQueue<(double Rate, long? Since)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
+                    guards.Enqueue((rate, since));
+                    if (rate != 0) {
+                        freshRaHours = (freshRaHours + (Math.Sign(rate) * MotorStepDeg / 15.0) + 24.0) % 24.0;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(guards.Where(g => g.Rate != 0).Select(g => g.Since), Is.All.EqualTo(42L));
+            Assert.That(guards.Where(g => g.Rate == 0).Select(g => g.Since), Is.All.Null, "a stop is never refused");
         }
 
         // Stop must stop the motor at once, not leave it running to the end of the turn.

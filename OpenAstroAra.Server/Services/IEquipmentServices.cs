@@ -122,6 +122,17 @@ public interface ITelescopeService {
     /// null when not connected or the read fails. Polar alignment stops its motor moves on it.</summary>
     Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
         Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+
+    /// <summary>Counts every slew abort (Stop Mount, Emergency Stop, the watchdog). A routine that drives the motors
+    /// itself reads it when a move starts, and treats any change as a stop it must obey.</summary>
+    long AbortEpoch => 0;
+
+    /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
+    /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
+    /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal
+    /// must never restart a motor the user just stopped.</summary>
+    Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, ct);
 }
 
 public interface IFocuserService {
