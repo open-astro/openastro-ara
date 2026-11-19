@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
 
@@ -48,14 +49,17 @@ MonitorSnapshot _snap({
   bool frozen = false,
   MonitorConditions? conditions,
   List<MonitorUpNext>? upNext,
+  MonitorVerdict? verdict,
 }) => MonitorSnapshot(
   asOf: _asOf,
   frozenSince: frozen ? _asOf : null,
-  verdict: const MonitorVerdict(
-    MonitorVerdictKind.allGood,
-    MonitorStatus.normal,
-    target: 'NGC 1269',
-  ),
+  verdict:
+      verdict ??
+      const MonitorVerdict(
+        MonitorVerdictKind.allGood,
+        MonitorStatus.normal,
+        target: 'NGC 1269',
+      ),
   now: MonitorNow(
     status: MonitorStatus.working,
     word: MonitorNowWord.exposing,
@@ -464,5 +468,36 @@ void main() {
       matchesSemantics(label: 'Monitor', isHeader: true),
     );
     handle.dispose();
+  });
+
+  testWidgets(
+    "a wide window gives a stop's outcome the whole top line, no title",
+    (tester) async {
+      await _pump(
+        tester,
+        _snap(
+          verdict: const MonitorVerdict(
+            MonitorVerdictKind.message,
+            MonitorStatus.warning,
+            message: SimpleMessage(
+              id: 1,
+              kind: SimpleMessageKind.warning,
+              title: 'Emergency Stop: done',
+              sticky: true,
+            ),
+          ),
+        ),
+      );
+      expect(_k('title'), findsNothing);
+    },
+  );
+
+  testWidgets('a wide window above 1.3x text leaves the title out', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _snap());
+    expect(_k('title'), findsNothing);
   });
 }

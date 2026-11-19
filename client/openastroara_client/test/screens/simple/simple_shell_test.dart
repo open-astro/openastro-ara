@@ -7209,6 +7209,15 @@ void main() {
       expect(find.byKey(const Key('simple-device-safety')), findsOneWidget);
     });
 
+    testWidgets('with no weather station, a Conditions tap closes Monitor and opens the Camera window', (tester) async {
+      await openMonitor(tester, gear: [cameraStatusProvider.overrideWith(() => _CoolingCamera(-10))]);
+      await tester.tap(find.byKey(const Key('simple-monitor-conditions')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    });
+
     testWidgets('the safety alarm shows over it', (tester) async {
       final (c, _) = await openMonitor(tester, manualAlarm: true);
       (c.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
