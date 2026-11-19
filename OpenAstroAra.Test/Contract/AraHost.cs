@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using OpenAstroAra.Server;
 using System;
 using System.IO;
+using System.Linq;
 
 namespace OpenAstroAra.Test.Contract {
 
@@ -39,13 +40,21 @@ namespace OpenAstroAra.Test.Contract {
         }
 
         protected override void Dispose(bool disposing) {
-            base.Dispose(disposing);
-            if (disposing) {
-                Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);
-                try {
-                    Directory.Delete(profileDir, recursive: true);
-                } catch (IOException) {
-                    // best effort: the temp dir is not worth failing a teardown for
+            try {
+                base.Dispose(disposing);
+            } catch (AggregateException e) when (e.InnerExceptions.All(x => x is ObjectDisposedException)) {
+                // Two parties stop this host: the factory here, and Program.Main's app.Run(), which
+                // returns and disposes the app (and the services' cancellation sources) on its own
+                // thread. When Main wins, the hosted services' StopAsync finds its source disposed.
+                // The host is down either way; production stops it once, so this is harness-only.
+            } finally {
+                if (disposing) {
+                    Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);
+                    try {
+                        Directory.Delete(profileDir, recursive: true);
+                    } catch (IOException) {
+                        // best effort: the temp dir is not worth failing a teardown for
+                    }
                 }
             }
         }

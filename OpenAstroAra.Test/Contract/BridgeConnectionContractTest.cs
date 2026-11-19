@@ -51,9 +51,13 @@ namespace OpenAstroAra.Test.Contract {
 
         [OneTimeTearDown]
         public void StopAraAndBridge() {
-            http?.Dispose();
-            ara?.Dispose();
-            bridge?.Dispose();
+            // Each on its own: a failing Ara stop must not leave the bridge running.
+            try {
+                http?.Dispose();
+                ara?.Dispose();
+            } finally {
+                bridge?.Dispose();
+            }
         }
 
         // The driver-type tokens Ara reports for the bridge; empty when the bridge does not answer.
