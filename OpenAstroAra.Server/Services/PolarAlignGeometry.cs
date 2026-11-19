@@ -43,6 +43,8 @@ public static class PolarAlignGeometry {
     /// for a seed close to the pole. <paramref name="raIncreasing"/> (the mount's own turn: RA up =
     /// counter-clockwise about the north end of the axis) lets the fit reject the mirror line, which
     /// reproduces the turn the wrong way round.
+    /// <para>No routine calls it since 2026-11-19: every stage seeds with <see cref="FitAxisThreePoint"/>.
+    /// Kept, with its tests, as the reference for the §45.16 noise budget and the two-point comparison.</para>
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Non-finite inputs, a rotation outside
     /// (0°, 180°), coincident pointings (no axis information), or a chord longer than the

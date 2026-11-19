@@ -1223,18 +1223,6 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private static (double RaDeg, double DecDeg) FitAxis(
-                PolarAlignSolveOutcome a, PolarAlignSolveOutcome b, double rotationDeg, bool north, bool raIncreasing) {
-            try {
-                return PolarAlignGeometry.FitAxisTwoPoint(
-                    a.RaDegJnow, a.DecDegJnow, b.RaDegJnow, b.DecDegJnow, rotationDeg, north, raIncreasing);
-            } catch (ArgumentOutOfRangeException ex) {
-                // Every geometry rejection (coincident pointings, inconsistent chord, axis > 30°
-                // from the pole) is a user-actionable seed failure, not an internal error.
-                throw new RoutineFailedException("axis_fit_failed", ex.Message);
-            }
-        }
-
         /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
         /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available.</summary>
         private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) {
@@ -1256,9 +1244,8 @@ namespace OpenAstroAra.Server.Services {
 
         private static (double RaDeg, double DecDeg) Folded(Coordinates pos) {
             // #1536 — a synced mount can report Dec past ±90° (the Dec axis is over the pole). The same sky
-            // point is (RA+180°, 180°−Dec); folding keeps the Dec axis where it is, so the seed slew stays a
-            // pure RA turn the mount accepts. Clamping to the pole instead would move the Dec axis between
-            // the two seed frames, which the two-point fit does not model.
+            // point is (RA+180°, 180°−Dec); folding gives one reading per direction, so the seed's turns and
+            // the mount-turn cross-check compare like with like.
             return Math.Abs(pos.Dec) > 90.0
                 ? ((pos.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, pos.Dec) - pos.Dec)
                 : (pos.RADegrees, pos.Dec);

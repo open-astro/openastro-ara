@@ -73,7 +73,7 @@ String formatDecDms(double decDeg) {
 String _secondsLabel(num ms) => '${(ms / 1000).toStringAsFixed(1)} s';
 
 /// §45 polar-alignment panel — collapsible Imaging-tab section driving the
-/// server routine: Start (2-point seed → live adjust), the zooming bullseye
+/// server routine: Start (3-point seed → live adjust), the zooming bullseye
 /// with decoupled Az/Alt readouts fed by `polar_align.progress` WS events,
 /// the §45.11 no-solve retry banner, and Done/Abort. [Done] enables inside the
 /// profile's target tolerance (§45.12).

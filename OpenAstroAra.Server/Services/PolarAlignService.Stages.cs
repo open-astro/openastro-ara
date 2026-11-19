@@ -31,14 +31,14 @@ namespace OpenAstroAra.Server.Services {
 
     /// <summary>
     /// The three stages of the polar-align routine. <b>Coarse</b>: the mount goes Home (Find Home, or
-    /// the user puts it there and taps Continue), slews to Dec 85°, and the §45 seed-and-adjust
-    /// routine runs on the <i>main camera's</i> frames — a seed turn, the two-point axis fit, then the
-    /// live loop that reads knob moves — rough only in its cadence (the main camera's longer
+    /// the user puts it there and taps Continue), its Dec motor tilts the tube 5° off the axis, and the §45
+    /// seed-and-adjust routine runs on the <i>main camera's</i> frames — three solves with two RA-motor turns,
+    /// the three-point axis fit, then the live loop that reads knob moves — rough only in its cadence (the main camera's longer
     /// exposure and solve), good for the big moves on which side of the pole. It used to read the
     /// main camera's pointing at Home as the axis itself; that put its zero a degree off (#1727),
     /// because at Home the camera is not on the axis (cone error, the Home position). <b>Fine</b>:
     /// the same routine on the guide camera, which solves a frame a second. <b>Check</b>: Home again,
-    /// Dec 85°, three guide-camera solves with two RA turns of <c>CheckStepDeg</c>, an exact
+    /// the 5° tilt, three guide-camera solves with two RA-motor turns of <c>CheckStepDeg</c>, an exact
     /// three-point fit, and a verdict beside the fine stage's last readout. Nothing is adjusted in
     /// the check; it says how good the alignment really is (#1591).
     /// </summary>
