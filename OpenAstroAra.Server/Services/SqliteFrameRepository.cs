@@ -68,10 +68,18 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // earlier save directory) is refused on every gallery view; it warns once and repeats go to Debug.
     private readonly ConcurrentDictionary<(string FilePath, string Reason), byte> _refusalsNoted = new();
 
-    /// <summary>#2077 — how many distinct refused paths are remembered. Past it, every refusal warns
-    /// again and nothing more is recorded: memory stays bounded, and a burst of many distinct
-    /// tampered paths is never silenced. Internal and settable so tests can lower it.</summary>
-    internal int RefusalsNotedCap { get; set; } = 256;
+    /// <summary>#2077 — how many distinct refused paths are remembered, so memory stays bounded. A moved
+    /// save directory strands every frame written under it (a season of captures, not two rows), so
+    /// the cap is generous. Internal and settable so tests can lower it.</summary>
+    internal int RefusalsNotedCap { get; set; } = 4096;
+
+    /// <summary>#2077 — past <see cref="RefusalsNotedCap"/>, a refusal warns at most once per this
+    /// interval and the rest go to Debug. Warning on every refusal there would bring the per-view
+    /// flood back for a catalogue with more stale rows than the cap. Internal and settable for tests.</summary>
+    internal TimeSpan RefusalsPastCapWarnInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    // Environment.TickCount64 (ms) at or after which the next past-cap refusal may warn.
+    private long _nextPastCapWarnMs = long.MinValue;
 
     public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, IWsBroadcaster? ws = null, ILogger<SqliteFrameRepository>? logger = null,
             Func<IEnumerable<string>>? captureRoots = null) {
@@ -174,19 +182,32 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     /// <summary>#2077 — the first refusal of a path warns; repeats of it log at Debug, so one stale row
     /// does not write a warning on every thumbnail, preview and histogram request. Past
-    /// <see cref="RefusalsNotedCap"/> distinct paths, refusals warn without being recorded.</summary>
+    /// <see cref="RefusalsNotedCap"/> distinct paths nothing more is recorded, and a refusal warns at
+    /// most once per <see cref="RefusalsPastCapWarnInterval"/> (the rest at Debug), so the log stays
+    /// bounded however many stale rows the catalogue holds.</summary>
     private void NoteRefused(string filePath, string reason) {
         var key = (filePath, reason);
         if (_refusalsNoted.ContainsKey(key)) {
             LogPathRefusedAgain(filePath, reason);
             return;
         }
-        if (_refusalsNoted.Count < RefusalsNotedCap && !_refusalsNoted.TryAdd(key, 0)) {
-            // Another request recorded the same path first and has warned for it.
-            LogPathRefusedAgain(filePath, reason);
+        if (_refusalsNoted.Count < RefusalsNotedCap) {
+            if (_refusalsNoted.TryAdd(key, 0)) {
+                LogPathRefused(filePath, reason);
+            } else {
+                // Another request recorded the same path first and has warned for it.
+                LogPathRefusedAgain(filePath, reason);
+            }
             return;
         }
-        LogPathRefused(filePath, reason);
+        var now = Environment.TickCount64;
+        var next = Interlocked.Read(ref _nextPastCapWarnMs);
+        if (now >= next && Interlocked.CompareExchange(ref _nextPastCapWarnMs,
+                now + (long)RefusalsPastCapWarnInterval.TotalMilliseconds, next) == next) {
+            LogPathRefusedPastCap(filePath, reason, RefusalsNotedCap);
+        } else {
+            LogPathRefusedQuietly(filePath, reason);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Frame file refused: catalogued path '{FilePath}' is {Reason}; serving/deleting it was skipped (#1194). A frame catalogued under an earlier save directory stays refused; repeats of this path are logged at Debug")]
@@ -194,6 +215,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Frame file refused again: catalogued path '{FilePath}' is {Reason} (#1194)")]
     private partial void LogPathRefusedAgain(string filePath, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Frame file refused: catalogued path '{FilePath}' is {Reason}; serving/deleting it was skipped (#1194). More than {Cap} distinct paths have been refused, so further refusals are logged at Debug and this warning repeats at most once a minute")]
+    private partial void LogPathRefusedPastCap(string filePath, string reason, int cap);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Frame file refused (warning rate-limited): catalogued path '{FilePath}' is {Reason} (#1194)")]
+    private partial void LogPathRefusedQuietly(string filePath, string reason);
 
     /// <summary>
     /// Populate the catalog with fixture rows if the frames table is
