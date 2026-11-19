@@ -392,15 +392,24 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     // could read. The profile steps stay ordered (twin before push) and gate
                     // `initialized`; the rest never does.
                     var profilesOk = await TryInitStepAsync("get_profiles", GetProfiles).ConfigureAwait(false);
+                    var restoreCalibration = false;
                     if (profilesOk) {
                         if (BeforeAraProfileEnsureAsync is { } drain) {
                             await TryInitStepAsync("drain_twin_deletes", () => drain(token)).ConfigureAwait(false);
                         }
                         await TryInitStepAsync("ensure_ara_profile", () => EnsureAraGuiderProfileAsync(token)).ConfigureAwait(false);
-                        await TryInitStepAsync("push_engine_config", () => PushGuiderEngineConfigAsync(token)).ConfigureAwait(false);
+                        await TryInitStepAsync("push_engine_config", async () => {
+                            var plan = await PushGuiderEngineConfigAsync(token).ConfigureAwait(false);
+                            restoreCalibration = plan.RestoreCalibrationAfterReconnect;
+                        }).ConfigureAwait(false);
                     }
                     var equipmentConnected = false;
                     await TryInitStepAsync("set_connected", async () => { equipmentConnected = await EnsurePHD2EquipmentConnected().ConfigureAwait(false); }).ConfigureAwait(false);
+                    // #2074 — a push that had to open the disconnect window over unchanged gear and optics
+                    // must not cost the guider its calibration.
+                    if (restoreCalibration && equipmentConnected) {
+                        await TryInitStepAsync("restore_calibration", () => RestoreCalibrationAfterPushAsync(token)).ConfigureAwait(false);
+                    }
                     // The gain belongs to the Ara profile's twin, and the daemon only accepts it from a
                     // connected camera: both must hold or it would land on the wrong profile or be refused.
                     if (profilesOk && equipmentConnected) {

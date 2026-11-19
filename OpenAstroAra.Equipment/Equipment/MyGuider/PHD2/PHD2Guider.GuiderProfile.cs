@@ -499,7 +499,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     try {
                         if (selectedInvolved && deletedAny) {
                             await EnsureAraGuiderProfileAsync(CancellationToken.None).ConfigureAwait(false);
-                            await PushGuiderEngineConfigAsync(CancellationToken.None).ConfigureAwait(false);
+                            // No #2074 calibration restore here: the equipment is already off (get_calibrated
+                            // reads false), and the twin switch holds a different saved calibration.
+                            _ = await PushGuiderEngineConfigAsync(CancellationToken.None).ConfigureAwait(false);
                         }
                         if (wasConnected || (selectedInvolved && deletedAny)) {
                             await EnsurePHD2EquipmentConnected().ConfigureAwait(false);
