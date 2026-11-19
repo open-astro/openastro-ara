@@ -2727,7 +2727,7 @@ void main() {
         await _unplug(tester, c);
       });
 
-      testWidgets('the question counts every frame the run took, not only the current target\'s', (tester) async {
+      testWidgets('the question counts every frame the run took, across all its targets', (tester) async {
         final seq = _Seq();
         final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
         c.read(selectedSequenceIdProvider.notifier).select('seq-1');
