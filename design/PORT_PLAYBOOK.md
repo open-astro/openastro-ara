@@ -6488,6 +6488,9 @@ When support is added for an iPolar / PoleMaster / dedicated PA camera attached 
 
 ### 45.16 Solve-error budget and the 2-point call (2026-10-19, #1133)
 
+> Superseded 2026-11-19: every stage now seeds with three solves and two 10° RA-motor turns (see
+> "Revisited again" at the end of this section). The 30°/60° defaults and the 2-point call below are history.
+
 Written down after the on-sky nights of 2026-10-04 (41″ final on the HAE29C / ASI120MM Mini guide
 scope, +1.9° residual confirmed by the rotate-by-hand readout) and 2026-10-16/18 (CM4 rig; the
 §63 residual-from-guiding cross-check read ≥ 7.1′ ± 1.8′ on the first guided run of the night,
@@ -6563,6 +6566,7 @@ three-point fit has no read-back-Δ term (the mount's turns only cross-check it)
 trades amplification for safety — on the rig the fine stage and the check agreed to 0.62′ (check
 0.79′, turn mismatch 0.05°). No polar-align move is a GoTo except the `use_home: false` return to the
 start pointing. API_CONTRACT.md 2026-11-19 has the wire shape.
+
 ---
 
 ## 46. Notifications system
