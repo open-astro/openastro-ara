@@ -2359,10 +2359,8 @@ const List<Setting> settingsRegistry = [
   // §52.1 connection lifecycle — per-device-type auto-connect toggles. 10
   // individual entries (vs one composite) so ⌘K "guider connect" /
   // "dome boot" / "weather auto" all resolve to the specific panel.
-  // Defaults split between connect-by-default (core imaging chain) and
-  // manual-connect (devices with side effects: guider starts OpenAstro Guider; dome
-  // moves the shutter; weather starts polling). State lives in
-  // `equipmentConnectionProvider`.
+  // No client default (ADR 0015): each switch shows the rig's copy, loaded
+  // by `equipmentConnectionProvider`.
   Setting(
     id: 'eq.camera.auto_connect',
     tier: SettingTier.advanced,
