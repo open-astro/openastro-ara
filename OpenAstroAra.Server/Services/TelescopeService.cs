@@ -1519,9 +1519,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             IdempotencyKey: idempotencyKey);
 
     // Extracted (internal) for direct unit testing. ASCOM equatorial coordinates: RA in [0, 24)
-    // hours, Dec in [-90, 90] degrees (the poles are valid).
+    // hours, Dec in [-90, 90] degrees (the poles are valid). #2075 — NaN and ±Infinity are out of
+    // range too: every ordered comparison with NaN is false, so without the IsFinite terms a NaN
+    // target passed this check and reached the mount.
     internal static bool IsCoordinateOutOfRange(double raHours, double decDeg) =>
-        raHours < 0 || raHours >= 24 || decDeg < -90 || decDeg > 90;
+        !double.IsFinite(raHours) || !double.IsFinite(decDeg)
+        || raHours < 0 || raHours >= 24 || decDeg < -90 || decDeg > 90;
 
     public void Dispose() {
         _leaseTimer.Dispose();

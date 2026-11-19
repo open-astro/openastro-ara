@@ -214,6 +214,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void IsCoordinateOutOfRange_refuses_non_finite_values() {
+            // #2075 — every ordered comparison with NaN is false, so NaN used to pass as in range.
+            Assert.That(TelescopeService.IsCoordinateOutOfRange(double.NaN, 0), Is.True);
+            Assert.That(TelescopeService.IsCoordinateOutOfRange(0, double.NaN), Is.True);
+            Assert.That(TelescopeService.IsCoordinateOutOfRange(double.PositiveInfinity, 0), Is.True);
+            Assert.That(TelescopeService.IsCoordinateOutOfRange(0, double.NegativeInfinity), Is.True);
+        }
+
+        [Test]
         public void ConnectAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new TelescopeService();
             svc.Dispose();
