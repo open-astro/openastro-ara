@@ -37,6 +37,13 @@ class FakeSectionRig implements HttpClientAdapter {
   /// Every `If-Match` sent with a PUT (null when none), landed or refused.
   final List<String?> ifMatches = [];
 
+  /// Every section a GET asked for, answered or failed, in order.
+  final List<String> gets = [];
+
+  /// Path after `/api/v1/profile/` -> what a POST there does on the rig (a
+  /// daemon-owned write such as `safety/first-flip/rearm`); returns the reply.
+  final Map<String, Object? Function()> onPost = {};
+
   String etagOf(String section) => '"$section-v${_versions[section] ?? 1}"';
 
   /// Another device saved [section]: the rig's copy, and so its tag, moved on.
@@ -73,11 +80,16 @@ class FakeSectionRig implements HttpClientAdapter {
     final section = options.path.startsWith(_prefix)
         ? options.path.substring(_prefix.length)
         : options.path;
+    final post = onPost[section];
+    if (post != null && options.method.toUpperCase() == 'POST') {
+      return _json(post(), 200);
+    }
     if (!_sections.containsKey(section)) {
       return _json({'title': 'no such section'}, 404);
     }
     switch (options.method.toUpperCase()) {
       case 'GET':
+        gets.add(section);
         if (failGet.contains(section)) {
           throw DioException(
             requestOptions: options,
