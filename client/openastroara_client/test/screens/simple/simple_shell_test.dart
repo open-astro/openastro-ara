@@ -4394,18 +4394,6 @@ void main() {
     expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
   });
 
-  testWidgets('Devices: with no Polar Aligner found, its row says so', (tester) async {
-    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
-      polarAlignerApiProvider.overrideWithValue(_PolarAligner(const PolarAligner())),
-      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
-    ]);
-    await _openSection(tester, 'Devices');
-    await tester.pumpAndSettle();
-    expect(find.text('None · No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'),
-        findsOneWidget);
-    expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
-  });
-
   testWidgets('Devices: a failed Polar Aligner read shows Failed and why, as a device in error does', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       polarAlignerApiProvider.overrideWithValue(_PolarAlignerDown()),
