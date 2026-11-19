@@ -166,7 +166,11 @@ public sealed record CameraStateDto(
     // #1185 (§25.5.5) — the cooler's hot side (ASCOM HeatSinkTemperature); null when the driver
     // does not report it. A heat sink that climbs while CCD temperature holds is a fan or airflow
     // problem the cooler-power figure alone does not show.
-    double? HeatSinkTemperatureC = null);
+    double? HeatSinkTemperatureC = null,
+    // #2076 — true while a cooler Ara switched on does not respond: CoolerOn has read back off
+    // for a minute, or on at 0 % power with the sensor well above its set-point and not moving
+    // (a camera with no 12 V). Cleared when the cooler responds, is switched off, or on reconnect.
+    bool CoolerNotResponding = false);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +

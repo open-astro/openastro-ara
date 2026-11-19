@@ -64,6 +64,7 @@ import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
+import '../../models/camera_status.dart' show CameraStatus;
 import '../../models/equipment_device_status.dart';
 import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
 import '../../state/equipment/camera_state.dart';
@@ -324,6 +325,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  int? _coolerPill;
+
+  /// #2076 — one warning each time a cooler the daemon switched on stops
+  /// responding (no 12 V); it goes when the cooler responds or the camera
+  /// drops.
+  void _syncCoolerPill(CameraStatus? next) {
+    final on = next != null &&
+        next.connectionState == EquipmentConnectionState.connected &&
+        next.coolerNotResponding;
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    // A pill closed with × stays closed for this episode.
+    if (on && _coolerPill == null) {
+      final l10n = context.l10n;
+      _coolerPill = messages.show(
+        SimpleMessageKind.warning,
+        l10n.simpleCoolerNotResponding,
+        origin: SimpleStatusOrigin.camera,
+        actions: [
+          SimpleMessageAction(
+            l10n.shellSectionCamera,
+            () => _openFromPill(SimpleStatusOrigin.camera),
+          ),
+        ],
+      );
+    } else if (!on && _coolerPill != null) {
+      messages.dismiss(_coolerPill!);
+      _coolerPill = null;
+    }
+  }
+
   int? _calibrationPill;
 
   /// #1716 — one warning each time the Guider falls back to its earlier
@@ -397,6 +428,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
     }, fireImmediately: true);
     _watchDeviceFailures();
+    // #2076 — a frame late, as a pill changes a provider.
+    ref.listenManual(cameraStatusProvider, (_, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncCoolerPill(next.value);
+      });
+    }, fireImmediately: true);
     // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
     // person; a frame late, as a pill changes a provider.
     void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -570,6 +607,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
+    final coolerPill = _coolerPill;
     final devicePills = [..._devicePills.values];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       devicePills.forEach(_messages.dismiss);
@@ -577,6 +615,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
+      if (coolerPill != null) _messages.dismiss(coolerPill);
     });
     _focus.dispose();
     _rigBarConnect.dispose();

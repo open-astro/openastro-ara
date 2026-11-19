@@ -3963,6 +3963,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'Cooler not responding: is the camera\'s 12 V connected?';
+
+  @override
   String get simpleDewWarning =>
       'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 
@@ -10697,6 +10701,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get simpleGuiderCalibrationFailed =>
       'O guia não conseguiu calibrar, então está guiando com a calibração anterior. A guiagem pode ficar menos precisa esta noite.';
+
+  @override
+  String get simpleCoolerNotResponding =>
+      'O resfriador não está respondendo: os 12 V da câmera estão conectados?';
 
   @override
   String get simpleDewWarning =>
