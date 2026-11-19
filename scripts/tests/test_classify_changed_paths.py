@@ -142,6 +142,14 @@ class ClassifyTest(unittest.TestCase):
     def test_the_packaging_tree_runs_the_dotnet_jobs(self):
         self.assertTrue(self.c("packaging/debian/control")["dotnet"])
 
+    def test_the_checked_in_v2_schema_runs_the_dotnet_jobs(self):
+        # SequenceKindTableTest reads docs/specs/sequence-v2.schema.json, so a
+        # change to it must not take the docs/ shortcut.
+        p = "docs/specs/sequence-v2.schema.json"
+        self.assertTrue(self.c(p)["dotnet"])
+        self.assertFalse(self.c(p)["docs_only"])
+        self.assertTrue(self.c("docs/specs/sequence-v2.md")["docs_only"])
+
     # --- the closed bucket -------------------------------------------------
 
     def test_only_client_paths_reach_the_client_jobs(self):
@@ -639,7 +647,7 @@ class InertTreesTest(unittest.TestCase):
             ["git", "-c", "core.quotePath=false", "ls-files", "-z", "--", *cls.m.INERT_DIRS],
             cwd=REPO_ROOT, check=True, capture_output=True, text=True,
         ).stdout
-        cls.files = [f for f in out.split("\0") if f]
+        cls.files = [f for f in out.split("\0") if f and f not in cls.m.INERT_DIR_BUILD_INPUTS]
 
     def test_every_inert_dir_is_tracked_and_non_empty(self):
         for prefix in self.m.INERT_DIRS:
