@@ -575,6 +575,21 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/telescope/confirm-home:
+    post:
+      tags:
+        - Equipment
+      summary: 'Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.'
+      operationId: ConfirmTelescopeHome
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/abort:
     post:
       tags:
@@ -14991,6 +15006,7 @@ components:
         - storage-unavailable
         - end-night-in-progress
         - below-horizon-limit
+        - mount-position-unverified
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

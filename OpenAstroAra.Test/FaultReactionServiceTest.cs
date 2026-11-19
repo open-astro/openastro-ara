@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -967,6 +968,24 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             Assert.That(ActionPayload("recovered").GetProperty("attempts").GetInt32(), Is.EqualTo(3));
+        }
+
+        // #2070 — the escalation's park from a false zero is refused: the mount stops tracking, loudly.
+        [Test]
+        public async Task Escalation_park_refused_for_an_unverified_position_stops_tracking_and_alerts() {
+            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(TelescopeService.PositionUnverifiedRefusal(MountPoseTrust.PoseJumpInSession));
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(ActionPayload("escalated").GetProperty("parked").GetBoolean(), Is.False);
+            telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once,
+                "the mount stops tracking instead of parking");
+            Assert.That(posted.Any(n => n.Severity == NotificationSeverity.Critical
+                    && n.Title.Contains("NOT parked", StringComparison.Ordinal)), Is.True,
+                "a Critical alert says the mount was not parked");
         }
     }
 }

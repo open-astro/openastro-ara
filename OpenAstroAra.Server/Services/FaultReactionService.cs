@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
@@ -728,10 +729,35 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             await _telescope.ParkAsync(new ParkRequestDto("equipment.fault"), null, CancellationToken.None)
                 .ConfigureAwait(false);
             return true;
+        } catch (RefusalException refusal) when (refusal.Cause == RefusalCatalog.MountPositionUnverified) {
+            // #2070 — a park from a false zero drives the tube to the wrong place: the mount stops instead.
+            await StopTrackingInsteadOfParkAsync(refusal).ConfigureAwait(false);
+            return false;
         } catch (Exception ex) {
             LogRungFailed("park", ex);
             return false;
         }
+    }
+
+    // #2070 — the park was refused because the mount's position is unverified: stop tracking (best effort)
+    // and say so loudly, since the run ended with the mount unparked.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: a tracking stop that fails is logged and named in the alert, never thrown.")]
+    private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
+        var stopped = false;
+        try {
+            if (_telescope is not null) {
+                await _telescope.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
+                stopped = true;
+            }
+        } catch (Exception ex) {
+            LogRungFailed("tracking_off", ex);
+        }
+        LogParkRefusedUnverified(stopped);
+        await NotifyQuietlyAsync(NotificationSeverity.Critical, "Mount NOT parked (position unverified)",
+            "An equipment fault asked for a park, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "
+            + (stopped ? "Tracking was stopped instead. " : "Stopping tracking FAILED too. ")
+            + "Check the rig. " + refusal.Message).ConfigureAwait(false);
     }
 
     // ─── plumbing ───
@@ -865,6 +891,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: best-effort rung '{Rung}' failed; remaining steps still run")]
     private partial void LogRungFailed(string rung, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Fault reaction park refused: the mount's position is unverified (#2070); tracking stopped instead: {Stopped}")]
+    private partial void LogParkRefusedUnverified(bool stopped);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Fault reaction: episode for {DeviceType} failed unexpectedly")]
     private partial void LogEpisodeFailed(DeviceType deviceType, Exception ex);

@@ -71,6 +71,18 @@ public static partial class EquipmentEndpoints {
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
     }
 
+    /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
+    /// position is trusted again; 409 when it is not connected or does not report AtHome now.</summary>
+    internal static async Task<IResult> ConfirmHomeAsync(ITelescopeService telescope, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        try {
+            await telescope.ConfirmHomeAsync(ct);
+            return Results.NoContent();
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
@@ -363,6 +375,12 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
+        // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
+        telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("ConfirmTelescopeHome")
+            .WithSummary("Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.");
         telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
             // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
             // abort throws); the ordering contract lives in MountStopHandler where tests pin it.
@@ -1191,7 +1209,8 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (System.InvalidOperationException ex) {
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            // A declared Refusal (#2070's unverified mount position) keeps its own answer (RefusalHandler).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }

@@ -1008,6 +1008,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   /// Parked (false: Home) tapped while a plan runs: the window asks first.
   bool? _asking;
 
+  /// "The mount IS at Home" tapped: the window asks first (#2070).
+  bool _confirmingHome = false;
+
   /// Read up front: dispose clears the Check answer, and ref is gone by then.
   late final SimplePointingNotifier _pointing;
 
@@ -1043,6 +1046,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } else {
       final caps = m.capabilities;
       final notifier = ref.read(mountProvider.notifier);
+      if (m.positionUnverified) _addPositionUnverified(context, children, m);
       // A park is done once the mount says so; until then it reads Parking….
       final parking = ref.watch(simpleMountMotionProvider);
       final moving = parking != null || m.runtimeState == 'unparking';
@@ -1115,8 +1119,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       final position = m.parked ? 'parked' : 'unparked';
       children.add(
         simpleWindowRow(
-          // Home is the pad's centre now; the row still says where it is.
-          m.atHome && canHome && !homing
+          // Home is the pad's centre now; the row still says where it is. An
+          // unverified Home is no Home (#2070).
+          m.atHome && canHome && !homing && !m.positionUnverified
               ? '${context.l10n.deviceMountPosition} · ${context.l10n.deviceAtHome}'
               : context.l10n.deviceMountPosition,
           id: 'Position',
@@ -1153,7 +1158,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                         (
                           'parked',
                           context.l10n.deviceParked,
-                          caps?.canPark ?? false,
+                          // #2070 — a park from an unverified position is refused.
+                          (caps?.canPark ?? false) && !m.positionUnverified,
                           () => planRunning
                               ? setState(() => _asking = true)
                               : _park(context, true),
@@ -1266,7 +1272,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                 ref.watch(simpleMountHomeProvider) ||
                 (m.isBusy && !ref.watch(simplePadMovingProvider)),
             canHome: caps?.canFindHome ?? false,
-            onHome: m.parked || m.isBusy
+            // #2070 — Home by the mount's model is refused while unverified.
+            onHome: m.parked || m.isBusy || m.positionUnverified
                 ? null
                 : () => planRunning
                       ? setState(() => _asking = false)
@@ -1357,6 +1364,61 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
         error: true,
       );
     }
+  }
+
+  /// #2070 — the rig does not trust the mount's position (a power loss leaves a
+  /// mount without absolute encoders reporting Home wherever it points): say
+  /// so, and offer the Home confirmation once the mount reports Home (after its
+  /// own zero search, or when it really is there).
+  void _addPositionUnverified(
+    BuildContext context,
+    List<Widget> children,
+    MountStatus m,
+  ) {
+    final l10n = context.l10n;
+    children.add(
+      Column(
+        key: const Key('simple-mount-position-unverified'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s4,
+        children: [
+          Text(
+            l10n.mountPositionUnverifiedTitle,
+            style: kSimpleText.copyWith(color: AraColors.errorText),
+          ),
+          Text(l10n.mountPositionUnverifiedBody, style: kSimpleCaption),
+          if (!m.atHome)
+            Text(
+              l10n.mountPositionUnverifiedRunZeroSearch,
+              key: const Key('simple-mount-run-zero-search'),
+              style: kSimpleCaption,
+            )
+          else if (_confirmingHome)
+            simpleWindowConfirm(
+              question: l10n.mountConfirmAtHomeQuestion,
+              confirm: l10n.mountConfirmAtHomeYes,
+              onCancel: () => setState(() => _confirmingHome = false),
+              onConfirm: () {
+                setState(() => _confirmingHome = false);
+                _run(
+                  context,
+                  ref.read(mountProvider.notifier).confirmHome,
+                  failure: l10n.mountCouldntConfirmHome,
+                );
+              },
+            )
+          else
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                key: const Key('simple-mount-confirm-home'),
+                onPressed: () => setState(() => _confirmingHome = true),
+                child: Text(l10n.mountConfirmAtHome),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   /// False when the mount refused (a pill says why: [failure], or that it
