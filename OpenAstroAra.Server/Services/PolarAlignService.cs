@@ -630,8 +630,6 @@ namespace OpenAstroAra.Server.Services {
             return true;
         }
 
-        private const string SeedSlewRefusedMessage =
-            "the mount refused the RA seed slew — slew it to about Dec 85° from the mount controls, then start again";
 
         /// <summary>A fatal routine failure with a machine-readable reason for the WS error event
         /// (<c>seed_solve_failed</c>, <c>slew_failed</c>, …). Anything else that escapes the run
@@ -1236,11 +1234,26 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
+        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available.</summary>
+        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) {
+            if (_mount is ITelescopeService service
+                    && await service.ReadPointingNowAsync(ct).ConfigureAwait(false) is { } now) {
+                var frame = _mount.GetCurrentPosition()?.Epoch ?? Epoch.JNOW;
+                return Folded(new Coordinates(Angle.ByHours(now.RaHours), Angle.ByDegree(now.DecDegrees), frame).Transform(Epoch.JNOW));
+            }
+            return CurrentMountPointingJnow();
+        }
+
         private (double RaDeg, double DecDeg)? CurrentMountPointingJnow() {
             var pos = _mount.GetCurrentPosition()?.Transform(Epoch.JNOW);
             if (pos is null) {
                 return null;
             }
+            return Folded(pos);
+        }
+
+        private static (double RaDeg, double DecDeg) Folded(Coordinates pos) {
             // #1536 — a synced mount can report Dec past ±90° (the Dec axis is over the pole). The same sky
             // point is (RA+180°, 180°−Dec); folding keeps the Dec axis where it is, so the seed slew stays a
             // pure RA turn the mount accepts. Clamping to the pole instead would move the Dec axis between

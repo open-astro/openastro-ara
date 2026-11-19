@@ -6088,10 +6088,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarKnobTolerance => 'Tolerance (arcmin, 0.1 to 10)';
 
   @override
-  String get polarKnobTurn => 'Turn (°, 5 to 120)';
+  String get polarKnobTurn => 'Turn (°, 5 to 30)';
 
   @override
-  String get polarKnobVerifyStep => 'Verify step (°, 5 to 60)';
+  String get polarKnobVerifyStep => 'Verify step (°, 5 to 30)';
 
   @override
   String get polarKnobRoughExposure => 'Rough step exposure (s, 0.1 to 60)';
@@ -6111,10 +6111,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Off: where the mount points now counts as Home';
 
   @override
-  String get polarKnobTurnHint => 'Kept between 5° and 120°';
+  String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
-  String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
+  String get polarKnobVerifyStepHint => 'Kept between 5° and 30°';
 
   @override
   String get polarAligner => 'Polar Aligner';

@@ -116,6 +116,12 @@ public interface ITelescopeService {
     /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
+
+    /// <summary>The mount's RA (hours) and Dec (degrees) read from the driver now, not the 2 s refresh, in the
+    /// mount's own frame (<see cref="OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator.GetCurrentPosition"/>'s);
+    /// null when not connected or the read fails. Polar alignment stops its motor moves on it.</summary>
+    Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
+        Task.FromResult<(double RaHours, double DecDegrees)?>(null);
 }
 
 public interface IFocuserService {

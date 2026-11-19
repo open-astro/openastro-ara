@@ -10242,13 +10242,13 @@ abstract class AppLocalizations {
   /// Settings → Imaging → Polar align: RA turn field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Turn (°, 5 to 120)'**
+  /// **'Turn (°, 5 to 30)'**
   String get polarKnobTurn;
 
   /// Settings → Imaging → Polar align: Verify step field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Verify step (°, 5 to 60)'**
+  /// **'Verify step (°, 5 to 30)'**
   String get polarKnobVerifyStep;
 
   /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
@@ -10284,13 +10284,13 @@ abstract class AppLocalizations {
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Kept between 5° and 120°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobTurnHint;
 
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Kept between 5° and 60°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobVerifyStepHint;
 
   /// The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line

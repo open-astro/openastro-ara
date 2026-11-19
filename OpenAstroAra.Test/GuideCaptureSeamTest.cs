@@ -95,6 +95,14 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => position = target)
                 .ReturnsAsync(true);
+            // Polar alignment turns with the RA motor: each command steps the reported RA 0.25°.
+            mount.Setup(m => m.MoveAxis(It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<OpenAstroAra.Core.Enums.TelescopeAxes, double>((_, rate) => {
+                    if (rate != 0) {
+                        position = new Coordinates((position.RADegrees + Math.Sign(rate) * 0.25 + 360.0) % 360.0, position.Dec,
+                            Epoch.JNOW, Coordinates.RAType.Degrees);
+                    }
+                });
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
             return mount;
@@ -111,6 +119,8 @@ namespace OpenAstroAra.Test {
                 PausedRetryDelay = TimeSpan.Zero,
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.Zero,
+                AxisMovePoll = TimeSpan.FromMilliseconds(1),
+                AxisSettle = TimeSpan.Zero,
             };
         }
 

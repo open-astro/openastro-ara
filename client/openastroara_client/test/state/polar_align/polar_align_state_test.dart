@@ -318,10 +318,10 @@ void main() {
       expect(homing.isActive, isTrue);
     });
 
-    test('settings carry the stage knobs and default the turn to 60°', () {
+    test('settings carry the stage knobs and default the turn to 10°', () {
       const defaults = PolarAlignSettings();
-      expect(defaults.seedRotationDeg, 60.0);
-      expect(defaults.checkStepDeg, 30.0);
+      expect(defaults.seedRotationDeg, 10.0);
+      expect(defaults.checkStepDeg, 10.0);
       expect(defaults.coarseExposureSeconds, 3.0);
       expect(defaults.useHome, isTrue);
       final json = defaults.copyWith(useHome: false, checkStepDeg: 15).toJson();

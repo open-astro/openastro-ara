@@ -86,7 +86,7 @@ void main() {
       final fields = find.byType(TextField);
       expect(fields, findsNWidgets(4));
       // Row order: tolerance, turn, verify step, rough exposure.
-      final entered = ['2', '45', '20', '7.5'];
+      final entered = ['2', '25', '20', '7.5'];
       for (var i = 0; i < 4; i++) {
         await tester.enterText(fields.at(i), entered[i]);
         await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -94,7 +94,7 @@ void main() {
       }
       final last = api.saved.last;
       expect(last.targetToleranceArcmin, 2.0);
-      expect(last.seedRotationDeg, 45.0);
+      expect(last.seedRotationDeg, 25.0);
       expect(last.checkStepDeg, 20.0);
       expect(last.coarseExposureSeconds, 7.5);
     },
@@ -130,9 +130,9 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(api.saved, isEmpty);
-      expect(tester.widget<TextField>(fields.at(1)).controller!.text, '60');
+      expect(tester.widget<TextField>(fields.at(1)).controller!.text, '10');
       expect(tester.widget<TextField>(fields.at(0)).controller!.text, '1');
-      expect(find.textContaining('5 to 120'), findsOneWidget);
+      expect(find.textContaining('Turn (°, 5 to 30)'), findsOneWidget);
     },
   );
 

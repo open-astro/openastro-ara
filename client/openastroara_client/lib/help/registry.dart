@@ -2435,14 +2435,14 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.seed_rotation_deg',
     title: 'Polar align turn',
     body:
-        'How far the mount turns in RA to measure its axis, from 5° to 120°. A smaller turn suits a mount with limited RA travel.',
+        'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
   'img.polar.check_step_deg': Help(
     key: 'img.polar.check_step_deg',
     title: 'Verify step',
     body:
-        'The RA turn between the three frames of Verify, from 5° to 60°. A smaller step suits a mount with limited RA travel.',
+        'The RA turn between the three frames of Verify, from 5° to 30° (10° by default). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.check_step_deg'],
   ),
   'img.polar.coarse_exposure_seconds': Help(

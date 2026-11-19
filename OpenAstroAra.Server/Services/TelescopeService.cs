@@ -394,6 +394,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         RefreshCacheOnce();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read is 'no fresh reading' (null) by contract; the caller falls back or fails its own way.")]
+    public async Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            return null;
+        }
+        try {
+            var (ra, dec) = await Task.Run(() => (client.RightAscension, client.Declination), ct).ConfigureAwait(false);
+            return double.IsFinite(ra) && double.IsFinite(dec) ? (ra, dec) : null;
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
     public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
@@ -425,9 +445,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (borrowedPrimary && rate != 0 && Interlocked.Exchange(ref _secondaryFallbackLogged, 1) == 0) {
             LogSecondaryBandsBorrowed(_logger);
         }
-        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
-            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
-        }
         // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
         // leased move starts its deadline only once the mount took it. A renewal at the speed the
         // axis already moves at only extends the lease: the driver is not asked again.
@@ -435,6 +452,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
             return;
+        }
+        // Logged once per driver call, not on every lease renewal (a polar-align move renews four times a second).
+        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
+            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
         try {

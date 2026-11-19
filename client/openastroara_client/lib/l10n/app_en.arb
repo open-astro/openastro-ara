@@ -7864,11 +7864,11 @@
   "@polarKnobTolerance": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: tolerance field label with its accepted range"
   },
-  "polarKnobTurn": "Turn (°, 5 to 120)",
+  "polarKnobTurn": "Turn (°, 5 to 30)",
   "@polarKnobTurn": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: RA turn field label with its accepted range"
   },
-  "polarKnobVerifyStep": "Verify step (°, 5 to 60)",
+  "polarKnobVerifyStep": "Verify step (°, 5 to 30)",
   "@polarKnobVerifyStep": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
   },
@@ -7892,11 +7892,11 @@
   "@polarKnobUseHomeOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobTurnHint": "Kept between 5° and 120°",
+  "polarKnobTurnHint": "Kept between 5° and 30°",
   "@polarKnobTurnHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobVerifyStepHint": "Kept between 5° and 60°",
+  "polarKnobVerifyStepHint": "Kept between 5° and 30°",
   "@polarKnobVerifyStepHint": {
     "description": "Imaging > Polar align settings panel hint"
   },

@@ -193,6 +193,14 @@ public static class PolarAlignGeometry {
         return (ra, dec, cone);
     }
 
+    /// <summary>The great-circle angle (degrees) between two pointings; a pointing folded over the pole
+    /// (RA+180°, 180°−Dec) is the same direction, so the angle is the true distance the tube moved.</summary>
+    public static double SeparationDeg(double ra1Deg, double dec1Deg, double ra2Deg, double dec2Deg) {
+        var a = UnitVector(ra1Deg, dec1Deg);
+        var b = UnitVector(ra2Deg, dec2Deg);
+        return Math.Acos(Math.Clamp(Dot(a, b), -1.0, 1.0)) * 180.0 / Math.PI;
+    }
+
     /// <summary>
     /// The signed angle (degrees, −180..180) the pointing turned about <paramref name="axisRaDeg"/>/<paramref name="axisDecDeg"/>
     /// from (<paramref name="ra1Deg"/>, <paramref name="dec1Deg"/>) to (<paramref name="ra2Deg"/>, <paramref name="dec2Deg"/>),
