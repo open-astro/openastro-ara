@@ -180,6 +180,11 @@ namespace OpenAstroAra.Test {
 
         private static double Wrap180Test(double deg) => ((deg + 540.0) % 360.0) - 180.0;
 
+        /// <summary>A raw reading past the pole (|Dec| > 90°) as the same sky point: (RA+180°, ±180° − Dec).</summary>
+        private static Coordinates Folded(Coordinates c) => Math.Abs(c.Dec) > 90.0
+            ? new Coordinates((c.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, c.Dec) - c.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
+            : c;
+
         /// <summary>One motor command's worth of travel on the bench mount.</summary>
         private const double MotorStepDeg = 0.25;
 
@@ -1252,14 +1257,15 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("adjusting"));
-            // The folded pointing (RA +180°) sits on the axis (|Dec| > 87°), so the routine first tilts 5° off it
-            // with the Dec motor, then makes the seed turns from there: each turn is a pure 30° RA change at
-            // that Dec, on the hemisphere's side of the pole.
-            var slews = targets.ToArray();
-            Assert.That(slews, Has.Length.EqualTo(3));
-            Assert.That(PolarAlignGeometry.SeparationDeg(expectedTargetRa - 30.0, expectedTargetDec, slews[0].RADegrees, slews[0].Dec),
-                Is.EqualTo(90.0 - PolarAlignService.SeedDecDeg).Within(1e-6), "the tilt is 5° from the folded reading");
-            Assert.That(Math.Sign(slews[0].Dec), Is.EqualTo(Math.Sign(expectedTargetDec)));
+            // The folded pointing (RA +180°, Dec ±89.1°) sits on the axis (|Dec| > 87°), so the routine first tilts
+            // off it with the Dec motor. This bench motor first heads over the pole, so the tilt reverses and ends
+            // 5° from the pole on the reading's own side; then the seed turns: each a pure 30° RA change at that Dec.
+            var stops = targets.ToArray();
+            Assert.That(stops, Has.Length.EqualTo(4), "the reversal's stop, the tilt, two turns");
+            var slews = stops[1..];
+            Assert.That(Math.Abs(Folded(slews[0]).Dec), Is.EqualTo(PolarAlignService.SeedDecDeg).Within(MotorStepDeg), "5° from the pole, within one motor step");
+            Assert.That(Math.Abs(Folded(slews[0]).RADegrees - (expectedTargetRa - 30.0)), Is.LessThan(1e-6), "on the reading's side of the pole");
+            Assert.That(Math.Sign(Folded(slews[0]).Dec), Is.EqualTo(Math.Sign(expectedTargetDec)));
             Assert.That(Math.Abs(Wrap180Test(slews[1].RADegrees - slews[0].RADegrees)), Is.EqualTo(30.0).Within(1e-6));
             Assert.That(Math.Abs(Wrap180Test(slews[2].RADegrees - slews[1].RADegrees)), Is.EqualTo(30.0).Within(1e-6));
             Assert.That(slews[1].Dec, Is.EqualTo(slews[0].Dec).Within(1e-6));
@@ -1328,6 +1334,23 @@ namespace OpenAstroAra.Test {
             Assert.That(moves.Select(c => c.LeaseMs), Is.All.EqualTo(3000), "every motor command carries the lease");
             Assert.That(calls.Count(c => c.Rate == 0 && c.LeaseMs is null), Is.GreaterThanOrEqualTo(2), "each turn ends with a stop");
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never, "never the mediator's unleased call");
+        }
+
+        // The turn mismatch is the clutch-slip diagnostic: on a perfect mount it is zero. Between solves a tracking
+        // tube also turns with the Earth, which the mount's sky-RA reading does not show; 30 s apart that is 0.125°.
+        [TestCase(10.0)]
+        [TestCase(-10.0)]
+        public void The_turn_mismatch_counts_the_Earths_turn_between_solves(double turnDeg) {
+            var t0 = new DateTimeOffset(2026, 11, 19, 6, 0, 0, TimeSpan.Zero);
+            // The axis on the pole: the solves read what the mount reads, each 30 s after the last.
+            var a = (new PolarAlignSolveOutcome(true, 100.0, 85.0), t0);
+            var b = (new PolarAlignSolveOutcome(true, 100.0 + turnDeg, 85.0), t0.AddSeconds(30));
+            var c = (new PolarAlignSolveOutcome(true, 100.0 + (2 * turnDeg), 85.0), t0.AddSeconds(60));
+
+            var (axis, mismatch) = PolarAlignService.FitThreePointOrFail(a, b, c, turnDeg, turnDeg, north: true);
+
+            Assert.That(axis.DecDeg, Is.EqualTo(90.0).Within(1e-6));
+            Assert.That(mismatch, Is.EqualTo(0.0).Within(1e-6));
         }
 
         // Stop must stop the motor at once, not leave it running to the end of the turn.

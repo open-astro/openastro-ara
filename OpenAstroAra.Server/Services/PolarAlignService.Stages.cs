@@ -177,7 +177,8 @@ namespace OpenAstroAra.Server.Services {
             // Three Point Polar Alignment: 10° steps, 20° in all, from where the scope points). The
             // axis is the circle through the three pointings — no reliance on the mount's reported
             // turn, which the fit only cross-checks (a slipping clutch, a stalled motor).
-            var (ra0, dec0) = CurrentMountPointingJnow()
+            // Read from the driver like the turns' own readings, so the mount turns compare like with like.
+            var (ra0, dec0) = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var a = await SolveSeedFrameAsync(capture, "seed-a", SeedHint((ra0, dec0), afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             var aTime = DateTimeOffset.UtcNow;
@@ -187,13 +188,13 @@ namespace OpenAstroAra.Server.Services {
             // meridian flip, which garbles the fit — guider design §5 step 2).
             var dirSign = AwayFromMeridianSign(ra0);
             var p1 = await TurnRaAsync(ra0, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
-            var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
+            var mountTurn1 = FoldTolerantSignedTurnDeg(p1.RaDeg - ra0);
             var b = await SolveSeedFrameAsync(capture, "seed-b", SeedHint(p1, afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             var bTime = DateTimeOffset.UtcNow;
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
-            var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
+            var mountTurn2 = FoldTolerantSignedTurnDeg(p2.RaDeg - p1.RaDeg);
             var c = await SolveSeedFrameAsync(capture, "seed-c", SeedHint(p2, afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             var cTime = DateTimeOffset.UtcNow;
             LogSeedSolve("seed-c", c.RaDegJnow, c.DecDegJnow);
@@ -203,7 +204,7 @@ namespace OpenAstroAra.Server.Services {
                 axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, cTime);
             var seedPointing = PolarAlignGeometry.PointingAltAz(
                 c.RaDegJnow, c.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, cTime);
-            LogSeedFit(dirSign * (mountTurn1 + mountTurn2), axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
+            LogSeedFit(mountTurn1 + mountTurn2, axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
 
             // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
             // every subsequent solve's alt/az delta from the seed pointing is purely the user's
@@ -253,7 +254,8 @@ namespace OpenAstroAra.Server.Services {
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
 
             var step = settings.CheckStepDeg; // always in range: PolarAlignSettingsClamp on every read
-            var (ra0, dec0) = CurrentMountPointingJnow()
+            // Read from the driver like the turns' own readings, so the mount turns compare like with like.
+            var (ra0, dec0) = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var dirSign = AwayFromMeridianSign(ra0);
             LiveCapture capture = (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token);
@@ -264,14 +266,14 @@ namespace OpenAstroAra.Server.Services {
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
             var p1 = await TurnRaAsync(ra0, dirSign * step, gen, ct).ConfigureAwait(false);
-            var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
+            var mountTurn1 = FoldTolerantSignedTurnDeg(p1.RaDeg - ra0);
             var s2 = await SolveSeedFrameAsync(capture, "check-2", SeedHint(p1, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             var t2 = DateTimeOffset.UtcNow;
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * step, gen, ct).ConfigureAwait(false);
-            var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
+            var mountTurn2 = FoldTolerantSignedTurnDeg(p2.RaDeg - p1.RaDeg);
             var s3 = await SolveSeedFrameAsync(capture, "check-3", SeedHint(p2, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
@@ -307,14 +309,17 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>Sidereal rate, degrees of RA per second of time.</summary>
-        private const double SiderealDegPerSecond = 360.98564736629 / 86400.0;
+        internal const double SiderealDegPerSecond = 360.98564736629 / 86400.0;
 
         /// <summary>The mount's axis from three solves taken at different times (the seed and the check). Each
         /// solve is moved to the last one's time by the Earth's turn since it was taken: the RA axis is fixed to
         /// the ground, so the three pointings lie on one circle about it in the ground frame (NINA's TPPA works in
         /// alt/az for the same reason). The fit is refused when the solved turns disagree with the mount's own by
         /// more than <see cref="MaxCheckTurnMismatchDeg"/>, or the pointings sit too close to the axis.</summary>
-        private static ((double RaDeg, double DecDeg, double ConeDeg) Axis, double MismatchDeg) FitThreePointOrFail(
+        /// <param name="mountTurn1">The mount's signed sky-RA change between the first two solves (its motor turn:
+        /// tracking holds the reading still). In the ground frame the tube also turned with the Earth meanwhile, so
+        /// the turn to compare with the solved one is the hour-angle change, sidereal rate × elapsed − RA change.</param>
+        internal static ((double RaDeg, double DecDeg, double ConeDeg) Axis, double MismatchDeg) FitThreePointOrFail(
                 (PolarAlignSolveOutcome S, DateTimeOffset At) p1, (PolarAlignSolveOutcome S, DateTimeOffset At) p2,
                 (PolarAlignSolveOutcome S, DateTimeOffset At) p3, double mountTurn1, double mountTurn2, bool north) {
             double ToRef((PolarAlignSolveOutcome S, DateTimeOffset At) p) =>
@@ -333,7 +338,9 @@ namespace OpenAstroAra.Server.Services {
             // mount that turns by other than it reports (the open question behind #1591).
             var turn1 = PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, ra1, p1.S.DecDegJnow, ra2, p2.S.DecDegJnow);
             var turn2 = PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, ra2, p2.S.DecDegJnow, ra3, p3.S.DecDegJnow);
-            var mismatch = Math.Max(Math.Abs(Math.Abs(turn1) - mountTurn1), Math.Abs(Math.Abs(turn2) - mountTurn2));
+            var groundTurn1 = Math.Abs(((p2.At - p1.At).TotalSeconds * SiderealDegPerSecond) - mountTurn1);
+            var groundTurn2 = Math.Abs(((p3.At - p2.At).TotalSeconds * SiderealDegPerSecond) - mountTurn2);
+            var mismatch = Math.Max(Math.Abs(Math.Abs(turn1) - groundTurn1), Math.Abs(Math.Abs(turn2) - groundTurn2));
             // No answer from a fit the geometry does not support: three solves of one field (a mount that
             // reports turns it did not make — a slipping clutch, a stalled motor) still pass the coincidence
             // guards on noise and fit a random axis that can land near the pole by chance.
@@ -499,18 +506,23 @@ namespace OpenAstroAra.Server.Services {
             }
             var aimDecDeg = Math.CopySign(SeedDecDeg, decDeg == 0 ? 1.0 : decDeg);
             LogLeavingAxis(decDeg, aimDecDeg);
-            await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, 90.0 - SeedDecDeg,
-                (from, now) => PolarAlignGeometry.SeparationDeg(from.RaDeg, from.DecDeg, now.RaDeg, now.DecDeg),
-                checkDirection: false, gen, ct).ConfigureAwait(false);
+            // Progress is the gain in distance from the pole, so a tilt that heads over the pole (from Dec 88°, say)
+            // is reversed rather than ending 3° off the axis on the far side. From the reading's start the tube goes
+            // to 5° from the pole; after a hand-set Home the reading is stale, so the tilt is 5° relative to it.
+            var startPoleDistDeg = 90.0 - Math.Abs(decDeg);
+            var tiltDeg = afterManualHome ? 90.0 - SeedDecDeg : Math.Max(1.0, 90.0 - SeedDecDeg - startPoleDistDeg);
+            await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, tiltDeg,
+                (from, now) => Math.Abs(from.DecDeg) - Math.Abs(now.DecDeg),
+                checkDirection: true, gen, ct).ConfigureAwait(false);
         }
 
-        /// <summary>The size of the mount's own RA turn from two of its pointing readings. A synced mount can
-        /// report Dec past ±90° (the Dec axis over the pole), and <see cref="CurrentMountPointingJnow"/> folds
-        /// such a reading by 180° in RA; one folded reading between two solves would make a 30° turn read as
-        /// 150°. A check step is at most 60°, so the turn and its 180° complement are never confused.</summary>
-        private static double FoldTolerantTurnDeg(double rawDeltaDeg) {
-            var a = Math.Abs(Wrap180(rawDeltaDeg));
-            return Math.Min(a, 180.0 - a);
+        /// <summary>The mount's own signed RA turn (its sky-RA reading's change) from two of its pointing readings.
+        /// A synced mount can report Dec past ±90° (the Dec axis over the pole), and <see cref="CurrentMountPointingJnow"/>
+        /// folds such a reading by 180° in RA; one folded reading between two solves would make a 30° turn read as
+        /// 150°. A turn is at most 30°, so the turn and its 180° complement are never confused.</summary>
+        internal static double FoldTolerantSignedTurnDeg(double rawDeltaDeg) {
+            var a = Wrap180(rawDeltaDeg);
+            return Math.Abs(a) > 90.0 ? a - Math.CopySign(180.0, a) : a;
         }
 
         /// <summary>With HA = LST − RA, decreasing RA increases HA (further west): turn west when
@@ -598,7 +610,7 @@ namespace OpenAstroAra.Server.Services {
                     if (checkDirection && !reversed && p <= -0.5) {
                         reversed = true;
                         direction = -direction;
-                        if (axis == TelescopeAxes.Primary) {
+                        if (axis == TelescopeAxes.Primary && IsCurrent(gen)) { // never a superseded run's lesson
                             _raMotorSign = -_raMotorSign;
                         }
                         var reversedRate = Rate();
@@ -646,7 +658,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>The daemon's leased motor command (the same one the app's direction pad uses) when the
-        /// mount is the daemon's telescope service; the mediator's own call otherwise (tests).</summary>
+        /// mount is the daemon's telescope service; the mediator's own call otherwise (tests). Production always
+        /// takes the first branch: <c>TelescopeService</c>'s mediator <c>MoveAxis</c> is a no-op stub, so never
+        /// route a real move through the fallback.</summary>
         private Task RunAxisAsync(TelescopeAxes axis, double rate) =>
             _mount is ITelescopeService service
                 ? service.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, CancellationToken.None)
