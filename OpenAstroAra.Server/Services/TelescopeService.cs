@@ -478,6 +478,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             LogMoveAxisSuperseded(_logger, axis, effective);
             return;
         }
+        // An abort that landed between the check above and the driver call: the move may have reached the mount
+        // after the AbortSlew, so stop the axis again rather than leave it running.
+        if (effective != 0 && unlessAbortedSince is long racedSince && Interlocked.Read(ref _abortEpoch) != racedSince) {
+            await Task.Run(() => client.MoveAxis(axisEnum, 0), CancellationToken.None).ConfigureAwait(false);
+            throw new InvalidOperationException("the mount was stopped (Stop Mount) while this move started; the axis is stopped again");
+        }
         if (effective != 0 && leaseMs is int ms) {
             Lease.Renew(axis, effective, ms, LeaseClock.GetUtcNow());
             ArmLeaseTimer(true);

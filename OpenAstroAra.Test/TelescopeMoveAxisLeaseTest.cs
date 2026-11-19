@@ -220,6 +220,39 @@ namespace OpenAstroAra.Test {
             Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(2));
         }
 
+        // The race the check before the driver call cannot see: Stop Mount lands while the move's own PUT is in flight,
+        // so the move may reach the mount after the AbortSlew. The service stops the axis again and refuses the move.
+        [Test]
+        public async Task A_move_that_races_Stop_Mount_is_stopped_again_after_the_driver_call() {
+            TelescopeService? service = null;
+            Task? abort = null;
+            var raced = 0;
+            var (box, svc, _) = await ArmedAsync(path => {
+                if (path.EndsWith("/moveaxis", StringComparison.Ordinal) && Interlocked.Exchange(ref raced, 1) == 0 && service is { } s) {
+                    var before = s.AbortEpoch;
+                    abort = Task.Run(() => s.AbortSlewAsync(CancellationToken.None)); // the user taps Stop Mount now
+                    var sw = Stopwatch.StartNew();
+                    while (s.AbortEpoch == before && sw.Elapsed < TimeSpan.FromSeconds(5)) {
+                        Thread.Sleep(5);
+                    }
+                }
+                return null;
+            });
+            await using var _ = box;
+            using var __ = svc;
+            service = svc;
+            var since = svc.AbortEpoch;
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            if (abort is not null) {
+                await abort;
+            }
+
+            Assert.That(raced, Is.EqualTo(1), "the abort raced the move's PUT");
+            Assert.That(MoveAxisPuts(box).Last(), Does.Contain("Axis=0").And.Contain("Rate=0"), "the axis is stopped after the racing move");
+            Assert.That(svc.Lease.Any, Is.False, "no lease is left to renew");
+        }
+
         [Test]
         public async Task A_leased_move_with_no_renewal_is_stopped_after_the_lease() {
             var (box, svc, clock) = await ArmedAsync();
