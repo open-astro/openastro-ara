@@ -1787,6 +1787,9 @@ class _TargetCard extends StatelessWidget {
           TextButton(
             key: const Key('simple-run-pick-in-sky'),
             onPressed: onPickInSky,
+            // linkText pinned on the card, not left to the TextButton theme:
+            // 4.7:1 on the tint.
+            style: TextButton.styleFrom(foregroundColor: AraColors.linkText),
             child: Text(l.planPickInSky),
           ),
         ],

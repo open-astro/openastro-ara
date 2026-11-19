@@ -13,7 +13,8 @@ enum RefusalCause {
   opticsNotSet('optics-not-set'),
   solverNotSet('solver-not-set'),
   captureSettingsUnsupported('capture-settings-unsupported'),
-  storageUnavailable('storage-unavailable');
+  storageUnavailable('storage-unavailable'),
+  endNightInProgress('end-night-in-progress');
 
   const RefusalCause(this.token);
 

@@ -6575,6 +6575,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The storage disk is missing. Plug it back in, then try again.';
 
   @override
+  String get refusalEndNightInProgress =>
+      'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
@@ -13293,6 +13297,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalStorageUnavailable =>
       'O disco de armazenamento não foi encontrado. Reconecte-o e tente de novo.';
+
+  @override
+  String get refusalEndNightInProgress =>
+      'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

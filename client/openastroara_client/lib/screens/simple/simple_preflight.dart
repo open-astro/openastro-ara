@@ -159,8 +159,10 @@ class _Step extends StatelessWidget {
                       '${step.index + 1}',
                       style: kSimpleText.copyWith(
                         fontSize: 11,
+                        // textPrimary: accentInfo reads 3.9:1 on the tint
+                        // over a bright frame; the ring keeps accentInfo.
                         color: on
-                            ? AraColors.accentInfo
+                            ? AraColors.textPrimary
                             : AraColors.textSecondary,
                       ),
                     ),
