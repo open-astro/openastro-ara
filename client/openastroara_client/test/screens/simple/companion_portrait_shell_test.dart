@@ -641,7 +641,11 @@ void main() {
       expect(find.text('HOLD'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 1400));
       await tester.pump();
-      expect(find.text(no), findsOneWidget, reason: 'the shutter hold is a stop');
+      expect(
+        find.text(no),
+        findsOneWidget,
+        reason: 'the shutter hold is a stop',
+      );
       await g.up();
       await tester.pump(const Duration(seconds: 15));
     },
