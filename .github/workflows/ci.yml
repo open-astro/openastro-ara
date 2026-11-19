@@ -604,6 +604,70 @@ jobs:
       - name: dotnet test (bench category, native arm64)
         run: dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-build --verbosity normal --filter "TestCategory=bench"
 
+  # #1548 — Ara against a real AlpacaBridge, tested through Ara's own HTTP API. The release .deb is
+  # arm64-only and its Depends (libltdl7 >= 2.5.4, libjpeg62-turbo) are not on Ubuntu 24.04, so the job
+  # runs in a Debian 13 (trixie) container on the native arm64 runner. The .deb is pinned by version and
+  # SHA-256 (v5.0.2: the newest stable, and it already serves devicecatalog, the route the test reads).
+  # No systemd in a container: the test starts /usr/bin/alpacabridge itself, so it can kill and restart it.
+  # Only [Category("Contract")] runs here; the same tests skip when no bridge is configured.
+  bridge-contract:
+    name: AlpacaBridge contract (linux-arm64, trixie)
+    runs-on: ubuntu-24.04-arm
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read  # checkout + download a public release asset; no write scope
+    container:
+      image: debian:trixie
+    env:
+      BRIDGE_VERSION: "5.0.2"
+      BRIDGE_DEB_SHA256: a408731928d2b276265ab65d717a5be33652480255c1c14590f640d309e462f6
+    steps:
+      # Before checkout: git is what lets the submodule checkout below work, and the .NET installer needs curl.
+      - name: Install build + runtime prerequisites
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential libicu76 libcfitsio10t64
+
+      - name: Checkout (no LFS)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
+          lfs: false
+          persist-credentials: false
+
+      - name: Download, verify and install the pinned AlpacaBridge .deb
+        run: |
+          set -euo pipefail
+          deb="alpacabridge_${BRIDGE_VERSION}_arm64.deb"
+          curl -fsSL -o "$deb" "https://github.com/open-astro/AlpacaBridge/releases/download/v${BRIDGE_VERSION}/${deb}"
+          echo "${BRIDGE_DEB_SHA256}  ${deb}" | sha256sum -c -
+          apt-get install -y --no-install-recommends "./${deb}"
+          test -x /usr/bin/alpacabridge
+
+      - name: Setup .NET 11 SDK + .NET 10 runtime
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
+        with:
+          # 11.0.x = the SDK global.json requires; 10.0.x = the runtime the net10.0 projects run on.
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: dotnet restore (test project)
+        run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
+
+      - name: dotnet build (test project, Release)
+        run: dotnet build OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-restore
+
+      - name: dotnet test (Contract category)
+        env:
+          ARA_CONTRACT_BRIDGE_BIN: /usr/bin/alpacabridge
+          ARA_CONTRACT_BRIDGE_PORT: "6800"
+          LD_LIBRARY_PATH: /usr/lib/alpacabridge  # as the packaged systemd unit sets it
+        run: dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-build --verbosity normal --filter "TestCategory=Contract"
+
   # The bundled ASTAP solver really solves: build astap_cli from the submodule natively on
   # arm64 (the Pi's architecture), solve a real frame with the D05 database hinted and blind,
   # and check the thread count does not change the answer. server-build only proves the binary
