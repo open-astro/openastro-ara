@@ -720,20 +720,28 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     private static bool PointingNear(ITelescopeDevice c, double targetRaHours, double targetDecDeg) =>
         PointingNear(c.RightAscension, c.Declination, targetRaHours, targetDecDeg);
 
-    // #2075 — fold both sides over the pole before the per-axis compare: a mount that reports its Dec
-    // axis past ±90° (RA r, Dec 90.6°) after a goto to the folded target (r + 12h, 89.4°) is on target,
-    // and without the fold its RA differs by 180°, the settle never completes and a StallTimeout fault
-    // is published.
+    // #2075 — the per-axis compare alone fails over the pole: a mount that reports its Dec axis past
+    // ±90° (RA r, Dec 90.6°) after a goto to the folded target (r + 12h, 89.4°) is on target, but its
+    // RA differs by 180°, the settle never completes and a StallTimeout fault is published. Folding
+    // the reading instead would split the sky at the pole (a goto to (r, 89.99°) on a mount that then
+    // reads (r, 90.001°) folds to 12h off). So a great-circle separation inside the tolerance also
+    // counts as near: the unit vector of (r, 90.6°) is the one of (r + 12h, 89.4°), so it needs no
+    // fold, and it is the only sane compare near the pole, where RA is ill-defined.
     internal static bool PointingNear(double raHours, double decDeg, double targetRaHours, double targetDecDeg) {
-        var (ra, dec) = FoldOverPoleHours(raHours, decDeg);
-        var (tRa, tDec) = FoldOverPoleHours(targetRaHours, targetDecDeg);
-        var raDiffHours = Math.Abs(WrapRaHours(ra) - WrapRaHours(tRa));
+        var raDiffHours = Math.Abs(raHours - targetRaHours);
         var raDiffDeg = Math.Min(raDiffHours, 24.0 - raDiffHours) * 15.0; // wrap-aware, hours → degrees
-        return raDiffDeg < SlewToleranceDeg && Math.Abs(dec - tDec) < SlewToleranceDeg;
+        return (raDiffDeg < SlewToleranceDeg && Math.Abs(decDeg - targetDecDeg) < SlewToleranceDeg)
+            || GreatCircleSeparationDeg(raHours, decDeg, targetRaHours, targetDecDeg) < SlewToleranceDeg;
     }
 
-    private static (double RaHours, double DecDeg) FoldOverPoleHours(double raHours, double decDeg) =>
-        Math.Abs(decDeg) > 90.0 ? (raHours + 12.0, Math.CopySign(180.0, decDeg) - decDeg) : (raHours, decDeg);
+    // Angular distance between two (RA hours, Dec degrees) points. A NaN input gives NaN (never near).
+    private static double GreatCircleSeparationDeg(double ra1Hours, double dec1Deg, double ra2Hours, double dec2Deg) {
+        var d1 = dec1Deg * Math.PI / 180.0;
+        var d2 = dec2Deg * Math.PI / 180.0;
+        var dRa = (ra1Hours - ra2Hours) * 15.0 * Math.PI / 180.0;
+        var cos = Math.Sin(d1) * Math.Sin(d2) + Math.Cos(d1) * Math.Cos(d2) * Math.Cos(dRa);
+        return Math.Acos(Math.Clamp(cos, -1.0, 1.0)) * 180.0 / Math.PI;
+    }
 
     // #2075 — RA into [0, 24): the same sky point, so nothing is lost. A non-finite value is returned
     // as is for SlewTargetRefusal to refuse. The last clause catches a tiny negative input that

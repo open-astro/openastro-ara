@@ -59,5 +59,16 @@ namespace OpenAstroAra.Test {
             Assert.That(TelescopeService.PointingNear(6.0, 45.0, 6.1, 45.5), Is.True);
             Assert.That(TelescopeService.PointingNear(6.0, 45.0, 18.0, 45.0), Is.False);
         }
+
+        [Test]
+        public void PointingNear_has_no_seam_at_the_pole() {
+            // A goto to (6h, 89.99°) on a mount that then reads (6h, 90.001°): 0.011° apart. Folding the
+            // reading alone gives (18h, 89.999°), 180° off in RA, and the settle would end in a stall fault.
+            Assert.That(TelescopeService.PointingNear(6.0, 90.001, 6.0, 89.99), Is.True);
+            // Near the pole a large RA difference is a small distance: (6h, 89.9°) and (7h, 89.9°) are 0.03° apart.
+            Assert.That(TelescopeService.PointingNear(7.0, 89.9, 6.0, 89.9), Is.True);
+            Assert.That(TelescopeService.PointingNear(double.NaN, 45.0, 6.0, 45.0), Is.False);
+            Assert.That(TelescopeService.PointingNear(6.0, 80.0, 6.0, 89.0), Is.False);
+        }
     }
 }
