@@ -4043,13 +4043,11 @@ class _PolarAlignerGearRows extends ConsumerWidget {
       case AsyncLoading():
         return const SizedBox.shrink();
     }
-    // No rig, or a daemon that predates the Polar Aligner (404).
-    if (device == null) return const SizedBox.shrink();
+    // No rig, a daemon that predates the Polar Aligner (404), or none found (#2042).
+    if (device == null || !device.present) return const SizedBox.shrink();
     final moving = device.moving || polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
     final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
-    final (dot, word, caption) = !device.present
-        ? (StatusLevel.disconnected, l10n.polarAlignerNone, l10n.polarAlignerFoundNone)
-        : !device.drivable
+    final (dot, word, caption) = !device.drivable
         ? (
             StatusLevel.busy,
             unreadable ? l10n.polarAlignerCantRead : l10n.polarAlignerCantDrive,
@@ -4060,7 +4058,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
             moving ? l10n.deviceMoving : l10n.polarAlignerReady,
             device.carrier == 'mount' ? l10n.polarAlignerFoundMount : l10n.polarAlignerFoundBase,
           );
-    final title = device.name == null || !device.present
+    final title = device.name == null
         ? l10n.polarAligner
         : l10n.shellGearTitle(l10n.polarAligner, device.name!);
     final row = _gearRow(
@@ -4074,7 +4072,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
       onOpen: null,
       toggle: null,
     );
-    if (!device.present || !device.drivable) return row;
+    if (!device.drivable) return row;
     final auto = ref.watch(polarAlignSettingsProvider).value?.polarAlignerAuto;
     Future<void> pick(bool next) async {
       final notify = userNotifier(context);

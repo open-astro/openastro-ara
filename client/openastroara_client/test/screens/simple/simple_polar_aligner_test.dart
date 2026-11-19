@@ -6,6 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/guider/guide_step_state.dart';
+import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/server_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
@@ -224,4 +235,70 @@ void main() {
     expect(c.calls, ['home']);
     expect(find.text('no Polar Aligner is connected'), findsOneWidget);
   });
+
+  testWidgets('Devices has no Polar Aligner row while the daemon finds none', (tester) async {
+    await _pumpDevices(tester, const PolarAligner());
+    expect(find.byKey(const Key('simple-gear')), findsOneWidget);
+    expect(find.textContaining('Polar Aligner'), findsNothing);
+    expect(_key('simple-gear-polaraligner-turned-by'), findsNothing);
+  });
+
+  testWidgets('Devices has a Polar Aligner row once the daemon finds one', (tester) async {
+    await _pumpDevices(tester, _base);
+    expect(find.text('Polar Aligner · Polar base'), findsOneWidget);
+  });
+}
+
+class _MemPrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
+class _StartOnLive extends SelectedTabIndexNotifier {
+  @override
+  int build() => kLiveTabIndex;
+}
+
+class _SkyReady extends PlanetariumReadyNotifier {
+  @override
+  bool build() => true;
+}
+
+class _NoSteps extends GuideStepNotifier {
+  @override
+  List<GuideStep> build() => const [];
+}
+
+/// Settings > Devices with the daemon reporting [device] for the Polar Aligner.
+Future<void> _pumpDevices(WidgetTester tester, PolarAligner device) async {
+  tester.view.physicalSize = const Size(1024, 768);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+        serverLinkUpProvider.overrideWithValue(true),
+        discoveredServersProvider.overrideWith(
+          (ref) => const Stream<AraServer>.empty(),
+        ),
+        rigSetupHydratedProvider.overrideWith((ref) async => false),
+        selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+        planetariumReadyProvider.overrideWith(_SkyReady.new),
+        guideStepsProvider.overrideWith(_NoSteps.new),
+        polarAlignerApiProvider.overrideWithValue(_Aligner(device)),
+        polarAlignApiProvider.overrideWithValue(_Api()),
+      ],
+      child: MaterialApp(
+        home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.tap(find.byTooltip('Settings'));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('simple-menu-nav-Devices')));
+  await tester.pumpAndSettle();
 }
