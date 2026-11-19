@@ -8536,6 +8536,11 @@
   "@refusalCaptureSettingsUnsupported": {"description": "Refusal (capture-settings-unsupported): the exposure or binning is outside the camera's range"},
   "refusalStorageUnavailable": "The storage disk is missing. Plug it back in, then try again.",
   "@refusalStorageUnavailable": {"description": "Refusal (storage-unavailable): the disk frames are saved to is gone"},
+  "refusalBelowHorizonLimit": "That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.",
+  "@refusalBelowHorizonLimit": {
+    "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
+    "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
+  },
   "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
   "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
   "bridgeSetupFoundTitle": "Found on this rig",

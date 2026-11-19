@@ -93,10 +93,17 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.captureSettingsUnsupported =>
       l.refusalCaptureSettingsUnsupported,
     RefusalCause.storageUnavailable => l.refusalStorageUnavailable,
+    RefusalCause.belowHorizonLimit => l.refusalBelowHorizonLimit(
+      _degrees(r.parameters['altitude_deg']),
+      _degrees(r.parameters['limit_deg']),
+    ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     null => _firstLine(r.detail),
   };
 }
+
+/// A refusal's altitude or limit in degrees, one decimal; "?" when absent.
+String _degrees(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

@@ -1796,7 +1796,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Endpoint(s) or area:** the pointing endpoints: `POST /api/v1/platesolve/verify-position` (Check), `POST /api/v1/platesolve/frames/{id}/solve` and `POST /api/v1/platesolve/center`. First slice of #1847; the other endpoint families follow.
 
-**Decision:** when the rig declines a request for a reason the user can fix, the answer is a 409 or 422 `application/problem+json` whose `reason` is one of the `RefusalReason` values in `openapi.yaml`, `title` is a human sentence (never a token) and `detail` is the English sentence. Eight causes in this slice: `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `center-in-progress` (`job_id`), `optics-not-set` (`missing`: a list of `focal_length` and `pixel_size`), `solver-not-set` and `capture-settings-unsupported`. Modules throw `RefusalException` with a cause from `RefusalCatalog`; `RefusalHandler` is the one place that writes the answer. Check's other `InvalidOperationException` is no longer a 409 `no-camera`: it is a 500, as for every other route. A 422 on Check and on solving a frame now carries a `reason`; Center's 409 moves its token from `title` (`center_in_progress`) to `reason` (`center-in-progress`). Supersedes the 409 part of 2026-11-11 #1786 and the 409 shape of 2026-10-06 #1149.
+**Decision:** when the rig declines a request for a reason the user can fix, the answer is a 409 or 422 `application/problem+json` whose `reason` is one of the `RefusalReason` values in `openapi.yaml`, `title` is a human sentence (never a token) and `detail` is the English sentence. Eight causes in this slice (#1901 adds `end-night-in-progress` and #2044 adds `below-horizon-limit`): `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `center-in-progress` (`job_id`), `optics-not-set` (`missing`: a list of `focal_length` and `pixel_size`), `solver-not-set` and `capture-settings-unsupported`. Modules throw `RefusalException` with a cause from `RefusalCatalog`; `RefusalHandler` is the one place that writes the answer. Check's other `InvalidOperationException` is no longer a 409 `no-camera`: it is a 500, as for every other route. A 422 on Check and on solving a frame now carries a `reason`; Center's 409 moves its token from `title` (`center_in_progress`) to `reason` (`center-in-progress`). Supersedes the 409 part of 2026-11-11 #1786 and the 409 shape of 2026-10-06 #1149.
 
 **Reasoning:** a client that picks the fix from the words of `detail` or from the status breaks when the sentence changes, and it cannot word the answer in the user's language. A declared token the app maps to its own sentence (English and pt-BR) and its own fix button does not. The old catch-all turned any fault of the capture path into "no camera", so a daemon bug sent the person to Camera settings; only a camera that is not there says `no-camera`. An app newer than the daemon gets a 422 without `reason`: it shows the daemon's `detail` and offers no fix button, since it does not guess one.
 
@@ -1817,6 +1817,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/BahtinovFocusService.cs` (`ExposureOrDefault`), `Services/GuideFocusService.cs` (`ExposureOrDefault`), `Endpoints/AutofocusEndpoints.cs` (`StepSizeAsync`), `Contracts/FocusCalibrationDtos.cs` (`AutofocusStepSizeDto`)
 
 **Related:** #1544
+
+## 2026-11-19 — #2044 `POST /equipment/telescope/slew` refuses a target under the horizon: `below-horizon-limit` (ADR 0022)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`; the `RefusalReason` schema in `openapi.yaml`.
+
+**Decision:** a slew (not a sync) whose target is under the profile's horizon limit at its azimuth (the flat `default_horizon_altitude_deg`, or the custom skyline when `use_custom_horizon` is on) answers 409 `application/problem+json` with `reason` `below-horizon-limit` and the extensions `altitude_deg` and `limit_deg` (degrees), and dispatches nothing. `force` does not bypass it; it only bypasses `run_in_progress`, which keeps its `title` token. A profile with no site, or a failed altitude transform, lets the slew through. The tenth cause of the `RefusalReason` enum (after `end-night-in-progress`).
+
+**Reasoning:** a GoTo under the horizon points the telescope at the ground or a building. The check is the one the Resume refinement and the re-center already used (`HorizonGuard`), so the three callers cannot disagree about where the horizon is.
+
+**Spec ref:** `Services/HorizonGuard.cs`, `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+
+**Related:** #2044, #1847, ADR 0022
 
 ---
 

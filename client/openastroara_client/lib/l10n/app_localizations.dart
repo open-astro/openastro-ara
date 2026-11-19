@@ -11055,6 +11055,12 @@ abstract class AppLocalizations {
   /// **'The storage disk is missing. Plug it back in, then try again.'**
   String get refusalStorageUnavailable;
 
+  /// Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.'**
+  String refusalBelowHorizonLimit(String altitude, String limit);
+
   /// Refusal (end-night-in-progress): End Night was started while it is already running
   ///
   /// In en, this message translates to:
