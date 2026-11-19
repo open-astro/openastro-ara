@@ -125,7 +125,7 @@ double suggestedSubSeconds(
   Map<String, double> skyCalibrationK = const {},
 }) {
   final outcome = resolveOptimalSubLocal(
-    optics: ref.read(opticsSettingsProvider),
+    optics: ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
     electronics:
         ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
     site: ref.read(siteSettingsProvider),
@@ -219,7 +219,8 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   }
 
   List<FilterPlanStep> _steps(List<PlanningFilter> picked) {
-    final defaults = ref.read(imagingDefaultsProvider);
+    final defaults =
+        ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
     final defaultExposure = defaults.defaultExposure.inMilliseconds /
         Duration.millisecondsPerSecond;
     return [

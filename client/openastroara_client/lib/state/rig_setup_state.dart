@@ -74,19 +74,27 @@ List<RigSetupGap> rigSetupGaps(RigSetupFacts f) => [
 ];
 
 /// The profile's site, optics and guide values are read from the rig once the
-/// link is up, so the defaults they start with are never mistaken for a gap.
-/// False while that read has not finished or failed; a failed read is tried
-/// again the next time the link comes up.
+/// link is up, so what they hold before it (defaults, and nothing at all for
+/// optics) is never mistaken for a gap. False while that read has not finished
+/// or when any of the three failed (optics tell by `load()`'s result); a failed
+/// read is tried again the next time the link comes up.
 final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return false;
   try {
     // Read here, not through the planner's bootstrap: it swallows a failed read.
-    await Future.wait([
-      ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
-      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
-      ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
+    final loaded = await Future.wait([
+      ref
+          .read(siteSettingsProvider.notifier)
+          .hydrateFromServer(api)
+          .then((_) => true),
+      ref.read(opticsSettingsProvider.notifier).load(api),
+      ref
+          .read(phd2SettingsProvider.notifier)
+          .hydrateFromServer(api)
+          .then((_) => true),
     ]);
+    if (loaded.contains(false)) return false;
     // Kept until the rig changes: a read when a dropped link comes back would
     // undo a Settings edit not saved yet.
     if (ref.mounted) ref.keepAlive();
@@ -116,7 +124,9 @@ final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
   if (!ref.watch(serverLinkUpProvider)) return null;
   if (!(ref.watch(rigSetupHydratedProvider).value ?? false)) return null;
   final site = ref.watch(siteSettingsProvider);
-  final optics = ref.watch(opticsSettingsProvider);
+  // Null while optics hold no value (a failed load, or a reset that dropped it).
+  final optics = ref.watch(opticsSettingsProvider).value;
+  if (optics == null) return null;
   final guide = ref.watch(phd2SettingsProvider);
   final guider = ref.watch(guiderStatusProvider).value;
   final connected = guider?.isConnected ?? false;

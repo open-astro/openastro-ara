@@ -113,6 +113,7 @@ import '../shell_listeners.dart';
 import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
+import 'simple_save_section.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
@@ -523,31 +524,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     watch('safety', safetyMonitorProvider, (l) => l.shellSafetyMonitor);
   }
 
-  /// The profile owns the telescope; a value it doesn't know (0) is filled
-  /// from what the connected mount reports and saved to the profile.
+  /// The rig fills the telescope's empty fields from the mount when it connects
+  /// (#1846); reading them again lets the screens show them. Never a save from
+  /// here: no widget saves a profile section in reaction to rig state (record
+  /// 0021 rule 7), and overlapping loads at connect once wrote zeros over the
+  /// sensor fields (#2041).
   Future<void> _opticsFromMount(MountCapabilities caps) async {
     if (caps.apertureMm == null && caps.focalLengthMm == null) return;
     final api = ref.read(profileApiProvider);
     if (api == null) return;
-    final optics = ref.read(opticsSettingsProvider.notifier);
-    try {
-      // The profile's own values first: never fill over one not loaded yet.
-      await optics.hydrateFromServer(api);
-      if (!mounted) return;
-      final known = ref.read(opticsSettingsProvider);
-      var changed = false;
-      if (known.apertureMm <= 0 && caps.apertureMm != null) {
-        optics.setApertureMm(caps.apertureMm!);
-        changed = true;
-      }
-      if (known.focalLengthMm <= 0 && caps.focalLengthMm != null) {
-        optics.setFocalLengthMm(caps.focalLengthMm!);
-        changed = true;
-      }
-      if (changed) await optics.persistToServer(api);
-    } catch (e) {
-      debugPrint('[simple] telescope from the mount: $e');
-    }
+    await ref.read(opticsSettingsProvider.notifier).load(api);
   }
 
   late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
@@ -4885,22 +4871,31 @@ class _ThisRig extends ConsumerWidget {
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
         const Divider(height: AraSpace.s16),
-        for (final (id, label, digits, value, set)
-            in <(String, String, int?, double, void Function(double))>[
+        // Not loaded reads as 0 (unset); a tap loads the rig's copy first.
+        for (final (id, label, digits, value, apply)
+            in <
+              (
+                String,
+                String,
+                int?,
+                double,
+                OpticsSettings Function(OpticsSettings, double),
+              )
+            >[
               // Aperture on one wheel of millimetres; focal length per digit.
               (
                 'aperture',
                 l10n.shellAperture,
                 null,
-                ref.watch(opticsSettingsProvider).apertureMm,
-                ref.read(opticsSettingsProvider.notifier).setApertureMm,
+                ref.watch(opticsSettingsProvider).value?.apertureMm ?? 0,
+                (o, v) => o.copyWith(apertureMm: v),
               ),
               (
                 'focal',
                 l10n.shellFocalLength,
                 4,
-                ref.watch(opticsSettingsProvider).focalLengthMm,
-                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
+                ref.watch(opticsSettingsProvider).value?.focalLengthMm ?? 0,
+                (o, v) => o.copyWith(focalLengthMm: v),
               ),
             ])
           _RigWheelRow.millimetres(
@@ -4909,13 +4904,12 @@ class _ThisRig extends ConsumerWidget {
             label: label,
             digits: digits,
             value: value,
-            onSet: (v) => _save(
+            onSet: (v) => simpleSaveSection(
               context,
               ref,
-              () => set(v),
-              (api) => ref
-                  .read(opticsSettingsProvider.notifier)
-                  .persistToServer(api),
+              opticsSettingsProvider,
+              (o) => apply(o, v),
+              title: l10n.shellCouldntSave,
             ),
           ),
         // The guide scope: read from the guider when the profile left it

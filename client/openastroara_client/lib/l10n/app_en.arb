@@ -7002,6 +7002,14 @@
   "@settingsSectionReload": {
     "description": "Settings panel: button that replaces local edits with the rig's newer copy"
   },
+  "simpleSectionNotLoaded": "Settings not loaded from the rig; nothing was saved",
+  "@simpleSectionNotLoaded": {
+    "description": "Simple Mode pill detail: a settings change was refused because the rig's copy of the settings could not be loaded first"
+  },
+  "simpleSectionConflict": "These settings changed on the rig; nothing was saved",
+  "@simpleSectionConflict": {
+    "description": "Simple Mode pill detail: a settings change was refused because another device saved a newer copy on the rig"
+  },
   "companionTimeOfferQuestion": "The rig has no clock or site yet. Send this phone's location and time?",
   "@companionTimeOfferQuestion": {
     "description": "Companion Mode question pill: offers the phone's location and time to a rig with no recent time sync"

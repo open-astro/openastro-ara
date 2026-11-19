@@ -14,9 +14,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
-import '../../state/profile_management_state.dart' show profileApiProvider;
-import '../../state/simple_messages_state.dart'
-    show SimpleStatusOrigin, userNotifier;
+import '../../state/simple_messages_state.dart' show SimpleStatusOrigin;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../models/focuser_status.dart';
@@ -36,6 +34,7 @@ import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_guide_panel.dart'
     show SimpleToolRow, SimpleToolStatus, simpleToolButton;
 import 'simple_device_windows.dart' show simpleCelsius, simpleSigned;
+import 'simple_save_section.dart';
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../util/friendly_error.dart';
@@ -131,7 +130,7 @@ void simpleOpenFocusOffsets(WidgetRef ref) {
   final reference = offsetReference(
     slots,
     picks,
-    ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)),
+    ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter ?? '')),
   );
   return ({...picks, ?reference}, reference);
 }
@@ -187,8 +186,8 @@ final simpleGuideExposureProvider =
 double? simpleFocusExposureShown(WidgetRef ref, double? picked) =>
     picked ??
     ref
-        .watch(autofocusSettingsProvider.select((s) => s.exposureSeconds))
-        .toDouble();
+        .watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds))
+        ?.toDouble();
 
 /// Whether the focus run's frame, its measured stars circled, fills the screen
 /// behind Focus's panels (session only; off to start).
@@ -697,23 +696,14 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 
   /// Saves the pick to the profile, as the daemon reads the next run's
   /// exposure from there (it is not sent with the run).
-  Future<void> _setExposure(int seconds) async {
-    final af = ref.read(autofocusSettingsProvider.notifier);
-    af.setExposureSeconds(seconds);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final notify = userNotifier(context, origin: SimpleStatusOrigin.focus);
-    final l10n = context.l10n;
-    try {
-      await af.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSaveThat,
-        detail: failureReason(l10n, e),
-        error: true,
-      );
-    }
-  }
+  Future<void> _setExposure(int seconds) => simpleSaveSection(
+    context,
+    ref,
+    autofocusSettingsProvider,
+    (c) => c.copyWith(exposureSeconds: seconds),
+    title: context.l10n.deviceCouldntSaveThat,
+    origin: SimpleStatusOrigin.focus,
+  );
 
   /// Under Autofocus: the next run's exposure (the profile's autofocus
   /// exposure, the same setting Advanced Mode edits; Steps and Step size stay
@@ -722,11 +712,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
   /// room for them on an iPad beside the chart).
   List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked) {
     final seconds = ref.watch(
-      autofocusSettingsProvider.select((s) => s.exposureSeconds),
+      autofocusSettingsProvider.select((s) => s.value?.exposureSeconds),
     );
     // A profile value outside the four shows as its own chip, never rewritten
     // until the user picks one of the four.
-    final choices = {...kSimpleAutofocusExposures, seconds}.toList()..sort();
+    final choices = {...kSimpleAutofocusExposures, ?seconds}.toList()..sort();
     final wheel = ref.watch(filterWheelProvider).value;
     final hasWheel = wheel?.isConnected ?? false;
     final (picks, reference) = simpleOffsetPicks(ref);

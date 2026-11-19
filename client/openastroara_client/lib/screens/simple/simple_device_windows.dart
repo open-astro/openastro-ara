@@ -71,6 +71,7 @@ import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
+import 'simple_save_section.dart';
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/adaptive_controls.dart';
@@ -149,8 +150,11 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(cameraStatusProvider).value;
+    // The profile's target once loaded; until then the one the cooler runs to.
     final target =
-        _dragTarget ?? ref.watch(imagingDefaultsProvider).coolerTargetC;
+        _dragTarget ??
+        ref.watch(imagingDefaultsProvider).value?.coolerTargetC ??
+        s?.coolerSetpointC;
     final children = <Widget>[
       SimpleDeviceHeader(type: context.l10n.deviceCamera, status: s),
     ];
@@ -212,7 +216,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             _row(
               'Target',
               context.l10n.deviceTarget,
-              Text(simpleCelsius(target), style: kSimpleText),
+              Text(
+                target == null ? '—' : simpleCelsius(target),
+                style: kSimpleText,
+              ),
             ),
           );
           children.add(
@@ -221,8 +228,8 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
               min: lo,
               max: hi,
               divisions: ((hi - lo) / SimpleCameraWindow.targetStep).round(),
-              value: target.clamp(lo, hi),
-              label: simpleCelsius(target),
+              value: (target ?? lo).clamp(lo, hi),
+              label: target == null ? '—' : simpleCelsius(target),
               onChanged: (v) => setState(() => _dragTarget = v),
               onChangeEnd: (v) {
                 setState(() => _dragTarget = null);
@@ -270,24 +277,17 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
   /// Set once: the profile keeps it (plans cool to it), and a running cooler
   /// follows it at once.
   Future<void> _setTarget(double celsius, bool coolerOn) async {
-    final defaults = ref.read(imagingDefaultsProvider.notifier);
-    final before = ref.read(imagingDefaultsProvider).coolerTargetC;
-    defaults.setCoolerTargetC(celsius);
-    if (ref.read(imagingDefaultsProvider).coolerTargetC == before) return;
-    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
-    final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api != null) {
-      try {
-        await defaults.persistToServer(api);
-      } catch (e) {
-        notify(
-          l10n.deviceCouldntSaveTarget,
-          detail: failureReason(l10n, e),
-          error: true,
-        );
-      }
+    if (ref.read(imagingDefaultsProvider).value?.coolerTargetC == celsius) {
+      return;
     }
+    await simpleSaveSection(
+      context,
+      ref,
+      imagingDefaultsProvider,
+      (c) => c.copyWith(coolerTargetC: celsius),
+      title: context.l10n.deviceCouldntSaveTarget,
+      origin: SimpleStatusOrigin.camera,
+    );
     if (coolerOn && mounted) {
       await _run(
         () => ref
@@ -1650,9 +1650,9 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   /// Advanced Mode's Settings.
   List<Widget> _autofocusSettings() {
     final l10n = context.l10n;
-    final af = ref.watch(autofocusSettingsProvider);
-    final on = autofocusDuringPlans(af);
-    final sharp = keepFocusSharpOf(af);
+    final af = ref.watch(autofocusSettingsProvider).value;
+    final on = af != null && autofocusDuringPlans(af);
+    final sharp = af == null ? null : keepFocusSharpOf(af);
     final slots = ref.watch(filterWheelProvider).value?.slots ?? const [];
     return [
       simpleWindowRow(
@@ -1661,12 +1661,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         _OnOff(
           id: 'simple-focuser-plans',
           on: on,
+          // Not loaded from the rig: neither reads as selected, both take a tap.
+          known: af != null,
           group: l10n.deviceAutofocusDuringPlans,
-          onChanged: (v) => _saveAutofocus(
-            () => ref
-                .read(autofocusSettingsProvider.notifier)
-                .setAutofocusDuringPlans(v),
-          ),
+          onChanged: (v) => _saveAutofocus((c) => withAutofocusDuringPlans(c, v)),
         ),
       ),
       Text(
@@ -1688,11 +1686,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
               (KeepFocusSharp.custom, l10n.deviceKeepSharpCustom, 'custom'),
           ],
           selected: sharp,
-          onPick: (p) => _saveAutofocus(
-            () => ref
-                .read(autofocusSettingsProvider.notifier)
-                .applyKeepFocusSharp(p),
-          ),
+          onPick: (p) => _saveAutofocus((c) => withKeepFocusSharp(c, p)),
         ),
         Text(
           sharp == KeepFocusSharp.custom
@@ -1715,9 +1709,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 if (f.name.isNotEmpty) (f.name, f.name, f.name),
             ],
             selected: af.afFilter,
-            onPick: (f) => _saveAutofocus(
-              () => ref.read(autofocusSettingsProvider.notifier).setAfFilter(f),
-            ),
+            onPick: (f) => _saveAutofocus((c) => c.copyWith(afFilter: f)),
           ),
           Text(l10n.deviceAfFilterHint, style: kSimpleCaption),
         ],
@@ -1725,24 +1717,17 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     ];
   }
 
-  /// Applies [change] to the autofocus settings and keeps it in the profile.
-  Future<void> _saveAutofocus(void Function() change) async {
-    final af = ref.read(autofocusSettingsProvider.notifier);
-    change();
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
-    final l10n = context.l10n;
-    try {
-      await af.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSaveThat,
-        detail: failureReason(l10n, e),
-        error: true,
+  /// Applies [change] to the rig's autofocus settings and keeps it in the
+  /// profile (loads them first, says when it couldn't).
+  Future<void> _saveAutofocus(AutofocusSettings Function(AutofocusSettings) change) =>
+      simpleSaveSection(
+        context,
+        ref,
+        autofocusSettingsProvider,
+        change,
+        title: context.l10n.deviceCouldntSaveThat,
+        origin: SimpleStatusOrigin.focuser,
       );
-    }
-  }
 
   /// One knob with its name under it ("Coarse"): a slider to
   /// screen readers, Up and Down a click from the keyboard. It sits centred

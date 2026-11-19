@@ -267,8 +267,10 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       rig: rig,
     );
     if (choice == null) return ImagingRunResult.userCancelled;
-    final defaults = container.read(imagingDefaultsProvider);
-    final af = container.read(autofocusSettingsProvider);
+    final defaults =
+        container.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
+    final af =
+        container.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
     final exposureSeconds = exposureOverride ??
         defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
     final frameCount = frameCountOverride ??
@@ -414,8 +416,10 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   if (choice == null) return ImagingRunResult.userCancelled;
   final ditherEvery = _ditherCadence(container, choice);
 
-  final defaults = container.read(imagingDefaultsProvider);
-  final af = container.read(autofocusSettingsProvider);
+  final defaults =
+      container.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
+  final af =
+      container.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
   final exposureSeconds = exposureOverride ??
       defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
   final frameCount = frameCountOverride ?? defaultFrameCount(

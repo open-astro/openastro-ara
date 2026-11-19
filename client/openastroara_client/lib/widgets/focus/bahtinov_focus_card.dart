@@ -100,7 +100,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
 
     final exposure = active && status.exposureSec > 0
         ? status.exposureSec
-        : _exposureSec ?? ref.watch(autofocusSettingsProvider.select((s) => s.exposureSeconds)).toDouble();
+        : _exposureSec ?? (ref.watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds)) ?? const AutofocusSettings().exposureSeconds).toDouble();
     final subhead = [
       if (focuserConnected && focuser != null) 'Focuser at ${focuser.position ?? '—'} · ${focuser.name}' else 'Manual focuser',
       'Bahtinov mask',

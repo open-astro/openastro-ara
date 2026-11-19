@@ -202,9 +202,10 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
 }
 
 /// A section read outside Settings (no panel opens it first): loads itself
-/// once the notifier is built and whenever it is back to not loaded with no
-/// failure, such as after the reset point (migrated_sections.dart) or when the
-/// rig connects. A failed load stays failed until Retry or the next Save.
+/// once the notifier is built and whenever it does not hold the rig's copy (not
+/// loaded, or an offline cache seed) with no failure, such as after the reset
+/// point (migrated_sections.dart) or when the rig connects. A failed load stays
+/// failed until Retry or the next Save.
 abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
   @override
   LoadedSection<T> build() {
@@ -217,7 +218,7 @@ abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
   void _loadIfDue(LoadedSection<T> now) {
     final api = ref.read(profileApiProvider);
     if (api != null &&
-        now.source == SectionSource.notLoaded &&
+        now.source != SectionSource.rig &&
         now.lastFailure == null) {
       load(api);
     }

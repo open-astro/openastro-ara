@@ -5,9 +5,8 @@ import '../../../l10n/l10n.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
 import '../../../state/imaging/exposure_state.dart' show FrameKind;
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/imaging_defaults_state.dart';
 import '../../../services/planning_prefs_service.dart';
 import '../../../state/planning/planning_prefs_state.dart';
@@ -15,13 +14,16 @@ import '../../../state/planning/sky_model_calibration_state.dart';
 import '../../../state/settings/filter_set_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_load_state.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../theme/ara_colors.dart';
 
 /// §37.9 Imaging Defaults panel. Phase 12h.3b registered all 8 fields in
 /// `settings/registry.dart` and wired `helpKey`s on the non-obvious controls;
-/// Phase 12h.6b adds the daemon round-trip — values hydrate from the active
-/// server on mount and persist back on Save.
+/// the section loads from the rig on mount and saves back with its ETag
+/// (ADR 0015). The Planning and sky-model rows below it are client-side and
+/// show with or without a rig.
 class ImagingDefaultsPanel extends ConsumerStatefulWidget {
   const ImagingDefaultsPanel({super.key});
 
@@ -31,165 +33,137 @@ class ImagingDefaultsPanel extends ConsumerStatefulWidget {
 }
 
 class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
   bool _refitting = false;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return; // no active server — keep local defaults
-    try {
-      await ref.read(imagingDefaultsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      // Hydration failures are non-fatal — the user can still edit + Save,
-      // and a real failure will resurface on Save with a clearer error.
-      if (mounted) {
-        setState(
-          () => _lastError = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionLoadSettings,
-          ),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [imagingDefaultsProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(imagingDefaultsProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave),
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final d = ref.watch(imagingDefaultsProvider);
+    final gate = sectionGate();
+    final d = gate == null ? ref.watch(imagingDefaultsProvider).value! : null;
     final n = ref.read(imagingDefaultsProvider.notifier);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        EditableNumberRow(
-          label: 'Default exposure (s)',
-          helpKey: 'imaging.defaults.exposure',
-          currentValue: d.defaultExposure.inSeconds.toString(),
-          getCanonical: () => ref
-              .read(imagingDefaultsProvider)
-              .defaultExposure
-              .inSeconds
-              .toString(),
-          parse: (s) {
-            final i = int.tryParse(s);
-            if (i == null) return;
-            n.setExposure(Duration(seconds: i));
-          },
-        ),
-        EditableNumberRow(
-          label: 'Default gain',
-          helpKey: 'imaging.defaults.gain',
-          currentValue: d.defaultGain.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).defaultGain.toString(),
-          parse: (s) {
-            final i = int.tryParse(s);
-            if (i != null) n.setGain(i);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Default offset',
-          helpKey: 'imaging.defaults.offset',
-          currentValue: d.defaultOffset.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).defaultOffset.toString(),
-          parse: (s) {
-            final i = int.tryParse(s);
-            if (i != null) n.setOffset(i);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Default bin',
-          helpKey: 'imaging.defaults.bin',
-          currentValue: d.defaultBin.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).defaultBin.toString(),
-          parse: (s) {
-            final i = int.tryParse(s);
-            if (i != null) n.setBin(i);
-          },
-        ),
-        SettingsDropdownRow<FrameKind>(
-          label: 'Default frame type',
-          helpKey: 'imaging.defaults.frame_type',
-          value: d.defaultFrameKind,
-          items: const {
-            FrameKind.light: 'Light',
-            FrameKind.dark: 'Dark',
-            FrameKind.bias: 'Bias',
-            FrameKind.flat: 'Flat',
-          },
-          onChanged: (v) {
-            if (v != null) n.setFrameKind(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Cooling target temperature (°C)',
-          helpKey: 'imaging.defaults.cooling_target',
-          currentValue: d.coolerTargetC.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).coolerTargetC.toString(),
-          parse: (s) {
-            final v = double.tryParse(s);
-            if (v != null) n.setCoolerTargetC(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Cooler ramp rate (°C/min)',
-          helpKey: 'imaging.defaults.cooler_ramp_c_per_min',
-          currentValue: d.coolerRampRatePerMin.toString(),
-          getCanonical: () =>
-              ref.read(imagingDefaultsProvider).coolerRampRatePerMin.toString(),
-          parse: (s) {
-            final v = double.tryParse(s);
-            if (v != null) n.setCoolerRampRate(v);
-          },
-        ),
-        SettingsSwitchRow(
-          label: 'Warm-up cooler at session end',
-          helpKey: 'imaging.defaults.warmup_at_session_end',
-          value: d.warmupAtSessionEnd,
-          onChanged: n.setWarmupAtSessionEnd,
-        ),
+        if (d == null)
+          SectionNotLoaded(
+            section: ref.watch(imagingDefaultsProvider),
+            onRetry: loadSections,
+            padding: const EdgeInsets.only(bottom: 16),
+          )
+        else ...[
+          ?sectionConflict(),
+          EditableNumberRow(
+            label: 'Default exposure (s)',
+            helpKey: 'imaging.defaults.exposure',
+            currentValue: d.defaultExposure.inSeconds.toString(),
+            getCanonical: () => ref
+                .read(imagingDefaultsProvider)
+                .value!
+                .defaultExposure
+                .inSeconds
+                .toString(),
+            parse: (s) {
+              final i = int.tryParse(s);
+              if (i == null) return;
+              n.setExposure(Duration(seconds: i));
+            },
+          ),
+          EditableNumberRow(
+            label: 'Default gain',
+            helpKey: 'imaging.defaults.gain',
+            currentValue: d.defaultGain.toString(),
+            getCanonical: () =>
+                ref.read(imagingDefaultsProvider).value!.defaultGain.toString(),
+            parse: (s) {
+              final i = int.tryParse(s);
+              if (i != null) n.setGain(i);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Default offset',
+            helpKey: 'imaging.defaults.offset',
+            currentValue: d.defaultOffset.toString(),
+            getCanonical: () => ref
+                .read(imagingDefaultsProvider)
+                .value!
+                .defaultOffset
+                .toString(),
+            parse: (s) {
+              final i = int.tryParse(s);
+              if (i != null) n.setOffset(i);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Default bin',
+            helpKey: 'imaging.defaults.bin',
+            currentValue: d.defaultBin.toString(),
+            getCanonical: () =>
+                ref.read(imagingDefaultsProvider).value!.defaultBin.toString(),
+            parse: (s) {
+              final i = int.tryParse(s);
+              if (i != null) n.setBin(i);
+            },
+          ),
+          SettingsDropdownRow<FrameKind>(
+            label: 'Default frame type',
+            helpKey: 'imaging.defaults.frame_type',
+            value: d.defaultFrameKind,
+            items: const {
+              FrameKind.light: 'Light',
+              FrameKind.dark: 'Dark',
+              FrameKind.bias: 'Bias',
+              FrameKind.flat: 'Flat',
+            },
+            onChanged: (v) {
+              if (v != null) n.setFrameKind(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Cooling target temperature (°C)',
+            helpKey: 'imaging.defaults.cooling_target',
+            currentValue: d.coolerTargetC.toString(),
+            getCanonical: () => ref
+                .read(imagingDefaultsProvider)
+                .value!
+                .coolerTargetC
+                .toString(),
+            parse: (s) {
+              final v = double.tryParse(s);
+              if (v != null) n.setCoolerTargetC(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Cooler ramp rate (°C/min)',
+            helpKey: 'imaging.defaults.cooler_ramp_c_per_min',
+            currentValue: d.coolerRampRatePerMin.toString(),
+            getCanonical: () => ref
+                .read(imagingDefaultsProvider)
+                .value!
+                .coolerRampRatePerMin
+                .toString(),
+            parse: (s) {
+              final v = double.tryParse(s);
+              if (v != null) n.setCoolerRampRate(v);
+            },
+          ),
+          SettingsSwitchRow(
+            label: 'Warm-up cooler at session end',
+            helpKey: 'imaging.defaults.warmup_at_session_end',
+            value: d.warmupAtSessionEnd,
+            onChanged: n.setWarmupAtSessionEnd,
+          ),
+        ],
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(
@@ -307,7 +281,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _api() != null && !_refitting
+            onPressed: ref.read(profileApiProvider) != null && !_refitting
                 ? _recalibrateSkyModel
                 : null,
             icon: const Icon(Icons.refresh, size: 18),
@@ -321,7 +295,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
   List<Widget> _skyModelRows() {
     final record = ref.watch(skyModelCalibrationProvider);
     final value = record.asData?.value;
-    if (_api() == null) {
+    if (ref.watch(profileApiProvider) == null) {
       return const [
         SettingsRow(
           label: 'Calibration',
@@ -396,7 +370,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(l10n, e, action: l10n.actionRefitSkyModel)),
+          content: Text(
+            friendlyError(l10n, e, action: l10n.actionRefitSkyModel),
+          ),
         ),
       );
     } finally {

@@ -1,13 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../focus/focus_presets.dart';
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
-/// §37.11 Autofocus settings. Phase 12h.6h wires the daemon round-trip
-/// via [ProfileApi] (`/api/v1/profile/autofocus`). Local state is the
-/// source of truth between syncs.
+/// §37.11 Autofocus settings (`/api/v1/profile/autofocus`), loaded from the rig
+/// with its ETag and saved with it (ADR 0015).
 
 enum AutofocusMethod { hfrVCurve, brightestStarHfr, fwhm }
 
@@ -18,22 +17,22 @@ enum TelescopeType { refractor, sct, mak, rc, newtonian, other }
 
 /// §59.13 wire strings (exact; the daemon treats anything else as `other`).
 TelescopeType telescopeTypeFromWire(String? s) => switch (s) {
-      'refractor' => TelescopeType.refractor,
-      'sct' => TelescopeType.sct,
-      'mak' => TelescopeType.mak,
-      'rc' => TelescopeType.rc,
-      'newtonian' => TelescopeType.newtonian,
-      _ => TelescopeType.other,
-    };
+  'refractor' => TelescopeType.refractor,
+  'sct' => TelescopeType.sct,
+  'mak' => TelescopeType.mak,
+  'rc' => TelescopeType.rc,
+  'newtonian' => TelescopeType.newtonian,
+  _ => TelescopeType.other,
+};
 
 String telescopeTypeToWire(TelescopeType t) => switch (t) {
-      TelescopeType.refractor => 'refractor',
-      TelescopeType.sct => 'sct',
-      TelescopeType.mak => 'mak',
-      TelescopeType.rc => 'rc',
-      TelescopeType.newtonian => 'newtonian',
-      TelescopeType.other => 'other',
-    };
+  TelescopeType.refractor => 'refractor',
+  TelescopeType.sct => 'sct',
+  TelescopeType.mak => 'mak',
+  TelescopeType.rc => 'rc',
+  TelescopeType.newtonian => 'newtonian',
+  TelescopeType.other => 'other',
+};
 
 class AutofocusSettings {
   final AutofocusMethod method;
@@ -97,112 +96,109 @@ class AutofocusSettings {
     TelescopeType? telescopeType,
     int? backlashInSteps,
     int? backlashOutSteps,
-  }) =>
-      AutofocusSettings(
-        method: method ?? this.method,
-        steps: steps ?? this.steps,
-        stepSize: stepSize ?? this.stepSize,
-        stepSizeAuto: stepSizeAuto ?? this.stepSizeAuto,
-        exposureSeconds: exposureSeconds ?? this.exposureSeconds,
-        binning: binning ?? this.binning,
-        afFilter: afFilter ?? this.afFilter,
-        runAfterFilterChange:
-            runAfterFilterChange ?? this.runAfterFilterChange,
-        triggerTempDeltaC: triggerTempDeltaC ?? this.triggerTempDeltaC,
-        triggerHfrDriftPct: triggerHfrDriftPct ?? this.triggerHfrDriftPct,
-        everyNHours: everyNHours ?? this.everyNHours,
-        abortSequenceOnAfFailure:
-            abortSequenceOnAfFailure ?? this.abortSequenceOnAfFailure,
-        restorePositionOnFailure:
-            restorePositionOnFailure ?? this.restorePositionOnFailure,
-        telescopeType: telescopeType ?? this.telescopeType,
-        backlashInSteps: backlashInSteps ?? this.backlashInSteps,
-        backlashOutSteps: backlashOutSteps ?? this.backlashOutSteps,
-      );
+  }) => AutofocusSettings(
+    method: method ?? this.method,
+    steps: steps ?? this.steps,
+    stepSize: stepSize ?? this.stepSize,
+    stepSizeAuto: stepSizeAuto ?? this.stepSizeAuto,
+    exposureSeconds: exposureSeconds ?? this.exposureSeconds,
+    binning: binning ?? this.binning,
+    afFilter: afFilter ?? this.afFilter,
+    runAfterFilterChange: runAfterFilterChange ?? this.runAfterFilterChange,
+    triggerTempDeltaC: triggerTempDeltaC ?? this.triggerTempDeltaC,
+    triggerHfrDriftPct: triggerHfrDriftPct ?? this.triggerHfrDriftPct,
+    everyNHours: everyNHours ?? this.everyNHours,
+    abortSequenceOnAfFailure:
+        abortSequenceOnAfFailure ?? this.abortSequenceOnAfFailure,
+    restorePositionOnFailure:
+        restorePositionOnFailure ?? this.restorePositionOnFailure,
+    telescopeType: telescopeType ?? this.telescopeType,
+    backlashInSteps: backlashInSteps ?? this.backlashInSteps,
+    backlashOutSteps: backlashOutSteps ?? this.backlashOutSteps,
+  );
 }
 
-class AutofocusSettingsNotifier extends Notifier<AutofocusSettings>
-    with SettingsSyncMixin<AutofocusSettings> {
-  @override
-  AutofocusSettings build() => const AutofocusSettings();
-
-  void setMethod(AutofocusMethod m) => state = state.copyWith(method: m);
+class AutofocusSettingsNotifier extends SelfLoadingSection<AutofocusSettings> {
+  void setMethod(AutofocusMethod m) => edit((c) => c.copyWith(method: m));
 
   void setSteps(int v) {
     // V-curve needs at least 3 points to fit; 31 is the practical upper
     // bound to keep AF runs under a few minutes.
     if (v < 3 || v > 31) return;
-    state = state.copyWith(steps: v);
+    edit((c) => c.copyWith(steps: v));
   }
 
   void setStepSize(int v) {
     if (v <= 0) return;
-    state = state.copyWith(stepSize: v);
+    edit((c) => c.copyWith(stepSize: v));
   }
 
-  void setStepSizeAuto(bool v) => state = state.copyWith(stepSizeAuto: v);
+  void setStepSizeAuto(bool v) => edit((c) => c.copyWith(stepSizeAuto: v));
 
   void setExposureSeconds(int v) {
     if (v <= 0) return;
-    state = state.copyWith(exposureSeconds: v);
+    edit((c) => c.copyWith(exposureSeconds: v));
   }
 
   void setBinning(int v) {
     if (v < 1) return;
-    state = state.copyWith(binning: v);
+    edit((c) => c.copyWith(binning: v));
   }
 
   void setAfFilter(String s) {
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(afFilter: v);
+    edit((c) => c.copyWith(afFilter: v));
   }
 
   void setRunAfterFilterChange(bool v) =>
-      state = state.copyWith(runAfterFilterChange: v);
+      edit((c) => c.copyWith(runAfterFilterChange: v));
 
   void setTriggerTempDeltaC(double v) {
     if (v < 0) return;
-    state = state.copyWith(triggerTempDeltaC: v);
+    edit((c) => c.copyWith(triggerTempDeltaC: v));
   }
 
   void setTriggerHfrDriftPct(double v) {
     if (v < 0 || v > 100) return;
-    state = state.copyWith(triggerHfrDriftPct: v);
+    edit((c) => c.copyWith(triggerHfrDriftPct: v));
   }
 
   void setEveryNHours(int v) {
     if (v < 0) return;
-    state = state.copyWith(everyNHours: v);
+    edit((c) => c.copyWith(everyNHours: v));
   }
 
   void setAbortSequenceOnAfFailure(bool v) =>
-      state = state.copyWith(abortSequenceOnAfFailure: v);
+      edit((c) => c.copyWith(abortSequenceOnAfFailure: v));
   void setRestorePositionOnFailure(bool v) =>
-      state = state.copyWith(restorePositionOnFailure: v);
+      edit((c) => c.copyWith(restorePositionOnFailure: v));
   void setTelescopeType(TelescopeType v) =>
-      state = state.copyWith(telescopeType: v);
+      edit((c) => c.copyWith(telescopeType: v));
 
   /// #1544 — Simple Mode's "Keep focus sharp": all four triggers at once.
   void applyKeepFocusSharp(KeepFocusSharp p) =>
-      state = withKeepFocusSharp(state, p);
+      edit((c) => withKeepFocusSharp(c, p));
 
   /// #1544 — Simple Mode's "Autofocus during plans". On from off applies the
   /// Normal preset (today's defaults); off clears all four triggers.
-  void setAutofocusDuringPlans(bool on) {
-    if (on == autofocusDuringPlans(state)) return;
-    state = on
-        ? withKeepFocusSharp(state, KeepFocusSharp.onDefault)
-        : withAutofocusDuringPlansOff(state);
-  }
+  void setAutofocusDuringPlans(bool on) =>
+      edit((c) => withAutofocusDuringPlans(c, on));
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getAutofocusSettings());
+  @override
+  Future<Tagged<AutofocusSettings>> fetch(ProfileApi api) =>
+      api.getAutofocusSection();
 
-  Future<AutofocusSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putAutofocusSettings(sent));
+  @override
+  Future<Tagged<AutofocusSettings>> send(
+    ProfileApi api,
+    AutofocusSettings value,
+    String? etag,
+  ) => api.putAutofocusSection(value, ifMatch: etag);
 }
 
 final autofocusSettingsProvider =
-    NotifierProvider<AutofocusSettingsNotifier, AutofocusSettings>(
-        AutofocusSettingsNotifier.new);
+    NotifierProvider<
+      AutofocusSettingsNotifier,
+      LoadedSection<AutofocusSettings>
+    >(AutofocusSettingsNotifier.new);

@@ -148,7 +148,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         }
         if (!mounted) return;
         final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
-        final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
+        final optics = planetariumOpticsFor(
+          ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
+        );
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
         final api = activeServer?.baseUrl ?? '';
@@ -590,7 +592,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       }
     });
     ref.listen(opticsSettingsProvider, (_, next) {
-      final optics = planetariumOpticsFor(next);
+      final optics = planetariumOpticsFor(next.value ?? const OpticsSettings());
       if (optics == null) return;
       _pushCmd({'type': 'optics', ...optics});
     });

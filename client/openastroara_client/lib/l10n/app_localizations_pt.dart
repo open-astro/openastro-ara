@@ -5485,6 +5485,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsSectionReload => 'Reload';
 
   @override
+  String get simpleSectionNotLoaded =>
+      'Settings not loaded from the rig; nothing was saved';
+
+  @override
+  String get simpleSectionConflict =>
+      'These settings changed on the rig; nothing was saved';
+
+  @override
   String get companionTimeOfferQuestion =>
       'The rig has no clock or site yet. Send this phone\'s location and time?';
 
@@ -12220,6 +12228,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsSectionReload => 'Recarregar';
+
+  @override
+  String get simpleSectionNotLoaded =>
+      'Configurações não carregadas do setup; nada foi salvo';
+
+  @override
+  String get simpleSectionConflict =>
+      'Estas configurações mudaram no setup; nada foi salvo';
 
   @override
   String get companionTimeOfferQuestion =>

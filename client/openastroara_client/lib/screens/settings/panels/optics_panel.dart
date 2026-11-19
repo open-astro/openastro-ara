@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/camera_geometry_api.dart';
-import '../../../services/profile_api.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/adaptive_controls.dart';
 
 /// §36/§25.5 Optics panel — the imaging-train geometry (focal length,
 /// reducer/barlow, sensor size + pixel pitch) that drives the Planning tab's
-/// Frame-mode FOV overlay. Values hydrate from the active server's `optics`
-/// section on mount (#467) and persist back on Save; a live read-out shows the
-/// resulting field of view so the user can sanity-check their rig. Mirrors the
-/// Imaging Defaults panel's daemon round-trip.
+/// Frame-mode FOV overlay. The `optics` section loads from the rig on mount
+/// (#467) and saves back with its ETag (ADR 0015); a live read-out shows the
+/// resulting field of view so the user can sanity-check their rig.
 class OpticsPanel extends ConsumerStatefulWidget {
   const OpticsPanel({super.key});
 
@@ -26,7 +29,7 @@ class OpticsPanel extends ConsumerStatefulWidget {
 }
 
 class _OpticsPanelState extends ConsumerState<OpticsPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   // Kept (not header-owned): also disables the "Refresh from connected
   // camera" button while a save is in flight.
   bool _saving = false;
@@ -34,54 +37,20 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return; // no active server — keep local defaults
-    try {
-      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [opticsSettingsProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() {
       _saving = true;
       _lastError = null;
     });
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
+    final error = await saveSections();
+    if (mounted) {
       setState(() {
         _saving = false;
-        _lastError = 'Not connected — connect to your rig to save this.';
+        _lastError = error;
       });
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -121,9 +90,10 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       n.setSensorWidthPx(geometry.sensorWidthPx);
       n.setSensorHeightPx(geometry.sensorHeightPx);
       n.setPixelSizeUm(geometry.pixelSizeUm);
-      // Re-resolve the active server at the persist site (centralised in _api()) rather than reusing
-      // the pre-await capture — the saved-server list may have changed during the camera read.
-      final api = _api();
+      // Re-resolve the rig at the persist site rather than reusing the
+      // pre-await capture — the saved-server list may have changed during the
+      // camera read.
+      final api = ref.read(profileApiProvider);
       if (api == null) {
         // The values are in the form, but the server vanished mid-read — be honest that nothing saved.
         messenger.showSnackBar(
@@ -135,7 +105,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
         );
         return;
       }
-      await n.persistToServer(api);
+      await n.save(api);
       if (mounted) {
         messenger.showSnackBar(
           const SnackBar(
@@ -145,31 +115,32 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       }
     } catch (e) {
       // Set the field without its own setState; the finally's setState rebuilds with it.
-      _lastError = friendlyError(l10n, e, action: l10n.actionReadCamera);
+      _lastError =
+          e is SectionNotLoadedException || e is SectionConflictException
+          ? e.toString()
+          : friendlyError(l10n, e, action: l10n.actionReadCamera);
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final o = ref.watch(opticsSettingsProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final o = ref.watch(opticsSettingsProvider).value!;
     final n = ref.read(opticsSettingsProvider.notifier);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         EditableNumberRow(
           label: 'Focal length (mm)',
           helpKey: 'imaging.optics.focal_length',
           currentValue: _fmt(o.focalLengthMm),
           getCanonical: () =>
-              _fmt(ref.read(opticsSettingsProvider).focalLengthMm),
+              _fmt(ref.read(opticsSettingsProvider).value!.focalLengthMm),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setFocalLengthMm(v);
@@ -180,7 +151,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
           helpKey: 'imaging.optics.reducer',
           currentValue: _fmt(o.reducerFactor),
           getCanonical: () =>
-              _fmt(ref.read(opticsSettingsProvider).reducerFactor),
+              _fmt(ref.read(opticsSettingsProvider).value!.reducerFactor),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setReducerFactor(v);
@@ -190,7 +161,8 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
           label: 'Aperture (mm)',
           helpKey: 'imaging.optics.aperture',
           currentValue: _fmt(o.apertureMm),
-          getCanonical: () => _fmt(ref.read(opticsSettingsProvider).apertureMm),
+          getCanonical: () =>
+              _fmt(ref.read(opticsSettingsProvider).value!.apertureMm),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setApertureMm(v);
@@ -201,7 +173,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
           helpKey: 'imaging.optics.sensor_width',
           currentValue: o.sensorWidthPx.toString(),
           getCanonical: () =>
-              ref.read(opticsSettingsProvider).sensorWidthPx.toString(),
+              ref.read(opticsSettingsProvider).value!.sensorWidthPx.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setSensorWidthPx(v);
@@ -212,7 +184,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
           helpKey: 'imaging.optics.sensor_height',
           currentValue: o.sensorHeightPx.toString(),
           getCanonical: () =>
-              ref.read(opticsSettingsProvider).sensorHeightPx.toString(),
+              ref.read(opticsSettingsProvider).value!.sensorHeightPx.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) n.setSensorHeightPx(v);
@@ -223,7 +195,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
           helpKey: 'imaging.optics.pixel_size',
           currentValue: _fmt(o.pixelSizeUm),
           getCanonical: () =>
-              _fmt(ref.read(opticsSettingsProvider).pixelSizeUm),
+              _fmt(ref.read(opticsSettingsProvider).value!.pixelSizeUm),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setPixelSizeUm(v);

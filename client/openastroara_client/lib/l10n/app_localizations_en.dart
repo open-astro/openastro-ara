@@ -5485,6 +5485,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionReload => 'Reload';
 
   @override
+  String get simpleSectionNotLoaded =>
+      'Settings not loaded from the rig; nothing was saved';
+
+  @override
+  String get simpleSectionConflict =>
+      'These settings changed on the rig; nothing was saved';
+
+  @override
   String get companionTimeOfferQuestion =>
       'The rig has no clock or site yet. Send this phone\'s location and time?';
 

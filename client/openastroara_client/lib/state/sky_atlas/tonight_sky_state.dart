@@ -97,7 +97,8 @@ Future<List<TonightSkyObject>> _rankAt(
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
     return const <TonightSkyObject>[];
   }
-  final optics = ref.watch(opticsSettingsProvider);
+  final optics =
+      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
   // Planning reads what is loaded (the rig, or the offline cache); a section
   // not loaded plans with the unset values, and is never saved from here.
   final filterSet =
@@ -197,8 +198,11 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     if (_pinned) return state;
     // The site's own twilight line: the list's dark windows open there, so a
     // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).
-    return isDarkNow(site, nowUtc: ref.read(clockProvider)(),
-        belowDeg: twilightSunAltitudeDeg(site.twilightDefinition));
+    return isDarkNow(
+      site,
+      nowUtc: ref.read(clockProvider)(),
+      belowDeg: twilightSunAltitudeDeg(site.twilightDefinition),
+    );
   }
 
   void toggle() {

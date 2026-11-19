@@ -198,7 +198,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
       (_, _) => _reseed(),
     );
     ref.listen(
-      imagingDefaultsProvider.select((d) => d.defaultExposure),
+      imagingDefaultsProvider.select((d) => d.value?.defaultExposure),
       (_, _) => _reseed(),
     );
     ref.listen(filterWheelProvider.select((w) => w.value != null), (_, _) => _reseed());
@@ -208,7 +208,10 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
 
   List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
     ref.read(filterSetProvider).value?.filters ?? const [],
-    ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+    (ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults())
+            .defaultExposure
+            .inMilliseconds /
+        1000,
     remainingDarkHours: _darkHours,
     // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
     canChangeFilters: ref.read(filterWheelProvider).value != null,

@@ -568,6 +568,37 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _getTagged('optics', _opticsFromRig);
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
+
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
+      _getTagged('imaging-defaults', _imagingDefaultsFromRig);
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'imaging-defaults',
+    imagingDefaultsToJson(v),
+    _imagingDefaultsFromRig,
+    ifMatch,
+  );
+
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
+      _getTagged('autofocus', _autofocusFromRig);
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'autofocus',
+    autofocusSettingsToJson(v),
+    _autofocusFromRig,
+    ifMatch,
+  );
+
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() =>
       _getTagged('equipment-connection', _equipmentConnectionFromRig);
@@ -672,6 +703,64 @@ class ProfileApi {
     if (raw.isEmpty) throw const FormatException('labels empty');
     return FilterWheelLabels(labels: [for (final e in raw) e as String]);
   }
+
+  static OpticsSettings _opticsFromRig(Map<String, dynamic> j) =>
+      OpticsSettings(
+        focalLengthMm: (j['focal_length_mm'] as num).toDouble(),
+        reducerFactor: (j['reducer_factor'] as num).toDouble(),
+        sensorWidthPx: (j['sensor_width_px'] as num).toInt(),
+        sensorHeightPx: (j['sensor_height_px'] as num).toInt(),
+        pixelSizeUm: (j['pixel_size_um'] as num).toDouble(),
+        apertureMm: (j['aperture_mm'] as num).toDouble(),
+        telescopeName: j['telescope_name'] as String,
+      );
+
+  static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
+      ImagingDefaults(
+        defaultExposure: Duration(
+          seconds: (j['exposure_seconds'] as num).toInt(),
+        ),
+        defaultGain: (j['gain'] as num).toInt(),
+        defaultOffset: (j['offset'] as num).toInt(),
+        defaultBin: (j['bin'] as num).toInt(),
+        defaultFrameKind: FrameKind.values.firstWhere(
+          (k) => k.name == j['frame_kind'],
+          orElse: () =>
+              throw FormatException('unknown frame kind', j['frame_kind']),
+        ),
+        coolerTargetC: (j['cooler_target_c'] as num).toDouble(),
+        coolerRampRatePerMin: (j['cooler_ramp_c_per_min'] as num).toDouble(),
+        warmupAtSessionEnd: j['warmup_at_session_end'] as bool,
+      );
+
+  static AutofocusSettings _autofocusFromRig(Map<String, dynamic> j) =>
+      AutofocusSettings(
+        method: AutofocusMethod.values.firstWhere(
+          (m) => _autofocusMethodToString(m) == j['method'],
+          orElse: () => throw FormatException('unknown method', j['method']),
+        ),
+        steps: (j['steps'] as num).toInt(),
+        stepSize: (j['step_size'] as num).toInt(),
+        stepSizeAuto: j['step_size_auto'] as bool,
+        exposureSeconds: (j['exposure_seconds'] as num).toInt(),
+        binning: (j['binning'] as num).toInt(),
+        afFilter: j['af_filter'] as String,
+        runAfterFilterChange: j['run_after_filter_change'] as bool,
+        triggerTempDeltaC: (j['trigger_temp_delta_c'] as num).toDouble(),
+        triggerHfrDriftPct: (j['trigger_hfr_drift_pct'] as num).toDouble(),
+        everyNHours: (j['every_n_hours'] as num).toInt(),
+        abortSequenceOnAfFailure: j['abort_sequence_on_af_failure'] as bool,
+        restorePositionOnFailure: j['restore_position_on_failure'] as bool,
+        telescopeType: TelescopeType.values.firstWhere(
+          (t) => telescopeTypeToWire(t) == j['telescope_type'],
+          orElse: () => throw FormatException(
+            'unknown telescope type',
+            j['telescope_type'],
+          ),
+        ),
+        backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
+        backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
+      );
 
   static PlateSolveSettings _plateSolveSettingsFromRig(
     Map<String, dynamic> j,

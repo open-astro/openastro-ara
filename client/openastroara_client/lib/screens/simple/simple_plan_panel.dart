@@ -914,8 +914,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 raDeg: sel.raJ2000Hours * 15,
                 decDeg: sel.decJ2000Deg,
                 defaultExposure:
-                    ref
-                        .watch(imagingDefaultsProvider)
+                    (ref.watch(imagingDefaultsProvider).value ??
+                            const ImagingDefaults())
                         .defaultExposure
                         .inMilliseconds /
                     1000,

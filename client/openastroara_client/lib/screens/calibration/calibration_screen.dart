@@ -373,7 +373,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   @override
   void initState() {
     super.initState();
-    _coolTo.text = _degrees(ref.read(imagingDefaultsProvider).coolerTargetC);
+    final target = ref.read(imagingDefaultsProvider).value?.coolerTargetC;
+    if (target != null) _coolTo.text = _degrees(target);
     _loadSetpoint();
   }
 
@@ -871,9 +872,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
             ?.capabilities
             ?.canSetTemperature ==
         true;
-    return canCool
-        ? _MatchingFlatsDialogState._degrees(
-            ref.read(imagingDefaultsProvider).coolerTargetC)
+    final target = ref.read(imagingDefaultsProvider).value?.coolerTargetC;
+    return canCool && target != null
+        ? _MatchingFlatsDialogState._degrees(target)
         : '';
   }
 

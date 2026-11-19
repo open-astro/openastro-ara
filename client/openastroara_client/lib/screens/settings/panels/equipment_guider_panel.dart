@@ -134,7 +134,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// on setup-type change, and before every save/apply.
   void _syncDerivedFocalLength() {
     if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
-    final optics = ref.read(opticsSettingsProvider);
+    final optics =
+        ref.read(opticsSettingsProvider).value ?? const OpticsSettings();
     _syncingDerived = true;
     try {
       ref
@@ -313,6 +314,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   @override
   Widget build(BuildContext context) {
     final phd2 = ref.watch(phd2SettingsProvider);
+    final optics =
+        ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
     final phd2N = ref.read(phd2SettingsProvider.notifier);
     ref.listen(phd2SettingsProvider, (_, _) => _scheduleSave());
     final guiderStatus = ref.watch(guiderStatusProvider).asData?.value;
@@ -449,7 +452,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType == 'oag')
           Builder(
             builder: (context) {
-              final optics = ref.watch(opticsSettingsProvider);
               final derived = derivedOagGuideFocalLength(
                 optics.focalLengthMm,
                 optics.reducerFactor,
@@ -481,8 +483,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType != 'oag' &&
             guideFocalLengthLooksCopiedFromMainScope(
               phd2.guideFocalLength,
-              ref.watch(opticsSettingsProvider).focalLengthMm,
-              ref.watch(opticsSettingsProvider).reducerFactor,
+              optics.focalLengthMm,
+              optics.reducerFactor,
             ))
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),

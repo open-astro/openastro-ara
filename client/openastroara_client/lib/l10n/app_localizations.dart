@@ -9213,6 +9213,18 @@ abstract class AppLocalizations {
   /// **'Reload'**
   String get settingsSectionReload;
 
+  /// Simple Mode pill detail: a settings change was refused because the rig's copy of the settings could not be loaded first
+  ///
+  /// In en, this message translates to:
+  /// **'Settings not loaded from the rig; nothing was saved'**
+  String get simpleSectionNotLoaded;
+
+  /// Simple Mode pill detail: a settings change was refused because another device saved a newer copy on the rig
+  ///
+  /// In en, this message translates to:
+  /// **'These settings changed on the rig; nothing was saved'**
+  String get simpleSectionConflict;
+
   /// Companion Mode question pill: offers the phone's location and time to a rig with no recent time sync
   ///
   /// In en, this message translates to:

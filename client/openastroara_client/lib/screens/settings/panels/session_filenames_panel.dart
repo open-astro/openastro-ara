@@ -36,9 +36,9 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
-  /// Save also persists site and optics, which still load the old way; until
-  /// both have been hydrated, saving would push defaults over server values a
-  /// failed hydrate never loaded. Storage and filenames guard their own save
+  /// Save also persists the site, which still loads the old way; until it has
+  /// been hydrated, saving would push defaults over server values a failed
+  /// hydrate never loaded. Storage, filenames and optics guard their own save
   /// (ADR 0015).
   bool _hydrated = false;
 
@@ -48,6 +48,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
   List<PanelSection> get sections => [
     storageSettingsProvider,
     filenamesSettingsProvider,
+    opticsSettingsProvider,
   ];
 
   @override
@@ -61,7 +62,6 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     if (api == null) return;
     try {
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       _hydrated = true;
     } catch (e) {
       if (mounted) {
@@ -98,7 +98,6 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final error = await saveSections(
       andThen: (api) async {
         await ref.read(siteSettingsProvider.notifier).persistToServer(api);
-        await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
       },
     );
     if (mounted) setState(() => _lastError = error);
@@ -113,7 +112,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final sn = ref.read(storageSettingsProvider.notifier);
     final ss = ref.watch(storageSettingsProvider).value!;
     final site = ref.watch(siteSettingsProvider);
-    final optics = ref.watch(opticsSettingsProvider);
+    final optics = ref.watch(opticsSettingsProvider).value!;
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
 
     return ListView(
@@ -219,7 +218,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           label: 'Telescope',
           helpKey: 'session.filenames.telescope',
           currentValue: optics.telescopeName,
-          getCanonical: () => ref.read(opticsSettingsProvider).telescopeName,
+          getCanonical: () =>
+              ref.read(opticsSettingsProvider).value!.telescopeName,
           parse: (v) =>
               ref.read(opticsSettingsProvider.notifier).setTelescopeName(v),
         ),

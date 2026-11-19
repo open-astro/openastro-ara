@@ -1,16 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
 /// §36/§25.5 imaging-train optics + sensor geometry — the inputs the Planning
 /// tab's Frame mode needs to draw the field-of-view box without a live camera.
-/// Backed by the daemon's `GET`/`PUT /api/v1/profile/optics` section (#467):
-/// [OpticsSettingsNotifier.hydrateFromServer] runs when the Planning/Settings
-/// surface mounts, [persistToServer] from the Settings Save button. The
-/// on-first-camera-connect auto-population is a later slice; this is the model
-/// + geometry the FOV overlay consumes.
+/// Backed by the daemon's `GET`/`PUT /api/v1/profile/optics` section (#467),
+/// loaded with its ETag and saved with it (ADR 0015). The daemon fills the
+/// empty fields from the mount on connect (#1846); the client never does.
+/// This is the model + geometry the FOV overlay consumes.
 ///
 /// Framing math (the FOV box this feeds):
 ///   pixelScale[arcsec/px] = 206.265 × pixelSize_µm ÷ (focalLength_mm × reducer)
@@ -97,23 +96,18 @@ class OpticsSettings {
     double? pixelSizeUm,
     double? apertureMm,
     String? telescopeName,
-  }) =>
-      OpticsSettings(
-        focalLengthMm: focalLengthMm ?? this.focalLengthMm,
-        reducerFactor: reducerFactor ?? this.reducerFactor,
-        sensorWidthPx: sensorWidthPx ?? this.sensorWidthPx,
-        sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
-        pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
-        apertureMm: apertureMm ?? this.apertureMm,
-        telescopeName: telescopeName ?? this.telescopeName,
-      );
+  }) => OpticsSettings(
+    focalLengthMm: focalLengthMm ?? this.focalLengthMm,
+    reducerFactor: reducerFactor ?? this.reducerFactor,
+    sensorWidthPx: sensorWidthPx ?? this.sensorWidthPx,
+    sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
+    pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
+    apertureMm: apertureMm ?? this.apertureMm,
+    telescopeName: telescopeName ?? this.telescopeName,
+  );
 }
 
-class OpticsSettingsNotifier extends Notifier<OpticsSettings>
-    with SettingsSyncMixin<OpticsSettings> {
-  @override
-  OpticsSettings build() => const OpticsSettings();
-
+class OpticsSettingsNotifier extends SelfLoadingSection<OpticsSettings> {
   // Setters validate at the boundary so the daemon never sees a physically
   // impossible value. 0 is allowed (it means "unset") except for the reducer,
   // which multiplies the focal length in the pixel-scale denominator.
@@ -122,49 +116,51 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings>
   // value leaves the text field and the stored state showing different numbers.
   void setFocalLengthMm(double v) {
     if (v < 0) return;
-    state = state.copyWith(focalLengthMm: v);
+    edit((c) => c.copyWith(focalLengthMm: v));
   }
 
   void setReducerFactor(double v) {
     if (v <= 0) return;
-    state = state.copyWith(reducerFactor: v);
+    edit((c) => c.copyWith(reducerFactor: v));
   }
 
   void setSensorWidthPx(int v) {
     if (v < 0) return;
-    state = state.copyWith(sensorWidthPx: v);
+    edit((c) => c.copyWith(sensorWidthPx: v));
   }
 
   void setSensorHeightPx(int v) {
     if (v < 0) return;
-    state = state.copyWith(sensorHeightPx: v);
+    edit((c) => c.copyWith(sensorHeightPx: v));
   }
 
   void setPixelSizeUm(double v) {
     if (v < 0) return;
-    state = state.copyWith(pixelSizeUm: v);
+    edit((c) => c.copyWith(pixelSizeUm: v));
   }
 
   void setApertureMm(double v) {
     if (v < 0) return;
-    state = state.copyWith(apertureMm: v);
+    edit((c) => c.copyWith(apertureMm: v));
   }
 
   void setTelescopeName(String v) {
-    state = state.copyWith(telescopeName: v.trim());
+    edit((c) => c.copyWith(telescopeName: v.trim()));
   }
 
-  /// Replace local state with what the daemon currently holds. Called when the
-  /// Planning/Settings surface mounts. Errors bubble up for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getOptics());
+  @override
+  Future<Tagged<OpticsSettings>> fetch(ProfileApi api) =>
+      api.getOpticsSection();
 
-  /// Send the current local state to the daemon; returns its echo so the caller
-  /// can confirm (and update state if the daemon normalized any field).
-  Future<OpticsSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putOptics(sent));
+  @override
+  Future<Tagged<OpticsSettings>> send(
+    ProfileApi api,
+    OpticsSettings value,
+    String? etag,
+  ) => api.putOpticsSection(value, ifMatch: etag);
 }
 
 final opticsSettingsProvider =
-    NotifierProvider<OpticsSettingsNotifier, OpticsSettings>(
-        OpticsSettingsNotifier.new);
+    NotifierProvider<OpticsSettingsNotifier, LoadedSection<OpticsSettings>>(
+      OpticsSettingsNotifier.new,
+    );

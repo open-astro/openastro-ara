@@ -1519,6 +1519,8 @@
   "settingsSectionRetry": "Tentar de novo",
   "settingsSectionConflict": "Estas configurações foram alteradas em outro dispositivo. Nada foi salvo. Recarregue para ver os novos valores (suas alterações aqui serão substituídas).",
   "settingsSectionReload": "Recarregar",
+  "simpleSectionNotLoaded": "Configurações não carregadas do setup; nada foi salvo",
+  "simpleSectionConflict": "Estas configurações mudaram no setup; nada foi salvo",
   "companionTimeOfferQuestion": "O setup ainda não tem hora nem local. Enviar a localização e a hora deste celular?",
   "companionTimeOfferNotNow": "Agora não",
   "companionTimeOfferSend": "Enviar",

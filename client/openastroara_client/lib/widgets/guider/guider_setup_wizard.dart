@@ -556,7 +556,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               if (norm == 'oag') {
                 // §63.19 — OAG derives the guide focal length from the main
                 // optics (focal length × reducer), same rule as the panel.
-                final optics = ref.read(opticsSettingsProvider);
+                final optics =
+                    ref.read(opticsSettingsProvider).value ??
+                    const OpticsSettings();
                 _edit((d) => d.copyWith(
                     guideFocalLength: derivedOagGuideFocalLength(
                         optics.focalLengthMm, optics.reducerFactor)));
