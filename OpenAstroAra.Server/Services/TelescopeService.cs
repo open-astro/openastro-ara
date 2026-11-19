@@ -394,7 +394,34 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         RefreshCacheOnce();
     }
 
-    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read is 'no fresh reading' (null) by contract; the caller falls back or fails its own way.")]
+    public async Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            return null;
+        }
+        try {
+            var (ra, dec) = await Task.Run(() => (client.RightAscension, client.Declination), ct).ConfigureAwait(false);
+            return double.IsFinite(ra) && double.IsFinite(dec) ? (ra, dec) : null;
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    private long _abortEpoch;
+
+    public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
+
+    public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
+
+    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
         // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
@@ -425,9 +452,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (borrowedPrimary && rate != 0 && Interlocked.Exchange(ref _secondaryFallbackLogged, 1) == 0) {
             LogSecondaryBandsBorrowed(_logger);
         }
-        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
-            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
-        }
         // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
         // leased move starts its deadline only once the mount took it. A renewal at the speed the
         // axis already moves at only extends the lease: the driver is not asked again.
@@ -435,6 +459,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
             return;
+        }
+        // A routine's renewal after Stop Mount finds its lease gone and would start the motor again: refuse it.
+        // This sits after the TryRenew early return on purpose: it relies on AbortSlewCoreAsync cancelling every
+        // lease right after it bumps the count, so a renewal that returned early never outlives an abort.
+        if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
+            throw new InvalidOperationException("the mount was stopped (Stop Mount) after this move began; the move is not restarted");
+        }
+        // Logged once per driver call, not on every lease renewal (a polar-align move renews four times a second).
+        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
+            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
         try {
@@ -445,6 +479,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // 2026-11-11: a short pad press read "Couldn't move the mount").
             LogMoveAxisSuperseded(_logger, axis, effective);
             return;
+        }
+        // An abort that landed between the check above and the driver call: the move may have reached the mount
+        // after the AbortSlew, so stop the axis again rather than leave it running.
+        if (effective != 0 && unlessAbortedSince is long racedSince && Interlocked.Read(ref _abortEpoch) != racedSince) {
+            await Task.Run(() => client.MoveAxis(axisEnum, 0), CancellationToken.None).ConfigureAwait(false);
+            throw new InvalidOperationException("the mount was stopped (Stop Mount) while this move started; the axis is stopped again");
         }
         if (effective != 0 && leaseMs is int ms) {
             Lease.Renew(axis, effective, ms, LeaseClock.GetUtcNow());
@@ -610,6 +650,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
     private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
+        // Before the lease goes: a routine's renewal must see the abort first. A renewal landing between the two only
+        // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe.
+        Interlocked.Increment(ref _abortEpoch);
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount

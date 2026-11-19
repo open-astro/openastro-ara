@@ -69,7 +69,9 @@ namespace OpenAstroAra.Test {
                 Assert.That(refusal.Cause.Status, Is.EqualTo(409));
                 Assert.That((double)refusal.Parameters["altitude_deg"]!, Is.EqualTo(14).Within(0.3));
                 Assert.That(refusal.Parameters["limit_deg"], Is.EqualTo(20.0));
-                Assert.That(refusal.Message, Does.Contain("14").And.Contain("20"), "the detail names the altitude and the limit");
+                // The site is 0.1° off the pole, so the altitude drifts 13.9–14.1° over the day: name the computed one.
+                var altitude = ((double)refusal.Parameters["altitude_deg"]!).ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.That(refusal.Message, Does.Contain(altitude).And.Contain("20"), "the detail names the altitude and the limit");
             });
             NothingDispatched(telescope);
         }

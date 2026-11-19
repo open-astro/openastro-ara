@@ -47,8 +47,8 @@ namespace OpenAstroAra.Server.Services {
     /// The user's Next moves from one to the next.</para>
     ///
     /// <para><b>Fine-stage state machine</b> (the <c>state</c> string in <see cref="PolarAlignStateDto"/>):
-    /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA slew Δ away from the meridian → frame B →
-    /// two-point axis fit) → <c>adjusting</c> (tracking stopped; continuous capture→solve, each
+    /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA-motor turn Δ away from the meridian → frame B →
+    /// another turn → frame C → three-point axis fit) → <c>adjusting</c> (tracking stopped; continuous capture→solve, each
     /// solve's alt/az delta from the seed pointing is the user's knob adjustment seen from the camera — §45.8
     /// reverse-projection, no re-slewing) → Stop → <c>stopped</c>. Five consecutive failed solves
     /// park the loop in <c>paused</c> (it keeps retrying at a slower cadence and resumes on the next
@@ -630,8 +630,6 @@ namespace OpenAstroAra.Server.Services {
             return true;
         }
 
-        private const string SeedSlewRefusedMessage =
-            "the mount refused the RA seed slew — slew it to about Dec 85° from the mount controls, then start again";
 
         /// <summary>A fatal routine failure with a machine-readable reason for the WS error event
         /// (<c>seed_solve_failed</c>, <c>slew_failed</c>, …). Anything else that escapes the run
@@ -658,6 +656,9 @@ namespace OpenAstroAra.Server.Services {
                 _trackingTouched = false;
             }
             var alignerRun = BeginAlignerRun(site.LatitudeDeg);
+            lock (_gate) {
+                _raMotorSign = 1.0; // a new run learns the RA motor's sign afresh
+            }
             try {
                 Directory.CreateDirectory(workDir);
 
@@ -668,7 +669,7 @@ namespace OpenAstroAra.Server.Services {
 
                 // ── unpark: the routine rotates the mount, and the mediator refuses every slew while it is
                 // parked. 2026-10-17 the mount had been parked a minute before; the first frame solved and
-                // the run then failed with "the RA seed slew was rejected by the mount". The user started a
+                // the run then failed with "the RA seed slew was rejected by the mount" (the turns were GoTos then). The user started a
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
                 var mountInfo = _mount.GetInfo();
@@ -1224,16 +1225,15 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private static (double RaDeg, double DecDeg) FitAxis(
-                PolarAlignSolveOutcome a, PolarAlignSolveOutcome b, double rotationDeg, bool north, bool raIncreasing) {
-            try {
-                return PolarAlignGeometry.FitAxisTwoPoint(
-                    a.RaDegJnow, a.DecDegJnow, b.RaDegJnow, b.DecDegJnow, rotationDeg, north, raIncreasing);
-            } catch (ArgumentOutOfRangeException ex) {
-                // Every geometry rejection (coincident pointings, inconsistent chord, axis > 30°
-                // from the pole) is a user-actionable seed failure, not an internal error.
-                throw new RoutineFailedException("axis_fit_failed", ex.Message);
+        /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
+        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available.</summary>
+        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) {
+            if (_mount is ITelescopeService service
+                    && await service.ReadPointingNowAsync(ct).ConfigureAwait(false) is { } now) {
+                var frame = _mount.GetCurrentPosition()?.Epoch ?? Epoch.JNOW;
+                return Folded(new Coordinates(Angle.ByHours(now.RaHours), Angle.ByDegree(now.DecDegrees), frame).Transform(Epoch.JNOW));
             }
+            return CurrentMountPointingJnow();
         }
 
         private (double RaDeg, double DecDeg)? CurrentMountPointingJnow() {
@@ -1241,10 +1241,13 @@ namespace OpenAstroAra.Server.Services {
             if (pos is null) {
                 return null;
             }
+            return Folded(pos);
+        }
+
+        private static (double RaDeg, double DecDeg) Folded(Coordinates pos) {
             // #1536 — a synced mount can report Dec past ±90° (the Dec axis is over the pole). The same sky
-            // point is (RA+180°, 180°−Dec); folding keeps the Dec axis where it is, so the seed slew stays a
-            // pure RA turn the mount accepts. Clamping to the pole instead would move the Dec axis between
-            // the two seed frames, which the two-point fit does not model.
+            // point is (RA+180°, 180°−Dec); folding gives one reading per direction, so the seed's turns and
+            // the mount-turn cross-check compare like with like.
             return Math.Abs(pos.Dec) > 90.0
                 ? ((pos.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, pos.Dec) - pos.Dec)
                 : (pos.RADegrees, pos.Dec);
@@ -1293,7 +1296,7 @@ namespace OpenAstroAra.Server.Services {
             PolarAlignmentRecord record;
             lock (_gate) {
                 // The last readout of any stage is a measured axis error: the coarse stage fits the axis
-                // from its own seed turn (#1727), so a run stopped there records a real measurement too,
+                // from its own seed turns (#1727), so a run stopped there records a real measurement too,
                 // only one the user had not finished adjusting.
                 var total = _altErrorArcmin is double alt && _azErrorArcmin is double az
                     ? (double?)Math.Sqrt(alt * alt + az * az)
@@ -1539,19 +1542,19 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4525, Level = LogLevel.Information, Message = "§45.4 the guider did not report the guide camera's frame size — auto binning stays at 1×1: {Reason}")]
         private partial void LogFrameSizeUnavailable(string reason);
 
-        [LoggerMessage(EventId = 4531, Level = LogLevel.Information, Message = "§45 polar-align turned tracking on for the seed slew (restored on exit)")]
+        [LoggerMessage(EventId = 4531, Level = LogLevel.Information, Message = "§45 polar-align turned tracking on for the seed turns (restored on exit)")]
         private partial void LogTrackingEnabled();
 
         [LoggerMessage(EventId = 4532, Level = LogLevel.Warning, Message = "§45 polar-align could not turn tracking on")]
         private partial void LogTrackingEnableFailed(Exception exception);
 
-        [LoggerMessage(EventId = 4533, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped before the seed slew — turning it back on")]
+        [LoggerMessage(EventId = 4533, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped before a seed turn — turning it back on")]
         private partial void LogTrackingDropped();
 
-        [LoggerMessage(EventId = 4526, Level = LogLevel.Warning, Message = "§45 polar-align seed slew refused by the mount: {Reason}")]
+        [LoggerMessage(EventId = 4526, Level = LogLevel.Warning, Message = "§45 polar-align slew refused by the mount: {Reason}")]
         private partial void LogSeedSlewRefused(string reason);
 
-        [LoggerMessage(EventId = 4523, Level = LogLevel.Information, Message = "§45 polar alignment: the mount is parked — unparking it before the seed slew")]
+        [LoggerMessage(EventId = 4523, Level = LogLevel.Information, Message = "§45 polar alignment: the mount is parked — unparking it before the seed turns")]
         private partial void LogUnparking();
     }
 }

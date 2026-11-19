@@ -14429,7 +14429,7 @@ components:
             - number
             - string
           format: double
-          default: 60
+          default: 10
         loop_cadence_ms:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -14453,7 +14453,7 @@ components:
             - number
             - string
           format: double
-          default: 30
+          default: 10
         coarse_exposure_seconds:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:

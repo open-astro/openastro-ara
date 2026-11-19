@@ -512,7 +512,7 @@ public sealed record Phd2SettingsDto(
 /// <c>Binning</c> 0 = auto (§45.4: the tier for the guide camera's frame size, see
 /// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
-/// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew; <c>CheckStepDeg</c> each
+/// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
 /// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure of the
 /// coarse stage; <c>UseHome</c> whether every stage starts by sending the mount Home (a fine start too);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
@@ -524,14 +524,14 @@ public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
     int Binning = 0,
     double TargetToleranceArcmin = 1.0,
-    // 60°: §45.16 — a 30° turn amplifies solve noise ~1.9×, 60° passes it through 1:1. From Home the
-    // tube spins about the axis line, so a 60° turn cannot reach the pier.
-    double SeedRotationDeg = 60.0,
+    // 10°: each of the seed's two RA turns between its three solves, as NINA's Three Point Polar
+    // Alignment (20° of travel in all from where the scope points). Clamped to 5–30°.
+    double SeedRotationDeg = 10.0,
     int LoopCadenceMs = 1000,
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop,
-    // Check stage: each of the two RA turns between the three solves.
-    double CheckStepDeg = 30.0,
+    // Check stage: each of the two RA turns between the three solves. Clamped to 5–30°.
+    double CheckStepDeg = 10.0,
     // Coarse stage: the main-camera exposure (the pole field is sparse; longer than a guide frame).
     double CoarseExposureSeconds = 3.0,
     // Every stage starts by sending the mount Home (Find Home when it can, else the routine waits

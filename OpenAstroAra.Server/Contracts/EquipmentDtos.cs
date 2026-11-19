@@ -897,7 +897,7 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 /// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount goes
-/// Home, then the two-point seed + live adjust loop on the main camera (slower frames, for the big moves);
+/// Home, then the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower frames, for the big moves);
 /// <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — back Home, three
 /// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
 public static class PolarAlignStages {
@@ -931,7 +931,7 @@ public sealed record PolarAlignCheckResultDto(
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (Find Home running, or — WaitingForHome — waiting for the user to
-    // put the mount at Home and tap Continue), seeding (2-point axis measurement incl. the RA slew),
+    // put the mount at Home and tap Continue), seeding (3-point axis measurement: the Dec-motor tilt and two RA-motor turns),
     // adjusting (live loop, error fields populated — every stage reaches it through seeding), paused
     // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
     // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).

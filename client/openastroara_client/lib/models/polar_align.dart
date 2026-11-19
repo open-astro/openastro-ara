@@ -32,7 +32,7 @@ abstract final class PolarAlignStates {
 }
 
 /// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, then the
-/// seed turn + live loop on the main camera), fine (the same on the guide
+/// three-point seed — two RA-motor turns — + live loop on the main camera), fine (the same on the guide
 /// camera), check (Home, three guide-camera solves, an exact fit).
 abstract final class PolarAlignStages {
   static const coarse = 'coarse';
@@ -387,11 +387,11 @@ class PolarAlignSettings {
     this.exposureSeconds = 1.0,
     this.binning = 0,
     this.targetToleranceArcmin = 1.0,
-    this.seedRotationDeg = 60.0,
+    this.seedRotationDeg = 10.0,
     this.loopCadenceMs = 1000,
     this.settleSeconds = 2.0,
     this.loopMode = PolarAlignLoopModes.loop,
-    this.checkStepDeg = 30.0,
+    this.checkStepDeg = 10.0,
     this.coarseExposureSeconds = 3.0,
     this.useHome = true,
     this.polarAlignerAuto = true,
@@ -403,13 +403,13 @@ class PolarAlignSettings {
         binning: (json['binning'] as num?)?.toInt() ?? 0,
         targetToleranceArcmin:
             (json['target_tolerance_arcmin'] as num?)?.toDouble() ?? 1.0,
-        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 60.0,
+        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 10.0,
         loopCadenceMs: (json['loop_cadence_ms'] as num?)?.toInt() ?? 1000,
         settleSeconds: (json['settle_seconds'] as num?)?.toDouble() ?? 2.0,
         loopMode: json['loop_mode'] == PolarAlignLoopModes.single
             ? PolarAlignLoopModes.single
             : PolarAlignLoopModes.loop,
-        checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 30.0,
+        checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 10.0,
         coarseExposureSeconds:
             (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
         useHome: json['use_home'] != false,

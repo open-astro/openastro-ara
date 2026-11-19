@@ -214,13 +214,14 @@ framing/focus loop when you need to point or focus by eye.
   first, because the assistant needs the star to drift uncorrected. Run it on a calm night after polar alignment, and again after you change the
   guide camera, scope or mount.
 - **Polar Align in three steps.** *Rough*: the mount goes Home (or you put it there and tap
-  Continue), slews a few degrees off the axis and turns in RA (60° by default) with the main camera
-  solving a frame at each end; that measures where the mount's axis really points, so the card says
+  Continue), tilts 5° off the axis with the Dec motor and makes two 10° RA turns with the RA motor
+  (never a GoTo with *Send the mount Home first* on, as NINA's three-point alignment), the main camera solving a frame at each of the three
+  stops; the circle through them is where the mount's axis really points, so the card says
   how far from the pole you are and on which side — above or below, east or west — while you make
   the big moves. The main camera's frames take a few seconds each. Tap **Next: fine** when you are
   within a few arcminutes. *Fine*: the mount goes Home again and the guide camera measures the axis
   the same way, a frame a second, then guides the knobs live, as before. *Check*: once inside the
-  tolerance, **Verify** sends the mount Home again and takes three solves (30° apart by default); the result is
+  tolerance, **Verify** sends the mount Home again and takes three solves (10° apart by default, the same motor moves); the result is
   measured on its own, not read off the loop, so it says how good the alignment really is and how far
   it disagrees with the fine readout. **Done** skips the check. The Start card also offers *Skip the
   rough step* (a permanent pier) and *Check only*.

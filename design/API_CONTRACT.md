@@ -1843,3 +1843,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** #1901; `Services/EndNightService.cs`, `Services/ShutdownLadder.cs`, `Endpoints/EndNightEndpoints.cs`, `Contracts/EndNightDtos.cs`, `Contracts/WsEvents/EndNightPayloads.cs`, `Services/HostPoweroffStarter.cs`. Tests `EndNightServiceTest`.
 
 **Related:** #1901, ADR 0009, ADR 0014, ADR 0017, ADR 0022, ADR 0023
+
+## 2026-11-19 — Polar Align measures with motor moves and three solves, NINA's way (10° steps)
+
+**Endpoint(s) or area:** `GET`/`PUT /api/v1/profile/polar-align` (`seed_rotation_deg` default 60 → 10, clamp 5–120 → 5–30; `check_step_deg` default 30 → 10, clamp 5–60 → 5–30); the routine's mount moves; `polar_align.error` reason `slew_failed` now also covers a refused, stalled or slow motor move.
+
+**Decision:** every stage measures the axis like NINA's Three Point Polar Alignment: three solves with two RA turns of `seed_rotation_deg` between them, and the axis is the circle through the three pointings (`FitAxisThreePoint`, each solve moved to the last one's time by the Earth's turn) — the two-point seed and its reliance on the mount's reported turn are gone; the reported turns only cross-check the fit (over 5° of mismatch, or a cone under 1°, is `axis_fit_failed`). No polar-align move is a GoTo any more: the tilt off the axis from Home (5° of Dec) runs the Dec motor and each turn runs the RA motor (`MoveAxis` through the telescope service's leased call, 3 s lease), at 3°/s and 1°/s for the last 3°, stopping on the mount's position read from the driver four times a second; a motor that runs the wrong way is reversed once; a move with no progress for 10 s, or over three times its slow travel time, stops and fails as `slew_failed`; Stop and every failure stop the motor. The return to the start pointing with `use_home: false` is still a GoTo.
+
+**Reasoning:** 2026-11-18 on the HAE29C: the GoTo from Home to Dec 85° left the firmware to choose a pier side, and at Home (hour angle ±6 h) it chose the flipped one and swung the tube toward the pier; the 60° seed turn had already been reported as alarming. A motor move cannot change the pier side, and 10° steps keep the whole measurement within 20° of Home. Rig check the same night: rough, fine and Verify ran with motor moves only; Verify read 0.79′ against the fine stage's 0.18′ (0.62′ apart), turn mismatch 0.05°.
+
+**Spec ref:** `Services/PolarAlignService.Stages.cs` (`MoveAxisUntilAsync`, `FitThreePointOrFail`), `Services/PolarAlignSettingsClamp.cs`, `Services/TelescopeService.cs` (`ReadPointingNowAsync`), `Contracts/ProfileDtos.cs`.
+
+**Related:** #2048, #1591, #1735

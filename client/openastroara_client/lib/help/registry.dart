@@ -1122,11 +1122,11 @@ const Map<String, Help> helpRegistry = {
     key: 'setup.polar_align.stages',
     title: 'Polar alignment in three steps',
     body:
-        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), slews a few degrees off the axis and turns in RA by the profile\'s seed turn (60° for a new profile) with the *main camera* solving a frame at each end; that measures where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
-        '* **Fine** — the mount goes Home again, and the *guide camera* takes two solved frames around the same turn in RA (from Home the mount first slews a few degrees off the axis, where the turn draws a circle the fit can use), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
-        '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
+        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), its Dec motor tilts the tube 5° off the axis, and its RA motor makes two turns of the profile\'s seed turn (10° for a new profile), with the *main camera* solving a frame at each of the three stops; the circle through them is where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
+        '* **Fine** — the mount goes Home again and the *guide camera* measures the axis the same way (the 5° tilt, three solves, two RA turns), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
+        '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (10° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
-        '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
+        '* With *Send the mount Home first* on (the default), every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. With it off, each later step first returns to where the run started with a GoTo. The mount\'s own limits still apply.',
     relatedHelpKeys: [
       'img.polar.use_home',
       'img.polar.seed_rotation_deg',
@@ -2435,14 +2435,14 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.seed_rotation_deg',
     title: 'Polar align turn',
     body:
-        'How far the mount turns in RA to measure its axis, from 5° to 120°. A smaller turn suits a mount with limited RA travel.',
+        'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
   'img.polar.check_step_deg': Help(
     key: 'img.polar.check_step_deg',
     title: 'Verify step',
     body:
-        'The RA turn between the three frames of Verify, from 5° to 60°. A smaller step suits a mount with limited RA travel.',
+        'The RA turn between the three frames of Verify, from 5° to 30° (10° by default). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.check_step_deg'],
   ),
   'img.polar.coarse_exposure_seconds': Help(
