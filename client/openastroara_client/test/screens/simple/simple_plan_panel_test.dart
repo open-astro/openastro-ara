@@ -10,7 +10,6 @@ import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/profile_api.dart';
-import 'selection_tint_contrast.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -72,6 +71,7 @@ import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 
 import '../../support/fake_section_rig.dart';
+import 'selection_tint_contrast.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -1245,7 +1245,7 @@ void main() {
 
   group('the sheet', () {
     testWidgets(
-      'the target card\'s Pick in Sky reads 4.5:1 on the selection tint',
+      'the target card\'s Pick in Sky reads 4.5:1 on the selection tint without the app theme',
       (tester) async {
         await _pump(
           tester,
