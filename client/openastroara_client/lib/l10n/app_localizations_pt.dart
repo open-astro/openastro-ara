@@ -6614,6 +6614,11 @@ class AppLocalizationsPt extends AppLocalizations {
       'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
 
   @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'The mount has turned $offset° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.';
+  }
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6628,6 +6633,16 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String polarConfirmBand(String max) {
     return 'Later steps turn back over the same arc: never more than $max° from where it starts.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'RA is $offset° $direction of where Polar Align started; these turns go back toward it.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within $limit° of it.';
   }
 
   @override
@@ -13408,6 +13423,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.';
 
   @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
+  }
+
+  @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';
 
   @override
@@ -13422,6 +13442,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String polarConfirmBand(String max) {
     return 'As etapas seguintes voltam pelo mesmo arco: nunca mais de $max° de onde começa.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'A AR está $offset° a $direction de onde o alinhamento polar começou; estes giros voltam em direção a esse ponto.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'Esta posição é o novo início do alinhamento polar: até a montagem ser movida de outra forma, a AR fica a no máximo $limit° dela.';
   }
 
   @override

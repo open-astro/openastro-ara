@@ -43,6 +43,9 @@ class PolarStartConfirmDialog extends StatelessWidget {
         ? l10n.polarDirectionWest
         : l10n.polarDirectionEast;
     String deg(double v) => v.toStringAsFixed(0);
+    final offsetDirection = plan.originOffsetDeg < 0
+        ? l10n.polarDirectionWest
+        : l10n.polarDirectionEast;
     final lines = [
       l10n.polarConfirmPoint,
       l10n.polarConfirmTurns(
@@ -50,6 +53,14 @@ class PolarStartConfirmDialog extends StatelessWidget {
         direction,
         deg(plan.stepDeg * plan.turns),
       ),
+      // #2089 — where this run stands against the session's first start.
+      if (plan.newOrigin)
+        l10n.polarConfirmNewOrigin(deg(plan.sweepLimitDeg))
+      else if (plan.originOffsetDeg.abs() >= 0.5)
+        l10n.polarConfirmFromOrigin(
+          deg(plan.originOffsetDeg.abs()),
+          offsetDirection,
+        ),
       // A check-only run has no later step to turn back.
       if (plan.stage != PolarAlignStages.check)
         l10n.polarConfirmBand(deg(plan.maxSweepDeg)),

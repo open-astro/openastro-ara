@@ -100,12 +100,18 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
     RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
+    RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
+      _wholeDegrees(r.parameters['offset_deg']),
+    ),
     null => _firstLine(r.detail),
   };
 }
 
 /// A refusal's altitude or limit in degrees, one decimal; "?" when absent.
 String _degrees(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
+
+/// A refusal's angle in whole degrees, unsigned; "?" when absent.
+String _wholeDegrees(Object? value) => value is num ? value.abs().toStringAsFixed(0) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

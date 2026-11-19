@@ -17,7 +17,8 @@ enum RefusalCause {
   belowHorizonLimit('below-horizon-limit'),
   endNightInProgress('end-night-in-progress'),
   polarAlignMountParked('polar-align-mount-parked'),
-  polarAlignUnconfirmed('polar-align-unconfirmed');
+  polarAlignUnconfirmed('polar-align-unconfirmed'),
+  polarAlignSweepLimit('polar-align-sweep-limit');
 
   const RefusalCause(this.token);
 
@@ -50,7 +51,7 @@ class Refusal implements Exception {
   final String? reason;
   final String? detail;
 
-  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`, `direction`).
+  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`, `direction`, `offset_deg`).
   final Map<String, Object?> parameters;
   final int? status;
 

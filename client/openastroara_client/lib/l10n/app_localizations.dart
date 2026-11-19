@@ -11097,6 +11097,12 @@ abstract class AppLocalizations {
   /// **'Polar alignment moves the mount only after you confirm it. Start it again and confirm.'**
   String get refusalPolarAlignUnconfirmed;
 
+  /// Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
+  String refusalPolarAlignSweepLimit(String offset);
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:
@@ -11120,6 +11126,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Later steps turn back over the same arc: never more than {max}° from where it starts.'**
   String polarConfirmBand(String max);
+
+  /// Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start
+  ///
+  /// In en, this message translates to:
+  /// **'RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.'**
+  String polarConfirmFromOrigin(String offset, String direction);
+
+  /// Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within {limit}° of it.'**
+  String polarConfirmNewOrigin(String limit);
 
   /// Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier
   ///

@@ -70,6 +70,32 @@ void main() {
     expect(rig.started.single.stage, PolarAlignStages.fine);
   });
 
+  testWidgets('a later start says how far RA has turned from where Polar Align started, and turns back (#2089)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.west,
+      newOrigin: false,
+      originOffsetDeg: 20.2,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine);
+    expect(find.text('RA is 20° east of where Polar Align started; these turns go back toward it.'), findsOneWidget);
+    expect(find.textContaining("new start"), findsNothing);
+
+    await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+    await tester.pumpAndSettle();
+    expect(rig.started.single.newOrigin, isFalse, reason: 'the start says the user confirmed a continued start');
+  });
+
+  testWidgets("a new start says the pose becomes Polar Align's start, and the limit (#2089)", (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east, sweepLimitDeg: 30));
+    await _open(tester, rig);
+    expect(
+      find.text("This pose is Polar Align's new start: until the mount is moved some other way, RA stays within 30° of it."),
+      findsOneWidget,
+    );
+    expect(find.textContaining('of where Polar Align started'), findsNothing);
+  });
+
   testWidgets('Cancel starts nothing', (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east));
     await _open(tester, rig);

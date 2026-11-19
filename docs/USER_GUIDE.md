@@ -219,6 +219,12 @@ framing/focus loop when you need to point or focus by eye.
   pole first"); Polar Align never unparks it. Before anything moves, a confirm step shows which way
   RA will turn (east or west, away from the meridian, about 10° twice) and the most the whole run
   turns; the mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
+- **Polar Align keeps RA near where it first started.** The first start after the mount connects is
+  Polar Align's start for the session. Every later run (**Adjust again**, or a new Start) turns back
+  toward it, and the confirm step says how far RA is from it ("RA is 20° east of where Polar Align
+  started"). A run that would take RA more than 30° from it is refused: slew the mount back near the
+  pole, counterweights down, and start again. When you move the mount some other way (a slew, the hand
+  pad, by hand) or reconnect it, the confirm step says the pose is a new start, and it becomes the start.
   In Simple Mode's Preflight, the polar step no longer starts on its own: start it from the shutter.
 - **Polar Align in three steps.** *Rough*: from where you pointed it (when the tube looks right at the
   pole, the Dec motor first tilts it 5° off the axis), the RA motor makes two 10° turns, never a GoTo,

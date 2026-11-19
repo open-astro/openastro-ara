@@ -103,6 +103,7 @@ class PolarAlignApi implements PolarAlignClient {
           if (plan.stage != null) 'stage': plan.stage,
           'confirmed': true,
           'direction': plan.direction,
+          'new_origin': plan.newOrigin,
         },
       );
     } on DioException catch (e) {

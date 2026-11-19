@@ -8551,6 +8551,11 @@
   "@refusalPolarAlignMountParked": {"description": "Refusal (polar-align-mount-parked): polar alignment was started on a parked mount; it never unparks the mount itself"},
   "refusalPolarAlignUnconfirmed": "Polar alignment moves the mount only after you confirm it. Start it again and confirm.",
   "@refusalPolarAlignUnconfirmed": {"description": "Refusal (polar-align-unconfirmed): a start reached the rig without the confirm step, or the turn direction changed since the user confirmed it"},
+  "refusalPolarAlignSweepLimit": "The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.",
+  "@refusalPolarAlignSweepLimit": {
+    "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
+    "placeholders": {"offset": {"type": "String"}}
+  },
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",
@@ -8564,6 +8569,16 @@
   "@polarConfirmBand": {
     "description": "Polar align start confirm dialog: the most the whole run turns the RA axis from where it starts, whole degrees",
     "placeholders": {"max": {"type": "String"}}
+  },
+  "polarConfirmFromOrigin": "RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.",
+  "@polarConfirmFromOrigin": {
+    "description": "Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start",
+    "placeholders": {"offset": {"type": "String"}, "direction": {"type": "String"}}
+  },
+  "polarConfirmNewOrigin": "This pose is Polar Align's new start: until the mount is moved some other way, RA stays within {limit}° of it.",
+  "@polarConfirmNewOrigin": {
+    "description": "Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees",
+    "placeholders": {"limit": {"type": "String"}}
   },
   "polarConfirmPower": "Keep a hand on the mount's power switch.",
   "@polarConfirmPower": {"description": "Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier"},

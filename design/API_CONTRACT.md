@@ -1879,3 +1879,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarAlignService.cs` (`MountPreflight`, `PlanStartAsync`, `GetStartPlanAsync`, `StartAsync`), `Services/PolarAlignService.Stages.cs` (`PlanStageTurns`, `TurnDirectionForStageAsync`), `Contracts/Refusals/RefusalCatalog.cs`, `Endpoints/EquipmentEndpoints.cs`; client `lib/widgets/imaging/polar_start_confirm.dart`. Tests `PolarAlignServiceTest.Start.cs`.
 
 **Related:** #2048, #2071, #2073, ADR 0022
+
+## 2026-11-20 — Polar Align bounds the RA sweep across runs from a session origin (#2089)
+
+**Endpoint(s) or area:** `PolarAlignStartPlanDto` gains `new_origin` (bool), `origin_offset_deg` (signed, + east) and `sweep_limit_deg`; `PolarAlignStartRequestDto` gains `new_origin` (default false), which must equal the plan's (else `polar-align-unconfirmed`); new Refusal cause `polar-align-sweep-limit` (409, with `offset_deg` and `limit_deg`) at `start-plan` and `start`.
+
+**Decision:** with no Home between runs, each Start built its band from wherever the mount was, so "Adjust again" after Verify turned 20 → 40° from the first start. The daemon keeps a sweep origin per mount session: the pose of the first confirmed start after the mount connects. A later start reads its offset from the origin and turns back toward it (within 2° of it, the origin's first direction); a start whose turns would take the RA axis more than 30° from the origin (`MaxSweepFromOriginDeg`; a run whose own band is wider keeps to its band plus 2°) is refused. Only RA differences the mount reports are used, less the Earth's turn over the daemon's monotonic clock — never the mount clock, LST or absolute RA (#2071, #2070). The origin is forgotten when the mount session changes (`ITelescopeService.SessionEpoch`: connect, disconnect, trip), on a daemon restart (it lives in memory), and when the mount is more than 1° (mechanical turn) from where Polar Align's own moves last left it, or its pier side changed: the plan then says `new_origin: true`, and the start must carry it, so the user confirms the pose as a new start. The direction at a new origin is unchanged (away from the meridian).
+
+**Reasoning:** reviewers of #2089 found the cross-run walk toward the pier. Differences of the mount's own readings hold even when its clock or zero is wrong; the confirm step keeps the user in the loop whenever the origin is reset.
+
+**Spec ref:** `Services/PolarAlignService.SweepOrigin.cs` (`PlanSweep`, `MovedSince`, `MechanicalTurnDeg`), `Services/PolarAlignService.cs` (`PlanStartAsync`, `StartAsync`), `Services/TelescopeService.cs` (`SessionEpoch`); client `lib/widgets/imaging/polar_start_confirm.dart`. Tests `PolarAlignServiceTest.Sweep.cs`.
+
+**Related:** #2048, #2089, #2070, #2071, ADR 0022

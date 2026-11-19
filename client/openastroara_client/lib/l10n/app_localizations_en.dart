@@ -6614,6 +6614,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
 
   @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'The mount has turned $offset° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.';
+  }
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6628,6 +6633,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String polarConfirmBand(String max) {
     return 'Later steps turn back over the same arc: never more than $max° from where it starts.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'RA is $offset° $direction of where Polar Align started; these turns go back toward it.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within $limit° of it.';
   }
 
   @override

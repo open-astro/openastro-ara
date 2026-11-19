@@ -474,6 +474,13 @@ abstract final class PolarAlignDirections {
 /// [direction] first, never more than [maxSweepDeg] from where it starts. The
 /// user confirms it; the start sends [direction] back, and the rig refuses a
 /// start whose direction changed since.
+///
+/// #2089 — [newOrigin] is true when this pose becomes Polar Align's start for
+/// the session (the first start since the mount connected, or the mount was
+/// moved some other way since Polar Align last turned it); otherwise
+/// [originOffsetDeg] is how far RA has turned from that start (+ east,
+/// − west) and [direction] turns back toward it. No turn goes more than
+/// [sweepLimitDeg] from that start. The start sends [newOrigin] back too.
 class PolarAlignStartPlan {
   /// The stage the start asks for ([PolarAlignStages]; null = the default).
   final String? stage;
@@ -483,6 +490,9 @@ class PolarAlignStartPlan {
   final double stepDeg;
   final int turns;
   final double maxSweepDeg;
+  final bool newOrigin;
+  final double originOffsetDeg;
+  final double sweepLimitDeg;
 
   const PolarAlignStartPlan({
     this.stage,
@@ -490,6 +500,9 @@ class PolarAlignStartPlan {
     this.stepDeg = 10.0,
     this.turns = 2,
     this.maxSweepDeg = 20.0,
+    this.newOrigin = true,
+    this.originOffsetDeg = 0.0,
+    this.sweepLimitDeg = 30.0,
   });
 
   factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
@@ -501,5 +514,8 @@ class PolarAlignStartPlan {
         stepDeg: (json['step_deg'] as num?)?.toDouble() ?? 10.0,
         turns: (json['turns'] as num?)?.toInt() ?? 2,
         maxSweepDeg: (json['max_sweep_deg'] as num?)?.toDouble() ?? 20.0,
+        newOrigin: json['new_origin'] != false,
+        originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
+        sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
       );
 }

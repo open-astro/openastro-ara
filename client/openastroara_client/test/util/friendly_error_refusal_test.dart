@@ -87,6 +87,20 @@ void main() {
     }
   });
 
+  test('the sweep-limit sentence says how far the mount turned, in whole degrees (#2089)', () {
+    const r = Refusal(
+      cause: RefusalCause.polarAlignSweepLimit,
+      reason: 'polar-align-sweep-limit',
+      detail: _detail,
+      parameters: {'offset_deg': -60.3, 'limit_deg': 30},
+    );
+    expect(
+      failureReason(_en, r),
+      'The mount has turned 60° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.',
+    );
+    expect(failureReason(_pt, r), contains('60°'));
+  });
+
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(
       cause: null,
