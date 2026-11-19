@@ -41,7 +41,9 @@ bool _popup(WidgetTester tester) =>
     tester.state<NavigatorState>(find.byType(Navigator)).canPop();
 
 void main() {
-  testWidgets('the wheel opens in place and Done sets it', (tester) async {
+  testWidgets('the wheel opens in place and folding it sets the spun value', (
+    tester,
+  ) async {
     final picks = await _pump(tester);
     await tester.tap(find.byKey(const Key('tile')));
     await tester.pumpAndSettle();
@@ -49,10 +51,71 @@ void main() {
     tester
         .widget<CupertinoPicker>(find.byType(CupertinoPicker))
         .onSelectedItemChanged!(0);
-    await tester.tap(find.text('Done'));
+    await tester.tap(find.byKey(const Key('tile')));
     await tester.pumpAndSettle();
     expect(picks, [5]);
     expect(find.byType(CupertinoPicker), findsNothing);
+  });
+
+  testWidgets('a tap on a row picks that value once and folds the wheel', (
+    tester,
+  ) async {
+    final picks = await _pump(tester);
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('× 20'));
+    await tester.pumpAndSettle();
+    expect(picks, [20]);
+    expect(find.byType(CupertinoPicker), findsNothing);
+  });
+
+  testWidgets("a row tap picks on Android's flat picker too", (tester) async {
+    final picks = await _pump(tester, platform: TargetPlatform.android);
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('× 5'));
+    await tester.pumpAndSettle();
+    expect(picks, [5]);
+    expect(find.byType(ListWheelScrollView), findsNothing);
+  });
+
+  testWidgets(
+    'a spin alone sets nothing; the tile tap that folds it sets it once',
+    (tester) async {
+      final picks = await _pump(tester);
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      final picker = tester.widget<CupertinoPicker>(
+        find.byType(CupertinoPicker),
+      );
+      picker.onSelectedItemChanged!(2);
+      picker.onSelectedItemChanged!(0);
+      picker.onSelectedItemChanged!(2);
+      await tester.pumpAndSettle();
+      expect(picks, isEmpty, reason: 'browsing moves nothing');
+      await tester.tap(find.byKey(const Key('tile')));
+      await tester.pumpAndSettle();
+      expect(picks, [20]);
+      expect(find.byType(CupertinoPicker), findsNothing);
+    },
+  );
+
+  testWidgets('a wheel folded without a spin sets nothing', (tester) async {
+    final picks = await _pump(tester);
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    expect(picks, isEmpty);
+  });
+
+  testWidgets('the wheel has no Done button', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoPicker), findsOneWidget);
+    expect(find.text('Done'), findsNothing);
+    expect(find.byType(TextButton), findsNothing);
   });
 
   testWidgets(
@@ -66,7 +129,7 @@ void main() {
       tester
           .widget<ListWheelScrollView>(find.byType(ListWheelScrollView))
           .onSelectedItemChanged!(2);
-      await tester.tap(find.text('Done'));
+      await tester.tap(find.byKey(const Key('tile')));
       await tester.pumpAndSettle();
       expect(picks, [20]);
       await _pump(tester, platform: TargetPlatform.iOS);
@@ -99,7 +162,7 @@ void main() {
           .properties
           .onIncrease!();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
+      await tester.tap(find.byKey(const Key('tile')));
       await tester.pumpAndSettle();
       expect(picks, [20]);
       handle.dispose();
@@ -192,23 +255,24 @@ void main() {
       );
     });
 
-    testWidgets('after typing a count, + steps from it and the field shows the new count', (
-      tester,
-    ) async {
-      final sets = await pumpCount(tester);
-      await tester.enterText(find.byKey(const Key('n')), '47');
-      await tester.pump();
-      // A touch on + leaves the phone's focus in the field.
-      await tester.tap(find.byKey(const Key('n-up')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('n-up')));
-      await tester.pump();
-      expect(sets, [47, 48, 49]);
-      expect(
-        tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
-        '49',
-      );
-    });
+    testWidgets(
+      'after typing a count, + steps from it and the field shows the new count',
+      (tester) async {
+        final sets = await pumpCount(tester);
+        await tester.enterText(find.byKey(const Key('n')), '47');
+        await tester.pump();
+        // A touch on + leaves the phone's focus in the field.
+        await tester.tap(find.byKey(const Key('n-up')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('n-up')));
+        await tester.pump();
+        expect(sets, [47, 48, 49]);
+        expect(
+          tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
+          '49',
+        );
+      },
+    );
 
     testWidgets('holding + repeats the step, and letting go stops it', (
       tester,
