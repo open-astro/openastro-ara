@@ -12,8 +12,11 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
@@ -76,8 +79,8 @@ namespace OpenAstroAra.Test {
 
         private static bool TrackingOn(string body) => body.Contains("Tracking=True", StringComparison.OrdinalIgnoreCase);
 
-        private static async Task<TelescopeService> ConnectedAsync(ScriptedAlpacaDevice box, WarningLog? log = null) {
-            var svc = new TelescopeService(logger: log);
+        private static async Task<TelescopeService> ConnectedAsync(ScriptedAlpacaDevice box, WarningLog? log = null, Func<IGuiderMediator?>? guider = null) {
+            var svc = new TelescopeService(logger: log, guiderResolver: guider);
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "never connected");
             return svc;
@@ -130,6 +133,37 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => log.Messages.Any(m => m.Contains("slew to RA", StringComparison.Ordinal)), "the refused goto was never logged");
             var line = log.Messages.First(m => m.Contains("slew to RA", StringComparison.Ordinal));
             Assert.That(line, Does.Contain(TrackingRefusal), "the one-line message carries the driver's reason");
+        }
+
+        [Test]
+        public async Task A_stop_that_lands_after_the_goto_was_accepted_drops_the_goto() {
+            // The GoTo waits for the guider to stop (up to 3 s) and then for the tracking round trips; a Stop
+            // Mount or emergency stop (AbortSlew, then Tracking off) in that window must not be undone by the
+            // GoTo turning tracking back on and moving the mount after it.
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            var stopAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                stopAsked.TrySetResult();
+                return stopDone.Task;
+            });
+            using var svc = await ConnectedAsync(box, log, () => guider.Object);
+
+            var slew = svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await svc.AbortSlewAsync(CancellationToken.None);
+            stopDone.SetResult(true);
+            await slew;
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the goto was not dropped after the stop");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.GreaterThanOrEqualTo(0), "the stop reached the mount");
+                Assert.That(PutIndex(box, GotoVerb), Is.EqualTo(-1), "the goto never reaches the mount after the stop");
+                Assert.That(PutIndex(box, "tracking"), Is.EqualTo(-1), "tracking is not turned back on after the stop");
+            });
         }
 
         private sealed class WarningLog : Microsoft.Extensions.Logging.ILogger<TelescopeService> {

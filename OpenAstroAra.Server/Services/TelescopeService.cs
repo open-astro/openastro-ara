@@ -229,16 +229,19 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
+        // #2073 — read before the guider stop (up to StopGuidingBeforeMoveTimeout): an abort or an
+        // emergency stop that lands after this request must win over its goto. See SlewInBackground.
+        var abortEpoch = AbortEpoch;
         // A sync moves nothing, so guiding carries on. The checks above still throw synchronously.
-        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey);
+        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch);
     }
 
-    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey) {
+    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch) {
         await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
-        return DispatchSlew(client, ra, dec, sync: false, idempotencyKey);
+        return DispatchSlew(client, ra, dec, sync: false, idempotencyKey, abortEpoch);
     }
 
-    private OperationAcceptedDto DispatchSlew(ITelescopeDevice client, double ra, double dec, bool sync, string? idempotencyKey) {
+    private OperationAcceptedDto DispatchSlew(ITelescopeDevice client, double ra, double dec, bool sync, string? idempotencyKey, long abortEpoch) {
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
             // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
@@ -249,7 +252,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 SlewWatch.NoteSlewTarget(ra, dec);
             }
         }
-        _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
+        _ = Task.Run(() => SlewInBackground(client, ra, dec, sync, abortEpoch), CancellationToken.None);
         return Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey);
     }
 
@@ -714,17 +717,34 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void SlewInBackground(ITelescopeDevice client, double raHours, double decDeg, bool sync) {
+    private void SlewInBackground(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch) {
         try {
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
             } else {
+                // #2073 — a Stop Mount or emergency stop (AbortSlew, then Tracking off) that landed after
+                // this goto was accepted wins: the goto is dropped rather than turning tracking back on
+                // and moving the mount after the stop. Checked again after the tracking round trips.
+                if (AbortedSince(abortEpoch)) {
+                    LogSlewDroppedAfterAbort(raHours, decDeg);
+                    ClearPendingSlewTarget();
+                    return;
+                }
                 // Same pre-slew tracking enable as the mediator goto: ITelescopeV4 mounts refuse an
                 // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
                 // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
                 // a refused write is logged at Debug and the slew attempt stays authoritative.
-                TryEnableTracking(client);
+                var trackingTurnedOn = TryEnableTracking(client);
+                if (AbortedSince(abortEpoch)) {
+                    // The stop came during the tracking write: leave tracking as the stop left it.
+                    if (trackingTurnedOn) {
+                        _ = TrySetTracking(client, enabled: false);
+                    }
+                    LogSlewDroppedAfterAbort(raHours, decDeg);
+                    ClearPendingSlewTarget();
+                    return;
+                }
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
                 // State="slewing" until the mount settles.
                 client.SlewToCoordinatesAsync(raHours, decDeg);
@@ -735,11 +755,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             LogSlewFailed(ex, raHours, decDeg, ex.Message);
             // The dispatch failed — no episode will open for this command, so its noted target
             // must not ride an unrelated later episode's slew_started (#836 r2).
-            lock (_gate) {
-                SlewWatch.ClearPendingTarget();
-            }
+            ClearPendingSlewTarget();
         }
     }
+
+    private bool AbortedSince(long abortEpoch) => Interlocked.Read(ref _abortEpoch) != abortEpoch;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background control boundary: the blocking ASCOM Park/Unpark can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
@@ -1537,6 +1557,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed: {Reason}")]
     private partial void LogSlewFailed(Exception ex, double ra, double dec, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° dropped: the mount was stopped after the GoTo was accepted")]
+    private partial void LogSlewDroppedAfterAbort(double ra, double dec);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed: {Reason}")]
     private partial void LogControlFailed(Exception ex, string op, string reason);
