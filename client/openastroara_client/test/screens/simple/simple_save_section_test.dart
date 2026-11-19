@@ -184,7 +184,8 @@ void main() {
     final c = await _pump(tester, const SimpleFocusPanel(), width: null, rig: rig);
     final hold = rig.holdGet[_route] = Completer<void>();
     await _tap(tester, 'simple-focus-af-exposure-10');
-    await tester.runAsync(() => settle(() => rig.gets.length > 1));
+    // The tap's GET is out once the rig has taken the hold.
+    await tester.runAsync(() => settle(() => rig.holdGet.isEmpty));
     // The reset lands while the tap's GET is out; the section then fails to
     // load again, so it holds no copy when the tap's load returns.
     rig.failGet.add(_route);
