@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
             var port = ((IPEndPoint)probe.LocalEndpoint).Port;
             probe.Stop();
             Environment.SetEnvironmentVariable("OPENASTROARA_PORT", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            app = Program.BuildApp([]);
+            app = Program.BuildApp([], TestHostSeams.Replace);
             await app.StartAsync();
             http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
         }
