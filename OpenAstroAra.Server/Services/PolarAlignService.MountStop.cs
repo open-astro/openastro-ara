@@ -1,0 +1,365 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Microsoft.Extensions.Logging;
+using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
+using System;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Server.Services {
+
+    /// <summary>
+    /// #2048 — every end of a run leaves the mount stopped, as NINA's Three Point Polar Alignment does: its catch around
+    /// the RA move sends MoveAxis 0 on any error or cancel, and its finally turns tracking off when StopTrackingWhenDone is
+    /// set (NINA PolarAlignment.cs, the MoveAxis catch at 1037-1041 and the finally at 791-805). Here every exit — Stop,
+    /// Done, a sequence start, a failure, an exception, a time bound, a lost guider, daemon shutdown and the check's
+    /// verdict — sends AbortSlew when a GoTo, Find Home or motor move may be running, then MoveAxis 0 on both axes, then
+    /// confirms on fresh reads that the mount does not slew and its position stands still. Nothing on that path waits on
+    /// a lock, a lease or the operation it stops, and no call on it takes the run's token.
+    /// </summary>
+    public sealed partial class PolarAlignService {
+
+        private enum MountMotion { None = 0, AxisMove = 1, GoTo = 2, FindHome = 3 }
+
+        // The motion this routine commanded and has not seen end. Written by the run task (a superseded one too: the
+        // mount knows nothing of generations), read by the stop path. Cleared only when the motion ended normally or a
+        // stop was confirmed: a GoTo whose wait was cancelled still runs on the mount.
+        private int _motion;
+
+        private MountMotion CurrentMotion => (MountMotion)Volatile.Read(ref _motion);
+
+        /// <summary>The run's gate before it commands motion: a run that was stopped or superseded starts none.</summary>
+        private void BeginMotion(MountMotion kind, int gen, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!IsCurrent(gen)) {
+                throw new OperationCanceledException("the run was stopped before the mount moved");
+            }
+            Volatile.Write(ref _motion, (int)kind);
+        }
+
+        private void EndMotion() => Volatile.Write(ref _motion, (int)MountMotion.None);
+
+        // Instance (not const) so tests shrink them. The defaults follow the abort contract of #2048: a stop is never
+        // confirmed within 2 s of the last command (AlpacaBridge iOptron caches status and position for 1 s), needs two
+        // fresh reads 1.5 s apart, is sent three times at most, 2 s apart, and is given up after 8 s.
+        /// <summary>The longest one stop command or read may take; a hung PUT must not hold back the next command.</summary>
+        internal TimeSpan StopCommandTimeout { get; set; } = TimeSpan.FromSeconds(3);
+        internal TimeSpan StopVerifyPoll { get; set; } = TimeSpan.FromMilliseconds(250);
+        internal TimeSpan StopVerifyStillFor { get; set; } = TimeSpan.FromSeconds(1.5);
+        internal TimeSpan StopVerifyNotBefore { get; set; } = TimeSpan.FromSeconds(2);
+        internal TimeSpan StopResendAfter { get; set; } = TimeSpan.FromSeconds(2);
+        internal TimeSpan StopVerifyWindow { get; set; } = TimeSpan.FromSeconds(8);
+        /// <summary>Daemon shutdown waits this long for a running routine to stop the mount and unwind.</summary>
+        internal TimeSpan ShutdownGrace { get; set; } = TimeSpan.FromSeconds(15);
+        internal const int StopSends = 3;
+        /// <summary>Two reads closer than this in RA and in Dec (degrees) count as standing still.</summary>
+        internal const double StopStillDeg = 0.05;
+
+        /// <summary>The reason PA's AbortSlew carries in the telescope service's log and <c>slew_aborted</c> event.</summary>
+        internal const string AbortReason = "polar_align";
+
+        /// <summary>The <c>polar_align.error</c> reason when a stop could not be confirmed.</summary>
+        internal const string MountDidNotStop = "mount_did_not_stop";
+
+        /// <summary>The end request when Guiding takes the guide camera from an open run: the mount still stops, and
+        /// the tracking the run found is handed back, since the guiding that follows needs it (a GoTo turns tracking on by
+        /// itself, guiding does not).</summary>
+        internal const string HandedToGuiding = "handed_to_guiding";
+
+        internal const string CutPowerSentence =
+            "Ara could not confirm that the mount stopped. Cut the mount's power now, and check the mount before you start again.";
+
+        /// <summary>How a run was asked to end, and what its exit found. One per run, shared by the run task and the
+        /// stop path, so the stop path never needs the run's lock.</summary>
+        private sealed class RunEnd {
+            private string? _requested;
+            private int _mountStopped = -1; // -1 not known yet, 0 not confirmed, 1 confirmed
+            private int _reported;
+
+            /// <summary><c>aborted</c>, <c>complete</c>, <c>ended_by_sequence</c> or <c>shutdown</c>; null until one asks.</summary>
+            public string? Requested => Volatile.Read(ref _requested);
+
+            /// <summary>The first request wins: a Stop that lands after a Done does not turn the Done into a Stop.</summary>
+            public void Request(string outcome) => Interlocked.CompareExchange(ref _requested, outcome, null);
+
+            public bool? MountStopped {
+                get => Volatile.Read(ref _mountStopped) switch { 1 => true, 0 => false, _ => null };
+                set => Volatile.Write(ref _mountStopped, value switch { true => 1, false => 0, null => -1 });
+            }
+
+            /// <summary>Set once the stop path published the run's last event: a later finding is the run's own to report.</summary>
+            public bool Reported => Volatile.Read(ref _reported) == 1;
+
+            public void MarkReported() => Volatile.Write(ref _reported, 1);
+        }
+
+        // The current run's cancellation and end request, for the stop path, which must not wait on _opLock. Guarded by _gate.
+        private (CancellationTokenSource Cts, RunEnd End)? _liveRun;
+
+        /// <summary>
+        /// The first step of Stop, Done, a sequence start and daemon shutdown, before any lock or wait: fence the run (its
+        /// late writes become no-ops, and it starts no new motion), send the mount its stop, and cancel the run. The run's
+        /// own exit then sends the stop again and confirms it. A no-op when no run is live.
+        /// </summary>
+        private async Task StopRunFirstAsync(string outcome) {
+            (CancellationTokenSource Cts, RunEnd End)? live;
+            bool active;
+            lock (_gate) {
+                live = _liveRun;
+                active = _active;
+                if (live is not null) {
+                    _generation++;
+                }
+            }
+            if (live is not { } run) {
+                return;
+            }
+            run.End.Request(outcome);
+            // Started before the cancel and awaited after it: the cancel runs the run's continuations, and a hung mount
+            // command must not hold the cancel back.
+            var stopping = active || CurrentMotion != MountMotion.None
+                ? SendMountStopAsync(outcome, forceAbort: false)
+                : Task.CompletedTask;
+            try {
+                await run.Cts.CancelAsync().ConfigureAwait(false);
+            } catch (ObjectDisposedException) {
+                // A concurrent end already disposed it, after it cancelled it.
+            }
+            await stopping.ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Stop the mount and confirm it stopped: AbortSlew when a GoTo, Find Home or motor move of this routine may be
+        /// running (or the mount reads as slewing), MoveAxis 0 on the primary and the secondary axis, then fresh reads
+        /// until two of them, at least <see cref="StopVerifyStillFor"/> apart and <see cref="StopVerifyNotBefore"/> after the
+        /// last command, both say not slewing and differ by under <see cref="StopStillDeg"/> in RA and in Dec. The stop is
+        /// sent again every <see cref="StopResendAfter"/>, <see cref="StopSends"/> times in all. A failed, missing or
+        /// slewing read never counts as stopped. False, logged as Critical, when the stop is not confirmed within
+        /// <see cref="StopVerifyWindow"/>.
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The exit must always finish: a fault here is 'not confirmed', logged as Critical, never an escape from the run's exit.")]
+        private async Task<bool> StopMountMotionAsync(string why) {
+            try {
+                return await StopMountMotionCoreAsync(why).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogMountStopFailed(why, ex);
+                return false;
+            }
+        }
+
+        private async Task<bool> StopMountMotionCoreAsync(string why) {
+            if (_mount.GetInfo() is not { Connected: true }) {
+                LogMountStopNotConnected(why);
+                return false;
+            }
+            var began = Stopwatch.GetTimestamp();
+            await SendMountStopAsync(why, forceAbort: false).ConfigureAwait(false);
+            var lastSent = Stopwatch.GetTimestamp();
+            var sends = 1;
+            (double RaDeg, double DecDeg, long At)? anchor = null;
+            while (Stopwatch.GetElapsedTime(began) < StopVerifyWindow) {
+                await Task.Delay(StopVerifyPoll, CancellationToken.None).ConfigureAwait(false);
+                var reading = await ReadStillnessAsync().ConfigureAwait(false);
+                var at = Stopwatch.GetTimestamp();
+                if (reading is { Slewing: false } r) {
+                    if (anchor is { } a && Math.Abs(Wrap180(r.RaDeg - a.RaDeg)) < StopStillDeg && Math.Abs(r.DecDeg - a.DecDeg) < StopStillDeg) {
+                        if (Stopwatch.GetElapsedTime(a.At, at) >= StopVerifyStillFor && Stopwatch.GetElapsedTime(lastSent, at) >= StopVerifyNotBefore) {
+                            EndMotion();
+                            var seconds = Stopwatch.GetElapsedTime(began).TotalSeconds;
+                            LogMountStopConfirmed(why, sends, seconds);
+                            return true;
+                        }
+                    } else {
+                        anchor = (r.RaDeg, r.DecDeg, at); // moved (or the first reading): the still time starts again here
+                    }
+                } else {
+                    anchor = null;
+                }
+                if (sends < StopSends && Stopwatch.GetElapsedTime(lastSent) >= StopResendAfter) {
+                    sends++;
+                    LogMountStopResent(why, sends);
+                    // A mount that still reads as slewing, or gives no reading, gets the AbortSlew too.
+                    await SendMountStopAsync(why, forceAbort: reading is not { Slewing: false }).ConfigureAwait(false);
+                    lastSent = Stopwatch.GetTimestamp();
+                }
+            }
+            LogMountStopNotConfirmed(why, sends, StopVerifyWindow.TotalSeconds);
+            return false;
+        }
+
+        /// <summary>One round of stop commands, each bounded by <see cref="StopCommandTimeout"/> and none taking a token
+        /// that could already be cancelled.</summary>
+        private async Task SendMountStopAsync(string why, bool forceAbort) {
+            var motion = CurrentMotion;
+            var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
+            LogMountStopSent(why, abort, motion);
+            if (abort) {
+                await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
+                    ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
+                    : Task.Run(_mount.StopSlew, CancellationToken.None)).ConfigureAwait(false);
+            }
+            await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
+            await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0)).ConfigureAwait(false);
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Each stop command is best-effort: its fault is logged and the next command still goes out; the confirmation decides.")]
+        private async Task StopCommandAsync(string command, Func<Task> send) {
+            try {
+                await send().WaitAsync(StopCommandTimeout).ConfigureAwait(false);
+            } catch (TimeoutException) {
+                LogMountStopCommandTimedOut(command, StopCommandTimeout.TotalSeconds);
+            } catch (Exception ex) {
+                LogMountStopCommandFailed(command, ex);
+            }
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The cached reading only adds an AbortSlew; a fault reading it must not stop the stop.")]
+        private bool SlewingByTheCache() {
+            try {
+                return _mount.GetInfo()?.Slewing == true;
+            } catch (Exception) {
+                return true;
+            }
+        }
+
+        /// <summary>A fresh reading for the stop's confirmation: on the daemon the driver's position now (never the
+        /// cached one) and its Slewing now (the cache when the driver gives no answer); the mediator's own reading in tests.
+        /// Null when there is no reading.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A failed read is 'not confirmed' by contract: the confirmation loop reads again or gives up.")]
+        private async Task<(double RaDeg, double DecDeg, bool Slewing)?> ReadStillnessAsync() {
+            try {
+                if (_mount is ITelescopeService service) {
+                    var pointing = await service.ReadPointingNowAsync(CancellationToken.None).WaitAsync(StopCommandTimeout).ConfigureAwait(false);
+                    if (pointing is not { } p) {
+                        return null;
+                    }
+                    var slewing = await service.ReadSlewingNowAsync(CancellationToken.None).WaitAsync(StopCommandTimeout).ConfigureAwait(false)
+                        ?? SlewingByTheCache();
+                    return (p.RaHours * 15.0, p.DecDegrees, slewing);
+                }
+                var pos = _mount.GetCurrentPosition();
+                return pos is null ? null : (pos.RADegrees, pos.Dec, SlewingByTheCache());
+            } catch (Exception) {
+                return null;
+            }
+        }
+
+        /// <summary>Tracking at the end of a run (NINA's StopTrackingWhenDone, profile <c>stop_tracking_when_done</c>, on by
+        /// default). On: tracking off. Off: a run that finished (Done, or the check's verdict) gives back the tracking it
+        /// found, unless another caller set tracking after the run's last write. A Stop, a sequence start, a failure or a
+        /// shutdown never turns tracking back on, whatever the setting: tracking off. The one other hand-back is Guiding
+        /// taking the camera from an open run (<see cref="HandedToGuiding"/>): guiding needs the tracking the run found.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A profile read fault falls back to the safe default (tracking off).")]
+        private void ApplyExitTracking(bool? priorTracking, bool finished, bool handedToGuiding, string why) {
+            bool stopTracking;
+            try {
+                stopTracking = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings()).StopTrackingWhenDone;
+            } catch (Exception) {
+                stopTracking = true;
+            }
+            if ((handedToGuiding || (finished && !stopTracking)) && priorTracking is bool prior) {
+                if (_trackingTouched) {
+                    RestoreTrackingBestEffort(prior);
+                }
+                return;
+            }
+            TrackingOffBestEffort(why);
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The exit's tracking write is best-effort on every exit path; a mount fault here must not mask the routine's outcome.")]
+        private void TrackingOffBestEffort(string why) {
+            try {
+                _mount.SetTrackingEnabled(false);
+                LogTrackingOffAtExit(why);
+            } catch (Exception ex) {
+                LogTrackingRestoreFailed(ex);
+            } finally {
+                _ownTrackingWrites = _mount.TrackingWriteCount;
+            }
+        }
+
+        /// <summary>Daemon shutdown: a live routine stops the mount and turns tracking off before the telescope service
+        /// (created before this service, so disposed after it) goes away. Bounded by <see cref="ShutdownGrace"/>.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Dispose must not throw; the failure is logged loudly.")]
+        private void StopRunForShutdown() {
+            bool live;
+            lock (_gate) {
+                live = _liveRun is not null;
+            }
+            if (!live) {
+                return;
+            }
+            var run = _runTask;
+            try {
+                var shutdown = Task.Run(async () => {
+                    await StopRunFirstAsync("shutdown").ConfigureAwait(false);
+                    if (run is not null) {
+                        await AwaitRunUnwindAsync(run).ConfigureAwait(false);
+                    }
+                }, CancellationToken.None);
+                if (!shutdown.Wait(ShutdownGrace)) {
+                    LogShutdownStopTimedOut(ShutdownGrace.TotalSeconds);
+                }
+            } catch (Exception ex) {
+                LogShutdownStopFailed(ex);
+            }
+        }
+
+        [LoggerMessage(EventId = 4555, Level = LogLevel.Information, Message = "§45 polar-align ({Why}): stopping the mount — AbortSlew {Abort}, motion {Motion}, then MoveAxis 0 on both axes")]
+        private partial void LogMountStopSent(string why, bool abort, MountMotion motion);
+
+        [LoggerMessage(EventId = 4556, Level = LogLevel.Information, Message = "§45 polar-align ({Why}): the mount stopped (confirmed on fresh reads after {Sends} stop sends, {Seconds:F1} s)")]
+        private partial void LogMountStopConfirmed(string why, int sends, double seconds);
+
+        [LoggerMessage(EventId = 4557, Level = LogLevel.Warning, Message = "§45 polar-align ({Why}): the mount is not confirmed stopped yet — stop sent again ({Sends} of 3)")]
+        private partial void LogMountStopResent(string why, int sends);
+
+        [LoggerMessage(EventId = 4558, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): COULD NOT CONFIRM THE MOUNT STOPPED after {Sends} stop sends in {Seconds:F0} s — cut the mount's power and check it")]
+        private partial void LogMountStopNotConfirmed(string why, int sends, double seconds);
+
+        [LoggerMessage(EventId = 4559, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): the mount is not connected — Ara cannot stop it or confirm it stopped; cut the mount's power and check it")]
+        private partial void LogMountStopNotConnected(string why);
+
+        [LoggerMessage(EventId = 4560, Level = LogLevel.Warning, Message = "§45 polar-align: the stop command {Command} failed")]
+        private partial void LogMountStopCommandFailed(string command, Exception exception);
+
+        [LoggerMessage(EventId = 4561, Level = LogLevel.Warning, Message = "§45 polar-align: the stop command {Command} did not answer within {Seconds:F0} s (the next command goes out)")]
+        private partial void LogMountStopCommandTimedOut(string command, double seconds);
+
+        [LoggerMessage(EventId = 4562, Level = LogLevel.Information, Message = "§45 polar-align ({Why}): tracking off at the end of the run")]
+        private partial void LogTrackingOffAtExit(string why);
+
+        [LoggerMessage(EventId = 4563, Level = LogLevel.Critical, Message = "§45 polar-align: the routine did not stop the mount within {Seconds:F0} s of daemon shutdown")]
+        private partial void LogShutdownStopTimedOut(double seconds);
+
+        [LoggerMessage(EventId = 4564, Level = LogLevel.Critical, Message = "§45 polar-align: stopping the mount at daemon shutdown failed")]
+        private partial void LogShutdownStopFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4566, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): stopping the mount failed — cut the mount's power and check it")]
+        private partial void LogMountStopFailed(string why, Exception exception);
+
+        [LoggerMessage(EventId = 4565, Level = LogLevel.Information, Message = "§45 polar-align: a newer run owns the mount — this superseded run leaves the stop and tracking to it")]
+        private partial void LogExitLeftToSuccessor();
+    }
+}

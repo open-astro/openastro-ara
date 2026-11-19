@@ -6341,6 +6341,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
+  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
+
+  @override
+  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
+
+  @override
   String get polarAdvancedTitle => 'Advanced';
 
   @override

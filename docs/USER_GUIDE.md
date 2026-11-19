@@ -225,6 +225,15 @@ framing/focus loop when you need to point or focus by eye.
   measured on its own, not read off the loop, so it says how good the alignment really is and how far
   it disagrees with the fine readout. **Done** skips the check. The Start card also offers *Skip the
   rough step* (a permanent pier) and *Check only*.
+- **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of Verify all stop the
+  mount where it is: Ara aborts a GoTo or Find Home, stops both motors, and checks on fresh readings
+  that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
+  check the mount before you start again. Then tracking goes off, as NINA does by default, so the mount
+  cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
+  (Settings › Imaging › Polar align), Done and the end of Verify give back the tracking the run found;
+  a Stop or a failure still leaves tracking off. A GoTo turns tracking on again by itself. Starting
+  guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
+  Polar Align found, because guiding needs it.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

@@ -8210,6 +8210,18 @@
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
+  "polarKnobStopTracking": "Stop tracking when polar align ends",
+  "@polarKnobStopTracking": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)"
+  },
+  "polarKnobStopTrackingOn": "Every end of a run turns tracking off",
+  "@polarKnobStopTrackingOn": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is on"
+  },
+  "polarKnobStopTrackingOff": "Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off",
+  "@polarKnobStopTrackingOff": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is off"
+  },
   "polarAdvancedTitle": "Advanced",
   "@polarAdvancedTitle": {
     "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"

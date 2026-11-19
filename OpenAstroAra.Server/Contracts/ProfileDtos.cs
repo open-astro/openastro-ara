@@ -515,6 +515,7 @@ public sealed record Phd2SettingsDto(
 /// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
 /// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure of the
 /// coarse stage; <c>UseHome</c> whether every stage starts by sending the mount Home (a fine start too);
+/// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
 /// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
@@ -539,7 +540,11 @@ public sealed record PolarAlignSettingsDto(
     bool UseHome = true,
     // #1971: with a Polar Aligner on the rig, the live stages move its motors after each
     // measurement. Off = the person turns the bolts, as on a rig without one.
-    bool PolarAlignerAuto = true);
+    bool PolarAlignerAuto = true,
+    // #2048: NINA's StopTrackingWhenDone, on by default like NINA's ("to not run into pier collisions").
+    // On: every end of a run turns tracking off. Off: a run that finishes (Done, or the check's verdict)
+    // gives back the tracking it found; a Stop or a failure still leaves tracking off.
+    bool StopTrackingWhenDone = true);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

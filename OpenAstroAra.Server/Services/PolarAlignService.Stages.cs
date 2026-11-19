@@ -239,7 +239,9 @@ namespace OpenAstroAra.Server.Services {
 
         // ── check ────────────────────────────────────────────────────────────────────────────
 
-        private async Task RunCheckStageAsync(
+        /// <returns>The verdict. The caller stops the mount and confirms it before it reports the verdict
+        /// (<see cref="FinishCheckedAsync"/>).</returns>
+        private async Task<PolarAlignCheckResultDto> RunCheckStageAsync(
                 IGuideCaptureLink guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
@@ -305,7 +307,7 @@ namespace OpenAstroAra.Server.Services {
                 Verdict: VerdictFor(total),
                 MeasuredAt: at);
             LogCheckResult(axis.RaDeg, axis.DecDeg, altErr, azErr, total, axis.ConeDeg, mismatch, fine);
-            await FinishCheckedAsync(gen, result).ConfigureAwait(false);
+            return result;
         }
 
         /// <summary>Sidereal rate, degrees of RA per second of time.</summary>
@@ -427,14 +429,24 @@ namespace OpenAstroAra.Server.Services {
                 SetState(gen, "homing");
                 LogFindingHome();
                 bool homed;
+                // #2048 — until Find Home is seen to end, the stop path aborts it (a cancelled wait leaves the mount homing).
+                BeginMotion(MountMotion.FindHome, gen, ct);
                 try {
                     // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
                     homed = await TelescopeService.RunWithoutOpFaultsAsync(
                         () => _mount.FindHome(new Progress<ApplicationStatus>(), ct)).ConfigureAwait(false);
                 } catch (OperationCanceledException) {
                     throw;
+                } catch (Exception) when (!IsCurrent(gen)) {
+                    throw new OperationCanceledException("the run was stopped while the mount went Home");
                 } catch (Exception ex) {
                     throw new RoutineFailedException("home_failed", $"the mount refused Find Home: {ex.Message}");
+                }
+                if (!IsCurrent(gen)) {
+                    throw new OperationCanceledException("the run was stopped while the mount went Home");
+                }
+                if (homed) {
+                    EndMotion();
                 }
                 if (!homed) {
                     throw new RoutineFailedException("home_failed",
@@ -614,6 +626,7 @@ namespace OpenAstroAra.Server.Services {
             var reversed = false;
             var startRate = Rate();
             LogAxisMove(axis, degrees, startRate);
+            BeginMotion(MountMotion.AxisMove, gen, ct);
             try {
                 await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                 while (true) {
@@ -662,11 +675,18 @@ namespace OpenAstroAra.Server.Services {
                     if (fast && degrees - p <= AxisSlowZoneDeg) {
                         fast = false; // the last few degrees at the slow speed: the stop lands close to the target
                     }
+                    if (!IsCurrent(gen)) {
+                        // Checked again just before the renewal: a Stop during the read above must not get a motor restart.
+                        throw new OperationCanceledException("the run was superseded while the mount moved");
+                    }
                     await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
                 }
-            } catch (RoutineFailedException) {
-                throw;
             } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception) when (!IsCurrent(gen)) {
+                // A Stop (its AbortSlew refuses the next renewal, or ends the move) is a stop, not a failure.
+                throw new OperationCanceledException("the run was stopped while the mount moved");
+            } catch (RoutineFailedException) {
                 throw;
             } catch (Exception) when (AbortedSince(abortEpoch)) {
                 throw new RoutineFailedException("slew_failed", ExternalStopMessage);
@@ -678,6 +698,8 @@ namespace OpenAstroAra.Server.Services {
             } finally {
                 await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
             }
+            // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
+            EndMotion();
             await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
             var after = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
@@ -729,6 +751,8 @@ namespace OpenAstroAra.Server.Services {
         private async Task SlewOrFailAsync(Coordinates target, string refusedMessage, int gen, CancellationToken ct) {
             await KeepTrackingOnForSlewAsync(gen, ct).ConfigureAwait(false);
             bool slewed;
+            // #2048 — until the GoTo is seen to end, the stop path aborts it: a cancelled wait leaves the mount slewing.
+            BeginMotion(MountMotion.GoTo, gen, ct);
             try {
                 // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
                 slewed = await TelescopeService.RunWithoutOpFaultsAsync(() => _mount.SlewToCoordinatesAsync(target, ct)).ConfigureAwait(false);
@@ -743,6 +767,10 @@ namespace OpenAstroAra.Server.Services {
                 throw new RoutineFailedException("slew_failed", refusedMessage);
             }
             await _mount.WaitForSlew(ct).ConfigureAwait(false);
+            if (!IsCurrent(gen)) {
+                throw new OperationCanceledException("the run was stopped while the mount slewed");
+            }
+            EndMotion();
         }
 
         // ── state + events ───────────────────────────────────────────────────────────────────

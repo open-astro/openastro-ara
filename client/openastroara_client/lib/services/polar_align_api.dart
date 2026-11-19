@@ -78,18 +78,31 @@ class PolarAlignApi implements PolarAlignClient {
     await _dio.post<void>('/api/v1/equipment/polaralign/next');
   }
 
-  /// Abort — the mount stays where it is; logged as `aborted`. 202-Accepted.
+  /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
+  /// stopped, confirmed on the daemon, tracking left off); logged as
+  /// `aborted`. 202-Accepted.
   @override
   Future<void> stop() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/stop');
+    await _dio.post<void>(
+      '/api/v1/equipment/polaralign/stop',
+      options: Options(receiveTimeout: _endTimeout),
+    );
   }
 
   /// The user is satisfied: same unwind as [stop] but the §45.13 session row
   /// records `complete` with the achieved error. 202-Accepted.
   @override
   Future<void> complete() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/complete');
+    await _dio.post<void>(
+      '/api/v1/equipment/polaralign/complete',
+      options: Options(receiveTimeout: _endTimeout),
+    );
   }
+
+  /// #2048 — an end answers once the daemon confirmed the mount stopped (2 s
+  /// at least, 8 s at most, after the run unwinds): longer than the 5 s
+  /// default, so a slow confirmation does not read as a failed Stop.
+  static const _endTimeout = Duration(seconds: 30);
 
   /// Single-frame mode: take the next adjust frame. 202-Accepted; a 409
   /// outside the adjust phase.

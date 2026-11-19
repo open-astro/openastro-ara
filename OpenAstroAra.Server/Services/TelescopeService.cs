@@ -635,13 +635,35 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Message = "MoveAxis lease on axis {Axis} expired, but stopping the axis failed (#1649).")]
     private static partial void LogMoveAxisLeaseStopFailed(ILogger logger, Exception ex, int axis);
 
-    public async Task AbortSlewAsync(CancellationToken ct) {
+    public Task AbortSlewAsync(CancellationToken ct) => AbortSlewAsync("user_request", ct);
+
+    public async Task AbortSlewAsync(string reason, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it).
         // CancellationToken.None (not ct) is critical: Task.Run(lambda, ct) returns a pre-cancelled
         // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
         // that cancelled the token would silently never send the abort and the slew would continue.
-        await AbortSlewCoreAsync(client, reason: "user_request", rethrow: true).ConfigureAwait(false);
+        _ = ct;
+        await AbortSlewCoreAsync(client, reason, rethrow: true).ConfigureAwait(false);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read is 'no fresh reading' (null) by contract; the caller treats it as not confirmed.")]
+    public async Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            return null;
+        }
+        try {
+            return await Task.Run(() => client.Slewing, ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /// <summary>The shared §57 abort flow — the user panic stop (<c>user_request</c>, throwing)

@@ -329,6 +329,14 @@ void main() {
       expect(PolarAlignSettings.fromJson(json).checkStepDeg, 15.0);
       expect(PolarAlignSettings.fromJson(json).useHome, isFalse);
     });
+
+    test('settings carry stop_tracking_when_done, on unless the daemon says off (#2048)', () {
+      expect(const PolarAlignSettings().stopTrackingWhenDone, isTrue, reason: "NINA's default");
+      expect(PolarAlignSettings.fromJson(const {}).stopTrackingWhenDone, isTrue, reason: 'an older daemon');
+      final json = const PolarAlignSettings().copyWith(stopTrackingWhenDone: false).toJson();
+      expect(json['stop_tracking_when_done'], isFalse);
+      expect(PolarAlignSettings.fromJson(json).stopTrackingWhenDone, isFalse);
+    });
   });
 
   group('PolarAlignSettings', () {
