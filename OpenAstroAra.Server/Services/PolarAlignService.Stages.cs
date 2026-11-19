@@ -597,7 +597,11 @@ namespace OpenAstroAra.Server.Services {
             var start = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
-            var direction = (sign >= 0 ? 1.0 : -1.0) * (axis == TelescopeAxes.Primary ? _raMotorSign : 1.0);
+            double learnedSign;
+            lock (_gate) {
+                learnedSign = axis == TelescopeAxes.Primary ? _raMotorSign : 1.0;
+            }
+            var direction = (sign >= 0 ? 1.0 : -1.0) * learnedSign;
             // Stop Mount (or Emergency Stop) during the move aborts the mount from outside this routine: every
             // renewal checks for it, and the telescope service refuses a renewal that would restart the motor.
             var abortEpoch = (_mount as ITelescopeService)?.AbortEpoch;

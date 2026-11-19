@@ -461,6 +461,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             return;
         }
         // A routine's renewal after Stop Mount finds its lease gone and would start the motor again: refuse it.
+        // This sits after the TryRenew early return on purpose: it relies on AbortSlewCoreAsync cancelling every
+        // lease right after it bumps the count, so a renewal that returned early never outlives an abort.
         if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
             throw new InvalidOperationException("the mount was stopped (Stop Mount) after this move began; the move is not restarted");
         }
