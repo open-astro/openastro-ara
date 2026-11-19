@@ -55,6 +55,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: System.IO.Ports
         update-types: ["version-update:semver-major"]
+      # Serilog.AspNetCore's major follows .NET: 11.x pulls
+      # Microsoft.Extensions.* and System.Text.Json 11.0.0 into the server.
+      - dependency-name: Serilog.AspNetCore
+        update-types: ["version-update:semver-major"]
 
   # Flutter / Dart client packages.
   #
