@@ -662,7 +662,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     /// <summary>Runs <paramref name="op"/> with this call's mount-op faults (§42.4) left unpublished. For a
     /// caller that reports its own failure to the user and must not feed the fault escalation to
-    /// abort-and-park (#1536 Polar Align's seed slew). The flag is set inside this method's own async
+    /// abort-and-park (#1536 Polar Align's slews). The flag is set inside this method's own async
     /// context, so no other caller's ops are affected.</summary>
     public static Task<T> RunWithoutOpFaultsAsync<T>(Func<Task<T>> op) {
         ArgumentNullException.ThrowIfNull(op);

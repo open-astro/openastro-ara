@@ -516,7 +516,7 @@ public partial class Program {
         });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
-        // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
+        // solver runs ASTAP with the guide optics, the telescope service drives the seed's motor moves +
         // tracking hand-back, and the profile store supplies the site for the pole-error geometry.
         builder.Services.AddSingleton<IPolarAlignFrameSolver>(sp =>
             new PolarAlignFrameSolver(

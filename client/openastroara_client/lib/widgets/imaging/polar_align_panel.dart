@@ -727,7 +727,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Two solved frames around a small RA slew. Leave the mount alone '
+            'Three solved frames around two small RA turns. Leave the mount alone '
             'until the bullseye appears.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),

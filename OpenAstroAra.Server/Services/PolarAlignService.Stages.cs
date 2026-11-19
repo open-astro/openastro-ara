@@ -61,7 +61,7 @@ namespace OpenAstroAra.Server.Services {
                 Func<Task> renew, int gen, CancellationToken ct) {
             var manualHome = await GoHomeAsync(settings, renew, returnTo: null, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
-            // The axis is MEASURED (seed turn + two-point fit), never read off the camera's pointing at
+            // The axis is MEASURED (three solves, two turns, the three-point fit), never read off the camera's pointing at
             // Home: on 2026-11-07 the camera-as-axis reading sat 75′ from the fine stage's seed (#1727).
             // Seed frames may need the blind fallback (the mount can be degrees off); the live loop takes
             // one fast look per frame and shoots again, like the guide-camera loop (#1136).
@@ -805,7 +805,7 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4540, Level = LogLevel.Information, Message = "§45 polar-align: no Home in use — slewing back to the run's start pointing RA {RaDeg:F2}° Dec {DecDeg:F2}° before this stage's turn")]
         private partial void LogReturningToStart(double raDeg, double decDeg);
 
-        [LoggerMessage(EventId = 4538, Level = LogLevel.Information, Message = "§45 polar-align: the camera is on the axis (Dec {DecDeg:F2}°) — slewing to Dec {TargetDecDeg:F0}° for the turn")]
+        [LoggerMessage(EventId = 4538, Level = LogLevel.Information, Message = "§45 polar-align: the camera is on the axis (Dec {DecDeg:F2}°) — tilting toward Dec {TargetDecDeg:F0}° with the Dec motor")]
         private partial void LogLeavingAxis(double decDeg, double targetDecDeg);
 
         [LoggerMessage(EventId = 4539, Level = LogLevel.Information, Message = "§45 polar-align three-point check: axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ total {TotalArcmin:F2}′; cone {ConeDeg:F2}°; turn mismatch {MismatchDeg:F3}°; fine stage said {FineArcmin}′")]
