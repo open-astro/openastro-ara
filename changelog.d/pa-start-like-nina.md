@@ -5,6 +5,7 @@
 ### Fixed (Polar Align)
 
 - **Polar Align starts like NINA's: no Find Home, no GoTo** (#2048): on RC51 the routine sent the mount Home before each step and took AlpacaBridge's "at Home" as proof of where the mount was; with *Send the mount Home first* off, each later step slewed back to the run's start. Now no step calls Find Home or slews, as NINA's Three Point Polar Alignment, which never homes and starts from where the mount is. With no Home between the steps, each later step turns inside the arc you confirmed: Fine turns back over Rough's arc, and Verify's turns stay inside it too (Rough, Fine, Verify at 10°: 0 → 20° → 0 → 20°). A parked mount is refused ("Mount is parked — unpark it and point near the pole first"), as NINA does; Polar Align never unparks it.
+- **Polar Align reads where the mount points from the mount itself** (#2048): the turn direction you confirm, and the arc every later step keeps to, come from a fresh read of the mount. When the mount does not answer (a WiFi hiccup), the start is refused, or the step fails before it turns, instead of using the daemon's last cached position, which after a failed status poll is a (0, 0) placeholder.
 
 ### Added (Polar Align)
 

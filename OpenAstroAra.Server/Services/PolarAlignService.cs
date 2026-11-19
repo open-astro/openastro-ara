@@ -351,8 +351,10 @@ namespace OpenAstroAra.Server.Services {
         /// run keeps to. The first turn goes away from the meridian (<see cref="AwayFromMeridianSign"/>), unchanged.</summary>
         private async Task<(PolarAlignStartPlanDto Plan, RunBand Band)> PlanStartAsync(
                 string? stage, PolarAlignSettingsDto settings, CancellationToken ct) {
-            var (raDeg, _) = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new InvalidOperationException("the mount reports no current pointing — check its connection, then start again");
+            // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
+            // are both read here.
+            var (raDeg, _) = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("the mount did not report where it points — check its connection, then start again");
             var startedAt = Stopwatch.GetTimestamp();
             var awaySign = AwayFromMeridianSign(raDeg);
             var checkOnly = stage == PolarAlignStages.Check;
@@ -1357,13 +1359,22 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
         /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available.</summary>
-        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) {
-            if (_mount is ITelescopeService service
-                    && await service.ReadPointingNowAsync(ct).ConfigureAwait(false) is { } now) {
-                var frame = _mount.GetCurrentPosition()?.Epoch ?? Epoch.JNOW;
-                return Folded(new Coordinates(Angle.ByHours(now.RaHours), Angle.ByDegree(now.DecDegrees), frame).Transform(Epoch.JNOW));
+        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) =>
+            await DriverPointingJnowAsync(ct).ConfigureAwait(false) ?? CurrentMountPointingJnow();
+
+        /// <summary>#2048 — the mount's pointing from the driver now, never the daemon's cache: null when the driver gives
+        /// no answer. The cache falls back to the (0, 0) placeholder after one failed status poll (an AlpacaBridge hiccup
+        /// fails the poll and the fresh read together), and a band anchored there, or a stage's offset read from it, turns
+        /// the mount a way the user never confirmed. The mediator's own reading in tests (no telescope service).</summary>
+        private async Task<(double RaDeg, double DecDeg)?> DriverPointingJnowAsync(CancellationToken ct) {
+            if (_mount is not ITelescopeService service) {
+                return CurrentMountPointingJnow();
             }
-            return CurrentMountPointingJnow();
+            if (await service.ReadPointingNowAsync(ct).ConfigureAwait(false) is not { } now) {
+                return null;
+            }
+            var frame = _mount.GetCurrentPosition()?.Epoch ?? Epoch.JNOW;
+            return Folded(new Coordinates(Angle.ByHours(now.RaHours), Angle.ByDegree(now.DecDegrees), frame).Transform(Epoch.JNOW));
         }
 
         private (double RaDeg, double DecDeg)? CurrentMountPointingJnow() {

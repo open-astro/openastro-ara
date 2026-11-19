@@ -73,6 +73,22 @@ namespace OpenAstroAra.Test {
             public bool IgnoresStops { get; set; }
             /// <summary>The first tracking-off write throws (a mount fault the routine does not expect).</summary>
             public bool ThrowsOnFirstTrackingOff { get; set; }
+            /// <summary>The next this many fresh position reads fail (a WiFi hiccup). Until a read succeeds again the cached
+            /// position is the daemon's (0, 0) J2000 placeholder, as after a failed status poll.</summary>
+            public int DriverReadsFail {
+                get {
+                    lock (_lock) {
+                        return _driverReadsFail;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _driverReadsFail = value;
+                    }
+                }
+            }
+            private int _driverReadsFail;
+            private bool _cacheLost;
             /// <summary>How many WS events were published when a command arrived: the order against the run's last event.</summary>
             public Func<int>? EventCount { get; set; }
 
@@ -90,7 +106,9 @@ namespace OpenAstroAra.Test {
                 });
                 Mock.Setup(m => m.GetCurrentPosition()).Returns(() => {
                     lock (_lock) {
-                        return new Coordinates(_raDeg, _decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
+                        return _cacheLost
+                            ? new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000)
+                            : new Coordinates(_raDeg, _decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
                     }
                 });
                 Mock.SetupGet(m => m.TrackingWriteCount).Returns(() => Interlocked.Read(ref _trackingWrites));
@@ -135,6 +153,12 @@ namespace OpenAstroAra.Test {
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
                 service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
                     lock (_lock) {
+                        if (_driverReadsFail > 0) {
+                            _driverReadsFail--;
+                            _cacheLost = true;
+                            return Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+                        }
+                        _cacheLost = false;
                         if (!Frozen) {
                             _raDeg = (_raDeg + (Math.Sign(_rates[0]) * StepDeg) + (_runaway ? StepDeg : 0.0) + 360.0) % 360.0;
                             var dec = Math.Sign(_rates[1]) * StepDeg;

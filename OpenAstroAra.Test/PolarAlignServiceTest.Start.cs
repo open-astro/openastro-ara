@@ -178,6 +178,49 @@ namespace OpenAstroAra.Test {
                 "a coarse start can move on to the check: its band holds the check's turns too");
         }
 
+        // ── the band's readings come from the driver, never the cache ──────────────────────────
+
+        [Test]
+        public async Task A_start_whose_driver_read_fails_is_refused_and_never_planned_from_the_cached_placeholder() {
+            // A WiFi hiccup fails the status poll and the fresh read together: the cache is then the (0, 0) placeholder.
+            // A plan read from it shows a direction and anchors a band that have nothing to do with the mount.
+            var mount = new FakeStopMount(tracking: true) { DriverReadsFail = 2 };
+            var fake = NewFake();
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws, guider: fake);
+
+            var planError = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None));
+            var startError = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(
+                PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None));
+
+            Assert.That(planError!.Message, Does.Contain("did not report where it points"));
+            Assert.That(startError!.Message, Does.Contain("did not report where it points"));
+            Assert.That(mount.Log.Where(IsMotion), Is.Empty, string.Join(", ", mount.Log));
+            Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
+        }
+
+        [Test]
+        public async Task A_stage_whose_driver_read_fails_fails_the_run_and_never_turns_from_the_cached_placeholder() {
+            // After the fine stage's turns the axis sits at the band's far edge, so the check turns back. Read from the
+            // placeholder, the axis would look back at the start and the check would turn further away, out of the band.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            var at = mount.Count;
+
+            mount.DriverReadsFail = 2; // the check's tilt read (it falls back to the cache: no tilt) and its band read
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("did not report where it points"));
+            AssertNoMotionAfter(mount, at);
+            Assert.That(mount.AtRest, Is.True);
+            Assert.That(mount.Tracking, Is.False);
+        }
+
         // ── the band the stages keep to ──────────────────────────────────────────────────────
 
         // awaySign +1 (east). Columns: offset from the start, this stage's two turns, the band → direction, turn back first.

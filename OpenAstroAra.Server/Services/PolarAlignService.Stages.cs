@@ -486,8 +486,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The sign of this stage's two turns (<see cref="PlanStageTurns"/>), after the turn back to the start
         /// pose when the band needs one. Logged either way.</summary>
         private async Task<double> TurnDirectionForStageAsync(RunBand band, double travelDeg, int gen, CancellationToken ct) {
-            var (raNow, _) = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
+            // From the driver, never the cache (DriverPointingJnowAsync): a placeholder reading would put the axis anywhere
+            // in the band and turn it a way the user never confirmed.
+            var (raNow, _) = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+                ?? throw new RoutineFailedException("mount_fault", "the mount did not report where it points, so the turns were not started — check its connection, then start again");
             var offset = RaOffsetFromStartDeg(band, raNow);
             var (dirSign, returnFirst) = PlanStageTurns(band.AwaySign, offset, travelDeg, band.MaxSweepDeg);
             var stage = CurrentStage() ?? "?";
