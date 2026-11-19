@@ -93,6 +93,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.captureSettingsUnsupported =>
       l.refusalCaptureSettingsUnsupported,
     RefusalCause.storageUnavailable => l.refusalStorageUnavailable,
+    RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     null => _firstLine(r.detail),
   };
 }

@@ -6575,6 +6575,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The storage disk is missing. Plug it back in, then try again.';
 
   @override
+  String get refusalEndNightInProgress =>
+      'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
