@@ -6606,6 +6606,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
 
   @override
+  String get refusalMountPositionUnverified =>
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'The mount\'s position has not been read since it connected. Try again in a few seconds.';
+
+  @override
+  String get mountPositionUnverifiedTitle => 'Mount position unverified';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountConfirmAtHome => 'The mount IS at Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Yes, it is at Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Couldn\'t confirm Home';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override

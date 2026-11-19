@@ -356,6 +356,12 @@ namespace OpenAstroAra.Server.Services {
                 if (mountInfo?.Connected != true) {
                     throw new InvalidOperationException("mount is not connected");
                 }
+                // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
+                // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
+                // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
+                if (_mount is ITelescopeService pose && await pose.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+                    throw TelescopeService.PositionUnverifiedRefusal(unverified);
+                }
                 var site = _profileStore.GetSiteSettings();
                 if (!(double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90)) {
                     throw new InvalidOperationException(

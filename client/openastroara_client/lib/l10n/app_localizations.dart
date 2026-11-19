@@ -11085,6 +11085,60 @@ abstract class AppLocalizations {
   /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
   String get refusalEndNightInProgress;
 
+  /// Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionUnverified;
+
+  /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
+  String get refusalMountPositionNotReadYet;
+
+  /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount position unverified'**
+  String get mountPositionUnverifiedTitle;
+
+  /// Mount window: what the unverified-position warning means and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionUnverifiedBody;
+
+  /// Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)
+  ///
+  /// In en, this message translates to:
+  /// **'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.'**
+  String get mountPositionUnverifiedRunZeroSearch;
+
+  /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again
+  ///
+  /// In en, this message translates to:
+  /// **'The mount IS at Home'**
+  String get mountConfirmAtHome;
+
+  /// Mount window: the question asked before confirming Home
+  ///
+  /// In en, this message translates to:
+  /// **'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.'**
+  String get mountConfirmAtHomeQuestion;
+
+  /// Mount window: the confirm button of the Home question
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, it is at Home'**
+  String get mountConfirmAtHomeYes;
+
+  /// Mount window: notice when the rig refused the Home confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t confirm Home'**
+  String get mountCouldntConfirmHome;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:

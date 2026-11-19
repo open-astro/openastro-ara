@@ -1818,6 +1818,20 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #1544
 
+## 2026-11-19 — #2070 An unverified mount position: `position_unverified` on the telescope runtime, `POST /equipment/telescope/confirm-home`, the `mount-position-unverified` refusal (ADR 0022)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/telescope` (`runtime`); `POST /api/v1/equipment/telescope/slew`, `/park`, `/home`, `/moveaxis` (a polar-alignment lease move); new `POST /api/v1/equipment/telescope/confirm-home`; `POST /api/v1/equipment/polaralign/start`; the `RefusalReason` schema in `openapi.yaml`.
+
+**Decision:** the daemon marks a mount's position **unverified** when the first read of a session reports AtHome while still (unless the last pose this process trusted for that device was a trusted Home), when that first read is more than 2° in Dec from the last trusted pose (a pose the mount had settled at; a session that ended mid-move keeps none), or, inside a session, when AtHome turns true or Dec jumps more than 2° between two still ticks with no Ara mount command or slewing tick in the last 30 s. It applies to every mount. The runtime carries `position_unverified` (bool, default false) and `position_unverified_reason` (`at_home_on_connect` | `pose_jump_on_reconnect` | `at_home_without_command` | `pose_jump_in_session`, null when trusted), read from the trust state at request time. While unverified, a slew (not a sync; `force` does not bypass it), a park, a find-home, a polar-alignment start and a polar-alignment lease move answer 409 `application/problem+json` with `reason` `mount-position-unverified` and the extension `position_unverified_reason`; the same check before a session's first position read answers `not_read_yet`. The sequencer's GoTo, Park, Find Home and meridian flip fail the instruction (no op fault); a refused sequencer Park stops tracking first, so the mount is not left tracking unattended. A sync, a pad move with no lease owner, Stop, tracking and Unpark are not checked. `POST /confirm-home` answers 204 and trusts the position again when the mount reports AtHome now; 409 when it is not connected or does not report AtHome. The flag is kept per device id in `{profileDir}/mount-pose.json`, so a reconnect or a daemon restart does not clear it; only `confirm-home` does. The safety and fault reactions stop the mount's motion (AbortSlew, which also ends any axis lease) and its tracking, and post a Critical notification, when their park is refused this way. The eleventh cause of the `RefusalReason` enum (after `below-horizon-limit`).
+
+**Reasoning:** a mount with no absolute encoders (the iOptron HAE29C) wakes from a power loss reporting Home and Dec 90 wherever it points. A GoTo, Park, model Home or polar alignment from that false zero drives the tube to the wrong place (RC51, 2026-11-19: Polar Align slewed below the pole, and Home was a no-op). Parking by a wrong model can hit the tripod, so a refused safety park stops tracking instead. The extension is not named `reason`, which ADR 0022 keeps for the cause. A sensor zero search route waits for the AlpacaBridge contract (open-astro/AlpacaBridge#2420).
+
+**Spec ref:** `Services/MountPoseTrust.cs`, `Services/MountPoseStore.cs`, `Services/TelescopeService.PoseTrust.cs`, `Services/TelescopeService.cs`, `Services/TelescopeService.Mediator.cs`, `Services/PolarAlignService.cs`, `Services/SafetyReactionService.cs`, `Services/FaultReactionService.cs`, `Endpoints/EquipmentEndpoints.cs` (`ConfirmHomeAsync`), `Contracts/EquipmentDtos.cs`, `Contracts/Refusals/RefusalCatalog.cs`. Tests `MountPoseTrustTest`, `TelescopePositionUnverifiedTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`, `lib/models/mount_status.dart`.
+
+**Related:** #2070, #2048, #2044, #1847, ADR 0022, open-astro/AlpacaBridge#2420
+
+---
+
 ## 2026-11-19 — #2044 `POST /equipment/telescope/slew` refuses a target under the horizon: `below-horizon-limit` (ADR 0022)
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`; the `RefusalReason` schema in `openapi.yaml`.

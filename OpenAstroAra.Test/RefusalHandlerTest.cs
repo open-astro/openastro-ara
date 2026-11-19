@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class RefusalHandlerTest {
 
-        // Every declared cause (slice 1 pointing, then GoTo, then End Night): token, status, parameter names. A row changed here is a wire change.
+        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then the unverified mount): token, status, parameter names. A row changed here is a wire change.
         private static readonly object[] Causes = {
             new object[] { "no-camera", 409, Array.Empty<string>() },
             new object[] { "camera-busy", 409, Array.Empty<string>() },
@@ -47,6 +47,7 @@ namespace OpenAstroAra.Test {
             new object[] { "storage-unavailable", 409, Array.Empty<string>() },
             new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
             new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
+            new object[] { "mount-position-unverified", 409, new[] { "position_unverified_reason" } },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };

@@ -364,7 +364,9 @@ public partial class Program {
             // resolved lazily (and the factory lambda bypasses constructor activation: every optional
             // parameter is passed by hand, #711).
             () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
-            sp.GetService<IProfileStore>())));
+            sp.GetService<IProfileStore>(),
+            // #2070 — registered below, once profileDir is known.
+            sp.GetService<IMountPoseStore>())));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
@@ -654,6 +656,9 @@ public partial class Program {
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+        // #2070 — the mounts whose position is unverified (a false zero after a power loss) stay so across a restart.
+        builder.Services.AddSingleton<IMountPoseStore>(sp =>
+            new FileMountPoseStore(profileDir, sp.GetService<ILogger<FileMountPoseStore>>()));
         // §63.4 — guider-twin deletes waiting for a connected, idle guider (survive a daemon restart).
         builder.Services.AddSingleton<IGuiderTwinDeleteStore>(sp =>
             new FileGuiderTwinDeleteStore(profileDir, sp.GetService<ILogger<FileGuiderTwinDeleteStore>>()));

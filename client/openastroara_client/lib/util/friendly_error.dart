@@ -98,6 +98,10 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['limit_deg']),
     ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
+    RefusalCause.mountPositionUnverified =>
+      r.parameters['position_unverified_reason'] == 'not_read_yet'
+          ? l.refusalMountPositionNotReadYet
+          : l.refusalMountPositionUnverified,
     null => _firstLine(r.detail),
   };
 }

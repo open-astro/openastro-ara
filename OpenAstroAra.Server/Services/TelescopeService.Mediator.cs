@@ -316,6 +316,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
+            // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
+            // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
             // #1124 — a slew right after connect can beat the first refresh: read the system now
             // rather than guess. Still unknown → fail the instruction without sending anything
             // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
@@ -497,6 +501,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
+        }
+        // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
+        // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
+        if (op is "telescope.park" or "telescope.findhome") {
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
+                // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
+                // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
+                stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
         }
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is
@@ -751,6 +763,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem.Value));
+        NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
         try {
             var opTask = Task.Run(() => {
                 if (!client.CanSync) {
@@ -795,6 +808,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
+        // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
+        await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
         if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
             await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
         }

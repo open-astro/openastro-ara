@@ -87,6 +87,20 @@ void main() {
     }
   });
 
+  test('an unverified mount position read too early says to try again (#2070)', () {
+    for (final l in [_en, _pt]) {
+      const early = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {'position_unverified_reason': 'not_read_yet'},
+      );
+      expect(failureReason(l, early), l.refusalMountPositionNotReadYet);
+      expect(failureReason(l, _known(RefusalCause.mountPositionUnverified)),
+          l.refusalMountPositionUnverified);
+    }
+  });
+
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(
       cause: null,

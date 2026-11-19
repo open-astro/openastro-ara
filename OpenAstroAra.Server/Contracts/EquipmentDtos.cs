@@ -296,7 +296,19 @@ public sealed record TelescopeStateDto(
     double? TargetDeclinationDegrees = null,
     // #1649 — the mount's drive rate ("Sidereal" | "Lunar" | "Solar" | "King", ASCOM DriveRate
     // names as in SupportedSiderealRates); null when the mount can't report it.
-    string? TrackingRate = null);
+    string? TrackingRate = null,
+    // #2070 — the mount's reported position is not trusted (it reported Home right after it
+    // connected, or its position jumped with nothing commanded): GoTo, Park, Home and polar
+    // alignment are refused until the user confirms Home. The reason is one of
+    // at_home_on_connect | pose_jump_on_reconnect | at_home_without_command | pose_jump_in_session.
+    bool PositionUnverified = false,
+    string? PositionUnverifiedReason = null);
+
+/// <summary>#2070 — one mount whose position is unverified, as the daemon keeps it across restarts.</summary>
+public sealed record MountPoseEntry(string DeviceId, string Reason);
+
+/// <summary>#2070 — on-disk shape of the unverified-mount file (<c>mount-pose.json</c>).</summary>
+public sealed record MountPoseFile(IReadOnlyList<MountPoseEntry> Unverified);
 
 /// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
 /// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
