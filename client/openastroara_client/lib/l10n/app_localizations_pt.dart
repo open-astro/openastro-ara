@@ -1947,8 +1947,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planStopPlan => 'Stop plan…';
 
   @override
-  String get planStopPlanAsk =>
-      'Stop the plan? The frames taken are kept and the mount keeps tracking.';
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Stop the plan? The $count frames taken are kept; the mount keeps tracking.',
+      one:
+          'Stop the plan? The 1 frame taken is kept; the mount keeps tracking.',
+      zero: 'Stop the plan? The mount keeps tracking.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get planStopPlanConfirm => 'Stop plan';
@@ -8648,8 +8658,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planStopPlan => 'Parar a sessão…';
 
   @override
-  String get planStopPlanAsk =>
-      'Parar a sessão? Os quadros feitos são mantidos e a montagem continua rastreando.';
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Parar a sessão? Os $count quadros feitos são mantidos; a montagem continua rastreando.',
+      one: 'Parar a sessão? O 1 quadro feito é mantido; a montagem continua rastreando.',
+      zero: 'Parar a sessão? A montagem continua rastreando.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get planStopPlanConfirm => 'Parar a sessão';

@@ -2259,7 +2259,7 @@ class SimpleRunPanel extends ConsumerWidget {
                 style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
               ),
             // The plan alone, not Emergency Stop: asks in place (#1911).
-            if (imaging) const _StopPlan(),
+            if (imaging) _StopPlan(frames: allCaptured),
             // Solid like the sheet's Add to queue (user, 2026-11-04).
             FilledButton(
               key: const Key('simple-run-add'),
@@ -2278,11 +2278,14 @@ class SimpleRunPanel extends ConsumerWidget {
 }
 
 /// Stop plan…: ends the plan after a question in the panel itself, no popup.
-/// The frames taken stay and the mount keeps tracking. It is the plan's own
-/// stop; Emergency Stop is the shutters' and the rail-foot Stop's 2 s hold,
-/// and shows no such question (ADR 0013 rule 2).
+/// The [frames] the whole run took stay and the mount keeps tracking. It is
+/// the plan's own stop; Emergency Stop is the shutters' and the rail-foot
+/// Stop's 2 s hold, and shows no such question (ADR 0013 rule 2).
 class _StopPlan extends ConsumerStatefulWidget {
-  const _StopPlan();
+  const _StopPlan({required this.frames});
+
+  /// Frames the run took, across all its targets: what Stop keeps.
+  final int frames;
 
   @override
   ConsumerState<_StopPlan> createState() => _StopPlanState();
@@ -2309,7 +2312,7 @@ class _StopPlanState extends ConsumerState<_StopPlan> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text(l10n.planStopPlanAsk, style: kSimpleText),
+        Text(l10n.planStopPlanAsk(widget.frames), style: kSimpleText),
         FilledButton(
           key: const Key('simple-run-stop-confirm'),
           style: FilledButton.styleFrom(

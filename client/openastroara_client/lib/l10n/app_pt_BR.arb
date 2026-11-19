@@ -560,7 +560,7 @@
   "planRecenterAndRefocus": "Recentralizar e refocar",
   "planHintPause": "Toque no obturador para pausar após este quadro.",
   "planStopPlan": "Parar a sessão…",
-  "planStopPlanAsk": "Parar a sessão? Os quadros feitos são mantidos e a montagem continua rastreando.",
+  "planStopPlanAsk": "{count, plural, =0{Parar a sessão? A montagem continua rastreando.} =1{Parar a sessão? O 1 quadro feito é mantido; a montagem continua rastreando.} other{Parar a sessão? Os {count} quadros feitos são mantidos; a montagem continua rastreando.}}",
   "planStopPlanConfirm": "Parar a sessão",
   "planKeepImaging": "Continuar fotografando",
   "planAddTarget": "Adicionar alvo",

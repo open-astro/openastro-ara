@@ -2716,7 +2716,7 @@ void main() {
         final calls = seq.calls.length;
         await tester.tap(find.byKey(const Key('simple-run-stop')));
         await tester.pumpAndSettle();
-        expect(find.text('Stop the plan? The frames taken are kept and the mount keeps tracking.'), findsOneWidget);
+        expect(find.text('Stop the plan? The 24 frames taken are kept; the mount keeps tracking.'), findsOneWidget);
         expect(seq.calls.length, calls, reason: 'asked, not stopped');
         await tester.tap(find.byKey(const Key('simple-run-stop-keep')));
         await tester.pumpAndSettle();
@@ -2725,6 +2725,22 @@ void main() {
         expect(seq.calls.length, calls, reason: 'Keep imaging sends nothing');
         expect(estop.calls, 0);
         await _unplug(tester, c);
+      });
+
+      testWidgets('the question counts every frame the run took, not only the current target\'s', (tester) async {
+        final seq = _Seq();
+        final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+        c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        const single = [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)];
+        c.read(simpleRunProvider.notifier).state = SimpleRun(sequenceId: 'seq-1', started: true, targets: const [
+          SimpleTarget(name: 'M 31', steps: single),
+          SimpleTarget(name: 'M 33', steps: single),
+        ]);
+        // 30 on M 31, 4 on M 33: Stop keeps all 34.
+        await imaging(tester, c, seq, _imaging(34));
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        expect(find.text('Stop the plan? The 34 frames taken are kept; the mount keeps tracking.'), findsOneWidget);
       });
 
       testWidgets('confirming stops the plan and is not an Emergency Stop', (tester) async {

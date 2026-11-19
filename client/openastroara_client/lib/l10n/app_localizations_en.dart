@@ -1947,8 +1947,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planStopPlan => 'Stop plan…';
 
   @override
-  String get planStopPlanAsk =>
-      'Stop the plan? The frames taken are kept and the mount keeps tracking.';
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Stop the plan? The $count frames taken are kept; the mount keeps tracking.',
+      one:
+          'Stop the plan? The 1 frame taken is kept; the mount keeps tracking.',
+      zero: 'Stop the plan? The mount keeps tracking.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get planStopPlanConfirm => 'Stop plan';

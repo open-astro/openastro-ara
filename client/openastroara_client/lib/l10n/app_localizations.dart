@@ -3417,11 +3417,11 @@ abstract class AppLocalizations {
   /// **'Stop plan…'**
   String get planStopPlan;
 
-  /// Plan's panel: the in-place question after Stop plan…
+  /// Plan's panel: the in-place question after Stop plan…; count is every frame the run took, across all its targets
   ///
   /// In en, this message translates to:
-  /// **'Stop the plan? The frames taken are kept and the mount keeps tracking.'**
-  String get planStopPlanAsk;
+  /// **'{count, plural, =0{Stop the plan? The mount keeps tracking.} =1{Stop the plan? The 1 frame taken is kept; the mount keeps tracking.} other{Stop the plan? The {count} frames taken are kept; the mount keeps tracking.}}'**
+  String planStopPlanAsk(int count);
 
   /// Plan's panel: confirms stopping the plan (not an Emergency Stop)
   ///
