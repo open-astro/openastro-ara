@@ -139,6 +139,7 @@ Future<void> _pump(
   MonitorSnapshot snap, {
   Size size = const Size(1288, 780),
   Locale? locale,
+  void Function(MonitorDestination)? onOpen,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -155,7 +156,7 @@ Future<void> _pump(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SimpleMonitorScreen(onOpen: (_) {}),
+        home: SimpleMonitorScreen(onOpen: onOpen ?? (_) {}),
       ),
     ),
   );
@@ -410,6 +411,34 @@ void main() {
     expect(_in('conditions', 'Cooler power'), findsNothing);
     expect(_in('conditions', 'Focuser'), findsNothing);
   });
+
+  testWidgets(
+    'a tap on Conditions opens the weather window when a station reports',
+    (tester) async {
+      final opened = <MonitorDestination>[];
+      await _pump(tester, _snap(), onOpen: opened.add);
+      await tester.tap(_k('conditions'));
+      expect(opened, [MonitorDestination.weather]);
+    },
+  );
+
+  testWidgets(
+    'a tap on Conditions with no weather station opens the camera window',
+    (tester) async {
+      final opened = <MonitorDestination>[];
+      await _pump(
+        tester,
+        _snap(
+          conditions: const MonitorConditions(
+            rig: MonitorRigTemps(sensorC: -10.2),
+          ),
+        ),
+        onOpen: opened.add,
+      );
+      await tester.tap(_k('conditions'));
+      expect(opened, [MonitorDestination.camera]);
+    },
+  );
 
   testWidgets(
     'a rig with no weather and no camera or focuser has no Conditions',
