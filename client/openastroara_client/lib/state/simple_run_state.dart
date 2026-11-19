@@ -17,6 +17,7 @@ import 'settings/imaging_defaults_state.dart';
 import 'settings/site_settings_state.dart';
 import '../services/dso_catalog_service.dart'
     show bestCatalogDesignation, catalogTag;
+import 'sky_atlas/plan_framing_state.dart';
 import 'sky_atlas/planetarium_selection_state.dart';
 import 'sky_atlas/tonight_sky_state.dart';
 import '../l10n/l10n.dart';
@@ -110,6 +111,22 @@ String? simpleTargetTag(String name, List<String> designations) {
   final best = bestCatalogDesignation(designations);
   return best == null ? null : catalogTag(best)!.$2;
 }
+
+/// A name as a framing and a selection share it: without a leading `NAME `
+/// or `*`, trimmed.
+String _cleanName(String d) {
+  var n = d.trim();
+  if (n.startsWith('NAME ')) n = n.substring(5);
+  if (n.startsWith('*')) n = n.substring(1);
+  return n.trim();
+}
+
+/// Whether [f] frames [sel]: on, with a centre, and named by the Target's
+/// name or one of its designations (#1899). Pure — unit-tested.
+bool simpleFramingFits(PlanFraming f, PlanetariumSelection sel) =>
+    f.hasTarget &&
+    (_cleanName(f.name) == _cleanName(sel.name) ||
+        sel.designations.any((d) => _cleanName(f.name) == _cleanName(d)));
 
 /// [t]'s time of day at its next occurrence after [now], on the wheel's
 /// 5-minute grid.
@@ -312,9 +329,20 @@ class SimpleTarget {
     this.gain,
     this.calibration = false,
     this.flats = SimpleTargetFlats.none,
+    this.positionAngleDeg,
+    this.framingRaDeg,
+    this.framingDecDeg,
   });
 
   final String name;
+
+  /// #1899 — the planetarium framing this Target was queued with: the dialed
+  /// angle (east of north) and the framing centre (J2000 degrees). All null:
+  /// a plain centred go-to on [raDeg], [decDeg]. Kept with the Target so edit
+  /// and Undo rebuild its block as it was queued, whatever the page holds now.
+  final double? positionAngleDeg;
+  final double? framingRaDeg;
+  final double? framingDecDeg;
 
   /// When this target's flats are shot (#1757).
   final SimpleTargetFlats flats;
@@ -507,7 +535,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
     final flats = ref.read(simpleRunFlatsProvider);
+    final framing = ref.read(planFramingProvider);
     if (sel == null || state.busy) return false;
+    final framed = simpleFramingFits(framing, sel) ? framing : null;
     // One block per name (the rig finds a target's block by it): a queued
     // target isn't added again; Start now moves it to the front instead.
     final queued = state.targets.indexWhere((t) => t.name == sel.name);
@@ -542,8 +572,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       final r = await createImagingRun(
         null,
         container: ref.container,
-        raDeg: sel.raJ2000Hours * 15,
-        decDeg: sel.decJ2000Deg,
+        raDeg: framed?.raDeg ?? sel.raJ2000Hours * 15,
+        decDeg: framed?.decDeg ?? sel.decJ2000Deg,
+        positionAngleDeg: framed?.rotationDeg,
         targetName: sel.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -585,6 +616,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         rise: sel.belowHorizon ? sel.rise : null,
         gain: gain,
         flats: flats,
+        positionAngleDeg: framed?.rotationDeg,
+        framingRaDeg: framed?.raDeg,
+        framingDecDeg: framed?.decDeg,
       );
       if (queue == null) {
         state = SimpleRun(
@@ -663,8 +697,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         null,
         pauseForFilterSwap: false,
         container: ref.container,
-        raDeg: t.raDeg,
-        decDeg: t.decDeg,
+        raDeg: t.framingRaDeg ?? t.raDeg,
+        decDeg: t.framingDecDeg ?? t.decDeg,
+        positionAngleDeg: t.positionAngleDeg,
         targetName: t.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -691,6 +726,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         rise: t.rise,
         gain: gain,
         flats: t.flats,
+        positionAngleDeg: t.positionAngleDeg,
+        framingRaDeg: t.framingRaDeg,
+        framingDecDeg: t.framingDecDeg,
       );
       state = state.copyWith(
         targets: [...state.targets]..[i] = edited,
@@ -752,8 +790,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         null,
         pauseForFilterSwap: false,
         container: ref.container,
-        raDeg: t.raDeg,
-        decDeg: t.decDeg,
+        raDeg: t.framingRaDeg ?? t.raDeg,
+        decDeg: t.framingDecDeg ?? t.decDeg,
+        positionAngleDeg: t.positionAngleDeg,
         targetName: t.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -764,6 +803,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: t.gain,
         stopAtDawn: state.dawnStop,
         recalibrateGuider: true,
+        flatsAfterTarget: t.flats == SimpleTargetFlats.afterTarget,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take it back");
