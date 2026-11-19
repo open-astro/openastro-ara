@@ -1050,6 +1050,23 @@ namespace OpenAstroAra.Test {
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
         }
 
+        // #1808 — WaitForSlew throws when the mount is still moving at the slew bound. Like the slew itself
+        // (#1536), that is this routine's slew_failed, and its stall must not count toward abort-and-park.
+        [Test]
+        public async Task A_WaitForSlew_that_throws_fails_as_slew_failed_and_runs_without_op_faults() {
+            var mount = NewMount();
+            var suppressed = new List<bool>();
+            mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(() => {
+                lock (suppressed) { suppressed.Add(TelescopeService.OpFaultsSuppressed); }
+                return Task.FromException(new SequenceEntityFailedException("telescope.slew was not confirmed settled within the 600s bound"));
+            });
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+            lock (suppressed) {
+                Assert.That(suppressed, Has.Count.EqualTo(1).And.All.True, "WaitForSlew ran once, inside RunWithoutOpFaultsAsync");
+            }
+        }
+
         [Test]
         public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_mount_fault() {
             var mount = NewMount();

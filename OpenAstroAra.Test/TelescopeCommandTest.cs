@@ -273,8 +273,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_pier_side_write_that_never_returns_leaves_a_log_line_and_the_goto_still_runs_with_no_fault() {
-            await AssertAbandonedCallObservedAsync((m, blocked) => { m.CanSetPierSideValue = true; m.OnSideOfPierWrite = blocked; }, async svc => {
+            FakeTelescopeDevice? mount = null;
+            await AssertAbandonedCallObservedAsync((m, blocked) => { mount = m; m.CanSetPierSideValue = true; m.OnSideOfPierWrite = blocked; }, async svc => {
                 Assert.That(await svc.MeridianFlip(Here, CancellationToken.None), Is.True);
+                // A hard timeout carries its TimeoutException: logged as refused, not as still moving.
+                Assert.That(_log.Lines, Has.Some.Contains("the pier-side hint was refused"));
+                Assert.That(mount!.Gotos, Is.EqualTo(1), "the goto runs after the abandoned write");
             }, svc => svc.SlewCommandPolicy = Slew(), expectFault: false);
         }
 
@@ -337,6 +341,18 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectedAsync(mount, s => s.SlewCommandPolicy = Slew(maxPolls: 5));
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.WaitForSlew(CancellationToken.None));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
+        }
+
+        [Test]
+        public async Task WaitForSlew_run_without_op_faults_throws_at_the_bound_and_publishes_nothing() {
+            // #1536: Polar Align waits for its slews inside RunWithoutOpFaultsAsync; the stall is its own to report.
+            using var mount = new FakeTelescopeDevice { SlewingScript = () => true };
+            using var svc = await ConnectedAsync(mount, s => s.SlewCommandPolicy = Slew(maxPolls: 5));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => TelescopeService.RunWithoutOpFaultsAsync(async () => {
+                await svc.WaitForSlew(CancellationToken.None);
+                return true;
+            }));
+            Assert.That(_faults.Faults, Is.Empty);
         }
 
         [Test]
