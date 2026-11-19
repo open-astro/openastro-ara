@@ -15,6 +15,9 @@ import 'package:openastroara/l10n/l10n.dart';
 
 /// Pure fake — records calls; scripted status/settings.
 class _FakePolarAlignClient implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   PolarAlignStatus? status;
   PolarAlignSettings settings = const PolarAlignSettings();
@@ -22,7 +25,7 @@ class _FakePolarAlignClient implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
   @override
-  Future<void> start({String? stage}) async => calls.add(stage == null ? 'start' : 'start:$stage');
+  Future<void> start(PolarAlignStartPlan plan) async => calls.add(plan.stage == null ? 'start' : 'start:${plan.stage}');
   @override
   Future<void> next() async => calls.add('next');
   @override
@@ -78,6 +81,13 @@ Widget _harness(_FakePolarAlignClient api, PolarAlignLive live) {
 
 // The panel is always open; the title it once tapped is hidden while a routine
 // runs on a short window, so this only settles.
+/// #2048 — the confirm step every start goes through: its dialog, then "Move the mount".
+Future<void> _confirm(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+  await tester.pumpAndSettle();
+}
+
 Future<void> _expand(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
@@ -322,9 +332,9 @@ void main() {
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
       await _expand(tester);
       await tester.tap(find.byKey(const Key('polar-align-start-fine')));
-      await tester.pumpAndSettle();
+      await _confirm(tester);
       await tester.tap(find.byKey(const Key('polar-align-start-check')));
-      await tester.pumpAndSettle();
+      await _confirm(tester);
       expect(api.calls, containsAll(['start:fine', 'start:check']));
     });
 
@@ -427,11 +437,11 @@ void main() {
       expect(api.calls, contains('complete'));
       await tester.ensureVisible(find.byKey(const Key('polar-align-adjust-again')));
       await tester.tap(find.byKey(const Key('polar-align-adjust-again')));
-      await tester.pumpAndSettle();
+      await _confirm(tester);
       expect(api.calls, contains('start:fine'));
     });
 
-    testWidgets('idle shows Start and posts start', (tester) async {
+    testWidgets('idle shows Start, and posts start only once the confirm step says so (#2048)', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
       await tester.pumpAndSettle();
@@ -441,6 +451,14 @@ void main() {
       expect(start, findsOneWidget);
       await tester.tap(start);
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
+      expect(api.calls, isEmpty, reason: 'nothing moves while the user reads the confirm step');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(api.calls, isEmpty, reason: 'Cancel starts nothing');
+
+      await tester.tap(start);
+      await _confirm(tester);
       expect(api.calls, ['start']);
     });
 

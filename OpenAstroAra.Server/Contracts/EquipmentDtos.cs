@@ -896,10 +896,11 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount goes
-/// Home, then the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower frames, for the big moves);
-/// <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — back Home, three
-/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
+/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — from where the user
+/// pointed the mount, the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower
+/// frames, for the big moves); <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — three
+/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting. No stage sends the mount Home or
+/// slews it (#2048, NINA's start).</summary>
 public static class PolarAlignStages {
     public const string Coarse = "coarse";
     public const string Fine = "fine";
@@ -908,9 +909,31 @@ public static class PolarAlignStages {
     public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
 }
 
-/// <summary><c>POST /polaralign/start</c> body (optional): the stage to begin at. Null/absent = coarse, or
-/// fine when the coarse stage cannot run (main camera off, optics unset, no solver).</summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null);
+/// <summary><c>POST /polaralign/start</c> body: the stage to begin at (null/absent = coarse, or fine when the coarse
+/// stage cannot run: main camera off, optics unset, no solver), and the user's confirmation of the start (#2048). The
+/// routine starts from where the mount points now; it moves only with <c>Confirmed</c> true and <c>Direction</c> equal
+/// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
+/// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now).</summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null);
+
+/// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
+/// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
+/// first, chosen away from the meridian from the mount's current pointing; <c>StepDeg</c> is each of the
+/// <c>Turns</c> turns; <c>MaxSweepDeg</c> bounds how far the run turns the RA axis from where it starts, over every
+/// stage the user moves on to. <c>Stage</c> echoes the request.</summary>
+public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg);
+
+/// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
+/// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move.</summary>
+public sealed record PolarAlignStartConfirmation(string Direction);
+
+/// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
+public static class PolarAlignDirections {
+    /// <summary>The mount's RA reading increases: the tube turns toward the east.</summary>
+    public const string East = "east";
+    /// <summary>The mount's RA reading decreases: the tube turns toward the west.</summary>
+    public const string West = "west";
+}
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the
 /// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
@@ -946,7 +969,7 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastFrameDto? LastFrame = null,
     // Which stage is running (PolarAlignStages); null when idle/stopped before any run.
     string? Stage = null,
-    // The mount cannot find Home itself: the routine waits for POST /polaralign/next.
+    // Always false since #2048: no stage sends the mount Home or waits for it. Kept for older clients.
     bool WaitingForHome = false,
     // Check stage: solves done so far (0–3).
     int CheckSolvesDone = 0,

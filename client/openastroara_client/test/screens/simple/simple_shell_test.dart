@@ -682,6 +682,9 @@ class _PolarAlignerDown extends _PolarAligner {
 
 /// The profile's polar-align section: [puts] records each save.
 class _PolarProfile implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarAlignerAuto: true);
   final puts = <Map<String, dynamic>>[];
   @override
@@ -694,7 +697,7 @@ class _PolarProfile implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override

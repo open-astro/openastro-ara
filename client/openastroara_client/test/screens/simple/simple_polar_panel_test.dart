@@ -10,6 +10,7 @@ import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutterButton;
+import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_routine_state.dart' show polarAlignActionProvider;
@@ -20,6 +21,9 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 1.0);
   @override
@@ -27,7 +31,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> getSettings() async => settings;
   @override
-  Future<void> start({String? stage}) async => calls.add('start');
+  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
   @override
   Future<void> next() async => calls.add('next');
   @override
@@ -55,14 +59,25 @@ class _NoSettingsApi extends _Api {
 
 class _FailingApi extends _Api {
   @override
-  Future<void> start({String? stage}) async => throw StateError('no camera');
+  Future<void> start(PolarAlignStartPlan plan) async => throw StateError('no camera');
+}
+
+/// A rig whose mount is parked: the start plan is refused (#2048), so no confirm step opens.
+class _ParkedApi extends _Api {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async => throw const Refusal(
+        cause: RefusalCause.polarAlignMountParked,
+        reason: 'polar-align-mount-parked',
+        detail: 'Mount is parked — unpark it and point near the pole first',
+        status: 409,
+      );
 }
 
 /// A start that waits for [gate]: the shutter's call in flight, then refused.
 class _SlowFailingApi extends _Api {
   final gate = Completer<void>();
   @override
-  Future<void> start({String? stage}) async {
+  Future<void> start(PolarAlignStartPlan plan) async {
     await gate.future;
     throw StateError('no camera');
   }
@@ -740,9 +755,35 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
       ));
       await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
       await tester.pump();
       expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
       expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('a parked mount is refused before the confirm step, in a pill, and nothing starts (#2048)', (tester) async {
+      final api = _ParkedApi();
+      final c = ProviderContainer(overrides: [
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
+        simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+        simpleModeFeaturePrefsProvider.overrideWithValue(_SimplePrefs()),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
+      ));
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing, reason: 'no confirm step for a start the rig refuses');
+      expect(api.calls, isNot(contains('start')));
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.kind, SimpleMessageKind.error);
+      expect('${pill.title} ${pill.detail ?? ''}', contains('The mount is parked. Unpark it and point it near the pole first.'));
     });
 
     testWidgets('a start runs through the shared module: busy while it runs, its failure in the pill only (#1764)', (tester) async {
@@ -757,6 +798,9 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
       ));
       await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the confirm step is part of the start in flight');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
       await tester.pump();
       expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the module knows the start is in flight');
       expect(tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed, isNull,
@@ -795,8 +839,12 @@ void main() {
       expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
           findsOneWidget, reason: 'a routine starts with play');
       await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pump();
-      expect(api!.calls, ['start']);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget, reason: '#2048: the confirm step first');
+      expect(api!.calls, isEmpty);
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['start']);
     });
     testWidgets('Loop running: the square stops it', (tester) async {
       final api = await shutter(tester, _adjusting);

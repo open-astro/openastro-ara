@@ -53,8 +53,13 @@ public static class RefusalCatalog {
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
 
+    // #2048 — Polar Align starts like NINA's: from where the user pointed the mount, never from a parked mount, and only
+    // after the user confirmed the start and its RA turn direction (direction = the way the run would turn now).
+    public static readonly RefusalCause PolarAlignMountParked = new("polar-align-mount-parked", 409, "The mount is parked");
+    public static readonly RefusalCause PolarAlignUnconfirmed = new("polar-align-unconfirmed", 409, "Polar alignment needs your confirmation before the mount moves", "direction");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress, BelowHorizonLimit,
+        EndNightInProgress, BelowHorizonLimit, PolarAlignMountParked, PolarAlignUnconfirmed,
     ];
 }

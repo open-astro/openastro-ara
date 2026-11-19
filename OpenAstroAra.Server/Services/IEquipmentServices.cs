@@ -434,14 +434,20 @@ public interface IPolarAlignService {
     /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
-    Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#2048 — what a start at <paramref name="stage"/> would do, for the confirm step: the RA turn direction
+    /// from the mount's current pointing, the step and the most the run turns the RA axis from where it starts. Refuses
+    /// like <see cref="StartAsync"/> does before any motion: a mount not connected, a parked mount
+    /// (<c>polar-align-mount-parked</c>), no site latitude.</summary>
+    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
     /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
-    /// when the coarse stage cannot run). Throws <see cref="ArgumentException"/> for an unknown stage (the
-    /// endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
+    /// when the coarse stage cannot run), from where the mount points now: no stage sends the mount Home or slews
+    /// it (#2048). The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run
+    /// would turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
+    /// (<c>polar-align-mount-parked</c>) and never unparked. Throws <see cref="ArgumentException"/> for an unknown
+    /// stage (the endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
     /// failed preflight.</summary>
-    Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
-    /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
-    /// stage to the fine stage, Next from the fine stage to the check. Throws
+    Task<OperationAcceptedDto> StartAsync(string? stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Advance: Next from the coarse stage to the fine stage, Next from the fine stage to the check. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws

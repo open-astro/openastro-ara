@@ -6108,16 +6108,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Done turns on once the error is inside it';
 
   @override
-  String get polarKnobUseHome => 'Send the mount Home first';
-
-  @override
-  String get polarKnobUseHomeOn => 'Every stage starts from Home';
-
-  @override
-  String get polarKnobUseHomeOff =>
-      'Off: where the mount points now counts as Home';
-
-  @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
@@ -6614,6 +6604,46 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
+  String get refusalPolarAlignMountParked =>
+      'The mount is parked. Unpark it and point it near the pole first.';
+
+  @override
+  String get refusalPolarAlignUnconfirmed =>
+      'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
+
+  @override
+  String get polarConfirmTitle => 'Before the mount moves';
+
+  @override
+  String get polarConfirmPoint =>
+      'Point the tube near the pole, with the counterweights down.';
+
+  @override
+  String polarConfirmTurns(String step, String direction, String total) {
+    return 'RA will turn about $step° twice toward the $direction ($total° in all).';
+  }
+
+  @override
+  String polarConfirmBand(String max) {
+    return 'Later steps turn back over the same arc: never more than $max° from where it starts.';
+  }
+
+  @override
+  String get polarConfirmPower => 'Keep a hand on the mount\'s power switch.';
+
+  @override
+  String get polarConfirmGo => 'Move the mount';
+
+  @override
+  String get polarConfirmCancel => 'Cancel';
+
+  @override
+  String get polarDirectionEast => 'east';
+
+  @override
+  String get polarDirectionWest => 'west';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';

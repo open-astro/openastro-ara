@@ -98,6 +98,8 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['limit_deg']),
     ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
+    RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
+    RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
     null => _firstLine(r.detail),
   };
 }

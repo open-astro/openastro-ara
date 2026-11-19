@@ -15,7 +15,9 @@ enum RefusalCause {
   captureSettingsUnsupported('capture-settings-unsupported'),
   storageUnavailable('storage-unavailable'),
   belowHorizonLimit('below-horizon-limit'),
-  endNightInProgress('end-night-in-progress');
+  endNightInProgress('end-night-in-progress'),
+  polarAlignMountParked('polar-align-mount-parked'),
+  polarAlignUnconfirmed('polar-align-unconfirmed');
 
   const RefusalCause(this.token);
 
@@ -48,7 +50,7 @@ class Refusal implements Exception {
   final String? reason;
   final String? detail;
 
-  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`).
+  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`, `direction`).
   final Map<String, Object?> parameters;
   final int? status;
 

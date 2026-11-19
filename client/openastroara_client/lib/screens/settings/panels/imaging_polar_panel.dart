@@ -82,13 +82,6 @@ class ImagingPolarPanel extends ConsumerWidget {
           range: (min: 0.1, max: 10),
           hint: l10n.polarKnobToleranceHint,
         ),
-        SettingsSwitchRow(
-          label: l10n.polarKnobUseHome,
-          helpKey: 'img.polar.use_home',
-          value: s.useHome,
-          onChanged: (v) => save(s.copyWith(useHome: v)),
-          hint: s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
-        ),
         // #1971 a profile setting: shown with or without a Polar Aligner connected.
         SettingsSwitchRow(
           label: l10n.polarKnobAlignerAuto,

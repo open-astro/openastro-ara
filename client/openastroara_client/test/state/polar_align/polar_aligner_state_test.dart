@@ -14,6 +14,9 @@ WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
     WsEvent(type: type, ts: DateTime.utc(2026, 11, 16, 9), seq: 1, payload: payload);
 
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignSettings settings = const PolarAlignSettings();
   final puts = <Map<String, dynamic>>[];
   @override
@@ -26,7 +29,7 @@ class _Api implements PolarAlignClient {
     return settings = next;
   }
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override
