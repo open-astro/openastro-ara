@@ -201,7 +201,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           onChanged: n.setMeridianFlipAuto,
         ),
         EditableNumberRow(
-          label: 'Pause after flip (min)',
+          label: 'Stop before meridian (min)',
           helpKey: 'safety.policies.meridian_pause_min',
           currentValue: s.meridianPauseMin.toString(),
           getCanonical: () =>
