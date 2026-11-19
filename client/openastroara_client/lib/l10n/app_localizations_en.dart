@@ -1419,6 +1419,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellRailTabs => 'Modes';
 
   @override
+  String shellRailTabDone(String mode) {
+    return '$mode, done tonight';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, running';
+  }
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -6568,6 +6578,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String refusalBelowHorizonLimit(String altitude, String limit) {
     return 'That target is at $altitude°, below your $limit° horizon limit. Pick a higher target, or lower the horizon limit.';
   }
+
+  @override
+  String get refusalEndNightInProgress =>
+      'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';

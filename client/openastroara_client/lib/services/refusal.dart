@@ -14,7 +14,8 @@ enum RefusalCause {
   solverNotSet('solver-not-set'),
   captureSettingsUnsupported('capture-settings-unsupported'),
   storageUnavailable('storage-unavailable'),
-  belowHorizonLimit('below-horizon-limit');
+  belowHorizonLimit('below-horizon-limit'),
+  endNightInProgress('end-night-in-progress');
 
   const RefusalCause(this.token);
 

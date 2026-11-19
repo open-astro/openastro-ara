@@ -97,6 +97,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['altitude_deg']),
       _degrees(r.parameters['limit_deg']),
     ),
+    RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     null => _firstLine(r.detail),
   };
 }

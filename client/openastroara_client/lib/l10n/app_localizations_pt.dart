@@ -1419,6 +1419,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellRailTabs => 'Modes';
 
   @override
+  String shellRailTabDone(String mode) {
+    return '$mode, done tonight';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, running';
+  }
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -6570,6 +6580,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalEndNightInProgress =>
+      'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
@@ -8103,6 +8117,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellRailTabs => 'Modos';
+
+  @override
+  String shellRailTabDone(String mode) {
+    return '$mode, feito esta noite';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, em andamento';
+  }
 
   @override
   String shellModeSemantics(String mode) {
@@ -13283,6 +13307,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalBelowHorizonLimit(String altitude, String limit) {
     return 'Esse alvo está a $altitude°, abaixo do seu limite de horizonte de $limit°. Escolha um alvo mais alto ou reduza o limite de horizonte.';
   }
+
+  @override
+  String get refusalEndNightInProgress =>
+      'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

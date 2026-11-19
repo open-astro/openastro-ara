@@ -306,6 +306,10 @@ public static class WsEventCatalog {
     // action == "emergency_stop".
     public static readonly WsEvent SafetyEmergencyStop = new("safety.emergency_stop");
 
+    // #1901 End Night: a change of the action (started, cancel requested, finished) or of one of its steps;
+    // payload { run_id, state, step, step_state, detail, cancellable }. GET /api/v1/end-night/status holds every step.
+    public static readonly WsEvent EndNightProgress = new("end_night.progress");
+
     /// <summary>
     /// The typed payload record of each event that has one (ADR 0014 step 2), by wire token. The snapshot
     /// (ws-events.json) reads the payload shape from these types; an event not listed here keeps a hand-built payload.
@@ -314,6 +318,7 @@ public static class WsEventCatalog {
         [CameraExposureStarted.Token] = typeof(ExposureStartedPayload),
         [CameraExposureComplete.Token] = typeof(ExposureCompletePayload),
         [CameraExposureFailed.Token] = typeof(ExposureFailedPayload),
+        [EndNightProgress.Token] = typeof(EndNightProgressPayload),
     };
 
     /// <summary>
@@ -417,6 +422,7 @@ public static class WsEventCatalog {
         SafetySafe,
         SafetyActionTaken,
         SafetyEmergencyStop,
+        EndNightProgress,
     };
 }
 

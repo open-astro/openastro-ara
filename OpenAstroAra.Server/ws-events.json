@@ -93,6 +93,7 @@
     { "name": "SafetyUnsafe", "type": "safety.unsafe" },
     { "name": "SafetySafe", "type": "safety.safe" },
     { "name": "SafetyActionTaken", "type": "safety.action_taken" },
-    { "name": "SafetyEmergencyStop", "type": "safety.emergency_stop" }
+    { "name": "SafetyEmergencyStop", "type": "safety.emergency_stop" },
+    { "name": "EndNightProgress", "type": "end_night.progress", "payload": [ { "field": "run_id", "type": "string", "nullable": false }, { "field": "state", "type": "string", "nullable": false }, { "field": "step", "type": "string", "nullable": true }, { "field": "step_state", "type": "string", "nullable": true }, { "field": "detail", "type": "string", "nullable": true }, { "field": "cancellable", "type": "boolean", "nullable": false } ] }
   ]
 }

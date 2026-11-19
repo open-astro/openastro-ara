@@ -2535,6 +2535,18 @@ abstract class AppLocalizations {
   /// **'Modes'**
   String get shellRailTabs;
 
+  /// Simple Mode screen reader label of a right rail tab whose step is done tonight; mode is the mode name
+  ///
+  /// In en, this message translates to:
+  /// **'{mode}, done tonight'**
+  String shellRailTabDone(String mode);
+
+  /// Simple Mode screen reader label of the right rail tab of the mode that runs now; mode is the mode name
+  ///
+  /// In en, this message translates to:
+  /// **'{mode}, running'**
+  String shellRailTabRunning(String mode);
+
   /// Simple Mode screen reader label of the mode button on the right rail; mode is the mode name
   ///
   /// In en, this message translates to:
@@ -11036,6 +11048,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.'**
   String refusalBelowHorizonLimit(String altitude, String limit);
+
+  /// Refusal (end-night-in-progress): End Night was started while it is already running
+  ///
+  /// In en, this message translates to:
+  /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
+  String get refusalEndNightInProgress;
 
   /// Add your devices: heading above the detected devices
   ///

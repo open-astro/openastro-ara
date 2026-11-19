@@ -1925,6 +1925,24 @@
   "@shellRailTabs": {
     "description": "Simple Mode screen reader label of the right rail's tab list of the six modes"
   },
+  "shellRailTabDone": "{mode}, done tonight",
+  "@shellRailTabDone": {
+    "description": "Simple Mode screen reader label of a right rail tab whose step is done tonight; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "shellRailTabRunning": "{mode}, running",
+  "@shellRailTabRunning": {
+    "description": "Simple Mode screen reader label of the right rail tab of the mode that runs now; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
   "shellModeSemantics": "Mode: {mode}",
   "@shellModeSemantics": {
     "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",
@@ -8510,6 +8528,8 @@
     "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
     "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
   },
+  "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
+  "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"

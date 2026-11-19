@@ -4609,6 +4609,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreflightChecklistDto'
+  /api/v1/end-night:
+    post:
+      tags:
+        - EndNight
+      summary: '#1901 End Night: abort the run, stop guiding, Find Home, park, disconnect, warm the cooler, then (when chosen) shut the host down. Returns at once; progress is the end_night.progress event and the status read. A second start while one runs is the end-night-in-progress refusal.'
+      operationId: StartEndNight
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/EndNightStartRequestDto'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/end-night/status:
+    get:
+      tags:
+        - EndNight
+      summary: The state of the End Night action and each of its steps; the last run stays readable until the next start.
+      operationId: GetEndNightStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
+  /api/v1/end-night/cancel:
+    post:
+      tags:
+        - EndNight
+      summary: Stop End Night at the next step boundary and leave the rig as it is. Nothing cancels it once the host poweroff has started (cancellable is false in the answer).
+      operationId: CancelEndNight
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
   /api/v1/planning/sky-model:
     get:
       tags:
@@ -10438,6 +10490,66 @@ components:
         cooler_off:
           type: boolean
           default: false
+    EndNightStartRequestDto:
+      type: object
+      properties:
+        shut_down_host:
+          type: boolean
+          default: true
+    EndNightStatusDto:
+      required:
+        - state
+        - run_id
+        - shut_down_host
+        - cancellable
+        - cancel_requested
+        - started_utc
+        - ended_utc
+        - steps
+      type: object
+      properties:
+        state:
+          type: string
+        run_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        shut_down_host:
+          type: boolean
+        cancellable:
+          type: boolean
+        cancel_requested:
+          type: boolean
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        ended_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/EndNightStepDto'
+    EndNightStepDto:
+      required:
+        - id
+        - state
+        - detail
+      type: object
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+        detail:
+          type:
+            - 'null'
+            - string
     EquipmentConnectionDto:
       required:
         - camera
@@ -14877,6 +14989,7 @@ components:
         - solver-not-set
         - capture-settings-unsupported
         - storage-unavailable
+        - end-night-in-progress
         - below-horizon-limit
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
@@ -18012,6 +18125,7 @@ tags:
   - name: Diagnostics
   - name: Faults
   - name: Preflight
+  - name: EndNight
   - name: Planning
   - name: Server
   - name: ServerUpdate
