@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
@@ -27,7 +28,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -352,6 +355,29 @@ namespace OpenAstroAra.Test {
 
         private static void AssertNoMotionAfter(FakeStopMount mount, int from) =>
             Assert.That(mount.Since(from).Where(IsMotion), Is.Empty, $"no motion command after the stop: {string.Join(", ", mount.Since(from))}");
+
+        /// <summary>The review of #2086: the app's Stop and Done wait <c>PolarAlignApi.endTimeout</c> for the daemon's answer. It
+        /// must outlast the daemon's slowest end (a stuck run, from the default bounds) with room for tracking off, the session
+        /// row and the camera release, or the app reports a failed Stop while the daemon is still stopping the mount.</summary>
+        [Test]
+        public void The_clients_end_timeout_outlasts_the_daemons_slowest_end() {
+            using var svc = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
+                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+            Assert.That(svc.EndWorstCase, Is.EqualTo(TimeSpan.FromSeconds(47.25)), "the default bounds");
+
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "OpenAstroAra.sln"))) {
+                dir = dir.Parent;
+            }
+            Assert.That(dir, Is.Not.Null, "repo root above " + AppContext.BaseDirectory);
+            var api = File.ReadAllText(Path.Combine(dir!.FullName,
+                "client", "openastroara_client", "lib", "services", "polar_align_api.dart"));
+            var match = Regex.Match(api, @"static const endTimeout = Duration\(seconds: (\d+)\);");
+            Assert.That(match.Success, Is.True, "PolarAlignApi.endTimeout in polar_align_api.dart");
+            var client = TimeSpan.FromSeconds(int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture));
+            Assert.That(client - svc.EndWorstCase, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(10)),
+                $"the client waits {client.TotalSeconds} s; the daemon may take {svc.EndWorstCase.TotalSeconds} s before the end's last writes");
+        }
 
         // ── user Stop ────────────────────────────────────────────────────────────────────────
 
