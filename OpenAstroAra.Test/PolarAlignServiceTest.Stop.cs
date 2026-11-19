@@ -90,6 +90,9 @@ namespace OpenAstroAra.Test {
             }
             private int _driverReadsFail;
             private bool _cacheLost;
+            /// <summary>#2089 — one fresh read fails (the cache turns to the placeholder) once the RA motor runs at or past this
+            /// RA: a WiFi hiccup in the middle of a turn. Guarded by the lock.</summary>
+            public double? FailReadPastRaDeg { get; set; }
             /// <summary>How many WS events were published when a command arrived: the order against the run's last event.</summary>
             public Func<int>? EventCount { get; set; }
 
@@ -155,6 +158,10 @@ namespace OpenAstroAra.Test {
                 service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
                 service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
                     lock (_lock) {
+                        if (FailReadPastRaDeg is double past && _rates[0] != 0 && _raDeg >= past) {
+                            FailReadPastRaDeg = null;
+                            _driverReadsFail++;
+                        }
                         if (_driverReadsFail > 0) {
                             _driverReadsFail--;
                             _cacheLost = true;

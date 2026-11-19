@@ -1369,18 +1369,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
-        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available. With
-        /// <paramref name="noteLeft"/> (a motor move's readings, #2089), a driver reading is where Polar Align's own move
-        /// left the mount (<see cref="NoteMountLeft"/>); a cached one, possibly the (0, 0) placeholder, never is.</summary>
-        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct, bool noteLeft = false) {
-            if (await DriverPointingJnowAsync(ct).ConfigureAwait(false) is { } fresh) {
-                if (noteLeft) {
-                    NoteMountLeft(fresh);
-                }
-                return fresh;
-            }
-            return CurrentMountPointingJnow();
-        }
+        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available. Never
+        /// for a motor move's readings (<see cref="MoveAxisUntilAsync"/> reads the driver alone, #2089).</summary>
+        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) =>
+            await DriverPointingJnowAsync(ct).ConfigureAwait(false) ?? CurrentMountPointingJnow();
 
         /// <summary>#2048 — the mount's pointing from the driver now, never the daemon's cache: null when the driver gives
         /// no answer. The cache falls back to the (0, 0) placeholder after one failed status poll (an AlpacaBridge hiccup

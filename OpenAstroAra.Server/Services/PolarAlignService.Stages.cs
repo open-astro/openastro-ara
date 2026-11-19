@@ -554,8 +554,11 @@ namespace OpenAstroAra.Server.Services {
                 TelescopeAxes axis, double sign, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, bool checkDirection,
                 int gen, CancellationToken ct) {
-            var start = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
+            // #2089 — every reading of a move comes from the driver, never the cache: after a failed status poll the cache
+            // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
+            // it away from the band (and the session's origin) until the stall bound. A failed read stops the move.
+            var start = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+                ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
             double learnedSign;
             lock (_gate) {
@@ -586,8 +589,9 @@ namespace OpenAstroAra.Server.Services {
                         throw new RoutineFailedException("slew_failed", ExternalStopMessage);
                     }
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
-                    var now = await FreshMountPointingJnowAsync(ct, noteLeft: true).ConfigureAwait(false)
-                        ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
+                    var now = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+                        ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
+                    NoteMountLeft(now);
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {
                         break;
@@ -654,8 +658,9 @@ namespace OpenAstroAra.Server.Services {
             // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();
             await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
-            var after = await FreshMountPointingJnowAsync(ct, noteLeft: true).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
+            var after = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+                ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
+            NoteMountLeft(after);
             var moved = progress(start, after);
             LogAxisMoveDone(axis, moved);
             return after;
@@ -669,6 +674,9 @@ namespace OpenAstroAra.Server.Services {
             _mount is ITelescopeService service
                 ? service.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, rate == 0 ? null : abortEpoch, CancellationToken.None)
                 : Task.Run(() => _mount.MoveAxis(axis, rate));
+
+        private const string MoveReadFailedMessage =
+            "the mount did not report where it points during the turn, so the motor was stopped — check its connection, then start again";
 
         private const string ExternalStopMessage =
             "the mount was stopped from outside polar alignment (Stop Mount) — start again when ready";

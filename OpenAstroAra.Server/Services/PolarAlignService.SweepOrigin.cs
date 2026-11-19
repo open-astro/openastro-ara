@@ -73,6 +73,15 @@ namespace OpenAstroAra.Server.Services {
         internal static double MechanicalTurnDeg(double fromRaDeg, double toRaDeg, double elapsedSeconds) =>
             Wrap180(toRaDeg - fromRaDeg - (elapsedSeconds * SiderealDegPerSecond));
 
+        /// <summary>How far the mount moved between two readings beyond what tracking explains, on or off: the smaller of
+        /// the reading's change (tracking on keeps it still) and the axis's mechanical turn (tracking off keeps the axis
+        /// still). Tracking is not a move by other means: counting it as one would forget the origin a few minutes after a
+        /// run that handed tracking back (<c>stop_tracking_when_done</c> off, or Guiding took the camera), and the next run
+        /// would build its band from where the last one ended, the walk toward the pier this bound stops. The offset
+        /// from the origin still counts the tracking turn (<see cref="MechanicalTurnDeg"/>). Pure, for the tests.</summary>
+        internal static double MovedByOtherMeansDegBetween(double fromRaDeg, double toRaDeg, double elapsedSeconds) =>
+            Math.Min(Math.Abs(Wrap180(toRaDeg - fromRaDeg)), Math.Abs(MechanicalTurnDeg(fromRaDeg, toRaDeg, elapsedSeconds)));
+
         private static double SecondsBetween(long from, long to) => (to - from) / (double)Stopwatch.Frequency;
 
         /// <summary>The sweep part of a start's plan from the mount's pose read now: a new origin (the first start since
@@ -119,9 +128,9 @@ namespace OpenAstroAra.Server.Services {
             if (lastLeft is null) {
                 return "no pose left by Polar Align";
             }
-            var turned = MechanicalTurnDeg(lastLeft.RaDeg, now.RaDeg, SecondsBetween(lastLeft.At, now.At));
-            if (Math.Abs(turned) > MovedByOtherMeansDeg) {
-                return $"the RA axis turned {turned:F1}° since Polar Align last moved it";
+            var turned = MovedByOtherMeansDegBetween(lastLeft.RaDeg, now.RaDeg, SecondsBetween(lastLeft.At, now.At));
+            if (turned > MovedByOtherMeansDeg) {
+                return $"the RA axis moved {turned:F1}° since Polar Align last moved it, more than tracking (on or off) explains";
             }
             if (lastLeft.Side != PierSide.pierUnknown && now.Side != PierSide.pierUnknown && lastLeft.Side != now.Side) {
                 return "the pier side changed since Polar Align last moved it";

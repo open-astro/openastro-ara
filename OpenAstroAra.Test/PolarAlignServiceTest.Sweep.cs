@@ -18,6 +18,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Concurrent;
@@ -257,6 +258,43 @@ namespace OpenAstroAra.Test {
             Assert.That(third.NewOrigin, Is.False, "the RA wrap is not a move by other means");
             Assert.That(third.OriginOffsetDeg, Is.EqualTo(0.0).Within(0.5));
             Assert.That(third.Direction, Is.EqualTo(PolarAlignDirections.East), "at the origin: the origin's own first way");
+        }
+
+        // ── a driver read failure in the middle of a turn ───────────────────────────────────────
+
+        [Test]
+        public async Task A_driver_read_that_fails_during_a_turn_stops_the_motor_and_never_turns_it_back_past_the_start() {
+            // The second turn runs from RA 10° east. One read fails mid-turn: the cache is then the (0, 0) placeholder,
+            // and progress read from it (−10°) looked like a wrong-way turn: the motor reversed and ran west, out of the
+            // band and toward the far side of the origin, until the stall bound. The move now stops and the run fails.
+            var mount = new FakeStopMount(tracking: true) { FailReadPastRaDeg = 12.0 };
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(plan.Direction, Is.EqualTo(PolarAlignDirections.East));
+
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("did not report where it points during the turn"));
+            Assert.That(mount.Log.Where(c => c.StartsWith("move primary -", StringComparison.Ordinal)), Is.Empty,
+                "never reversed on the placeholder: " + string.Join(", ", mount.Log));
+            Assert.That(mount.RaDeg, Is.InRange(12.0, 13.0), "stopped where the read failed");
+            Assert.That(mount.AtRest, Is.True);
+        }
+
+        // ── tracking is not a move by other means ────────────────────────────────────────────
+
+        // from RA, to RA, seconds between → how far the mount moved beyond what tracking (on or off) explains.
+        [TestCase(10.0, 10.0, 1800.0, 0.0, TestName = "Tracking on for 30 minutes (the run handed tracking back) is not a move by other means")]
+        [TestCase(10.0, 17.52, 1800.0, 0.0, TestName = "Tracking off for 30 minutes (the reading drifts) is not a move by other means")]
+        [TestCase(10.0, 15.0, 0.0, 5.0, TestName = "A 5 degree slew is a move by other means")]
+        [TestCase(359.0, 4.0, 0.0, 5.0, TestName = "A 5 degree slew across 0 h is a move by other means")]
+        [TestCase(10.0, 40.0, 1800.0, 22.48, TestName = "A slew with tracking off is a move by other means")]
+        public void MovedByOtherMeansDegBetween_does_not_count_tracking(double fromRaDeg, double toRaDeg, double seconds, double expectedDeg) {
+            Assert.That(PolarAlignService.MovedByOtherMeansDegBetween(fromRaDeg, toRaDeg, seconds), Is.EqualTo(expectedDeg).Within(0.01));
         }
 
         // ── the mechanical turn ──────────────────────────────────────────────────────────────
