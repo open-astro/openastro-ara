@@ -56,6 +56,8 @@ namespace OpenAstroAra.Test {
             private double _decDeg = 85.0;
             private TaskCompletionSource<bool>? _goto;
             private TaskCompletionSource<bool>? _home;
+            private TaskCompletionSource<bool>? _unpark;
+            private bool _parked;
             private long _epoch;
             private long _trackingWrites;
             private bool _tracking;
@@ -86,14 +88,19 @@ namespace OpenAstroAra.Test {
             public TaskCompletionSource FirstMove { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public TaskCompletionSource GotoStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public TaskCompletionSource HomeStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource UnparkStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            public FakeStopMount(bool tracking = true, bool canFindHome = false) {
+            /// <param name="parked">The mount starts parked. Its unpark is a motorised move that ignores the caller's token
+            /// and ends only on AbortSlew (the abort lands as the mount finishes unparking), and its Slewing does not cover
+            /// the unpark: only the routine's own motion mark tells the stop path to send AbortSlew.</param>
+            public FakeStopMount(bool tracking = true, bool canFindHome = false, bool parked = false) {
                 _tracking = tracking;
+                _parked = parked;
                 Mock.Setup(m => m.GetInfo()).Returns(() => {
                     lock (_lock) {
                         return new TelescopeInfo {
                             Connected = true, SiderealTime = 20.0, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(),
+                            Slewing = SlewingLocked(), AtPark = _parked,
                         };
                     }
                 });
@@ -147,6 +154,16 @@ namespace OpenAstroAra.Test {
                             _home = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                             HomeStarted.TrySetResult();
                             return HomeIgnoresCancel ? _home.Task : _home.Task.WaitAsync(ct);
+                        }
+                    });
+
+                Mock.Setup(m => m.UnparkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                    .Returns(() => {
+                        lock (_lock) {
+                            Record("unpark");
+                            _unpark = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            UnparkStarted.TrySetResult();
+                            return _unpark.Task;
                         }
                     });
 
@@ -207,6 +224,11 @@ namespace OpenAstroAra.Test {
                             _goto = null;
                             _home?.TrySetResult(false);
                             _home = null;
+                            if (_unpark is not null) {
+                                _parked = false;
+                                _unpark.TrySetResult(true);
+                                _unpark = null;
+                            }
                         }
                         return Task.CompletedTask;
                     });
@@ -218,6 +240,14 @@ namespace OpenAstroAra.Test {
                     _home?.TrySetResult(false);
                     _home = null;
                     _runaway = false;
+                }
+            }
+
+            /// <summary>Ends an unpark that nothing else ended (no AbortSlew reached it); the mount stays parked.</summary>
+            public void ReleaseUnpark() {
+                lock (_lock) {
+                    _unpark?.TrySetResult(false);
+                    _unpark = null;
                 }
             }
 
@@ -408,6 +438,39 @@ namespace OpenAstroAra.Test {
             AssertNoMotionAfter(mount, at);
             Assert.That(mount.AtRest, Is.True, "the GoTo was aborted, not left running");
             Assert.That(mount.Tracking, Is.False, "the GoTo turned tracking on; the Stop leaves it off");
+        }
+
+        // A Stop that lands while the run unparks the mount: the unpark is motion like a GoTo, so the Stop's first round
+        // carries AbortSlew even though the mount does not read as slewing. An unpark that still returns (the abort landed
+        // as it finished) does not let the stopped run go on: its motion stays marked, so the exit's own round aborts too,
+        // and the run ends stopped, not failed as mount_parked.
+        [Test]
+        public async Task Stop_during_the_unpark_aborts_it_and_the_run_ends_stopped() {
+            var mount = new FakeStopMount(tracking: true, parked: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(2);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.UnparkStarted.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            Assert.That(mount.AtRest, Is.True, "the mount does not read as slewing while it unparks");
+
+            var at = mount.Count;
+            try {
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            } finally {
+                mount.ReleaseUnpark();
+            }
+
+            var since = mount.Since(at);
+            var all = string.Join(", ", since);
+            Assert.That(since.FirstOrDefault(), Is.EqualTo("abort polar_align"), $"the Stop's first command aborts the unpark: {all}");
+            AssertStopRoundFrom(mount.Log, at, abort: true);
+            Assert.That(since.Count(c => c == "abort polar_align"), Is.GreaterThanOrEqualTo(2),
+                $"the exit's own round aborts too: the stopped run never cleared its unpark mark: {all}");
+            AssertNoMotionAfter(mount, at);
+            Assert.That(mount.Tracking, Is.False);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, $"no mount_parked failure: {all}");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
         }
 
         // A client that gave up (its 5 s timeout, a dropped link) cancels the request: the stop still goes out in full.

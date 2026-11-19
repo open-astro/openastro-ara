@@ -144,7 +144,8 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // Run exits stopping the mount right now (ExitMountOnceAsync). Guarded by _gate.
+        // Run exits stopping the mount right now (ExitMountOnceAsync; a failure's exit counts from the moment it clears
+        // _active, in FailRoutineAsync). Guarded by _gate.
         private int _exitsInFlight;
 
         private bool IsCurrent(int gen) {
@@ -1400,9 +1401,21 @@ namespace OpenAstroAra.Server.Services {
                 if (claimed) {
                     _state = "failed";
                     _active = false;
+                    // In the same section that clears _active: a sequence start reading IsActive between the two would
+                    // otherwise see no run and go on while the exit below still sends its stop rounds and tracking write.
+                    _exitsInFlight++;
                 }
             }
-            var mountStopped = await exitMount().ConfigureAwait(false);
+            bool? mountStopped;
+            try {
+                mountStopped = await exitMount().ConfigureAwait(false);
+            } finally {
+                if (claimed) {
+                    lock (_gate) {
+                        _exitsInFlight--;
+                    }
+                }
+            }
             if (!claimed) {
                 return;
             }
