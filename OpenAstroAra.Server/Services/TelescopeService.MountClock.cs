@@ -123,11 +123,17 @@ public sealed partial class TelescopeService : IMountClockGate {
             try {
                 await _sitePushGate.WaitAsync().ConfigureAwait(false);
                 try {
-                    if (store is not null && site is not null) {
-                        await PushSiteCoreAsync(store, site, force: true).ConfigureAwait(false);
-                    }
-                    if (clock is not null) {
-                        await PushMountClockCoreAsync(clock, "connect", session).ConfigureAwait(false);
+                    try {
+                        if (store is not null && site is not null) {
+                            await PushSiteCoreAsync(store, site, force: true).ConfigureAwait(false);
+                        }
+                    } finally {
+                        // A site push that throws must not skip the clock: with no check recorded the
+                        // gate would stay closed for the whole session (the 2 s tick only rechecks a
+                        // check that exists).
+                        if (clock is not null) {
+                            await PushMountClockCoreAsync(clock, "connect", session).ConfigureAwait(false);
+                        }
                     }
                 } finally {
                     _sitePushGate.Release();
@@ -198,7 +204,13 @@ public sealed partial class TelescopeService : IMountClockGate {
             return;
         }
         var before = ReadMountUtc(clock);
-        timeSync.TryGetTrustedUtc(out var pushed);
+        // Read again after the slew wait: a manual sync meanwhile drops the trust, and the default
+        // (year 1) must never be written into the mount.
+        if (!timeSync.TryGetTrustedUtc(out var pushed)) {
+            LogMountClockNoTrustedTime(reason);
+            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false);
+            return;
+        }
         string? refused = null;
         try {
             clock.SetUtcDate(pushed.UtcDateTime);
@@ -395,8 +407,9 @@ public sealed partial class TelescopeService : IMountClockGate {
                 || _timeSyncResolver.Invoke() is not { } timeSync || !timeSync.TryGetTrustedUtc(out _)) {
             return;
         }
-        // A clock never written (the mount was slewing) is written now; otherwise the check is read-only.
-        RunMountClockJob("recheck", write: check.Reason == SlewingReason);
+        // A clock never written (the mount was slewing, or no trusted time had reached it) is written
+        // now; otherwise the check is read-only.
+        RunMountClockJob("recheck", write: check.Reason is SlewingReason or NoTrustedTimeReason);
     }
 
     /// <summary>A sequencer GoTo right after a reconnect waits, up to <see cref="MountClockPushWait"/>, for
@@ -404,11 +417,24 @@ public sealed partial class TelescopeService : IMountClockGate {
     private async Task<string?> MountClockRefusalAfterPushAsync(CancellationToken token) {
         var refusal = MountClockMotionRefusal();
         var deadline = TickMs() + (long)MountClockPushWait.TotalMilliseconds;
-        while (refusal is not null && Volatile.Read(ref _mountClockPushes) > 0 && TickMs() < deadline) {
+        while (refusal is not null && MountClockSettling() && TickMs() < deadline) {
             await Task.Delay(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
             refusal = MountClockMotionRefusal();
         }
         return refusal;
+    }
+
+    // A push is running, or a verified check has seen a host clock step that the next 2 s tick turns
+    // into a push: either way the answer is about to change.
+    private bool MountClockSettling() {
+        if (Volatile.Read(ref _mountClockPushes) > 0) {
+            return true;
+        }
+        MountClockCheck? check;
+        lock (_gate) {
+            check = _mountClock;
+        }
+        return check is { Verified: true } && HostClockStepped(check);
     }
 
     [LoggerMessage(Level = LogLevel.Information,

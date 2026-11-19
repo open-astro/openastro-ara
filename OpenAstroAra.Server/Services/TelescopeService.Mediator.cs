@@ -807,8 +807,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
-        // #2071 — before the pier-side hint: some mounts start the flip slew on that write.
-        if (MountClockMotionRefusal() is { } clockRefusal) {
+        // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
+        // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
+        if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
             LogMountOpRejectedClock("telescope.flip", clockRefusal);
             throw new SequenceEntityFailedException(clockRefusal);
         }

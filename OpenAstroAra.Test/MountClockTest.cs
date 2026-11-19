@@ -237,6 +237,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_manual_sync_during_the_slew_wait_writes_nothing_into_the_mount() {
+            using var rig = new Rig();
+            rig.Mount.SlewingFor = 2;
+            rig.Svc.SitePushWait = _ => rig.SyncAsync("manual"); // a typed-in time lands while the push waits
+            await rig.SyncAsync();
+            Assert.That(rig.UtcWrites, Is.Zero, "the trust went away during the wait: no time (and never year 1) goes out");
+            Assert.That(rig.Mount.Clock, Is.EqualTo(StaleMount.UtcDateTime));
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Does.Contain("not been synced"));
+        }
+
+        [Test]
+        public async Task A_site_push_that_throws_still_sets_and_checks_the_mount_clock_on_connect() {
+            using var rig = new Rig();
+            await rig.SyncAsync();
+            rig.Mount.Writes.Clear();
+            rig.Mount.Clock = StaleMount.UtcDateTime;
+            var broken = new Mock<IProfileStore>();
+            broken.Setup(s => s.GetSiteSettings()).Throws(new System.IO.IOException("profile unreadable"));
+            rig.Svc.FollowProfileSite(broken.Object);
+            rig.Svc.OnMountConnected();
+            Assert.That(rig.UtcWrites, Is.EqualTo(1), "the clock push runs after a failed site push");
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null, "checked against the mount's own longitude");
+        }
+
+        [Test]
+        public async Task A_mount_clock_no_trusted_time_reached_is_written_on_the_recheck() {
+            using var rig = new Rig();
+            rig.Svc.OnMountConnected(); // no trusted time yet
+            rig.Svc.MountClockSource = () => null; // the sync lands while the mount is between sessions
+            await rig.SyncAsync();
+            rig.Svc.MountClockSource = () => rig.Mount;
+            Assert.That(rig.UtcWrites, Is.Zero);
+            rig.Tick += 31_000;
+            rig.Wall += TimeSpan.FromSeconds(31);
+            rig.Svc.WatchMountClock();
+            Assert.That(rig.UtcWrites, Is.EqualTo(1), "a recheck of a clock never written writes it");
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+        }
+
+        [Test]
         public void Without_a_time_sync_service_the_gate_is_off() {
             using var svc = new TelescopeService();
             Assert.That(svc.MountClockMotionRefusal(), Is.Null);
