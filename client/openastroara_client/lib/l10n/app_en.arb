@@ -8545,6 +8545,11 @@
     "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
     "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
   },
+  "refusalCounterweightLimit": "That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.",
+  "@refusalCounterweightLimit": {
+    "description": "Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees",
+    "placeholders": {"hourAngle": {"type": "String"}, "angle": {"type": "String"}, "limit": {"type": "String"}}
+  },
   "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
   "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
   "bridgeSetupFoundTitle": "Found on this rig",

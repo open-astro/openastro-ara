@@ -51,7 +51,8 @@ public static partial class EquipmentEndpoints {
     /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
     /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
-    /// with the <c>below-horizon-limit</c> Refusal (#2044); <c>force</c> does not bypass it. Testable
+    /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
+    /// meridian with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
     /// without the host.</summary>
     internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null) {
         ArgumentNullException.ThrowIfNull(telescope);
@@ -66,6 +67,13 @@ public static partial class EquipmentEndpoints {
                 throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
                     string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
                     new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
+            }
+            // #2073 — the daemon now turns tracking on before a GoTo, so the mount's "tracking is off"
+            // refusal no longer stops a target below the pole that would put the counterweight up.
+            if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, logger) is { } cw) {
+                throw new RefusalException(RefusalCatalog.CounterweightLimit,
+                    string.Create(CultureInfo.InvariantCulture, $"The target is below the pole at hour angle {cw.HourAngleHours:F1} h: the counterweight would be {cw.CounterweightAngleDeg:F0}° from down, past the {cw.LimitDeg:F0}° limit."),
+                    new Dictionary<string, object?> { ["hour_angle_hours"] = cw.HourAngleHours, ["counterweight_angle_deg"] = cw.CounterweightAngleDeg, ["limit_deg"] = cw.LimitDeg });
             }
         }
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
@@ -353,7 +361,7 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
                 SlewAsync(request, key, svc, sequencer, profiles, ct, logger))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced) or the below-horizon-limit Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit or counterweight-limit Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.

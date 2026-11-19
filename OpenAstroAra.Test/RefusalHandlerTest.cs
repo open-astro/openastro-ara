@@ -46,6 +46,7 @@ namespace OpenAstroAra.Test {
             new object[] { "capture-settings-unsupported", 422, Array.Empty<string>() },
             new object[] { "storage-unavailable", 409, Array.Empty<string>() },
             new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
+            new object[] { "counterweight-limit", 409, new[] { "hour_angle_hours", "counterweight_angle_deg", "limit_deg" } },
             new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
         };
 

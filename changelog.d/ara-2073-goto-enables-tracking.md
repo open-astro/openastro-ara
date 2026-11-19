@@ -1,0 +1,8 @@
+### Breaking changes
+
+- **A GoTo to a target below the pole near the lower meridian is refused** (#2073): `POST /api/v1/equipment/telescope/slew` now answers 409 with `reason` `counterweight-limit` for a target more than 10 h from the meridian (within 2 h of the lower meridian, under the pole), where the counterweight would be more than 60° from hanging down. Before, such a GoTo was sent to the mount. **After upgrading:** a GoTo to a low circumpolar target in that band is refused until it rises; pick another target or wait. An app older than this daemon shows the daemon's English sentence.
+
+### Fixed (GoTo)
+
+- **A GoTo from the Mount panel turns tracking on first** (#2073): the daemon now enables tracking right before it sends the GoTo, as Park and sequence GoTos already did, so a mount that is stopped or at Home (for example right after Find Home) no longer refuses it with "SlewToCoordinatesAsync requires Tracking to be true". A GoTo, Park, Unpark or Find Home that the mount refuses now has the driver's reason in the log line itself, not only in the exception.
+- **A GoTo that would put the counterweight up is refused before the mount moves** (#2073): turning tracking on removed the accidental barrier that stopped two counterweight-up GoTos at hour angle −11.1 h on 2026-11-19, so a REST GoTo below the pole past #2048's 60° counterweight angle is refused with `counterweight-limit` (hour angle, counterweight angle and limit), worded by the app in English and pt-BR. The horizon check runs first, a sync is not checked, `force` does not bypass it, and a profile with no site lets the GoTo through. The limit is fixed at 60° until #2048 adds its setting.

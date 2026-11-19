@@ -50,11 +50,14 @@ public static class RefusalCatalog {
     // Slice 2: a GoTo under the profile's horizon limit (#2044).
     public static readonly RefusalCause BelowHorizonLimit = new("below-horizon-limit", 409, "The target is below the horizon limit", "altitude_deg", "limit_deg");
 
+    // Slice 2: a GoTo below the pole that would turn the counterweight past its limit (#2073).
+    public static readonly RefusalCause CounterweightLimit = new("counterweight-limit", 409, "The target would turn the counterweight past its limit", "hour_angle_hours", "counterweight_angle_deg", "limit_deg");
+
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress, BelowHorizonLimit,
+        EndNightInProgress, BelowHorizonLimit, CounterweightLimit,
     ];
 }

@@ -720,13 +720,19 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
             } else {
+                // Same pre-slew tracking enable as the mediator goto: ITelescopeV4 mounts refuse an
+                // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
+                // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
+                // a refused write is logged at Debug and the slew attempt stays authoritative.
+                TryEnableTracking(client);
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
                 // State="slewing" until the mount settles.
                 client.SlewToCoordinatesAsync(raHours, decDeg);
             }
             RefreshCacheOnce();
         } catch (Exception ex) {
-            LogSlewFailed(ex, raHours, decDeg);
+            // The reason goes in the one-line message too (#2073), not only in the exception (@x).
+            LogSlewFailed(ex, raHours, decDeg, ex.Message);
             // The dispatch failed — no episode will open for this command, so its noted target
             // must not ride an unrelated later episode's slew_started (#836 r2).
             lock (_gate) {
@@ -742,7 +748,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             action(client);
             RefreshCacheOnce();
         } catch (Exception ex) {
-            LogControlFailed(ex, op);
+            LogControlFailed(ex, op, ex.Message);
         }
     }
 
@@ -1529,9 +1535,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         GC.SuppressFinalize(this);
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed")]
-    private partial void LogSlewFailed(Exception ex, double ra, double dec);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed: {Reason}")]
+    private partial void LogSlewFailed(Exception ex, double ra, double dec, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed")]
-    private partial void LogControlFailed(Exception ex, string op);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed: {Reason}")]
+    private partial void LogControlFailed(Exception ex, string op, string reason);
 }

@@ -1830,6 +1830,7 @@
   "refusalCaptureSettingsUnsupported": "A câmera não consegue fazer essa exposição ou binning. Tente outro valor.",
   "refusalStorageUnavailable": "O disco de armazenamento não foi encontrado. Reconecte-o e tente de novo.",
   "refusalBelowHorizonLimit": "Esse alvo está a {altitude}°, abaixo do seu limite de horizonte de {limit}°. Escolha um alvo mais alto ou reduza o limite de horizonte.",
+  "refusalCounterweightLimit": "Esse alvo está abaixo do polo, no ângulo horário {hourAngle} h: o contrapeso subiria {angle}° a partir da posição vertical para baixo, além do limite de {limit}°. Escolha outro alvo ou espere este subir mais.",
   "refusalEndNightInProgress": "O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.",
   "bridgeSetupFoundTitle": "Encontrado neste setup",
   "bridgeSetupAddSelected": "Adicionar selecionados ({count})",

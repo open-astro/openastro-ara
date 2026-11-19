@@ -24,6 +24,12 @@ Refusal _known(RefusalCause cause) => Refusal(
       ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
       : cause == RefusalCause.belowHorizonLimit
       ? const {'altitude_deg': 14.2, 'limit_deg': 20}
+      : cause == RefusalCause.counterweightLimit
+      ? const {
+          'hour_angle_hours': -11.13,
+          'counterweight_angle_deg': 77.0,
+          'limit_deg': 60,
+        }
       : const {},
 );
 
@@ -86,6 +92,18 @@ void main() {
       expect(words, contains('20'));
     }
   });
+
+  test(
+    'the counterweight sentence names the hour angle, the angle and the limit',
+    () {
+      for (final l in [_en, _pt]) {
+        final words = failureReason(l, _known(RefusalCause.counterweightLimit));
+        expect(words, contains('-11.1'));
+        expect(words, contains('77'));
+        expect(words, contains('60'));
+      }
+    },
+  );
 
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(
