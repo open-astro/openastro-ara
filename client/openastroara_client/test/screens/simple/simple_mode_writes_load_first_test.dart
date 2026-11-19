@@ -71,7 +71,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, FakeSectionRig rig) async {
       ),
     ),
   );
-  await tester.pump();
+  await flushLoads(tester);
   return c;
 }
 

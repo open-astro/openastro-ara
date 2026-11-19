@@ -171,7 +171,7 @@ Future<ProviderContainer> _pump(
       ),
     ),
   );
-  await tester.pump();
+  await flushLoads(tester);
   return c;
 }
 

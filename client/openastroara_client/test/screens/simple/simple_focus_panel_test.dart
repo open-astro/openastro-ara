@@ -35,6 +35,7 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -130,33 +131,53 @@ void _tall(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-/// The daemon's profile: records each autofocus PUT.
+/// The section as the rig served it when the test starts.
+class _Loaded extends AutofocusSettingsNotifier {
+  @override
+  LoadedSection<AutofocusSettings> build() => const LoadedSection(
+    value: AutofocusSettings(),
+    source: SectionSource.rig,
+  );
+}
+
+/// The daemon's profile: serves the autofocus section and records each PUT.
 class _SaveProfile extends ProfileApi {
   _SaveProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
   final saved = <AutofocusSettings>[];
   @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async {
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() async =>
+      (value: saved.isEmpty ? const AutofocusSettings() : saved.last, etag: null);
+  @override
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings value, {
+    String? ifMatch,
+  }) async {
     saved.add(value);
-    return value;
+    return (value: value, etag: null);
   }
 }
 
-class _FailProfile extends ProfileApi {
-  _FailProfile() : super(const AraServer(hostname: 'localhost', port: 5555));
+class _FailProfile extends _SaveProfile {
   @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async => throw StateError('daemon offline');
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings value, {
+    String? ifMatch,
+  }) async => throw StateError('daemon offline');
 }
 
 Future<(_Focuser, _Live)> _pump(WidgetTester tester,
     {FocuserStatus? focuser,
     AutofocusRun run = AutofocusRun.idle,
     Uint8List? frame,
+    ProfileApi? profile,
     List<Override> extra = const []}) async {
   final f = _Focuser(focuser);
   final l = _Live(AutofocusLive(run: run, frame: frame));
   _c = ProviderContainer(overrides: [
     focuserProvider.overrideWith(() => f),
     autofocusLiveProvider.overrideWith(() => l),
+    autofocusSettingsProvider.overrideWith(_Loaded.new),
+    profileApiProvider.overrideWithValue(profile ?? _SaveProfile()),
     ...extra,
   ]);
   addTearDown(_c.dispose);
@@ -525,21 +546,20 @@ void main() {
       await pumpWith(tester);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
       await tester.pump();
-      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 10);
+      expect(_c.read(autofocusSettingsProvider).value!.exposureSeconds, 10);
       expect(selected(tester, '10'), isTrue);
     });
 
     testWidgets("a pick is saved to the profile, where the daemon reads the next run's exposure", (tester) async {
       final api = _SaveProfile();
-      await _pump(tester, focuser: _focuser(), extra: [profileApiProvider.overrideWithValue(api)]);
+      await _pump(tester, focuser: _focuser(), profile: api);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
       await tester.pump();
       expect(api.saved.map((v) => v.exposureSeconds), [10]);
     });
 
     testWidgets("a failed save says so in a pill", (tester) async {
-      await _pump(tester, focuser: _focuser(), extra: [
-        profileApiProvider.overrideWithValue(_FailProfile()),
+      await _pump(tester, focuser: _focuser(), profile: _FailProfile(), extra: [
         simpleModeActiveProvider.overrideWithValue(true),
       ]);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
@@ -553,11 +573,11 @@ void main() {
       await pumpWith(tester, seconds: 3);
       expect(selected(tester, '3'), isTrue);
       expect(find.text('3 s'), findsOneWidget);
-      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 3);
+      expect(_c.read(autofocusSettingsProvider).value!.exposureSeconds, 3);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-15')));
       await tester.pump();
       expect(find.byKey(const Key('simple-focus-af-exposure-3')), findsNothing);
-      expect(_c.read(autofocusSettingsProvider).exposureSeconds, 15);
+      expect(_c.read(autofocusSettingsProvider).value!.exposureSeconds, 15);
     });
 
     testWidgets('locked while autofocus runs', (tester) async {

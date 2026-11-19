@@ -251,8 +251,11 @@ void _whole(WidgetTester tester, Finder text) {
 // target_plan_dialog_test).
 class _Optics extends OpticsSettingsNotifier {
   @override
-  OpticsSettings build() => const OpticsSettings(
-      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+  LoadedSection<OpticsSettings> build() => const LoadedSection(
+    value: OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91),
+    source: SectionSource.rig,
+  );
 }
 
 class _Electronics extends CameraElectronicsNotifier {

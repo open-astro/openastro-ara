@@ -32,6 +32,8 @@ import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 
 /// The rig's calibration routes: its sessions, and the matching-flats
@@ -288,6 +290,14 @@ CalibrationSession _session({
   manualCapture: manual,
 );
 
+class _Defaults extends ImagingDefaultsNotifier {
+  @override
+  LoadedSection<ImagingDefaults> build() => const LoadedSection(
+    value: ImagingDefaults(),
+    source: SectionSource.rig,
+  );
+}
+
 Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
   WidgetTester tester,
   List<CalibrationSession> sessions, {
@@ -308,6 +318,8 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
     simpleCalibrationRunStateProvider.overrideWith(() => run.calibration),
     flatPanelProvider.overrideWith(() => _Panel(panel, cover: cover)),
     cameraStatusProvider.overrideWith(() => _Camera(camera)),
+    // The rig's imaging defaults: the target a calibration set cools to.
+    imagingDefaultsProvider.overrideWith(_Defaults.new),
     if (plan != null) simpleRunProvider.overrideWith(() => _Plan(plan)),
     ...overrides,
   ]);

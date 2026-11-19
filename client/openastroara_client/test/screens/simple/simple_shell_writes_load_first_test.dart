@@ -120,7 +120,7 @@ Future<ProviderContainer> _pump(
       ),
     ),
   );
-  await tester.pump();
+  await flushLoads(tester);
   return c;
 }
 
@@ -146,7 +146,7 @@ Future<void> _settle(
       () => Future<void>.delayed(const Duration(milliseconds: 5)),
     );
   }
-  await tester.pump();
+  await flushLoads(tester);
 }
 
 Future<void> _roll(WidgetTester tester, String wheel, int items) async {
@@ -250,7 +250,7 @@ void main() {
       mount.report({'focal_length_mm': 480, 'aperture_diameter_mm': 80});
       await settle(() => rig.puts.isNotEmpty);
     });
-    await tester.pump();
+    await flushLoads(tester);
     expect(rig.puts, isEmpty);
     expect(rig.sectionOf('optics'), rigOptics);
   });
@@ -284,7 +284,7 @@ void main() {
       await other;
       await settle(() => rig.puts.isNotEmpty);
     });
-    await tester.pump();
+    await flushLoads(tester);
     expect(rig.puts, isEmpty);
     expect(rig.sectionOf('optics'), rigOptics);
   });

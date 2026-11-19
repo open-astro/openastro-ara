@@ -45,8 +45,10 @@ class _Profile extends ProfileApi {
   Future<SiteSettings> getSiteSettings() async =>
       site ?? (throw Exception('connection refused'));
   @override
-  Future<OpticsSettings> getOptics() async =>
-      optics ?? (throw Exception('connection refused'));
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => (
+    value: optics ?? (throw Exception('connection refused')),
+    etag: null,
+  );
   @override
   Future<Phd2Settings> getPhd2Settings() async => phd2;
 }
@@ -328,7 +330,7 @@ void main() {
       // The user types a focal length in Settings and has not saved it yet.
       c.read(opticsSettingsProvider.notifier).setFocalLengthMm(1000);
       await _relink(c);
-      expect(c.read(opticsSettingsProvider).focalLengthMm, 1000);
+      expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 1000);
       expect(c.read(rigSetupFactsProvider), isNotNull);
     });
 

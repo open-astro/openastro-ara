@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 
@@ -39,6 +41,10 @@ class FakeSectionRig implements HttpClientAdapter {
 
   /// Every section a GET asked for, answered or failed, in order.
   final List<String> gets = [];
+
+  /// Section -> a completer its next GET waits on before answering (a GET
+  /// that fails by [failGet] does not wait). The test completes it.
+  final Map<String, Completer<void>> holdGet = {};
 
   /// Path after `/api/v1/profile/` -> what a POST there does on the rig (a
   /// daemon-owned write such as `safety/first-flip/rearm`); returns the reply.
@@ -97,6 +103,8 @@ class FakeSectionRig implements HttpClientAdapter {
             error: 'rig unreachable',
           );
         }
+        final hold = holdGet.remove(section);
+        if (hold != null) await hold.future;
         return _json(_sections[section], 200, etag: etagOf(section));
       case 'PUT':
         final ifMatch = options.headers['if-match'] as String?;
@@ -133,6 +141,24 @@ class FakeSectionRig implements HttpClientAdapter {
 /// defaults), for the sections whose reader takes no client default: every
 /// key is there, so the load succeeds (ADR 0015 rule 3).
 const rigDefaults = <String, Map<String, Object?>>{
+  'autofocus': {
+    'method': 'hfr_v_curve',
+    'steps': 7,
+    'step_size': 50,
+    'step_size_auto': true,
+    'exposure_seconds': 5,
+    'binning': 1,
+    'af_filter': 'L',
+    'run_after_filter_change': true,
+    'trigger_temp_delta_c': 2.0,
+    'trigger_hfr_drift_pct': 15.0,
+    'every_n_hours': 2,
+    'abort_sequence_on_af_failure': true,
+    'restore_position_on_failure': true,
+    'telescope_type': 'other',
+    'backlash_in_steps': 0,
+    'backlash_out_steps': 0,
+  },
   'camera-electronics': {
     'sensor_name': '',
     'read_noise_e': 0,
@@ -178,6 +204,25 @@ const rigDefaults = <String, Map<String, Object?>>{
     'home_on_first_connect': true,
     'use_filter_wheel_offsets': false,
   },
+  'imaging-defaults': {
+    'exposure_seconds': 5,
+    'gain': 100,
+    'offset': 50,
+    'bin': 1,
+    'frame_kind': 'light',
+    'cooler_target_c': -10.0,
+    'cooler_ramp_c_per_min': 1.0,
+    'warmup_at_session_end': false,
+  },
+  'optics': {
+    'focal_length_mm': 0,
+    'reducer_factor': 1.0,
+    'sensor_width_px': 0,
+    'sensor_height_px': 0,
+    'pixel_size_um': 0,
+    'aperture_mm': 0,
+    'telescope_name': '',
+  },
   'plate-solve': {
     'engine': 'astap',
     'path_or_endpoint': '/opt/openastroara/astap_cli',
@@ -209,5 +254,14 @@ const rigDefaults = <String, Map<String, Object?>>{
 Future<void> settle(bool Function() done) async {
   for (var i = 0; i < 200 && !done(); i++) {
     await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
+/// A section that loads itself starts its GET while a widget builds, inside
+/// the test's fake clock, and Dio's request pipeline takes several timer turns
+/// to finish it. Turn them, so none is pending when the test ends.
+Future<void> flushLoads(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 10));
   }
 }

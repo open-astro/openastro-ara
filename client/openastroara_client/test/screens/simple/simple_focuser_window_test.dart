@@ -16,7 +16,11 @@ import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 
 /// A focuser that records where it was sent.
 class _Focuser extends FocuserNotifier {
@@ -76,6 +80,23 @@ class _Live extends AutofocusLiveNotifier {
   Future<void> start() async => starts++;
 }
 
+/// The rig's autofocus section in memory: its own GET and PUT, no network.
+class _MemAutofocus extends AutofocusSettingsNotifier {
+  AutofocusSettings rig = const AutofocusSettings();
+  @override
+  Future<Tagged<AutofocusSettings>> fetch(ProfileApi api) async =>
+      (value: rig, etag: null);
+  @override
+  Future<Tagged<AutofocusSettings>> send(
+    ProfileApi api,
+    AutofocusSettings value,
+    String? etag,
+  ) async {
+    rig = value;
+    return (value: value, etag: null);
+  }
+}
+
 class _Wheel extends FilterWheelNotifier {
   _Wheel(this._v);
   final FilterWheelStatus _v;
@@ -105,6 +126,11 @@ Future<_Focuser> _pump(
     overrides: [
       autofocusLiveProvider.overrideWith(() => _live),
       focuserProvider.overrideWith(() => focuser),
+      // A rig that holds the section: a change loads it first, then saves it.
+      profileApiProvider.overrideWithValue(
+        ProfileApi(const AraServer(hostname: 'test', port: 1)),
+      ),
+      autofocusSettingsProvider.overrideWith(_MemAutofocus.new),
       deviceDriverProvider.overrideWith((ref, type) async => null),
       if (wheel != null)
         filterWheelProvider.overrideWith(
@@ -155,6 +181,7 @@ Future<_Focuser> _pump(
     ),
   );
   await tester.pump();
+  await tester.pump(); // the section loads itself
   return focuser;
 }
 
@@ -682,7 +709,7 @@ void main() {
       await _pump(tester, _wire());
       await tester.tap(chipFor('simple-focuser-sharp-tight'));
       await tester.pump();
-      var s = _c.read(autofocusSettingsProvider);
+      var s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (
           s.runAfterFilterChange,
@@ -700,7 +727,7 @@ void main() {
       );
       await tester.tap(chipFor('simple-focuser-sharp-relaxed'));
       await tester.pump();
-      s = _c.read(autofocusSettingsProvider);
+      s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours),
         (3.0, 25.0, 4),
@@ -714,7 +741,7 @@ void main() {
       await _pump(tester, _wire());
       await tester.tap(chipFor('simple-focuser-plans-off'));
       await tester.pump();
-      final s = _c.read(autofocusSettingsProvider);
+      final s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (
           s.runAfterFilterChange,
@@ -738,7 +765,7 @@ void main() {
       );
       await tester.tap(chipFor('simple-focuser-plans-on'));
       await tester.pump();
-      final back = _c.read(autofocusSettingsProvider);
+      final back = _c.read(autofocusSettingsProvider).value!;
       expect(
         (back.triggerTempDeltaC, back.triggerHfrDriftPct, back.everyNHours),
         (2.0, 15.0, 2),
@@ -765,13 +792,13 @@ void main() {
       await tester.tap(chipFor('simple-focuser-sharp-custom'));
       await tester.pump();
       expect(
-        _c.read(autofocusSettingsProvider).triggerTempDeltaC,
+        _c.read(autofocusSettingsProvider).value!.triggerTempDeltaC,
         7,
         reason: 'Custom is never applied',
       );
       await tester.tap(chipFor('simple-focuser-sharp-normal'));
       await tester.pump();
-      final s = _c.read(autofocusSettingsProvider);
+      final s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours),
         (2.0, 15.0, 2),
@@ -791,7 +818,7 @@ void main() {
       expect(chipFor('simple-focuser-af-filter-L'), findsOneWidget);
       await tester.tap(chipFor('simple-focuser-af-filter-G'));
       await tester.pump();
-      expect(_c.read(autofocusSettingsProvider).afFilter, 'G');
+      expect(_c.read(autofocusSettingsProvider).value!.afFilter, 'G');
     },
   );
 

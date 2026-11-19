@@ -63,7 +63,8 @@ class _FakeProfileApi extends ProfileApi {
   }
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: null);
   @override
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() async =>
@@ -422,6 +423,7 @@ void main() {
   testWidgets('#1715 a guide scope whose focal length equals the main scope gets a warning', (tester) async {
     await _pump(tester, const Phd2Settings(guideFocalLength: 375));
     final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    await tester.pumpAndSettle(); // the optics load
     container.read(opticsSettingsProvider.notifier).setFocalLengthMm(375);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('guider_focal_length_copied')), findsOneWidget);

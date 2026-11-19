@@ -159,6 +159,7 @@ import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+import '../../support/fake_section_rig.dart';
 
 /// The session's rigs, without storage.
 class _SavedRigs extends SavedServersNotifier {
@@ -239,7 +240,10 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final container = ProviderContainer(overrides: [
+  final container = ProviderContainer(
+      // A provider that fails (a rig that is not there) would retry on the test's clock.
+      retry: (_, _) => null,
+      overrides: [
     // flutter_test runs as Android: not a phone unless a test says so.
     companionPlatformProvider.overrideWithValue(platform),
     simpleModePrefsProvider.overrideWithValue(modePrefs ?? _MemPrefs()),
@@ -784,7 +788,8 @@ class _GuideOpticsApi extends ProfileApi {
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
       : const Phd2Settings();
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: null);
 }
 
 /// A rig that holds the permanent pier on and refuses to change it.
@@ -806,6 +811,9 @@ class _PierRefusedApi extends ProfileApi {
       throw StateError('The rig refused the change.');
   @override
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  @override
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: null);
 }
 
 /// The rig's guider section as a store: reads return it, saves replace it.
@@ -821,7 +829,8 @@ class _Phd2StoreApi extends ProfileApi {
     return stored = s;
   }
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: null);
 }
 
 /// The rig's answer once the guider is disconnected: no guider (404).
@@ -927,19 +936,35 @@ class _OpticsMount extends MountNotifier {
       MountStatus.fromJson({..._wire('AM5', EquipmentConnectionState.connected), 'capabilities': caps});
 }
 
-class _OpticsApi extends ProfileApi {
-  _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
-  OpticsSettings optics;
-  final puts = <OpticsSettings>[];
-  // The status pill loads the safety policies; no network here.
+/// A rig with no network: the status pill's safety read fails at once, the
+/// profile list is one profile, the guider reads its defaults and the site takes
+/// any write.
+class _QuietApi extends ProfileApi {
+  _QuietApi() : super(const AraServer(hostname: 'test', port: 1));
   @override
   Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
-  Future<OpticsSettings> getOptics() async => optics;
+  Future<SiteSettings> putSiteSettings(SiteSettings value) async => value;
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings value) async {
+  Future<ProfileList> listProfiles() async => const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]);
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  @override
+  Future<({StorageSettings value, String? etag})> getStorageSection() async => throw StateError('unreachable');
+}
+
+/// The rig's optics in memory: the section's own GET and PUT, no network.
+class _MemOptics extends OpticsSettingsNotifier {
+  _MemOptics(this.optics);
+  OpticsSettings optics;
+  final puts = <OpticsSettings>[];
+  @override
+  Future<Tagged<OpticsSettings>> fetch(ProfileApi api) async => (value: optics, etag: '"${puts.length}"');
+  @override
+  Future<Tagged<OpticsSettings>> send(ProfileApi api, OpticsSettings value, String? etag) async {
     puts.add(value);
-    return optics = value;
+    optics = value;
+    return (value: value, etag: '"${puts.length}"');
   }
 }
 
@@ -3466,10 +3491,11 @@ void main() {
 
   testWidgets('Rig sets the telescope with digit wheels and the site with this device\'s location, adjust wheels and '
       'an elevation stepper, saved to the profile; no text fields', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
-    c.read(opticsSettingsProvider.notifier)
-      ..setApertureMm(80)
-      ..setFocalLengthMm(480);
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      profileApiProvider.overrideWithValue(_QuietApi()),
+      opticsSettingsProvider.overrideWith(() => _MemOptics(const OpticsSettings(apertureMm: 80, focalLengthMm: 480))),
+    ]);
+    await tester.pump();
     c.read(siteSettingsProvider.notifier)
       ..setLatitudeDeg(-37.2037)
       ..setLongitudeDeg(174.8824)
@@ -3496,7 +3522,7 @@ void main() {
     expect(tester.widget<CupertinoPicker>(find.byKey(const Key('simple-rig-aperture-wheel-0'))).useMagnifier, isTrue,
         reason: "iOS's own picker, the value under the band magnified");
     await roll('simple-rig-aperture-wheel-0', 2);
-    expect(c.read(opticsSettingsProvider).apertureMm, 82);
+    expect(c.read(opticsSettingsProvider).value!.apertureMm, 82);
     await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-aperture')));
@@ -3508,7 +3534,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-rig-focal')));
     await tester.pumpAndSettle();
     await roll('simple-rig-focal-wheel-0', 1);
-    expect(c.read(opticsSettingsProvider).focalLengthMm, 1480);
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 1480);
 
     // Latitude: hemisphere, degrees, four decimals.
     await tester.ensureVisible(find.byKey(const Key('simple-rig-focal')));
@@ -3800,8 +3826,9 @@ void main() {
           ..setLatitudeDeg(-37.2)
           ..setLongitudeDeg(174.9)
           ..setElevationM(71);
-        ref.read(opticsSettingsProvider.notifier).setApertureMm(80);
       }),
+      profileApiProvider.overrideWithValue(_QuietApi()),
+      opticsSettingsProvider.overrideWith(() => _MemOptics(const OpticsSettings(apertureMm: 80))),
     ]);
     await tester.pump();
     expect(loaded, 1, reason: 'Simple Mode loads the profile itself; nothing else may have');
@@ -3824,29 +3851,27 @@ void main() {
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
   });
 
-  testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
-      (tester) async {
-    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
+  testWidgets('a mount that reports its optics loads the profile\'s optics and sends no PUT', (tester) async {
+    final rig = FakeSectionRig({'optics': ProfileApi.opticsToJson(const OpticsSettings(focalLengthMm: 600))});
     final c = await _pump(tester, const Size(1024, 768), gear: [
-      profileApiProvider.overrideWithValue(api),
+      profileApiProvider.overrideWithValue(rig.api()),
       mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
     ]);
-    await tester.pump();
-    await tester.pump();
-    expect(api.puts.single.apertureMm, 80, reason: 'unknown: the mount\'s, saved to the profile');
-    expect(api.puts.single.focalLengthMm, 600, reason: 'the profile\'s own value wins');
-    expect(c.read(opticsSettingsProvider).apertureMm, 80);
+    await tester.runAsync(() => settle(() => rig.gets.contains('optics')));
+    await flushLoads(tester);
+    expect(rig.puts, isEmpty, reason: 'the rig fills what it lacks from the mount; the client never saves it');
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 600, reason: 'the profile\'s own value');
   });
 
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
-    final api = _OpticsApi(const OpticsSettings());
+    final rig = FakeSectionRig({'optics': ProfileApi.opticsToJson(const OpticsSettings())});
     await _pump(tester, const Size(1024, 768), gear: [
-      profileApiProvider.overrideWithValue(api),
+      profileApiProvider.overrideWithValue(rig.api()),
       mountProvider.overrideWith(() => _OpticsMount({})),
     ]);
-    await tester.pump();
-    await tester.pump();
-    expect(api.puts, isEmpty);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await flushLoads(tester);
+    expect(rig.puts, isEmpty);
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {

@@ -161,6 +161,21 @@ void main() {
         reason: 'an older snapshot must not reset the knob to defaults');
   });
 
+  test('a snapshot with no optics, imaging defaults or autofocus key leaves them not loaded', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {'filter_set': ProfileApi.filterSetToJson(const FilterSetSettings())});
+    final container = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
+    addTearDown(container.dispose);
+    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+    for (final p in [opticsSettingsProvider, imagingDefaultsProvider, autofocusSettingsProvider]) {
+      final s = container.read(p);
+      expect(s.source, SectionSource.notLoaded, reason: '$p');
+      expect(s.value, isNull, reason: '$p');
+    }
+  });
+
   test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
@@ -195,8 +210,8 @@ void main() {
     addTearDown(c.dispose);
     final seeded = await seedPlanningFromCache(c, 'p1');
     expect(seeded, isTrue);
-    expect(c.read(opticsSettingsProvider).focalLengthMm, 382);
-    expect(c.read(imagingDefaultsProvider).defaultGain, 101);
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 382);
+    expect(c.read(imagingDefaultsProvider).value!.defaultGain, 101);
     expect(c.read(siteSettingsProvider).siteName, 'South GA');
     expect(c.read(filterSetProvider).value!.filters.single.name, 'Ha');
     expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);

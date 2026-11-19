@@ -12,7 +12,7 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 import '../../../support/storage_fixture.dart';
 
 /// The rig behind File naming: Storage as [FakeStorageApi] serves it, and the
-/// other three sections the panel reads, whose filenames or site GET can be
+/// other sections the panel reads and saves, whose filenames or site GET can be
 /// failed. Their PUTs echo what was sent.
 class _FakeRig extends FakeStorageApi {
   Object? failFilenames;
@@ -41,10 +41,14 @@ class _FakeRig extends FakeStorageApi {
   Future<SiteSettings> putSiteSettings(SiteSettings value) async => value;
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: '"o1"');
 
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings value) async => value;
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings value, {
+    String? ifMatch,
+  }) async => (value: value, etag: '"o1"');
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeRig api) async {

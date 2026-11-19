@@ -44,4 +44,18 @@ void main() {
       }
     },
   );
+
+  test('the fields of the sections Simple Mode writes have no client default '
+      '(ADR 0015)', () {
+    final sections = settingsRegistry.where(
+      (s) =>
+          s.id.startsWith('imaging.defaults.') ||
+          s.id.startsWith('img.optics.') ||
+          s.id.startsWith('img.autofocus.'),
+    );
+    expect(sections, isNotEmpty);
+    for (final s in sections) {
+      expect(s.defaultValue, isNull, reason: s.id);
+    }
+  });
 }

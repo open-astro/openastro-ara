@@ -24,11 +24,11 @@ lib/screens/settings/panels/equipment_switch_panel.dart 27
 lib/screens/settings/panels/equipment_weather_panel.dart 15
 lib/screens/settings/panels/experimental_panel.dart 8
 lib/screens/settings/panels/filter_set_panel.dart 15
-lib/screens/settings/panels/imaging_autofocus_panel.dart 19
-lib/screens/settings/panels/imaging_defaults_panel.dart 27
+lib/screens/settings/panels/imaging_autofocus_panel.dart 18
+lib/screens/settings/panels/imaging_defaults_panel.dart 26
 lib/screens/settings/panels/imaging_plate_solve_panel.dart 18
 lib/screens/settings/panels/imaging_unguided_panel.dart 27
-lib/screens/settings/panels/optics_panel.dart 16
+lib/screens/settings/panels/optics_panel.dart 15
 lib/screens/settings/panels/profile_active_panel.dart 9
 lib/screens/settings/panels/profile_wizard_panel.dart 5
 lib/screens/settings/panels/safety_policies_panel.dart 49

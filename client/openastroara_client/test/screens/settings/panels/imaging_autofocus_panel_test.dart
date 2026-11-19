@@ -9,12 +9,13 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
 import 'package:openastroara/state/focus/focus_presets.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 // §59.8 — the Automatic step size switch; #1544 — the rows the Advanced
-// toggle and a settings search hit show. No server: the panel keeps the
-// notifier's defaults instead of hydrating.
+// toggle and a settings search hit show. No server: the section is a fixed
+// copy from the rig, as the sibling panel tests hold theirs.
 Future<void> _pump(
   WidgetTester tester, {
   AutofocusApi? api,
@@ -37,6 +38,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         activeServerProvider.overrideWithValue(null),
+        autofocusSettingsProvider.overrideWith(_Loaded.new),
         autofocusApiProvider.overrideWithValue(api),
         advancedSettingsProvider.overrideWith(() => _Advanced(advanced)),
         // A ⌘K hit picked before the panel opened (command_palette.dart).
@@ -60,6 +62,14 @@ Finder _autoSwitch() => find.descendant(
   of: find.widgetWithText(SettingsSwitchRow, 'Automatic step size'),
   matching: find.byType(Switch),
 );
+
+class _Loaded extends AutofocusSettingsNotifier {
+  @override
+  LoadedSection<AutofocusSettings> build() => const LoadedSection(
+    value: AutofocusSettings(),
+    source: SectionSource.rig,
+  );
+}
 
 class _Advanced extends AdvancedSettings {
   _Advanced(this.on);
@@ -241,6 +251,7 @@ void main() {
       expect(
         ProviderScope.containerOf(element)
             .read(autofocusSettingsProvider)
+            .value!
             .stepSizeAuto,
         isFalse,
       );

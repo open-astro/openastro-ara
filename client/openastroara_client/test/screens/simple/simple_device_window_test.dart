@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
@@ -54,6 +57,23 @@ Map<String, dynamic> _wire({
   },
 };
 
+/// The rig's imaging defaults in memory: the section's own GET and PUT.
+class _MemDefaults extends ImagingDefaultsNotifier {
+  ImagingDefaults rig = const ImagingDefaults();
+  @override
+  Future<Tagged<ImagingDefaults>> fetch(ProfileApi api) async =>
+      (value: rig, etag: null);
+  @override
+  Future<Tagged<ImagingDefaults>> send(
+    ProfileApi api,
+    ImagingDefaults value,
+    String? etag,
+  ) async {
+    rig = value;
+    return (value: value, etag: null);
+  }
+}
+
 Future<(ProviderContainer, _Camera)> _pump(
   WidgetTester tester,
   Map<String, dynamic> wire, {
@@ -71,6 +91,11 @@ Future<(ProviderContainer, _Camera)> _pump(
         (ref, type) async => type == 'camera' ? driver : null,
       ),
       coolingFanProvider.overrideWith(() => _FixedFan()),
+      // A rig that holds the imaging defaults: a change loads them, then saves.
+      profileApiProvider.overrideWithValue(
+        ProfileApi(const AraServer(hostname: 'test', port: 1)),
+      ),
+      imagingDefaultsProvider.overrideWith(_MemDefaults.new),
     ],
   );
   addTearDown(c.dispose);
@@ -83,6 +108,7 @@ Future<(ProviderContainer, _Camera)> _pump(
     ),
   );
   await tester.pump();
+  await tester.pump(); // the section loads itself
   return (c, camera);
 }
 
@@ -156,7 +182,7 @@ void main() {
     expect(camera.calls, isEmpty, reason: 'nothing is sent while dragging');
     tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-15);
     await tester.pump();
-    expect(c.read(imagingDefaultsProvider).coolerTargetC, -15);
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -15);
     expect(camera.calls, [(true, -15.0)]);
 
   });
@@ -176,7 +202,7 @@ void main() {
     });
     c.read(exposureControllerProvider.notifier).setGain(100);
     await tester.pump();
-    final plans = c.read(imagingDefaultsProvider).defaultGain;
+    final plans = c.read(imagingDefaultsProvider).value!.defaultGain;
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.value), (0.0, 300.0, 100.0));
     slider.onChanged!(123);
@@ -185,7 +211,7 @@ void main() {
     tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(127);
     await tester.pump();
     expect(c.read(exposureControllerProvider).gain, 130, reason: 'steps of 10; Preview\'s chip shows it too');
-    expect(c.read(imagingDefaultsProvider).defaultGain, plans, reason: 'the plans\' gain is its own setting');
+    expect(c.read(imagingDefaultsProvider).value!.defaultGain, plans, reason: 'the plans\' gain is its own setting');
   });
 
   testWidgets('a camera with named gain modes slides through the names', (tester) async {

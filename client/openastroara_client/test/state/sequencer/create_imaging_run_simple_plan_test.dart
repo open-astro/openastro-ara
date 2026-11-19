@@ -11,6 +11,8 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 
+import '../../support/section_load.dart';
+
 /// Simple Mode's Run hands createImagingRun a finished plan: no plan chooser,
 /// its own sub length and frame count, and a run of its own even with a
 /// sequence open (no append).
@@ -144,6 +146,9 @@ void main() {
           sequenceApiProvider.overrideWith((ref) => seq),
           focuserProvider.overrideWith(_Focuser.new),
         ],
+      );
+      await tester.runAsync(
+        () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
       );
       container.read(autofocusSettingsProvider.notifier).setTriggerTempDeltaC(1.5);
       await _run(

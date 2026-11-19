@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
@@ -13,9 +14,11 @@ import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
@@ -27,6 +30,7 @@ import '../../support/fake_section_rig.dart';
 /// Every migrated section by the path the rig serves it under (the filter
 /// wheel's two sections share the route `filter-wheel`).
 const _paths = [
+  'autofocus',
   'camera-electronics',
   'cooling-fan',
   'custom-horizon',
@@ -37,18 +41,23 @@ const _paths = [
   'filter-set',
   'filter-wheel/labels',
   'filter-wheel/policy',
+  'imaging-defaults',
   'notifications',
+  'optics',
   'plate-solve',
   'storage',
   'unguided',
 ];
 
 final _selfLoading = {
+  autofocusSettingsProvider,
   coolingFanProvider,
   domeSettingsProvider,
   equipmentConnectionProvider,
   filterWheelLabelsProvider,
   filterWheelPolicyProvider,
+  imagingDefaultsProvider,
+  opticsSettingsProvider,
 };
 
 String _routeOf(String path) => path.split('/').first;
@@ -130,6 +139,11 @@ void main() {
         c.read(unguidedSettingsProvider.notifier).setGuardEnabled(false),
     'plate-solve': (c) =>
         c.read(plateSolveSettingsProvider.notifier).setCenterAfterSlew(false),
+    'autofocus': (c) => c.read(autofocusSettingsProvider.notifier).setSteps(9),
+    'imaging-defaults': (c) =>
+        c.read(imagingDefaultsProvider.notifier).setGain(200),
+    'optics': (c) =>
+        c.read(opticsSettingsProvider.notifier).setFocalLengthMm(800),
     'camera-electronics': (c) => c
         .read(cameraElectronicsProvider.notifier)
         .edit((v) => v.copyWith(readNoiseE: 1.5)),
@@ -205,9 +219,12 @@ void main() {
   ];
   final partial = <String, List<Object?>>{
     for (final r in [
+      'autofocus',
       'camera-electronics',
       'dome',
       'equipment-connection',
+      'imaging-defaults',
+      'optics',
       'unguided',
     ])
       r: [null, ...without(rigDefaults[r]!)],
@@ -282,6 +299,7 @@ void main() {
   // The PUT reply is the rig's copy too: one without the edited key fails the
   // Save, which keeps the edit and the loaded tag (no default comes back).
   const replyDrops = {
+    'autofocus': 'steps',
     'camera-electronics': 'read_noise_e',
     'cooling-fan': 'port_id',
     'custom-horizon': 'points',
@@ -290,6 +308,8 @@ void main() {
     'filter-set': 'filters',
     'filter-wheel/labels': 'labels',
     'filter-wheel/policy': 'use_filter_wheel_offsets',
+    'imaging-defaults': 'gain',
+    'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
     'unguided': 'guard_enabled',
   };

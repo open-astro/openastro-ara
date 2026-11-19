@@ -16,13 +16,10 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
 
-// ADR 0015 for the six sections Simple Mode writes with set-then-persist
-// (slice 3 plus PR 2c of #1807): site, optics, phd2, safety, imaging defaults,
-// autofocus. Each case runs the sequence a Simple Mode window runs today (one
-// setter, then persist, with nothing loaded first) and asserts only on what
-// reached the rig (FakeSectionRig.puts). Implement renames the entry points
-// (`hydrateFromServer` -> `load`, `persistToServer` -> `save`, the setter ->
-// `editAndSave`); it keeps every assertion on `rig.puts` and `rig.ifMatches`.
+// ADR 0015 for the sections Simple Mode writes (slice 3 of #1807, PR 2c-i:
+// optics, imaging defaults, autofocus). Each case runs the write a Simple Mode
+// window makes (load the rig's copy, apply one change to it, save it with the
+// loaded tag) and asserts only on what reached the rig (FakeSectionRig.puts).
 // These cases guard the notifiers (strict readers, refusal, reset, cache);
 // that each Simple Mode window loads before it writes is guarded by the widget
 // cases in test/screens/simple/.
@@ -89,12 +86,14 @@ final _cases = <_Case>[
       const OpticsSettings(focalLengthMm: 333, telescopeName: 'Cached scope'),
     ),
     setThenSave: (c, api) async {
-      final n = c.read(opticsSettingsProvider.notifier);
-      n.setFocalLengthMm(1200);
-      await n.persistToServer(api);
+      await _loadThenSave(
+        c,
+        opticsSettingsProvider,
+        api,
+        (o) => o.copyWith(focalLengthMm: 1200),
+      );
     },
-    load: (c, api) =>
-        c.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
+    load: (c, api) => c.read(opticsSettingsProvider.notifier).load(api),
     provider: opticsSettingsProvider,
     toJson: (v) => ProfileApi.opticsToJson(v as OpticsSettings),
   ),
@@ -115,12 +114,14 @@ final _cases = <_Case>[
       const ImagingDefaults(coolerTargetC: 10),
     ),
     setThenSave: (c, api) async {
-      final n = c.read(imagingDefaultsProvider.notifier);
-      n.setCoolerTargetC(-5);
-      await n.persistToServer(api);
+      await _loadThenSave(
+        c,
+        imagingDefaultsProvider,
+        api,
+        (d) => d.copyWith(coolerTargetC: -5),
+      );
     },
-    load: (c, api) =>
-        c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
+    load: (c, api) => c.read(imagingDefaultsProvider.notifier).load(api),
     provider: imagingDefaultsProvider,
     toJson: (v) => ProfileApi.imagingDefaultsToJson(v as ImagingDefaults),
   ),
@@ -137,12 +138,14 @@ final _cases = <_Case>[
       const AutofocusSettings(exposureSeconds: 3),
     ),
     setThenSave: (c, api) async {
-      final n = c.read(autofocusSettingsProvider.notifier);
-      n.setExposureSeconds(10);
-      await n.persistToServer(api);
+      await _loadThenSave(
+        c,
+        autofocusSettingsProvider,
+        api,
+        (a) => a.copyWith(exposureSeconds: 10),
+      );
     },
-    load: (c, api) =>
-        c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
+    load: (c, api) => c.read(autofocusSettingsProvider.notifier).load(api),
     provider: autofocusSettingsProvider,
     toJson: (v) => ProfileApi.autofocusSettingsToJson(v as AutofocusSettings),
   ),
@@ -189,6 +192,19 @@ final _connected = NotifierProvider<_Connected, bool>(_Connected.new);
 
 /// The section's value, whatever the notifier's state type.
 Object? _valueOf(Object? state) => state is LoadedSection ? state.value : state;
+
+/// What Simple Mode's helper does: load the rig's copy, apply the change to
+/// it, save it with the loaded tag. A failed load is a refusal.
+Future<void> _loadThenSave<T>(
+  ProviderContainer c,
+  NotifierProvider<SectionNotifier<T>, LoadedSection<T>> provider,
+  ProfileApi api,
+  T Function(T) change,
+) async {
+  final n = c.read(provider.notifier);
+  if (!await n.load(api)) throw StateError('not loaded');
+  await n.replaceAndSave(change(c.read(provider).value as T));
+}
 
 /// A refusal is the right outcome here; the test asserts on the rig.
 Future<void> _try(Future<void> Function() run) async {
