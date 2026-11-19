@@ -3,8 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan;
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/diagnostics_mode_state.dart';
+import 'package:openastroara/state/settings/dome_settings_state.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
@@ -24,8 +28,11 @@ import '../../support/fake_section_rig.dart';
 /// wheel's two sections share the route `filter-wheel`).
 const _paths = [
   'camera-electronics',
+  'cooling-fan',
   'custom-horizon',
   'diagnostics-mode',
+  'dome',
+  'equipment-connection',
   'filenames',
   'filter-set',
   'filter-wheel/labels',
@@ -36,7 +43,13 @@ const _paths = [
   'unguided',
 ];
 
-final _selfLoading = {filterWheelLabelsProvider, filterWheelPolicyProvider};
+final _selfLoading = {
+  coolingFanProvider,
+  domeSettingsProvider,
+  equipmentConnectionProvider,
+  filterWheelLabelsProvider,
+  filterWheelPolicyProvider,
+};
 
 String _routeOf(String path) => path.split('/').first;
 
@@ -122,6 +135,15 @@ void main() {
         .edit((v) => v.copyWith(readNoiseE: 1.5)),
     'custom-horizon': (c) =>
         c.read(customHorizonProvider.notifier).addPoint(90, 20),
+    'cooling-fan': (c) => c
+        .read(coolingFanProvider.notifier)
+        .edit((_) => const CoolingFan(deviceId: 'sw-1', portId: 2)),
+    'dome': (c) => c
+        .read(domeSettingsProvider.notifier)
+        .edit((v) => v.copyWith(domeRadiusMm: 1500)),
+    'equipment-connection': (c) => c
+        .read(equipmentConnectionProvider.notifier)
+        .edit((v) => v.copyWithAutoConnect(EquipmentDeviceType.camera, false)),
     'notifications': (c) =>
         c.read(notificationsSettingsProvider.notifier).setPushoverToken('mine'),
     'filenames': (c) => c
@@ -182,8 +204,19 @@ void main() {
     for (final k in m.keys) {...m}..remove(k),
   ];
   final partial = <String, List<Object?>>{
-    for (final r in ['camera-electronics', 'unguided'])
+    for (final r in [
+      'camera-electronics',
+      'dome',
+      'equipment-connection',
+      'unguided',
+    ])
       r: [null, ...without(rigDefaults[r]!)],
+    // A null fan is "none"; a missing key is a bad reply.
+    'cooling-fan': [
+      null,
+      <String, Object?>{},
+      ...without(rigDefaults['cooling-fan']!),
+    ],
     'plate-solve': [
       null,
       ...without(rigDefaults['plate-solve']!),
@@ -250,7 +283,10 @@ void main() {
   // Save, which keeps the edit and the loaded tag (no default comes back).
   const replyDrops = {
     'camera-electronics': 'read_noise_e',
+    'cooling-fan': 'port_id',
     'custom-horizon': 'points',
+    'dome': 'dome_radius_mm',
+    'equipment-connection': 'camera',
     'filter-set': 'filters',
     'filter-wheel/labels': 'labels',
     'filter-wheel/policy': 'use_filter_wheel_offsets',

@@ -8,9 +8,6 @@ import 'polar_align/polar_align_routine_state.dart';
 import 'profile_cache_state.dart';
 import 'profile_management_state.dart';
 import 'settings/autofocus_settings_state.dart';
-import 'settings/cooling_fan_state.dart';
-import 'settings/dome_settings_state.dart';
-import 'settings/equipment_connection_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/migrated_sections.dart';
 import 'settings/optics_settings_state.dart';
@@ -59,8 +56,6 @@ final Map<String, _Hydrate> _hydrators = {
       c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
   'autofocus': (c, api) =>
       c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
-  'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
-  'dome': (c, _) async => c.invalidate(domeSettingsProvider),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
   'optics': (c, api) =>
       c.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
@@ -70,8 +65,6 @@ final Map<String, _Hydrate> _hydrators = {
       c.read(safetyPoliciesProvider.notifier).hydrateFromServer(api),
   'phd2': (c, api) =>
       c.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
-  'equipment-connection': (c, api) =>
-      c.read(equipmentConnectionProvider.notifier).hydrateFromServer(api),
 };
 
 Future<void> _hydrateMigrated(

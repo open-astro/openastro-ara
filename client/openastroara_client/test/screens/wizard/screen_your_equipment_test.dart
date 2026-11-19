@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
@@ -108,18 +109,30 @@ Future<ProviderContainer> _pump(
   TelescopeOptics? optics,
   MountProps? mount,
   OpticsSettings? baseOptics,
+  bool fanLoaded = true,
 }) async {
-  final container = ProviderContainer(overrides: [
-    if (baseOptics != null)
-      profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    coolingFanProvider.overrideWith(_NoFan.new),
-    switchListProvider.overrideWith(() => _Switches(switches)),
-    equipmentDiscoveryApiFactoryProvider
-        .overrideWithValue((_) => _FakeDiscoveryApi(byType)),
-    deviceFactsSourceFactoryProvider.overrideWithValue(
-        (_) => _FakeFactsSource(byType, camera: camera, optics: optics, mount: mount)),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      if (baseOptics != null)
+        profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      coolingFanProvider.overrideWith(
+        fanLoaded ? _NoFan.new : _NotLoadedFan.new,
+      ),
+      switchListProvider.overrideWith(() => _Switches(switches)),
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue(
+        (_) => _FakeDiscoveryApi(byType),
+      ),
+      deviceFactsSourceFactoryProvider.overrideWithValue(
+        (_) => _FakeFactsSource(
+          byType,
+          camera: camera,
+          optics: optics,
+          mount: mount,
+        ),
+      ),
+    ],
+  );
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
@@ -135,6 +148,27 @@ void main() {
   testWidgets('#1700: with no switch connected the wizard hides the Cooling fan row', (tester) async {
     await _pump(tester, byType: const {});
     expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+  });
+
+  testWidgets('#1700: the cooling fan not loaded reads as None and writes '
+      'nothing to the draft', (tester) async {
+    final container = await _pump(
+      tester,
+      byType: const {},
+      fanLoaded: false,
+      switches: const [
+        SwitchDevice(
+          deviceId: 'sw',
+          alpacaDeviceNumber: 0,
+          name: 'Powerbox',
+          connectionState: SwitchConnectionState.connected,
+          ports: [],
+        ),
+      ],
+    );
+    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
+    expect(find.text('None'), findsWidgets);
+    expect(container.read(wizardControllerProvider).draft.coolingFan, isNull);
   });
 
   testWidgets('#1700: the wizard offers the Cooling fan choice and keeps it in the draft', (tester) async {
@@ -354,9 +388,15 @@ class _OpticsOnlyProfileApi implements ProfileApi {
       throw UnimplementedError('${invocation.memberName} is not used by the reducer field');
 }
 
+class _NotLoadedFan extends CoolingFanNotifier {
+  @override
+  LoadedSection<CoolingFan> build() => const LoadedSection();
+}
+
 class _NoFan extends CoolingFanNotifier {
   @override
-  Future<CoolingFan> build() async => CoolingFan.none;
+  LoadedSection<CoolingFan> build() =>
+      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
 }
 
 class _Switches extends SwitchListNotifier {

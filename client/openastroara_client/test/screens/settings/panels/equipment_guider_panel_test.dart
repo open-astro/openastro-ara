@@ -65,8 +65,9 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<OpticsSettings> getOptics() async => const OpticsSettings();
   @override
-  Future<EquipmentConnectionSettings> getEquipmentConnection() async =>
-      const EquipmentConnectionSettings();
+  Future<({EquipmentConnectionSettings value, String? etag})>
+  getEquipmentConnectionSection() async =>
+      (value: const EquipmentConnectionSettings(), etag: '"v1"');
 }
 
 class _FakeEquipmentApi implements GuiderEquipmentClient {

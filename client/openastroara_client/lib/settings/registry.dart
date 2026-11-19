@@ -2359,10 +2359,8 @@ const List<Setting> settingsRegistry = [
   // §52.1 connection lifecycle — per-device-type auto-connect toggles. 10
   // individual entries (vs one composite) so ⌘K "guider connect" /
   // "dome boot" / "weather auto" all resolve to the specific panel.
-  // Defaults split between connect-by-default (core imaging chain) and
-  // manual-connect (devices with side effects: guider starts OpenAstro Guider; dome
-  // moves the shutter; weather starts polling). State lives in
-  // `equipmentConnectionProvider`.
+  // No client default (ADR 0015): each switch shows the copy loaded from the
+  // rig by `equipmentConnectionProvider`.
   Setting(
     id: 'eq.camera.auto_connect',
     tier: SettingTier.advanced,
@@ -2371,7 +2369,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['camera', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Camera'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.camera.auto_connect',
   ),
   Setting(
@@ -2389,7 +2387,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Mount'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.mount.auto_connect',
   ),
   Setting(
@@ -2407,7 +2405,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Focuser'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.focuser.auto_connect',
   ),
   Setting(
@@ -2425,7 +2423,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.filterwheel.auto_connect',
   ),
   Setting(
@@ -2436,7 +2434,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['rotator', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Rotator'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.rotator.auto_connect',
   ),
   Setting(
@@ -2455,7 +2453,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'equipment.guider.auto_connect',
   ),
   Setting(
@@ -2474,7 +2472,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Flat Panel'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.flat.auto_connect',
   ),
   Setting(
@@ -2485,7 +2483,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'shutter', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'equipment.dome.auto_connect',
   ),
   Setting(
@@ -2496,7 +2494,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'follow', 'slave', 'slit', 'mount', 'sync'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'dome.follow_mount',
   ),
   Setting(
@@ -2507,7 +2505,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'mount', 'equatorial', 'fork', 'geometry'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.enumValue(['equatorial', 'fork_on_wedge']),
-    defaultValue: 'equatorial',
+    defaultValue: null,
     profilePath: 'dome.mount_type',
   ),
   Setting(
@@ -2518,7 +2516,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'radius', 'geometry', 'follow'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.doubleRange(min: 0, max: 100000, step: 10),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'dome.dome_radius_mm',
   ),
   Setting(
@@ -2551,7 +2549,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'tolerance', 'azimuth', 'follow', 'degrees'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.doubleRange(min: 0.5, max: 90, step: 0.5),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'dome.azimuth_tolerance_degrees',
   ),
   Setting(
@@ -2562,7 +2560,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dome', 'slew', 'synchronize', 'during', 'follow'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'dome.synchronize_during_mount_slew',
   ),
   Setting(
@@ -2580,7 +2578,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Weather'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'equipment.weather.auto_connect',
   ),
   Setting(
@@ -2598,7 +2596,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Safety Monitor'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'equipment.safety.auto_connect',
   ),
 

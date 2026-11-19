@@ -14,7 +14,7 @@ import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/cooler_controls.dart';
 import '../../../widgets/equipment/cooling_fan_picker.dart';
 import '../../../widgets/equipment/fan_switch_row.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -27,8 +27,6 @@ class EquipmentCameraPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(cameraStatusProvider);
     final notifier = ref.read(cameraStatusProvider.notifier);
 
@@ -48,12 +46,7 @@ class EquipmentCameraPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _CameraBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.camera),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.camera, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.camera),
       ],
     );
   }

@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
 import 'camera_electronics_state.dart';
+import 'cooling_fan_state.dart';
 import 'custom_horizon_state.dart';
 import 'diagnostics_mode_state.dart';
+import 'dome_settings_state.dart';
+import 'equipment_connection_state.dart';
 import 'filenames_settings_state.dart';
 import 'filter_set_state.dart';
 import 'filter_wheel_labels_state.dart';
@@ -42,8 +45,11 @@ typedef MigratedSection = ({
 /// read, and a test checks both against.
 final List<MigratedSection> migratedSections = [
   (route: 'camera-electronics', provider: cameraElectronicsProvider),
+  (route: 'cooling-fan', provider: coolingFanProvider),
   (route: 'custom-horizon', provider: customHorizonProvider),
   (route: 'diagnostics-mode', provider: diagnosticsModeProvider),
+  (route: 'dome', provider: domeSettingsProvider),
+  (route: 'equipment-connection', provider: equipmentConnectionProvider),
   (route: 'filenames', provider: filenamesSettingsProvider),
   (route: 'filter-set', provider: filterSetProvider),
   (route: 'filter-wheel', provider: filterWheelLabelsProvider),

@@ -16,7 +16,7 @@ import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/equipment/switch_device_body.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/adaptive_controls.dart';
 
@@ -101,8 +101,6 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   Widget build(BuildContext context) {
     final switches = ref.watch(switchListProvider);
     final serverUp = ref.watch(serverLinkUpProvider);
-    final connection = ref.watch(equipmentConnectionProvider);
-    final connNotifier = ref.read(equipmentConnectionProvider.notifier);
     // Only offer Reconnect while no switch is currently connected/connecting —
     // reconnectAll re-dispatches every remembered switch, and re-connecting one
     // that's live can tear it down if Ara's remembered UniqueId differs
@@ -139,13 +137,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
             ),
           ],
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.switchDevice),
-          onChanged: (v) =>
-              connNotifier.setAutoConnect(EquipmentDeviceType.switchDevice, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.switchDevice),
         const SizedBox(height: 4),
         // Stale-guard: with the server link down the switch list is stale and
         // nothing can be reconnected — show a clear offline state.

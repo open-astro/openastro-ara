@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/profile_list.dart';
@@ -18,6 +19,9 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/cooling_fan_prompt_listener.dart';
 import 'package:openastroara/widgets/equipment/cooling_fan_picker.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/section_load.dart';
 
 SwitchDevice _box({
   String id = 'box',
@@ -55,13 +59,17 @@ class _Api extends ProfileApi {
   CoolingFan current = CoolingFan.none;
   final puts = <CoolingFan>[];
   @override
-  Future<CoolingFan> getCoolingFan() async => current;
+  Future<({CoolingFan value, String? etag})> getCoolingFanSection() async =>
+      (value: current, etag: null);
   @override
-  Future<CoolingFan> putCoolingFan(CoolingFan value) async {
+  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
+    CoolingFan value, {
+    String? ifMatch,
+  }) async {
     final e = refuse;
     if (e != null) throw e;
     puts.add(value);
-    return current = value;
+    return (value: current = value, etag: null);
   }
 }
 
@@ -233,6 +241,123 @@ void main() {
     );
   });
 
+  testWidgets('no rig: the profile picker shows nothing, not None', (
+    tester,
+  ) async {
+    final c = ProviderContainer(
+      overrides: [
+        profileApiProvider.overrideWithValue(null),
+        switchListProvider.overrideWith(() => _Switches([_box()])),
+      ],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+  });
+
+  testWidgets('no rig: the profile picker says the rig is not connected', (
+    tester,
+  ) async {
+    final c = ProviderContainer(
+      overrides: [profileApiProvider.overrideWithValue(null)],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Rig not connected'), findsOneWidget);
+  });
+
+  testWidgets('a failed load: the profile picker says so and Retry loads it', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({'cooling-fan': rigDefaults['cooling-fan']})
+      ..failGet.add('cooling-fan');
+    final c = ProviderContainer(
+      overrides: [profileApiProvider.overrideWithValue(rig.api())],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+    rig.failGet.clear();
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
+  });
+
+  testWidgets('a copy changed on the rig: the choice stays with Reload, and '
+      'Reload shows the rig\'s fan', (tester) async {
+    final rig = FakeSectionRig({'cooling-fan': rigDefaults['cooling-fan']});
+    final c = ProviderContainer(
+      overrides: [
+        profileApiProvider.overrideWithValue(rig.api()),
+        switchListProvider.overrideWith(() => _Switches([_box()])),
+        simpleModeActiveProvider.overrideWithValue(true),
+      ],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Another device chose Fan 1; its profile.updated hasn't reached us.
+    rig.daemonWrote('cooling-fan', {'device_id': 'box', 'port_id': 0});
+    await _open(tester);
+    await tester.tap(find.text('Pegasus Powerbox › Dew B').last);
+    await tester.pumpAndSettle();
+    CoolingFan? shown() => tester
+        .widget<DropdownButton<CoolingFan>>(
+          find.byKey(const Key('cooling-fan-picker')),
+        )
+        .value;
+    expect(shown(), const CoolingFan(deviceId: 'box', portId: 1));
+    expect(find.textContaining('changed on another device'), findsOneWidget);
+    expect(
+      c.read(simpleMessagesProvider).single.detail,
+      contains('changed on the rig'),
+    );
+    await tester.tap(find.byKey(const Key('section-reload')));
+    await tester.pumpAndSettle();
+    expect(shown(), const CoolingFan(deviceId: 'box', portId: 0));
+    expect(find.byKey(const Key('section-reload')), findsNothing);
+  });
+
   test('a saved choice takes the daemon echo', () async {
     final api = _Api();
     final c = ProviderContainer(
@@ -246,7 +371,7 @@ void main() {
       coolingFanProvider,
       (_, _) {},
     ); // nothing but a listener keeps a rebuilt provider running
-    await c.read(coolingFanProvider.future);
+    await settleLoaded(c, coolingFanProvider);
     await c
         .read(coolingFanProvider.notifier)
         .choose(const CoolingFan(deviceId: 'box', portId: 1));
@@ -372,5 +497,12 @@ class _SlowFan extends CoolingFanNotifier {
   _SlowFan(this.gate);
   final Completer<CoolingFan> gate;
   @override
-  Future<CoolingFan> build() => gate.future;
+  LoadedSection<CoolingFan> build() {
+    gate.future.then((v) {
+      if (ref.mounted) {
+        state = LoadedSection(value: v, source: SectionSource.rig);
+      }
+    });
+    return const LoadedSection();
+  }
 }
