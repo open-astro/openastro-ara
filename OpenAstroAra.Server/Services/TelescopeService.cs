@@ -87,6 +87,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private TelescopeCapabilitiesDto? _capabilities;
     // #1971 — the driver's actions, read with the capabilities once per connect (a Polar Aligner may ride on them).
     private IDriverActions? _mountActions;
+    // #2073 — the mount type, read with the capabilities once per connect; null = unknown (the counterweight
+    // check then runs, as for a German equatorial mount).
+    private AlignmentMode? _alignmentMode;
     // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
     // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver
     // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
@@ -189,6 +192,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private void ResetSessionLocked() {
         _capabilities = null;       // re-read for the new device
         _mountActions = null;
+        _alignmentMode = null;
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -317,10 +321,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // the guider stop and the move itself are deferred.
         var client = RequireConnectedClient();
         Lease.CancelAll();
-        return ParkAfterGuidingStoppedAsync(client, idempotencyKey);
+        // #2073 — read before the guider stop, as the GoTo does: a Stop Mount or emergency stop that lands
+        // after this request must win over its tracking enable and park.
+        var abortEpoch = AbortEpoch;
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch);
     }
 
-    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey) {
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch) {
         await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
@@ -328,7 +335,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
             // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
             // issue the park. The park itself stops tracking once the mount reaches the park position.
-            TryEnableTracking(c);
+            // #2073 — a stop that landed after this park was accepted wins: the park is dropped rather
+            // than turning tracking back on and moving the mount after the stop.
+            if (!TryEnableTrackingUnlessAborted(c, abortEpoch)) {
+                LogParkDroppedAfterAbort();
+                return;
+            }
             c.Park();
         }), CancellationToken.None);
         return Accepted("telescope.park", idempotencyKey);
@@ -725,22 +737,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             } else {
                 // #2073 — a Stop Mount or emergency stop (AbortSlew, then Tracking off) that landed after
                 // this goto was accepted wins: the goto is dropped rather than turning tracking back on
-                // and moving the mount after the stop. Checked again after the tracking round trips.
-                if (AbortedSince(abortEpoch)) {
-                    LogSlewDroppedAfterAbort(raHours, decDeg);
-                    ClearPendingSlewTarget();
-                    return;
-                }
+                // and moving the mount after the stop.
                 // Same pre-slew tracking enable as the mediator goto: ITelescopeV4 mounts refuse an
                 // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
                 // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
                 // a refused write is logged at Debug and the slew attempt stays authoritative.
-                var trackingTurnedOn = TryEnableTracking(client);
-                if (AbortedSince(abortEpoch)) {
-                    // The stop came during the tracking write: leave tracking as the stop left it.
-                    if (trackingTurnedOn) {
-                        _ = TrySetTracking(client, enabled: false);
-                    }
+                if (!TryEnableTrackingUnlessAborted(client, abortEpoch)) {
                     LogSlewDroppedAfterAbort(raHours, decDeg);
                     ClearPendingSlewTarget();
                     return;
@@ -760,6 +762,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     }
 
     private bool AbortedSince(long abortEpoch) => Interlocked.Read(ref _abortEpoch) != abortEpoch;
+
+    /// <summary>#2073 — the pre-move tracking enable of a REST GoTo or Park, unless a Stop Mount or emergency
+    /// stop came since <paramref name="abortEpoch"/>. False = drop the move: the stop came before the enable,
+    /// or during it (then tracking this call turned on is turned off again, as the stop left it).</summary>
+    private bool TryEnableTrackingUnlessAborted(ITelescopeDevice client, long abortEpoch) {
+        if (AbortedSince(abortEpoch)) {
+            return false;
+        }
+        var trackingTurnedOn = TryEnableTracking(client);
+        if (AbortedSince(abortEpoch)) {
+            if (trackingTurnedOn) {
+                _ = TrySetTracking(client, enabled: false);
+            }
+            return false;
+        }
+        return true;
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background control boundary: the blocking ASCOM Park/Unpark can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
@@ -819,6 +838,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // clamp cache — one pair of GETs, only while either still needs them.
         var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
         var caps = needCaps ? ReadCapabilities(client, pad) : null;
+        var alignmentMode = needCaps ? ReadAlignmentMode(client) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -850,6 +870,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 if (caps is not null) {
                     _capabilities = caps;
                     _mountActions = actions;
+                    _alignmentMode = alignmentMode;
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -933,6 +954,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 }
                 // Outside the lock: it does profile IO. caps is non-null only on the first read of a connect.
                 if (caps is not null) {
+                    if (alignmentMode is null) {
+                        LogAlignmentModeUnknown(watchedDevice?.Name ?? "?"); // once per connect, with the caps
+                    }
                     MaybeAutoPopulateOptics(caps);
                 }
             });
@@ -1403,6 +1427,29 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         metres > 0 ? metres * 1000.0 : null;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a driver that does not implement AlignmentMode throws; null means 'unknown', which keeps the counterweight check on (fail-safe) rather than failing the capability read. CA1031's log-and-recover boundary applies.")]
+    private static AlignmentMode? ReadAlignmentMode(ITelescopeDevice c) {
+        try {
+            var mode = c.AlignmentMode;
+            return Enum.IsDefined(mode) ? mode : null;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /// <summary>#2073 — the mount type read at connect; see <see cref="ITelescopeService.MountAlignmentMode"/>.</summary>
+    public AlignmentMode? MountAlignmentMode {
+        get {
+            lock (_gate) {
+                return _alignmentMode;
+            }
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Mount {Device} did not report its AlignmentMode; the counterweight check on a GoTo stays on, as for a German equatorial mount (#2073)")]
+    private partial void LogAlignmentModeUnknown(string device);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; report null ('read failed, retry next pass') rather than failing the whole refresh — RefreshPass distinguishes a failed read from a device genuinely reporting Other. CA1031's log-and-recover boundary applies.")]
     private static EquatorialCoordinateType? ReadEquatorialSystem(ITelescopeDevice c) {
         try {
@@ -1560,6 +1607,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° dropped: the mount was stopped after the GoTo was accepted")]
     private partial void LogSlewDroppedAfterAbort(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
+    private partial void LogParkDroppedAfterAbort();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed: {Reason}")]
     private partial void LogControlFailed(Exception ex, string op, string reason);

@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using ASCOM.Common.DeviceInterfaces;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -53,8 +54,9 @@ namespace OpenAstroAra.Test {
             return ((lstHours - hourAngleHours) % 24.0 + 24.0) % 24.0;
         }
 
-        private static (Mock<ITelescopeService> Telescope, Mock<ISequencerService> Sequencer) Rig() {
+        private static (Mock<ITelescopeService> Telescope, Mock<ISequencerService> Sequencer) Rig(AlignmentMode? alignment = AlignmentMode.GermanPolar) {
             var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.MountAlignmentMode).Returns(alignment);
             telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
             var sequencer = new Mock<ISequencerService>();
@@ -82,6 +84,33 @@ namespace OpenAstroAra.Test {
                 Assert.That(refusal.Message, Does.Contain("-11.1").And.Contain("60"), "the detail names the hour angle and the limit");
             });
             NothingDispatched(telescope);
+        }
+
+        [TestCase(AlignmentMode.AltAz)]
+        [TestCase(AlignmentMode.Polar)] // a fork: no counterweight to go up
+        public async Task A_mount_without_a_counterweight_is_not_refused(AlignmentMode alignment) {
+            // Polaris-like target near the lower meridian: an alt-az or fork mount must keep it.
+            var (telescope, sequencer) = Rig(alignment);
+            var accepted = await Slew(new SlewRequestDto(RaAtHourAngle(-11.1), 69.18), telescope, sequencer, Site().Object);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+        }
+
+        [Test]
+        public async Task A_mount_whose_type_is_unknown_is_checked() {
+            var (telescope, sequencer) = Rig(alignment: null);
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => Slew(new SlewRequestDto(RaAtHourAngle(-11.1), 69.18), telescope, sequencer, Site().Object));
+            Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.CounterweightLimit), "unknown is treated as a German equatorial mount (fail-safe)");
+            NothingDispatched(telescope);
+        }
+
+        [Test]
+        public void Only_a_german_equatorial_or_unknown_mount_has_a_counterweight() {
+            Assert.Multiple(() => {
+                Assert.That(CounterweightGuard.HasCounterweight(AlignmentMode.GermanPolar), Is.True);
+                Assert.That(CounterweightGuard.HasCounterweight(null), Is.True, "unknown is checked");
+                Assert.That(CounterweightGuard.HasCounterweight(AlignmentMode.AltAz), Is.False);
+                Assert.That(CounterweightGuard.HasCounterweight(AlignmentMode.Polar), Is.False);
+            });
         }
 
         [Test]
@@ -141,9 +170,11 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(-10.5), at)?.HourAngleHours, Is.EqualTo(-10.5).Within(1e-6));
                 Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(10.5), at), Is.Not.Null, "west of the lower meridian too");
-                Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(-9.9), at), Is.Null, "54° is inside the limit");
+                Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(-9.9), at), Is.Null, "58.5° is inside the limit");
                 Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(1.0), at), Is.Null, "above the pole");
                 Assert.That(CounterweightGuard.TargetPastCounterweightLimit(null, At(-11.1), at), Is.Null, "no profile");
+                Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(-11.1), at, AlignmentMode.AltAz), Is.Null, "alt-az");
+                Assert.That(CounterweightGuard.TargetPastCounterweightLimit(store, At(-11.1), at, AlignmentMode.GermanPolar), Is.Not.Null, "German equatorial");
             });
         }
     }

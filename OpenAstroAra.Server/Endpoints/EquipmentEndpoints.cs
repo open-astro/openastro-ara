@@ -52,7 +52,7 @@ public static partial class EquipmentEndpoints {
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
     /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
     /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
-    /// meridian with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
+    /// meridian on a German equatorial mount with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
     /// without the host.</summary>
     internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null) {
         ArgumentNullException.ThrowIfNull(telescope);
@@ -69,8 +69,9 @@ public static partial class EquipmentEndpoints {
                     new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
             }
             // #2073 — the daemon now turns tracking on before a GoTo, so the mount's "tracking is off"
-            // refusal no longer stops a target below the pole that would put the counterweight up.
-            if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, logger) is { } cw) {
+            // refusal no longer stops a target below the pole that would put the counterweight up. Only a
+            // German equatorial mount (or one whose type is unknown) is checked.
+            if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, telescope.MountAlignmentMode, logger) is { } cw) {
                 throw new RefusalException(RefusalCatalog.CounterweightLimit,
                     string.Create(CultureInfo.InvariantCulture, $"The target is below the pole at hour angle {cw.HourAngleHours:F1} h: the counterweight would be {cw.CounterweightAngleDeg:F0}° from down, past the {cw.LimitDeg:F0}° limit."),
                     new Dictionary<string, object?> { ["hour_angle_hours"] = cw.HourAngleHours, ["counterweight_angle_deg"] = cw.CounterweightAngleDeg, ["limit_deg"] = cw.LimitDeg });

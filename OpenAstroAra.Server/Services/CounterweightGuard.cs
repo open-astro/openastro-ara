@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using System;
@@ -35,6 +36,10 @@ namespace OpenAstroAra.Server.Services;
 /// handle; a 60° limit there would refuse every target within 2 h of the meridian.</para>
 /// <para>With the 60° limit the check refuses a target within 2 h of the lower meridian
 /// (10 h &lt; |HA| ≤ 12 h). Static, taking the profile store, like <see cref="HorizonGuard"/>.</para>
+/// <para>Only a German equatorial mount has a counterweight that can go up: an alt-az mount or a fork
+/// (ASCOM <c>AlignmentMode</c> <c>algAltAz</c> or <c>algPolar</c>) is never refused, or it would lose every
+/// target within 2 h of the lower meridian (Polaris for about 4 h a day). A mount whose type is unknown is
+/// checked (fail-safe).</para>
 /// </summary>
 public static partial class CounterweightGuard {
 
@@ -46,12 +51,16 @@ public static partial class CounterweightGuard {
     /// missing site or a failed read also answers null, as the horizon check does: the guard only
     /// refuses, it never blocks a GoTo because the profile is missing. The hour angle uses the
     /// daemon's clock and the profile longitude, and the target as given (J2000); the
-    /// sub-degree epoch difference is far inside the 2 h band.</summary>
+    /// sub-degree epoch difference is far inside the 2 h band. <paramref name="alignmentMode"/> is the
+    /// mount's ASCOM type: alt-az and polar (fork) answer null; German polar or null (unknown) are checked.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A profile read fault must degrade to 'unknown — proceed', never fault the caller. Log-and-recover boundary, as HorizonGuard.")]
     public static (double HourAngleHours, double CounterweightAngleDeg, double LimitDeg)? TargetPastCounterweightLimit(
-            IProfileStore? profiles, Coordinates coords, DateTimeOffset atUtc, ILogger? logger = null) {
+            IProfileStore? profiles, Coordinates coords, DateTimeOffset atUtc, AlignmentMode? alignmentMode = null, ILogger? logger = null) {
         ArgumentNullException.ThrowIfNull(coords);
+        if (!HasCounterweight(alignmentMode)) {
+            return null;
+        }
         try {
             var site = profiles?.GetSiteSettings();
             if (site is null || !double.IsFinite(site.LongitudeDeg)) {
@@ -70,6 +79,10 @@ public static partial class CounterweightGuard {
             return null;
         }
     }
+
+    /// <summary>True for a German equatorial mount, and for an unknown one (fail-safe: checked).</summary>
+    internal static bool HasCounterweight(AlignmentMode? alignmentMode) =>
+        alignmentMode is null or AlignmentMode.GermanPolar;
 
     /// <summary>#2048's φ_HA: 90° − the angular distance (degrees) from the hour angle to the nearer
     /// of 0 h and 12 h. 0 at HA ±6 h (Home), 90 at HA 0 h or 12 h.</summary>

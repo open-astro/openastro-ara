@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using AlignmentMode = ASCOM.Common.DeviceInterfaces.AlignmentMode;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
@@ -164,6 +165,87 @@ namespace OpenAstroAra.Test {
                 Assert.That(PutIndex(box, GotoVerb), Is.EqualTo(-1), "the goto never reaches the mount after the stop");
                 Assert.That(PutIndex(box, "tracking"), Is.EqualTo(-1), "tracking is not turned back on after the stop");
             });
+        }
+
+        [Test]
+        public async Task A_stop_that_lands_after_the_park_was_accepted_drops_the_park() {
+            // The REST Park has the GoTo's window: it waits for the guider and turns tracking on before the
+            // park. A Stop Mount or emergency stop in that window must not be undone by it.
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            var stopAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                stopAsked.TrySetResult();
+                return stopDone.Task;
+            });
+            using var svc = await ConnectedAsync(box, log, () => guider.Object);
+
+            var park = svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await svc.AbortSlewAsync(CancellationToken.None);
+            stopDone.SetResult(true);
+            await park;
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("park dropped", StringComparison.Ordinal)), "the park was not dropped after the stop");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.GreaterThanOrEqualTo(0), "the stop reached the mount");
+                Assert.That(PutIndex(box, "park"), Is.EqualTo(-1), "the park never reaches the mount after the stop");
+                Assert.That(PutIndex(box, "tracking"), Is.EqualTo(-1), "tracking is not turned back on after the stop");
+            });
+        }
+
+        [Test]
+        public async Task A_park_with_no_stop_turns_tracking_on_then_parks() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            using var svc = await ConnectedAsync(box);
+
+            await svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutIndex(box, "park") >= 0, "the mount never received the park");
+            var tracking = PutIndex(box, "tracking", TrackingOn);
+            Assert.That(tracking, Is.GreaterThanOrEqualTo(0).And.LessThan(PutIndex(box, "park")), "tracking is turned on before the park");
+        }
+
+        [TestCase("0", AlignmentMode.AltAz)]
+        [TestCase("1", AlignmentMode.Polar)]
+        [TestCase("2", AlignmentMode.GermanPolar)]
+        public async Task The_mount_type_is_read_once_at_connect(string wire, AlignmentMode expected) {
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/alignmentmode", StringComparison.Ordinal) ? wire : mount(path));
+            using var svc = await ConnectedAsync(box);
+
+            await WaitForAsync(() => svc.MountAlignmentMode is not null, "the mount type was never read");
+            Assert.That(svc.MountAlignmentMode, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task A_mount_that_does_not_report_its_type_reads_unknown() {
+            var log = new InfoLog();
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/alignmentmode", StringComparison.Ordinal) ? ScriptedAlpacaDevice.NotImplementedPrefix + "AlignmentMode" : mount(path));
+            var svc = new TelescopeService(logger: log);
+            using var _ = svc;
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Capabilities is not null, "the capabilities were never read");
+
+            Assert.That(svc.MountAlignmentMode, Is.Null, "unknown: the counterweight check stays on");
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("AlignmentMode", StringComparison.Ordinal)), "the unknown type was never logged");
+            Assert.That(log.Messages.Count(m => m.Contains("AlignmentMode", StringComparison.Ordinal)), Is.EqualTo(1), "logged once per connect");
+        }
+
+        private sealed class InfoLog : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
+            public ConcurrentQueue<string> Messages { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Information) {
+                    Messages.Enqueue(formatter(state, exception));
+                }
+            }
         }
 
         private sealed class WarningLog : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
