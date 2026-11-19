@@ -538,7 +538,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 3.0.0
+Package:        Scalar.AspNetCore 3.0.2
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
@@ -617,7 +617,7 @@ License source: https://github.com/ssg/SimpleBase (README: Apache-2.0)
 Project:        https://github.com/ssg/SimpleBase
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp 4.156.1
+Package:        SkiaSharp 4.157.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -625,7 +625,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Linux 4.156.1
+Package:        SkiaSharp.NativeAssets.Linux 4.157.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -633,7 +633,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.macOS 4.156.1
+Package:        SkiaSharp.NativeAssets.macOS 4.157.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -641,7 +641,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Win32 4.156.1
+Package:        SkiaSharp.NativeAssets.Win32 4.157.0
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
