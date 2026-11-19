@@ -1126,7 +1126,7 @@ const Map<String, Help> helpRegistry = {
         '* **Fine** — the mount goes Home again and the *guide camera* measures the axis the same way (the 5° tilt, three solves, two RA turns), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
         '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (10° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
-        '* Every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. The mount\'s own limits still apply.',
+        '* With *Send the mount Home first* on (the default), every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. With it off, each later step first returns to where the run started with a GoTo. The mount\'s own limits still apply.',
     relatedHelpKeys: [
       'img.polar.use_home',
       'img.polar.seed_rotation_deg',
