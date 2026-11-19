@@ -14,10 +14,13 @@
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenAstroAra.Server;
 using System;
 using System.IO;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.Contract {
 
@@ -34,19 +37,31 @@ namespace OpenAstroAra.Test.Contract {
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", profileDir);
         }
 
+        private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(30);
+
+        private readonly TaskCompletionSource hostDisposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         protected override void ConfigureWebHost(IWebHostBuilder builder) {
             ArgumentNullException.ThrowIfNull(builder);
             builder.UseEnvironment("Production");
+            // Built by the container, so the container disposes it: the last step of the host's own dispose.
+            builder.ConfigureServices(s => s.AddSingleton(_ => new DisposeSignal(hostDisposed)));
+        }
+
+        // Program.Main runs app.Run() on its own thread, and app.Run() stops and disposes the host once
+        // ApplicationStopping fires. The factory's dispose would run a second Host.StopAsync at the same
+        // time, and the hosted services' StopAsync is not safe against a concurrent second stop (disposed
+        // cancellation sources, a half-cleaned mDNS advertiser). So Main is the only party that stops the
+        // host, as in production: the factory's stop asks for the stop and waits for Main's dispose.
+        protected override IHost CreateHost(IHostBuilder builder) {
+            var host = base.CreateHost(builder);
+            host.Services.GetRequiredService<DisposeSignal>(); // created now, disposed with the host
+            return new StoppedByMainHost(host, hostDisposed.Task);
         }
 
         protected override void Dispose(bool disposing) {
             try {
                 base.Dispose(disposing);
-            } catch (AggregateException e) when (e.InnerExceptions.All(x => x is ObjectDisposedException)) {
-                // Two parties stop this host: the factory here, and Program.Main's app.Run(), which
-                // returns and disposes the app (and the services' cancellation sources) on its own
-                // thread. When Main wins, the hosted services' StopAsync finds its source disposed.
-                // The host is down either way; production stops it once, so this is harness-only.
             } finally {
                 if (disposing) {
                     Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);
@@ -56,6 +71,27 @@ namespace OpenAstroAra.Test.Contract {
                         // best effort: the temp dir is not worth failing a teardown for
                     }
                 }
+            }
+        }
+
+        private sealed class DisposeSignal(TaskCompletionSource disposed) : IDisposable {
+            public void Dispose() => disposed.TrySetResult();
+        }
+
+        private sealed class StoppedByMainHost(IHost inner, Task disposed) : IHost {
+            private readonly IHostApplicationLifetime lifetime = inner.Services.GetRequiredService<IHostApplicationLifetime>();
+
+            public IServiceProvider Services => inner.Services;
+
+            public Task StartAsync(CancellationToken cancellationToken = default) => inner.StartAsync(cancellationToken);
+
+            public Task StopAsync(CancellationToken cancellationToken = default) {
+                lifetime.StopApplication();
+                return disposed.WaitAsync(StopTimeout, cancellationToken);
+            }
+
+            public void Dispose() {
+                // Program.Main's app.Run() disposed the host.
             }
         }
     }

@@ -25,7 +25,8 @@ namespace OpenAstroAra.Test.Contract {
     /// <summary>#1548 — Ara against a real AlpacaBridge, asserted only through Ara's own HTTP API. The bridge is
     /// killed (its sockets drop) and started again; Ara must show the loss and then the recovery on
     /// <c>GET /api/v1/equipment/alpacabridge/catalog</c>, the route the setup wizard reads the bridge's drivers
-    /// from: a bridge that does not answer is an empty <c>device_types</c> list (the wizard then offers no Add).
+    /// from: a bridge that does not answer is an empty <c>device_types</c> list (the wizard then offers no Add,
+    /// design/PORT_PLAYBOOK.md §68.2).
     /// Skipped unless <see cref="BridgeProcess.BinVar"/> and <see cref="BridgeProcess.PortVar"/> name a bridge, so
     /// a local or <c>analyzer-gate</c> run stays green without one.</summary>
     [TestFixture]
