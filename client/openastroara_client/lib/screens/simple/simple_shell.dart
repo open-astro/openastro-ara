@@ -1,5 +1,6 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_best_screen.dart';
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
@@ -11,6 +12,7 @@ import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderProxyBox;
+import 'package:flutter/semantics.dart' show SemanticsRole;
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -122,6 +124,7 @@ import '../../state/sky_atlas/dso_catalog_state.dart'
 import '../../state/album/album_art.dart';
 import '../../state/album/album_matching.dart' show skyPickArt;
 import '../../widgets/album/album_card.dart' show albumCardAspect;
+import 'simple_devices_empty.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 import 'simple_rig_card.dart';
@@ -157,6 +160,9 @@ const double kSimplePreflightRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
+
+/// The rail-foot Stop's height (#1911); grows with the rails.
+const double kSimpleRailFootHeight = 60;
 
 /// The modes, in the decided order.
 
@@ -754,6 +760,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ),
   );
 
+  /// Tonight's Best (#1900): a page over the shell like Monitor, not a Screen.
+  /// Image this closes it and opens Plan's sheet on the Target; Search and
+  /// Set site close it and open what owns them.
+  void _openBest() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (bestContext) => TonightsBestScreen(
+          onBack: () => Navigator.of(bestContext).pop(),
+          onImage: (_) {
+            Navigator.of(bestContext).pop();
+            // The screen already set the selection.
+            _imagePick();
+          },
+          onSearch: () {
+            Navigator.of(bestContext).pop();
+            _toggle(_Popover.search);
+          },
+          onSetSite: () {
+            Navigator.of(bestContext).pop();
+            _openMenu();
+          },
+        ),
+      ),
+    ),
+  );
+
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.preflight) return _startSimplePreflight();
     setState(() => _popover = _Popover.none);
@@ -776,6 +808,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  /// A tab on the right rail: what opening the modes did first (the discard
+  /// question, the sheet closed), then the pick itself.
+  void _pickTab(SimpleModeScreen m, {bool discarded = false}) {
+    if (!discarded && _askDiscard(() => _pickTab(m, discarded: true))) return;
+    if (_adding) setState(_closeSheet);
+    _pickFromGrid(m);
+  }
+
   /// The Settings sheet's section to open on (a search hit names one).
   String _menuSection = 'Rig';
 
@@ -785,6 +825,51 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// Open Storage's one scroll: only the sheet it opens jumps to Storage.
   bool _revealStoragePending = false;
+
+  /// Keys 1 to 6 pick a mode, the arrows walk the tabs (wrapping): only where
+  /// the rail is a tab list, and never while a text field has focus. A key it
+  /// does not take is left `ignored`, so a field still gets its digits and
+  /// arrows.
+  KeyEventResult _railKey(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isMetaPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed) {
+      return KeyEventResult.ignored;
+    }
+    const digits = [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+    ];
+    final key = event.logicalKey;
+    final digit = digits.indexOf(key);
+    final back =
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowLeft;
+    final forward =
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowRight;
+    if (digit < 0 && !back && !forward) return KeyEventResult.ignored;
+    final typing =
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() !=
+        null;
+    if (typing || !simpleRailTabs(context, ref)) return KeyEventResult.ignored;
+    final at = railOrder.indexOf(ref.read(simpleShowingProvider));
+    final n = railOrder.length;
+    _pickTab(
+      digit >= 0
+          ? railOrder[digit]
+          : railOrder[((at < 0 ? 0 : at) + (back ? n - 1 : 1)) % n],
+    );
+    return KeyEventResult.handled;
+  }
 
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
@@ -1113,6 +1198,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
+      onSeeAll: _openBest,
     );
     final sheet = screen.overlay(screenHost);
     final runActive =
@@ -1132,11 +1218,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // swipe); with none, the note takes a row of its own so it shows whole at
     // any text size.
     final deck = companionPortrait(context, ref);
+    final railTabs = simpleRailTabs(context, ref);
     final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
     final railTop = kSimpleInset * 2 + barHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
+    // #1911 — desktop and iPad: Stop is the foot of the right rail, so no
+    // block sits in the corner and the rows beside the rail run to the inset.
+    final railFoot = railTabs;
+    final footHeight = kSimpleRailFootHeight * simpleRailScale(context);
+    // Where the bottom row and the rig bar end on the right.
+    final rowRight = deck || railFoot
+        ? kSimpleInset
+        : kSimpleInset * 2 + (railWidth + stopSize) / 2;
     // The bottom row (guiding, histogram) grows with the text like the
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
@@ -1152,11 +1247,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final aboveRow = statsShown
         ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
         : rowBottom;
+    // What the right rail leaves clear under it: Stop's block, or the
+    // bottom row when Stop is the rail's own foot.
+    final railBottom = railFoot ? aboveRow : kSimpleInset * 2 + stopSize;
     // Beside the rail, the right edge the panels keep: the deck has no rail.
     final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck || railFoot
+        ? aboveRow
+        : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -1201,8 +1301,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : railTop;
     _measure();
     final rightRailTop =
-        railTop +
-        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+        railTop + (height - railTop - railBottom - _rightRailHeight) / 2;
+    // The rail's foot, where the tabs end (not drawn before the rail is
+    // measured, as the plan squares are not).
+    final footShown = railFoot && _rightRailHeight > 0;
+    final footTop = rightRailTop + _rightRailHeight - footHeight;
+    // What a sheet over the right edge leaves clear: Stop, whose foot sits
+    // over every veil and sheet.
+    final aboveFoot = footShown ? height - footTop + kSimpleInset : aboveStop;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
@@ -1290,7 +1396,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      right: rowRight,
       bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
@@ -1376,6 +1482,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                   ): _stopRun,
                 },
                 child: Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onKeyEvent: _railKey,
+                  child: Focus(
                   focusNode: _focus,
                   child: SafeArea(
                     // One shared blur for every frosted panel over the image
@@ -1534,10 +1644,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right: deck
-                                    ? kSimpleInset
-                                    : kSimpleInset * 2 +
-                                          (railWidth + stopSize) / 2,
+                                right: rowRight,
                                 bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
@@ -1558,6 +1665,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       info: ref.watch(simpleInfoShownProvider),
                                       onSection: _pickFromGrid,
                                       onMonitor: _openMonitor,
+                                      onBest: _openBest,
                                       onSky: () => setState(() => _sky = !_sky),
                                       onInfo: () => ref
                                           .read(simpleInfoShownProvider.notifier)
@@ -1581,6 +1689,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       sky: _sky,
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
+                                      onBest: _openBest,
                                       // The grid needs the room.
                                       onMonitor:
                                           MediaQuery.sizeOf(context).width >=
@@ -1598,22 +1707,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               Positioned(
                                 right: kSimpleInset,
                                 top: railTop,
-                                bottom: kSimpleInset * 2 + stopSize,
+                                bottom: railBottom,
                                 width: railWidth,
                                 child: Center(
                                   child: CompositedTransformTarget(
                                     link: _railLink,
-                                    child: _RightRail(
-                                      key: _rightRailKey,
-                                      mode: shown,
-                                      named: pilot != null
-                                          ? SimpleModeScreen.preflight
-                                          : null,
-                                      popover: _popover,
-                                      onModes: () => _toggle(_Popover.modes),
-                                      onSettings: () =>
-                                          _toggle(_Popover.settings),
-                                    ),
+                                    child: railTabs
+                                        ? _RailTabs(
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onPick: _pickTab,
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                            footHeight: footHeight,
+                                          )
+                                        : _RightRail(
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onModes: () =>
+                                                _toggle(_Popover.modes),
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                          ),
                                   ),
                                 ),
                               ),
@@ -1849,7 +1972,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: aboveStop,
+                                  bottom: aboveFoot,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).
@@ -1880,8 +2003,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ],
-                              // Stop on its own at the bottom, under the rail.
-                              if (!deck)
+                              // Stop on its own at the bottom, under the rail (a phone
+                              // held sideways; desktop and iPad have it as the foot).
+                              if (footShown)
+                                Positioned(
+                                  right: kSimpleInset,
+                                  top: footTop,
+                                  width: railWidth,
+                                  height: footHeight,
+                                  child: const EmergencyStopButton(railFoot: true),
+                                )
+                              else if (!deck && !railFoot)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
@@ -1902,6 +2034,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     ),
                     ),
                   ),
+                ),
                 ),
               ),
             ),
@@ -2577,12 +2710,16 @@ class _LeftRail extends StatelessWidget {
     required this.sky,
     required this.onSky,
     required this.onAlbum,
+    required this.onBest,
     this.onMonitor,
   });
 
   final bool sky;
   final VoidCallback? onSky;
   final VoidCallback onAlbum;
+
+  /// Tonight's Best: offered at every width (Monitor needs 900 pt).
+  final VoidCallback onBest;
 
   /// Null: the window is too narrow for Monitor, so it isn't offered.
   final VoidCallback? onMonitor;
@@ -2638,6 +2775,12 @@ class _LeftRail extends StatelessWidget {
             label: context.l10n.monitorTitle,
             onTap: onMonitor,
           ),
+        _RailButton(
+          key: const Key('simple-best-open'),
+          icon: Icons.star_outline,
+          label: context.l10n.bestNav,
+          onTap: onBest,
+        ),
       ],
       ),
     ),
@@ -2718,7 +2861,7 @@ class _RightRail extends ConsumerWidget {
             key: const Key('simple-settings'),
             icon: Icons.tune,
             tall: true,
-            label: _chipLabel(context, ref),
+            label: _railChipLabel(context, ref, mode, named),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
@@ -2726,14 +2869,303 @@ class _RightRail extends ConsumerWidget {
       ),
     );
   }
+}
 
-  // In Preflight the chip names the step whose settings it shows ("Focus"
-  // over "Auto"), so they don't read as random.
-  String _chipLabel(BuildContext context, WidgetRef ref) {
-    final label = SimpleScreen.of(mode).caption(context, ref);
-    return named == null
-        ? label
-        : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
+// In Preflight the chip names the step whose settings it shows ("Focus"
+// over "Auto"), so they don't read as random.
+String _railChipLabel(
+  BuildContext context,
+  WidgetRef ref,
+  SimpleModeScreen mode,
+  SimpleModeScreen? named,
+) {
+  final label = SimpleScreen.of(mode).caption(context, ref);
+  return named == null
+      ? label
+      : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
+}
+
+/// Whether the right rail is a tab list of the six modes: every layout but the
+/// Companion portrait deck and a phone held sideways (shortest side under 600),
+/// which keep the mode button and the grid (#1911, slices 1 to 4).
+bool simpleRailTabs(BuildContext context, WidgetRef ref) =>
+    !companionPortrait(context, ref) &&
+    MediaQuery.sizeOf(context).shortestSide >= 600;
+
+String _railSlug(SimpleModeScreen m) => switch (m) {
+  SimpleModeScreen.polarAlign => 'polar',
+  SimpleModeScreen.guide => 'guider',
+  _ => m.name,
+};
+
+/// The right rail as a tab list (#1911): one tap on a tab opens that mode. The
+/// open mode is the selected tab, in place, with the shutter and the settings
+/// chip under its name. Above 1.1x text the open block stays on top while the
+/// other tabs scroll; Stop sits outside the rail either way.
+class _RailTabs extends ConsumerWidget {
+  const _RailTabs({
+    super.key,
+    required this.mode,
+    this.named,
+    required this.popover,
+    required this.onPick,
+    required this.onSettings,
+    required this.footHeight,
+  });
+
+  final SimpleModeScreen mode;
+  final SimpleModeScreen? named;
+  final _Popover popover;
+  final ValueChanged<SimpleModeScreen> onPick;
+  final VoidCallback onSettings;
+
+  /// The rail's last row, Stop's, which the shell draws over the panel.
+  final double footHeight;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pinned = simpleRailScale(context) > 1;
+    final done = ref.watch(doneTonightProvider);
+    final running = ref.watch(railRunningProvider);
+    final open = _openBlock(context, ref, done, running);
+    return SimplePanel(
+      // The bottom is Stop's room: the shell draws it over the rail's foot (#1911).
+      padding: EdgeInsets.fromLTRB(6, AraSpace.s8, 6, footHeight),
+      // No tabBar role: it allows tab children only, and the open block holds
+      // the shutter and the settings chip too.
+      child: Semantics(
+        container: true,
+        label: context.l10n.shellRailTabs,
+        child: Column(
+          key: const Key('simple-rail-tabs'),
+          mainAxisSize: MainAxisSize.min,
+          spacing: AraSpace.s4,
+          children: [
+            if (pinned) open,
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  spacing: AraSpace.s4,
+                  children: [
+                    for (final m in railOrder)
+                      if (m == mode) ...[
+                        if (!pinned) open,
+                      ] else
+                        _RailTab(
+                          key: Key('simple-rail-tab-${_railSlug(m)}'),
+                          mode: m,
+                          selected: false,
+                          done: done.contains(m),
+                          running: running.contains(m),
+                          compact: pinned,
+                          onTap: () => onPick(m),
+                        ),
+                    // Temporary: Preflight is no tab, and goes in slice 2.
+                    _RailTab(
+                      key: const Key('simple-mode-preflight'),
+                      mode: SimpleModeScreen.preflight,
+                      selected: named == SimpleModeScreen.preflight,
+                      compact: pinned,
+                      onTap: () => onPick(SimpleModeScreen.preflight),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _openBlock(
+    BuildContext context,
+    WidgetRef ref,
+    Set<SimpleModeScreen> done,
+    Set<SimpleModeScreen> running,
+  ) {
+    // The plan's frames taken, under the name of the open Plan.
+    final figure = mode == SimpleModeScreen.plan
+        ? ref.watch(railFigureProvider)
+        : null;
+    return Container(
+      key: const Key('simple-rail-open'),
+      decoration: BoxDecoration(
+        color: AraColors.selectionTint,
+        borderRadius: BorderRadius.circular(AraRadius.container),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: AraSpace.s8,
+        children: [
+          KeyedSubtree(
+            key: const Key('simple-mode'),
+            child: _RailTab(
+              key: Key('simple-rail-tab-${_railSlug(mode)}'),
+              mode: named ?? mode,
+              selected: true,
+              done: done.contains(mode),
+              running: running.contains(mode),
+              // In Preflight a pick of its step's mode would end it.
+              onTap: named == null ? () => onPick(mode) : () {},
+              name: true,
+            ),
+          ),
+          if (figure != null)
+            Text(
+              figure,
+              key: const Key('simple-rail-figure'),
+              style: AraText.caption.copyWith(color: AraColors.selectionFg),
+            ),
+          SimpleScreen.of(mode).shutter,
+          _RailButton(
+            key: const Key('simple-settings'),
+            icon: Icons.tune,
+            tall: true,
+            label: _railChipLabel(context, ref, mode, named),
+            selected: popover == _Popover.settings,
+            onTap: onSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One tab: the mode's icon over its caption. [name] is the open block's
+/// header, which shows the short name alone, as the rail did. [compact] (large
+/// text) drops the icon and keeps the caption to one line; the tab list
+/// scrolls when the tabs outgrow the rail. [done] draws a tick (done tonight)
+/// and [running] a steady dot in the corner; neither animates.
+class _RailTab extends StatelessWidget {
+  const _RailTab({
+    super.key,
+    required this.mode,
+    required this.selected,
+    required this.onTap,
+    this.name = false,
+    this.compact = false,
+    this.done = false,
+    this.running = false,
+  });
+
+  final SimpleModeScreen mode;
+  final bool selected;
+  final bool done;
+  final bool running;
+  final VoidCallback onTap;
+  final bool name;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = simpleRailScale(context);
+    final color = selected ? AraColors.selectionFg : AraColors.textSecondary;
+    final label = name
+        ? mode.railLabelOf(context.l10n)
+        : mode.labelOf(context.l10n);
+    final style = AraText.caption.copyWith(
+      color: color,
+      fontWeight: selected ? FontWeight.w600 : null,
+    );
+    // The longest word, so two lines wrap between words, never inside one.
+    final words = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: DefaultTextStyle.of(context).style.merge(style),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final longestWord = words.minIntrinsicWidth;
+    words.dispose();
+    return Semantics(
+      role: SemanticsRole.tab,
+      selected: selected,
+      enabled: true,
+      label: running
+          ? context.l10n.shellRailTabRunning(mode.labelOf(context.l10n))
+          : done
+          ? context.l10n.shellRailTabDone(mode.labelOf(context.l10n))
+          : mode.labelOf(context.l10n),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AraRadius.container),
+        child: ExcludeSemantics(
+          child: ConstrainedBox(
+            // Content-high above its minimum, so large text takes what it
+            // needs and no more.
+            constraints: BoxConstraints(
+              minWidth: 60 * scale,
+              maxWidth: 60 * scale,
+              minHeight: name ? 48 : (compact ? 44 : 46),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!name && !compact)
+                      Icon(mode.icon, size: 20, color: color),
+                    // "Polar align" wraps to two lines at the rail's width (or
+                    // its longest word's), and FittedBox shrinks the caption to
+                    // the tab, never cut. Compact keeps one line and shrinks it
+                    // whole, so no fixed width there.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: SizedBox(
+                          width: compact
+                              ? null
+                              : math.max(
+                                  60 * scale,
+                                  longestWord.ceilToDouble(),
+                                ),
+                          child: Text(
+                            label,
+                            maxLines: compact ? 1 : 2,
+                            softWrap: !compact,
+                            textAlign: TextAlign.center,
+                            style: style,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (done)
+                  Positioned(
+                    top: 2,
+                    right: 4,
+                    child: Icon(
+                      Icons.check,
+                      key: Key('simple-rail-tick-${_railSlug(mode)}'),
+                      size: 12,
+                      color: AraColors.accentConnected,
+                    ),
+                  ),
+                if (running)
+                  Positioned(
+                    top: 4,
+                    right: 6,
+                    child: Container(
+                      key: Key('simple-rail-dot-${_railSlug(mode)}'),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AraColors.accentConnected,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -3489,6 +3921,18 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 ),
                 'Dome' => const SimpleDomeWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
+                // #1580: with nothing connected, the add-your-devices panel leads the list.
+                'Devices'
+                    when ref.watch(serverLinkUpProvider) &&
+                        !_anyDeviceShown(ref) =>
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: AraSpace.s16,
+                    children: [
+                      const SimpleDevicesEmpty(),
+                      _Gear(onOpen: (id) => setState(() => _section = id)),
+                    ],
+                  ),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),

@@ -29,7 +29,8 @@ public interface IEquipmentFaultSink {
     void Publish(EquipmentFaultEvent fault);
 
     /// <summary>The device's own reads came back after a standing fault it published (a
-    /// <c>degraded</c> episode ended on its own): resolve the §42.5 row and broadcast the same
+    /// <c>degraded</c> episode ended on its own, or the guider's own recovery succeeded and the reaction
+    /// service resumes the runs it paused): resolve the §42.5 row and broadcast the same
     /// <c>equipment.fault_action_taken { action: "recovered" }</c> the reaction ladder sends, so the
     /// chip clears either way. Default no-op keeps test fakes compiling.</summary>
     void Recovered(EquipmentFaultEvent fault) { }
@@ -61,7 +62,20 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
     // a device service's refresh tick. Copy-on-write array: subscriptions happen at startup
     // (the reaction service), publishes for a daemon lifetime.
     private Action<EquipmentFaultEvent>[] _subscribers = [];
+    private Action<EquipmentFaultEvent>[] _recoveredSubscribers = [];
     private readonly object _subscribeGate = new();
+
+    /// <summary>Register a consumer of <see cref="Recovered"/> (the §42.3 reaction service, which ends
+    /// the guider episode and resumes the runs it paused). Same lifetime as <see cref="Subscribe"/>.</summary>
+    public void SubscribeRecovered(Action<EquipmentFaultEvent> consumer) {
+        ArgumentNullException.ThrowIfNull(consumer);
+        lock (_subscribeGate) {
+            var next = new Action<EquipmentFaultEvent>[_recoveredSubscribers.Length + 1];
+            _recoveredSubscribers.CopyTo(next, 0);
+            next[^1] = consumer;
+            _recoveredSubscribers = next;
+        }
+    }
 
     /// <summary>Register a fault consumer (the §42.3 reaction service). No unsubscribe — the
     /// hub and its consumers are daemon-lifetime singletons.</summary>
@@ -150,6 +164,13 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
             _ = _broadcaster.PublishAsync(WsEventCatalog.EquipmentFaultActionTaken, element, System.Threading.CancellationToken.None);
         } catch (Exception ex) {
             LogPublishFailed(ex);
+        }
+        foreach (var subscriber in _recoveredSubscribers) {
+            try {
+                subscriber(fault);
+            } catch (Exception ex) {
+                LogSubscriberFailed(ex);
+            }
         }
     }
 

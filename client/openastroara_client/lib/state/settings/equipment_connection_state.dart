@@ -1,22 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
-import '../saved_server_state.dart';
 
 /// §52.1 connection-lifecycle defaults: which equipment device types
-/// auto-connect when the daemon boots. Phase 12h.6L wires the daemon
-/// round-trip via [ProfileApi] (`/api/v1/profile/equipment-connection`).
+/// auto-connect when the daemon boots (`/api/v1/profile/equipment-connection`).
 ///
-/// Each of the 10 equipment panels has an auto-connect toggle but no
-/// Save button. To keep the existing UX intact, the notifier handles
-/// persistence itself: [build] schedules a one-shot hydrate from the
-/// daemon, and [setAutoConnect] fires-and-forgets a PUT after the
-/// optimistic local update. Save errors are silent (best-effort) — the
-/// trade-off is acceptable for v0.0.1 trusted-LAN. Phase 14 can replace
-/// the silent failure with an error-stream provider the panels watch
-/// for snackbars.
+/// Each equipment panel has an auto-connect switch and no Save button, so a
+/// change saves itself (ADR 0015): nothing is shown or sent until the rig's
+/// copy is loaded, and [EquipmentConnectionNotifier.setAutoConnect] throws
+/// when the rig did not take the change, for the panel to say so.
 
 enum EquipmentDeviceType {
   camera,
@@ -68,59 +62,32 @@ class EquipmentConnectionSettings {
 }
 
 class EquipmentConnectionNotifier
-    extends Notifier<EquipmentConnectionSettings>
-    with SettingsSyncMixin<EquipmentConnectionSettings> {
+    extends SelfLoadingSection<EquipmentConnectionSettings> {
+  /// Saves on change; throws when the rig did not take it (not loaded, 412,
+  /// unreachable) so the panel can say so. ADR 0015: nothing is changed or
+  /// sent while the section is not loaded from the rig. A failed save puts
+  /// the rig's copy back; a 412 keeps the edit (rule 6).
+  Future<void> setAutoConnect(EquipmentDeviceType t, bool v) {
+    final c = state.value;
+    return c == null
+        ? editAndSave((c) => c.copyWithAutoConnect(t, v))
+        : replaceAndSave(c.copyWithAutoConnect(t, v));
+  }
+
   @override
-  EquipmentConnectionSettings build() {
-    // Schedule one-shot hydration after the current build pass. Calling
-    // ref.read inside build() synchronously would re-enter the notifier
-    // and trip an assertion; Future.microtask defers it cleanly.
-    Future.microtask(_tryHydrate);
-    return const EquipmentConnectionSettings();
-  }
+  Future<Tagged<EquipmentConnectionSettings>> fetch(ProfileApi api) =>
+      api.getEquipmentConnectionSection();
 
-  void setAutoConnect(EquipmentDeviceType t, bool v) {
-    state = state.copyWithAutoConnect(t, v);
-    // Fire-and-forget PUT. Failures are silent (see class docstring).
-    Future.microtask(_tryPersist);
-  }
-
-  /// Manual hydrate — exposed for tests that want to inject a mocked api.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getEquipmentConnection());
-
-  /// Manual persist — exposed for tests + future error-stream wiring.
-  Future<EquipmentConnectionSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putEquipmentConnection(sent));
-
-  ProfileApi? _activeApi() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
-  }
-
-  Future<void> _tryHydrate() async {
-    final api = _activeApi();
-    if (api == null) return;
-    try {
-      await hydrateGuarded(() => api.getEquipmentConnection());
-    } catch (_) {
-      // Silent — defaults remain.
-    }
-  }
-
-  Future<void> _tryPersist() async {
-    final api = _activeApi();
-    if (api == null) return;
-    try {
-      // Serialized + fenced through the mixin so rapid toggles can't let an
-      // out-of-order PUT echo revert a newer optimistic local update.
-      await persistGuarded((sent) => api.putEquipmentConnection(sent));
-    } catch (_) {
-      // Silent — local optimistic update stays.
-    }
-  }
+  @override
+  Future<Tagged<EquipmentConnectionSettings>> send(
+    ProfileApi api,
+    EquipmentConnectionSettings value,
+    String? etag,
+  ) => api.putEquipmentConnectionSection(value, ifMatch: etag);
 }
 
-final equipmentConnectionProvider = NotifierProvider<
-    EquipmentConnectionNotifier,
-    EquipmentConnectionSettings>(EquipmentConnectionNotifier.new);
+final equipmentConnectionProvider =
+    NotifierProvider<
+      EquipmentConnectionNotifier,
+      LoadedSection<EquipmentConnectionSettings>
+    >(EquipmentConnectionNotifier.new);

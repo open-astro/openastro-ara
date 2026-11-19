@@ -20,6 +20,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
@@ -119,10 +120,12 @@ namespace OpenAstroAra.Test {
             try {
                 var first = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
 
-                var other = PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0), centering, jobs, Profile(attempts: 1).Object);
-                var problem = other as ProblemHttpResult;
-                Assert.That(problem?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict), "another target must not silently join");
-                Assert.That(problem!.ProblemDetails.Detail, Does.Contain(first.Value!.JobId.ToString()).And.Contain("DELETE /api/v1/jobs/"));
+                var refusal = Assert.Throws<RefusalException>(() =>
+                    PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0), centering, jobs, Profile(attempts: 1).Object),
+                    "another target must not silently join");
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.CenterInProgress));
+                Assert.That(refusal.Parameters["job_id"], Is.EqualTo(first.Value!.JobId.ToString()));
+                Assert.That(refusal.Message, Does.Contain(first.Value.JobId.ToString()).And.Contain("DELETE /api/v1/jobs/"));
 
                 var same = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
                 Assert.That(same.Value!.JobId, Is.EqualTo(first.Value.JobId), "the same target joins the running job");

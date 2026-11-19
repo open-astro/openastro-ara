@@ -110,6 +110,16 @@ public partial class Program {
         builder.Services.AddOpenApi(o => o.AddDocumentTransformer((doc, _, _) => {
             doc.Info.Title = "OpenAstro Ara REST API";
             doc.Info.Version = "v1";
+            // ADR 0022 — the declared refusal causes, built from the catalog (never a second list), so the
+            // client's RefusalCause enum has one contract to be checked against.
+            var components = doc.Components ??= new Microsoft.OpenApi.OpenApiComponents();
+            var schemas = components.Schemas ??= new Dictionary<string, Microsoft.OpenApi.IOpenApiSchema>();
+            schemas["RefusalReason"] = new Microsoft.OpenApi.OpenApiSchema {
+                Type = Microsoft.OpenApi.JsonSchemaType.String,
+                Description = "The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.",
+                Enum = OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All
+                    .Select(c => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(c.Token)!).ToList(),
+            };
             return Task.CompletedTask;
         }).AddOperationTransformer((op, ctx, _) => {
             // ADR 0015 — a section PUT takes the tag of the copy the client loaded (WithSection).
@@ -448,7 +458,7 @@ public partial class Program {
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<IFaultLogService>(),
+                sp.GetService<IEquipmentFaultSink>(),
                 // §30.7.4 — lets the calibration-state stamp detect a profile switch mid-build
                 // (profile select swaps the live store without touching the guider).
                 () => sp.GetService<IProfileRepository>()?.ActiveId,
@@ -937,6 +947,28 @@ public partial class Program {
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
+        // #1901 — End Night: the shared shutdown ladder, the root-owned poweroff helper (ADR 0017: the daemon only
+        // asks systemd to start the unit) and the action itself.
+        builder.Services.AddSingleton(sp => new ShutdownLadder(
+            sp.GetService<IProfileStore>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            sp.GetService<ICameraService>(),
+            sp.GetService<IFilterWheelService>(),
+            sp.GetService<IFocuserService>(),
+            sp.GetService<IRotatorService>(),
+            sp.GetService<IFlatDeviceService>(),
+            sp.GetService<ILogger<ShutdownLadder>>()));
+        builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
+        builder.Services.AddSingleton(sp => new EndNightService(
+            sp.GetRequiredService<ShutdownLadder>(),
+            sp.GetRequiredService<IHostPoweroffStarter>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetService<UnattendedShutdownService>(),
+            sp.GetService<ILogger<EndNightService>>()));
+
         // #1140 P2 — the sky-model calibration fit reads the catalog's frame rows and writes the profile.
         builder.Services.AddSingleton(sp => new SkyModelCalibrationService(
             sp.GetRequiredService<IProfileStore>(), sp.GetService<IFrameRepository>()));
@@ -1045,7 +1077,9 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetService<ILogger<FaultReactionService>>(),
                 // §42.5 — the reaction outcome lands on the fault-log row.
-                sp.GetService<IFaultLogService>()));
+                sp.GetService<IFaultLogService>(),
+                // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
+                () => sp.GetService<GuiderService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
@@ -1317,6 +1351,9 @@ public partial class Program {
         // #1194 — §27 on REST: a mutating request carrying a stale X-Ara-Session is refused (409);
         // header-less requests stay on the documented advisory path.
         app.Use(SessionGuard.Middleware);
+        // ADR 0022 — a module's RefusalException becomes its declared 4xx problem; after the guard, so its
+        // own 409 is never seen here.
+        app.Use(RefusalHandler.Middleware);
 
         // §49 API docs: Scalar UI (AOT-friendly Swagger replacement per §71.3).
         app.MapOpenApi();
@@ -1351,6 +1388,7 @@ public partial class Program {
         app.MapDiagnosticsEndpoints();
         app.MapFaultsEndpoints(); // §42.5 — persisted fault history
         app.MapPreflightEndpoints(); // §58.14 — pre-sleep checklist
+        app.MapEndNightEndpoints(); // #1901 — End Night
         app.MapPlanningEndpoints(); // #1140 P2 — sky-model calibration store
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
@@ -1513,7 +1551,19 @@ public partial class Program {
         // §37: eagerly construct the multi-profile repository at boot (not on first request) so it
         // migrates the legacy profile.json into the profiles/ set and loads the active profile into
         // the live store before any request is served.
-        _ = app.Services.GetRequiredService<IProfileRepository>();
+        var profileRepo = app.Services.GetRequiredService<IProfileRepository>();
+
+        // #1955 — a profile file the repository set aside while loading gets one Critical inbox notice;
+        // the file no longer matches *.json, so the next start does not repeat it.
+        if (profileRepo is FileProfileRepository fileProfileRepo) {
+            foreach (var notif in StartupNotificationFactory.ForProfileSetAsides(fileProfileRepo.SetAsideFiles)) {
+                try {
+                    notificationSvc.CreateAsync(notif, CancellationToken.None).GetAwaiter().GetResult();
+                } catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or System.Text.Json.JsonException) {
+                    LogNotificationEmitFailed(app.Services.GetRequiredService<ILogger<Program>>(), ex);
+                }
+            }
+        }
 
         // #1121 — say at boot when the configured plate-solver binary is missing (after the
         // normalizer's stock-solver-path → bundled astap_cli migration had its chance): otherwise

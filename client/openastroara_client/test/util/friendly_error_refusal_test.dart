@@ -1,0 +1,111 @@
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
+import 'package:openastroara/services/refusal.dart';
+import 'package:openastroara/util/friendly_error.dart';
+
+/// ADR 0022 rule 6 — each known Refusal cause is worded by the app, in
+/// English and in pt-BR, from the arb files; the daemon's English `detail`
+/// shows only for a cause the app does not know or an answer with no reason.
+final _en = lookupAppLocalizations(const Locale('en'));
+final _pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+
+const _detail = 'DAEMON DETAIL SENTENCE';
+
+Refusal _known(RefusalCause cause) => Refusal(
+  cause: cause,
+  reason: cause.token,
+  detail: _detail,
+  parameters: cause == RefusalCause.opticsNotSet
+      ? const {
+          'missing': ['focal_length'],
+        }
+      : cause == RefusalCause.centerInProgress
+      ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
+      : cause == RefusalCause.belowHorizonLimit
+      ? const {'altitude_deg': 14.2, 'limit_deg': 20}
+      : const {},
+);
+
+void main() {
+  for (final cause in RefusalCause.values) {
+    test(
+      '${cause.token} is worded by the app in English and in pt-BR, not with the daemon detail',
+      () {
+        final en = failureReason(_en, _known(cause));
+        final pt = failureReason(_pt, _known(cause));
+        expect(en, isNot(contains(_detail)));
+        expect(pt, isNot(contains(_detail)));
+        expect(
+          en,
+          isNot(failureReason(_en, Exception('x'))),
+          reason: 'its own sentence, not the generic one',
+        );
+        expect(
+          pt,
+          isNot(failureReason(_pt, Exception('x'))),
+          reason: 'its own sentence, not the generic one',
+        );
+        expect(pt, isNot(en), reason: 'the pt-BR sentence is its own');
+        expect(
+          friendlyError(_en, _known(cause), action: 'check the position'),
+          en,
+        );
+      },
+    );
+  }
+
+  test('each cause has a sentence of its own', () {
+    final en = {
+      for (final c in RefusalCause.values) failureReason(_en, _known(c)),
+    };
+    final pt = {
+      for (final c in RefusalCause.values) failureReason(_pt, _known(c)),
+    };
+    expect(en, hasLength(RefusalCause.values.length));
+    expect(pt, hasLength(RefusalCause.values.length));
+  });
+
+  test('the optics sentence names the missing value', () {
+    String words(List<String> missing) => failureReason(
+      _en,
+      Refusal(
+        cause: RefusalCause.opticsNotSet,
+        reason: 'optics-not-set',
+        detail: _detail,
+        parameters: {'missing': missing},
+      ),
+    );
+    expect(words(['focal_length']), isNot(words(['pixel_size'])));
+  });
+
+  test('the below-horizon sentence names the altitude and the limit', () {
+    for (final l in [_en, _pt]) {
+      final words = failureReason(l, _known(RefusalCause.belowHorizonLimit));
+      expect(words, contains('14'));
+      expect(words, contains('20'));
+    }
+  });
+
+  test('a cause the app does not know shows the daemon detail', () {
+    const r = Refusal(
+      cause: null,
+      reason: 'dome-closed',
+      detail: 'The dome is closed.',
+    );
+    expect(
+      friendlyError(_en, r, action: 'check the position'),
+      'The dome is closed.',
+    );
+    expect(failureReason(_pt, r), 'The dome is closed.');
+  });
+
+  test('an answer with no reason shows the daemon detail', () {
+    const r = Refusal(
+      cause: null,
+      reason: null,
+      detail: 'Plate-solver executable not found.',
+    );
+    expect(failureReason(_en, r), 'Plate-solver executable not found.');
+  });
+}

@@ -27,6 +27,7 @@ using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
@@ -178,7 +179,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Verify_fails_fast_while_another_exposure_holds_the_camera() {
             // The camera reports its in-flight gate held: no capture is attempted (the capture path would
-            // wait up to 20 min), the caller gets CameraBusyException → 409 at once.
+            // wait up to 20 min), the caller gets a camera-busy Refusal (409) at once.
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(Mock.Of<IPlateSolveSettings>());
             profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
@@ -189,15 +190,10 @@ namespace OpenAstroAra.Test {
             using var svc = new VerifyPositionService(profileService.Object, factory.Object, Mock.Of<IImagingMediator>(),
                 Mock.Of<ITelescopeMediator>(), Mock.Of<IFilterWheelMediator>(), camera: camera.Object);
 
-            await Assert.ThatAsync(() => svc.VerifyAsync(2, CancellationToken.None), Throws.TypeOf<CameraBusyException>());
+            await Assert.ThatAsync(() => svc.VerifyAsync(2, CancellationToken.None),
+                Throws.TypeOf<RefusalException>().With.Property(nameof(RefusalException.Cause)).EqualTo(RefusalCatalog.CameraBusy)
+                    .And.Message.EqualTo(MainCameraPointingSolver.CameraBusyMessage));
             factory.VerifyNoOtherCalls();
-
-            var busy = new Mock<IVerifyPositionService>();
-            busy.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new CameraBusyException());
-            var problem = (ProblemHttpResult)await PlateSolveEndpoints.VerifyPositionAsync(null, busy.Object, CancellationToken.None);
-            Assert.That(problem.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
-            Assert.That(problem.ProblemDetails.Detail, Does.Contain("busy"));
-            Assert.That(problem.ProblemDetails.Extensions["reason"], Is.EqualTo("camera-busy"));
         }
 
         [Test]
@@ -208,42 +204,18 @@ namespace OpenAstroAra.Test {
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
             using var svc = new VerifyPositionService(profileService.Object, Mock.Of<IPlateSolverFactory>(), Mock.Of<IImagingMediator>(),
                 Mock.Of<ITelescopeMediator>(), Mock.Of<IFilterWheelMediator>());
-            await Assert.ThatAsync(() => svc.VerifyAsync(2, CancellationToken.None), Throws.TypeOf<PlateSolverConfigurationException>());
+            await Assert.ThatAsync(() => svc.VerifyAsync(2, CancellationToken.None),
+                Throws.TypeOf<RefusalException>().With.Property(nameof(RefusalException.Cause)).EqualTo(RefusalCatalog.OpticsNotSet));
         }
 
         [Test]
-        public async Task Endpoint_maps_configuration_to_422_and_no_camera_to_409() {
+        public async Task Endpoint_returns_the_verification() {
             var ok = new Mock<IVerifyPositionService>();
             ok.Setup(v => v.VerifyAsync(1.5, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new VerifyPositionResultDto(true, 1, 2, 1, 2, null, null, 0, null, 1.5, null, "J2000"));
             var result = await PlateSolveEndpoints.VerifyPositionAsync(new VerifyPositionRequestDto(1.5), ok.Object, CancellationToken.None);
             Assert.That(result, Is.InstanceOf<Ok<VerifyPositionResultDto>>());
             Assert.That(((Ok<VerifyPositionResultDto>)result).Value!.ExposureSeconds, Is.EqualTo(1.5));
-
-            var misconfigured = new Mock<IVerifyPositionService>();
-            misconfigured.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new PlateSolverConfigurationException("no optics"));
-            var problem = await PlateSolveEndpoints.VerifyPositionAsync(null, misconfigured.Object, CancellationToken.None);
-            Assert.That(((ProblemHttpResult)problem).StatusCode, Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
-
-            var noCamera = new Mock<IVerifyPositionService>();
-            noCamera.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("No camera connected"));
-            var conflict = await PlateSolveEndpoints.VerifyPositionAsync(null, noCamera.Object, CancellationToken.None);
-            Assert.That(((ProblemHttpResult)conflict).StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
-            Assert.That(((ProblemHttpResult)conflict).ProblemDetails.Extensions["reason"], Is.EqualTo("no-camera"));
-
-            // A camera gate held by a long exposure is "busy" (409), not a 500; a missing CLI solver or an
-            // out-of-range exposure is a configuration problem (422).
-            IResult Map(Exception ex) {
-                var svc = new Mock<IVerifyPositionService>();
-                svc.Setup(v => v.VerifyAsync(It.IsAny<double?>(), It.IsAny<CancellationToken>())).ThrowsAsync(ex);
-                return PlateSolveEndpoints.VerifyPositionAsync(null, svc.Object, CancellationToken.None).GetAwaiter().GetResult();
-            }
-            Assert.That(((ProblemHttpResult)Map(new TimeoutException("gate"))).StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
-            Assert.That(((ProblemHttpResult)Map(new TimeoutException("gate"))).ProblemDetails.Extensions["reason"], Is.EqualTo("gate-stuck"));
-            Assert.That(((ProblemHttpResult)Map(new System.IO.FileNotFoundException("solver"))).StatusCode, Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
-            Assert.That(((ProblemHttpResult)Map(new ArgumentOutOfRangeException("exposure"))).StatusCode, Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
     }
 }

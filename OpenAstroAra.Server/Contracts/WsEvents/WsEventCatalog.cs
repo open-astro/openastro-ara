@@ -129,9 +129,6 @@ public static class WsEventCatalog {
     // #1156 — one per dither, REST or sequencer-driven: payload { ok, operation_id? (REST only),
     // error? }. Published after SettleDone or the settle failsafe, so `ok` is the settle verdict.
     public static readonly WsEvent GuiderDitherComplete = new("guider.dither_complete");
-    // §42.2 — the mid-sequence guider fault flow reports the executed
-    // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
-    public static readonly WsEvent GuiderFaultActionTaken = new("guider.fault_action_taken");
     // §63.17 — an on-demand POST /guider/profile/push completed; payload carries the RPC method names
     // attempted so the client can show what reached the daemon.
     public static readonly WsEvent GuiderProfilePushed = new("guider.profile_pushed");
@@ -309,6 +306,10 @@ public static class WsEventCatalog {
     // action == "emergency_stop".
     public static readonly WsEvent SafetyEmergencyStop = new("safety.emergency_stop");
 
+    // #1901 End Night: a change of the action (started, cancel requested, finished) or of one of its steps;
+    // payload { run_id, state, step, step_state, detail, cancellable }. GET /api/v1/end-night/status holds every step.
+    public static readonly WsEvent EndNightProgress = new("end_night.progress");
+
     /// <summary>
     /// The typed payload record of each event that has one (ADR 0014 step 2), by wire token. The snapshot
     /// (ws-events.json) reads the payload shape from these types; an event not listed here keeps a hand-built payload.
@@ -317,6 +318,7 @@ public static class WsEventCatalog {
         [CameraExposureStarted.Token] = typeof(ExposureStartedPayload),
         [CameraExposureComplete.Token] = typeof(ExposureCompletePayload),
         [CameraExposureFailed.Token] = typeof(ExposureFailedPayload),
+        [EndNightProgress.Token] = typeof(EndNightProgressPayload),
     };
 
     /// <summary>
@@ -345,7 +347,6 @@ public static class WsEventCatalog {
         GuiderPaResidual,
         GuiderOperationComplete,
         GuiderDitherComplete,
-        GuiderFaultActionTaken,
         GuiderProfilePushed,
         GuiderDarkLibraryInvalidated,
         PolarAlignStarted,
@@ -421,6 +422,7 @@ public static class WsEventCatalog {
         SafetySafe,
         SafetyActionTaken,
         SafetyEmergencyStop,
+        EndNightProgress,
     };
 }
 

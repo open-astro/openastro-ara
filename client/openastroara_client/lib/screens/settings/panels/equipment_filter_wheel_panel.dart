@@ -18,6 +18,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../theme/ara_metrics.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -34,11 +35,10 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final connN = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(filterWheelProvider);
     final notifier = ref.read(filterWheelProvider.notifier);
-    final labels = ref.watch(filterWheelLabelsProvider);
+    final labelsSection = ref.watch(filterWheelLabelsProvider);
+    final labels = labelsSection.canSave ? labelsSection.value : null;
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
     final policySection = ref.watch(filterWheelPolicyProvider);
     final policy = policySection.canSave ? policySection.value : null;
@@ -76,13 +76,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FilterWheelBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.filterWheel),
-          onChanged: (v) =>
-              connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.filterWheel),
         if (policy == null)
           SectionNotLoaded(
             section: policySection,
@@ -118,33 +112,49 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // Offsets drives the same daemon routine; ADR 0009 rule 1).
         if (status.value case final s? when s.isConnected && !s.manual)
           _FocusOffsetsSection(slots: s.slots),
-        // Local slot labels — the user's filter names used when authoring
-        // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
-        // independent of the connected wheel's own names shown live above. Hidden
+        // Slot labels — the user's filter names, loaded from the rig, that the
+        // §38 editor offers (it reads `filterWheelLabelsProvider`); independent
+        // of the connected wheel's own names shown live above. Hidden
         // while a wheel is connected (its driver names take over) to avoid duplication.
         if (showSlotLabels) ...[
           SettingsSectionHeader(
-              manual ? 'Filters (manual filter wheel)' : 'Slot labels (for sequences)'),
-          for (var slot = 1; slot <= labels.slotCount; slot++)
-            EditableTextRow(
-              label: 'Slot $slot',
-              helpKey: slot == 1
-                  ? (manual
-                      ? 'eq.filterwheel.manual_filters'
-                      : 'eq.filterwheel.slot_labels')
-                  : null,
-              currentValue: labels.labelAt(slot),
-              getCanonical: () =>
-                  ref.read(filterWheelLabelsProvider).labelAt(slot),
-              // Each committed row persists to the daemon (12h.2b round-trip);
-              // a failure keeps the local edit and says so — offline authoring
-              // still works, the labels just won't survive a daemon-side reload.
-              parse: (s) {
-                labelsN.setLabel(slot, s);
-                unawaited(_persistLabels(context, ref));
-              },
-              hint: 'Empty = unused',
-            ),
+            manual
+                ? 'Filters (manual filter wheel)'
+                : 'Slot labels (for sequences)',
+          ),
+          if (labels == null)
+            SectionNotLoaded(
+              section: labelsSection,
+              onRetry: _reload(ref, filterWheelLabelsProvider),
+              // A row of the list: start where the rows start.
+              padding: const EdgeInsets.symmetric(vertical: AraSpace.s12),
+            )
+          else ...[
+            if (labelsSection.conflict)
+              SectionConflictBanner(
+                onReload: _reload(ref, filterWheelLabelsProvider),
+              ),
+            for (var slot = 1; slot <= labels.slotCount; slot++)
+              EditableTextRow(
+                label: 'Slot $slot',
+                helpKey: slot == 1
+                    ? (manual
+                          ? 'eq.filterwheel.manual_filters'
+                          : 'eq.filterwheel.slot_labels')
+                    : null,
+                currentValue: labels.labelAt(slot),
+                getCanonical: () =>
+                    ref.read(filterWheelLabelsProvider).value?.labelAt(slot) ??
+                    '',
+                // Each committed row saves to the rig; a refusal shows in a
+                // SnackBar and the edit stays on screen (a 412 can be reloaded).
+                parse: (s) {
+                  labelsN.setLabel(slot, s);
+                  unawaited(_persistLabels(context, ref));
+                },
+                hint: 'Empty = unused',
+              ),
+          ],
         ],
       ],
     );
@@ -490,7 +500,7 @@ Future<void> _autoSave(
 }
 
 /// Persist the slot labels to the daemon, surfacing a failure as a SnackBar
-/// (the local edit is kept either way — offline authoring keeps working).
+/// (the edit stays on screen so a 412 can be reloaded).
 Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
   try {
     await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
@@ -502,9 +512,19 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSaveSlotLabels))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is SectionNotLoadedException || e is SectionConflictException
+                ? e.toString()
+                : friendlyError(
+                    context.l10n,
+                    e,
+                    action: context.l10n.actionSaveSlotLabels,
+                  ),
+          ),
+        ),
+      );
     }
   }
 }

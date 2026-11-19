@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/models/camera_status.dart';
@@ -135,7 +136,15 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 class _FixedLabels extends FilterWheelLabelsNotifier {
   static List<String> labels = const [];
   @override
-  FilterWheelLabels build() => FilterWheelLabels(labels: labels);
+  LoadedSection<FilterWheelLabels> build() => LoadedSection(
+    value: FilterWheelLabels(labels: labels),
+    source: SectionSource.rig,
+  );
+}
+
+class _NotLoadedLabels extends FilterWheelLabelsNotifier {
+  @override
+  LoadedSection<FilterWheelLabels> build() => const LoadedSection();
 }
 
 class _FixedCameraStatus extends CameraStatusNotifier {
@@ -703,6 +712,61 @@ void main() {
     expect(find.textContaining("isn't a slot on the connected wheel"),
         findsOneWidget);
   });
+
+  testWidgets(
+    'labels not loaded: a name off the connected wheel maps to no slot',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          filterWheelLabelsProvider.overrideWith(_NotLoadedLabels.new),
+          filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      container.read(exposureControllerProvider.notifier).setFilterSlot('R');
+
+      final wheel =
+          container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(
+        FilterWheelStatus(
+          deviceId: 'fw',
+          name: 'FILTERWHEEL',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: null,
+          slots: const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: '', focusOffset: 0),
+            FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      // 'R' is slot 2 of the reference labels; with nothing loaded it must not
+      // resolve by position to the unnamed device slot.
+      await tester.tap(find.text('R').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('R').last);
+      await tester.pumpAndSettle();
+
+      expect(wheel.changeCalls, isEmpty);
+      expect(
+        find.textContaining("isn't a slot on the connected wheel"),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('a pick landing on an unnamed device slot tags the local label',
       (tester) async {

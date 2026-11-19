@@ -1416,6 +1416,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellLibrary => 'Library';
 
   @override
+  String get shellRailTabs => 'Modes';
+
+  @override
+  String shellRailTabDone(String mode) {
+    return '$mode, done tonight';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, running';
+  }
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Mode: $mode';
   }
@@ -1736,12 +1749,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planResume => 'Resume';
 
   @override
-  String get planStopTheRun => 'Stop the run';
-
-  @override
-  String get planHoldToStop => 'Hold to stop';
-
-  @override
   String get planTonightsBest => 'TONIGHT\'S BEST';
 
   @override
@@ -1925,8 +1932,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get planHintResume =>
-      'Tap the shutter to resume and re-center; hold it to stop.';
+  String get planHintResume => 'Tap the shutter to resume and re-center.';
 
   @override
   String get planResumeWithoutRecenter => 'Resume without re-centering';
@@ -1935,8 +1941,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planRecenterAndRefocus => 'Re-center and refocus';
 
   @override
-  String get planHintPause =>
-      'Tap the shutter to pause after this frame; hold it to stop.';
+  String get planHintPause => 'Tap the shutter to pause after this frame.';
+
+  @override
+  String get planStopPlan => 'Stop plan…';
+
+  @override
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Stop the plan? The $count frames taken are kept; the mount keeps tracking.',
+      one:
+          'Stop the plan? The 1 frame taken is kept; the mount keeps tracking.',
+      zero: 'Stop the plan? The mount keeps tracking.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planStopPlanConfirm => 'Stop plan';
+
+  @override
+  String get planKeepImaging => 'Keep imaging';
 
   @override
   String get planAddTarget => 'Add target';
@@ -6333,6 +6361,317 @@ class AppLocalizationsPt extends AppLocalizations {
       'POLAR ALIGNER MAY STILL BE MOVING (stop failed)';
 
   @override
+  String get bestNav => 'Best';
+
+  @override
+  String get bestTitle => 'Tonight\'s Best';
+
+  @override
+  String bestSubtitle(String time) {
+    return 'for the rest of tonight · updated $time';
+  }
+
+  @override
+  String get bestSeeAll => 'See all';
+
+  @override
+  String get bestBack => 'Back';
+
+  @override
+  String get bestRefresh => 'Refresh';
+
+  @override
+  String get bestSort => 'Sort';
+
+  @override
+  String get bestSortScore => 'Score';
+
+  @override
+  String get bestSortTransit => 'Transit';
+
+  @override
+  String get bestSortAltitude => 'Altitude now';
+
+  @override
+  String get bestType => 'Type';
+
+  @override
+  String get bestTypeAll => 'All';
+
+  @override
+  String get bestTypeGalaxy => 'Galaxy';
+
+  @override
+  String get bestTypeNebula => 'Nebula';
+
+  @override
+  String get bestTypeCluster => 'Cluster';
+
+  @override
+  String get bestTypePlanetary => 'Planetary nebula';
+
+  @override
+  String get bestTypeOther => 'Other';
+
+  @override
+  String get bestShow => 'Show';
+
+  @override
+  String get bestShowAll => 'All night';
+
+  @override
+  String get bestShowUp => 'Up now';
+
+  @override
+  String get bestPeak => 'Peak altitude (at transit)';
+
+  @override
+  String get bestPeakAny => 'Any';
+
+  @override
+  String bestPeakDeg(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get bestField => 'Field';
+
+  @override
+  String get bestFitsOn => 'Fits my field';
+
+  @override
+  String get bestFitsOff => 'All fields';
+
+  @override
+  String get bestFieldUnknown =>
+      'Field not known. Set your camera and telescope in Settings > Rig.';
+
+  @override
+  String bestCount(int shown, int total) {
+    return '$shown of $total Targets';
+  }
+
+  @override
+  String get bestKept => 'Sort and filters are kept on this device.';
+
+  @override
+  String get bestFitTooSmall => 'Too small';
+
+  @override
+  String get bestFitFills => 'Fills the frame';
+
+  @override
+  String get bestFitMosaic => 'Needs a mosaic';
+
+  @override
+  String bestWindow(String range) {
+    return 'Best $range';
+  }
+
+  @override
+  String bestTransitAt(String time) {
+    return 'Transit $time';
+  }
+
+  @override
+  String bestHighest(int deg) {
+    return 'Highest $deg°';
+  }
+
+  @override
+  String bestNow(int deg) {
+    return 'Now $deg°';
+  }
+
+  @override
+  String get bestNowBelow => 'Now: below the horizon';
+
+  @override
+  String bestMoon(int deg) {
+    return 'Moon $deg° away: brighter sky';
+  }
+
+  @override
+  String get bestInQueue => 'In Queue';
+
+  @override
+  String get bestCollected => 'Collected';
+
+  @override
+  String get bestImage => 'Image this';
+
+  @override
+  String get bestAddToQueue => 'Add to Queue';
+
+  @override
+  String bestAdded(String name) {
+    return '$name added to the Queue';
+  }
+
+  @override
+  String get bestNoneTitle => 'Nothing well placed tonight';
+
+  @override
+  String get bestNoneBody =>
+      'No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.';
+
+  @override
+  String get bestSearch => 'Search';
+
+  @override
+  String get bestNoSiteTitle => 'Set your site';
+
+  @override
+  String get bestNoSiteBody =>
+      'Tonight\'s Best ranks by where you are. Add your site and the list fills in.';
+
+  @override
+  String get bestSetSite => 'Set site';
+
+  @override
+  String get bestNoMatchTitle => 'No Targets match';
+
+  @override
+  String get bestNoMatchBody => 'Your filters hide every Target.';
+
+  @override
+  String get bestClearFilters => 'Clear filters';
+
+  @override
+  String get bestRigOff => 'Rig not connected';
+
+  @override
+  String get bestOffline =>
+      'Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.';
+
+  @override
+  String get bestLoadFailed => 'Could not rank tonight\'s Targets.';
+
+  @override
+  String get bestRetry => 'Try again';
+
+  @override
+  String get refusalNoCamera =>
+      'No camera is connected. Connect one in Camera settings, then try again.';
+
+  @override
+  String get refusalCameraBusy =>
+      'The camera is busy with an exposure. Try again once it has read out.';
+
+  @override
+  String get refusalGateStuck =>
+      'The camera is stuck mid-capture. Restart Ara on your rig to clear it.';
+
+  @override
+  String get refusalCenterInProgress =>
+      'Another centering is already running. Wait for it, or cancel it, before centering on a different target.';
+
+  @override
+  String refusalOpticsNotSet(String missing) {
+    String _temp0 = intl.Intl.selectLogic(missing, {
+      'focal_length':
+          'The telescope focal length is not set. Set it in Optics.',
+      'pixel_size': 'The camera pixel size is not set. Set it in Optics.',
+      'other': 'The telescope focal length and camera pixel size are not set. Set them in Optics.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get refusalSolverNotSet =>
+      'The plate solver is not set up. Check its path in Plate solving settings.';
+
+  @override
+  String get refusalCaptureSettingsUnsupported =>
+      'The camera cannot take that exposure or binning. Try a different one.';
+
+  @override
+  String get refusalStorageUnavailable =>
+      'The storage disk is missing. Plug it back in, then try again.';
+
+  @override
+  String refusalBelowHorizonLimit(String altitude, String limit) {
+    return 'That target is at $altitude°, below your $limit° horizon limit. Pick a higher target, or lower the horizon limit.';
+  }
+
+  @override
+  String get refusalEndNightInProgress =>
+      'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
+  String get bridgeSetupFoundTitle => 'Found on this rig';
+
+  @override
+  String bridgeSetupAddSelected(int count) {
+    return 'Add selected ($count)';
+  }
+
+  @override
+  String get bridgeSetupAdding => 'Adding…';
+
+  @override
+  String get bridgeSetupWaiting => 'Waiting';
+
+  @override
+  String get bridgeSetupAdded => 'Added';
+
+  @override
+  String get bridgeSetupFailed => 'Failed';
+
+  @override
+  String get bridgeSetupRetry => 'Retry';
+
+  @override
+  String get bridgeSetupEdit => 'Edit';
+
+  @override
+  String get bridgeSetupNeedsDetails => 'Needs details';
+
+  @override
+  String get bridgeSetupMayExist =>
+      'No answer from the bridge: it may already exist. Retry checks first.';
+
+  @override
+  String get bridgeSetupLooking => 'Looking for devices';
+
+  @override
+  String get bridgeSetupContinue => 'Continue';
+
+  @override
+  String get bridgeSetupBack => 'Back';
+
+  @override
+  String get bridgeSetupAdd => 'Add';
+
+  @override
+  String get bridgeSetupByHand => 'Add a device by hand';
+
+  @override
+  String get bridgeSetupWhichCamera => 'Which camera?';
+
+  @override
+  String get bridgeSetupNothingFound =>
+      'No devices found on this rig. Plug in your gear and retry, or add one by hand.';
+
+  @override
+  String get bridgeSetupRequired => 'Required';
+
+  @override
+  String get bridgeSetupOutOfRange => 'Out of range';
+
+  @override
+  String get bridgeSetupNotAllowed => 'Not an allowed value';
+
+  @override
+  String get bridgeSetupAddRow => 'Add a row';
+
+  @override
+  String get bridgeSetupRemoveRow => 'Remove this row';
+
+  @override
+  String get bridgeSetupRefused => 'Ara refused this device.';
+
+  @override
   String clockWrongSlow(String amount) {
     return 'The rig\'s clock is $amount slow, so times and targets will be off. Start anyway?';
   }
@@ -7792,6 +8131,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellLibrary => 'Biblioteca';
 
   @override
+  String get shellRailTabs => 'Modos';
+
+  @override
+  String shellRailTabDone(String mode) {
+    return '$mode, feito esta noite';
+  }
+
+  @override
+  String shellRailTabRunning(String mode) {
+    return '$mode, em andamento';
+  }
+
+  @override
   String shellModeSemantics(String mode) {
     return 'Modo: $mode';
   }
@@ -8114,12 +8466,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planResume => 'Retomar';
 
   @override
-  String get planStopTheRun => 'Parar a sessão';
-
-  @override
-  String get planHoldToStop => 'Segure para parar';
-
-  @override
   String get planTonightsBest => 'MELHORES DA NOITE';
 
   @override
@@ -8305,7 +8651,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planHintResume =>
-      'Toque no obturador para retomar e recentralizar; segure para parar.';
+      'Toque no obturador para retomar e recentralizar.';
 
   @override
   String get planResumeWithoutRecenter => 'Retomar sem recentralizar';
@@ -8315,7 +8661,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planHintPause =>
-      'Toque no obturador para pausar após este quadro; segure para parar.';
+      'Toque no obturador para pausar após este quadro.';
+
+  @override
+  String get planStopPlan => 'Parar a sessão…';
+
+  @override
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Parar a sessão? Os $count quadros feitos são mantidos; a montagem continua rastreando.',
+      one: 'Parar a sessão? O 1 quadro feito é mantido; a montagem continua rastreando.',
+      zero: 'Parar a sessão? A montagem continua rastreando.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planStopPlanConfirm => 'Parar a sessão';
+
+  @override
+  String get planKeepImaging => 'Continuar fotografando';
 
   @override
   String get planAddTarget => 'Adicionar alvo';
@@ -12735,6 +13103,318 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPolarAligner =>
       'O ALINHADOR POLAR PODE AINDA ESTAR SE MOVENDO (falha ao parar)';
+
+  @override
+  String get bestNav => 'Melhores';
+
+  @override
+  String get bestTitle => 'Melhores da Noite';
+
+  @override
+  String bestSubtitle(String time) {
+    return 'para o resto da noite · atualizado $time';
+  }
+
+  @override
+  String get bestSeeAll => 'Ver tudo';
+
+  @override
+  String get bestBack => 'Voltar';
+
+  @override
+  String get bestRefresh => 'Atualizar';
+
+  @override
+  String get bestSort => 'Ordem';
+
+  @override
+  String get bestSortScore => 'Nota';
+
+  @override
+  String get bestSortTransit => 'Trânsito';
+
+  @override
+  String get bestSortAltitude => 'Altura agora';
+
+  @override
+  String get bestType => 'Tipo';
+
+  @override
+  String get bestTypeAll => 'Todos';
+
+  @override
+  String get bestTypeGalaxy => 'Galáxia';
+
+  @override
+  String get bestTypeNebula => 'Nebulosa';
+
+  @override
+  String get bestTypeCluster => 'Aglomerado';
+
+  @override
+  String get bestTypePlanetary => 'Nebulosa planetária';
+
+  @override
+  String get bestTypeOther => 'Outros';
+
+  @override
+  String get bestShow => 'Mostrar';
+
+  @override
+  String get bestShowAll => 'A noite toda';
+
+  @override
+  String get bestShowUp => 'Visíveis agora';
+
+  @override
+  String get bestPeak => 'Altitude máxima (no trânsito)';
+
+  @override
+  String get bestPeakAny => 'Qualquer';
+
+  @override
+  String bestPeakDeg(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get bestField => 'Campo';
+
+  @override
+  String get bestFitsOn => 'Cabe no meu campo';
+
+  @override
+  String get bestFitsOff => 'Todos os campos';
+
+  @override
+  String get bestFieldUnknown =>
+      'Campo desconhecido. Defina a câmera e o telescópio em Ajustes > Equipamento.';
+
+  @override
+  String bestCount(int shown, int total) {
+    return '$shown de $total Alvos';
+  }
+
+  @override
+  String get bestKept => 'Ordem e filtros ficam salvos neste aparelho.';
+
+  @override
+  String get bestFitTooSmall => 'Pequeno demais';
+
+  @override
+  String get bestFitFills => 'Preenche o quadro';
+
+  @override
+  String get bestFitMosaic => 'Precisa de mosaico';
+
+  @override
+  String bestWindow(String range) {
+    return 'Melhor $range';
+  }
+
+  @override
+  String bestTransitAt(String time) {
+    return 'Trânsito $time';
+  }
+
+  @override
+  String bestHighest(int deg) {
+    return 'Máxima $deg°';
+  }
+
+  @override
+  String bestNow(int deg) {
+    return 'Agora $deg°';
+  }
+
+  @override
+  String get bestNowBelow => 'Agora: abaixo do horizonte';
+
+  @override
+  String bestMoon(int deg) {
+    return 'Lua a $deg° de distância: céu mais claro';
+  }
+
+  @override
+  String get bestInQueue => 'Na Fila';
+
+  @override
+  String get bestCollected => 'Coletado';
+
+  @override
+  String get bestImage => 'Fotografar';
+
+  @override
+  String get bestAddToQueue => 'Adicionar à Fila';
+
+  @override
+  String bestAdded(String name) {
+    return '$name adicionado à Fila';
+  }
+
+  @override
+  String get bestNoneTitle => 'Nada bem posicionado esta noite';
+
+  @override
+  String get bestNoneBody =>
+      'Nenhum Alvo fica acima de 30° por tempo suficiente para esta configuração esta noite. Tente amanhã ou busque um Alvo pelo nome.';
+
+  @override
+  String get bestSearch => 'Buscar';
+
+  @override
+  String get bestNoSiteTitle => 'Defina seu local';
+
+  @override
+  String get bestNoSiteBody =>
+      'Melhores da Noite classifica pelo lugar onde você está. Adicione seu local e a lista aparece.';
+
+  @override
+  String get bestSetSite => 'Definir local';
+
+  @override
+  String get bestNoMatchTitle => 'Nenhum Alvo corresponde';
+
+  @override
+  String get bestNoMatchBody => 'Seus filtros escondem todos os Alvos.';
+
+  @override
+  String get bestClearFilters => 'Limpar filtros';
+
+  @override
+  String get bestRigOff => 'Equipamento não conectado';
+
+  @override
+  String get bestOffline =>
+      'Planejamento offline: classificado pelo seu local e telescópio salvos. Fotografar planeja agora; a configuração executa depois.';
+
+  @override
+  String get bestLoadFailed =>
+      'Não foi possível classificar os Alvos desta noite.';
+
+  @override
+  String get bestRetry => 'Tentar de novo';
+
+  @override
+  String get refusalNoCamera =>
+      'Nenhuma câmera está conectada. Conecte uma em Configurações da câmera e tente de novo.';
+
+  @override
+  String get refusalCameraBusy =>
+      'A câmera está ocupada com uma exposição. Tente de novo quando terminar a leitura.';
+
+  @override
+  String get refusalGateStuck =>
+      'A câmera travou no meio de uma captura. Reinicie o Ara no seu setup para liberar.';
+
+  @override
+  String get refusalCenterInProgress =>
+      'Outro centramento já está em andamento. Espere por ele, ou cancele, antes de centrar em outro alvo.';
+
+  @override
+  String refusalOpticsNotSet(String missing) {
+    String _temp0 = intl.Intl.selectLogic(missing, {
+      'focal_length': 'A distância focal do telescópio não está definida. Defina em Óptica.',
+      'pixel_size':
+          'O tamanho do pixel da câmera não está definido. Defina em Óptica.',
+      'other': 'A distância focal do telescópio e o tamanho do pixel da câmera não estão definidos. Defina em Óptica.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get refusalSolverNotSet =>
+      'O plate solver não está configurado. Verifique o caminho em Configurações de plate solving.';
+
+  @override
+  String get refusalCaptureSettingsUnsupported =>
+      'A câmera não consegue fazer essa exposição ou binning. Tente outro valor.';
+
+  @override
+  String get refusalStorageUnavailable =>
+      'O disco de armazenamento não foi encontrado. Reconecte-o e tente de novo.';
+
+  @override
+  String refusalBelowHorizonLimit(String altitude, String limit) {
+    return 'Esse alvo está a $altitude°, abaixo do seu limite de horizonte de $limit°. Escolha um alvo mais alto ou reduza o limite de horizonte.';
+  }
+
+  @override
+  String get refusalEndNightInProgress =>
+      'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
+
+  @override
+  String get bridgeSetupFoundTitle => 'Encontrado neste setup';
+
+  @override
+  String bridgeSetupAddSelected(int count) {
+    return 'Adicionar selecionados ($count)';
+  }
+
+  @override
+  String get bridgeSetupAdding => 'Adicionando…';
+
+  @override
+  String get bridgeSetupWaiting => 'Aguardando';
+
+  @override
+  String get bridgeSetupAdded => 'Adicionado';
+
+  @override
+  String get bridgeSetupFailed => 'Falhou';
+
+  @override
+  String get bridgeSetupRetry => 'Tentar de novo';
+
+  @override
+  String get bridgeSetupEdit => 'Editar';
+
+  @override
+  String get bridgeSetupNeedsDetails => 'Precisa de detalhes';
+
+  @override
+  String get bridgeSetupMayExist =>
+      'Sem resposta da ponte: ele pode já existir. Tentar de novo confere antes.';
+
+  @override
+  String get bridgeSetupLooking => 'Procurando dispositivos';
+
+  @override
+  String get bridgeSetupContinue => 'Continuar';
+
+  @override
+  String get bridgeSetupBack => 'Voltar';
+
+  @override
+  String get bridgeSetupAdd => 'Adicionar';
+
+  @override
+  String get bridgeSetupByHand => 'Adicionar um dispositivo manualmente';
+
+  @override
+  String get bridgeSetupWhichCamera => 'Qual câmera?';
+
+  @override
+  String get bridgeSetupNothingFound =>
+      'Nenhum dispositivo encontrado neste setup. Conecte seus dispositivos e tente de novo, ou adicione um manualmente.';
+
+  @override
+  String get bridgeSetupRequired => 'Obrigatório';
+
+  @override
+  String get bridgeSetupOutOfRange => 'Fora da faixa';
+
+  @override
+  String get bridgeSetupNotAllowed => 'Valor não permitido';
+
+  @override
+  String get bridgeSetupAddRow => 'Adicionar uma linha';
+
+  @override
+  String get bridgeSetupRemoveRow => 'Remover esta linha';
+
+  @override
+  String get bridgeSetupRefused => 'O Ara recusou este dispositivo.';
 
   @override
   String clockWrongSlow(String amount) {

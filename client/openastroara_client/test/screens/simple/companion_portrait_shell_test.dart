@@ -185,7 +185,7 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('on a phone held upright (390x844) both rails fold into one deck with the six section words, '
+  testWidgets('on a phone held upright (390x844) both rails fold into one deck with the seven section words, '
       'the shutter, the chip and STOP', (tester) async {
     await _pump(tester, _portrait);
     expect(find.byKey(const Key('companion-deck')), findsOneWidget);
@@ -194,6 +194,8 @@ void main() {
     }
     expect(section('monitor'), findsOneWidget);
     expect(find.text('Monitor'), findsOneWidget, reason: 'the sixth word');
+    expect(section('best'), findsOneWidget);
+    expect(find.text('Best'), findsOneWidget, reason: 'the seventh word');
     expect(
       find.byKey(const Key('simple-mode')),
       findsNothing,
@@ -568,6 +570,7 @@ void main() {
           'simple-settings',
           'companion-section-preview',
           'companion-section-monitor',
+          'companion-section-best',
         ]) {
           final r = tester.getRect(find.byKey(Key(k)));
           expect(r.height, greaterThanOrEqualTo(44), reason: '$k height');
@@ -623,6 +626,30 @@ void main() {
       );
     }
   }
+
+  testWidgets(
+    'a phone held upright keeps its deck STOP and its shutter also holds for Emergency Stop (two paths until S5, #1911)',
+    (tester) async {
+      await _pump(tester, _portrait);
+      expect(stop, findsOneWidget, reason: 'the deck STOP stays');
+      expect(find.byKey(const Key('simple-rail-stop')), findsNothing);
+      final no = lookupAppLocalizations(const Locale('en')).estopNoServer;
+      final g = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('simple-shutter'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pump();
+      expect(
+        find.text(no),
+        findsOneWidget,
+        reason: 'the shutter hold is a stop',
+      );
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    },
+  );
 
   testWidgets(
     'a phone on its side (844x390) keeps the narrow layout: the rails, no deck',

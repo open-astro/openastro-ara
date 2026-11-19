@@ -380,41 +380,6 @@ class ProfileApi {
     return filterSetFromJson(res.data ?? const {});
   }
 
-  /// GET the active profile's filter-wheel slot labels (§37.4/§46.2 —
-  /// the offline-authoring names the §38 editor's filter picker sources).
-  Future<FilterWheelLabels> getFilterWheelLabels() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/labels',
-    );
-    return _filterWheelLabelsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's filter-wheel slot labels. Returns Ara's
-  /// echo (it trims each label; 400 on >32 slots or a label over 64 chars).
-  Future<FilterWheelLabels> putFilterWheelLabels(
-    FilterWheelLabels value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/filter-wheel/labels',
-      data: {
-        'labels': [for (var s = 1; s <= value.slotCount; s++) value.labelAt(s)],
-      },
-    );
-    return _filterWheelLabelsFromJson(res.data ?? const {});
-  }
-
-  static FilterWheelLabels _filterWheelLabelsFromJson(
-    Map<String, dynamic> json,
-  ) {
-    final raw = json['labels'];
-    // Defensive: a malformed/absent list keeps the reference defaults rather
-    // than collapsing the wheel to zero slots.
-    if (raw is! List || raw.isEmpty) return FilterWheelLabels();
-    return FilterWheelLabels(
-      labels: [for (final e in raw) e is String ? e : ''],
-    );
-  }
-
   /// GET the active profile's storage-settings section.
   Future<StorageSettings> getStorageSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
@@ -564,6 +529,21 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({FilterWheelLabels value, String? etag})>
+  getFilterWheelLabelsSection() =>
+      _getTagged('filter-wheel/labels', _filterWheelLabelsFromRig);
+  Future<({FilterWheelLabels value, String? etag})> putFilterWheelLabelsSection(
+    FilterWheelLabels v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'filter-wheel/labels',
+    {
+      'labels': [for (var s = 1; s <= v.slotCount; s++) v.labelAt(s)],
+    },
+    _filterWheelLabelsFromRig,
+    ifMatch,
+  );
+
   Future<({UnguidedSettings value, String? etag})> getUnguidedSection() =>
       _getTagged('unguided', _unguidedSettingsFromRig);
   Future<({UnguidedSettings value, String? etag})> putUnguidedSection(
@@ -587,6 +567,34 @@ class ProfileApi {
     _plateSolveSettingsFromRig,
     ifMatch,
   );
+
+  Future<({EquipmentConnectionSettings value, String? etag})>
+  getEquipmentConnectionSection() =>
+      _getTagged('equipment-connection', _equipmentConnectionFromRig);
+  Future<({EquipmentConnectionSettings value, String? etag})>
+  putEquipmentConnectionSection(
+    EquipmentConnectionSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'equipment-connection',
+    _equipmentConnectionToJson(v),
+    _equipmentConnectionFromRig,
+    ifMatch,
+  );
+
+  Future<({CoolingFan value, String? etag})> getCoolingFanSection() =>
+      _getTagged('cooling-fan', _coolingFanFromRig);
+  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
+    CoolingFan v, {
+    String? ifMatch,
+  }) => _putTagged('cooling-fan', v.toJson(), _coolingFanFromRig, ifMatch);
+
+  Future<({DomeSettings value, String? etag})> getDomeSection() =>
+      _getTagged('dome', _domeFromRig);
+  Future<({DomeSettings value, String? etag})> putDomeSection(
+    DomeSettings v, {
+    String? ifMatch,
+  }) => _putTagged('dome', v.toJson(), _domeFromRig, ifMatch);
 
   // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
   // rule 3): as with storage, a missing or mistyped key fails the load or the
@@ -656,6 +664,14 @@ class ProfileApi {
         homeOnFirstConnect: j['home_on_first_connect'] as bool,
         useFilterWheelOffsets: j['use_filter_wheel_offsets'] as bool,
       );
+
+  // Strict like the readers above: a missing, non-list or empty labels value or
+  // a non-string slot fails the load instead of reading as the reference wheel.
+  static FilterWheelLabels _filterWheelLabelsFromRig(Map<String, dynamic> j) {
+    final raw = j['labels'] as List;
+    if (raw.isEmpty) throw const FormatException('labels empty');
+    return FilterWheelLabels(labels: [for (final e in raw) e as String]);
+  }
 
   static PlateSolveSettings _plateSolveSettingsFromRig(
     Map<String, dynamic> j,
@@ -831,55 +847,14 @@ class ProfileApi {
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
-  /// GET the switch port designated as the profile's cooling fan (#1700).
-  Future<CoolingFan> getCoolingFan() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/cooling-fan',
-    );
-    return CoolingFan.fromJson(res.data ?? const {});
-  }
-
-  /// PUT the cooling fan designation. Returns Ara's echo.
+  /// PUT the cooling fan designation from the wizard, which writes without a
+  /// loaded version (see [putCoolingFanSection] for the loaded path).
   Future<CoolingFan> putCoolingFan(CoolingFan value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/cooling-fan',
       data: value.toJson(),
     );
     return CoolingFan.fromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's dome geometry and follow-the-mount setting (#1689).
-  Future<DomeSettings> getDomeSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/dome');
-    return DomeSettings.fromJson(res.data ?? const {});
-  }
-
-  /// PUT the dome settings. The daemon refuses a scope outside the dome (422).
-  Future<DomeSettings> putDomeSettings(DomeSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/dome',
-      data: value.toJson(),
-    );
-    return DomeSettings.fromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's equipment auto-connect bools.
-  Future<EquipmentConnectionSettings> getEquipmentConnection() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/equipment-connection',
-    );
-    return _equipmentConnectionFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's equipment auto-connect bools.
-  Future<EquipmentConnectionSettings> putEquipmentConnection(
-    EquipmentConnectionSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/equipment-connection',
-      data: _equipmentConnectionToJson(value),
-    );
-    return _equipmentConnectionFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -1030,26 +1005,54 @@ class ProfileApi {
 
   // ── Equipment-connection JSON mapping ──────────────────────────────────
 
-  static EquipmentConnectionSettings _equipmentConnectionFromJson(
+  static const _equipmentConnectionKeys = {
+    EquipmentDeviceType.camera: 'camera',
+    EquipmentDeviceType.mount: 'mount',
+    EquipmentDeviceType.focuser: 'focuser',
+    EquipmentDeviceType.filterWheel: 'filter_wheel',
+    EquipmentDeviceType.rotator: 'rotator',
+    EquipmentDeviceType.guider: 'guider',
+    EquipmentDeviceType.flatPanel: 'flat_panel',
+    EquipmentDeviceType.dome: 'dome',
+    EquipmentDeviceType.weather: 'weather',
+    EquipmentDeviceType.safetyMonitor: 'safety_monitor',
+    EquipmentDeviceType.switchDevice: 'switch',
+  };
+
+  // Strict (ADR 0015 rule 3): a device type the rig did not report fails the
+  // load instead of reading as a default, so Save never writes one back.
+  static EquipmentConnectionSettings _equipmentConnectionFromRig(
     Map<String, dynamic> j,
-  ) {
-    bool read(String key, bool dflt) => (j[key] as bool?) ?? dflt;
-    return EquipmentConnectionSettings(
-      autoConnectOnBoot: {
-        EquipmentDeviceType.camera: read('camera', true),
-        EquipmentDeviceType.mount: read('mount', true),
-        EquipmentDeviceType.focuser: read('focuser', true),
-        EquipmentDeviceType.filterWheel: read('filter_wheel', true),
-        EquipmentDeviceType.rotator: read('rotator', true),
-        EquipmentDeviceType.guider: read('guider', false),
-        EquipmentDeviceType.flatPanel: read('flat_panel', true),
-        EquipmentDeviceType.dome: read('dome', false),
-        EquipmentDeviceType.weather: read('weather', false),
-        EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
-        EquipmentDeviceType.switchDevice: read('switch', true),
-      },
-    );
+  ) => EquipmentConnectionSettings(
+    autoConnectOnBoot: {
+      for (final e in _equipmentConnectionKeys.entries)
+        e.key: j[e.value] as bool,
+    },
+  );
+
+  // Both keys must be present: null is "no fan", an absent key is a bad reply.
+  static CoolingFan _coolingFanFromRig(Map<String, dynamic> j) {
+    if (!j.containsKey('device_id') || !j.containsKey('port_id')) {
+      throw const FormatException('cooling fan keys missing');
+    }
+    return CoolingFan.fromJson(j);
   }
+
+  static DomeSettings _domeFromRig(Map<String, dynamic> j) => DomeSettings(
+    domeRadiusMm: (j['dome_radius_mm'] as num).toDouble(),
+    scopePositionNorthSouthMm: (j['scope_position_north_south_mm'] as num)
+        .toDouble(),
+    scopePositionEastWestMm: (j['scope_position_east_west_mm'] as num)
+        .toDouble(),
+    scopePositionUpDownMm: (j['scope_position_up_down_mm'] as num).toDouble(),
+    mountType: j['mount_type'] as String,
+    gemAxisMm: (j['gem_axis_mm'] as num).toDouble(),
+    lateralAxisMm: (j['lateral_axis_mm'] as num).toDouble(),
+    decOffsetHorizontalMm: (j['dec_offset_horizontal_mm'] as num).toDouble(),
+    azimuthToleranceDegrees: (j['azimuth_tolerance_degrees'] as num).toDouble(),
+    synchronizeDuringMountSlew: j['synchronize_during_mount_slew'] as bool,
+    domeSyncTimeoutSeconds: (j['dome_sync_timeout_seconds'] as num).toInt(),
+  );
 
   static Map<String, dynamic> _equipmentConnectionToJson(
     EquipmentConnectionSettings v,

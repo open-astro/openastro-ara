@@ -193,6 +193,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-17 — #1769 the OS disk's other partitions: `system_disk_level` and `media_kind` on `GET /api/v1/storage/devices`
+
+**Endpoint(s) or area:** `GET /api/v1/storage/devices` → `StorageDeviceDto` gains `system_disk_level` (`none` | `os_partition` | `os_disk_data`) and `media_kind` (`emmc` | `nvme` | `sd` | `unknown`); `POST /api/v1/storage/configure` with `format: true`.
+
+**Decision:** `os_partition` is a device that carries `/`, `/boot` or `/boot/firmware`, or an ancestor of one (md, LVM, dm-crypt, the physical disk). `os_disk_data` is any other partition on that physical disk. `is_system_disk` stays true for both, so an older client hides exactly what it hides today. `media_kind` is read from sysfs `device/type` (`SD`, `MMC` = eMMC) and lsblk's NVMe transport; anything else, or a failed read, is `unknown`. Both fields are additive; a client that does not know them reads `none` and `unknown`. `POST /storage/configure` with `format: true` on a device of either level answers 422 Problem `title: refused`, `detail: system_disk`, before the erase is noted and before the helper runs. Mount, check and eject on an `os_disk_data` partition are not refused while it is unmounted or mounted at the store; mounted anywhere else (a separate `/var`, `/home` or `/opt`, or the copy path), each answers 422 `title: device_busy`, `detail: mounted_elsewhere`, the code the copy target already uses. The copy target keeps its own check, which accepts a partition that is unmounted or already at the copy path. The root helper refuses every mode on an `os_partition` and the erase of an `os_disk_data` partition.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml` (`StorageDeviceDto`); `Services/StorageDeviceService.cs` (`ParseDevices`, `ProbeMedia`, `RefuseEraseOnOsDiskAsync`), `Endpoints/SystemEndpoints.cs` (`/storage/configure`), `packaging/debian/opt/openastroara/scripts/configure-storage.sh` (`refuse_if_os_partition`, `refuse_if_os_disk`, `refuse_if_os_disk_mounted_elsewhere`).
+
+**Related:** #1769, ADR 0017; tests `StorageOsDiskTest`, `StorageCopyEndpointTest`, `scripts/tests/test_configure_storage_switch.py`.
+
+---
+
 ## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.
@@ -1660,7 +1672,19 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** a fresh rig has an AlpacaBridge with no devices and Retry detection cannot help; the add must be an Ara route because the client cannot always reach the bridge and Ara keeps no device facts. The attached camera fills `serialNumber` and `cameraName` (what AlpacaBridge's own web picker saves: the entry then binds by serial), not `cameraIndex`.
 
-**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`. The Flutter client waits for the board's mock review.
+**Spec ref:** `Endpoints/AlpacaBridgeSetupEndpoints.cs`, `Services/AlpacaManagementClient.Setup.cs`, `Contracts/EquipmentDtos.cs` (`AlpacaBridgeCatalogResponseDto`, `AlpacaBridgeCamerasResponseDto`, `AlpacaBridgeAddDeviceResponseDto`); tests `AlpacaBridgeSetupTest`; mock `design/preview/alpacabridge-add-devices-mock.html`.
+
+---
+
+## 2026-11-17 — `GET /equipment/guider/alpacadevicenames` answers `serials` (#1580)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider/alpacadevicenames?host=&port=` (one optional field on the existing response).
+
+**Decision:** the response gains `serials`: `"type/N"` → the device's serial number (additive, like `unique_ids`; entries the server reports no serial for are left out; absent on an older daemon, which the client reads as no serials). The daemon takes it from the entry's `Config.serialNumber` that an OpenAstro AlpacaBridge already reports.
+
+**Reasoning:** the add-your-devices list hides a camera the bridge already offers. Two cameras of one model have the same name, so the name cannot tell them apart; the serial can. The client falls back to the name only when either side has no serial.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`AlpacaDeviceNamesResponseDto.Serials`), `Services/AlpacaManagementClient.cs` (`SerialsOf`), `Endpoints/EquipmentEndpoints.cs` (`GetAlpacaDeviceNamesAsync`); test `AlpacaManagementClientTest`.
 
 ---
 
@@ -1726,6 +1750,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #1971, #1974, #1975
 
+## 2026-11-16 — Guider faults use `equipment.fault` and `equipment.fault_action_taken`; `guider.fault_action_taken` retired (#1588)
+
+**Endpoint(s) or area:** WebSocket events `equipment.fault`, `equipment.fault_action_taken`; retired WS event `guider.fault_action_taken`.
+
+**Decision:** the three guider faults (link down, guide camera dropped, guide star lost for more than the 30 s grace) now publish `equipment.fault` with `device_type: "guider"`, `device_name: "PHD2"` and `details` `link_down` | `equipment_disconnected` | `star_lost` (`kind` `disconnected` for the first two, `tracking_lost` for the third). The reaction is `equipment.fault_action_taken` with the shared verbs: `sequence_paused` (`paused_runs`), `recovered`, `gave_up` (abort: `terminal: "abort"`, `aborted_runs`, no park), `released`, `notify_only`, and a new `skipped` (`skipped_runs`) for `on_guider_lost: skip_target`. `guider.fault_action_taken` is removed from the catalog: its `auto_resume` and `runs_affected` payloads have no replacement; the resume shows as `recovered`. The `on_guider_lost` profile tokens do not change. A repeat guide-camera drop while the first fault is open adds nothing; a drop after the recovery is a new fault with its own fault-log row, and a flapping camera now starts a new episode per drop.
+
+**Reasoning:** the guider had its own reaction and event, so its faults never reached the client's fault panel and chips, and "pause the runs, then resume the ones I paused" existed twice. Nothing in the client reads the retired event, so there is no compatibility shim.
+
+**Spec ref:** `Services/FaultPolicyMatrix.cs` (`ResolveGuider`), `Services/FaultReactionService.cs` (`RunGuiderEpisodeAsync`), `Services/EquipmentFaultHub.cs` (`SubscribeRecovered`), `Services/GuiderService.cs` (`PublishFaultLocked`), `Contracts/WsEvents/WsEventCatalog.cs`
+
+**Related:** #1588
+
 ---
 
 ## 2026-11-17 — Polar Corrector is renamed Polar Aligner; the Routine's side is the correction (#1971)
@@ -1756,6 +1792,20 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ---
 
+## 2026-11-18 — #1847 A declined request carries a declared `reason` (ADR 0022)
+
+**Endpoint(s) or area:** the pointing endpoints: `POST /api/v1/platesolve/verify-position` (Check), `POST /api/v1/platesolve/frames/{id}/solve` and `POST /api/v1/platesolve/center`. First slice of #1847; the other endpoint families follow.
+
+**Decision:** when the rig declines a request for a reason the user can fix, the answer is a 409 or 422 `application/problem+json` whose `reason` is one of the `RefusalReason` values in `openapi.yaml`, `title` is a human sentence (never a token) and `detail` is the English sentence. Eight causes in this slice (#1901 adds `end-night-in-progress` and #2044 adds `below-horizon-limit`): `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `center-in-progress` (`job_id`), `optics-not-set` (`missing`: a list of `focal_length` and `pixel_size`), `solver-not-set` and `capture-settings-unsupported`. Modules throw `RefusalException` with a cause from `RefusalCatalog`; `RefusalHandler` is the one place that writes the answer. Check's other `InvalidOperationException` is no longer a 409 `no-camera`: it is a 500, as for every other route. A 422 on Check and on solving a frame now carries a `reason`; Center's 409 moves its token from `title` (`center_in_progress`) to `reason` (`center-in-progress`). Supersedes the 409 part of 2026-11-11 #1786 and the 409 shape of 2026-10-06 #1149.
+
+**Reasoning:** a client that picks the fix from the words of `detail` or from the status breaks when the sentence changes, and it cannot word the answer in the user's language. A declared token the app maps to its own sentence (English and pt-BR) and its own fix button does not. The old catch-all turned any fault of the capture path into "no camera", so a daemon bug sent the person to Camera settings; only a camera that is not there says `no-camera`. An app newer than the daemon gets a 422 without `reason`: it shows the daemon's `detail` and offers no fix button, since it does not guess one.
+
+**Spec ref:** `Contracts/Refusals/` (`RefusalCatalog`, `RefusalException`), `Endpoints/RefusalHandler.cs`, `Program.cs` (the `RefusalReason` schema), `Services/VerifyPositionService.cs`, `Services/PlateSolveService.cs`. Tests `RefusalHandlerTest`, `PointingRefusalTest`; client `lib/services/refusal.dart`.
+
+**Related:** #1847, #1786, #1149, ADR 0022
+
+---
+
 ## 2026-11-17 — Focus settings tiers: `GET /autofocus/step-size`; Bahtinov and guide focus take the AF exposure when `exposure_sec` is omitted (#1544)
 
 **Endpoint(s) or area:** new `GET /api/v1/autofocus/step-size`; `exposure_sec` is now optional on `POST /api/v1/bahtinov-focus/start` and `POST /api/v1/equipment/guider/focus/start`.
@@ -1767,3 +1817,29 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/BahtinovFocusService.cs` (`ExposureOrDefault`), `Services/GuideFocusService.cs` (`ExposureOrDefault`), `Endpoints/AutofocusEndpoints.cs` (`StepSizeAsync`), `Contracts/FocusCalibrationDtos.cs` (`AutofocusStepSizeDto`)
 
 **Related:** #1544
+
+## 2026-11-19 — #2044 `POST /equipment/telescope/slew` refuses a target under the horizon: `below-horizon-limit` (ADR 0022)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`; the `RefusalReason` schema in `openapi.yaml`.
+
+**Decision:** a slew (not a sync) whose target is under the profile's horizon limit at its azimuth (the flat `default_horizon_altitude_deg`, or the custom skyline when `use_custom_horizon` is on) answers 409 `application/problem+json` with `reason` `below-horizon-limit` and the extensions `altitude_deg` and `limit_deg` (degrees), and dispatches nothing. `force` does not bypass it; it only bypasses `run_in_progress`, which keeps its `title` token. A profile with no site, or a failed altitude transform, lets the slew through. The tenth cause of the `RefusalReason` enum (after `end-night-in-progress`).
+
+**Reasoning:** a GoTo under the horizon points the telescope at the ground or a building. The check is the one the Resume refinement and the re-center already used (`HorizonGuard`), so the three callers cannot disagree about where the horizon is.
+
+**Spec ref:** `Services/HorizonGuard.cs`, `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+
+**Related:** #2044, #1847, ADR 0022
+
+---
+
+## 2026-11-19 — End Night: `POST /end-night`, `GET /end-night/status`, `POST /end-night/cancel`, `end_night.progress`, the `end-night-in-progress` refusal (#1901)
+
+**Endpoint(s) or area:** new `POST /api/v1/end-night` (optional body `{ "shut_down_host": true }`, default true), `GET /api/v1/end-night/status`, `POST /api/v1/end-night/cancel`; the WebSocket event `end_night.progress`; the refusal cause `end-night-in-progress`. Slice 2 of #1901 (the daemon); the client screen is slice 3.
+
+**Decision:** one daemon action puts the rig to bed, open to both shells (ADR 0009 rule 1; it is not the Emergency Stop, rule 3). `POST` answers 202 at once with the status and the work runs on the daemon, so it carries on when the client sleeps or loses Wi-Fi. The steps run in this order, each best-effort and reported as `pending`, `running`, `done`, `skipped` or `failed`: `abort_run` (aborts the run and waits, up to 60 s, until it is over so its Session is closed), `stop_guiding`, `find_home` (skipped when the mount cannot), `park_mount` (or stops tracking when it cannot park), `disconnect_devices` (filter wheel, focuser, rotator, flat panel), `warm_cooler` (the profile's ramp, then cooler off), `disconnect_camera` (skipped when the warm-up failed or was cancelled, so the cooler is never left cold), `notify`, `host_poweroff`. A step that fails is reported and the next safe step still runs. `host_poweroff` runs only when `shut_down_host` is true and the mount ended parked or with tracking off; otherwise it is `skipped` with the reason in `detail`. The status is `{ state: idle|running|complete|cancelled, run_id, shut_down_host, cancellable, cancel_requested, started_utc, ended_utc, steps: [{ id, state, detail }] }`; the finished action stays readable until the next start. `POST /end-night/cancel` stops at the next step boundary (the warm-up checks between ramp steps) and leaves the rig as it is; it never takes effect once the poweroff has started, and then `cancellable` is false. It answers 200 with the status whether or not it took effect. `end_night.progress` carries `{ run_id, state, step, step_state, detail, cancellable }`: `step` and `step_state` are null for a change of the action itself (started, cancel requested, finished). A `POST` while one runs is a 409 with `reason: end-night-in-progress`.
+
+**Reasoning:** the unattended shutdown already parks, warms and disconnects in the right order; End Night shares those steps (`ShutdownLadder`) and adds the run abort, Find Home and the host poweroff around them. The poweroff is the one step that cannot be undone and the Pi then cannot report back, so it is gated on the mount being safe, and a cancel cannot race it. The poweroff goes through the root-owned helper unit of ADR 0017; the daemon only asks systemd to start it.
+
+**Spec ref:** #1901; `Services/EndNightService.cs`, `Services/ShutdownLadder.cs`, `Endpoints/EndNightEndpoints.cs`, `Contracts/EndNightDtos.cs`, `Contracts/WsEvents/EndNightPayloads.cs`, `Services/HostPoweroffStarter.cs`. Tests `EndNightServiceTest`.
+
+**Related:** #1901, ADR 0009, ADR 0014, ADR 0017, ADR 0022, ADR 0023

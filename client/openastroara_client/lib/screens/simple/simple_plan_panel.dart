@@ -4,9 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart'
     show CupertinoDatePicker, CupertinoDatePickerMode;
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
@@ -53,7 +51,7 @@ import '../../util/tonight_sky_local.dart'
 import '../../widgets/platform_context_menu.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show suggestedSubSeconds;
-import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
+import '../../widgets/emergency_stop_button.dart' show EmergencyStopHold;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import '../../state/simple_preflight_state.dart';
@@ -75,7 +73,6 @@ import 'simple_shell.dart'
         SimpleSegments,
         simpleFrost,
         kSimpleGoStyle,
-        kSimpleInset,
         kSimpleRailWidth,
         simpleRailScale;
 import '../../widgets/adaptive_controls.dart';
@@ -564,16 +561,13 @@ class _PlanSquare extends StatelessWidget {
   }
 }
 
-/// How long the shutter is held to stop a run (the Emergency Stop's hold).
-const kSimpleRunStopHold = kEmergencyStopHold;
-
-/// The rail's shutter in Plan. Plan ready: a play triangle in a green ring;
-/// a tap starts it. Imaging: pause bars, with a blue ring filling as the
-/// frame exposes; a tap pauses (after the frame in hand). Paused: a play
-/// triangle in an amber ring; a tap resumes. While imaging or paused, a
-/// 2 s hold stops the run (a red ring fills; letting go early cancels).
-/// Screen readers get "Stop the run" as an action. Keyboards: Tab reaches
-/// it, Enter / Space taps it, ⌘. / Ctrl+. pressed twice stops the run.
+/// The rail's shutter in Plan. Plan ready: a play triangle in a ring; a tap
+/// starts it. Imaging: pause bars, with a blue ring filling as the frame
+/// exposes; a tap pauses (after the frame in hand). Paused: a play triangle
+/// in an amber ring; a tap resumes. Like every shutter, a 2 s hold is
+/// Emergency Stop ([EmergencyStopHold], #1911); stopping the plan alone is
+/// Stop plan… in the panel. Keyboards: Tab reaches it, Enter / Space taps it,
+/// ⌘. / Ctrl+. pressed twice stops the run.
 class SimpleRunShutter extends ConsumerStatefulWidget {
   const SimpleRunShutter({super.key});
 
@@ -581,32 +575,11 @@ class SimpleRunShutter extends ConsumerStatefulWidget {
   ConsumerState<SimpleRunShutter> createState() => _SimpleRunShutterState();
 }
 
-class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _hold =
-      AnimationController(vsync: this, duration: kSimpleRunStopHold)
-        ..addListener(() => setState(() {}))
-        ..addStatusListener((s) {
-          if (s == AnimationStatus.completed) {
-            _held = true;
-            _hold.value = 0;
-            ref.read(simpleRunProvider.notifier).stop();
-          }
-        });
-
-  /// The hold reached the end: the release is not a tap.
-  bool _held = false;
-  bool _down = false;
-
-  /// The press came from a pointer, which [Listener] already handled; the
-  /// [InkResponse] tap is for the keyboard (Enter / Space) only.
-  bool _viaPointer = false;
-
+class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
   Timer? _riseTimer;
 
   @override
   void dispose() {
-    _hold.dispose();
     _riseTimer?.cancel();
     super.dispose();
   }
@@ -615,11 +588,6 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final sel = ref.read(planetariumSelectionProvider);
     return sel != null && !sel.belowHorizon;
   }
-
-  bool _holdable(SimpleRunPhase p) =>
-      p == SimpleRunPhase.imaging ||
-      p == SimpleRunPhase.pausing ||
-      p == SimpleRunPhase.paused;
 
   VoidCallback? _tap(SimpleRunPhase p) {
     final run = ref.read(simpleRunProvider.notifier);
@@ -647,7 +615,6 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final flipWait = ref.watch(
       sequenceRunStateProvider.select((s) => s.value?.meridianWaitLeft != null),
     );
-    final holdable = _holdable(phase);
     ref.watch(planetariumSelectionProvider);
     // A picked target with no plan yet starts like a ready plan; a plan
     // queued below the horizon waits for the rise.
@@ -678,7 +645,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
         phase == SimpleRunPhase.imaging || phase == SimpleRunPhase.pausing;
     return Semantics(
       button: true,
-      enabled: tap != null || holdable,
+      enabled: tap != null,
       label: switch (phase) {
         _ when waiting => context.l10n.planRisesAtCap(
           _hhmm(run.targets.first.rise!.toLocal()),
@@ -693,120 +660,60 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
         _ => context.l10n.planStartImaging,
       },
       onTap: tap,
-      customSemanticsActions: holdable
-          ? {
-              CustomSemanticsAction(label: context.l10n.planStopTheRun): () =>
-                  ref.read(simpleRunProvider.notifier).stop(),
-            }
-          : null,
-      child: Listener(
-        onPointerDown: (e) {
-          _viaPointer = true;
-          // Only a finger or the main mouse button, as the Emergency Stop.
-          if (e.kind == PointerDeviceKind.mouse &&
-              e.buttons != kPrimaryButton) {
-            return;
-          }
-          _down = true;
-          _held = false;
-          if (holdable) _hold.forward(from: 0);
-        },
-        onPointerUp: (_) {
-          scheduleMicrotask(() => _viaPointer = false);
-          if (!_down) return;
-          _down = false;
-          // Up to 0.8 s is a tap (gloves, cold hands); longer, short of 2 s,
-          // cancels the hold.
-          final quick = _hold.value < 0.4;
-          _hold.value = 0;
-          if (!_held && (quick || !holdable)) {
-            // Greyed out: a tap says why (user, 2026-11-04).
+      child: EmergencyStopHold(
+        // Greyed out: a tap says why (user, 2026-11-04).
+        onTap: () =>
             tap == null && (idle || waiting || phase == SimpleRunPhase.pausing)
-                ? simpleSayWhy(
-                    context,
-                    phase == SimpleRunPhase.pausing
-                        ? context.l10n.planPausingAfterFrame
-                        : waiting
-                        ? context.l10n.planRisesAtCap(
-                            _hhmm(run.targets.first.rise!.toLocal()),
-                          )
-                        : context.l10n.planPickTargetFirst,
-                  )
-                : tap?.call();
-          }
-        },
-        onPointerCancel: (_) {
-          scheduleMicrotask(() => _viaPointer = false);
-          _down = false;
-          _hold.value = 0;
-        },
-        child: InkResponse(
-          radius: 36,
-          onTap: () {
-            if (!_viaPointer) tap?.call();
-          },
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Container(
-                key: const Key('simple-shutter'),
+            ? simpleSayWhy(
+                context,
+                phase == SimpleRunPhase.pausing
+                    ? context.l10n.planPausingAfterFrame
+                    : waiting
+                    ? context.l10n.planRisesAtCap(
+                        _hhmm(run.targets.first.rise!.toLocal()),
+                      )
+                    : context.l10n.planPickTargetFirst,
+              )
+            : tap?.call(),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Container(
+              key: const Key('simple-shutter'),
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: ring, width: 3),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                pauseBars ? Icons.pause : Icons.play_arrow,
+                size: 40,
+                color: idle || phase == SimpleRunPhase.pausing
+                    ? AraColors.textDisabled
+                    : AraColors.textPrimary,
+              ),
+            ),
+            // The frame exposing.
+            if (pauseBars && exposing)
+              SizedBox(
                 width: 60,
                 height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ring, width: 3),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  pauseBars ? Icons.pause : Icons.play_arrow,
-                  size: 40,
-                  color: idle || phase == SimpleRunPhase.pausing ? AraColors.textDisabled : AraColors.textPrimary,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: (camera?.exposureProgressPct ?? 0) / 100),
+                  duration: const Duration(milliseconds: 900),
+                  builder: (_, v, _) => AdaptiveProgressIndicator(
+                    value: v,
+                    strokeWidth: 3,
+                    valueColor: const AlwaysStoppedAnimation(
+                      AraColors.selectionBg,
+                    ),
+                  ),
                 ),
               ),
-              // The frame exposing, or the hold to stop over it.
-              if (_hold.value > 0 || (pauseBars && exposing))
-                SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(
-                      end: _hold.value > 0
-                          ? _hold.value
-                          : (camera?.exposureProgressPct ?? 0) / 100,
-                    ),
-                    duration: _hold.value > 0
-                        ? Duration.zero
-                        : const Duration(milliseconds: 900),
-                    builder: (_, v, _) => AdaptiveProgressIndicator(
-                      value: v,
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation(
-                        _hold.value > 0
-                            ? AraColors.accentError
-                            : AraColors.selectionBg,
-                      ),
-                    ),
-                  ),
-                ),
-              if (_hold.value > 0)
-                Positioned(
-                  right: 60 + kSimpleInset + 6,
-                  child: SimplePanel(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      context.l10n.planHoldToStop,
-                      style: kSimpleText,
-                      maxLines: 1,
-                      softWrap: false,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -835,8 +742,12 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
     required this.onShowSky,
     required this.onPickInSky,
     required this.onCreated,
+    this.onSeeAll,
     this.editing,
   });
+
+  /// Tonight's Best row: opens the whole list (#1900); no button when null.
+  final VoidCallback? onSeeAll;
 
   /// The queued target being edited (its rows are in the plan rows); null
   /// when planning the next target.
@@ -1096,7 +1007,25 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final lists = <Widget>[
       // Tonight's best, ranked for the rest of tonight: one tap picks a target.
       if (best.isNotEmpty) ...[
-        Text(context.l10n.planTonightsBest, style: AraText.caption),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                context.l10n.planTonightsBest,
+                style: AraText.caption,
+              ),
+            ),
+            if (widget.onSeeAll != null)
+              OutlinedButton(
+                key: const Key('simple-run-best-see-all'),
+                onPressed: widget.onSeeAll,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                ),
+                child: Text(context.l10n.bestSeeAll),
+              ),
+          ],
+        ),
         Wrap(
           spacing: AraSpace.s8,
           runSpacing: AraSpace.s8,
@@ -1765,6 +1694,9 @@ class _TargetCard extends StatelessWidget {
           TextButton(
             key: const Key('simple-run-pick-in-sky'),
             onPressed: onPickInSky,
+            // linkText pinned on the card, not left to the TextButton theme:
+            // 4.7:1 on the tint.
+            style: TextButton.styleFrom(foregroundColor: AraColors.linkText),
             child: Text(l.planPickInSky),
           ),
         ],
@@ -2329,6 +2261,8 @@ class SimpleRunPanel extends ConsumerWidget {
                 context.l10n.planHintPause,
                 style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
               ),
+            // The plan alone, not Emergency Stop: asks in place (#1911).
+            if (imaging) _StopPlan(frames: allCaptured),
             // Solid like the sheet's Add to queue (user, 2026-11-04).
             FilledButton(
               key: const Key('simple-run-add'),
@@ -2342,6 +2276,64 @@ class SimpleRunPanel extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Stop plan…: ends the plan after a question in the panel itself, no popup.
+/// The [frames] the whole run took stay and the mount keeps tracking. It is
+/// the plan's own stop; Emergency Stop is the shutters' and the rail-foot
+/// Stop's 2 s hold, and shows no such question (ADR 0013 rule 2).
+class _StopPlan extends ConsumerStatefulWidget {
+  const _StopPlan({required this.frames});
+
+  /// Frames the run took, across all its targets: what Stop keeps.
+  final int frames;
+
+  @override
+  ConsumerState<_StopPlan> createState() => _StopPlanState();
+}
+
+class _StopPlanState extends ConsumerState<_StopPlan> {
+  bool _asking = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    if (!_asking) {
+      return OutlinedButton(
+        key: const Key('simple-run-stop'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AraColors.errorText,
+          side: const BorderSide(color: AraColors.emergencyStop),
+        ),
+        onPressed: () => setState(() => _asking = true),
+        child: Text(l10n.planStopPlan),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        Text(l10n.planStopPlanAsk(widget.frames), style: kSimpleText),
+        FilledButton(
+          key: const Key('simple-run-stop-confirm'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AraColors.emergencyStop,
+            foregroundColor: AraColors.onEmergencyStop,
+          ),
+          onPressed: () {
+            setState(() => _asking = false);
+            ref.read(simpleRunProvider.notifier).stop();
+          },
+          child: Text(l10n.planStopPlanConfirm),
+        ),
+        TextButton(
+          key: const Key('simple-run-stop-keep'),
+          onPressed: () => setState(() => _asking = false),
+          child: Text(l10n.planKeepImaging),
+        ),
+      ],
     );
   }
 }

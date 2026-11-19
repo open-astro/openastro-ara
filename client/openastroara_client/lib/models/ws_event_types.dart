@@ -24,7 +24,6 @@ abstract final class WsEventTypes {
   static const String guiderPaResidual = 'guider.pa_residual';
   static const String guiderOperationComplete = 'guider.operation_complete';
   static const String guiderDitherComplete = 'guider.dither_complete';
-  static const String guiderFaultActionTaken = 'guider.fault_action_taken';
   static const String guiderProfilePushed = 'guider.profile_pushed';
   static const String guiderDarkLibraryInvalidated =
       'guider.dark_library.invalidated';
@@ -112,6 +111,7 @@ abstract final class WsEventTypes {
   static const String safetySafe = 'safety.safe';
   static const String safetyActionTaken = 'safety.action_taken';
   static const String safetyEmergencyStop = 'safety.emergency_stop';
+  static const String endNightProgress = 'end_night.progress';
 }
 
 /// Payload of `camera.exposure_started`; a missing or mistyped field throws a [TypeError].
@@ -184,4 +184,33 @@ final class CameraExposureFailedPayload {
   final String frameId;
   final String kind;
   final String reason;
+}
+
+/// Payload of `end_night.progress`; a missing or mistyped field throws a [TypeError].
+final class EndNightProgressPayload {
+  const EndNightProgressPayload({
+    required this.runId,
+    required this.state,
+    this.step,
+    this.stepState,
+    this.detail,
+    required this.cancellable,
+  });
+
+  factory EndNightProgressPayload.fromJson(Map<String, dynamic> json) =>
+      EndNightProgressPayload(
+        runId: json['run_id'] as String,
+        state: json['state'] as String,
+        step: json['step'] as String?,
+        stepState: json['step_state'] as String?,
+        detail: json['detail'] as String?,
+        cancellable: json['cancellable'] as bool,
+      );
+
+  final String runId;
+  final String state;
+  final String? step;
+  final String? stepState;
+  final String? detail;
+  final bool cancellable;
 }

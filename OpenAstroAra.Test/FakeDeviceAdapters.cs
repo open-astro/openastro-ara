@@ -161,7 +161,9 @@ namespace OpenAstroAra.Test {
         public double MaxSwitchValue(short id) => 1;
         public double SwitchStep(short id) => 1;
         public bool CanWrite(short id) => true;
-        public void SetSwitchValue(short id, double value) { }
+        // Runs inside a write (block it, or throw from it).
+        public volatile Action<short, double>? OnSet;
+        public void SetSwitchValue(short id, double value) => OnSet?.Invoke(id, value);
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each
         // call (null = NotImplemented, as a driver without actions does). Every call is recorded.
         public List<string> Actions { get; } = [];
@@ -180,7 +182,14 @@ namespace OpenAstroAra.Test {
     }
 
     internal sealed class FakeFilterWheelDevice : FakeDeviceAdapter, IFilterWheelDevice {
-        public short Position { get { ThrowIfReadFails(); return 1; } set { } }
+        // Scripts: PositionScript answers (or throws) each Position read once set; OnSetPosition runs inside the
+        // Position write (block it, or throw from it).
+        public volatile Func<short>? PositionScript;
+        public volatile Action<short>? OnSetPosition;
+        public short Position {
+            get { ThrowIfReadFails(); return PositionScript is { } script ? script() : (short)1; }
+            set { OnSetPosition?.Invoke(value); }
+        }
         public string[] Names => ["L", "R"];
         public int[] FocusOffsets => [0, 0];
     }

@@ -848,7 +848,10 @@ public sealed record AlpacaDeviceNamesResponseDto(
     IReadOnlyDictionary<string, string> Names,
     // #1308 — "type/number" → the server's UniqueID, so a picker can pin the guide camera by identity;
     // entries the server reports no UniqueID for are left out. Additive; older clients ignore it.
-    IReadOnlyDictionary<string, string>? UniqueIds = null);
+    IReadOnlyDictionary<string, string>? UniqueIds = null,
+    // #1580 — "type/number" → the device's serial, so the setup flow can tell two cameras of one model apart;
+    // entries the server reports no serial for are left out. Additive; older clients ignore it.
+    IReadOnlyDictionary<string, string>? Serials = null);
 
 /// <summary>#1580 — AlpacaBridge's device catalog as the wizard shows it: the drivers that are built in
 /// (<c>available</c> true), grouped by device type. Each driver (and so each field schema) is AlpacaBridge's own

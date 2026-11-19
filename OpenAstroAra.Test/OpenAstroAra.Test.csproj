@@ -23,6 +23,7 @@
          for-profit use — staying on the last Apache-2.0 line is a deliberate
          licensing decision, not a version lag. -->
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
     <PackageReference Include="NUnit" />

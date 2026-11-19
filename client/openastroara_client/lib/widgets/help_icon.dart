@@ -36,7 +36,7 @@ class HelpIcon extends ConsumerWidget {
             child: Icon(
               Icons.info_outline,
               size: 14,
-              color: AraColors.textDisabled,
+              color: AraColors.textTertiary,
             ),
           ),
         ),
@@ -84,6 +84,8 @@ void showHelpSheet(BuildContext context, Help entry, {String? device}) {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
+                    tooltip: MaterialLocalizations.of(context)
+                        .closeButtonTooltip,
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -162,9 +164,8 @@ void showHelpSheet(BuildContext context, Help entry, {String? device}) {
                 const SizedBox(height: 24),
                 Text(
                   'Related settings:',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AraColors.textDisabled,
-                  ),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textTertiary),
                 ),
                 const SizedBox(height: 8),
                 Wrap(

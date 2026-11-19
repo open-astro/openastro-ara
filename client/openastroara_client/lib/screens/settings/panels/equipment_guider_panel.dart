@@ -22,6 +22,7 @@ import '../../../widgets/guider/guider_setup_wizard.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/adaptive_controls.dart';
 
@@ -311,8 +312,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final connN = ref.read(equipmentConnectionProvider.notifier);
     final phd2 = ref.watch(phd2SettingsProvider);
     final phd2N = ref.read(phd2SettingsProvider.notifier);
     ref.listen(phd2SettingsProvider, (_, _) => _scheduleSave());
@@ -350,13 +349,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
             if (v != null) phd2N.setGuiderProfileId(v);
           },
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.guider),
-          onChanged: (v) => connN.setAutoConnect(EquipmentDeviceType.guider, v),
-          hint:
-              'Off by default — guider connect starts the OpenAstro Guider client',
+        AutoConnectRow(
+          EquipmentDeviceType.guider,
+          hint: 'Off by default — guider connect starts the OpenAstro Guider client',
         ),
         const SettingsSectionHeader('Dithering'),
         SettingsSwitchRow(

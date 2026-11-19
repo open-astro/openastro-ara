@@ -60,7 +60,7 @@ namespace OpenAstroAra.Test {
                 new[] { TimeSpan.Zero }, (_, _) => Task.CompletedTask, TimeSpan.FromSeconds(1));
             using var svc = new GuiderService(new HeadlessProfileService(), recovery, NullLogger<GuiderService>.Instance,
                 supervisor.Object, ws: null, profileStore: null, sequencerResolver: () => Mock.Of<ISequencerService>(),
-                notifications: Mock.Of<INotificationService>(), faultLog: null, activeProfileIdResolver: null) {
+                notifications: Mock.Of<INotificationService>(), faultSink: null, activeProfileIdResolver: null) {
                 ReconnectAttemptInterval = TimeSpan.FromMilliseconds(200),
                 ReconnectGraceFromSeconds = _ => TimeSpan.FromSeconds(20),
             };

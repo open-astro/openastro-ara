@@ -14,7 +14,7 @@ import '../../../state/settings/settings_nav.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -28,8 +28,6 @@ class EquipmentFocuserPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(focuserProvider);
     final notifier = ref.read(focuserProvider.notifier);
 
@@ -49,12 +47,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FocuserBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.focuser),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.focuser),
         const SettingsSectionHeader('Autofocus'),
         // §59 — trigger one V-curve sweep with the profile's autofocus settings.
         // Runs as a daemon background job; the row polls it to a terminal state.

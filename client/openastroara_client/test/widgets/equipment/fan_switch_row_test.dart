@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -74,7 +75,7 @@ Future<_FakeSwitchClient> _pump(
   List<SwitchDevice>? switches,
   CameraStatus? camera,
   _FakeSwitchClient? switchClient,
-  CoolingFan fan = const CoolingFan(deviceId: 'switch-5', portId: 1),
+  CoolingFan? fan = const CoolingFan(deviceId: 'switch-5', portId: 1),
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
@@ -127,6 +128,14 @@ void main() {
   testWidgets('a Thermal Switch with a Fan port shows nothing when none is designated',
       (tester) async {
     await _pump(tester, switches: [_fanDevice()], fan: CoolingFan.none);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
+  });
+
+  testWidgets('a fan designation not loaded shows no fan switch', (
+    tester,
+  ) async {
+    await _pump(tester, switches: [_fanDevice(value: 1.0)], fan: null);
     expect(find.byType(Switch), findsNothing);
     expect(find.text('Cooling fan'), findsNothing);
   });
@@ -209,9 +218,13 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
 
 class _FixedFan extends CoolingFanNotifier {
   _FixedFan(this.fan);
-  final CoolingFan fan;
+
+  /// Null: the designation has not loaded.
+  final CoolingFan? fan;
   @override
-  Future<CoolingFan> build() async => fan;
+  LoadedSection<CoolingFan> build() => fan == null
+      ? const LoadedSection()
+      : LoadedSection(value: fan, source: SectionSource.rig);
 }
 
 class _SwitchListNotifierForTest extends SwitchListNotifier {

@@ -78,6 +78,18 @@ _Avoid_: operation, action, move (when the wait is meant)
 The rig declining a command, with a stable cause that the app puts into words.
 _Avoid_: error (for a declined command), rejection, failure (that is a device fault)
 
+**Fault**:
+A device failure the daemon detected and recorded in the fault log.
+_Avoid_: error, alarm
+
+**Fault Episode**:
+One Fault from detection to its end: recovered, gave up, or released by the user.
+_Avoid_: incident, event (for the episode)
+
+**Recovery**:
+What an adapter tries during a Fault Episode: an Alpaca reconnect, a guider process restart, a star-lost re-centre.
+_Avoid_: retry (for the whole attempt)
+
 ### Presentations
 
 **Advanced Mode**:
@@ -101,8 +113,12 @@ One of Simple Mode's five views (Preview, Focus, Polar align, Guide, Queue). Pre
 _Avoid_: mode, panel, page
 
 **Monitor**:
-Simple Mode's full-screen, read-only view of the Session, opened from the left rail. Not a Screen.
+Simple Mode's full-screen, read-only view of the Session, opened from the left rail or the phone deck's Monitor word. Not a Screen.
 _Avoid_: Cockpit, Night Watch, Dashboard
+
+**Tonight's Best**:
+Simple Mode's page of the Targets ranked for the rest of tonight, with sort, filters and Image this, opened from the left rail's Best item, the phone deck's Best word or See all on Plan's Tonight's Best row. A page pushed over the shell like Monitor, not a Screen.
+_Avoid_: Suggestions, Best list
 
 **Prompt**:
 Something the rig's state asks or tells the person, shown as a dialog in Advanced Mode and as a pill in Simple Mode. Feedback for something the person just did is not a Prompt.

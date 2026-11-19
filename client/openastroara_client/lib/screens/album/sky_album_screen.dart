@@ -173,11 +173,11 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       AlbumFilter.all => objects,
       AlbumFilter.collected => [
         for (final d in objects)
-          if (stats.containsKey(d.id)) d,
+          if (stats[d.id]?.tier != null) d,
       ],
       AlbumFilter.missing => [
         for (final d in objects)
-          if (!stats.containsKey(d.id)) d,
+          if (stats[d.id]?.tier == null) d,
       ],
     };
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
@@ -286,7 +286,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
               child: LayoutBuilder(
                 builder: (context, box) {
                   final count = Text(
-                    l.albumCollected(stats.length, objects.length),
+                    l.albumCollected(stats.values.where((s) => s.tier != null).length, objects.length),
                     style: headerText.copyWith(fontWeight: FontWeight.w600),
                   );
                   final tierCounts = Wrap(
@@ -406,7 +406,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
         views: shown,
         byKey: {
           for (final d in objects)
-            if (!stats.containsKey(d.id))
+            if (stats[d.id]?.tier == null)
               for (final name in [d.id, ...d.aliases]) designationKey(name): d,
         },
       );

@@ -190,8 +190,9 @@ namespace OpenAstroAra.Test {
             profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
             var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.Throws<PlateSolverConfigurationException>(
+            var refusal = Assert.Throws<OpenAstroAra.Server.Contracts.Refusals.RefusalException>(
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.OpticsNotSet));
         }
 
         // ── ARA-store optics precedence (the dual-profile-systems fix): the user configures

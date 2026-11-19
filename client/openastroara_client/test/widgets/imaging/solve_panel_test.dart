@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/plate_solve_result.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/state/imaging/solve_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -13,7 +14,7 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/imaging/solve_panel.dart';
 
 /// §18.I / #1150 — the Imaging tab's Solve panel: disabled without a frame,
-/// busy while ASTAP runs, then the solution or the daemon's readable failure.
+/// busy while ASTAP runs, then the solution or a readable failure.
 class _ScriptedSolver extends PlateSolveApi {
   _ScriptedSolver() : super(const AraServer(hostname: 'x', port: 1));
   final completer = Completer<PlateSolveResult>();
@@ -104,18 +105,51 @@ void main() {
     expect(find.textContaining('No solution'), findsOneWidget);
   });
 
-  testWidgets('a configuration failure shows the daemon\'s message verbatim', (
-    tester,
-  ) async {
-    final solver = _ScriptedSolver();
-    await _pump(tester, solver, frameId: 'frame-1');
-    await tester.tap(find.text('Solve frame'));
-    await tester.pump();
-    solver.completer.completeError(
-      const PlateSolveException('Set the focal length first.'),
-    );
-    await tester.pump();
-    expect(find.text('Set the focal length first.'), findsOneWidget);
-    expect(find.text('Solve frame'), findsOneWidget, reason: 'retryable');
-  });
+  testWidgets(
+    'a frame the catalog does not hold shows the client\'s message verbatim',
+    (tester) async {
+      final solver = _ScriptedSolver();
+      await _pump(tester, solver, frameId: 'frame-1');
+      await tester.tap(find.text('Solve frame'));
+      await tester.pump();
+      solver.completer.completeError(
+        const PlateSolveException(
+          'Frame not found in the catalog. Capture a frame first.',
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.text('Frame not found in the catalog. Capture a frame first.'),
+        findsOneWidget,
+      );
+      expect(find.text('Solve frame'), findsOneWidget, reason: 'retryable');
+    },
+  );
+
+  testWidgets(
+    'a solve refused for unset optics shows the app\'s sentence, not the daemon detail',
+    (tester) async {
+      final solver = _ScriptedSolver();
+      await _pump(tester, solver, frameId: 'frame-1');
+      await tester.tap(find.text('Solve frame'));
+      await tester.pump();
+      solver.completer.completeError(
+        const Refusal(
+          cause: RefusalCause.opticsNotSet,
+          reason: 'optics-not-set',
+          detail: 'The daemon\'s own English sentence.',
+          parameters: {
+            'missing': ['focal_length'],
+          },
+          status: 422,
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.text('The telescope focal length is not set. Set it in Optics.'),
+        findsOneWidget,
+      );
+      expect(find.text('Solve frame'), findsOneWidget, reason: 'retryable');
+    },
+  );
 }

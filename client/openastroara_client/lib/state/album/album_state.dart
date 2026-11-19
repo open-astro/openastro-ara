@@ -151,13 +151,14 @@ class AlbumFramesNotifier extends AsyncNotifier<AlbumCollection> {
 }
 
 /// A Book ready to show: its objects in catalog order and the stats of each
-/// object some frame contains.
+/// object some frame contains. A Card is collected at a Tier, not at its
+/// first light.
 class AlbumBookView {
   final List<PlanningDso> objects;
   final Map<String, CardStats> stats;
   const AlbumBookView({required this.objects, required this.stats});
 
-  int get collected => stats.length;
+  int get collected => stats.values.where((s) => s.tier != null).length;
 }
 
 /// [book] matched against the full bundled catalog (not the culled planning

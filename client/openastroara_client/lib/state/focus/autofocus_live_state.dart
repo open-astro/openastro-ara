@@ -40,6 +40,11 @@ class AutofocusLive {
   /// True after the first run snapshot of this session has been applied.
   final bool hydrated;
 
+  /// The user marked the scope in focus ([AutofocusLiveNotifier.markFocusedManually])
+  /// since the latest run began: a failed run no longer clears Simple Mode's
+  /// Focus tick (#1911).
+  final bool manualMarkSinceRun;
+
   /// When the first snapshot showed an already-complete run, its start time:
   /// that run is from an earlier app session and never sets
   /// [focusedThisSession]. Ara keeps its last run until it restarts.
@@ -58,6 +63,7 @@ class AutofocusLive {
     this.error,
     this.focusedThisSession = false,
     this.hydrated = false,
+    this.manualMarkSinceRun = false,
     this.staleRunStartedUtc,
     this.collimation,
   });
@@ -74,22 +80,22 @@ class AutofocusLive {
     bool clearFrame = false,
     bool? focusedThisSession,
     bool? hydrated,
+    bool? manualMarkSinceRun,
     DateTime? staleRunStartedUtc,
     CollimationVerdict? collimation,
     bool clearCollimation = false,
-  }) =>
-      AutofocusLive(
-        run: run ?? this.run,
-        frame: clearFrame ? null : (frame ?? this.frame),
-        frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
-        busy: busy ?? this.busy,
-        error: clearError ? null : (error ?? this.error),
-        focusedThisSession: focusedThisSession ?? this.focusedThisSession,
-        hydrated: hydrated ?? this.hydrated,
-        staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
-        collimation:
-            clearCollimation ? null : (collimation ?? this.collimation),
-      );
+  }) => AutofocusLive(
+    run: run ?? this.run,
+    frame: clearFrame ? null : (frame ?? this.frame),
+    frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
+    busy: busy ?? this.busy,
+    error: clearError ? null : (error ?? this.error),
+    focusedThisSession: focusedThisSession ?? this.focusedThisSession,
+    hydrated: hydrated ?? this.hydrated,
+    manualMarkSinceRun: manualMarkSinceRun ?? this.manualMarkSinceRun,
+    staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
+    collimation: clearCollimation ? null : (collimation ?? this.collimation),
+  );
 }
 
 /// Pure: fold a run snapshot into the live view (frame handled separately).
@@ -103,6 +109,11 @@ AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) {
     run: run,
     focusedThisSession: current.focusedThisSession || (run.isComplete && !staleFromEarlierSession),
     hydrated: true,
+    // A new run (another start time) ends the manual mark of the one before;
+    // the first snapshot only learns which run is the latest.
+    manualMarkSinceRun:
+        current.manualMarkSinceRun &&
+        (!current.hydrated || _runIdentity(run) == _runIdentity(current.run)),
     staleRunStartedUtc: !current.hydrated && run.isComplete ? _runIdentity(run) : null,
     // A new run drops the previous run's picture until its own arrives.
     clearFrame: run.isRunning && !run.hasFrame,
@@ -241,7 +252,7 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
   /// The user says the main telescope is already in focus (manual focus, or a
   /// run from an earlier app session) — satisfies the OAG gate.
   void markFocusedManually() {
-    state = state.copyWith(focusedThisSession: true);
+    state = state.copyWith(focusedThisSession: true, manualMarkSinceRun: true);
   }
 }
 

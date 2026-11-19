@@ -1921,6 +1921,28 @@
   "@shellLibrary": {
     "description": "Simple Mode left rail button: open the image library"
   },
+  "shellRailTabs": "Modes",
+  "@shellRailTabs": {
+    "description": "Simple Mode screen reader label of the right rail's tab list of the six modes"
+  },
+  "shellRailTabDone": "{mode}, done tonight",
+  "@shellRailTabDone": {
+    "description": "Simple Mode screen reader label of a right rail tab whose step is done tonight; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "shellRailTabRunning": "{mode}, running",
+  "@shellRailTabRunning": {
+    "description": "Simple Mode screen reader label of the right rail tab of the mode that runs now; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
   "shellModeSemantics": "Mode: {mode}",
   "@shellModeSemantics": {
     "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",
@@ -2390,14 +2412,6 @@
   "@planResume": {
     "description": "Shutter screen-reader label while paused"
   },
-  "planStopTheRun": "Stop the run",
-  "@planStopTheRun": {
-    "description": "Shutter screen-reader custom action: stop the run"
-  },
-  "planHoldToStop": "Hold to stop",
-  "@planHoldToStop": {
-    "description": "Hint beside the shutter: hold it to stop the run"
-  },
   "planTonightsBest": "TONIGHT'S BEST",
   "@planTonightsBest": {
     "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
@@ -2676,7 +2690,7 @@
       }
     }
   },
-  "planHintResume": "Tap the shutter to resume and re-center; hold it to stop.",
+  "planHintResume": "Tap the shutter to resume and re-center.",
   "@planHintResume": {
     "description": "Progress panel hint while paused"
   },
@@ -2688,9 +2702,30 @@
   "@planRecenterAndRefocus": {
     "description": "Progress panel button while paused: resume after re-centering and refocusing"
   },
-  "planHintPause": "Tap the shutter to pause after this frame; hold it to stop.",
+  "planHintPause": "Tap the shutter to pause after this frame.",
   "@planHintPause": {
     "description": "Progress panel hint while imaging"
+  },
+  "planStopPlan": "Stop plan…",
+  "@planStopPlan": {
+    "description": "Plan's panel button while a plan runs: asks in place before it stops the plan (the shutter pauses; a 2 s hold is Emergency Stop)"
+  },
+  "planStopPlanAsk": "{count, plural, =0{Stop the plan? The mount keeps tracking.} =1{Stop the plan? The 1 frame taken is kept; the mount keeps tracking.} other{Stop the plan? The {count} frames taken are kept; the mount keeps tracking.}}",
+  "@planStopPlanAsk": {
+    "description": "Plan's panel: the in-place question after Stop plan…; count is every frame the run took, across all its targets",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planStopPlanConfirm": "Stop plan",
+  "@planStopPlanConfirm": {
+    "description": "Plan's panel: confirms stopping the plan (not an Emergency Stop)"
+  },
+  "planKeepImaging": "Keep imaging",
+  "@planKeepImaging": {
+    "description": "Plan's panel: answers the stop question with no stop"
   },
   "planAddTarget": "Add target",
   "@planAddTarget": {
@@ -4166,7 +4201,7 @@
   },
   "albumTierBronze": "Bronze",
   "@albumTierBronze": {
-    "description": "Sky Album: bronze tier name (at least one light)"
+    "description": "Sky Album: bronze tier name (at least 15 min of lights)"
   },
   "albumTierSilver": "Silver",
   "@albumTierSilver": {
@@ -4265,11 +4300,11 @@
   },
   "albumImageThis": "Image this target",
   "@albumImageThis": {
-    "description": "Sky Album card back: action on a missing card; hands the object to the planner"
+    "description": "Sky Album card back: action on a card with no lights; hands the object to the planner"
   },
   "albumAddTime": "Add more time",
   "@albumAddTime": {
-    "description": "Sky Album card back: action on a collected card; hands the object to the planner"
+    "description": "Sky Album card back: action on a card with lights, collected or not; hands the object to the planner"
   },
   "albumLoadFailed": "Couldn't load the album: {reason}",
   "@albumLoadFailed": {
@@ -8209,6 +8244,399 @@
   "estopFailPolarAligner": "POLAR ALIGNER MAY STILL BE MOVING (stop failed)",
   "@estopFailPolarAligner": {
     "description": "Emergency stop: the Polar Aligner's stop failed"
+  },
+  "bestNav": "Best",
+  "@bestNav": {
+    "description": "Rail and deck word for Tonight's Best"
+  },
+  "bestTitle": "Tonight's Best",
+  "@bestTitle": {
+    "description": "Tonight's Best screen title"
+  },
+  "bestSubtitle": "for the rest of tonight · updated {time}",
+  "@bestSubtitle": {
+    "description": "Subtitle: when the list was ranked (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bestSeeAll": "See all",
+  "@bestSeeAll": {
+    "description": "Plan sheet button that opens Tonight's Best"
+  },
+  "bestBack": "Back",
+  "@bestBack": {
+    "description": "Tonight's Best: back button"
+  },
+  "bestRefresh": "Refresh",
+  "@bestRefresh": {
+    "description": "Tonight's Best: rank again"
+  },
+  "bestSort": "Sort",
+  "@bestSort": {
+    "description": "Sort control label"
+  },
+  "bestSortScore": "Score",
+  "@bestSortScore": {
+    "description": "Sort by score"
+  },
+  "bestSortTransit": "Transit",
+  "@bestSortTransit": {
+    "description": "Sort by transit time; also the transit label"
+  },
+  "bestSortAltitude": "Altitude now",
+  "@bestSortAltitude": {
+    "description": "Sort by altitude now"
+  },
+  "bestType": "Type",
+  "@bestType": {
+    "description": "Type chips label"
+  },
+  "bestTypeAll": "All",
+  "@bestTypeAll": {
+    "description": "Type chip: every type"
+  },
+  "bestTypeGalaxy": "Galaxy",
+  "@bestTypeGalaxy": {
+    "description": "Type chip"
+  },
+  "bestTypeNebula": "Nebula",
+  "@bestTypeNebula": {
+    "description": "Type chip"
+  },
+  "bestTypeCluster": "Cluster",
+  "@bestTypeCluster": {
+    "description": "Type chip"
+  },
+  "bestTypePlanetary": "Planetary nebula",
+  "@bestTypePlanetary": {
+    "description": "Type chip"
+  },
+  "bestTypeOther": "Other",
+  "@bestTypeOther": {
+    "description": "Type chip"
+  },
+  "bestShow": "Show",
+  "@bestShow": {
+    "description": "Show control label"
+  },
+  "bestShowAll": "All night",
+  "@bestShowAll": {
+    "description": "Show: the whole night"
+  },
+  "bestShowUp": "Up now",
+  "@bestShowUp": {
+    "description": "Show: only Targets up now"
+  },
+  "bestPeak": "Peak altitude (at transit)",
+  "@bestPeak": {
+    "description": "Peak altitude control label"
+  },
+  "bestPeakAny": "Any",
+  "@bestPeakAny": {
+    "description": "Peak altitude: no minimum"
+  },
+  "bestPeakDeg": "{deg}°",
+  "@bestPeakDeg": {
+    "description": "Peak altitude minimum",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestField": "Field",
+  "@bestField": {
+    "description": "Fits my field control label"
+  },
+  "bestFitsOn": "Fits my field",
+  "@bestFitsOn": {
+    "description": "Only Targets that fit the field"
+  },
+  "bestFitsOff": "All fields",
+  "@bestFitsOff": {
+    "description": "Every Target, whatever its fit"
+  },
+  "bestFieldUnknown": "Field not known. Set your camera and telescope in Settings > Rig.",
+  "@bestFieldUnknown": {
+    "description": "Why Fits my field is off"
+  },
+  "bestCount": "{shown} of {total} Targets",
+  "@bestCount": {
+    "description": "Count line",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "bestKept": "Sort and filters are kept on this device.",
+  "@bestKept": {
+    "description": "Note under the controls"
+  },
+  "bestFitTooSmall": "Too small",
+  "@bestFitTooSmall": {
+    "description": "Framing fit"
+  },
+  "bestFitFills": "Fills the frame",
+  "@bestFitFills": {
+    "description": "Framing fit"
+  },
+  "bestFitMosaic": "Needs a mosaic",
+  "@bestFitMosaic": {
+    "description": "Framing fit"
+  },
+  "bestWindow": "Best {range}",
+  "@bestWindow": {
+    "description": "Best dark window, e.g. 20:40-03:20",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "bestTransitAt": "Transit {time}",
+  "@bestTransitAt": {
+    "description": "Transit time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "bestHighest": "Highest {deg}°",
+  "@bestHighest": {
+    "description": "Peak altitude of the Target",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestNow": "Now {deg}°",
+  "@bestNow": {
+    "description": "Altitude now",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestNowBelow": "Now: below the horizon",
+  "@bestNowBelow": {
+    "description": "Altitude line of a Target under the horizon"
+  },
+  "bestMoon": "Moon {deg}° away: brighter sky",
+  "@bestMoon": {
+    "description": "Moon distance on a Target the Moon affects",
+    "placeholders": {
+      "deg": {
+        "type": "int"
+      }
+    }
+  },
+  "bestInQueue": "In Queue",
+  "@bestInQueue": {
+    "description": "Marker and disabled button"
+  },
+  "bestCollected": "Collected",
+  "@bestCollected": {
+    "description": "Marker: already imaged"
+  },
+  "bestImage": "Image this",
+  "@bestImage": {
+    "description": "Opens the plan sheet on the Target"
+  },
+  "bestAddToQueue": "Add to Queue",
+  "@bestAddToQueue": {
+    "description": "Adds the Target while a plan runs"
+  },
+  "bestAdded": "{name} added to the Queue",
+  "@bestAdded": {
+    "description": "Pill after the add",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bestNoneTitle": "Nothing well placed tonight",
+  "@bestNoneTitle": {
+    "description": "Empty state"
+  },
+  "bestNoneBody": "No Target stays above 30° long enough for this rig tonight. Try again tomorrow, or search for a Target by name.",
+  "@bestNoneBody": {
+    "description": "Empty state text"
+  },
+  "bestSearch": "Search",
+  "@bestSearch": {
+    "description": "Empty state action"
+  },
+  "bestNoSiteTitle": "Set your site",
+  "@bestNoSiteTitle": {
+    "description": "Empty state"
+  },
+  "bestNoSiteBody": "Tonight's Best ranks by where you are. Add your site and the list fills in.",
+  "@bestNoSiteBody": {
+    "description": "Empty state text"
+  },
+  "bestSetSite": "Set site",
+  "@bestSetSite": {
+    "description": "Empty state action"
+  },
+  "bestNoMatchTitle": "No Targets match",
+  "@bestNoMatchTitle": {
+    "description": "Filters hide every Target"
+  },
+  "bestNoMatchBody": "Your filters hide every Target.",
+  "@bestNoMatchBody": {
+    "description": "Empty state text"
+  },
+  "bestClearFilters": "Clear filters",
+  "@bestClearFilters": {
+    "description": "Resets the four filters"
+  },
+  "bestRigOff": "Rig not connected",
+  "@bestRigOff": {
+    "description": "Strip text"
+  },
+  "bestOffline": "Planning offline: ranked from your saved site and telescope. Image this plans now; the rig runs it later.",
+  "@bestOffline": {
+    "description": "Note when the rig is not connected"
+  },
+  "bestLoadFailed": "Could not rank tonight's Targets.",
+  "@bestLoadFailed": {
+    "description": "Error text"
+  },
+  "bestRetry": "Try again",
+  "@bestRetry": {
+    "description": "Error action"
+  },
+  "refusalNoCamera": "No camera is connected. Connect one in Camera settings, then try again.",
+  "@refusalNoCamera": {"description": "Refusal (no-camera): the daemon has no camera to take the frame with"},
+  "refusalCameraBusy": "The camera is busy with an exposure. Try again once it has read out.",
+  "@refusalCameraBusy": {"description": "Refusal (camera-busy): another exposure holds the camera"},
+  "refusalGateStuck": "The camera is stuck mid-capture. Restart Ara on your rig to clear it.",
+  "@refusalGateStuck": {"description": "Refusal (gate-stuck): the camera's in-flight gate never released"},
+  "refusalCenterInProgress": "Another centering is already running. Wait for it, or cancel it, before centering on a different target.",
+  "@refusalCenterInProgress": {"description": "Refusal (center-in-progress): a centring job for another target is running"},
+  "refusalOpticsNotSet": "{missing, select, focal_length{The telescope focal length is not set. Set it in Optics.} pixel_size{The camera pixel size is not set. Set it in Optics.} other{The telescope focal length and camera pixel size are not set. Set them in Optics.}}",
+  "@refusalOpticsNotSet": {
+    "description": "Refusal (optics-not-set): the optics a plate solve needs; missing is focal_length, pixel_size or anything else for both",
+    "placeholders": {"missing": {"type": "String"}}
+  },
+  "refusalSolverNotSet": "The plate solver is not set up. Check its path in Plate solving settings.",
+  "@refusalSolverNotSet": {"description": "Refusal (solver-not-set): the plate solver is missing, wrong or too old"},
+  "refusalCaptureSettingsUnsupported": "The camera cannot take that exposure or binning. Try a different one.",
+  "@refusalCaptureSettingsUnsupported": {"description": "Refusal (capture-settings-unsupported): the exposure or binning is outside the camera's range"},
+  "refusalStorageUnavailable": "The storage disk is missing. Plug it back in, then try again.",
+  "@refusalStorageUnavailable": {"description": "Refusal (storage-unavailable): the disk frames are saved to is gone"},
+  "refusalBelowHorizonLimit": "That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.",
+  "@refusalBelowHorizonLimit": {
+    "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
+    "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
+  },
+  "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
+  "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
+  "bridgeSetupFoundTitle": "Found on this rig",
+  "@bridgeSetupFoundTitle": {
+    "description": "Add your devices: heading above the detected devices"
+  },
+  "bridgeSetupAddSelected": "Add selected ({count})",
+  "@bridgeSetupAddSelected": {
+    "description": "Add your devices: button that adds every ticked device; count is how many are ticked",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "bridgeSetupAdding": "Adding…",
+  "@bridgeSetupAdding": {
+    "description": "Add your devices: status of the row being added, and the label of the Add selected button while it runs"
+  },
+  "bridgeSetupWaiting": "Waiting",
+  "@bridgeSetupWaiting": {
+    "description": "Add your devices: status of a ticked row not yet reached"
+  },
+  "bridgeSetupAdded": "Added",
+  "@bridgeSetupAdded": {
+    "description": "Add your devices: status of a row the bridge registered"
+  },
+  "bridgeSetupFailed": "Failed",
+  "@bridgeSetupFailed": {
+    "description": "Add your devices: status of a row the bridge refused or did not confirm"
+  },
+  "bridgeSetupRetry": "Retry",
+  "@bridgeSetupRetry": {
+    "description": "Add your devices: button that sends a failed row again"
+  },
+  "bridgeSetupEdit": "Edit",
+  "@bridgeSetupEdit": {
+    "description": "Add your devices: button that opens a row's details"
+  },
+  "bridgeSetupNeedsDetails": "Needs details",
+  "@bridgeSetupNeedsDetails": {
+    "description": "Add your devices: status of a row that needs a value before it can be added"
+  },
+  "bridgeSetupMayExist": "No answer from the bridge: it may already exist. Retry checks first.",
+  "@bridgeSetupMayExist": {
+    "description": "Add your devices: note on a row whose add got no answer"
+  },
+  "bridgeSetupLooking": "Looking for devices",
+  "@bridgeSetupLooking": {
+    "description": "Add your devices: shown while the bridge is read"
+  },
+  "bridgeSetupContinue": "Continue",
+  "@bridgeSetupContinue": {
+    "description": "Add your devices: button that saves a row's details and goes on"
+  },
+  "bridgeSetupBack": "Back",
+  "@bridgeSetupBack": {
+    "description": "Add your devices: button that leaves a form with nothing sent"
+  },
+  "bridgeSetupAdd": "Add",
+  "@bridgeSetupAdd": {
+    "description": "Add your devices: button that adds a device chosen by hand"
+  },
+  "bridgeSetupByHand": "Add a device by hand",
+  "@bridgeSetupByHand": {
+    "description": "Add your devices: button that opens the list of device types"
+  },
+  "bridgeSetupWhichCamera": "Which camera?",
+  "@bridgeSetupWhichCamera": {
+    "description": "Add your devices: heading above the attached cameras of a vendor"
+  },
+  "bridgeSetupNothingFound": "No devices found on this rig. Plug in your gear and retry, or add one by hand.",
+  "@bridgeSetupNothingFound": {
+    "description": "Add your devices: nothing detected"
+  },
+  "bridgeSetupRequired": "Required",
+  "@bridgeSetupRequired": {
+    "description": "Add your devices: a form field that must have a value"
+  },
+  "bridgeSetupOutOfRange": "Out of range",
+  "@bridgeSetupOutOfRange": {
+    "description": "Add your devices: a number outside the range the bridge accepts"
+  },
+  "bridgeSetupNotAllowed": "Not an allowed value",
+  "@bridgeSetupNotAllowed": {
+    "description": "Add your devices: a value not in the list the bridge accepts"
+  },
+  "bridgeSetupAddRow": "Add a row",
+  "@bridgeSetupAddRow": {
+    "description": "Add your devices: button that adds a row to a list field"
+  },
+  "bridgeSetupRemoveRow": "Remove this row",
+  "@bridgeSetupRemoveRow": {
+    "description": "Add your devices: button that removes a row from a list field"
+  },
+  "bridgeSetupRefused": "Ara refused this device.",
+  "@bridgeSetupRefused": {
+    "description": "Add your devices: an add was refused and no reason came with it"
   },
   "clockWrongSlow": "The rig's clock is {amount} slow, so times and targets will be off. Start anyway?",
   "@clockWrongSlow": {

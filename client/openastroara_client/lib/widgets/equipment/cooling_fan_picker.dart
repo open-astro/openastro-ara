@@ -5,9 +5,12 @@ import '../../l10n/l10n.dart';
 import '../../models/switch_device.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../state/profile_management_state.dart';
+import '../settings/section_load_state.dart';
 
 /// The Cooling fan choice (#1700): None, then each writable port of the
 /// connected switches as "Device › Port", with what the choice does under it.
@@ -84,7 +87,9 @@ class CoolingFanPicker extends ConsumerWidget {
 }
 
 /// The picker on the active profile's fan: Simple Mode's Camera window and the
-/// full UI's camera panel. Nothing until the daemon's answer is in.
+/// full UI's camera panel. Until the daemon's answer is in: the not-loaded
+/// notice. A copy changed on the rig (412) keeps the choice and shows the
+/// conflict banner, whose Reload loads the rig's copy.
 class ProfileCoolingFanPicker extends ConsumerWidget {
   const ProfileCoolingFanPicker({
     super.key,
@@ -95,12 +100,33 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fan = ref.watch(coolingFanProvider).value;
-    if (fan == null) return const SizedBox.shrink();
-    return CoolingFanPicker(
+    final section = ref.watch(coolingFanProvider);
+    final fan = section.value;
+    // Retry and the conflict banner's Reload.
+    void reload() {
+      final api = ref.read(profileApiProvider);
+      if (api != null) ref.read(coolingFanProvider.notifier).load(api);
+    }
+
+    if (fan == null) {
+      return SectionNotLoaded(
+        section: section,
+        padding: EdgeInsets.zero,
+        onRetry: reload,
+      );
+    }
+    final picker = CoolingFanPicker(
       value: fan,
       style: style,
       onChanged: (v) => _choose(context, ref, v),
+    );
+    if (!section.conflict) return picker;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionConflictBanner(onReload: reload),
+        picker,
+      ],
     );
   }
 
@@ -115,7 +141,13 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
     try {
       await ref.read(coolingFanProvider.notifier).choose(fan);
     } catch (e) {
-      notify(title, detail: failureReason(l10n, e), error: true);
+      notify(
+        title,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
+        error: true,
+      );
     }
   }
 }

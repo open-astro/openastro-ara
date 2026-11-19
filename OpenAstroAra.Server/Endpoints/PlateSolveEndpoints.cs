@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -64,7 +65,7 @@ public static class PlateSolveEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("VerifyMountPosition")
-            .WithDescription("409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with), `camera-busy` (another exposure holds the camera; check again once it has read out) or `gate-stuck` (the in-flight gate leaked; a daemon restart clears it).")
+            .WithDescription("A 409 or 422 problem carries a stable `reason`, one of the `RefusalReason` values (ADR 0022). Here: `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `optics-not-set` (with `missing`), `solver-not-set` and `capture-settings-unsupported`.")
             .WithSummary("§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount's reported and intended positions.");
 
         // #1121 — read-only: is there a star database where the solver will look? A fresh install
@@ -83,36 +84,10 @@ public static class PlateSolveEndpoints {
     // service (the settings-wiring test) must still infer every route's parameters.
     public static async Task<IResult> VerifyPositionAsync([Microsoft.AspNetCore.Mvc.FromBody] VerifyPositionRequestDto? request,
             [Microsoft.AspNetCore.Mvc.FromServices] IVerifyPositionService verify, CancellationToken ct) {
-        try {
-            return Results.Ok(await verify.VerifyAsync(request?.ExposureSeconds, ct));
-        } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (System.IO.FileNotFoundException) {
-            // A non-ASTAP CLI solver whose binary is missing — the same 422 SolveFrameAsync gives it.
-            return Results.Problem("Plate-solver executable not found — check the solver path in the profile.",
-                statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (ArgumentOutOfRangeException ex) {
-            // The exposure or binning is outside the camera's capabilities.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (TimeoutException) {
-            // The capture path's 20-minute gate wait expired: a leaked in-flight flag, which only a daemon
-            // restart clears. (A gate merely HELD by a long exposure is CameraBusyException below, thrown
-            // before any wait — this branch is the stuck case, and no interactive client waits it out.)
-            return Results.Problem("The camera's in-flight gate is stuck — check the daemon log; a restart clears it.",
-                statusCode: StatusCodes.Status409Conflict, extensions: Reason("gate-stuck"));
-        } catch (CameraBusyException ex) {
-            // The gate is held by another exposure: fail fast, check again once it has read out (#1786).
-            // Caught before InvalidOperationException, which it derives from.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, extensions: Reason("camera-busy"));
-        } catch (InvalidOperationException ex) {
-            // The imaging mediator's "no camera connected", and a capture that lost the device mid-exposure:
-            // nothing to look with right now; the message says which.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, extensions: Reason("no-camera"));
-        }
+        // A Refusal or a fault leaves as the exception: RefusalHandler answers the first (ADR 0022), the
+        // rest keep their own 5xx path.
+        return Results.Ok(await verify.VerifyAsync(request?.ExposureSeconds, ct));
     }
-
-    // The 409's stable cause (`no-camera` | `camera-busy` | `gate-stuck`): a client picks its action from it.
-    private static Dictionary<string, object?> Reason(string reason) => new() { ["reason"] = reason };
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with a real store.
     public static IResult GetDatabaseStatus(IProfileStore store) =>
@@ -162,11 +137,11 @@ public static class PlateSolveEndpoints {
         try {
             job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts), identity);
         } catch (BatchJobConflictException ex) {
-            return Results.Problem(
-                title: "center_in_progress",
-                detail: $"A centering job for another target ({ex.RunningIdentity}) is already running (job {ex.RunningJobId}); "
+            // BatchJobConflictException stays (filter-offset calibration shares it); here it becomes the refusal.
+            throw new RefusalException(RefusalCatalog.CenterInProgress,
+                $"A centering job for another target ({ex.RunningIdentity}) is already running (job {ex.RunningJobId}); "
                     + "wait for it or cancel it (DELETE /api/v1/jobs/{id}) before centering on a different target.",
-                statusCode: StatusCodes.Status409Conflict);
+                new Dictionary<string, object?> { ["job_id"] = ex.RunningJobId.ToString() });
         }
         return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
     }
@@ -219,22 +194,10 @@ public static class PlateSolveEndpoints {
             return Results.NotFound();
         }
         var approx = await ResolveApproxCoordinatesAsync(id, request, frames, ct);
-        try {
-            // The user-driven solve: the one entry point that may learn the optics (#1136).
-            var result = await solver.SolveImageAndLearnOptics(image, approx, progress: null, ct);
-            return Results.Ok(ToDto(result));
-        } catch (System.IO.FileNotFoundException) {
-            // Framework message embeds the full server-side path; return a fixed, helpful string instead of
-            // leaking it (the solver's own validation messages below are intentionally user-facing and kept).
-            return Results.Problem("Plate-solver executable not found — check the solver path (e.g. ASTAPLocation) in the profile.",
-                statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
-            // Every user-fixable setup problem now throws this (no active profile; focal length / pixel size
-            // unconfigured; ASTAP path missing/wrong/too-old) — the messages are written to be shown to the
-            // user. Catching the narrow public base (not InvalidOperationException) keeps the 422 scoped to
-            // known setup errors and avoids mis-mapping unrelated InvalidOperationExceptions. Surface as 422.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        }
+        // The user-driven solve: the one entry point that may learn the optics (#1136). A setup problem
+        // (optics, solver) leaves PlateSolveService as a Refusal and RefusalHandler answers it (ADR 0022).
+        var result = await solver.SolveImageAndLearnOptics(image, approx, progress: null, ct);
+        return Results.Ok(ToDto(result));
     }
 
     /// <summary>Resolve the approximate sky position to seed a near-solve: an explicit, in-range body hint (both

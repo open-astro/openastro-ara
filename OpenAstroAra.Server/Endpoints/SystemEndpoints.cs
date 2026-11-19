@@ -394,6 +394,13 @@ public static class SystemEndpoints {
                 // #1765 — recorded before the wipe starts, so a copy marker that names this drive
                 // stops vouching for frames even if the format fails partway. Not recorded: no erase.
                 if (request.Format) {
+                    // Before the erase log: a refused erase leaves no entry and never reaches the helper.
+                    if (await svc.RefuseEraseOnOsDiskAsync(request.Uuid, ct).ConfigureAwait(false) is { } refusal) {
+                        return Results.Problem(
+                            title: refusal.Code,
+                            detail: refusal.Detail ?? refusal.Code,
+                            statusCode: StatusCodes.Status422UnprocessableEntity);
+                    }
                     try {
                         erased.Record(request.Uuid, DateTime.UtcNow);
                     } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {

@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +28,7 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>The polar-align coarse stage's frame source: one main-camera snapshot, solved with the
 /// main optics, returned as an apparent-of-date pointing. Failure to solve is <c>Success=false</c>;
-/// a busy camera throws <see cref="CameraBusyException"/>, unset optics
+/// a busy camera throws a <see cref="RefusalException"/> (<c>camera-busy</c>), unset optics
 /// <see cref="PlateSolverConfigurationException"/>.</summary>
 public interface IPolarAlignMainCameraSolver {
     /// <param name="blindFailover">Walk the staged search (wider radii, then the blind solver) when the near
@@ -49,6 +50,9 @@ public interface IPolarAlignMainCameraSolver {
 /// Verify Position and the polar-align coarse stage: both only LOOK — one attempt, no sync, no slew.
 /// </summary>
 public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
+    /// <summary>The camera-busy sentence. Polar align's coarse stage shows the exception's message, so it stays.</summary>
+    public const string CameraBusyMessage = "The camera is busy with an exposure — try Verify Position again once it has read out.";
+
     private readonly IProfileService _profileService;
     private readonly IProfileStore? _profileStore;
     private readonly IPlateSolverFactory _plateSolverFactory;
@@ -84,7 +88,7 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         }
         var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
             _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
-        if (!(focalLength > 0) || !(pixelSize > 0)) {
+        if (PlateSolveService.MissingOptics(focalLength, pixelSize).Length > 0) {
             return $"Cannot polar-align: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.";
         }
         if (_camera is null) {
@@ -99,6 +103,21 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         return _camera.IsFreeToCapture(this)
             ? null
             : "the main camera is busy (a live view or a sequence holds it) — stop it, or start polar alignment at the fine stage";
+    }
+
+    /// <summary>False when no profile is loaded (unreachable in the daemon; a fault, never a refusal).</summary>
+    public bool HasActiveProfile => _profileService.ActiveProfile is not null;
+
+    /// <summary>The optics the capture's solve geometry still lacks (see <see cref="PlateSolveService.MissingOptics"/>);
+    /// empty when both are set, and on no active profile (that fault is not a refusal).</summary>
+    public string[] MissingOptics() {
+        LegacyProfileBridge.SyncPlateSolve(_profileService, _profileStore);
+        if (_profileService.ActiveProfile is not { } profile) {
+            return [];
+        }
+        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
+            _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
+        return PlateSolveService.MissingOptics(focalLength, pixelSize);
     }
 
     /// <summary>The mount's reported pointing, or null when it is not connected.</summary>
@@ -123,7 +142,7 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         var settings = profile.PlateSolveSettings;
         var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
             _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
-        if (!(focalLength > 0) || !(pixelSize > 0)) {
+        if (PlateSolveService.MissingOptics(focalLength, pixelSize).Length > 0) {
             throw new PlateSolverConfigurationException(
                 $"{purpose}: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
         }
@@ -131,7 +150,7 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         // Fail fast while another exposure holds the camera: the capture path would otherwise wait
         // on the gate for up to 20 minutes, long past any client's timeout (review of #1346).
         if (_camera is not null && !_camera.IsFreeToCapture(this)) {
-            throw new CameraBusyException();
+            throw new RefusalException(RefusalCatalog.CameraBusy, CameraBusyMessage);
         }
 
         var captureSolver = _plateSolverFactory.GetCaptureSolver(

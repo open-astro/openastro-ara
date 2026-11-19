@@ -1,0 +1,1761 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenAstro Ara sequence v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "name",
+    "targets",
+    "root"
+  ],
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "name": {
+      "type": "string"
+    },
+    "root": {
+      "type": "object"
+    },
+    "schemaVersion": {
+      "type": "string"
+    },
+    "targets": {
+      "type": "array"
+    }
+  },
+  "$defs": {
+    "target-element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "coordinates"
+      ],
+      "properties": {
+        "coordinates": {
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "positionAngle": {
+          "type": "number"
+        }
+      }
+    },
+    "root": {
+      "type": "object",
+      "x-ara-engine-class": "SequenceRootContainer",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "root"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "conditions": {
+          "type": "array"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "expanded": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "triggers": {
+          "type": "array"
+        }
+      }
+    },
+    "sequential": {
+      "type": "object",
+      "x-ara-engine-class": "SequentialContainer",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "sequential"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "conditions": {
+          "type": "array"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "expanded": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "triggers": {
+          "type": "array"
+        }
+      }
+    },
+    "parallel": {
+      "type": "object",
+      "x-ara-engine-class": "ParallelContainer",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "parallel"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "conditions": {
+          "type": "array"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "expanded": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "triggers": {
+          "type": "array"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "x-ara-engine-class": "DeepSkyObjectContainer",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "targetId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "target"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "conditions": {
+          "type": "array"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "expanded": {
+          "type": "boolean"
+        },
+        "exposureInfoList": {
+          "type": "array"
+        },
+        "exposureInfoListExpanded": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "triggers": {
+          "type": "array"
+        }
+      }
+    },
+    "smart-exposure": {
+      "type": "object",
+      "x-ara-engine-class": "SmartExposure",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "smart-exposure"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "conditions": {
+          "type": "array"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "expanded": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "triggers": {
+          "type": "array"
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "x-ara-engine-class": "Annotation",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "annotation"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "wait-for-user": {
+      "type": "object",
+      "x-ara-engine-class": "WaitForUser",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wait-for-user"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "wait-for-duration": {
+      "type": "object",
+      "x-ara-engine-class": "WaitForTimeSpan",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wait-for-duration"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "time": {
+          "type": "number"
+        }
+      }
+    },
+    "wait-for-time": {
+      "type": "object",
+      "x-ara-engine-class": "WaitForTime",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wait-for-time"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "hours": {
+          "type": "integer"
+        },
+        "minutes": {
+          "type": "integer"
+        },
+        "minutesOffset": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "wait-for-sun-altitude": {
+      "type": "object",
+      "x-ara-engine-class": "WaitForSunAltitude",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wait-for-sun-altitude"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "data": {
+          "type": "object"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "wait-until-safe": {
+      "type": "object",
+      "x-ara-engine-class": "WaitUntilSafe",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wait-until-safe"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "set-tracking": {
+      "type": "object",
+      "x-ara-engine-class": "SetTracking",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-tracking"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "trackingMode": {
+          "type": "string"
+        }
+      }
+    },
+    "unpark-mount": {
+      "type": "object",
+      "x-ara-engine-class": "UnparkScope",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "unpark-mount"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "park-mount": {
+      "type": "object",
+      "x-ara-engine-class": "ParkScope",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "park-mount"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "find-home-mount": {
+      "type": "object",
+      "x-ara-engine-class": "FindHome",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "find-home-mount"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "slew-radec": {
+      "type": "object",
+      "x-ara-engine-class": "SlewScopeToRaDec",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "slew-radec"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "center": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "coordinates": {
+          "type": "object"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "inherited": {
+          "type": "boolean"
+        }
+      }
+    },
+    "slew-altaz": {
+      "type": "object",
+      "x-ara-engine-class": "SlewScopeToAltAz",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "slew-altaz"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "coordinates": {
+          "type": "object"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "move-focuser-absolute": {
+      "type": "object",
+      "x-ara-engine-class": "MoveFocuserAbsolute",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "move-focuser-absolute"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer"
+        }
+      }
+    },
+    "move-focuser-relative": {
+      "type": "object",
+      "x-ara-engine-class": "MoveFocuserRelative",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "move-focuser-relative"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "relativePosition": {
+          "type": "integer"
+        }
+      }
+    },
+    "move-focuser-by-temperature": {
+      "type": "object",
+      "x-ara-engine-class": "MoveFocuserByTemperature",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "move-focuser-by-temperature"
+        },
+        "absolute": {
+          "type": "boolean"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "intercept": {
+          "type": "number"
+        },
+        "slope": {
+          "type": "number"
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "x-ara-engine-class": "TakeExposure",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "capture"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "binning": {
+          "type": "object"
+        },
+        "calibrationNight": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "calibrationTarget": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "exposureCount": {
+          "type": "integer"
+        },
+        "exposureTime": {
+          "type": "number"
+        },
+        "gain": {
+          "type": "integer"
+        },
+        "imageType": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer"
+        }
+      }
+    },
+    "cool-camera": {
+      "type": "object",
+      "x-ara-engine-class": "CoolCamera",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "cool-camera"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "waitForTemperature": {
+          "type": "boolean"
+        }
+      }
+    },
+    "warm-camera": {
+      "type": "object",
+      "x-ara-engine-class": "WarmCamera",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "warm-camera"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "set-usb-limit": {
+      "type": "object",
+      "x-ara-engine-class": "SetUSBLimit",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-usb-limit"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "usbLimit": {
+          "type": "integer"
+        }
+      }
+    },
+    "set-readout-mode": {
+      "type": "object",
+      "x-ara-engine-class": "SetReadoutMode",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-readout-mode"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "integer"
+        }
+      }
+    },
+    "dew-heater": {
+      "type": "object",
+      "x-ara-engine-class": "DewHeater",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "dew-heater"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "onOff": {
+          "type": "boolean"
+        }
+      }
+    },
+    "start-guiding": {
+      "type": "object",
+      "x-ara-engine-class": "StartGuiding",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "start-guiding"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "calibrateEachNight": {
+          "type": "boolean"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "forceCalibration": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stop-guiding": {
+      "type": "object",
+      "x-ara-engine-class": "StopGuiding",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "stop-guiding"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "dither": {
+      "type": "object",
+      "x-ara-engine-class": "Dither",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "dither"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "move-rotator-mechanical": {
+      "type": "object",
+      "x-ara-engine-class": "MoveRotatorMechanical",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "move-rotator-mechanical"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "mechanicalPosition": {
+          "type": "number"
+        }
+      }
+    },
+    "set-switch-value": {
+      "type": "object",
+      "x-ara-engine-class": "SetSwitchValue",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-switch-value"
+        },
+        "alpacaDeviceNumber": {
+          "type": "integer"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "switchIndex": {
+          "type": "integer"
+        },
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+    "open-dome-shutter": {
+      "type": "object",
+      "x-ara-engine-class": "OpenDomeShutter",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "open-dome-shutter"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "close-dome-shutter": {
+      "type": "object",
+      "x-ara-engine-class": "CloseDomeShutter",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "close-dome-shutter"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "park-dome": {
+      "type": "object",
+      "x-ara-engine-class": "ParkDome",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "park-dome"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "find-home-dome": {
+      "type": "object",
+      "x-ara-engine-class": "FindHomeDome",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "find-home-dome"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "slew-dome-azimuth": {
+      "type": "object",
+      "x-ara-engine-class": "SlewDomeAzimuth",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "slew-dome-azimuth"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "azimuthDegrees": {
+          "type": "number"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "enable-dome-sync": {
+      "type": "object",
+      "x-ara-engine-class": "EnableDomeSynchronization",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "enable-dome-sync"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "disable-dome-sync": {
+      "type": "object",
+      "x-ara-engine-class": "DisableDomeSynchronization",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "disable-dome-sync"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "sync-dome": {
+      "type": "object",
+      "x-ara-engine-class": "SynchronizeDome",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "sync-dome"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "switch-filter": {
+      "type": "object",
+      "x-ara-engine-class": "SwitchFilter",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "switch-filter"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "filter": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "run-autofocus": {
+      "type": "object",
+      "x-ara-engine-class": "RunAutofocus",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "run-autofocus"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "center-and-rotate": {
+      "type": "object",
+      "x-ara-engine-class": "CenterAndRotate",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "center-and-rotate"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "coordinates": {
+          "type": "object"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "inherited": {
+          "type": "boolean"
+        },
+        "positionAngle": {
+          "type": "number"
+        }
+      }
+    },
+    "tracking-probe": {
+      "type": "object",
+      "x-ara-engine-class": "TrackingProbe",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "tracking-probe"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "ceilingSeconds": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "eccentricityTolerance": {
+          "type": "number"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "maxExposure": {
+          "type": "number"
+        },
+        "priorSeconds": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rungs": {
+          "type": "array"
+        }
+      }
+    },
+    "flat-panel-flats": {
+      "type": "object",
+      "x-ara-engine-class": "FlatPanelFlats",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "flat-panel-flats"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "brightness": {
+          "type": "integer"
+        },
+        "calibrationNight": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "calibrationTarget": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "frameCount": {
+          "type": "integer"
+        },
+        "gain": {
+          "type": "integer"
+        },
+        "maxExposureSec": {
+          "type": "number"
+        },
+        "minExposureSec": {
+          "type": "number"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "targetAdu": {
+          "type": "number"
+        },
+        "targetAduTolerancePct": {
+          "type": "number"
+        },
+        "targetPercent": {
+          "type": "number"
+        }
+      }
+    },
+    "sky-flats": {
+      "type": "object",
+      "x-ara-engine-class": "SkyFlats",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "sky-flats"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "calibrationNight": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "calibrationTarget": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "frameCount": {
+          "type": "integer"
+        },
+        "gain": {
+          "type": "integer"
+        },
+        "maxExposureSec": {
+          "type": "number"
+        },
+        "minExposureSec": {
+          "type": "number"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "stopAtMaxAdu": {
+          "type": "number"
+        },
+        "stopAtMinAdu": {
+          "type": "number"
+        },
+        "targetAdu": {
+          "type": "number"
+        },
+        "targetAduTolerancePct": {
+          "type": "number"
+        }
+      }
+    },
+    "open-flat-panel-cover": {
+      "type": "object",
+      "x-ara-engine-class": "OpenFlatPanelCover",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "open-flat-panel-cover"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "close-flat-panel-cover": {
+      "type": "object",
+      "x-ara-engine-class": "CloseFlatPanelCover",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "close-flat-panel-cover"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "connect-all-equipment": {
+      "type": "object",
+      "x-ara-engine-class": "ConnectAllEquipment",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "connect-all-equipment"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "connect-equipment": {
+      "type": "object",
+      "x-ara-engine-class": "ConnectEquipment",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "connect-equipment"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "selectedDevice": {
+          "type": "string"
+        }
+      }
+    },
+    "disconnect-all-equipment": {
+      "type": "object",
+      "x-ara-engine-class": "DisconnectAllEquipment",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "disconnect-all-equipment"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        }
+      }
+    },
+    "disconnect-equipment": {
+      "type": "object",
+      "x-ara-engine-class": "DisconnectEquipment",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "disconnect-equipment"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "selectedDevice": {
+          "type": "string"
+        }
+      }
+    },
+    "switch-profile": {
+      "type": "object",
+      "x-ara-engine-class": "SwitchProfile",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "switch-profile"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "errorBehavior": {
+          "type": "string"
+        },
+        "reconnect": {
+          "type": "boolean"
+        },
+        "selectedProfileId": {
+          "type": "string"
+        }
+      }
+    },
+    "loop-iterations": {
+      "type": "object",
+      "x-ara-engine-class": "LoopCondition",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loop-iterations"
+        },
+        "completedIterations": {
+          "type": "integer"
+        },
+        "iterations": {
+          "type": "integer"
+        }
+      }
+    },
+    "loop-for-duration": {
+      "type": "object",
+      "x-ara-engine-class": "TimeSpanCondition",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loop-for-duration"
+        },
+        "hours": {
+          "type": "integer"
+        },
+        "minutes": {
+          "type": "integer"
+        },
+        "seconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "loop-while-above-horizon": {
+      "type": "object",
+      "x-ara-engine-class": "AboveHorizonCondition",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loop-while-above-horizon"
+        },
+        "data": {
+          "type": "object"
+        },
+        "hasDsoParent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "loop-while-altitude": {
+      "type": "object",
+      "x-ara-engine-class": "AltitudeCondition",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loop-while-altitude"
+        },
+        "data": {
+          "type": "object"
+        },
+        "hasDsoParent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "loop-until-time": {
+      "type": "object",
+      "x-ara-engine-class": "TimeCondition",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loop-until-time"
+        },
+        "hours": {
+          "type": "integer"
+        },
+        "minutes": {
+          "type": "integer"
+        },
+        "minutesOffset": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "meridian-flip": {
+      "type": "object",
+      "x-ara-engine-class": "MeridianFlipTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "meridian-flip"
+        },
+        "recalibrateGuider": {
+          "type": "boolean"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "dither-after-exposures": {
+      "type": "object",
+      "x-ara-engine-class": "DitherAfterExposures",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "dither-after-exposures"
+        },
+        "afterExposures": {
+          "type": "integer"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "autofocus-after-exposures": {
+      "type": "object",
+      "x-ara-engine-class": "AutofocusAfterExposures",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "autofocus-after-exposures"
+        },
+        "afterExposures": {
+          "type": "integer"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "unguided-exposure-guard": {
+      "type": "object",
+      "x-ara-engine-class": "UnguidedExposureGuard",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "unguided-exposure-guard"
+        },
+        "eccentricityTolerance": {
+          "type": "number"
+        },
+        "goodEccentricity": {
+          "type": "number"
+        },
+        "maxExposure": {
+          "type": "number"
+        },
+        "run": {
+          "type": "array"
+        },
+        "rungs": {
+          "type": "array"
+        },
+        "stepDownAfter": {
+          "type": "integer"
+        },
+        "stepUpAfter": {
+          "type": "integer"
+        }
+      }
+    },
+    "center-after-drift": {
+      "type": "object",
+      "x-ara-engine-class": "CenterAfterDriftTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "center-after-drift"
+        },
+        "afterExposures": {
+          "type": "integer"
+        },
+        "coordinates": {
+          "type": "object"
+        },
+        "distanceArcMinutes": {
+          "type": "number"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "autofocus-after-time": {
+      "type": "object",
+      "x-ara-engine-class": "AutofocusAfterTimeTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "autofocus-after-time"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "autofocus-after-temperature-change": {
+      "type": "object",
+      "x-ara-engine-class": "AutofocusAfterTemperatureChangeTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "autofocus-after-temperature-change"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "autofocus-after-hfr-increase": {
+      "type": "object",
+      "x-ara-engine-class": "AutofocusAfterHFRIncreaseTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "autofocus-after-hfr-increase"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "run": {
+          "type": "array"
+        },
+        "sampleSize": {
+          "type": "integer"
+        }
+      }
+    },
+    "autofocus-after-filter-change": {
+      "type": "object",
+      "x-ara-engine-class": "AutofocusAfterFilterChange",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "autofocus-after-filter-change"
+        },
+        "run": {
+          "type": "array"
+        }
+      }
+    },
+    "reconnect": {
+      "type": "object",
+      "x-ara-engine-class": "ReconnectTrigger",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "reconnect"
+        },
+        "run": {
+          "type": "array"
+        },
+        "selectedDevice": {
+          "type": "string"
+        }
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "role",
+        "originalType",
+        "originalPayload",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "const": "unknown"
+        },
+        "name": {
+          "type": "string"
+        },
+        "originalPayload": {
+          "type": "object"
+        },
+        "originalType": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "glover-exposure": {
+      "type": "object",
+      "x-ara-engine-class": null,
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "glover-exposure"
+        },
+        "attempts": {},
+        "binning": {},
+        "errorBehavior": {},
+        "frameCount": {},
+        "gain": {},
+        "imageType": {},
+        "maxSubSeconds": {},
+        "measureFrames": {},
+        "minSubSeconds": {},
+        "offset": {},
+        "startSubSeconds": {},
+        "swampFactor": {}
+      }
+    }
+  }
+}

@@ -7,12 +7,16 @@ import '../../../models/dome_settings.dart';
 import '../../../models/dome_status.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../state/equipment/dome_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/settings/dome_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../theme/ara_metrics.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -25,8 +29,6 @@ class EquipmentDomePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(domeProvider);
     final notifier = ref.read(domeProvider.notifier);
 
@@ -46,11 +48,8 @@ class EquipmentDomePanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _DomeBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.dome),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.dome, v),
+        AutoConnectRow(
+          EquipmentDeviceType.dome,
           hint: 'Off by default — dome connect actuates shutter',
         ),
         SettingsSectionHeader(context.l10n.domePanelFollowingHeader),
@@ -67,11 +66,25 @@ class EquipmentDomePanel extends ConsumerWidget {
 class _DomeFollowSection extends ConsumerWidget {
   const _DomeFollowSection();
 
+  // The dome loads itself; this is Retry and the conflict banner's Reload.
+  VoidCallback _reload(WidgetRef ref) => () {
+    final api = ref.read(profileApiProvider);
+    if (api != null) ref.read(domeSettingsProvider.notifier).load(api);
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final settings = ref.watch(domeSettingsProvider).value;
-    if (settings == null) return Text(l10n.domePanelReadingSettings);
+    final section = ref.watch(domeSettingsProvider);
+    final settings = section.value;
+    if (settings == null) {
+      return SectionNotLoaded(
+        section: section,
+        onRetry: _reload(ref),
+        // A row of the list: start where the rows start.
+        padding: const EdgeInsets.symmetric(vertical: AraSpace.s12),
+      );
+    }
     final dome = ref.watch(domeProvider).value;
     final canTurn = dome?.capabilities?.canSetAzimuth ?? false;
     // The dome status, not the saved settings: parking, a turn of the dial or
@@ -81,7 +94,7 @@ class _DomeFollowSection extends ConsumerWidget {
     Future<void> save(DomeSettings next) async {
       final messenger = ScaffoldMessenger.of(context);
       try {
-        await ref.read(domeSettingsProvider.notifier).save(next);
+        await ref.read(domeSettingsProvider.notifier).apply(next);
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(
@@ -129,6 +142,7 @@ class _DomeFollowSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (section.conflict) SectionConflictBanner(onReload: _reload(ref)),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(

@@ -153,16 +153,19 @@ String _albumKey(String s) => designationKey(
   ),
 );
 
-/// Hours of lights, any filter, that make a Card silver and gold.
+/// Hours of lights, any filter, that make a Card bronze, silver and gold.
+/// Bronze needs 15 min so a stray frame collects nothing (user, 2026-11-18).
+const double albumBronzeHours = 0.25;
 const double albumSilverHours = 1;
 const double albumGoldHours = 5;
 
-/// None below one light; bronze at one, silver at 1 h, gold at 5 h, any filter.
+/// None below 15 min; bronze at 15 min, silver at 1 h, gold at 5 h, any filter.
 AlbumTier? tierFor({required int lights, required double hours}) {
   if (lights < 1) return null;
   if (hours >= albumGoldHours) return AlbumTier.gold;
   if (hours >= albumSilverHours) return AlbumTier.silver;
-  return AlbumTier.bronze;
+  if (hours >= albumBronzeHours) return AlbumTier.bronze;
+  return null;
 }
 
 /// One observing Night of a Card: its lights, the most common exposure
