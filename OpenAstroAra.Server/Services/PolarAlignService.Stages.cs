@@ -629,8 +629,12 @@ namespace OpenAstroAra.Server.Services {
                     if (checkDirection && !reversed && p <= -0.5) {
                         reversed = true;
                         direction = -direction;
-                        if (axis == TelescopeAxes.Primary && IsCurrent(gen)) { // never a superseded run's lesson
-                            _raMotorSign = -_raMotorSign;
+                        if (axis == TelescopeAxes.Primary) {
+                            lock (_gate) {
+                                if (_generation == gen) { // never a superseded run's lesson, checked and written as one
+                                    _raMotorSign = -_raMotorSign;
+                                }
+                            }
                         }
                         var reversedRate = Rate();
                         LogAxisMoveReversed(axis, reversedRate);

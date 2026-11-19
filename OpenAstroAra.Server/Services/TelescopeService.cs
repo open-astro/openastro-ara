@@ -648,7 +648,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
     private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
-        Interlocked.Increment(ref _abortEpoch); // before the lease goes: a routine's renewal must see the abort first
+        // Before the lease goes: a routine's renewal must see the abort first. A renewal landing between the two only
+        // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe.
+        Interlocked.Increment(ref _abortEpoch);
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount

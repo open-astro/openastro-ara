@@ -656,7 +656,9 @@ namespace OpenAstroAra.Server.Services {
                 _trackingTouched = false;
             }
             var alignerRun = BeginAlignerRun(site.LatitudeDeg);
-            _raMotorSign = 1.0; // a new run learns the RA motor's sign afresh
+            lock (_gate) {
+                _raMotorSign = 1.0; // a new run learns the RA motor's sign afresh
+            }
             try {
                 Directory.CreateDirectory(workDir);
 
