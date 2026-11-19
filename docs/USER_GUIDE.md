@@ -225,6 +225,8 @@ framing/focus loop when you need to point or focus by eye.
   started"). A run that would take RA more than 30° from it is refused: slew the mount back near the
   pole, counterweights down, and start again. When you move the mount some other way (a slew, the hand
   pad, by hand) or reconnect it, the confirm step says the pose is a new start, and it becomes the start.
+  Tracking does not count as moving it: after a long time tracking (guiding, say) RA may have turned
+  far enough that the next run is refused until you slew back.
   In Simple Mode's Preflight, the polar step no longer starts on its own: start it from the shutter.
 - **Polar Align in three steps.** *Rough*: from where you pointed it (when the tube looks right at the
   pole, the Dec motor first tilts it 5° off the axis), the RA motor makes two 10° turns, never a GoTo,
