@@ -86,6 +86,20 @@ void main() {
     expect(rig.started.single.newOrigin, isFalse, reason: 'the start says the user confirmed a continued start');
   });
 
+  testWidgets('within 2° of the origin, turns that go away from it are not called a turn back (#2089)', (tester) async {
+    // The rig turns the origin's first way within its 2° band: here 1.5° west of the origin, turning west again.
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.west,
+      newOrigin: false,
+      originOffsetDeg: -1.5,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine);
+    expect(find.text('RA will turn about 10° twice toward the west (20° in all).'), findsOneWidget);
+    expect(find.textContaining('go back toward it'), findsNothing);
+    expect(find.textContaining("new start"), findsNothing);
+  });
+
   testWidgets("a new start says the pose becomes Polar Align's start, and the limit (#2089)", (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east, sweepLimitDeg: 30));
     await _open(tester, rig);

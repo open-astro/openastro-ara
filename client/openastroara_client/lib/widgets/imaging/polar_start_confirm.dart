@@ -46,6 +46,12 @@ class PolarStartConfirmDialog extends StatelessWidget {
     final offsetDirection = plan.originOffsetDeg < 0
         ? l10n.polarDirectionWest
         : l10n.polarDirectionEast;
+    // #2089 — "these turns go back toward it" only when they do: within 2° of
+    // the origin the rig turns the origin's first way, which can be away.
+    final turnsBack =
+        plan.originOffsetDeg.abs() >= 0.5 &&
+        (plan.direction == PolarAlignDirections.west) ==
+            (plan.originOffsetDeg > 0);
     final lines = [
       l10n.polarConfirmPoint,
       l10n.polarConfirmTurns(
@@ -56,7 +62,7 @@ class PolarStartConfirmDialog extends StatelessWidget {
       // #2089 — where this run stands against the session's first start.
       if (plan.newOrigin)
         l10n.polarConfirmNewOrigin(deg(plan.sweepLimitDeg))
-      else if (plan.originOffsetDeg.abs() >= 0.5)
+      else if (turnsBack)
         l10n.polarConfirmFromOrigin(
           deg(plan.originOffsetDeg.abs()),
           offsetDirection,
