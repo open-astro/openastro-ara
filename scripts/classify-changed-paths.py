@@ -75,9 +75,12 @@ INERT_DIRS = (
 )
 
 # Files under an INERT_DIRS prefix that a .NET test reads: they run the dotnet
-# jobs and are not docs_only. SequenceKindTableTest compares the checked-in
-# v2 schema with the one the daemon generates from its tables (#2025).
-INERT_DIR_BUILD_INPUTS = frozenset({"docs/specs/sequence-v2.schema.json"})
+# jobs and are not docs_only. SequenceV2FieldTableTest compares the checked-in
+# v2 schema with the one the daemon generates from its tables, and the v2
+# tests read the kind and field rows of the spec through SequenceV2Spec (#2025).
+INERT_DIR_BUILD_INPUTS = frozenset(
+    {"docs/specs/sequence-v2.md", "docs/specs/sequence-v2.schema.json"}
+)
 
 # Root-level files that are prose and nothing else. Deliberately short:
 # every other root file falls through to the open `dotnet` default. In

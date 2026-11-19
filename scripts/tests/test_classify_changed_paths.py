@@ -143,12 +143,18 @@ class ClassifyTest(unittest.TestCase):
         self.assertTrue(self.c("packaging/debian/control")["dotnet"])
 
     def test_the_checked_in_v2_schema_runs_the_dotnet_jobs(self):
-        # SequenceKindTableTest reads docs/specs/sequence-v2.schema.json, so a
-        # change to it must not take the docs/ shortcut.
+        # SequenceV2FieldTableTest reads docs/specs/sequence-v2.schema.json, so
+        # a change to it must not take the docs/ shortcut.
         p = "docs/specs/sequence-v2.schema.json"
         self.assertTrue(self.c(p)["dotnet"])
         self.assertFalse(self.c(p)["docs_only"])
-        self.assertTrue(self.c("docs/specs/sequence-v2.md")["docs_only"])
+
+    def test_the_v2_spec_runs_the_dotnet_jobs_and_other_specs_do_not(self):
+        # SequenceV2Spec.Lines() reads docs/specs/sequence-v2.md.
+        p = "docs/specs/sequence-v2.md"
+        self.assertTrue(self.c(p)["dotnet"])
+        self.assertFalse(self.c(p)["docs_only"])
+        self.assertTrue(self.c("docs/specs/sky-album-v1.md")["docs_only"])
 
     # --- the closed bucket -------------------------------------------------
 
