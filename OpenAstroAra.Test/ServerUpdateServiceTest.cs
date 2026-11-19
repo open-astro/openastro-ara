@@ -179,7 +179,7 @@ namespace OpenAstroAra.Test {
             Assert.That(request, Is.EqualTo(Path.Combine(paths.StageDirectory, staged.Id + ".deb") + "\n5555\n5\n"),
                 "staged path, the daemon's port and the drain time, one per line, like the storage request");
             var start = calls.Single(c => c.File == "systemctl");
-            Assert.That(start.Args, Is.EqualTo(new[] { "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
+            Assert.That(start.Args, Is.EqualTo(new[] { "--no-ask-password", "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
                 "--no-block: the helper restarts this process before a blocking start could return");
             var evt = published.Single();
             Assert.That(evt.Type, Is.EqualTo(WsEventCatalog.ServerRestartImminent.Token));
