@@ -314,6 +314,46 @@ void main() {
     expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
   });
 
+  testWidgets('a copy changed on the rig: the choice stays with Reload, and '
+      'Reload shows the rig\'s fan', (tester) async {
+    final rig = FakeSectionRig({'cooling-fan': rigDefaults['cooling-fan']});
+    final c = ProviderContainer(
+      overrides: [
+        profileApiProvider.overrideWithValue(rig.api()),
+        switchListProvider.overrideWith(() => _Switches([_box()])),
+        simpleModeActiveProvider.overrideWithValue(true),
+      ],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: ProfileCoolingFanPicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Another device chose Fan 1; its profile.updated hasn't reached us.
+    rig.daemonWrote('cooling-fan', {'device_id': 'box', 'port_id': 0});
+    await _open(tester);
+    await tester.tap(find.text('Pegasus Powerbox › Dew B').last);
+    await tester.pumpAndSettle();
+    CoolingFan? shown() => tester
+        .widget<DropdownButton<CoolingFan>>(
+          find.byKey(const Key('cooling-fan-picker')),
+        )
+        .value;
+    expect(shown(), const CoolingFan(deviceId: 'box', portId: 1));
+    expect(find.textContaining('changed on another device'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('section-reload')));
+    await tester.pumpAndSettle();
+    expect(shown(), const CoolingFan(deviceId: 'box', portId: 0));
+    expect(find.byKey(const Key('section-reload')), findsNothing);
+  });
+
   test('a saved choice takes the daemon echo', () async {
     final api = _Api();
     final c = ProviderContainer(

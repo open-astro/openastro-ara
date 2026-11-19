@@ -7,8 +7,9 @@ import '../profile_management_state.dart';
 import 'loaded_section.dart';
 
 /// #1689 — the profile's dome geometry and follow-the-mount setting. A value
-/// only once the rig has answered (ADR 0015); [apply] keeps the old value
-/// until the rig has taken the new one (it refuses a scope outside the dome).
+/// only once the rig has answered (ADR 0015). [apply] shows the new geometry
+/// while it saves; a failed save (such as a scope outside the dome) puts the
+/// rig's copy back, except a 412: the edit stays until Reload.
 class DomeSettingsNotifier extends SelfLoadingSection<DomeSettings> {
   @override
   LoadedSection<DomeSettings> build() {

@@ -86,7 +86,9 @@ class CoolingFanPicker extends ConsumerWidget {
 }
 
 /// The picker on the active profile's fan: Simple Mode's Camera window and the
-/// full UI's camera panel. Until the daemon's answer is in: the not-loaded notice.
+/// full UI's camera panel. Until the daemon's answer is in: the not-loaded
+/// notice. A copy changed on the rig (412) keeps the choice and shows the
+/// conflict banner, whose Reload loads the rig's copy.
 class ProfileCoolingFanPicker extends ConsumerWidget {
   const ProfileCoolingFanPicker({
     super.key,
@@ -99,20 +101,31 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final section = ref.watch(coolingFanProvider);
     final fan = section.value;
+    // Retry and the conflict banner's Reload.
+    void reload() {
+      final api = ref.read(profileApiProvider);
+      if (api != null) ref.read(coolingFanProvider.notifier).load(api);
+    }
+
     if (fan == null) {
       return SectionNotLoaded(
         section: section,
         padding: EdgeInsets.zero,
-        onRetry: () {
-          final api = ref.read(profileApiProvider);
-          if (api != null) ref.read(coolingFanProvider.notifier).load(api);
-        },
+        onRetry: reload,
       );
     }
-    return CoolingFanPicker(
+    final picker = CoolingFanPicker(
       value: fan,
       style: style,
       onChanged: (v) => _choose(context, ref, v),
+    );
+    if (!section.conflict) return picker;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionConflictBanner(onReload: reload),
+        picker,
+      ],
     );
   }
 

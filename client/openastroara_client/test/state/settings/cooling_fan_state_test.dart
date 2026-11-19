@@ -64,6 +64,7 @@ void main() {
     );
     expect(rig.puts, isEmpty);
     expect(c.read(coolingFanProvider).conflict, isTrue);
+    expect(c.read(coolingFanProvider).value, _fan); // kept for Reload
   });
 
   test('Cooling fan: no rig, nothing is loaded and choose throws', () async {

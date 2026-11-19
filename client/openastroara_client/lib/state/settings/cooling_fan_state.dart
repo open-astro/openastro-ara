@@ -11,7 +11,8 @@ import 'loaded_section.dart';
 
 /// #1700 — the profile's designated cooling fan. A value only once the rig
 /// has answered (ADR 0015), so "none" is never read off a load still in
-/// flight, and [choose] keeps the old value until the rig has the new one.
+/// flight. [choose] shows the new fan while it saves; a failed save puts the
+/// rig's copy back, except a 412: the choice stays until Reload.
 class CoolingFanNotifier extends SelfLoadingSection<CoolingFan> {
   /// Throws when the rig didn't take it, for the caller to say so: a fan the
   /// user thinks is set must really be.
