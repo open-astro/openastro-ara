@@ -115,6 +115,33 @@ void main() {
     expect(picks, isEmpty);
   });
 
+  testWidgets('a value changed elsewhere while the wheel is open is not '
+      'overwritten by folding it unspun', (tester) async {
+    final picks = await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.iOS),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SimplePresetTile<int>(
+            key: const Key('tile'),
+            label: 'Frames',
+            value: 20,
+            options: const [5, 10, 20],
+            format: (n) => '× $n',
+            onSelected: picks.add,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect(picks, isEmpty);
+  });
+
   testWidgets('the wheel has no Done button', (tester) async {
     await _pump(tester);
     await tester.tap(_tileHead);
