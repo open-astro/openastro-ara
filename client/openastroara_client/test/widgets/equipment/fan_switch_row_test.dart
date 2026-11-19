@@ -132,7 +132,9 @@ void main() {
     expect(find.text('Cooling fan'), findsNothing);
   });
 
-  testWidgets('a fan designation not loaded shows no fan switch', (tester) async {
+  testWidgets('a fan designation not loaded shows no fan switch', (
+    tester,
+  ) async {
     await _pump(tester, switches: [_fanDevice(value: 1.0)], fan: null);
     expect(find.byType(Switch), findsNothing);
     expect(find.text('Cooling fan'), findsNothing);

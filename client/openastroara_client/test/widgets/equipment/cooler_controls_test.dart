@@ -149,33 +149,39 @@ CameraStatus _status({
       coolerSetpointC: coolerSetpointC,
     );
 
-Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
-    {bool compact = false,
-    _FakeSwitchClient? switchClient,
-    bool switchListFails = false,
-    bool fanLoaded = true}) async {
+Future<_FakeCameraApi> _pump(
+  WidgetTester tester,
+  CameraStatus status, {
+  bool compact = false,
+  _FakeSwitchClient? switchClient,
+  bool switchListFails = false,
+  bool fanLoaded = true,
+}) async {
   final api = _FakeCameraApi(status);
   final sw = switchClient ?? _FakeSwitchClient(const []);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      serverLinkUpProvider.overrideWith((ref) => true),
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
-      switchApiProvider.overrideWithValue(sw),
-      coolingFanProvider.overrideWith(() => _FixedFan(loaded: fanLoaded)),
-      switchListProvider.overrideWith(() => switchListFails
-          ? _FailingSwitchListNotifier()
-          : _FixedSwitchListNotifier(sw)),
-    ],
-    child: MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CoolerControls(compact: compact),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
+        switchApiProvider.overrideWithValue(sw),
+        coolingFanProvider.overrideWith(() => _FixedFan(loaded: fanLoaded)),
+        switchListProvider.overrideWith(
+          () => switchListFails
+              ? _FailingSwitchListNotifier()
+              : _FixedSwitchListNotifier(sw),
+        ),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(child: CoolerControls(compact: compact)),
         ),
       ),
     ),
-  ));
+  );
   // The fan row that loads the designation isn't in this harness.
   ProviderScope.containerOf(tester.element(find.byType(CoolerControls)))
       .listen(coolingFanProvider, (_, _) {});
@@ -261,13 +267,19 @@ void main() {
   testWidgets('a fan designation not loaded: the cooler command still goes, '
       'and the switch list is not re-read', (tester) async {
     final sw = _FakeSwitchClient([_fanDevice(value: 0.0)]);
-    final api = await _pump(tester, _status(coolerOn: false),
-        switchClient: sw, fanLoaded: false);
+    final api = await _pump(
+      tester,
+      _status(coolerOn: false),
+      switchClient: sw,
+      fanLoaded: false,
+    );
     final readsBefore = sw.calls.where((c) => c == 'getAll').length;
     await tester.tap(find.byType(Switch).first); // cooler switch
     await tester.pumpAndSettle();
-    expect(api.calls,
-        contains('command:cooler:enabled=true:target=null:fan=null'));
+    expect(
+      api.calls,
+      contains('command:cooler:enabled=true:target=null:fan=null'),
+    );
     expect(sw.calls.where((c) => c == 'getAll').length, readsBefore);
   });
 

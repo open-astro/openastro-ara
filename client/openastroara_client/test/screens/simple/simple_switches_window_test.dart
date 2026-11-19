@@ -91,8 +91,14 @@ SwitchDevice _box({String id = 'box', String name = 'Pegasus Powerbox', List<Swi
           ],
     );
 
-Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> devices,
-    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}, double? width, CoolingFan? fan = CoolingFan.none}) async {
+Future<(ProviderContainer, _Rig)> _pump(
+  WidgetTester tester,
+  List<SwitchDevice> devices, {
+  bool inSettings = false,
+  Map<String, DeviceDriver> drivers = const {},
+  double? width,
+  CoolingFan? fan = CoolingFan.none,
+}) async {
   final rig = _Rig(devices);
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_Servers()),
@@ -340,10 +346,15 @@ void main() {
     expect(_level('Heater', '0 %'), findsOneWidget);
   });
 
-  testWidgets('a fan designation not loaded lists every port, the fan too',
-      (tester) async {
+  testWidgets('a fan designation not loaded lists every port, the fan too', (
+    tester,
+  ) async {
     await _pump(tester, [
-      _box(id: 'ts', name: 'Any Box', ports: [_port(0, 'Fan', 1), _port(1, 'Heater', 0, max: 5)]),
+      _box(
+        id: 'ts',
+        name: 'Any Box',
+        ports: [_port(0, 'Fan', 1), _port(1, 'Heater', 0, max: 5)],
+      ),
     ], fan: null);
     expect(find.text('Any Box · 2 ports'), findsOneWidget);
     expect(find.text('Fan'), findsOneWidget);

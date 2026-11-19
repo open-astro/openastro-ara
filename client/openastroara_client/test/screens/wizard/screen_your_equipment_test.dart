@@ -111,17 +111,28 @@ Future<ProviderContainer> _pump(
   OpticsSettings? baseOptics,
   bool fanLoaded = true,
 }) async {
-  final container = ProviderContainer(overrides: [
-    if (baseOptics != null)
-      profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    coolingFanProvider.overrideWith(fanLoaded ? _NoFan.new : _NotLoadedFan.new),
-    switchListProvider.overrideWith(() => _Switches(switches)),
-    equipmentDiscoveryApiFactoryProvider
-        .overrideWithValue((_) => _FakeDiscoveryApi(byType)),
-    deviceFactsSourceFactoryProvider.overrideWithValue(
-        (_) => _FakeFactsSource(byType, camera: camera, optics: optics, mount: mount)),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      if (baseOptics != null)
+        profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      coolingFanProvider.overrideWith(
+        fanLoaded ? _NoFan.new : _NotLoadedFan.new,
+      ),
+      switchListProvider.overrideWith(() => _Switches(switches)),
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue(
+        (_) => _FakeDiscoveryApi(byType),
+      ),
+      deviceFactsSourceFactoryProvider.overrideWithValue(
+        (_) => _FakeFactsSource(
+          byType,
+          camera: camera,
+          optics: optics,
+          mount: mount,
+        ),
+      ),
+    ],
+  );
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
