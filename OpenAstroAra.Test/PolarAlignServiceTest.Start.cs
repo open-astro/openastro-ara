@@ -17,6 +17,7 @@ using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
@@ -99,6 +100,36 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("idle"));
+        }
+
+        [Test]
+        public async Task A_park_that_lands_after_Start_fails_the_run_as_mount_parked_before_anything_moves() {
+            // StartAsync saw an unparked mount; the park lands while it takes the guide camera. The run must fail as
+            // mount_parked before any turn or tilt, and never unpark the mount.
+            var mount = NewMount();
+            var parked = false;
+            mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, SiderealTime = 20.0, TrackingEnabled = !Volatile.Read(ref parked), AtPark = Volatile.Read(ref parked),
+            });
+            var fake = NewFake();
+            fake.LeaseGate = active => {
+                if (active) {
+                    Volatile.Write(ref parked, true);
+                }
+                return Task.CompletedTask;
+            };
+            var ws = new WsRecorder();
+            using var svc = NewService(fake, new ScriptedSolver(), mount, ws);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_parked"));
+            Assert.That(error.GetProperty("message").GetString(), Is.EqualTo(PolarAlignService.MountParkedMessage));
+            mount.Verify(m => m.UnparkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.Is<double>(rate => rate != 0.0)), Times.Never,
+                "no turn and no tilt: only the exit's MoveAxis 0");
+            NoHomeNoGoTo(mount);
         }
 
         // ── the confirm step ─────────────────────────────────────────────────────────────────
