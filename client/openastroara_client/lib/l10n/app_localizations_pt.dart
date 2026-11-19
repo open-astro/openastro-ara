@@ -13363,7 +13363,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get refusalMountClockNotVerified =>
-      'O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do equipamento: espere um momento e tente de novo, ou sincronize a hora em Configurações.';
+      'O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do setup: espere um momento e tente de novo, ou sincronize a hora em Configurações.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

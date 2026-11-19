@@ -69,7 +69,7 @@ public sealed partial class TelescopeService : IMountClockGate {
     private static readonly TimeSpan HostStepTolerance = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan MountClockReverifyPeriod = TimeSpan.FromSeconds(30);
 
-    internal const string NoTrustedTimeReason = "the rig clock has not been synced from the app or a GPS";
+    internal const string NoTrustedTimeReason = "the rig clock has not been synced from the app, a GPS or NTP";
     private const string SlewingReason = "the mount was still slewing when Ara went to set its clock";
 
     // Null: no time-sync service is wired (unit tests, tools), and the gate is off.

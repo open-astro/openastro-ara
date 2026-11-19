@@ -311,5 +311,78 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True, "the mount's clock can still be set and checked");
             Assert.That(utc, Is.EqualTo(T0.AddHours(9)));
         }
+
+        // ─── #2071: the kernel's NTP sync is a trusted time source too ───
+
+        private sealed class FakeKernelClock : IKernelClockSyncProbe {
+            public bool Synced { get; set; }
+            public bool Throws { get; set; }
+            public bool IsSynchronized() => Throws ? throw new InvalidOperationException("adjtimex failed") : Synced;
+        }
+
+        private static TimeSyncService KernelService(FakeKernelClock kernel, Func<DateTimeOffset> now, Func<long>? tick = null) =>
+            new(NullLogger<TimeSyncService>.Instance, new FakeClockSetter { Succeeds = false }, kernelClock: kernel) {
+                Now = now,
+                TickMs = tick ?? (() => 0),
+            };
+
+        [Test]
+        public void A_kernel_synchronised_clock_is_trusted_without_a_push() {
+            var svc = KernelService(new FakeKernelClock { Synced = true }, () => T0);
+            Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True, "after a daemon restart on a rig with working NTP");
+            Assert.That(utc, Is.EqualTo(T0), "the OS clock itself");
+        }
+
+        [Test]
+        public void An_unsynchronised_kernel_clock_is_never_trusted() {
+            var svc = KernelService(new FakeKernelClock { Synced = false }, () => T0);
+            Assert.That(svc.TryGetTrustedUtc(out _), Is.False);
+        }
+
+        [Test]
+        public void A_kernel_probe_that_throws_is_not_trusted() {
+            var svc = KernelService(new FakeKernelClock { Synced = true, Throws = true }, () => T0);
+            Assert.That(svc.TryGetTrustedUtc(out _), Is.False);
+        }
+
+        [Test]
+        public async Task A_kernel_that_loses_the_sync_falls_back_to_the_client_push() {
+            var kernel = new FakeKernelClock { Synced = true };
+            var wall = T0.AddMinutes(1); // the OS clock NTP keeps, a minute after the client's push
+            long tick = 0;
+            var svc = KernelService(kernel, () => wall, () => tick);
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+            tick = 10_000;
+            Assert.That(svc.TryGetTrustedUtc(out var synced), Is.True);
+            Assert.That(synced, Is.EqualTo(wall), "while the kernel is synchronised its clock is the time");
+
+            kernel.Synced = false;
+            Assert.That(svc.TryGetTrustedUtc(out var pushed), Is.True);
+            Assert.That(pushed, Is.EqualTo(T0.AddSeconds(10)), "the client push, carried forward on the monotonic clock");
+        }
+
+        [TestCase(0, 0x2001, 50_000L, true)] // TIME_OK, PLL + NANO, 50 ms bound: chrony or timesyncd keeping it
+        [TestCase(0, 0x0041, 50_000L, false)] // STA_UNSYNC set (a clock_settime sets it)
+        [TestCase(5, 0x2001, 50_000L, false)] // TIME_ERROR
+        [TestCase(-1, 0x2001, 50_000L, false)] // the call failed
+        [TestCase(0, 0x2001, 16_000_000L, false)] // the bound grew to the kernel's 16 s limit: nothing disciplines it
+        [TestCase(0, 0x2001, 2_000_000L, true)] // at the 2 s limit
+        [TestCase(0, 0x2001, 2_000_001L, false)]
+        public void The_adjtimex_rule_needs_the_sync_flag_clear_and_a_small_error_bound(int state, int status, long maxErrorUs, bool trusted) {
+            Assert.That(LinuxKernelClockSyncProbe.Evaluate(state, status, maxErrorUs), Is.EqualTo(trusted));
+        }
+
+        [Test]
+        public void The_adjtimex_read_matches_the_kernels_struct_layout() {
+            Assume.That(OperatingSystem.IsLinux() && Environment.Is64BitProcess && BitConverter.IsLittleEndian, "64-bit little-endian Linux only");
+            var read = LinuxKernelClockSyncProbe.Read();
+            Assert.That(read, Is.Not.Null);
+            var t = read!.Value;
+            Assert.Multiple(() => {
+                Assert.That(t.State, Is.InRange(0, 5), "a read-only adjtimex needs no privilege");
+                Assert.That(t.Tolerance, Is.EqualTo(500L << 16), "the kernel's fixed 500 ppm (MAXFREQ) at the tolerance offset");
+                Assert.That(t.MaxErrorMicroseconds, Is.InRange(0L, 16_000_000L), "maxerror at its offset, within the kernel's 16 s cap");
+            });
+        }
     }
 }

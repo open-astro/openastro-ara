@@ -93,9 +93,14 @@ namespace OpenAstroAra.Test {
             public readonly CapturingLogger Log = new();
             public int Waits;
 
+            /// <summary>#2071 — whether the kernel reports NTP sync (the probe behind the time-sync service).</summary>
+            public bool KernelSynced;
+
             public Rig(SiteSettingsDto? site = null) {
+                var kernel = new Mock<IKernelClockSyncProbe>();
+                kernel.Setup(k => k.IsSynchronized()).Returns(() => KernelSynced);
                 Time = new TimeSyncService(NullLogger<TimeSyncService>.Instance,
-                    Mock.Of<ISystemClockSetter>(c => c.TrySet(It.IsAny<DateTimeOffset>()) == true)) {
+                    Mock.Of<ISystemClockSetter>(c => c.TrySet(It.IsAny<DateTimeOffset>()) == true), kernelClock: kernel.Object) {
                     Now = () => Wall,
                     TickMs = () => Tick,
                 };
@@ -273,6 +278,51 @@ namespace OpenAstroAra.Test {
             rig.Wall += TimeSpan.FromSeconds(31);
             rig.Svc.WatchMountClock();
             Assert.That(rig.UtcWrites, Is.EqualTo(1), "a recheck of a clock never written writes it");
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+        }
+
+        // ─── the kernel's NTP sync (no client) ───
+
+        [Test]
+        public void After_a_daemon_restart_an_NTP_synced_rig_sets_the_mount_clock_on_connect_without_the_app() {
+            using var rig = new Rig { KernelSynced = true };
+            rig.Svc.OnMountConnected();
+            Assert.That(rig.UtcWrites, Is.EqualTo(1), "the kernel's synchronised clock is trusted time");
+            Assert.That(rig.Mount.Clock, Is.EqualTo(Now.UtcDateTime));
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+        }
+
+        [Test]
+        public void An_unsynchronised_kernel_clock_never_reaches_the_mount() {
+            using var rig = new Rig { KernelSynced = false };
+            rig.Svc.OnMountConnected();
+            Assert.That(rig.UtcWrites, Is.Zero);
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Does.Contain("not been synced"));
+        }
+
+        [Test]
+        public void A_kernel_that_gains_NTP_sync_after_the_connect_sets_the_mount_clock_on_the_recheck() {
+            using var rig = new Rig { KernelSynced = false };
+            rig.Svc.OnMountConnected();
+            rig.KernelSynced = true; // the network came up after boot
+            rig.Tick += 31_000;
+            rig.Wall += TimeSpan.FromSeconds(31);
+            rig.Svc.WatchMountClock();
+            Assert.That(rig.UtcWrites, Is.EqualTo(1));
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+        }
+
+        [Test]
+        public void An_NTP_clock_step_sets_the_mount_clock_again_from_the_stepped_clock() {
+            using var rig = new Rig { KernelSynced = true };
+            rig.Svc.OnMountConnected();
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+
+            rig.Wall += TimeSpan.FromMinutes(1); // NTP steps the OS clock; the monotonic clock does not move
+            rig.Svc.WatchMountClock();
+
+            Assert.That(rig.UtcWrites, Is.EqualTo(2), "a host clock step re-checks");
+            Assert.That(rig.Mount.Clock, Is.EqualTo(rig.Wall.UtcDateTime), "the kernel-synchronised clock is the truth after the step");
             Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
         }
 

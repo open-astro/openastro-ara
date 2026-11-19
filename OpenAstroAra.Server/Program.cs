@@ -741,7 +741,9 @@ public partial class Program {
             new TimeSyncService(
                 sp.GetRequiredService<ILogger<TimeSyncService>>(),
                 clockSetter: null,
-                profiles: sp.GetService<IProfileStore>()));
+                profiles: sp.GetService<IProfileStore>(),
+                // #2071 — a kernel the NTP daemon keeps synchronised is a trusted time source too.
+                kernelClock: new LinuxKernelClockSyncProbe()));
         builder.Services.AddSingleton<ITimeSyncService>(sp => sp.GetRequiredService<TimeSyncService>());
         // §37.4/§29 — the save-directory picker's server-side directory walk.
         builder.Services.AddSingleton<IStorageBrowseService, StorageBrowseService>();
