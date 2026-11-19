@@ -198,7 +198,7 @@ public sealed partial class EndNightService : IDisposable {
         }, string.IsNullOrWhiteSpace(s.Text) ? null : s.Text.Trim());
 
         try {
-            await StepAsync(EndNightStepIds.AbortRun, async () => (EndNightStepStates.Done, await AbortRunAsync().ConfigureAwait(false))).ConfigureAwait(false);
+            await StepAsync(EndNightStepIds.AbortRun, AbortRunAsync).ConfigureAwait(false);
             if (!cancelled) await StepAsync(EndNightStepIds.StopGuiding, async () => Of(await _ladder.StopGuidingAsync().ConfigureAwait(false))).ConfigureAwait(false);
             if (!cancelled) await StepAsync(EndNightStepIds.FindHome, async () => Of(await _ladder.FindHomeAsync().ConfigureAwait(false))).ConfigureAwait(false);
             if (!cancelled) await StepAsync(EndNightStepIds.ParkMount, async () => {
@@ -259,16 +259,16 @@ public sealed partial class EndNightService : IDisposable {
     }
 
     /// <summary>Abort the run and wait until it is over, so its Session is closed before the mount moves.</summary>
-    private async Task<string?> AbortRunAsync() {
+    private async Task<(string, string?)> AbortRunAsync() {
         var sequencer = _sequencerResolver?.Invoke();
-        if (sequencer is null) return null;
+        if (sequencer is null) return (EndNightStepStates.Done, null);
         var aborted = await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
         var deadline = _time.GetUtcNow() + AbortWait;
         while ((await sequencer.UnfinishedRunIdsAsync(CancellationToken.None).ConfigureAwait(false)).Count > 0) {
-            if (_time.GetUtcNow() >= deadline) return "The run did not finish aborting in time; End Night went on.";
+            if (_time.GetUtcNow() >= deadline) return (EndNightStepStates.Failed, "The run did not finish aborting in time; End Night went on.");
             await Task.Delay(AbortPoll, CancellationToken.None).ConfigureAwait(false);
         }
-        return aborted > 0 ? "Run aborted and its Session closed." : "No run was running.";
+        return (EndNightStepStates.Done, aborted > 0 ? "Run aborted and its Session closed." : "No run was running.");
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

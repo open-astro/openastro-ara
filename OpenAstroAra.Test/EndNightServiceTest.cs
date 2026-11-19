@@ -222,6 +222,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_run_that_does_not_finish_aborting_is_reported_as_a_failed_step() {
+            sequencer.Setup(s => s.UnfinishedRunIdsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var sut = CreateSUT();
+            sut.AbortWait = TimeSpan.FromMilliseconds(50);
+            sut.Start(shutDownHost: false);
+            await FinishedAsync(sut);
+
+            Assert.That(StepState(sut.GetStatus(), EndNightStepIds.AbortRun), Is.EqualTo(EndNightStepStates.Failed));
+            Assert.That(Calls(), Does.Contain("stop-guiding"), "End Night goes on with the next safe step");
+            Assert.That(posted.Single().Severity, Is.EqualTo(NotificationSeverity.Warning));
+        }
+
+        [Test]
         public async Task A_mount_that_cannot_find_home_is_parked_without_the_find_home_call() {
             telescope.Setup(t => t.GetInfo()).Returns(Mount(canFindHome: false));
             var sut = CreateSUT();
