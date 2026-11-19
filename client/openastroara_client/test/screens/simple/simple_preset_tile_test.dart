@@ -47,7 +47,9 @@ bool _popup(WidgetTester tester) =>
     tester.state<NavigatorState>(find.byType(Navigator)).canPop();
 
 void main() {
-  testWidgets('the wheel opens in place and folding it sets the spun value', (tester) async {
+  testWidgets('the wheel opens in place and folding it sets the spun value', (
+    tester,
+  ) async {
     final picks = await _pump(tester);
     await tester.tap(_tileHead);
     await tester.pumpAndSettle();
@@ -121,6 +123,25 @@ void main() {
     expect(find.text('Done'), findsNothing);
     expect(find.byType(TextButton), findsNothing);
   });
+
+  testWidgets('the open iOS wheel is three rows tall, none cut at an edge', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(CupertinoPicker)).height, 132);
+  });
+
+  testWidgets(
+    'the open Android wheel is three rows tall, none cut at an edge',
+    (tester) async {
+      await _pump(tester, platform: TargetPlatform.android);
+      await tester.tap(_tileHead);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(ListWheelScrollView)).height, 132);
+    },
+  );
 
   testWidgets(
     "each phone its own picker: the iOS wheel, Android's flat number picker",

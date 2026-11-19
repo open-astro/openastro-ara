@@ -1090,29 +1090,23 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
         ),
         if (controller != null)
           SizedBox(
-            height: 176,
-            child: Column(
-              children: [
-                Expanded(
-                  // Focused on opening, so the arrows turn it at once.
-                  child: SimpleWheelKeys(
-                    debugLabel: 'simple-wheel-${widget.label}',
-                    autofocus: true,
-                    onStep: SimpleWheelKeys.stepper(controller, items.length),
-                    // Each phone's own picker (user, 2026-11-13): the iOS
-                    // wheel, and on Android its flat number picker with
-                    // the pick between two accent lines.
-                    child: Theme.of(context).platform == TargetPlatform.android
-                        ? _androidWheel(controller, items, label)
-                        : CupertinoPicker(
-                            itemExtent: 44,
-                            scrollController: controller,
-                            onSelectedItemChanged: (i) => _spun = items[i],
-                            children: [for (final o in items) label(o)],
-                          ),
-                  ),
-                ),
-              ],
+            height: 132,
+            // Focused on opening, so the arrows turn it at once.
+            child: SimpleWheelKeys(
+              debugLabel: 'simple-wheel-${widget.label}',
+              autofocus: true,
+              onStep: SimpleWheelKeys.stepper(controller, items.length),
+              // Each phone's own picker (user, 2026-11-13): the iOS
+              // wheel, and on Android its flat number picker with
+              // the pick between two accent lines.
+              child: Theme.of(context).platform == TargetPlatform.android
+                  ? _androidWheel(controller, items, label)
+                  : CupertinoPicker(
+                      itemExtent: 44,
+                      scrollController: controller,
+                      onSelectedItemChanged: (i) => _spun = items[i],
+                      children: [for (final o in items) label(o)],
+                    ),
             ),
           ),
       ],
