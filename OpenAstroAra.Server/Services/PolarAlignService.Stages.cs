@@ -574,6 +574,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The motor runs on a lease: a daemon that stops renewing it (hung, crashed run) stops the axis.</summary>
         private const int AxisMoveLeaseMs = 3000;
         internal TimeSpan AxisMoveStall { get; set; } = TimeSpan.FromSeconds(10);
+        /// <summary>Added to a move's time bound (three times its travel at the slow speed): start-up and settle.</summary>
+        internal TimeSpan AxisMoveBoundSlack { get; set; } = TimeSpan.FromSeconds(15);
         /// <summary>How often a move reads the mount's position from the driver (fresh, not the 2 s refresh).</summary>
         internal TimeSpan AxisMovePoll { get; set; } = TimeSpan.FromMilliseconds(250);
         /// <summary>After the stop, how long the mount is left to settle before its final reading.</summary>
@@ -602,7 +604,7 @@ namespace OpenAstroAra.Server.Services {
             var fast = degrees > AxisSlowZoneDeg;
             double Rate() => direction * (fast ? AxisFastRateDegPerSec : AxisSlowRateDegPerSec);
             var began = Stopwatch.GetTimestamp();
-            var bound = TimeSpan.FromSeconds((degrees / AxisSlowRateDegPerSec * 3.0) + 15.0);
+            var bound = TimeSpan.FromSeconds(degrees / AxisSlowRateDegPerSec * 3.0) + AxisMoveBoundSlack;
             var best = 0.0;
             var bestAt = Stopwatch.GetTimestamp();
             var reversed = false;

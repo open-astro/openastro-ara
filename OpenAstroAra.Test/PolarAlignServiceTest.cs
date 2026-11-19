@@ -1429,6 +1429,77 @@ namespace OpenAstroAra.Test {
             Assert.That(guards.Where(g => g.Rate == 0).Select(g => g.Since), Is.All.Null, "a stop is never refused");
         }
 
+        // Each turn runs at 3°/s (NINA's speed) and slows to 1°/s for its last 3°, so the stop on the mount's reading
+        // lands close to the target; it never speeds up again.
+        [Test]
+        public async Task A_turn_runs_at_3_degrees_a_second_and_slows_to_1_for_its_last_3_degrees() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaDeg = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaDeg / 15.0, 85.0));
+            var commands = new ConcurrentQueue<(double Rate, double AtDeg)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, _, _) => {
+                    commands.Enqueue((rate, freshRaDeg));
+                    if (rate != 0) {
+                        freshRaDeg += Math.Sign(rate) * MotorStepDeg;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            // The first 30° turn (the bench store's step): every command until its stop.
+            var turn = commands.TakeWhile(c => c.Rate != 0).ToArray();
+            Assert.That(turn.Select(c => Math.Abs(c.Rate)), Is.All.EqualTo(3.0).Or.EqualTo(1.0));
+            Assert.That(turn.First().Rate, Is.EqualTo(3.0), "it starts at 3°/s");
+            Assert.That(turn.Last().Rate, Is.EqualTo(1.0), "it ends at 1°/s");
+            var firstSlow = Array.FindIndex(turn, c => Math.Abs(c.Rate) == 1.0);
+            Assert.That(turn.Skip(firstSlow).Select(c => Math.Abs(c.Rate)), Is.All.EqualTo(1.0), "never fast again");
+            Assert.That(turn[firstSlow].AtDeg, Is.GreaterThanOrEqualTo(30.0 - PolarAlignService.AxisSlowZoneDeg), "slow only for the last 3°");
+            Assert.That(turn[firstSlow - 1].AtDeg, Is.LessThan(30.0 - PolarAlignService.AxisSlowZoneDeg), "fast until then");
+        }
+
+        // A mount that creeps (each poll a little progress, so never a stall) but far slower than asked must not
+        // run on: the move has a time bound of three times its travel at the slow speed.
+        [Test]
+        public async Task A_turn_that_creeps_past_its_time_bound_fails_and_stops_the_motor() {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            var stops = 0;
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((_, rate) => {
+                    if (rate == 0) {
+                        Interlocked.Increment(ref stops);
+                        return;
+                    }
+                    position = new Coordinates((position.RADegrees + (Math.Sign(rate) * 0.06) + 360.0) % 360.0, position.Dec, Epoch.JNOW, Coordinates.RAType.Degrees);
+                });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
+            svc.AxisMovePoll = TimeSpan.FromMilliseconds(10);
+            svc.AxisSlowRateDegPerSec = 100.0; // bound = 30° / 100°/s × 3 = 0.9 s; the creep needs 5 s
+            svc.AxisMoveBoundSlack = TimeSpan.Zero;
+            svc.AxisMoveStall = TimeSpan.FromMinutes(5);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("moved only"));
+            Assert.That(stops, Is.GreaterThanOrEqualTo(1), "the motor is stopped");
+        }
+
         // Stop must stop the motor at once, not leave it running to the end of the turn.
         [Test]
         public async Task Stop_during_a_turn_stops_the_RA_motor() {
