@@ -12,6 +12,7 @@ Future<List<int>> _pump(
   WidgetTester tester, {
   bool enabled = true,
   TargetPlatform? platform,
+  int value = 10,
 }) async {
   tester.view.physicalSize = const Size(800, 1000);
   tester.view.devicePixelRatio = 1;
@@ -26,7 +27,7 @@ Future<List<int>> _pump(
         body: SimplePresetTile<int>(
           key: const Key('tile'),
           label: 'Frames',
-          value: 10,
+          value: value,
           options: const [5, 10, 20],
           format: (n) => '× $n',
           onSelected: enabled ? picks.add : null,
@@ -115,31 +116,18 @@ void main() {
     expect(picks, isEmpty);
   });
 
-  testWidgets('a value changed elsewhere while the wheel is open is not '
-      'overwritten by folding it unspun', (tester) async {
+  testWidgets('a fold without a spin keeps a value moved elsewhere', (
+    tester,
+  ) async {
     final picks = await _pump(tester);
     await tester.tap(_tileHead);
     await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(platform: TargetPlatform.iOS),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: SimplePresetTile<int>(
-            key: const Key('tile'),
-            label: 'Frames',
-            value: 20,
-            options: const [5, 10, 20],
-            format: (n) => '× $n',
-            onSelected: picks.add,
-          ),
-        ),
-      ),
-    );
+    // Another client moves the gear while the wheel is open.
+    final later = await _pump(tester, value: 20);
+    await tester.pumpAndSettle();
     await tester.tap(_tileHead);
     await tester.pumpAndSettle();
-    expect(picks, isEmpty);
+    expect([...picks, ...later], isEmpty);
   });
 
   testWidgets('the wheel has no Done button', (tester) async {
