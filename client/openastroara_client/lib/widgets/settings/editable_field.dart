@@ -185,33 +185,41 @@ class SettingsDropdownRow<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Row(
+              children: [
+                Flexible(
+                  child: ExcludeSemantics(
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: AraColors.textSecondary),
+                    ),
+                  ),
+                ),
+                if (helpKey != null) HelpIcon(helpKey: helpKey!),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Semantics(
+              label: label,
+              child: DropdownButtonFormField<T>(
+                initialValue: value,
+                isDense: true,
+                items: [
+                  for (final e in items.entries)
+                    DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: onChanged,
               ),
-              if (helpKey != null) HelpIcon(helpKey: helpKey!),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: DropdownButtonFormField<T>(
-            initialValue: value,
-            isDense: true,
-            items: [
-              for (final e in items.entries)
-                DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: onChanged,
-          ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }

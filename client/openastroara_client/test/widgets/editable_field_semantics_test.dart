@@ -47,4 +47,21 @@ void main() {
     expect(node.value, '60');
     handle.dispose();
   });
+
+  testWidgets('a dropdown row names its button by the row label', (t) async {
+    final handle = t.ensureSemantics();
+    await _pump(
+      t,
+      SettingsDropdownRow<int>(
+        label: 'Temperature unit',
+        value: 1,
+        items: const {1: 'Celsius', 2: 'Fahrenheit'},
+        onChanged: (_) {},
+      ),
+    );
+    final finder = find.bySemanticsLabel(RegExp('^Temperature unit'));
+    expect(finder, findsOneWidget);
+    expect(t.getSemantics(finder).flagsCollection.isButton, isTrue);
+    handle.dispose();
+  });
 }
