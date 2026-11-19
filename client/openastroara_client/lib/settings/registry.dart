@@ -2359,8 +2359,8 @@ const List<Setting> settingsRegistry = [
   // §52.1 connection lifecycle — per-device-type auto-connect toggles. 10
   // individual entries (vs one composite) so ⌘K "guider connect" /
   // "dome boot" / "weather auto" all resolve to the specific panel.
-  // No client default (ADR 0015): each switch shows the rig's copy, loaded
-  // by `equipmentConnectionProvider`.
+  // No client default (ADR 0015): each switch shows the copy loaded from the
+  // rig by `equipmentConnectionProvider`.
   Setting(
     id: 'eq.camera.auto_connect',
     tier: SettingTier.advanced,
