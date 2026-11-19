@@ -68,6 +68,23 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Daemon shutdown waits this long for a running routine to stop the mount and unwind.</summary>
         internal TimeSpan ShutdownGrace { get; set; } = TimeSpan.FromSeconds(15);
         internal const int StopSends = 3;
+
+        /// <summary>
+        /// The longest Stop or Done takes on the daemon before it answers, from the bounds above: the stuck run. The first
+        /// round of stop commands (AbortSlew and MoveAxis 0 on both axes, each up to <see cref="StopCommandTimeout"/>), then
+        /// the <see cref="RunUnwindGrace"/> for a run that never unwinds, then the stop the end confirms itself: its whole
+        /// <see cref="StopVerifyWindow"/>, plus the poll, the two reads and the resent round that its last pass may start.
+        /// The client's end timeout (<c>PolarAlignApi.endTimeout</c> in polar_align_api.dart) must outlast it with margin
+        /// for tracking off, the session row and the camera release; PolarAlignServiceTest checks that it does.
+        /// </summary>
+        internal TimeSpan EndWorstCase {
+            get {
+                var round = StopCommandTimeout * 3;
+                var confirmedStop = StopVerifyWindow + StopVerifyPoll + (StopCommandTimeout * 2) + round;
+                return round + RunUnwindGrace + confirmedStop;
+            }
+        }
+
         /// <summary>Two reads closer than this in RA and in Dec (degrees) count as standing still.</summary>
         internal const double StopStillDeg = 0.05;
 
