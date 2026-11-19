@@ -156,10 +156,10 @@ namespace OpenAstroAra.Server.Services {
 
         // ── the seed-and-adjust routine the coarse and fine stages share ─────────────────────
 
-        /// <summary>Leave the axis, seed the axis fit with two frames around an RA turn, then run the
+        /// <summary>Leave the axis, seed the axis fit with three frames around two RA turns, then run the
         /// live adjust loop until the user's Next. <paramref name="capture"/> is the camera: the main
         /// camera's capture-and-solve in the coarse stage, the guider's in the fine stage. Everything
-        /// else — the Dec-85° slew, the turn away from the meridian, the two-point fit, the §45.8
+        /// else — the 5° Dec-motor tilt, the RA-motor turns away from the meridian, the three-point fit, the §45.8
         /// reverse-projection — is the same, so the two stages differ only in the camera and its
         /// cadence, never in what the readout means.</summary>
         /// <param name="liveCapture">The live loop's capture when it differs from the seeds' (the coarse
@@ -171,7 +171,7 @@ namespace OpenAstroAra.Server.Services {
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
             // From Home the camera looks along the axis: the two seed frames would coincide.
-            await LeaveTheAxisAsync(settings, afterManualHome, gen, ct).ConfigureAwait(false);
+            await LeaveTheAxisAsync(afterManualHome, gen, ct).ConfigureAwait(false);
 
             // ── seed: three frames with two RA turns of SeedRotationDeg between them (NINA's
             // Three Point Polar Alignment: 10° steps, 20° in all, from where the scope points). The
@@ -186,13 +186,13 @@ namespace OpenAstroAra.Server.Services {
             // ── RA turns away from the meridian so the arc cannot cross it (a crossing risks a
             // meridian flip, which garbles the fit — guider design §5 step 2).
             var dirSign = AwayFromMeridianSign(ra0);
-            var p1 = await TurnRaAsync(ra0, dec0, dirSign * settings.SeedRotationDeg, settings, gen, ct).ConfigureAwait(false);
+            var p1 = await TurnRaAsync(ra0, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
             var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
             var b = await SolveSeedFrameAsync(capture, "seed-b", SeedHint(p1, afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             var bTime = DateTimeOffset.UtcNow;
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
 
-            var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * settings.SeedRotationDeg, settings, gen, ct).ConfigureAwait(false);
+            var p2 = await TurnRaAsync(p1.RaDeg, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
             var c = await SolveSeedFrameAsync(capture, "seed-c", SeedHint(p2, afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             var cTime = DateTimeOffset.UtcNow;
@@ -249,7 +249,7 @@ namespace OpenAstroAra.Server.Services {
                 // A run that began at the check never read the guide frame size (StartAsync clears it per run).
                 _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
             }
-            await LeaveTheAxisAsync(settings, manualHome, gen, ct).ConfigureAwait(false);
+            await LeaveTheAxisAsync(manualHome, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
 
             var step = settings.CheckStepDeg; // always in range: PolarAlignSettingsClamp on every read
@@ -263,14 +263,14 @@ namespace OpenAstroAra.Server.Services {
             LogSeedSolve("check-1", s1.RaDegJnow, s1.DecDegJnow);
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
-            var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
+            var p1 = await TurnRaAsync(ra0, dirSign * step, gen, ct).ConfigureAwait(false);
             var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
             var s2 = await SolveSeedFrameAsync(capture, "check-2", SeedHint(p1, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             var t2 = DateTimeOffset.UtcNow;
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
-            var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
+            var p2 = await TurnRaAsync(p1.RaDeg, dirSign * step, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
             var s3 = await SolveSeedFrameAsync(capture, "check-3", SeedHint(p2, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
@@ -491,7 +491,7 @@ namespace OpenAstroAra.Server.Services {
         /// <param name="afterManualHome">The user put the mount at Home by hand: its reported pointing is whatever
         /// the last move left, not where it is. The tilt is measured RELATIVE to the reading — the same 5° whatever
         /// the model believes — instead of being skipped because the reading already looks off-axis.</param>
-        private async Task LeaveTheAxisAsync(PolarAlignSettingsDto settings, bool afterManualHome, int gen, CancellationToken ct) {
+        private async Task LeaveTheAxisAsync(bool afterManualHome, int gen, CancellationToken ct) {
             var (_, decDeg) = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             if (!afterManualHome && Math.Abs(decDeg) <= OnAxisDecDeg) {
@@ -501,7 +501,7 @@ namespace OpenAstroAra.Server.Services {
             LogLeavingAxis(decDeg, aimDecDeg);
             await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, 90.0 - SeedDecDeg,
                 (from, now) => PolarAlignGeometry.SeparationDeg(from.RaDeg, from.DecDeg, now.RaDeg, now.DecDeg),
-                checkDirection: false, settings, gen, ct).ConfigureAwait(false);
+                checkDirection: false, gen, ct).ConfigureAwait(false);
         }
 
         /// <summary>The size of the mount's own RA turn from two of its pointing readings. A synced mount can
@@ -527,12 +527,13 @@ namespace OpenAstroAra.Server.Services {
         /// step), settle, and return the mount's reported pointing afterwards. No GoTo: the firmware never picks a
         /// pier side, and the Dec axis cannot move. A mount that reports under 1° of turn fails as <c>slew_failed</c>.</summary>
         private async Task<(double RaDeg, double DecDeg)> TurnRaAsync(
-                double fromRaDeg, double decDeg, double signedDeltaDeg, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            _ = decDeg;
+                double fromRaDeg, double signedDeltaDeg, int gen, CancellationToken ct) {
+            // The previous turn's live loop or a mount fault may have dropped tracking: re-check before each turn.
+            await KeepTrackingOnForSlewAsync(gen, ct).ConfigureAwait(false);
             var intended = signedDeltaDeg >= 0 ? 1.0 : -1.0;
             var after = await MoveAxisUntilAsync(TelescopeAxes.Primary, intended, Math.Abs(signedDeltaDeg),
                 (from, now) => intended * Wrap180(now.RaDeg - from.RaDeg),
-                checkDirection: true, settings, gen, ct).ConfigureAwait(false);
+                checkDirection: true, gen, ct).ConfigureAwait(false);
             var turned = Math.Abs(Wrap180(after.RaDeg - fromRaDeg));
             if (turned < 1.0) {
                 throw new RoutineFailedException("slew_failed",
@@ -544,6 +545,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The motor speeds of the routine's moves (°/s): NINA's 3°/s for the bulk of a move, then 1°/s
         /// for its last <see cref="AxisSlowZoneDeg"/>, so the stop on the mount's reading lands within about a degree.</summary>
         internal double AxisFastRateDegPerSec { get; set; } = 3.0;
+        /// <summary>−1 once a turn of this run found the driver's RA motor sign inverted; reset per run.</summary>
+        private double _raMotorSign = 1.0;
         internal double AxisSlowRateDegPerSec { get; set; } = 1.0;
         internal const double AxisSlowZoneDeg = 3.0;
         /// <summary>The motor runs on a lease: a daemon that stops renewing it (hung, crashed run) stops the axis.</summary>
@@ -565,11 +568,11 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(double RaDeg, double DecDeg)> MoveAxisUntilAsync(
                 TelescopeAxes axis, double sign, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, bool checkDirection,
-                PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            _ = settings;
+                int gen, CancellationToken ct) {
             var start = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
-            var direction = sign >= 0 ? 1.0 : -1.0;
+            // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
+            var direction = (sign >= 0 ? 1.0 : -1.0) * (axis == TelescopeAxes.Primary ? _raMotorSign : 1.0);
             var fast = degrees > AxisSlowZoneDeg;
             double Rate() => direction * (fast ? AxisFastRateDegPerSec : AxisSlowRateDegPerSec);
             var began = Stopwatch.GetTimestamp();
@@ -595,6 +598,9 @@ namespace OpenAstroAra.Server.Services {
                     if (checkDirection && !reversed && p <= -0.5) {
                         reversed = true;
                         direction = -direction;
+                        if (axis == TelescopeAxes.Primary) {
+                            _raMotorSign = -_raMotorSign;
+                        }
                         var reversedRate = Rate();
                         LogAxisMoveReversed(axis, reversedRate);
                         await RunAxisAsync(axis, 0).ConfigureAwait(false);

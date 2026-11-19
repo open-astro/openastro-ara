@@ -1286,6 +1286,48 @@ namespace OpenAstroAra.Test {
             // LST 20 h puts RA 0 east of the meridian: the chosen way is RA up, two 30° turns.
             Assert.That(position.RADegrees, Is.EqualTo(60.0).Within(1e-6), "both turns went RA up despite the motor's sign");
             mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.Is<double>(r => r < 0)), Times.AtLeastOnce(), "the reversal");
+            // The reversal is learned for the run: the second turn starts the right way at once.
+            var rates = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.MoveAxis)
+                    && i.Arguments[0] is TelescopeAxes.Primary)
+                .Select(i => i.Arguments[1] is double r ? r : double.NaN).ToArray();
+            var secondTurn = rates.SkipWhile(r => r != 0).Skip(1).SkipWhile(r => r != 0).Skip(1).ToArray(); // after the reversal stop and the first turn's stop
+            Assert.That(secondTurn.FirstOrDefault(r => r != 0), Is.LessThan(0), "the second turn starts with the learned sign");
+        }
+
+        // On the daemon the mount is the telescope service: each turn runs on its leased MoveAxis (the motor stops by
+        // itself if the routine stops renewing) and stops on the driver's position read now. The cached reading here
+        // never moves (the 2 s refresh never catches up), so a turn that waited on it would stall.
+        [Test]
+        public async Task On_the_telescope_service_the_turns_run_on_a_leased_motor_and_stop_on_fresh_reads() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var calls = new ConcurrentQueue<(int Axis, double Rate, int? LeaseMs)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, CancellationToken>((axis, rate, lease, _) => {
+                    calls.Enqueue((axis, rate, lease));
+                    if (rate != 0) {
+                        freshRaHours = (freshRaHours + (Math.Sign(rate) * MotorStepDeg / 15.0) + 24.0) % 24.0;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(freshRaHours * 15.0, Is.EqualTo(60.0).Within(1e-6), "two 30° turns, stopped on the fresh reading");
+            var moves = calls.Where(c => c.Rate != 0).ToArray();
+            Assert.That(moves, Is.Not.Empty);
+            Assert.That(moves.Select(c => c.LeaseMs), Is.All.EqualTo(3000), "every motor command carries the lease");
+            Assert.That(calls.Count(c => c.Rate == 0 && c.LeaseMs is null), Is.GreaterThanOrEqualTo(2), "each turn ends with a stop");
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never, "never the mediator's unleased call");
         }
 
         // Stop must stop the motor at once, not leave it running to the end of the turn.
