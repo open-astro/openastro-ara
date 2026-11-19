@@ -6443,8 +6443,8 @@ Polar Alignment section of profile (default values shown):
 - Exposure time: 1 s (the 0.5 s first planned was too little signal for a guide scope at the pole)
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
-- Initial RA rotation for seed: 60° (`seed_rotation_deg`; was 30° — §45.16 Revisited: a 30° turn amplifies solve noise ~1.9×, 60° passes it through 1:1; clamped to 5–120°)
-- Check-stage turns: 30° each (`check_step_deg`, 5–60°; the three-point check's two RA turns)
+- Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
+- Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
 - Use Home: on (`use_home`; every stage sends the mount Home first, a mount without Find Home is asked; off starts from the current pointing)
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
@@ -6482,7 +6482,7 @@ When support is added for an iPolar / PoleMaster / dedicated PA camera attached 
 
 ### 45.15 What we're explicitly NOT doing
 
-- Three-point polar alignment (TPPA) — dropped per §45.1, re-affirmed with numbers in §45.16
+- ~~Three-point polar alignment (TPPA) — dropped per §45.1, re-affirmed with numbers in §45.16~~ — adopted 2026-11-19, see §45.16 "Revisited again"
 - Drift-alignment method (the historical hour-of-RA-drift technique) — too slow + obsolete given plate-solve approach
 - Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
 
@@ -6550,6 +6550,19 @@ coarse stage now runs the seed turn and the two-point fit too; only the camera (
 exposure) differs from the fine stage. Nothing in a polar-align readout is ever a pointing read as
 the axis any more.
 
+
+**Revisited again 2026-11-19 (#2048): three solves and motor moves, NINA's way.** On the HAE29C
+(GNTO, 2026-11-18) the check's GoTo from Home to Dec 85° swung the tube toward the pier: at Home the
+hour angle is ±6 h and a GoTo leaves the firmware to choose the pier side. The 60° seed turn above had
+already been reported as alarming. Every stage now measures like NINA's TPPA: Home, the Dec motor
+alone tilts the tube 5° off the pole, then three solves with two **10°** RA-motor turns (MoveAxis at
+3°/s, 1°/s for the last 3°, stopped on the mount's position read from the driver four times a
+second), and the axis is the circle through the three pointings (`FitAxisThreePoint`, each solve
+moved to the last one's time). The 2-point seed's noise numbers above no longer apply: the
+three-point fit has no read-back-Δ term (the mount's turns only cross-check it), and a short arc
+trades amplification for safety — on the rig the fine stage and the check agreed to 0.62′ (check
+0.79′, turn mismatch 0.05°). No polar-align move is a GoTo except the `use_home: false` return to the
+start pointing. API_CONTRACT.md 2026-11-19 has the wire shape.
 ---
 
 ## 46. Notifications system
@@ -8343,7 +8356,7 @@ The button surfaces (as a large, prominent overlay near the top of the active vi
 - **Recovery slew** — §28 mount-home or slew-to-saved-target during crash recovery
 - **Plate-solve re-center slew** — post-slew correction
 - **Park / unpark / home** — these are also slews; the button appears
-- **Polar-align turns** — §45's 60° RA rotation for the seed and the check stage's two 30° turns
+- **Polar-align turns** — §45's single-axis motor moves (MoveAxis, not slews): the 5° Dec tilt off the pole and the two 10° RA turns of each stage's seed and of the check
 
 Does **not** appear for:
 - Sidereal tracking (not a slew event)
