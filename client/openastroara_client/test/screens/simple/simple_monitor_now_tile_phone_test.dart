@@ -400,4 +400,142 @@ void main() {
     },
     skip: skip,
   );
+
+  // A full rig fills Conditions most: all seven weather readings and the
+  // whole Camera and focuser group, under a Safety strip, beside a full
+  // Target; no other tile gives up room for it (#2014).
+  for (final size in const [
+    Size(1280, 800),
+    Size(1133, 744),
+    Size(1024, 768),
+    Size(390, 844),
+  ]) {
+    testWidgets(
+      'a full rig shows all of Conditions without scrolling at ${size.width.toInt()}x${size.height.toInt()} (#2014)',
+      (tester) async {
+        expect(hasFonts, isTrue, reason: 'Roboto not found under $_fonts');
+        final base = _busy();
+        final snap = MonitorSnapshot(
+          asOf: base.asOf,
+          verdict: base.verdict,
+          now: base.now,
+          upNext: base.upNext,
+          target: MonitorTarget(
+            name: 'M31',
+            longName: 'Andromeda Galaxy',
+            status: MonitorStatus.working,
+            word: MonitorTargetWord.tracking,
+            imagingTo: DateTime(2026, 11, 12, 3, 40),
+            maxAltitudeDeg: 78,
+            transit: DateTime(2026, 11, 11, 21, 40),
+            moonPct: 62,
+            curve: [
+              for (var i = 0; i <= 48; i++)
+                20 + 58 * (1 - ((i - 18) / 30).abs()),
+            ],
+            spanStart: DateTime(2026, 11, 11, 22, 30),
+            spanEnd: DateTime(2026, 11, 12, 3, 40),
+          ),
+          flip: base.flip,
+          safety: MonitorSafety(
+            status: MonitorStatus.normal,
+            safe: true,
+            since: _asOf.subtract(const Duration(hours: 2)),
+          ),
+          conditions: MonitorConditions(
+            weather: const MonitorWeather(
+              status: MonitorStatus.normal,
+              windDeg: 300,
+              gustKmh: 13,
+              cells: [
+                (cell: MonitorWeatherCell.cloud, value: 6, overLimit: null),
+                (
+                  cell: MonitorWeatherCell.skyQuality,
+                  value: 21.32,
+                  overLimit: null,
+                ),
+                (cell: MonitorWeatherCell.air, value: 11.4, overLimit: null),
+                (
+                  cell: MonitorWeatherCell.dewMargin,
+                  value: 6.8,
+                  overLimit: null,
+                ),
+                (cell: MonitorWeatherCell.humidity, value: 64, overLimit: null),
+                (cell: MonitorWeatherCell.rain, value: 0, overLimit: null),
+                (cell: MonitorWeatherCell.wind, value: 8, overLimit: null),
+              ],
+            ),
+            rig: MonitorRigTemps(
+              sensorC: -10.2,
+              sensorTargetC: -10,
+              coolerPowerPct: 38,
+              focuserC: 11.9,
+              autofocusAt: _asOf.subtract(const Duration(minutes: 2)),
+              tempSinceAutofocus: -0.8,
+            ),
+          ),
+          lastFrame: base.lastFrame,
+          night: MonitorNight(
+            darkStart: DateTime(2026, 11, 11, 19, 10),
+            darkEnd: DateTime(2026, 11, 12, 5),
+          ),
+        );
+        await _pump(tester, size: size, snap: snap);
+        // A phone's column builds as it scrolls, so each tile is checked in
+        // its turn. The Safety strip does not scroll: an overflow there
+        // fails the case.
+        final column = find.byKey(const Key('simple-monitor-column'));
+        for (final key in [
+          // The busiest Now tile already scrolls at 1024x768, whatever
+          // Conditions holds: that is the Now tile's own fit.
+          if (size.width != 1024) 'now',
+          'target',
+          'flip',
+          'conditions',
+          'last-frame',
+          'night',
+        ]) {
+          final tile = find.byKey(Key('simple-monitor-$key'));
+          if (column.evaluate().isNotEmpty) {
+            await tester.scrollUntilVisible(
+              tile,
+              200,
+              scrollable: find
+                  .descendant(of: column, matching: find.byType(Scrollable))
+                  .first,
+            );
+          }
+          final scroll = find
+              .descendant(of: tile, matching: find.byType(Scrollable))
+              .first;
+          expect(
+            tester.state<ScrollableState>(scroll).position.maxScrollExtent,
+            0,
+            reason: 'part of $key is hidden below its edge',
+          );
+          if (key != 'conditions') continue;
+          final box = tester.getRect(tile);
+          for (final text in [
+            'Sky quality',
+            'Wind · NW · gusts 13',
+            'Camera and focuser',
+            'Sensor · -10',
+            'Cooler power',
+            'Focuser',
+            'Autofocus 23:50',
+          ]) {
+            final r = tester.getRect(
+              find.descendant(of: tile, matching: find.text(text)),
+            );
+            expect(
+              box.top <= r.top && r.bottom <= box.bottom,
+              isTrue,
+              reason: '$text: $r outside $box',
+            );
+          }
+        }
+      },
+      skip: skip,
+    );
+  }
 }

@@ -7247,6 +7247,15 @@ void main() {
       expect(find.byKey(const Key('simple-device-safety')), findsOneWidget);
     });
 
+    testWidgets('with no weather station, a Conditions tap closes Monitor and opens the Camera window', (tester) async {
+      await openMonitor(tester, gear: [cameraStatusProvider.overrideWith(() => _CoolingCamera(-10))]);
+      await tester.tap(find.byKey(const Key('simple-monitor-conditions')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    });
+
     testWidgets('the safety alarm shows over it', (tester) async {
       final (c, _) = await openMonitor(tester, manualAlarm: true);
       (c.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
@@ -7257,9 +7266,9 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+    testWidgets("the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
       await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
-      final tile = find.byKey(const Key('simple-monitor-weather'));
+      final tile = find.byKey(const Key('simple-monitor-conditions'));
       expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
       for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
         expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');

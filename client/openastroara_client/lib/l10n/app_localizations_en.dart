@@ -4353,9 +4353,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorUpNext => 'Up next';
 
   @override
-  String get monitorTonightsBest => 'Tonight\'s best';
-
-  @override
   String monitorUpFrame(int frame) {
     return 'Frame $frame';
   }
@@ -4365,11 +4362,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorThen => 'then';
-
-  @override
-  String monitorAltitudeUp(String alt) {
-    return '$alt° up';
-  }
 
   @override
   String get monitorTarget => 'Target';
@@ -4490,8 +4482,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorClippedStars => 'Clipped stars';
 
   @override
-  String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since then';
+  String monitorAutofocusAt(String time) {
+    return 'Autofocus $time';
   }
 
   @override
@@ -4511,6 +4503,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorDrifting => 'Drifting';
+
+  @override
+  String get monitorConditions => 'Conditions';
+
+  @override
+  String get monitorCameraAndFocuser => 'Camera and focuser';
+
+  @override
+  String get monitorSensor => 'Sensor';
+
+  @override
+  String get monitorCoolerPower => 'Cooler power';
+
+  @override
+  String get monitorFocuserTemp => 'Focuser';
 
   @override
   String monitorImagingSpan(String start, String end) {

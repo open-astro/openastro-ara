@@ -7377,12 +7377,6 @@ abstract class AppLocalizations {
   /// **'Up next'**
   String get monitorUpNext;
 
-  /// Monitor Now tile with no plan: tonight's best Targets
-  ///
-  /// In en, this message translates to:
-  /// **'Tonight\'s best'**
-  String get monitorTonightsBest;
-
   /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
@@ -7400,12 +7394,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'then'**
   String get monitorThen;
-
-  /// Monitor Tonight's best row: the Target's altitude now
-  ///
-  /// In en, this message translates to:
-  /// **'{alt}° up'**
-  String monitorAltitudeUp(String alt);
 
   /// Monitor tile: the Target
   ///
@@ -7509,7 +7497,7 @@ abstract class AppLocalizations {
   /// **'Since {time} · {duration}'**
   String monitorSince(String time, String duration);
 
-  /// Monitor Weather tile status word
+  /// Monitor Conditions tile status word
   ///
   /// In en, this message translates to:
   /// **'Past limit'**
@@ -7605,11 +7593,11 @@ abstract class AppLocalizations {
   /// **'Clipped stars'**
   String get monitorClippedStars;
 
-  /// Monitor Last frame: the last autofocus and the temperature change since
+  /// Monitor Conditions: label under the focuser's signed temperature change since the last autofocus, which ran at the given clock time
   ///
   /// In en, this message translates to:
-  /// **'Autofocus {time} · {delta} since then'**
-  String monitorAutofocusSince(String time, String delta);
+  /// **'Autofocus {time}'**
+  String monitorAutofocusAt(String time);
 
   /// Monitor Now tile: frames saved so far
   ///
@@ -7634,6 +7622,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drifting'**
   String get monitorDrifting;
+
+  /// Monitor tile: weather with the camera and focuser temperatures
+  ///
+  /// In en, this message translates to:
+  /// **'Conditions'**
+  String get monitorConditions;
+
+  /// Monitor Conditions tile: section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Camera and focuser'**
+  String get monitorCameraAndFocuser;
+
+  /// Monitor Conditions tile: the camera sensor's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get monitorSensor;
+
+  /// Monitor Conditions tile: the cooler's power
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler power'**
+  String get monitorCoolerPower;
+
+  /// Monitor Conditions tile: the focuser's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser'**
+  String get monitorFocuserTemp;
 
   /// Monitor altitude graph key: the plan's imaging span
   ///

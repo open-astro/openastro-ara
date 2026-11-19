@@ -5474,10 +5474,6 @@
   "@monitorUpNext": {
     "description": "Monitor Now tile: the upcoming steps"
   },
-  "monitorTonightsBest": "Tonight's best",
-  "@monitorTonightsBest": {
-    "description": "Monitor Now tile with no plan: tonight's best Targets"
-  },
   "monitorUpFrame": "Frame {frame}",
   "@monitorUpFrame": {
     "description": "Monitor Up next row: the next frame (the filter follows when the camera has one)",
@@ -5494,15 +5490,6 @@
   "monitorThen": "then",
   "@monitorThen": {
     "description": "Monitor Up next row whose time isn't known"
-  },
-  "monitorAltitudeUp": "{alt}° up",
-  "@monitorAltitudeUp": {
-    "description": "Monitor Tonight's best row: the Target's altitude now",
-    "placeholders": {
-      "alt": {
-        "type": "String"
-      }
-    }
   },
   "monitorTarget": "Target",
   "@monitorTarget": {
@@ -5607,7 +5594,7 @@
   },
   "monitorPastLimit": "Past limit",
   "@monitorPastLimit": {
-    "description": "Monitor Weather tile status word"
+    "description": "Monitor Conditions tile status word"
   },
   "monitorCloud": "Cloud",
   "@monitorCloud": {
@@ -5684,14 +5671,11 @@
   "@monitorClippedStars": {
     "description": "Monitor Last frame reading: the share of clipped stars"
   },
-  "monitorAutofocusSince": "Autofocus {time} · {delta} since then",
-  "@monitorAutofocusSince": {
-    "description": "Monitor Last frame: the last autofocus and the temperature change since",
+  "monitorAutofocusAt": "Autofocus {time}",
+  "@monitorAutofocusAt": {
+    "description": "Monitor Conditions: label under the focuser's signed temperature change since the last autofocus, which ran at the given clock time",
     "placeholders": {
       "time": {
-        "type": "String"
-      },
-      "delta": {
         "type": "String"
       }
     }
@@ -5729,6 +5713,26 @@
   "monitorDrifting": "Drifting",
   "@monitorDrifting": {
     "description": "Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start"
+  },
+  "monitorConditions": "Conditions",
+  "@monitorConditions": {
+    "description": "Monitor tile: weather with the camera and focuser temperatures"
+  },
+  "monitorCameraAndFocuser": "Camera and focuser",
+  "@monitorCameraAndFocuser": {
+    "description": "Monitor Conditions tile: section heading"
+  },
+  "monitorSensor": "Sensor",
+  "@monitorSensor": {
+    "description": "Monitor Conditions tile: the camera sensor's temperature"
+  },
+  "monitorCoolerPower": "Cooler power",
+  "@monitorCoolerPower": {
+    "description": "Monitor Conditions tile: the cooler's power"
+  },
+  "monitorFocuserTemp": "Focuser",
+  "@monitorFocuserTemp": {
+    "description": "Monitor Conditions tile: the focuser's temperature"
   },
   "monitorImagingSpan": "Imaging {start} to {end}",
   "@monitorImagingSpan": {
