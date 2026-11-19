@@ -6235,7 +6235,7 @@ NINA's TPPA plugin slews to 3 widely-separated points, plate-solves each, and co
 - **Slow over Alpaca/HTTP** — main camera at full resolution = 50+ MB FITS per point × 3 points × multiple iterations = lots of waiting on transfers
 - **Bad UX** — adjust the knob, wait 30s for the next solve, see the error jumped instead of decreased, adjust again, repeat
 
-ARA drops TPPA entirely. The user's tip-of-the-spear hardware (iPolar) shows the better path: a tight feedback loop with small images and a visual aim point.
+ARA first dropped TPPA's *workflow* (re-measure after every adjustment). The user's tip-of-the-spear hardware (iPolar) shows the better path for the adjust loop: a tight feedback loop with small images and a visual aim point. Since 2026-11-19 (§45.16 "Revisited again") the *measurement* that seeds that loop is TPPA's: three solves with two 10° RA-motor turns, never a GoTo.
 
 ### 45.2 iPolar's approach + ARA's adaptation
 
@@ -6345,9 +6345,9 @@ Given:
 - `P_solved` = where the mount's optical axis currently points (RA/Dec from plate solve)
 - `P_mount_axis` = direction the RA axis is pointing (≠ P_solved if mount isn't perfectly polar-aligned)
 
-To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
+To find `P_mount_axis`, server captures three frames with the mount's RA motor turning Δ (10° by default) between them (since 2026-11-19; before that, two frames one turn apart). The three solved positions lie on a small circle about the axis; its pole is `P_mount_axis` (`FitAxisThreePoint`, each solve moved to the last one's time by the Earth's turn). Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
 
-Once `P_mount_axis` is known (after the initial 2-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
+Once `P_mount_axis` is known (after the initial 3-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
 This is the same math iPolar uses internally; we're just running it on the main camera at lower resolution instead of a dedicated PA cam.
 
@@ -6431,7 +6431,7 @@ Failure events:
 | Failure | Handling |
 |---|---|
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
-| Mount can't rotate in RA for initial 30° seed | Cap to whatever rotation is possible; user shown warning that estimate may be less precise |
+| Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
 | Southern hemisphere | Same workflow, just plate-solving against SCP region instead of NCP — no code difference; the math uses lat/long from profile |
