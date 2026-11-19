@@ -71,8 +71,15 @@ namespace OpenAstroAra.Test {
 
         private FakeTelescopeDevice Current { get { lock (_devices) { return _devices[^1]; } } }
 
-        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null) =>
+        private sealed class ManualClock : TimeProvider {
+            private long _ticks = new DateTimeOffset(2026, 11, 19, 3, 0, 0, TimeSpan.Zero).UtcTicks;
+            public void Advance(TimeSpan by) => Interlocked.Add(ref _ticks, by.Ticks);
+            public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _ticks), TimeSpan.Zero);
+        }
+
+        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null, TimeProvider? clock = null) =>
             new(faults: _faults, profileService: profile, poseStore: store) {
+                PoseClock = clock ?? TimeProvider.System,
                 RefreshPeriod = refresh ?? TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
                 DeviceFactory = _ => {
@@ -309,6 +316,26 @@ namespace OpenAstroAra.Test {
 
             await WaitForAsync(() => Runtime(svc)?.PositionUnverified == true, "the in-session detection");
             Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeWithoutCommand));
+        }
+
+        [Test]
+        public async Task A_sequence_sync_that_moves_the_reported_dec_is_not_a_jump() {
+            // A plan's Center slews, exposes and solves for longer than the quiet window, then syncs: the sync
+            // moves the reported Dec by more than 2° between two still ticks. That is Ara's own command, not a
+            // power blip, and must not lock out every later GoTo of the run.
+            var clock = new ManualClock();
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30));
+
+            Assert.That(await ((ITelescopeMediator)svc).Sync(new Coordinates(Angle.ByHours(5.0), Angle.ByDegree(35.0), Epoch.JNOW)), Is.True);
+            Assert.That(Current.Syncs, Is.EqualTo(1));
+            Current.Dec = 35.0; // the mount now reports the synced position
+
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 35.0, "the synced position");
+            await Task.Delay(200); // several still ticks after the change
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the sync explains the Dec change");
         }
 
         [Test]
