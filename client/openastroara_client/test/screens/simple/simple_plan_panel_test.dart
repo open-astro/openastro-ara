@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'selection_tint_contrast.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -1243,6 +1244,15 @@ void main() {
   });
 
   group('the sheet', () {
+    testWidgets('the target card\'s Pick in Sky reads 4.5:1 on the selection tint', (tester) async {
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}), overrides: _rig);
+      expectReadsOnSelectionTint(
+          tester,
+          find.descendant(
+              of: find.byKey(const Key('simple-run-target-card')),
+              matching: find.text('Pick in Sky')));
+    });
+
     testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
       var showSky = 0, pick = 0;
       final c = await _pump(
