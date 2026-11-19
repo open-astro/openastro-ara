@@ -176,5 +176,15 @@ namespace OpenAstroAra.Test {
                 .RestoreCalibrationAfterReconnect, Is.False, "alpaca server");
             Assert.That(PHD2Guider.SetupUnchanged(Messages(), Held() with { PixelSize = 2.9 + 1e-9 }), Is.True, "a rounding difference is not a change");
         }
+
+        [TestCase(3.7599999904632568, 3.76, true)] // an Alpaca driver's float, read back through the guider's %g
+        [TestCase(12.3456789, 12.3457, true)]      // more than six significant digits
+        [TestCase(3.76, 3.75, false)]
+        [TestCase(2.9, 2.91, false)]
+        public void The_pixel_size_compares_within_the_guiders_six_digit_rounding(double pushed, double held, bool unchanged) {
+            var setup = new Phd2Method[] { new Phd2SetProfileSetup { Parameters = new Phd2ProfileSetupParameter { PixelSize = pushed } } };
+
+            Assert.That(PHD2Guider.SetupUnchanged(setup, Held() with { PixelSize = held }), Is.EqualTo(unchanged));
+        }
     }
 }

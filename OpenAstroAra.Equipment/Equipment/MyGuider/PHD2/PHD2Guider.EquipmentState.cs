@@ -58,7 +58,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     public sealed partial class PHD2Guider {
 
-        private const double PixelSizeTolerance = 1e-6;
+        /// <summary>The guider prints <c>pixel_size</c> with <c>%g</c> (six significant digits, guider
+        /// event_server.cpp <c>NV(name, double)</c>), so a value Ara holds to more digits (an Alpaca driver's
+        /// float, e.g. 3.7599999904632568) reads back rounded. Compared relative to that rounding, plus a
+        /// tiny absolute floor.</summary>
+        private const double PixelSizeRelativeTolerance = 1e-5;
+        private const double PixelSizeAbsoluteTolerance = 1e-9;
 
         /// <summary>#2074 — the equipment selection group of a push: the Alpaca server and every
         /// <c>set_selected_*</c> setter. The group is sent whole or not at all, so its order (Alpaca server
@@ -100,7 +105,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>#2074 — true when every <c>set_profile_setup</c> in <paramref name="messages"/> already
-        /// matches the guider (focal length, pixel size within 1e-6, multi-star). With
+        /// matches the guider (focal length, pixel size within the guider's <c>%g</c> rounding, multi-star). With
         /// <paramref name="ignoreMultiStar"/> only the optics are compared. A field Ara does not read back
         /// from the guider counts as changed. Pure.</summary>
         public static bool SetupUnchanged(IEnumerable<Phd2Method> messages, GuiderEquipmentState? state, bool ignoreMultiStar = false) {
@@ -118,7 +123,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     return false;
                 }
                 if (p.PixelSize is { } pixel
-                    && (state?.PixelSize is not { } heldPixel || Math.Abs(heldPixel - pixel) > PixelSizeTolerance)) {
+                    && (state?.PixelSize is not { } heldPixel || !SamePixelSize(heldPixel, pixel))) {
                     return false;
                 }
                 if (!ignoreMultiStar && p.MultiStarEnabled is { } multi && state?.MultiStar != multi) {
@@ -149,6 +154,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 && SetupUnchanged(messages, state, ignoreMultiStar: true);
             return new GuiderEnginePushPlan(send, skipSelections, skipSetup, restore);
         }
+
+        private static bool SamePixelSize(double held, double pushed) =>
+            Math.Abs(held - pushed) <= Math.Max(Math.Abs(held), Math.Abs(pushed)) * PixelSizeRelativeTolerance + PixelSizeAbsoluteTolerance;
 
         private static bool SameChoice(string? pushed, string? held) =>
             pushed is not null && held is not null
