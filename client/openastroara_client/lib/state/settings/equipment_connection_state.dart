@@ -65,9 +65,14 @@ class EquipmentConnectionNotifier
     extends SelfLoadingSection<EquipmentConnectionSettings> {
   /// Saves on change; throws when the rig did not take it (not loaded, 412,
   /// unreachable) so the panel can say so. ADR 0015: nothing is changed or
-  /// sent while the section is not loaded from the rig.
-  Future<void> setAutoConnect(EquipmentDeviceType t, bool v) =>
-      editAndSave((c) => c.copyWithAutoConnect(t, v));
+  /// sent while the section is not loaded from the rig. A failed save puts
+  /// the rig's copy back; a 412 keeps the edit (rule 6).
+  Future<void> setAutoConnect(EquipmentDeviceType t, bool v) {
+    final c = state.value;
+    return c == null
+        ? editAndSave((c) => c.copyWithAutoConnect(t, v))
+        : replaceAndSave(c.copyWithAutoConnect(t, v));
+  }
 
   @override
   Future<Tagged<EquipmentConnectionSettings>> fetch(ProfileApi api) =>

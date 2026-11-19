@@ -62,6 +62,18 @@ void main() {
     expect(find.textContaining('Not loaded'), findsOneWidget);
   });
 
+  testWidgets("Auto-connect row: a failed load offers Retry, and Retry loads "
+      "the rig's copy", (tester) async {
+    final rig = _rig()..failGet.add('equipment-connection');
+    await _pump(tester, rig);
+    rig.failGet.clear(); // The rig answers again.
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(_switch(tester).value, isTrue);
+    expect(_switch(tester).onChanged, isNotNull);
+    expect(find.text('Retry'), findsNothing);
+  });
+
   testWidgets("Auto-connect row: shows the rig's value and saves a change", (
     tester,
   ) async {
@@ -72,6 +84,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.puts.single.body, containsPair('camera', false));
     expect(_switch(tester).value, isFalse);
+  });
+
+  testWidgets("Auto-connect row: a failed save puts the rig's value back", (
+    tester,
+  ) async {
+    final rig = _rig()..failPut.add('equipment-connection');
+    await _pump(tester, rig);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(rig.puts, isEmpty);
+    expect(_switch(tester).value, isTrue);
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 
   testWidgets('Auto-connect row: a copy another device replaced is refused '
