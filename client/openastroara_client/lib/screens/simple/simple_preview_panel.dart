@@ -995,6 +995,15 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
     }
   });
 
+  /// A tap on the tile: folds the wheel, and applies a spin once (browsing
+  /// never moves the gear more than once).
+  void _onTileTap() {
+    if (!_open) return _toggle();
+    final spun = _spun;
+    _toggle();
+    if (spun != widget.value) widget.onSelected?.call(spun);
+  }
+
   void _pick(T v) {
     _toggle();
     widget.onSelected?.call(v);
@@ -1049,8 +1058,12 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
       ),
     );
     final controller = _wheel;
-    Widget label(T o) =>
-        Center(child: Text(widget.format(o), style: kSimpleText));
+    // A tap on a row picks it.
+    Widget label(T o) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _pick(o),
+      child: Center(child: Text(widget.format(o), style: kSimpleText)),
+    );
     // Its own transparent Material: the fill and highlight paint here, over
     // the panel's scrim, not on a Material further down.
     return Column(
@@ -1069,7 +1082,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
             child: InkWell(
               borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-              onTap: enabled ? _toggle : null,
+              onTap: enabled ? _onTileTap : null,
               // The label and value above say it once.
               child: ExcludeSemantics(child: tile),
             ),
@@ -1080,14 +1093,6 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             height: 176,
             child: Column(
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-                    onPressed: () => _pick(_spun),
-                    child: Text(context.l10n.previewDone),
-                  ),
-                ),
                 Expanded(
                   // Focused on opening, so the arrows turn it at once.
                   child: SimpleWheelKeys(

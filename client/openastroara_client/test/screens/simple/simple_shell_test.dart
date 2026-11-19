@@ -2199,7 +2199,7 @@ void main() {
     final wheel = tester.widget<ListWheelScrollView>(find.byType(ListWheelScrollView));
     final tile = tester.widget<SimplePresetTile<Duration>>(find.byKey(const Key('simple-exposure')));
     wheel.onSelectedItemChanged!(tile.options.indexOf(const Duration(seconds: 10)));
-    await tester.tap(find.byKey(const Key('simple-exposure')));
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-exposure')), matching: find.byType(InkWell)));
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
     tester.widget<Slider>(find.byKey(const Key('simple-gain'))).onChangeEnd!(200);
