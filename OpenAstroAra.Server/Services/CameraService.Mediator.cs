@@ -675,8 +675,14 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             }
             return coolerOffFor >= CoolerResponseWatch.DefaultWindow;
         }
-        string NotRespondingShortfall() => string.Create(CultureInfo.InvariantCulture,
-            $"the cooler is not responding: is the camera's 12 V connected? (CoolerOn still reads off {coolerOffFor.TotalMinutes:0} min after it was switched on)");
+        string NotRespondingShortfall() {
+            // Warn, then fail (#2076 user decision): the step's poll time can reach the minute a
+            // refresh pass before the watch does, and a cooler-off right after the failure would
+            // reset the watch before it ever warned.
+            ReportCoolerNotRespondingFromStep();
+            return string.Create(CultureInfo.InvariantCulture,
+                $"the cooler is not responding: is the camera's 12 V connected? (CoolerOn still reads off {coolerOffFor.TotalMinutes:0} min after it was switched on)");
+        }
         try {
             double? last = null;
             if (duration > TimeSpan.Zero && !double.IsNaN(start) && Math.Abs(start - target) > CoolingReachedToleranceC) {

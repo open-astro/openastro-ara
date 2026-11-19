@@ -595,6 +595,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_cool_whose_cooler_never_turns_on_warns_before_it_fails_and_only_once() {
+            // #2076 user decision: warn, then fail. The step's poll time reaches the minute before
+            // the wall-clock refresh watch does, so the step publishes the warning itself; a
+            // cooler-off straight after the failure (a plan's Warm Camera) must not swallow it.
+            await using var cam = new SimCamera { FixedTemperature = 20, CoolerPower = 0, ReportsCoolerOff = true };
+            var sink = new FaultSink();
+            var nowTicks = DateTimeOffset.UtcNow.UtcTicks;
+            DateTimeOffset Now() => new(Interlocked.Read(ref nowTicks), TimeSpan.Zero);
+            var (svc, _) = await ConnectedAsync(cam, refreshPeriod: TimeSpan.FromMilliseconds(50), faults: sink, clock: Now);
+            using var __ = svc;
+            List<EquipmentFaultEvent> Mismatches() => sink.Faults.Where(f => f.Kind == EquipmentFaultKind.ValueMismatch).ToList();
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.False);
+
+            var fault = Mismatches().Single();
+            Assert.That(fault.Details, Does.Contain("12 V"));
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding, Is.True);
+
+            Interlocked.Add(ref nowTicks, TimeSpan.FromSeconds(61).Ticks);
+            await Task.Delay(400); // refresh passes past the watch's own minute
+            Assert.That(Mismatches(), Has.Count.EqualTo(1), "the refresh pass does not warn a second time");
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding, Is.True);
+        }
+
+        [Test]
         public async Task A_long_ramped_cool_whose_cooler_never_turns_on_stops_ramping_after_a_minute() {
             // #2076 review — an imported 10-minute ramp must not PUT the set-point every 15 s for
             // its whole duration while the cooler reads off.

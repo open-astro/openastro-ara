@@ -209,5 +209,21 @@ namespace OpenAstroAra.Test {
             Assert.That(w.NotResponding, Is.False);
             Assert.That(Off(w, 120), Is.EqualTo(CoolerResponseVerdict.Idle), "a new session is not armed");
         }
-    }
+    
+        [Test]
+        public void A_Cool_Camera_step_that_counted_the_minute_first_opens_the_episode_once() {
+            // #2076 review — warn, then fail: the step reports before it fails, and the refresh
+            // pass that reaches the minute just after does not warn a second time.
+            var w = new CoolerResponseWatch();
+            Assert.That(w.ReportReadsOff(20), Is.False, "never commanded on: nothing to report");
+            w.Command(true);
+            Off(w, 0);
+            Assert.That(w.ReportReadsOff(20), Is.True);
+            Assert.That(w.NotResponding, Is.True);
+            Assert.That(w.Symptom, Is.EqualTo(CoolerResponseSymptom.ReadsOff));
+            Assert.That(Off(w, 60), Is.EqualTo(CoolerResponseVerdict.Idle), "already reported by the step");
+            Assert.That(w.ReportReadsOff(20), Is.False, "a retried step does not warn again");
+            Assert.That(On(w, 62, power: 80, ccd: 19), Is.EqualTo(CoolerResponseVerdict.Recovered));
+        }
+}
 }

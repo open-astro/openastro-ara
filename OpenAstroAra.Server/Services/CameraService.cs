@@ -526,6 +526,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                         client.SetCCDTemperature = target;
                     }
                     client.CoolerOn = enabled;
+                    // #2076 — remember that the cooler was commanded on (only the off→on edge arms
+                    // the watch, so a ramp's 15 s re-sends do not restart its window) or off
+                    // (disarms it). Inside the write gate, so the watch sees commands in the order
+                    // the camera did: recorded after the gate, an Emergency Stop's off could land
+                    // before an in-flight ramp step's on and leave the watch armed on a cooler
+                    // that was switched off, which then warns "12 V?" a minute later.
+                    lock (_gate) {
+                        _coolerResponse.Command(enabled);
+                    }
                 }
             }, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -537,11 +546,6 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         if (skipped) {
             return;
-        }
-        // #2076 — remember that the cooler was commanded on (only the off→on edge arms the
-        // watch, so a ramp's 15 s re-sends do not restart its window) or off (disarms it).
-        lock (_gate) {
-            _coolerResponse.Command(enabled);
         }
         RefreshCacheOnce();
         // §25.5.6 / #1065 — on DISABLE the fan is stopped AFTER the cooler write is committed and
@@ -1981,14 +1985,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                     LogCoolingRecovered(watchedDevice?.Name ?? "?");
                 }
                 if (responseVerdict == CoolerResponseVerdict.NotResponding) {
-                    // Notify-only: ValueMismatch is "a commanded value read back wrong", a Warning
-                    // with no retry, pause or escalation (FaultPolicyMatrix, OpFaultEscalator).
-                    // Nothing re-sends the cooler write.
-                    var detail = CoolerNotRespondingDetail(responseSymptom, runtime);
-                    LogCoolerNotResponding(watchedDevice?.Name ?? "?", detail);
-                    _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
-                        watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.ValueMismatch,
-                        detail, DateTimeOffset.UtcNow));
+                    PublishCoolerNotResponding(watchedDevice, responseSymptom, runtime);
                 } else if (responseVerdict == CoolerResponseVerdict.Recovered) {
                     LogCoolerResponding(watchedDevice?.Name ?? "?");
                 }
@@ -2338,6 +2335,34 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Camera '{Device}' cooler back within band — drift monitor re-armed (§42.2)")]
     private partial void LogCoolingRecovered(string device);
+
+    /// <summary>#2076 — the one warning per episode, from the refresh pass or from a Cool Camera
+    /// step that counted the minute first. Notify-only: ValueMismatch is "a commanded value read
+    /// back wrong", a Warning with no retry, pause or escalation (FaultPolicyMatrix,
+    /// OpFaultEscalator). Nothing re-sends the cooler write.</summary>
+    private void PublishCoolerNotResponding(DiscoveredDeviceDto? device, CoolerResponseSymptom symptom, CameraStateDto runtime) {
+        var detail = CoolerNotRespondingDetail(symptom, runtime);
+        LogCoolerNotResponding(device?.Name ?? "?", detail);
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
+            device?.UniqueId, device?.Name, EquipmentFaultKind.ValueMismatch,
+            detail, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>#2076 — a Cool Camera step is about to fail because CoolerOn read off for the
+    /// minute: warn first, unless the refresh pass already did for this episode.</summary>
+    private void ReportCoolerNotRespondingFromStep() {
+        DiscoveredDeviceDto? device;
+        CameraStateDto runtime;
+        lock (_gate) {
+            if (!_coolerResponse.ReportReadsOff(_runtime.CcdTemperature)) {
+                return;
+            }
+            _runtime = _runtime with { CoolerNotResponding = true };
+            runtime = _runtime;
+            device = _lifecycle.Device;
+        }
+        PublishCoolerNotResponding(device, CoolerResponseSymptom.ReadsOff, runtime);
+    }
 
     /// <summary>#2076 — the warning sentence, with the symptom that fired it.</summary>
     internal static string CoolerNotRespondingDetail(CoolerResponseSymptom symptom, CameraStateDto runtime) {

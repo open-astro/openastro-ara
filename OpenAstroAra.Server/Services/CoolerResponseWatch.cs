@@ -164,6 +164,21 @@ public sealed class CoolerResponseWatch {
             : CoolerResponseVerdict.Settling;
     }
 
+    /// <summary>A sequencer Cool Camera counted the minute of CoolerOn reading off itself (in its
+    /// own poll time) and is about to fail. Opens the episode now when the refresh pass has not yet,
+    /// so the warning always comes before the step failure (#2076 user decision: warn, then fail)
+    /// and a cooler-off right after the failure (a plan's Warm Camera) cannot swallow it. True when
+    /// this call opened the episode, i.e. the caller must publish the warning.</summary>
+    public bool ReportReadsOff(double? ccdC) {
+        if (!_commanded || NotResponding) {
+            return false;
+        }
+        _offSinceUtc = null;
+        _starvedSinceUtc = null;
+        Fire(CoolerResponseSymptom.ReadsOff, ccdC);
+        return true;
+    }
+
     private CoolerResponseVerdict Fire(CoolerResponseSymptom symptom, double? ccdC) {
         NotResponding = true;
         Symptom = symptom;
