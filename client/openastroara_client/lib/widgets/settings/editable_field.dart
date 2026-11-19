@@ -93,11 +93,13 @@ class _EditableTextRowState extends State<EditableTextRow> {
                   // instead of overflowing past the help icon (#1306 panel
                   // tests surfaced it on the guider rows).
                   Flexible(
-                    child: Text(
-                      widget.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                    // The field carries the label as its name (below).
+                    child: ExcludeSemantics(
+                      child: Text(
+                        widget.label,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AraColors.textSecondary),
+                      ),
                     ),
                   ),
                   if (widget.helpKey != null) HelpIcon(helpKey: widget.helpKey!),
@@ -106,15 +108,20 @@ class _EditableTextRowState extends State<EditableTextRow> {
             ),
           ),
           Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              maxLines: widget.maxLines,
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: widget.hint,
+            // TextField builds its own text-field node; a Semantics parent
+            // without `container` merges the label into it: one node.
+            child: Semantics(
+              label: widget.label,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                maxLines: widget.maxLines,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: widget.hint,
+                ),
+                onSubmitted: (_) => _commit(),
               ),
-              onSubmitted: (_) => _commit(),
             ),
           ),
         ],
