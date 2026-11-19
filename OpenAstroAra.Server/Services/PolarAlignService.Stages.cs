@@ -507,13 +507,21 @@ namespace OpenAstroAra.Server.Services {
             }
             var aimDecDeg = Math.CopySign(SeedDecDeg, decDeg == 0 ? 1.0 : decDeg);
             LogLeavingAxis(decDeg, aimDecDeg);
+            if (afterManualHome) {
+                // The reading is stale (whatever the last move left, Dec 2° as easily as 85°), so it says nothing about
+                // where the pole is: the tilt is 5° of the reading's own movement, either way. From the physical Home
+                // both directions are the same harmless 5° tilt off the axis.
+                await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, 90.0 - SeedDecDeg,
+                    (from, now) => PolarAlignGeometry.SeparationDeg(from.RaDeg, from.DecDeg, now.RaDeg, now.DecDeg),
+                    checkDirection: false, gen, ct).ConfigureAwait(false);
+                return;
+            }
             // Progress is the gain in distance from the pole, so a tilt that heads over the pole from Dec 88°, say,
             // is reversed rather than ending 3° off the axis on the far side (from within 0.5° of the pole it can
-            // still cross before the reversal threshold, which ends 5° off on the far side: harmless). From the reading's start the tube goes
-            // to 5° from the pole; after a hand-set Home the reading is stale, so the tilt is 5° relative to it.
+            // still cross before the reversal threshold, which ends 5° off on the far side: harmless). The tube
+            // goes to 5° from the pole.
             var startPoleDistDeg = 90.0 - Math.Abs(decDeg);
-            var tiltDeg = afterManualHome ? 90.0 - SeedDecDeg : Math.Max(1.0, 90.0 - SeedDecDeg - startPoleDistDeg);
-            await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, tiltDeg,
+            await MoveAxisUntilAsync(TelescopeAxes.Secondary, 1.0, Math.Max(1.0, 90.0 - SeedDecDeg - startPoleDistDeg),
                 (from, now) => Math.Abs(from.DecDeg) - Math.Abs(now.DecDeg),
                 checkDirection: true, gen, ct).ConfigureAwait(false);
         }
@@ -575,7 +583,8 @@ namespace OpenAstroAra.Server.Services {
         /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second; fast
         /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest. Then stop, settle, and return the fresh
         /// reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below −0.5°)
-        /// is stopped and reversed once — a driver's sign for "positive" is not standard. Every exit stops the
+        /// is stopped and reversed once — a driver's sign for "positive" is not standard; a move that then runs
+        /// back past its start again does not reverse a second time, it stalls and fails. Every exit stops the
         /// motor: Stop, failure, stall (no progress for 10 s) and a time bound of three times the slow travel time.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A refused motor command is this routine's slew_failed with the mount's message, never internal_error.")]

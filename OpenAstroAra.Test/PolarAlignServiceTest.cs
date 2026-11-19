@@ -2313,6 +2313,42 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task After_a_hand_set_Home_a_stale_reading_near_the_equator_still_tilts_5_degrees() {
+            // A mount with no Find Home whose last GoTo left its reading at Dec 2°: the user puts it at Home by hand and
+            // taps Continue. The tilt cannot be measured as distance from the pole (the reading says nothing about the
+            // pole); it is 5° of the reading's own movement, which carries it past Dec 0° without a reversal.
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 2.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            var tilts = new List<Coordinates>();
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((axis, rate) => {
+                    if (rate == 0) {
+                        if (axis == TelescopeAxes.Secondary) {
+                            tilts.Add(position);
+                        }
+                        return;
+                    }
+                    var step = Math.Sign(rate) * MotorStepDeg;
+                    position = axis == TelescopeAxes.Primary
+                        ? new Coordinates((position.RADegrees + step + 360.0) % 360.0, position.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
+                        : new Coordinates(position.RADegrees, position.Dec - step, Epoch.JNOW, Coordinates.RAType.Degrees);
+                });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws, store: NewHomeStore());
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false); // Continue: at Home by hand
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(tilts, Has.Count.EqualTo(1), "one tilt, no reversal");
+            Assert.That(tilts[0].Dec, Is.EqualTo(-3.0).Within(1e-6), "5° of the reading's movement, across Dec 0°");
+        }
+
+        [Test]
         public async Task A_fine_start_on_a_mount_without_Find_Home_asks_for_Home_first() {
             // The same hazard on a mount the user homes by hand: with use_home on, a fine start opens in
             // homing and waits for Continue (needs_home) instead of seeding from wherever the last turn left
