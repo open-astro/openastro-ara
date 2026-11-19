@@ -113,12 +113,12 @@ namespace OpenAstroAra.Test {
             : null;
 
         private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync(
-                Func<string, string?>? putResponder = null) {
+                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null) {
             var box = ScriptedAlpacaDevice.Start(Mount(), putResponder);
             box.RespondWithQuery((path, _) => path.EndsWith("/axisrates", StringComparison.Ordinal)
                 ? "[{\"Minimum\":0.002,\"Maximum\":4.0}]" : null);
             var clock = new ManualClock();
-            var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
+            var svc = new TelescopeService(logger) { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             var sw = Stopwatch.StartNew();
             while ((await svc.GetAsync(CancellationToken.None))?.Capabilities?.MoveAxisRateBandsDegPerSec is not { Count: > 0 }) {
@@ -136,6 +136,68 @@ namespace OpenAstroAra.Test {
         private static bool IsStop(string body, int axis) =>
             body.Contains($"Axis={axis}", StringComparison.Ordinal) && body.Contains("Rate=0&", StringComparison.Ordinal)
             || body.Contains($"Axis={axis}", StringComparison.Ordinal) && body.EndsWith("Rate=0", StringComparison.Ordinal);
+
+        private sealed class WarningCounter : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
+            private int _snapped;
+            public int Snapped => Volatile.Read(ref _snapped);
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (formatter(state, exception).Contains("snapped to", StringComparison.Ordinal)) {
+                    Interlocked.Increment(ref _snapped);
+                }
+            }
+        }
+
+        // Polar alignment stops its motor moves on this read: it must be the driver's answer now, not the 2 s refresh.
+        [Test]
+        public async Task ReadPointingNow_returns_the_drivers_position_at_once() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5" : mount(path));
+
+            var now = await svc.ReadPointingNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.EqualTo(((double, double)?)(7.5, 45.0)));
+        }
+
+        [Test]
+        public async Task ReadPointingNow_is_null_without_a_mount() {
+            using var svc = new TelescopeService();
+
+            Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ReadPointingNow_is_null_when_the_driver_read_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        // A polar-align move renews its lease four times a second: the snap warning belongs to the driver call only.
+        [Test]
+        public async Task A_snapped_rate_is_logged_once_per_driver_call_not_per_renewal() {
+            var log = new WarningCounter();
+            var (box, svc, clock) = await ArmedAsync(logger: log);
+            await using var _ = box;
+            using var __ = svc;
+
+            await svc.MoveAxisAsync(0, 9.0, 1000, CancellationToken.None); // the bands top out at 4°/s
+            for (var i = 0; i < 3; i++) {
+                clock.Now = clock.Now.AddMilliseconds(250);
+                await svc.MoveAxisAsync(0, 9.0, 1000, CancellationToken.None);
+            }
+
+            Assert.That(log.Snapped, Is.EqualTo(1));
+        }
 
         [Test]
         public async Task A_leased_move_with_no_renewal_is_stopped_after_the_lease() {
