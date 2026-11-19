@@ -1,0 +1,4 @@
+### Changed (Simple Mode)
+
+- **Hold any shutter or STOP for 2 s for Emergency Stop** (#1911): every Simple Mode shutter (Preview, Focus, Polar align, Guider, Plan) and the new Stop at the foot of the right rail on desktop and iPad send one Emergency Stop after a 2 s hold. A press under 500 ms is a tap; the red fill and HOLD start at 500 ms; letting go or sliding off before 2 s sends nothing. The red Stop block is gone on desktop and iPad, and the bottom row runs to the right edge there; a phone keeps its STOP and also gets the shutter hold.
+- **Stopping the plan moved into Plan's panel** (#1911): the Plan shutter now pauses after the frame in hand and no longer stops on a hold. **Stop plan…** in the panel asks in place, saying how many frames the run took, and keeps those frames and the mount tracking.

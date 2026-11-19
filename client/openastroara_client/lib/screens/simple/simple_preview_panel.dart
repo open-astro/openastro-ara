@@ -41,6 +41,7 @@ import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/filter_offset_calibration_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../widgets/emergency_stop_button.dart' show EmergencyStopHold;
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/focus/guide_focus_card.dart'
@@ -1366,12 +1367,13 @@ class SimpleShutterButton extends StatelessWidget {
           label ??
           (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
       hint: why,
-      child: InkResponse(
+      // Every shutter is also the hold for Emergency Stop (#1911): a tap does
+      // the mode's job, 2 s from pointer down is one Emergency Stop.
+      child: EmergencyStopHold(
         key: const Key('simple-shutter'),
         onTap:
             onPressed ??
             (why == null ? null : () => simpleSayWhy(context, why)),
-        radius: 36,
         child: Container(
           width: 60,
           height: 60,

@@ -161,6 +161,9 @@ const double kSimplePreflightRowHeight = 56;
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
 
+/// The rail-foot Stop's height (#1911); grows with the rails.
+const double kSimpleRailFootHeight = 60;
+
 /// The modes, in the decided order.
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
@@ -1221,6 +1224,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
+    // #1911 — desktop and iPad: Stop is the foot of the right rail, so no
+    // block sits in the corner and the rows beside the rail run to the inset.
+    final railFoot = railTabs;
+    final footHeight = kSimpleRailFootHeight * simpleRailScale(context);
+    // Where the bottom row and the rig bar end on the right.
+    final rowRight = deck || railFoot
+        ? kSimpleInset
+        : kSimpleInset * 2 + (railWidth + stopSize) / 2;
     // The bottom row (guiding, histogram) grows with the text like the
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
@@ -1236,11 +1247,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final aboveRow = statsShown
         ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
         : rowBottom;
+    // What the right rail leaves clear under it: Stop's block, or the
+    // bottom row when Stop is the rail's own foot.
+    final railBottom = railFoot ? aboveRow : kSimpleInset * 2 + stopSize;
     // Beside the rail, the right edge the panels keep: the deck has no rail.
     final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck || railFoot
+        ? aboveRow
+        : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -1285,8 +1301,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : railTop;
     _measure();
     final rightRailTop =
-        railTop +
-        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+        railTop + (height - railTop - railBottom - _rightRailHeight) / 2;
+    // The rail's foot, where the tabs end (not drawn before the rail is
+    // measured, as the plan squares are not).
+    final footShown = railFoot && _rightRailHeight > 0;
+    final footTop = rightRailTop + _rightRailHeight - footHeight;
+    // What a sheet over the right edge leaves clear: Stop, whose foot sits
+    // over every veil and sheet.
+    final aboveFoot = footShown ? height - footTop + kSimpleInset : aboveStop;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
@@ -1374,7 +1396,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      right: rowRight,
       bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
@@ -1622,10 +1644,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right: deck
-                                    ? kSimpleInset
-                                    : kSimpleInset * 2 +
-                                          (railWidth + stopSize) / 2,
+                                right: rowRight,
                                 bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
@@ -1688,7 +1707,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               Positioned(
                                 right: kSimpleInset,
                                 top: railTop,
-                                bottom: kSimpleInset * 2 + stopSize,
+                                bottom: railBottom,
                                 width: railWidth,
                                 child: Center(
                                   child: CompositedTransformTarget(
@@ -1704,6 +1723,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             onPick: _pickTab,
                                             onSettings: () =>
                                                 _toggle(_Popover.settings),
+                                            footHeight: footHeight,
                                           )
                                         : _RightRail(
                                             key: _rightRailKey,
@@ -1952,7 +1972,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: aboveStop,
+                                  bottom: aboveFoot,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).
@@ -1983,8 +2003,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ],
-                              // Stop on its own at the bottom, under the rail.
-                              if (!deck)
+                              // Stop on its own at the bottom, under the rail (a phone
+                              // held sideways; desktop and iPad have it as the foot).
+                              if (footShown)
+                                Positioned(
+                                  right: kSimpleInset,
+                                  top: footTop,
+                                  width: railWidth,
+                                  height: footHeight,
+                                  child: const EmergencyStopButton(railFoot: true),
+                                )
+                              else if (!deck && !railFoot)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
@@ -2881,6 +2910,7 @@ class _RailTabs extends ConsumerWidget {
     required this.popover,
     required this.onPick,
     required this.onSettings,
+    required this.footHeight,
   });
 
   final SimpleModeScreen mode;
@@ -2889,6 +2919,9 @@ class _RailTabs extends ConsumerWidget {
   final ValueChanged<SimpleModeScreen> onPick;
   final VoidCallback onSettings;
 
+  /// The rail's last row, Stop's, which the shell draws over the panel.
+  final double footHeight;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pinned = simpleRailScale(context) > 1;
@@ -2896,7 +2929,8 @@ class _RailTabs extends ConsumerWidget {
     final running = ref.watch(railRunningProvider);
     final open = _openBlock(context, ref, done, running);
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      // The bottom is Stop's room: the shell draws it over the rail's foot (#1911).
+      padding: EdgeInsets.fromLTRB(6, AraSpace.s8, 6, footHeight),
       // No tabBar role: it allows tab children only, and the open block holds
       // the shutter and the settings chip too.
       child: Semantics(

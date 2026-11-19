@@ -1749,12 +1749,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planResume => 'Resume';
 
   @override
-  String get planStopTheRun => 'Stop the run';
-
-  @override
-  String get planHoldToStop => 'Hold to stop';
-
-  @override
   String get planTonightsBest => 'TONIGHT\'S BEST';
 
   @override
@@ -1938,8 +1932,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get planHintResume =>
-      'Tap the shutter to resume and re-center; hold it to stop.';
+  String get planHintResume => 'Tap the shutter to resume and re-center.';
 
   @override
   String get planResumeWithoutRecenter => 'Resume without re-centering';
@@ -1948,8 +1941,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planRecenterAndRefocus => 'Re-center and refocus';
 
   @override
-  String get planHintPause =>
-      'Tap the shutter to pause after this frame; hold it to stop.';
+  String get planHintPause => 'Tap the shutter to pause after this frame.';
+
+  @override
+  String get planStopPlan => 'Stop plan…';
+
+  @override
+  String planStopPlanAsk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Stop the plan? The $count frames taken are kept; the mount keeps tracking.',
+      one:
+          'Stop the plan? The 1 frame taken is kept; the mount keeps tracking.',
+      zero: 'Stop the plan? The mount keeps tracking.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planStopPlanConfirm => 'Stop plan';
+
+  @override
+  String get planKeepImaging => 'Keep imaging';
 
   @override
   String get planAddTarget => 'Add target';
