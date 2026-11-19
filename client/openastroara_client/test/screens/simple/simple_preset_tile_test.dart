@@ -12,6 +12,7 @@ Future<List<int>> _pump(
   WidgetTester tester, {
   bool enabled = true,
   TargetPlatform? platform,
+  int value = 10,
 }) async {
   tester.view.physicalSize = const Size(800, 1000);
   tester.view.devicePixelRatio = 1;
@@ -26,7 +27,7 @@ Future<List<int>> _pump(
         body: SimplePresetTile<int>(
           key: const Key('tile'),
           label: 'Frames',
-          value: 10,
+          value: value,
           options: const [5, 10, 20],
           format: (n) => '× $n',
           onSelected: enabled ? picks.add : null,
@@ -37,40 +38,142 @@ Future<List<int>> _pump(
   return picks;
 }
 
+/// The tile itself; the Key'd widget also holds the wheel under it.
+final _tileHead = find.descendant(
+  of: find.byKey(const Key('tile')),
+  matching: find.byType(InkWell),
+);
+
 bool _popup(WidgetTester tester) =>
     tester.state<NavigatorState>(find.byType(Navigator)).canPop();
 
 void main() {
-  testWidgets('the wheel opens in place and Done sets it', (tester) async {
+  testWidgets('the wheel opens in place and folding it sets the spun value', (
+    tester,
+  ) async {
     final picks = await _pump(tester);
-    await tester.tap(find.byKey(const Key('tile')));
+    await tester.tap(_tileHead);
     await tester.pumpAndSettle();
     expect(_popup(tester), isFalse, reason: 'no modal popup route');
     tester
         .widget<CupertinoPicker>(find.byType(CupertinoPicker))
         .onSelectedItemChanged!(0);
-    await tester.tap(find.text('Done'));
+    await tester.tap(_tileHead);
     await tester.pumpAndSettle();
     expect(picks, [5]);
     expect(find.byType(CupertinoPicker), findsNothing);
   });
 
+  testWidgets('a tap on a row picks that value once and folds the wheel', (
+    tester,
+  ) async {
+    final picks = await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('× 20'));
+    await tester.pumpAndSettle();
+    expect(picks, [20]);
+    expect(find.byType(CupertinoPicker), findsNothing);
+  });
+
+  testWidgets("a row tap picks on Android's flat picker too", (tester) async {
+    final picks = await _pump(tester, platform: TargetPlatform.android);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('× 5'));
+    await tester.pumpAndSettle();
+    expect(picks, [5]);
+    expect(find.byType(ListWheelScrollView), findsNothing);
+  });
+
+  testWidgets(
+    'a spin alone sets nothing; the tile tap that folds it sets it once',
+    (tester) async {
+      final picks = await _pump(tester);
+      await tester.tap(_tileHead);
+      await tester.pumpAndSettle();
+      final picker = tester.widget<CupertinoPicker>(
+        find.byType(CupertinoPicker),
+      );
+      picker.onSelectedItemChanged!(2);
+      picker.onSelectedItemChanged!(0);
+      picker.onSelectedItemChanged!(2);
+      await tester.pumpAndSettle();
+      expect(picks, isEmpty, reason: 'browsing moves nothing');
+      await tester.tap(_tileHead);
+      await tester.pumpAndSettle();
+      expect(picks, [20]);
+      expect(find.byType(CupertinoPicker), findsNothing);
+    },
+  );
+
+  testWidgets('a wheel folded without a spin sets nothing', (tester) async {
+    final picks = await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect(picks, isEmpty);
+  });
+
+  testWidgets('a fold without a spin keeps a value moved elsewhere', (
+    tester,
+  ) async {
+    final picks = await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    // Another client moves the gear while the wheel is open.
+    final later = await _pump(tester, value: 20);
+    await tester.pumpAndSettle();
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect([...picks, ...later], isEmpty);
+  });
+
+  testWidgets('the wheel has no Done button', (tester) async {
+    await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoPicker), findsOneWidget);
+    expect(find.text('Done'), findsNothing);
+    expect(find.byType(TextButton), findsNothing);
+  });
+
+  testWidgets('the open iOS wheel is three rows tall, none cut at an edge', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(_tileHead);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(CupertinoPicker)).height, 132);
+  });
+
+  testWidgets(
+    'the open Android wheel is three rows tall, none cut at an edge',
+    (tester) async {
+      await _pump(tester, platform: TargetPlatform.android);
+      await tester.tap(_tileHead);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(ListWheelScrollView)).height, 132);
+    },
+  );
+
   testWidgets(
     "each phone its own picker: the iOS wheel, Android's flat number picker",
     (tester) async {
       final picks = await _pump(tester, platform: TargetPlatform.android);
-      await tester.tap(find.byKey(const Key('tile')));
+      await tester.tap(_tileHead);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('simple-wheel-android')), findsOneWidget);
       expect(find.byType(CupertinoPicker), findsNothing);
       tester
           .widget<ListWheelScrollView>(find.byType(ListWheelScrollView))
           .onSelectedItemChanged!(2);
-      await tester.tap(find.text('Done'));
+      await tester.tap(_tileHead);
       await tester.pumpAndSettle();
       expect(picks, [20]);
       await _pump(tester, platform: TargetPlatform.iOS);
-      await tester.tap(find.byKey(const Key('tile')));
+      await tester.tap(_tileHead);
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoPicker), findsOneWidget);
       expect(find.byKey(const Key('simple-wheel-android')), findsNothing);
@@ -82,7 +185,7 @@ void main() {
     (tester) async {
       final handle = tester.ensureSemantics();
       final picks = await _pump(tester, platform: TargetPlatform.android);
-      await tester.tap(find.byKey(const Key('tile')));
+      await tester.tap(_tileHead);
       await tester.pumpAndSettle();
       final node = tester.getSemantics(
         find.byKey(const Key('simple-wheel-android')),
@@ -99,7 +202,7 @@ void main() {
           .properties
           .onIncrease!();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
+      await tester.tap(_tileHead);
       await tester.pumpAndSettle();
       expect(picks, [20]);
       handle.dispose();
@@ -135,7 +238,7 @@ void main() {
     tester,
   ) async {
     final picks = await _pump(tester);
-    await tester.tap(find.byKey(const Key('tile')));
+    await tester.tap(_tileHead);
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoPicker), findsOneWidget);
     await _pump(tester, enabled: false);

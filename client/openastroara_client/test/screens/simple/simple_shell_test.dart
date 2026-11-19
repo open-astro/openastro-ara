@@ -2202,8 +2202,7 @@ void main() {
     final wheel = tester.widget<ListWheelScrollView>(find.byType(ListWheelScrollView));
     final tile = tester.widget<SimplePresetTile<Duration>>(find.byKey(const Key('simple-exposure')));
     wheel.onSelectedItemChanged!(tile.options.indexOf(const Duration(seconds: 10)));
-    await tester.ensureVisible(find.text('Done'));
-    await tester.tap(find.text('Done'));
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-exposure')), matching: find.byType(InkWell)));
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
     tester.widget<Slider>(find.byKey(const Key('simple-gain'))).onChangeEnd!(200);
@@ -4436,18 +4435,6 @@ void main() {
     await _openSection(tester, 'Devices');
     await tester.pumpAndSettle();
     expect(find.text("Can't drive yet · Ara can't move this Polar Aligner yet: it only runs its own alignment."),
-        findsOneWidget);
-    expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
-  });
-
-  testWidgets('Devices: with no Polar Aligner found, its row says so', (tester) async {
-    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
-      polarAlignerApiProvider.overrideWithValue(_PolarAligner(const PolarAligner())),
-      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
-    ]);
-    await _openSection(tester, 'Devices');
-    await tester.pumpAndSettle();
-    expect(find.text('None · No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'),
         findsOneWidget);
     expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
   });

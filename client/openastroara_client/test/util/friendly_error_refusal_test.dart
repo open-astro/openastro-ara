@@ -22,6 +22,8 @@ Refusal _known(RefusalCause cause) => Refusal(
         }
       : cause == RefusalCause.centerInProgress
       ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
+      : cause == RefusalCause.belowHorizonLimit
+      ? const {'altitude_deg': 14.2, 'limit_deg': 20}
       : const {},
 );
 
@@ -75,6 +77,14 @@ void main() {
       ),
     );
     expect(words(['focal_length']), isNot(words(['pixel_size'])));
+  });
+
+  test('the below-horizon sentence names the altitude and the limit', () {
+    for (final l in [_en, _pt]) {
+      final words = failureReason(l, _known(RefusalCause.belowHorizonLimit));
+      expect(words, contains('14'));
+      expect(words, contains('20'));
+    }
   });
 
   test('a cause the app does not know shows the daemon detail', () {

@@ -47,11 +47,14 @@ public static class RefusalCatalog {
     public static readonly RefusalCause CaptureSettingsUnsupported = new("capture-settings-unsupported", 422, "The camera cannot take that exposure");
     public static readonly RefusalCause StorageUnavailable = new("storage-unavailable", 409, "The storage disk is missing");
 
+    // Slice 2: a GoTo under the profile's horizon limit (#2044).
+    public static readonly RefusalCause BelowHorizonLimit = new("below-horizon-limit", 409, "The target is below the horizon limit", "altitude_deg", "limit_deg");
+
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress,
+        EndNightInProgress, BelowHorizonLimit,
     ];
 }

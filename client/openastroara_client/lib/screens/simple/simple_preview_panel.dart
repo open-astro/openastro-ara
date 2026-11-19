@@ -980,6 +980,10 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   FixedExtentScrollController? _wheel;
   late T _spun;
 
+  /// The value when the wheel opened: a fold applies only a spin away from
+  /// it, so a value moved elsewhere meanwhile is not set back.
+  late T _opened;
+
   List<T> get _items => widget.options.contains(widget.value)
       ? widget.options
       : [widget.value, ...widget.options];
@@ -989,12 +993,22 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
     _wheel?.dispose();
     _wheel = null;
     if (_open) {
-      _spun = widget.value;
+      _spun = _opened = widget.value;
       _wheel = FixedExtentScrollController(
         initialItem: _items.indexOf(widget.value),
       );
     }
   });
+
+  /// A tap on the tile: folds the wheel, and applies a spin once (browsing
+  /// never moves the gear more than once).
+  void _onTileTap() {
+    if (!_open) return _toggle();
+    final spun = _spun;
+    final opened = _opened;
+    _toggle();
+    if (spun != opened && spun != widget.value) widget.onSelected?.call(spun);
+  }
 
   void _pick(T v) {
     _toggle();
@@ -1050,8 +1064,12 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
       ),
     );
     final controller = _wheel;
-    Widget label(T o) =>
-        Center(child: Text(widget.format(o), style: kSimpleText));
+    // A tap on a row picks it.
+    Widget label(T o) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _pick(o),
+      child: Center(child: Text(widget.format(o), style: kSimpleText)),
+    );
     // Its own transparent Material: the fill and highlight paint here, over
     // the panel's scrim, not on a Material further down.
     return Column(
@@ -1070,7 +1088,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
             child: InkWell(
               borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-              onTap: enabled ? _toggle : null,
+              onTap: enabled ? _onTileTap : null,
               // The label and value above say it once.
               child: ExcludeSemantics(child: tile),
             ),
@@ -1078,37 +1096,23 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
         ),
         if (controller != null)
           SizedBox(
-            height: 176,
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-                    onPressed: () => _pick(_spun),
-                    child: Text(context.l10n.previewDone),
-                  ),
-                ),
-                Expanded(
-                  // Focused on opening, so the arrows turn it at once.
-                  child: SimpleWheelKeys(
-                    debugLabel: 'simple-wheel-${widget.label}',
-                    autofocus: true,
-                    onStep: SimpleWheelKeys.stepper(controller, items.length),
-                    // Each phone's own picker (user, 2026-11-13): the iOS
-                    // wheel, and on Android its flat number picker with
-                    // the pick between two accent lines.
-                    child: Theme.of(context).platform == TargetPlatform.android
-                        ? _androidWheel(controller, items, label)
-                        : CupertinoPicker(
-                            itemExtent: 44,
-                            scrollController: controller,
-                            onSelectedItemChanged: (i) => _spun = items[i],
-                            children: [for (final o in items) label(o)],
-                          ),
-                  ),
-                ),
-              ],
+            height: 132,
+            // Focused on opening, so the arrows turn it at once.
+            child: SimpleWheelKeys(
+              debugLabel: 'simple-wheel-${widget.label}',
+              autofocus: true,
+              onStep: SimpleWheelKeys.stepper(controller, items.length),
+              // Each phone's own picker (user, 2026-11-13): the iOS
+              // wheel, and on Android its flat number picker with
+              // the pick between two accent lines.
+              child: Theme.of(context).platform == TargetPlatform.android
+                  ? _androidWheel(controller, items, label)
+                  : CupertinoPicker(
+                      itemExtent: 44,
+                      scrollController: controller,
+                      onSelectedItemChanged: (i) => _spun = items[i],
+                      children: [for (final o in items) label(o)],
+                    ),
             ),
           ),
       ],
