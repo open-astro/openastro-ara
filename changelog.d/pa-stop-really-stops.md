@@ -4,7 +4,7 @@
 
 ### Fixed (Polar Align)
 
-- **Stop really stops the mount** (#2048): Stop used to end the routine only. A Find Home or GoTo under way kept moving, a motor turn stopped only when the routine unwound, and a Stop whose request timed out never reached the mount. Now Stop sends AbortSlew and MoveAxis 0 on both axes at once, before it waits for anything, and every end of a run (Stop, Done, a failure, an exception, a time bound, the end of Verify, a sequence start, daemon shutdown) sends them again and checks on fresh readings that the mount stands still. If Ara cannot confirm that, the routine ends failed with `mount_did_not_stop` and tells you to cut the mount's power.
+- **Stop really stops the mount** (#2048): Stop used to end the routine only. A Find Home or GoTo under way kept moving, a motor turn stopped only when the routine unwound, and a Stop whose request timed out never reached the mount. Now Stop sends AbortSlew and MoveAxis 0 on both axes at once, before it waits for anything, and every end of a run (Stop, Done, a failure, an exception, a time bound, the end of Verify, a sequence start, daemon shutdown) sends them again and checks on fresh readings that the mount stands still. If Ara cannot confirm that, the routine ends failed with `mount_did_not_stop`, tells you to cut the mount's power, and leaves tracking off. A Stop tapped while Polar Align is still starting (taking the guide camera) now keeps it from starting, instead of letting it move the mount after the Stop.
 
 ### Added (Polar Align)
 

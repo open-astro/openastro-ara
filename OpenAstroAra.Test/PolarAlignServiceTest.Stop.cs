@@ -212,6 +212,15 @@ namespace OpenAstroAra.Test {
                     });
             }
 
+            /// <summary>Ends a Find Home that nothing else ends (one that ignores both cancellation and AbortSlew).</summary>
+            public void ReleaseHome() {
+                lock (_lock) {
+                    _home?.TrySetResult(false);
+                    _home = null;
+                    _runaway = false;
+                }
+            }
+
             private bool SlewingLocked() => _rates[0] != 0 || _rates[1] != 0 || _goto is not null || _home is not null || _runaway;
 
             private void Record(string command) => _log.Add((command, EventCount?.Invoke() ?? 0));
@@ -488,6 +497,83 @@ namespace OpenAstroAra.Test {
             Assert.That(error.GetProperty("message").GetString(), Does.Contain("Cut the mount's power"));
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.Zero, "never 'stopped' for a mount that may still move");
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"));
+        }
+
+        // A Stop that lands while a Start still holds the routine's lock (taking the camera from the guider) has no run to
+        // stop yet. It must not let that Start launch a run that moves the mount after the Stop.
+        [Test]
+        public async Task A_Stop_while_Start_is_taking_the_camera_launches_no_run_and_moves_nothing() {
+            var mount = new FakeStopMount(tracking: true, canFindHome: true);
+            var ws = new WsRecorder();
+            var guider = NewFake();
+            var inLease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var leaseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            guider.LeaseGate = active => {
+                if (!active) {
+                    return Task.CompletedTask;
+                }
+                inLease.TrySetResult();
+                return leaseGate.Task;
+            };
+            using var svc = NewStopService(mount, ws, NewHomeStore(), guider);
+
+            var start = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
+            await inLease.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var stop = svc.StopAsync(null, CancellationToken.None);
+            leaseGate.SetResult();
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => start).ConfigureAwait(false);
+            Assert.That(refused!.Message, Does.Contain("stopped while it was starting"));
+            await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await guider.WhenLeaseReleasedAsync().WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await Task.Delay(200).ConfigureAwait(false); // a run launched anyway would have sent Find Home by now
+            Assert.That(mount.Log.Where(IsMotion), Is.Empty, $"nothing moves after the Stop: {string.Join(", ", mount.Log)}");
+            Assert.That(mount.Log, Does.Not.Contain("tracking on"));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero, "no run was announced");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.Not.EqualTo("homing"));
+        }
+
+        // The hand-back gives tracking back only to a mount whose stop was confirmed: a mount that may still move is left
+        // with tracking off, even for the guiding that follows.
+        [Test]
+        public async Task Guiding_that_takes_the_camera_hands_back_no_tracking_when_the_stop_is_not_confirmed() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            var guider = NewFake();
+            using var svc = NewStopService(mount, ws, guider: guider);
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            mount.IgnoresStops = true;
+
+            var at = mount.Count;
+            await guider.TakeForGuidingAsync().ConfigureAwait(false);
+
+            Assert.That(mount.Since(at), Does.Contain("move primary 0").And.Contain("abort polar_align"), "the stop, resent with AbortSlew");
+            Assert.That(mount.Since(at), Does.Not.Contain("tracking on"));
+            Assert.That(mount.Tracking, Is.False, "no tracking for a mount that did not confirm its stop");
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+        }
+
+        // A run stuck in a call that ignores cancellation never reaches its own exit: the Stop confirms the stop itself and
+        // turns tracking off now, rather than leave a tracking mount running toward the pier for as long as the call hangs.
+        [Test]
+        public async Task A_Stop_whose_run_is_stuck_turns_tracking_off_itself() {
+            var mount = new FakeStopMount(tracking: true, canFindHome: true) { HomeArrives = false, HomeIgnoresCancel = true };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws, NewHomeStore());
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(200);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.HomeStarted.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            mount.IgnoresStops = true; // the abort does not end the Find Home call either: the run stays stuck
+
+            try {
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+                Assert.That(mount.Tracking, Is.False, "tracking off while the run is still stuck");
+                Assert.That(mount.Log, Does.Not.Contain("tracking on"));
+            } finally {
+                mount.ReleaseHome();
+            }
         }
 
         // ── daemon shutdown ──────────────────────────────────────────────────────────────────

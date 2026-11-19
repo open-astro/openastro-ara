@@ -33,7 +33,7 @@ namespace OpenAstroAra.Server.Services {
     /// </summary>
     public sealed partial class PolarAlignService {
 
-        private enum MountMotion { None = 0, AxisMove = 1, GoTo = 2, FindHome = 3 }
+        private enum MountMotion { None = 0, AxisMove = 1, GoTo = 2, FindHome = 3, Unpark = 4 }
 
         // The motion this routine commanded and has not seen end. Written by the run task (a superseded one too: the
         // mount knows nothing of generations), read by the stop path. Cleared only when the motion ended normally or a
@@ -42,13 +42,15 @@ namespace OpenAstroAra.Server.Services {
 
         private MountMotion CurrentMotion => (MountMotion)Volatile.Read(ref _motion);
 
-        /// <summary>The run's gate before it commands motion: a run that was stopped or superseded starts none.</summary>
+        /// <summary>The run's gate before it commands motion: a run that was stopped or superseded starts none. The
+        /// motion is marked BEFORE the run is checked: a Stop that fences the run after the check then reads the mark and
+        /// sends AbortSlew in its first round (a mark left by a failed check only adds one harmless AbortSlew).</summary>
         private void BeginMotion(MountMotion kind, int gen, CancellationToken ct) {
+            Volatile.Write(ref _motion, (int)kind);
             ct.ThrowIfCancellationRequested();
             if (!IsCurrent(gen)) {
                 throw new OperationCanceledException("the run was stopped before the mount moved");
             }
-            Volatile.Write(ref _motion, (int)kind);
         }
 
         private void EndMotion() => Volatile.Write(ref _motion, (int)MountMotion.None);
@@ -110,6 +112,12 @@ namespace OpenAstroAra.Server.Services {
         // The current run's cancellation and end request, for the stop path, which must not wait on _opLock. Guarded by _gate.
         private (CancellationTokenSource Cts, RunEnd End)? _liveRun;
 
+        // Every end request (Stop, Done, a sequence start, a lost camera, shutdown) counts here before it does anything
+        // else. A Start notes the count when it is called and launches no run if it changed: a Stop that lands while a
+        // Start still holds _opLock (taking the camera, stopping the guider's loop) finds no run to stop yet, and must not
+        // let that Start move the mount after it. Guarded by _gate.
+        private long _endRequests;
+
         /// <summary>
         /// The first step of Stop, Done, a sequence start and daemon shutdown, before any lock or wait: fence the run (its
         /// late writes become no-ops, and it starts no new motion), send the mount its stop, and cancel the run. The run's
@@ -119,6 +127,7 @@ namespace OpenAstroAra.Server.Services {
             (CancellationTokenSource Cts, RunEnd End)? live;
             bool active;
             lock (_gate) {
+                _endRequests++;
                 live = _liveRun;
                 active = _active;
                 if (live is not null) {
@@ -266,23 +275,34 @@ namespace OpenAstroAra.Server.Services {
         /// default). On: tracking off. Off: a run that finished (Done, or the check's verdict) gives back the tracking it
         /// found, unless another caller set tracking after the run's last write. A Stop, a sequence start, a failure or a
         /// shutdown never turns tracking back on, whatever the setting: tracking off. The one other hand-back is Guiding
-        /// taking the camera from an open run (<see cref="HandedToGuiding"/>): guiding needs the tracking the run found.</summary>
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "A profile read fault falls back to the safe default (tracking off).")]
-        private void ApplyExitTracking(bool? priorTracking, bool finished, bool handedToGuiding, string why) {
-            bool stopTracking;
-            try {
-                stopTracking = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings()).StopTrackingWhenDone;
-            } catch (Exception) {
-                stopTracking = true;
-            }
-            if ((handedToGuiding || (finished && !stopTracking)) && priorTracking is bool prior) {
+        /// taking the camera from an open run (<see cref="HandedToGuiding"/>): guiding needs the tracking the run found.
+        /// A mount whose stop was not confirmed (<paramref name="mountStopped"/> not true) never gets tracking back: off.</summary>
+        private void ApplyExitTracking(bool? priorTracking, bool finished, bool handedToGuiding, bool? mountStopped, string why) {
+            if (mountStopped == true && HandBackWanted(finished, handedToGuiding) && priorTracking is bool prior) {
                 if (_trackingTouched) {
                     RestoreTrackingBestEffort(prior);
                 }
                 return;
             }
             TrackingOffBestEffort(why);
+        }
+
+        /// <summary>Whether this end gives the run's tracking back rather than turning it off (before the stop's own
+        /// confirmation is considered): Guiding taking the camera, or a finished run with <c>stop_tracking_when_done</c> off.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A profile read fault falls back to the safe default (tracking off).")]
+        private bool HandBackWanted(bool finished, bool handedToGuiding) {
+            if (handedToGuiding) {
+                return true;
+            }
+            if (!finished) {
+                return false;
+            }
+            try {
+                return !PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings()).StopTrackingWhenDone;
+            } catch (Exception) {
+                return false;
+            }
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -305,6 +325,7 @@ namespace OpenAstroAra.Server.Services {
         private void StopRunForShutdown() {
             bool live;
             lock (_gate) {
+                _endRequests++; // a Start still taking the camera launches no run into the shutdown
                 live = _liveRun is not null;
             }
             if (!live) {
@@ -358,6 +379,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4566, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): stopping the mount failed — cut the mount's power and check it")]
         private partial void LogMountStopFailed(string why, Exception exception);
+
+        [LoggerMessage(EventId = 4567, Level = LogLevel.Information, Message = "§45 polar-align: an end request landed while the routine was starting — the run was not launched and the mount was not moved")]
+        private partial void LogStartStoppedBeforeRun();
 
         [LoggerMessage(EventId = 4565, Level = LogLevel.Information, Message = "§45 polar-align: a newer run owns the mount — this superseded run leaves the stop and tracking to it")]
         private partial void LogExitLeftToSuccessor();

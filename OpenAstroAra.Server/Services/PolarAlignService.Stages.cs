@@ -656,6 +656,10 @@ namespace OpenAstroAra.Server.Services {
                         var reversedRate = Rate();
                         LogAxisMoveReversed(axis, reversedRate);
                         await RunAxisAsync(axis, 0).ConfigureAwait(false);
+                        if (!IsCurrent(gen)) {
+                            // A Stop during the stop above must not get the motor restarted the other way.
+                            throw new OperationCanceledException("the run was stopped while the mount reversed");
+                        }
                         await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                         best = p;
                         bestAt = Stopwatch.GetTimestamp();

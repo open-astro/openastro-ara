@@ -484,7 +484,9 @@ namespace OpenAstroAra.Test {
             Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
 
             releaseStartLease.SetResult();
-            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+            // #2048 — a Stop that lands while the Start still holds the lock means the Start launches no run.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => startTask).ConfigureAwait(false);
+            await stopTask.ConfigureAwait(false);
 
             Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease),
                 "the lease calls must run in call order — acquire then release — not race");
