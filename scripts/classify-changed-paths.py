@@ -74,6 +74,14 @@ INERT_DIRS = (
     "changelog.d/",
 )
 
+# Files under an INERT_DIRS prefix that a .NET test reads: they run the dotnet
+# jobs and are not docs_only. SequenceV2FieldTableTest compares the checked-in
+# v2 schema with the one the daemon generates from its tables, and the v2
+# tests read the kind and field rows of the spec through SequenceV2Spec (#2025).
+INERT_DIR_BUILD_INPUTS = frozenset(
+    {"docs/specs/sequence-v2.md", "docs/specs/sequence-v2.schema.json"}
+)
+
 # Root-level files that are prose and nothing else. Deliberately short:
 # every other root file falls through to the open `dotnet` default. In
 # particular `.editorconfig` is NOT here -- it carries the
@@ -178,6 +186,9 @@ def buckets_for(path: str) -> frozenset:
     if path in SCRIPT_RULES:
         return SCRIPT_RULES[path]
 
+    if path in INERT_DIR_BUILD_INPUTS:
+        return frozenset({"dotnet"})
+
     for prefix in INERT_DIRS:
         if path.startswith(prefix):
             return NONE
@@ -229,6 +240,8 @@ def is_docs_path(path: str) -> bool:
     analyzer-gate and re-downloaded by the Alpaca jobs, and the §14.5.1
     auto-bump PR touches that file and nothing else.
     """
+    if path in INERT_DIR_BUILD_INPUTS:
+        return False
     for prefix in INERT_DIRS:
         if path.startswith(prefix):
             return True
