@@ -5,6 +5,7 @@ import '../../l10n/l10n.dart';
 import '../../models/switch_device.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
@@ -140,7 +141,13 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
     try {
       await ref.read(coolingFanProvider.notifier).choose(fan);
     } catch (e) {
-      notify(title, detail: failureReason(l10n, e), error: true);
+      notify(
+        title,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
+        error: true,
+      );
     }
   }
 }

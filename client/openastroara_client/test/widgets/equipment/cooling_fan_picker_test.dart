@@ -348,6 +348,10 @@ void main() {
         .value;
     expect(shown(), const CoolingFan(deviceId: 'box', portId: 1));
     expect(find.textContaining('changed on another device'), findsOneWidget);
+    expect(
+      c.read(simpleMessagesProvider).single.detail,
+      contains('changed on the rig'),
+    );
     await tester.tap(find.byKey(const Key('section-reload')));
     await tester.pumpAndSettle();
     expect(shown(), const CoolingFan(deviceId: 'box', portId: 0));
