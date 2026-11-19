@@ -311,9 +311,9 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.meridian_pause_min',
     tier: SettingTier.advanced,
-    label: 'Pause after meridian flip (min)',
-    description: 'Minutes to wait after a meridian flip before resuming exposures, so the mount can settle + the guider can re-lock.',
-    keywords: ['meridian', 'flip', 'pause', 'wait', 'settle', 'minutes'],
+    label: 'Stop before meridian (min)',
+    description: 'Minutes before the meridian at which imaging stops and waits, so the scope clears the pier. The flip then runs once the meridian has passed.',
+    keywords: ['meridian', 'flip', 'pause', 'stop', 'wait', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 30),
     defaultValue: 5,

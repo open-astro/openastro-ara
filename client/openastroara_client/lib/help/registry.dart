@@ -496,10 +496,10 @@ const Map<String, Help> helpRegistry = {
   ),
   'safety.policies.meridian_pause_min': Help(
     key: 'safety.policies.meridian_pause_min',
-    title: 'Pause after meridian flip',
+    title: 'Stop before meridian',
     body:
-        'Time the mount needs to settle mechanically after the pier-side swap before exposures resume. Faster mounts (Paramount, 10Micron) settle in <1 min; slower or heavy-payload setups need 3-5 min. '
-        'Set this conservatively — a too-short pause produces motion-blurred first frames after the flip.',
+        'How many minutes before the meridian imaging stops. At that moment the run pauses, waits for the target to cross the meridian, and then flips, so the scope never reaches the pier while it is still exposing. '
+        'On a mount where the scope or camera can touch the pier, set this to the time the target takes to get from a safe angle to the meridian, and leave a little extra. 0 turns the early stop off: the flip then runs inside the after-meridian window.',
     relatedSettings: ['safety.policies.meridian_flip_auto'],
   ),
   'safety.policies.on_altitude_limit': Help(
