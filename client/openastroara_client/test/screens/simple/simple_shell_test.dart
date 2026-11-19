@@ -2954,24 +2954,58 @@ void main() {
     });
   });
 
-  testWidgets('the plan square sits beside the tab list, above Stop (no bottom row)', (tester) async {
-    await _pump(tester, const Size(1024, 768),
-        plan: const SimpleRun(sequenceId: 'seq-1', targets: [
-          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
-        ]));
-    await openMode(tester, 'plan');
-    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
-    final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
-    // The tab list reaches down toward Stop, so the squares sit beside it (the shell's
-    // squaresBesideRail), from the first frame (no slide from the offer).
-    final rail = _panelOf(tester, find.byKey(const Key('simple-rail-tabs')));
-    expect(square.right, rail.left - kSimpleInset, reason: 'beside the tab list');
-    final stop = tester.getRect(find.byType(EmergencyStopButton));
-    expect(square.bottom, stop.top - kSimpleInset, reason: 'the bottom row is empty: just above Stop, not under it');
-    expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
-  });
+  testWidgets(
+    'the plan square sits beside the tab list, in the corner (no bottom row)',
+    (tester) async {
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        plan: const SimpleRun(
+          sequenceId: 'seq-1',
+          targets: [
+            SimpleTarget(
+              name: 'M31',
+              steps: [
+                FilterPlanStep(
+                  filterName: 'L',
+                  exposureSeconds: 120,
+                  frameCount: 30,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      await openMode(tester, 'plan');
+      // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      final square = tester.getRect(
+        find.byKey(const Key('simple-run-tracker')),
+      );
+      // The tab list reaches down toward Stop, so the squares sit beside it (the shell's
+      // squaresBesideRail), from the first frame (no slide from the offer).
+      final rail = _panelOf(tester, find.byKey(const Key('simple-rail-tabs')));
+      expect(
+        square.right,
+        rail.left - kSimpleInset,
+        reason: 'beside the tab list',
+      );
+      // Stop is the rail's foot (#1911): no block in the corner, so the square sits at the inset.
+      expect(
+        square.bottom,
+        768 - kSimpleInset,
+        reason: 'the bottom row is empty: the square hugs the corner',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('simple-run-tracker')),
+          matching: find.text('0 / 30'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   // #1789: the plan squares belong to the shell, so every Screen shows them where Queue does.
   const squaresRun = SimpleRun(
@@ -3060,11 +3094,20 @@ void main() {
             isFalse,
             reason: '$mode: square $square, rail $rail',
           );
+          // Just above Stop's block; with Stop as the rail's foot (#1911),
+          // above the bottom row, at the inset.
+          final footed = find
+              .byKey(const Key('simple-rail-stop'))
+              .evaluate()
+              .isNotEmpty;
           final stop = tester.getRect(find.byType(EmergencyStopButton));
           expect(
             square.bottom,
-            closeTo(stop.top - kSimpleInset, 0.01),
-            reason: '$mode: still just above Stop',
+            closeTo(
+              footed ? size.height - kSimpleInset : stop.top - kSimpleInset,
+              0.01,
+            ),
+            reason: '$mode: still in the corner, clear of Stop',
           );
         }
       },
@@ -4443,6 +4486,10 @@ void main() {
     expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-focuser-reconnect')));
+    await tester.ensureVisible(
+      find.byKey(const Key('simple-gear-mount-connect')),
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
     await tester.pump();
     expect(camera.calls, ['disconnect']);

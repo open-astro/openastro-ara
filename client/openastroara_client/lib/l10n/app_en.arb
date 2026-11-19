@@ -2412,14 +2412,6 @@
   "@planResume": {
     "description": "Shutter screen-reader label while paused"
   },
-  "planStopTheRun": "Stop the run",
-  "@planStopTheRun": {
-    "description": "Shutter screen-reader custom action: stop the run"
-  },
-  "planHoldToStop": "Hold to stop",
-  "@planHoldToStop": {
-    "description": "Hint beside the shutter: hold it to stop the run"
-  },
   "planTonightsBest": "TONIGHT'S BEST",
   "@planTonightsBest": {
     "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
@@ -2698,7 +2690,7 @@
       }
     }
   },
-  "planHintResume": "Tap the shutter to resume and re-center; hold it to stop.",
+  "planHintResume": "Tap the shutter to resume and re-center.",
   "@planHintResume": {
     "description": "Progress panel hint while paused"
   },
@@ -2710,9 +2702,25 @@
   "@planRecenterAndRefocus": {
     "description": "Progress panel button while paused: resume after re-centering and refocusing"
   },
-  "planHintPause": "Tap the shutter to pause after this frame; hold it to stop.",
+  "planHintPause": "Tap the shutter to pause after this frame.",
   "@planHintPause": {
     "description": "Progress panel hint while imaging"
+  },
+  "planStopPlan": "Stop plan…",
+  "@planStopPlan": {
+    "description": "Plan's panel button while a plan runs: asks in place before it stops the plan (the shutter pauses; a 2 s hold is Emergency Stop)"
+  },
+  "planStopPlanAsk": "Stop the plan? The frames taken are kept and the mount keeps tracking.",
+  "@planStopPlanAsk": {
+    "description": "Plan's panel: the in-place question after Stop plan…"
+  },
+  "planStopPlanConfirm": "Stop plan",
+  "@planStopPlanConfirm": {
+    "description": "Plan's panel: confirms stopping the plan (not an Emergency Stop)"
+  },
+  "planKeepImaging": "Keep imaging",
+  "@planKeepImaging": {
+    "description": "Plan's panel: answers the stop question with no stop"
   },
   "planAddTarget": "Add target",
   "@planAddTarget": {

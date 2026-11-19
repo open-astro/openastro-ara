@@ -1749,12 +1749,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planResume => 'Resume';
 
   @override
-  String get planStopTheRun => 'Stop the run';
-
-  @override
-  String get planHoldToStop => 'Hold to stop';
-
-  @override
   String get planTonightsBest => 'TONIGHT\'S BEST';
 
   @override
@@ -1938,8 +1932,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get planHintResume =>
-      'Tap the shutter to resume and re-center; hold it to stop.';
+  String get planHintResume => 'Tap the shutter to resume and re-center.';
 
   @override
   String get planResumeWithoutRecenter => 'Resume without re-centering';
@@ -1948,8 +1941,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planRecenterAndRefocus => 'Re-center and refocus';
 
   @override
-  String get planHintPause =>
-      'Tap the shutter to pause after this frame; hold it to stop.';
+  String get planHintPause => 'Tap the shutter to pause after this frame.';
+
+  @override
+  String get planStopPlan => 'Stop plan…';
+
+  @override
+  String get planStopPlanAsk =>
+      'Stop the plan? The frames taken are kept and the mount keeps tracking.';
+
+  @override
+  String get planStopPlanConfirm => 'Stop plan';
+
+  @override
+  String get planKeepImaging => 'Keep imaging';
 
   @override
   String get planAddTarget => 'Add target';
@@ -8442,12 +8447,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planResume => 'Retomar';
 
   @override
-  String get planStopTheRun => 'Parar a sessão';
-
-  @override
-  String get planHoldToStop => 'Segure para parar';
-
-  @override
   String get planTonightsBest => 'MELHORES DA NOITE';
 
   @override
@@ -8633,7 +8632,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planHintResume =>
-      'Toque no obturador para retomar e recentralizar; segure para parar.';
+      'Toque no obturador para retomar e recentralizar.';
 
   @override
   String get planResumeWithoutRecenter => 'Retomar sem recentralizar';
@@ -8643,7 +8642,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planHintPause =>
-      'Toque no obturador para pausar após este quadro; segure para parar.';
+      'Toque no obturador para pausar após este quadro.';
+
+  @override
+  String get planStopPlan => 'Parar a sessão…';
+
+  @override
+  String get planStopPlanAsk =>
+      'Parar a sessão? Os quadros feitos são mantidos e a montagem continua rastreando.';
+
+  @override
+  String get planStopPlanConfirm => 'Parar a sessão';
+
+  @override
+  String get planKeepImaging => 'Continuar fotografando';
 
   @override
   String get planAddTarget => 'Adicionar alvo';

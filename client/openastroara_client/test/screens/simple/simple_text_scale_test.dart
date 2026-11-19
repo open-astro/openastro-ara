@@ -270,9 +270,16 @@ void main() {
           }
         } else if (open == 'Stop armed') {
           // A keyboard press arms it: PRESS AGAIN, the longest label it shows.
-          tester.widget<FilledButton>(find.descendant(
-                  of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
-              .onPressed!();
+          final filled = find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
+          if (filled.evaluate().isNotEmpty) {
+            tester.widget<FilledButton>(filled).onPressed!();
+          } else {
+            // The rail-foot Stop (#1911): its keyboard activation is the InkResponse's.
+            tester
+                .widget<InkResponse>(
+                    find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(InkResponse)))
+                .onTap!();
+          }
           await tester.pump();
           expect(find.textContaining(l.estopCompactPressAgain.split('\n').last), findsOneWidget);
           // A clipped or mid-word-broken label throws nothing, so check the lines.

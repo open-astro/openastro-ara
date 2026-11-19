@@ -3111,18 +3111,6 @@ abstract class AppLocalizations {
   /// **'Resume'**
   String get planResume;
 
-  /// Shutter screen-reader custom action: stop the run
-  ///
-  /// In en, this message translates to:
-  /// **'Stop the run'**
-  String get planStopTheRun;
-
-  /// Hint beside the shutter: hold it to stop the run
-  ///
-  /// In en, this message translates to:
-  /// **'Hold to stop'**
-  String get planHoldToStop;
-
   /// Plan sheet caption above tonight's suggested targets (uppercase)
   ///
   /// In en, this message translates to:
@@ -3402,7 +3390,7 @@ abstract class AppLocalizations {
   /// Progress panel hint while paused
   ///
   /// In en, this message translates to:
-  /// **'Tap the shutter to resume and re-center; hold it to stop.'**
+  /// **'Tap the shutter to resume and re-center.'**
   String get planHintResume;
 
   /// Progress panel button while paused
@@ -3420,8 +3408,32 @@ abstract class AppLocalizations {
   /// Progress panel hint while imaging
   ///
   /// In en, this message translates to:
-  /// **'Tap the shutter to pause after this frame; hold it to stop.'**
+  /// **'Tap the shutter to pause after this frame.'**
   String get planHintPause;
+
+  /// Plan's panel button while a plan runs: asks in place before it stops the plan (the shutter pauses; a 2 s hold is Emergency Stop)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop plan…'**
+  String get planStopPlan;
+
+  /// Plan's panel: the in-place question after Stop plan…
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the plan? The frames taken are kept and the mount keeps tracking.'**
+  String get planStopPlanAsk;
+
+  /// Plan's panel: confirms stopping the plan (not an Emergency Stop)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop plan'**
+  String get planStopPlanConfirm;
+
+  /// Plan's panel: answers the stop question with no stop
+  ///
+  /// In en, this message translates to:
+  /// **'Keep imaging'**
+  String get planKeepImaging;
 
   /// Progress panel button: queue another target
   ///
