@@ -98,6 +98,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['limit_deg']),
     ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
+    RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     null => _firstLine(r.detail),
   };
 }

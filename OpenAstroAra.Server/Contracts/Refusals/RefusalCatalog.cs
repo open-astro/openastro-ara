@@ -50,11 +50,14 @@ public static class RefusalCatalog {
     // Slice 2: a GoTo under the profile's horizon limit (#2044).
     public static readonly RefusalCause BelowHorizonLimit = new("below-horizon-limit", 409, "The target is below the horizon limit", "altitude_deg", "limit_deg");
 
+    // A GoTo, Sync, Center or polar alignment before the mount's clock is set from the synced rig clock and checked (#2071).
+    public static readonly RefusalCause MountClockNotVerified = new("mount-clock-not-verified", 409, "Mount clock not verified");
+
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress, BelowHorizonLimit,
+        EndNightInProgress, BelowHorizonLimit, MountClockNotVerified,
     ];
 }

@@ -73,6 +73,14 @@ public partial class Program {
         return mount;
     }
 
+    // #2071 — a trusted time sync sets the connected mount's clock too, not only the Pi's.
+    private static TelescopeService FollowClock(IServiceProvider sp, TelescopeService mount) {
+        if (sp.GetService<ITimeSyncService>() is { } timeSync) {
+            mount.FollowTimeSync(timeSync);
+        }
+        return mount;
+    }
+
     /// <summary>
     /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
     /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
@@ -354,7 +362,7 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
-        builder.Services.AddSingleton<TelescopeService>(sp => FollowSite(sp, new TelescopeService(
+        builder.Services.AddSingleton<TelescopeService>(sp => FollowClock(sp, FollowSite(sp, new TelescopeService(
             sp.GetService<ILogger<TelescopeService>>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<IEquipmentFaultSink>(),
@@ -364,8 +372,11 @@ public partial class Program {
             // resolved lazily (and the factory lambda bypasses constructor activation: every optional
             // parameter is passed by hand, #711).
             () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
-            sp.GetService<IProfileStore>())));
+            sp.GetService<IProfileStore>(),
+            // #2071 — the mount's clock is set from, and checked against, the synced rig clock.
+            () => sp.GetService<ITimeSyncService>()))));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
+        builder.Services.AddSingleton<IMountClockGate>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
         // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
@@ -541,7 +552,8 @@ public partial class Program {
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
-                aligner: sp.GetRequiredService<IPolarAlignerSource>()));
+                aligner: sp.GetRequiredService<IPolarAlignerSource>(),
+                mountClock: sp.GetRequiredService<IMountClockGate>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>

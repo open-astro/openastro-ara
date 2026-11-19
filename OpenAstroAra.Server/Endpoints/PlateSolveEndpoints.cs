@@ -114,7 +114,8 @@ public static class PlateSolveEndpoints {
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
     public static IResult CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
-            OpenAstroAra.Profile.Interfaces.IProfileService profileService) {
+            OpenAstroAra.Profile.Interfaces.IProfileService profileService,
+            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null) {
         // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
         if (request is null
                 || request.RaHours is not (>= 0 and < 24)
@@ -133,6 +134,10 @@ public static class PlateSolveEndpoints {
         // running job (the §65.5 policy); one for OTHER coordinates is a 409 naming the running job,
         // not a silent join that reports the wrong target as centred.
         var identity = CenterIdentity(request.RaHours, request.DecDegrees);
+        // #2071 — the centring slews would be refused inside the job; answer the cause now instead.
+        if (mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
         BatchJobDto job;
         try {
             job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts), identity);

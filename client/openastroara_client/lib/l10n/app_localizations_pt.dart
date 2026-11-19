@@ -6606,6 +6606,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
 
   @override
+  String get refusalMountClockNotVerified =>
+      'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
@@ -13356,6 +13360,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalEndNightInProgress =>
       'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
+
+  @override
+  String get refusalMountClockNotVerified =>
+      'O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do equipamento: espere um momento e tente de novo, ou sincronize a hora em Configurações.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

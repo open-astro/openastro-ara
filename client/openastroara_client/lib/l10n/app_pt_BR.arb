@@ -1831,6 +1831,7 @@
   "refusalStorageUnavailable": "O disco de armazenamento não foi encontrado. Reconecte-o e tente de novo.",
   "refusalBelowHorizonLimit": "Esse alvo está a {altitude}°, abaixo do seu limite de horizonte de {limit}°. Escolha um alvo mais alto ou reduza o limite de horizonte.",
   "refusalEndNightInProgress": "O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.",
+  "refusalMountClockNotVerified": "O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do equipamento: espere um momento e tente de novo, ou sincronize a hora em Configurações.",
   "bridgeSetupFoundTitle": "Encontrado neste setup",
   "bridgeSetupAddSelected": "Adicionar selecionados ({count})",
   "bridgeSetupAdding": "Adicionando…",

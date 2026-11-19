@@ -322,10 +322,13 @@ namespace OpenAstroAra.Test {
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
         public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
-        public bool AtPark { get { ThrowIfLatched(); return false; } }
-        public bool AtHome { get { ThrowIfLatched(); return false; } }
+        public bool AtPark { get { ThrowIfLatched(); return ReportsArrival && _atPark; } }
+        public bool AtHome { get { ThrowIfLatched(); return ReportsArrival && _atHome; } }
+        // Opt-in: Park and FindHome report arriving, so a sequencer park or home completes.
+        public volatile bool ReportsArrival;
+        private volatile bool _atPark, _atHome;
         public bool IsPulseGuiding => false;
-        public PointingState SideOfPier { get => PointingState.Normal; set { } }
+        public PointingState SideOfPier { get => PointingState.Normal; set => Interlocked.Increment(ref _pierSideWrites); }
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
         public bool CanSlewAsync => true;
         public bool CanSlew => true;
@@ -335,13 +338,15 @@ namespace OpenAstroAra.Test {
         public bool CanSetTracking => true;
         public bool CanPulseGuide => true;
         public bool CanFindHome => true;
-        public bool CanSetPierSide => false;
+        public bool CanSetPierSide { get; set; }
         public double FocalLength => 0.5;
         public double ApertureDiameter => 0.1;
         public ITrackingRates TrackingRates => new FakeTrackingRates();
         public double SiteLatitude { get; set; }
         public double SiteLongitude { get; set; }
         public double SiteElevation { get; set; }
+        public DateTime UTCDate { get; set; } = DateTime.UtcNow;
+        public double SiderealTime => 0.0;
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each
@@ -358,11 +363,18 @@ namespace OpenAstroAra.Test {
         public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } }
         public override void Stop() => AbortSlew();
         public void AbortSlew() => Interlocked.Increment(ref _aborts);
-        public void Park() { }
+        public void Park() { _atPark = true; Interlocked.Increment(ref _parks); }
         public void Unpark() { }
-        public void FindHome() { }
-        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { }
-        public void SyncToCoordinates(double raHours, double decDegrees) { }
+        public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); }
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) => Interlocked.Increment(ref _slews);
+        public void SyncToCoordinates(double raHours, double decDegrees) => Interlocked.Increment(ref _syncs);
+        // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
+        private int _parks, _homes, _slews, _syncs, _pierSideWrites;
+        public int Parks => Volatile.Read(ref _parks);
+        public int Homes => Volatile.Read(ref _homes);
+        public int Slews => Volatile.Read(ref _slews);
+        public int Syncs => Volatile.Read(ref _syncs);
+        public int PierSideWrites => Volatile.Read(ref _pierSideWrites);
 
         private sealed class FakeTrackingRates : ITrackingRates {
             private readonly DriveRate[] _rates = [DriveRate.Sidereal];

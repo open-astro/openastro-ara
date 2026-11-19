@@ -316,6 +316,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
+            // here: refuse before anything is sent while the mount's clock is not verified.
+            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+                LogMountOpRejectedClock("telescope.slew", clockRefusal);
+                throw new SequenceEntityFailedException(clockRefusal);
+            }
             // #1124 — a slew right after connect can beat the first refresh: read the system now
             // rather than guess. Still unknown → fail the instruction without sending anything
             // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
@@ -738,6 +744,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogMountOpRejectedParked("telescope.sync");
             return false;
         }
+        // #2071 — a sync on a wrong mount clock bakes the error into the pointing model: a clean
+        // "not synced", so the centring loop offset-compensates (its re-slew is refused in turn).
+        if (MountClockMotionRefusal() is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.sync", clockRefusal);
+            return false;
+        }
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
@@ -794,6 +806,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
+        }
+        // #2071 — before the pier-side hint: some mounts start the flip slew on that write.
+        if (MountClockMotionRefusal() is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.flip", clockRefusal);
+            throw new SequenceEntityFailedException(clockRefusal);
         }
         if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
             await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);

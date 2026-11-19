@@ -1191,7 +1191,8 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (System.InvalidOperationException ex) {
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            // A declared refusal (mount-clock-not-verified, #2071) goes to RefusalHandler with its cause.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }

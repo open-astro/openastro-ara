@@ -15,7 +15,8 @@ enum RefusalCause {
   captureSettingsUnsupported('capture-settings-unsupported'),
   storageUnavailable('storage-unavailable'),
   belowHorizonLimit('below-horizon-limit'),
-  endNightInProgress('end-night-in-progress');
+  endNightInProgress('end-night-in-progress'),
+  mountClockNotVerified('mount-clock-not-verified');
 
   const RefusalCause(this.token);
 

@@ -257,5 +257,59 @@ namespace OpenAstroAra.Test {
             Assert.That(result.LocationUpdated, Is.False);
             Assert.That(store.GetSiteSettings(), Is.EqualTo(before), "no location push → the site section is untouched");
         }
+
+        // ─── #2071: the trusted time the mount's clock is set from ───
+
+        [TestCase("client")]
+        [TestCase("gps-client")]
+        [TestCase("gps-mobile")]
+        public async Task A_sync_of_medium_or_high_trust_raises_TrustedTimeApplied(string source) {
+            var svc = NewService();
+            var raised = 0;
+            svc.TrustedTimeApplied += (_, _) => raised++;
+            await svc.PushAsync(new TimeSyncPushRequestDto(source, T0), CancellationToken.None);
+            Assert.That(raised, Is.EqualTo(1));
+            Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True);
+            Assert.That(utc, Is.EqualTo(T0));
+        }
+
+        [Test]
+        public async Task A_manual_sync_is_never_trusted_time_for_the_mount() {
+            var svc = NewService();
+            var raised = 0;
+            svc.TrustedTimeApplied += (_, _) => raised++;
+            await svc.PushAsync(new TimeSyncPushRequestDto("manual", T0), CancellationToken.None);
+            Assert.That(raised, Is.Zero, "a typed-in time never reaches the mount");
+            Assert.That(svc.TryGetTrustedUtc(out _), Is.False);
+        }
+
+        [Test]
+        public async Task Trusted_time_runs_on_the_monotonic_clock_when_the_OS_clock_could_not_be_set() {
+            var wall = T0.AddHours(-6.8); // the Pi's stale boot clock, which the set fails to correct
+            long tick = 1_000;
+            var svc = new TimeSyncService(NullLogger<TimeSyncService>.Instance, new FakeClockSetter { Succeeds = false }) {
+                Now = () => wall,
+                TickMs = () => tick,
+            };
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+            tick += 90_000;
+            wall = T0.AddMinutes(1); // something else (NTP, the bridge) stepped the OS clock since
+            Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True);
+            Assert.That(utc, Is.EqualTo(T0.AddSeconds(90)), "the pushed time plus monotonic elapsed, never the wall clock plus a stale offset");
+        }
+
+        [Test]
+        public async Task Trusted_time_does_not_expire_after_the_freshness_hour() {
+            long tick = 0;
+            var svc = new TimeSyncService(NullLogger<TimeSyncService>.Instance, new FakeClockSetter()) {
+                Now = () => T0,
+                TickMs = () => tick,
+            };
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+            tick = (long)TimeSpan.FromHours(9).TotalMilliseconds; // a §42.3 reconnect late in the night
+            Assert.That((await svc.GetStateAsync(CancellationToken.None)).Synced, Is.False, "the §31.1 UI gate is still the hour");
+            Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True, "the mount's clock can still be set and checked");
+            Assert.That(utc, Is.EqualTo(T0.AddHours(9)));
+        }
     }
 }

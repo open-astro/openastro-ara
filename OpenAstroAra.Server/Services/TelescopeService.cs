@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
@@ -142,17 +143,21 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
-            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null) {
+            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null,
+            Func<ITimeSyncService?>? timeSyncResolver = null) {
         _profileStore = profileStore;
+        // #2071 — the time-sync service, resolved lazily like the guider. Without it the mount-clock gate is off.
+        _timeSyncResolver = timeSyncResolver;
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _guiderResolver = guiderResolver;
         _faults = faults;
         _ws = ws;
         _profileService = profileService;
-        // onConnected pushes the profile's site into the mount (one source of truth).
+        // onConnected pushes the profile's site into the mount (one source of truth), then sets and
+        // checks the mount's clock from the synced rig clock (#2071).
         _lifecycle = new DeviceLifecycle<ITelescopeDevice>(this, DeviceType.Telescope, "telescope",
             d => _createDevice(d), ReadTick, ResetSessionLocked, DeviceHealthTracker.DefaultThreshold, _logger, events, faults,
-            onConnected: () => PushProfileSite(force: true));
+            onConnected: OnMountConnected);
         _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -208,6 +213,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
         TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
         ForgetPushedSite();
+        ForgetMountClockLocked(); // #2071 — every session sets and checks the mount's clock again
     }
 
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -225,6 +231,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
         if (client is null) {
             throw new InvalidOperationException("telescope is not connected");
+        }
+        // #2071 — a GoTo or a Sync on a wrong mount clock points at (or bakes in) the wrong sky.
+        if (MountClockMotionRefusal() is { } clockRefusal) {
+            LogMountOpRejectedClock(request.Sync == true ? "telescope.sync" : "telescope.slew", clockRefusal);
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
         }
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
@@ -909,6 +920,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 if (caps is not null) {
                     MaybeAutoPopulateOptics(caps);
                 }
+                WatchMountClock(); // #2071 — a host clock step, or a recheck of an unverified mount clock
             });
     }
 

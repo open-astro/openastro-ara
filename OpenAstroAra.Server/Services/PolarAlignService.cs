@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
@@ -163,6 +164,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
+        // #2071 — the routine homes and slews against the mount's sidereal time: refuse to start while its clock is not verified.
+        private readonly IMountClockGate? _mountClock;
         // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
         private GuideCameraCustody.Claim? _claim;
 
@@ -176,8 +179,10 @@ namespace OpenAstroAra.Server.Services {
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
                 IPolarAlignMainCameraSolver? mainCamera = null,
-                IPolarAlignerSource? aligner = null) {
+                IPolarAlignerSource? aligner = null,
+                IMountClockGate? mountClock = null) {
             _guider = guider;
+            _mountClock = mountClock;
             _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
@@ -355,6 +360,9 @@ namespace OpenAstroAra.Server.Services {
                 var mountInfo = _mount.GetInfo();
                 if (mountInfo?.Connected != true) {
                     throw new InvalidOperationException("mount is not connected");
+                }
+                if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+                    throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
                 }
                 var site = _profileStore.GetSiteSettings();
                 if (!(double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90)) {

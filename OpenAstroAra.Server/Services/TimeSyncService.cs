@@ -30,6 +30,16 @@ public interface ITimeSyncService {
     /// <see cref="TimeSyncInvalidSourceException"/> for a source outside
     /// <c>client|gps-client|gps-mobile|manual</c> (→ 422 at the endpoint).</summary>
     Task<TimeSyncPushResultDto> PushAsync(TimeSyncPushRequestDto request, CancellationToken ct);
+
+    /// <summary>#2071 — the time from the last applied sync of medium or high trust, carried forward on
+    /// the monotonic clock: right even when the OS clock set failed or the clock has stepped since. False
+    /// before any such sync (a manual, low-trust entry never counts). It does not expire after the §31.1
+    /// hour: the mount clock written from it is checked again on every connect and host clock step.</summary>
+    bool TryGetTrustedUtc(out DateTimeOffset utc);
+
+    /// <summary>#2071 — raised after a sync of medium or high trust is applied, so the mount's clock can
+    /// follow it. Never raised for a manual (low-trust) sync.</summary>
+    event EventHandler? TrustedTimeApplied;
 }
 
 /// <summary>Sets the OS clock. The real implementation needs CAP_SYS_TIME and, under the packaged
@@ -90,6 +100,23 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         _profiles = profiles;
     }
 
+    public event EventHandler? TrustedTimeApplied;
+
+    public bool TryGetTrustedUtc(out DateTimeOffset utc) {
+        lock (_gate) {
+            if (_syncedAtUtc is { } at && _syncedAtTickMs is { } tick && IsTrusted(_trust)) {
+                // Never Now() + the tracked offset: that offset goes stale as soon as anything else
+                // (NTP, or AlpacaBridge's own UTCDate handling) steps the OS clock after the push.
+                utc = at + TimeSpan.FromMilliseconds(TickMs() - tick);
+                return true;
+            }
+        }
+        utc = default;
+        return false;
+    }
+
+    private static bool IsTrusted(string trust) => trust is "high" or "medium";
+
     public Task<TimeSyncStateDto> GetStateAsync(CancellationToken ct) {
         string source, trust;
         DateTimeOffset? syncedAt;
@@ -110,7 +137,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         // uncorrected) system clock from the (corrected) pushed instant.
         var synced = syncedAtTick is { } tick
             && TimeSpan.FromMilliseconds(TickMs() - tick) < Freshness
-            && trust is "high" or "medium";
+            && IsTrusted(trust);
         return Task.FromResult(new TimeSyncStateDto(
             Synced: synced,
             Source: source,
@@ -187,6 +214,10 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             _trackedOffsetSeconds = afterOffset;
         }
         LogSyncApplied(stateSource, trust, beforeOffset, clockSet);
+        if (IsTrusted(trust)) {
+            // Outside the gate: the mount-clock push the handler starts reads TryGetTrustedUtc.
+            TrustedTimeApplied?.Invoke(this, EventArgs.Empty);
+        }
         return new TimeSyncPushResultDto(
             Before: new TimeSyncBeforeAfterDto(before, beforeOffset),
             After: new TimeSyncBeforeAfterDto(clockSet ? timeUtc : Now(), afterOffset),
