@@ -231,7 +231,8 @@ framing/focus loop when you need to point or focus by eye.
   check the mount before you start again. Then tracking goes off, as NINA does by default, so the mount
   cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
   (Settings › Imaging › Polar align), Done and the end of Verify give back the tracking the run found;
-  a Stop or a failure still leaves tracking off. A GoTo turns tracking on again by itself. Starting
+  a Stop or a failure still leaves tracking off. A GoTo turns tracking on again by itself; a sequence
+  started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding

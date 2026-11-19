@@ -132,14 +132,20 @@ namespace OpenAstroAra.Server.Services {
         // superseded run's late effects are no-ops (its unique work dir keeps the files apart too).
         private int _generation;
 
-        /// <summary>True while the routine runs.</summary>
+        /// <summary>True while the routine runs, and while a run's exit still stops the mount (#2048): a failed run is
+        /// <c>failed</c> at once but sends its stop commands and its tracking write for up to 8 s more. A sequence start
+        /// or Emergency Stop then ends it and waits for that exit, so a resent AbortSlew or the tracking-off write never
+        /// lands on the slew or the tracking that comes after it.</summary>
         public bool IsActive {
             get {
                 lock (_gate) {
-                    return _active;
+                    return _active || _exitsInFlight > 0;
                 }
             }
         }
+
+        // Run exits stopping the mount right now (ExitMountOnceAsync). Guarded by _gate.
+        private int _exitsInFlight;
 
         private bool IsCurrent(int gen) {
             lock (_gate) {
@@ -148,10 +154,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Start-sequence counter, bumped ONLY by StartAsync (unlike _generation, which Stop also
-        // bumps). The hand-back fence: a run restores tracking unless a NEWER RUN has started —
-        // a clean Stop must still restore (its generation is already stale by design), but a zombie
-        // unblocking after a successor Start turned tracking off must not stomp the successor's
-        // mount state (§45.8 depends on tracking staying off mid-adjust).
+        // bumps). The exit's fence (#2048): a run stops the mount and sets tracking unless a NEWER RUN
+        // has started — a clean Stop still gets its exit (its generation is already stale by design),
+        // but a zombie unblocking after a successor Start must not cut the successor's moves short or
+        // stomp its tracking (§45.8 depends on tracking staying off mid-adjust).
         private int _startSeq;
 
         private bool NoNewerRunStarted(int startSeq) {
@@ -743,15 +749,24 @@ namespace OpenAstroAra.Server.Services {
                     LogExitLeftToSuccessor();
                     return null;
                 }
-                exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
-                end.MountStopped = exitStopped;
-                // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into a
-                // stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
-                var requested = end.Requested;
-                ApplyExitTracking(priorTracking,
-                    finished: finished && requested is null or "complete",
-                    handedToGuiding: handedToGuiding || requested == HandedToGuiding,
-                    exitStopped, why);
+                lock (_gate) {
+                    _exitsInFlight++;
+                }
+                try {
+                    exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
+                    end.MountStopped = exitStopped;
+                    // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into
+                    // a stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
+                    var requested = end.Requested;
+                    ApplyExitTracking(priorTracking,
+                        finished: finished && requested is null or "complete",
+                        handedToGuiding: handedToGuiding || requested == HandedToGuiding,
+                        exitStopped, why);
+                } finally {
+                    lock (_gate) {
+                        _exitsInFlight--;
+                    }
+                }
                 if (exitStopped == false && end.Reported) {
                     // The stop path already told the client this run ended: the finding is this run's to report.
                     await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);

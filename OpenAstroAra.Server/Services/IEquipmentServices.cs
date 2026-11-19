@@ -429,8 +429,9 @@ public enum GuiderTwinDeleteStatus {
 public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, string? Reason);
 
 public interface IPolarAlignService {
-    /// <summary>A routine is running (any stage, any state short of a terminal one) — the one test
-    /// Emergency Stop and the start gates need; never a list of state names that a new stage outgrows.</summary>
+    /// <summary>A routine is running (any stage, any state short of a terminal one), or a run that just ended is still
+    /// stopping the mount (#2048) — the one test Emergency Stop and the start gates need; never a list of state names
+    /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);

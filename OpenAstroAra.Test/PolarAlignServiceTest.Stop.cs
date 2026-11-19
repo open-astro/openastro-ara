@@ -650,6 +650,39 @@ namespace OpenAstroAra.Test {
             Assert.That(reason, Is.EqualTo("internal_error"));
         }
 
+        // A failed run reads "failed" at once, but its exit still sends stop rounds and the tracking-off write for a few
+        // seconds. A sequence that starts in that window must wait for the exit: otherwise a resent AbortSlew lands on the
+        // sequence's first slew, and the tracking-off write on the tracking the sequence just set.
+        [Test]
+        public async Task A_sequence_start_while_a_failed_run_still_stops_the_mount_waits_for_that_exit() {
+            var mount = new FakeStopMount(tracking: true) { RefusesMotor = true };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            // Holds the exit open long enough to land inside it; the stop is still confirmed.
+            svc.StopVerifyNotBefore = TimeSpan.FromSeconds(1.5);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var watch = Stopwatch.StartNew();
+            while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
+                Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "inside the exit: the failure is not reported yet");
+
+            Assert.That(svc.IsActive, Is.True, "a run whose exit still stops the mount counts as active");
+            await svc.StopForSequenceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var at = mount.Count;
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.EqualTo(1), "the exit finished before the sequence goes on");
+            Assert.That(ws.Events.Single(e => e.Type == WsEventCatalog.PolarAlignError).Payload.GetProperty("reason").GetString(),
+                Is.EqualTo("slew_failed"), "the stop was confirmed: the run's own failure, no cut-power alarm");
+            Assert.That(mount.Tracking, Is.False);
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(mount.Since(at), Is.Empty, $"nothing reaches the mount after the sequence start returns: {string.Join(", ", mount.Since(at))}");
+            Assert.That(svc.IsActive, Is.False);
+        }
+
         // ── finished runs ────────────────────────────────────────────────────────────────────
 
         [TestCase(true, false)]
