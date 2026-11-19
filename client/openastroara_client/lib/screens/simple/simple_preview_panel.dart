@@ -682,7 +682,16 @@ class SimpleSettingsPopover extends ConsumerWidget {
                             ),
                           ),
                           if (detail.isNotEmpty)
-                            Text(detail, style: AraText.caption),
+                            Text(
+                              detail,
+                              // textPrimary on the tint: textSecondary reads
+                              // 4:1 there over a bright frame (#1953).
+                              style: selected
+                                  ? AraText.caption.copyWith(
+                                      color: AraColors.textPrimary,
+                                    )
+                                  : AraText.caption,
+                            ),
                         ],
                       ),
                     ),
