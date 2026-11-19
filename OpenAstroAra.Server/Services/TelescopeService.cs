@@ -187,6 +187,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     // Caller holds the gate (adopt, disconnect and trip): a fresh, ended or tripped session forgets the last one's reads.
     private void ResetSessionLocked() {
+        Interlocked.Increment(ref _sessionEpoch); // #2089 — a pose kept across this boundary is stale
         _capabilities = null;       // re-read for the new device
         _mountActions = null;
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
@@ -417,6 +418,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private long _abortEpoch;
 
     public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
+
+    // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
+    private long _sessionEpoch;
+
+    public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
 
     public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);

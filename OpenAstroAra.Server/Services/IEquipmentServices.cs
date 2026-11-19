@@ -136,6 +136,11 @@ public interface ITelescopeService {
     /// itself reads it when a move starts, and treats any change as a stop it must obey.</summary>
     long AbortEpoch => 0;
 
+    /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
+    /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it
+    /// changes: a reconnected mount may have been moved, re-homed or swapped meanwhile.</summary>
+    long SessionEpoch => 0;
+
     /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
     /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
     /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal

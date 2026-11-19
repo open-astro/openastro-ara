@@ -348,22 +348,25 @@ namespace OpenAstroAra.Server.Services {
         private sealed record RunBand(double AwaySign, double StartRaDeg, long StartedAt, double MaxSweepDeg);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the band the
-        /// run keeps to. The first turn goes away from the meridian (<see cref="AwayFromMeridianSign"/>), unchanged.</summary>
-        private async Task<(PolarAlignStartPlanDto Plan, RunBand Band)> PlanStartAsync(
+        /// run keeps to and its place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
+        /// the first turn goes away from the meridian (<see cref="AwayFromMeridianSign"/>), unchanged; a later start turns
+        /// back toward the origin, and one whose turns would go past the limit is refused.</summary>
+        private async Task<(PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)> PlanStartAsync(
                 string? stage, PolarAlignSettingsDto settings, CancellationToken ct) {
             // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
             // are both read here.
-            var (raDeg, _) = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
+            var (raDeg, decDeg) = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("the mount did not report where it points — check its connection, then start again");
             var startedAt = Stopwatch.GetTimestamp();
-            var awaySign = AwayFromMeridianSign(raDeg);
             var checkOnly = stage == PolarAlignStages.Check;
             var stepDeg = checkOnly ? settings.CheckStepDeg : settings.SeedRotationDeg;
             // Every stage the user can move on to (coarse → fine → check) turns twice by its own step.
             var maxSweepDeg = 2.0 * (checkOnly ? settings.CheckStepDeg : Math.Max(settings.SeedRotationDeg, settings.CheckStepDeg));
+            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg);
+            var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
-                stepDeg, Turns: 2, maxSweepDeg);
-            return (plan, new RunBand(awaySign, raDeg, startedAt, maxSweepDeg));
+                stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg);
+            return (plan, new RunBand(awaySign, raDeg, startedAt, maxSweepDeg), sweep);
         }
 
         /// <inheritdoc />
@@ -430,13 +433,18 @@ namespace OpenAstroAra.Server.Services {
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
                 // is asked again. NINA asks nothing, but it starts from a GoTo of its own; Ara starts where the user
                 // pointed the mount, so the user has to see where it will turn.
-                var (plan, band) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
-                if (confirmation is null || !string.Equals(confirmation.Direction, plan.Direction, StringComparison.Ordinal)) {
+                var (plan, band, sweep) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
+                // #2089 — the user also confirmed whether this pose is a new start (the mount was moved by other means, or
+                // first start since it connected) or a continued one: a plan that changed between them since is asked again.
+                if (confirmation is null || !string.Equals(confirmation.Direction, plan.Direction, StringComparison.Ordinal)
+                        || confirmation.NewOrigin != plan.NewOrigin) {
                     LogStartNotConfirmed(confirmation?.Direction ?? "none", plan.Direction);
                     throw new RefusalException(RefusalCatalog.PolarAlignUnconfirmed,
                         confirmation is null
                             ? $"confirm the start first: tube near the pole, counterweights down; RA will turn ~{plan.StepDeg:F0}° twice toward the {plan.Direction}; keep a hand on the mount's power"
-                            : $"the RA turn direction changed since you confirmed it (it is {plan.Direction} now) — confirm the start again",
+                            : confirmation.NewOrigin != plan.NewOrigin
+                                ? "the mount moved since you confirmed the start, or Polar Align's start pose changed — confirm the start again"
+                                : $"the RA turn direction changed since you confirmed it (it is {plan.Direction} now) — confirm the start again",
                         new Dictionary<string, object?> { ["direction"] = plan.Direction });
                 }
                 var mainCamera = _mainCamera;
@@ -519,6 +527,7 @@ namespace OpenAstroAra.Server.Services {
                         // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
                         // abandoned by the just-stopped run has delivered its event by now.
                         startSeq = ++_startSeq;
+                        AdoptSweepPlanLocked(sweep); // #2089 — a new origin once confirmed, and where Polar Align saw the mount
                     }
                 }
                 if (endedWhileStarting) {
@@ -781,6 +790,8 @@ namespace OpenAstroAra.Server.Services {
                 try {
                     exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
                     end.MountStopped = exitStopped;
+                    // #2089 — where this run left the mount: the next start tells a continued pose from a moved one by it.
+                    await NoteMountLeftAfterStopAsync().ConfigureAwait(false);
                     // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into
                     // a stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
                     var requested = end.Requested;
@@ -1358,9 +1369,18 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>The mount's pointing read from the driver now (the daemon's telescope service), in JNOW and
-        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available.</summary>
-        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct) =>
-            await DriverPointingJnowAsync(ct).ConfigureAwait(false) ?? CurrentMountPointingJnow();
+        /// folded like <see cref="CurrentMountPointingJnow"/>; the cached reading when no fresh read is available. With
+        /// <paramref name="noteLeft"/> (a motor move's readings, #2089), a driver reading is where Polar Align's own move
+        /// left the mount (<see cref="NoteMountLeft"/>); a cached one, possibly the (0, 0) placeholder, never is.</summary>
+        private async Task<(double RaDeg, double DecDeg)?> FreshMountPointingJnowAsync(CancellationToken ct, bool noteLeft = false) {
+            if (await DriverPointingJnowAsync(ct).ConfigureAwait(false) is { } fresh) {
+                if (noteLeft) {
+                    NoteMountLeft(fresh);
+                }
+                return fresh;
+            }
+            return CurrentMountPointingJnow();
+        }
 
         /// <summary>#2048 — the mount's pointing from the driver now, never the daemon's cache: null when the driver gives
         /// no answer. The cache falls back to the (0, 0) placeholder after one failed status poll (an AlpacaBridge hiccup

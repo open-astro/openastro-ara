@@ -493,7 +493,7 @@ namespace OpenAstroAra.Server.Services {
             var offset = RaOffsetFromStartDeg(band, raNow);
             var (dirSign, returnFirst) = PlanStageTurns(band.AwaySign, offset, travelDeg, band.MaxSweepDeg);
             var stage = CurrentStage() ?? "?";
-            var way = dirSign == band.AwaySign ? "away from the meridian" : "back toward the start";
+            var way = dirSign == band.AwaySign ? "the confirmed way" : "back toward the start";
             LogStageTurns(stage, offset, way, band.MaxSweepDeg, returnFirst);
             if (returnFirst != 0.0) {
                 await TurnRaAsync(raNow, returnFirst, gen, ct).ConfigureAwait(false);
@@ -585,7 +585,8 @@ namespace OpenAstroAra.Server.Services {
                     if (AbortedSince(abortEpoch)) {
                         throw new RoutineFailedException("slew_failed", ExternalStopMessage);
                     }
-                    var now = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
+                    // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
+                    var now = await FreshMountPointingJnowAsync(ct, noteLeft: true).ConfigureAwait(false)
                         ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {
@@ -653,7 +654,7 @@ namespace OpenAstroAra.Server.Services {
             // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();
             await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
-            var after = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false)
+            var after = await FreshMountPointingJnowAsync(ct, noteLeft: true).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var moved = progress(start, after);
             LogAxisMoveDone(axis, moved);

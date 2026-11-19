@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
         public static async Task<OperationAcceptedDto> StartConfirmedAsync(
                 this PolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
             var plan = await svc.GetStartPlanAsync(stage, ct).ConfigureAwait(false);
-            return await svc.StartAsync(stage, new PolarAlignStartConfirmation(plan.Direction), idempotencyKey, ct).ConfigureAwait(false);
+            return await svc.StartAsync(stage, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), idempotencyKey, ct).ConfigureAwait(false);
         }
 
         public static Task<OperationAcceptedDto> StartConfirmedAsync(this PolarAlignService svc, string? idempotencyKey, CancellationToken ct) =>
@@ -185,7 +185,7 @@ namespace OpenAstroAra.Test {
             Assert.That(plan.Direction, Is.EqualTo(direction));
             Assert.That((plan.StepDeg, plan.Turns, plan.MaxSweepDeg), Is.EqualTo((30.0, 2, 60.0)), "the bench's 30° turns, twice");
 
-            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction), null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 

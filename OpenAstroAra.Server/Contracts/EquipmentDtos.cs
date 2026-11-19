@@ -913,19 +913,29 @@ public static class PolarAlignStages {
 /// stage cannot run: main camera off, optics unset, no solver), and the user's confirmation of the start (#2048). The
 /// routine starts from where the mount points now; it moves only with <c>Confirmed</c> true and <c>Direction</c> equal
 /// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
-/// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now).</summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null);
+/// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now). <c>NewOrigin</c> echoes the plan's
+/// <see cref="PolarAlignStartPlanDto.NewOrigin"/>: a start whose plan changed between a new start pose and a continued
+/// one since the user saw it is refused the same way.</summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false);
 
 /// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
 /// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
 /// first, chosen away from the meridian from the mount's current pointing; <c>StepDeg</c> is each of the
 /// <c>Turns</c> turns; <c>MaxSweepDeg</c> bounds how far the run turns the RA axis from where it starts, over every
-/// stage the user moves on to. <c>Stage</c> echoes the request.</summary>
-public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg);
+/// stage the user moves on to. <c>Stage</c> echoes the request.
+/// <para>#2089 — the session's sweep origin, from RA differences the mount reports (never its clock, LST or absolute
+/// RA): <c>NewOrigin</c> is true when this start's pose becomes Polar Align's origin (the first start since the mount
+/// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
+/// <c>OriginOffsetDeg</c> is how far the RA axis has turned from the origin (signed: + east, − west), and
+/// <c>Direction</c> turns back toward it. No turn takes the axis more than <c>SweepLimitDeg</c> from the
+/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para></summary>
+public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
+    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0);
 
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
-/// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move.</summary>
-public sealed record PolarAlignStartConfirmation(string Direction);
+/// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
+/// they saw made this pose Polar Align's new origin.</summary>
+public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false);
 
 /// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
 public static class PolarAlignDirections {

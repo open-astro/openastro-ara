@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class RefusalHandlerTest {
 
-        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then Polar Align's start, #2048): token, status, parameter names. A row changed here is a wire change.
+        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then Polar Align's start, #2048, and its sweep bound, #2089): token, status, parameter names. A row changed here is a wire change.
         private static readonly object[] Causes = {
             new object[] { "no-camera", 409, Array.Empty<string>() },
             new object[] { "camera-busy", 409, Array.Empty<string>() },
@@ -49,6 +49,7 @@ namespace OpenAstroAra.Test {
             new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
             new object[] { "polar-align-mount-parked", 409, Array.Empty<string>() },
             new object[] { "polar-align-unconfirmed", 409, new[] { "direction" } },
+            new object[] { "polar-align-sweep-limit", 409, new[] { "offset_deg", "limit_deg" } },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };

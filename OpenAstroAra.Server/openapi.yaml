@@ -14530,6 +14530,23 @@ components:
             - number
             - string
           format: double
+        new_origin:
+          type: boolean
+          default: true
+        origin_offset_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        sweep_limit_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 30
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -14544,6 +14561,9 @@ components:
           type:
             - 'null'
             - string
+        new_origin:
+          type: boolean
+          default: false
     PreflightChecklistDto:
       required:
         - generated_utc
@@ -15063,6 +15083,7 @@ components:
         - below-horizon-limit
         - polar-align-mount-parked
         - polar-align-unconfirmed
+        - polar-align-sweep-limit
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

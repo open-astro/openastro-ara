@@ -466,7 +466,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new ScriptedSolver());
 
             var startTaskPlan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
-            var startTask = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(startTaskPlan.Direction), null, CancellationToken.None);
+            var startTask = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(startTaskPlan.Direction, startTaskPlan.NewOrigin), null, CancellationToken.None);
             await startEnteredLease.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             // Start now holds _opLock inside the (blocked) lease call; a Stop must wait on the semaphore.
@@ -640,7 +640,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             var mark = Mark(svc);
             var restartPlan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
-            var restart = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(restartPlan.Direction), null, CancellationToken.None);
+            var restart = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(restartPlan.Direction, restartPlan.NewOrigin), null, CancellationToken.None);
             await Task.Delay(200).ConfigureAwait(false); // ADR 0016 rule 5 exception: the re-Start waiting behind the gated release is an absence nothing signals; the gate keeps it blocked, so the bound only gives a wrongly unblocked Start time to finish.
             Assert.That(restart.IsCompleted, Is.False,
                 "the re-Start must wait for the failed run's in-flight lease release");

@@ -57,9 +57,12 @@ public static class RefusalCatalog {
     // after the user confirmed the start and its RA turn direction (direction = the way the run would turn now).
     public static readonly RefusalCause PolarAlignMountParked = new("polar-align-mount-parked", 409, "The mount is parked");
     public static readonly RefusalCause PolarAlignUnconfirmed = new("polar-align-unconfirmed", 409, "Polar alignment needs your confirmation before the mount moves", "direction");
+    // #2089 — the RA axis has turned too far from where Polar Align started this session (offset_deg from the origin,
+    // limit_deg the bound): slew it back near the pole and confirm again.
+    public static readonly RefusalCause PolarAlignSweepLimit = new("polar-align-sweep-limit", 409, "The mount has turned too far from where Polar Align started", "offset_deg", "limit_deg");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress, BelowHorizonLimit, PolarAlignMountParked, PolarAlignUnconfirmed,
+        EndNightInProgress, BelowHorizonLimit, PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit,
     ];
 }

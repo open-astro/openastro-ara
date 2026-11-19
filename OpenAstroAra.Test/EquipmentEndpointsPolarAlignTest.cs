@@ -114,6 +114,20 @@ namespace OpenAstroAra.Test {
             svc.Verify(s => s.StartAsync(PolarAlignStages.Fine, null, null, It.IsAny<CancellationToken>()), Times.Once);
         }
 
+        // #2089 — the user also confirmed whether the start pose is a new origin: the body's new_origin reaches the service.
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task A_start_body_carries_the_new_origin_the_user_confirmed(bool newOrigin) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IPolarAlignService>();
+            svc.Setup(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation("east", newOrigin), null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object,
+                new PolarAlignStartRequestDto(PolarAlignStages.Fine, true, "east", newOrigin), null, CancellationToken.None);
+
+            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
+        }
+
         // ADR 0022 — the parked and unconfirmed refusals leave the endpoint for the one Refusal handler, which answers with
         // their reason; the endpoint's own 409 catch would drop it.
         [Test]

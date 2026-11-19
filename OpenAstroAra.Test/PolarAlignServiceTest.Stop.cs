@@ -17,6 +17,7 @@ using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
@@ -100,7 +101,7 @@ namespace OpenAstroAra.Test {
                     lock (_lock) {
                         return new TelescopeInfo {
                             Connected = true, SiderealTime = 20.0, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(),
+                            Slewing = SlewingLocked(), SideOfPier = _side,
                         };
                     }
                 });
@@ -151,6 +152,7 @@ namespace OpenAstroAra.Test {
 
                 var service = Mock.As<ITelescopeService>();
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
+                service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
                 service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
                     lock (_lock) {
                         if (_driverReadsFail > 0) {
@@ -214,6 +216,28 @@ namespace OpenAstroAra.Test {
             }
 
             private bool SlewingLocked() => _rates[0] != 0 || _rates[1] != 0 || _runaway;
+
+            private long _sessionEpoch;
+            private PierSide _side = PierSide.pierUnknown;
+
+            /// <summary>#2089 — the user moves the mount by other means (a slew, the hand pad, by hand) to this RA.</summary>
+            public void MoveByHand(double raDeg) {
+                lock (_lock) {
+                    _raDeg = (raDeg + 360.0) % 360.0;
+                }
+            }
+
+            /// <summary>#2089 — the mount disconnects and connects again: a new mount session.</summary>
+            public void Reconnect() => Interlocked.Increment(ref _sessionEpoch);
+
+            /// <summary>The pier side the mount reports.</summary>
+            public PierSide Side {
+                set {
+                    lock (_lock) {
+                        _side = value;
+                    }
+                }
+            }
 
             private void Record(string command) => _log.Add((command, EventCount?.Invoke() ?? 0));
 
@@ -452,7 +476,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewStopService(mount, ws, guider: guider);
 
             var startPlan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
-            var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(startPlan.Direction), null, CancellationToken.None);
+            var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(startPlan.Direction, startPlan.NewOrigin), null, CancellationToken.None);
             await inLease.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             var stop = svc.StopAsync(null, CancellationToken.None);
             leaseGate.SetResult();

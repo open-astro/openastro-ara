@@ -1194,7 +1194,7 @@ public static partial class EquipmentEndpoints {
     /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
     /// service refuses a start without one).</summary>
     internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
-        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction) : null;
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin) : null;
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
