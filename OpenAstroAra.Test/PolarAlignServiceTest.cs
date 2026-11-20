@@ -1852,8 +1852,9 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("failed"), "no live readout from a tracking mount");
             var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
             Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
-            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress
-                    && e.Payload.GetProperty("iteration").GetInt32() > 0), Is.False, "no live frame was read as a knob turn");
+            Assert.That(failure.GetProperty("message").GetString(), Does.Contain("kept tracking after Polar Align turned tracking off"),
+                "caught before the first live frame, not by the per-frame check");
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress), Is.False, "no readout was shown");
             Assert.That(calls, Does.Contain("tracking False"), "the routine did ask for tracking off");
         }
 

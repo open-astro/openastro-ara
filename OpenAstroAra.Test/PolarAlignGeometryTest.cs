@@ -547,9 +547,12 @@ namespace OpenAstroAra.Test {
         [TestCase(-33.0, 180.0, 1.0)]
         [TestCase(-33.0, 270.0, 0.0)]
         [TestCase(-33.0, 95.0, 0.087)]
+        [TestCase(45.0, 120.0, -0.5)]
+        [TestCase(-33.0, 60.0, -0.5)]
         public void The_readout_cos_psi_is_one_facing_the_pole_and_zero_due_east_or_west_of_it(
                 double latitudeDeg, double seedAzDeg, double expected) {
-            Assert.That(Math.Abs(PolarAlignGeometry.ReadoutCosPsi(seedAzDeg, latitudeDeg)), Is.EqualTo(expected).Within(0.001));
+            // Signed: past ψ = ±90° the altitude knob moves the camera the other way (#1983 keeps that sign).
+            Assert.That(PolarAlignGeometry.ReadoutCosPsi(seedAzDeg, latitudeDeg), Is.EqualTo(expected).Within(0.001));
         }
     }
 }
