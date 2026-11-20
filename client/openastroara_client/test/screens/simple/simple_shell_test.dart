@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/screens/simple/simple_rig_storage.dart';
+import 'package:openastroara/app_version.dart' show appVersionProvider;
 import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/screens/stats/stats_dashboard_screen.dart';
 import 'package:openastroara/state/album/album_art.dart';
@@ -3647,6 +3648,50 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  // #2093: the Ara server's version row in Simple Mode carries the same
+  // update-both warning as the About panel and the first-run screen.
+  testWidgets('Simple Mode warns under the Ara server version when it is from another release line (#2093)',
+      (tester) async {
+    const warning = 'Server 1.1.0 and app 1.0.0-beta.2 differ; update both from the same release.';
+    Future<void> check(String daemon, {required bool warns}) async {
+      final c = await _pump(tester, const Size(1470, 854),
+          server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
+          versions: DaemonVersions.fromJson({'daemon_version': daemon}),
+          gear: [appVersionProvider.overrideWithValue('1.0.0-beta.2')]);
+      // The Ara sheet, from the mark.
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      await tester.pump();
+      final sheet = find.byKey(const Key('simple-ara-sheet'));
+      expect(find.descendant(of: sheet, matching: find.text(daemon)), findsOneWidget, reason: daemon);
+      expect(find.descendant(of: sheet, matching: find.text(warning)), warns ? findsOneWidget : findsNothing,
+          reason: 'Ara sheet, server $daemon');
+      expect(find.descendant(of: sheet, matching: find.byKey(const Key('version-mismatch-warning'))),
+          warns ? findsOneWidget : findsNothing, reason: 'Ara sheet, server $daemon');
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      // Settings → Rig, the Versions block.
+      await _openSection(tester, 'Rig');
+      final menu = find.byKey(const Key('simple-menu'));
+      expect(find.descendant(of: menu, matching: find.byKey(const Key('version-mismatch-warning'))),
+          warns ? findsOneWidget : findsNothing, reason: 'Rig versions, server $daemon');
+      if (warns) {
+        // Right under the version table, not somewhere else on the page.
+        final table = tester.getRect(find.byKey(const Key('simple-versions')));
+        final line = tester.getRect(find.descendant(of: menu, matching: find.text(warning)));
+        expect(line.top, greaterThanOrEqualTo(table.bottom));
+        expect(line.top - table.bottom, lessThan(24));
+      }
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    }
+
+    await check('1.1.0', warns: true);
+    await check('1.0.3', warns: false);
+    await check('1.0.0.0', warns: false);
   });
 
   testWidgets("the running-plan warning wraps to the Ara sheet's width instead of widening it (user, 2026-11-11)",
