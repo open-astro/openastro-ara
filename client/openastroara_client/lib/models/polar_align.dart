@@ -79,6 +79,10 @@ class PolarAlignCheckResult {
   /// `excellent` | `very_good` | `good` | `rough` | `far_off`.
   final String verdict;
 
+  /// #2081 the mount's Dec spread across the check's three points (arcsec)
+  /// when over 2″ (NINA's warning: the result may be off); null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -88,6 +92,7 @@ class PolarAlignCheckResult {
     this.fineErrorArcmin,
     this.fineDeltaArcmin,
     this.verdict = '',
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -100,6 +105,7 @@ class PolarAlignCheckResult {
         fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 }
 
@@ -324,6 +330,10 @@ class PolarAlignStatus {
   /// from an older daemon.
   final String? readoutCaution;
 
+  /// #2081 the mount's Dec spread across the seed's three points (arcsec)
+  /// when over 2″, while the live readout runs; null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -340,6 +350,7 @@ class PolarAlignStatus {
     this.lastResult,
     this.correction,
     this.readoutCaution,
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -363,6 +374,7 @@ class PolarAlignStatus {
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
         correction: PolarAlignerRun.tryParse(json['correction']),
         readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 
   /// True while the server is running any phase of the routine.

@@ -74,6 +74,10 @@ class PolarAlignLive {
   /// the last progress event; null when the readout is sound.
   final String? readoutCaution;
 
+  /// #2081 the mount's Dec spread across the seed's three points (arcsec)
+  /// when over 2″, from the last progress event; null when it held.
+  final double? decSpreadArcsec;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -94,6 +98,7 @@ class PolarAlignLive {
     this.checkResult,
     this.correction,
     this.readoutCaution,
+    this.decSpreadArcsec,
   });
 
   /// True between a frame's `frame_started` and its `frame_complete`.
@@ -126,6 +131,8 @@ class PolarAlignLive {
     bool clearCorrection = false,
     String? readoutCaution,
     bool clearReadoutCaution = false,
+    double? decSpreadArcsec,
+    bool clearDecSpread = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -153,6 +160,7 @@ class PolarAlignLive {
         correction: clearCorrection ? null : correction ?? this.correction,
         // The readout's own caution goes with it.
         readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
+        decSpreadArcsec: clearReadout || clearDecSpread ? null : decSpreadArcsec ?? this.decSpreadArcsec,
       );
 }
 
@@ -236,6 +244,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         // Every progress event says the readout's caution afresh (absent = sound).
         readoutCaution: _str(event.payload, 'readout_caution'),
         clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
+        // #2081 the same for the Dec-spread warning.
+        decSpreadArcsec: _num(event.payload, 'dec_spread_arcsec'),
+        clearDecSpread: _num(event.payload, 'dec_spread_arcsec') == null,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -341,6 +352,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkResult: status.checkResult,
       correction: status.correction,
       readoutCaution: status.readoutCaution,
+      decSpreadArcsec: status.decSpreadArcsec,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService
