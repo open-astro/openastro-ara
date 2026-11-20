@@ -323,6 +323,14 @@ namespace OpenAstroAra.Server.Services {
             return site;
         }
 
+        /// <summary>#2070 — refuses (<c>mount-position-unverified</c>) while the mount's position is not trusted: a false zero
+        /// after a power loss, or a stop a run could not confirm (#2066, cleared only by a confirmed Home).</summary>
+        private async Task ThrowIfPoseUnverifiedAsync(CancellationToken ct) {
+            if (_mount is ITelescopeService pose && await pose.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+                throw TelescopeService.PositionUnverifiedRefusal(unverified);
+            }
+        }
+
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
         /// they take the axis (this measurement's two turns).</summary>
         private sealed record RunBand(double AwaySign, double MaxSweepDeg);
@@ -357,6 +365,9 @@ namespace OpenAstroAra.Server.Services {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
             MountPreflight();
+            // #2066 — the same order as Start: an unverified position is refused before the plan reads the pointing, so a
+            // false Home at the pole after a power cycle names the unconfirmed stop, not the on-axis refusal (#2082).
+            await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             // A start that names no stage is the fine measurement (#2082); the plan echoes the request.
             var (plan, _, _) = await PlanStartAsync(stage ?? PolarAlignStages.Fine, settings, ct).ConfigureAwait(false);
@@ -473,9 +484,7 @@ namespace OpenAstroAra.Server.Services {
                 // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
-                if (_mount is ITelescopeService pose && await pose.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
-                    throw TelescopeService.PositionUnverifiedRefusal(unverified);
-                }
+                await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
                 var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 // #2048 — nothing moves without the user's confirmation of this start and its RA turn direction, read from
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
