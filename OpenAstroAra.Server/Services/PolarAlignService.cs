@@ -115,7 +115,7 @@ namespace OpenAstroAra.Server.Services {
         private string? _stage;
         private int _checkSolvesDone;
         private PolarAlignCheckResultDto? _checkResult;
-        // #2082 — the last run's readout (any measurement that ended with one: Stop, Done, a check's verdict), both
+        // #2082 — the last run's readout (any measurement that ended with one: Stop, Done, a failure, a check's verdict), both
         // components; a check derives the total it compares with and the distance to its own axis. In memory only, like
         // _lastResult. Guarded by _gate.
         private double? _previousRunAltArcmin;
@@ -1465,6 +1465,7 @@ namespace OpenAstroAra.Server.Services {
                 if (claimed) {
                     _state = "failed";
                     _active = false;
+                    RememberRunReadoutLocked(); // #2082 — a failed run that had a readout is still the last run
                     // In the same section that clears _active: a sequence start reading IsActive between the two would
                     // otherwise see no run and go on while the exit below still sends its stop rounds and tracking write.
                     _exitsInFlight++;

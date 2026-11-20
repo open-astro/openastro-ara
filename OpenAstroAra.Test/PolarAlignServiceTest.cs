@@ -2627,6 +2627,28 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
         }
 
+        [Test]
+        public async Task A_second_Check_compares_with_the_first_Checks_verdict() {
+            // #2082 review — a check's verdict is the last run's readout too: Check, then Check again compares with it.
+            var fake = NewFake();
+            var ws = new WsRecorder();
+            using var svc = NewService(fake, new HintFollowingSolver(), NewPoleMount(), ws, store: NewStore());
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var first = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+            Assert.That(first.State, Is.EqualTo("checked"));
+            Assert.That(first.CheckResult!.FineErrorArcmin, Is.Null, "no run before it");
+
+            var mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var second = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(second.State, Is.EqualTo("checked"));
+            Assert.That(second.CheckResult!.FineErrorArcmin, Is.EqualTo(first.CheckResult.TotalErrorArcmin).Within(0.02),
+                "the first check's verdict is the last run's readout");
+            Assert.That(second.CheckResult.FineDeltaArcmin, Is.Not.Null.And.LessThan(0.1));
+        }
+
         private static async Task AssertThrowsAsync<T>(Func<Task> act) where T : Exception {
             try {
                 await act().ConfigureAwait(false);

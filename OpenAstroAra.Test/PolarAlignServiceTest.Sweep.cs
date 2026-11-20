@@ -206,6 +206,28 @@ namespace OpenAstroAra.Test {
             AssertNoMotionAfter(mount, mount.Count);
         }
 
+        [Test]
+        public async Task A_run_that_failed_after_a_readout_is_the_last_run_a_Check_compares_with() {
+            // #2082 review — the last run's readout, whatever ended it: a fine loop a Stop Mount failed still had one.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            var loop = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(loop.CurrentErrorArcmin, Is.Not.Null, "the loop has a readout");
+
+            var mark = Mark(svc);
+            mount.StopMount();
+            Assert.That((await PollStateAsync(svc, mark, "failed").ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var check = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(check.State, Is.EqualTo("checked"));
+            Assert.That(check.CheckResult!.FineErrorArcmin, Is.Not.Null, "the failed run's readout is the last run's");
+        }
+
         // ── moved by other means ─────────────────────────────────────────────────────────────
 
         [Test]
