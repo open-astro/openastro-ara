@@ -283,6 +283,46 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.AtRest, Is.True);
         }
 
+        [Test]
+        public async Task Two_Checks_at_once_from_the_adjust_loop_run_one_check_and_move_nothing_more() {
+            // A double tap on Check: the second Start arrives while the first ends the adjust loop. The first's end is held at
+            // its mount stop, the loop still adjusting. One Check runs and the other is a no-op accept; both used to end the
+            // loop, and each then saw the other's end and failed, so no check ran.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            var confirmation = new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin);
+            var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            mount.StopGate = () => {
+                stopEntered.TrySetResult();
+                return stopGate.Task;
+            };
+            var raBefore = mount.RaDeg;
+            var mark = Mark(svc);
+
+            var first = svc.StartAsync(PolarAlignStages.Check, confirmation, null, CancellationToken.None);
+            await stopEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var second = svc.StartAsync(PolarAlignStages.Check, confirmation, null, CancellationToken.None);
+            await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(300))).ConfigureAwait(false);
+            stopGate.SetResult();
+            await Task.WhenAll(first, second).ConfigureAwait(false); // neither tap fails
+            var status = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"));
+            var events = ws.Events.Skip(mark).ToArray();
+            Assert.That(events.Where(e => e.Type == WsEventCatalog.PolarAlignStarted).Select(e => e.Payload.GetProperty("stage").GetString()),
+                Is.EqualTo(OnlyTheCheckStarted), "exactly one check started");
+            Assert.That(events.Count(e => e.Type == WsEventCatalog.PolarAlignChecked), Is.EqualTo(1));
+            Assert.That(events.Count(e => e.Type == WsEventCatalog.PolarAlignError), Is.Zero);
+            Assert.That(Math.Abs(OffsetFrom(raBefore, mount.RaDeg)), Is.EqualTo(2 * 10.0).Within(1.5),
+                "the one check's two 10° turns and nothing more: " + string.Join(", ", mount.Log));
+        }
+
         // ── the retired use_home setting ─────────────────────────────────────────────────────
 
         [Test]

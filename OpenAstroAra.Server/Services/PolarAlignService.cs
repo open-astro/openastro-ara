@@ -382,6 +382,37 @@ namespace OpenAstroAra.Server.Services {
             if (!PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
+            if (stage != PolarAlignStages.Check) {
+                return await StartRunAsync(stage, confirmation, idempotencyKey, handOver: false, ct).ConfigureAwait(false);
+            }
+            // #2082 — one Check takes the adjust loop's hand-over. A second one while it is under way (a double tap) is a
+            // no-op accept, as a Start on a running routine is: a second end of the loop would fail both.
+            bool handOver;
+            lock (_gate) {
+                if (_checkHandOver) {
+                    return Accepted("polar-align.start", idempotencyKey);
+                }
+                handOver = _checkHandOver = IsAdjusting();
+            }
+            if (!handOver) {
+                return await StartRunAsync(stage, confirmation, idempotencyKey, handOver: false, ct).ConfigureAwait(false);
+            }
+            try {
+                return await StartRunAsync(stage, confirmation, idempotencyKey, handOver: true, ct).ConfigureAwait(false);
+            } finally {
+                lock (_gate) {
+                    _checkHandOver = false;
+                }
+            }
+        }
+
+        /// <summary>A Check takes the adjust loop's hand-over (<see cref="EndAdjustForCheckAsync"/>); guarded by
+        /// <c>_gate</c>.</summary>
+        private bool _checkHandOver;
+
+        /// <param name="handOver">This Start is the Check that ends the adjust loop first.</param>
+        private async Task<OperationAcceptedDto> StartRunAsync(
+                string stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, bool handOver, CancellationToken ct) {
             // #2066 — the run's one reading of the mount's stop count, taken at the call like a REST GoTo's: a Stop Mount,
             // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
             var abortEpochAtCall = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
@@ -392,7 +423,7 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
             }
-            if (stage == PolarAlignStages.Check && IsAdjusting()) {
+            if (handOver) {
                 var adjustWatch = await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false);
                 // The loop's end is the one end request this Start makes itself; any other since the call still counts.
                 endRequestsAtCall++;
