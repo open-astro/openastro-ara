@@ -317,6 +317,31 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // #2066's Stop_while_opLock_held_aborts_within_1s: a Stop whose run is stuck in a call that ignores cancellation
+        // sends its stop at once, not after the run's unwind grace, when the end confirms the stop itself.
+        [Test]
+        public async Task A_Stop_whose_run_is_stuck_reaches_the_mount_within_1s() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var solver = new StuckSolver();
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(3); // well past 1 s: a stop held back for the run lands after it
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                var at = mount.Now;
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+                var first = mount.Stops.FirstOrDefault(s => s.At >= at && s.Kind != StopKind.LeaseStop);
+                Assert.That(first, Is.Not.Null, "the Stop reached the mount. " + mount.Describe());
+                Assert.That(first!.At - at, Is.LessThan(TimeSpan.FromSeconds(1)), "the first stop went out within 1 s. " + mount.Describe());
+            } finally {
+                solver.Release();
+            }
+        }
+
         // stop_tracking_when_done off: Done hands back the tracking the run found (off here). A Done that abandons a run stuck
         // past its grace left the hand-back to the run's own exit, and then fenced that exit: nobody handed tracking back, and
         // the mount tracked on toward the pier. The end that fences the run does the hand-back itself.
