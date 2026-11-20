@@ -321,6 +321,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo would run
+            // beside its next turn. It throws, like the refusals below, so a blind SlewScopeToRaDec shows it.
+            ThrowIfMotionOwned("telescope.slew");
             // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
             // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
             // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.

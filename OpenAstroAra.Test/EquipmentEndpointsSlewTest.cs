@@ -131,6 +131,34 @@ namespace OpenAstroAra.Test {
             Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
         }
 
+        // #2066 (ARA-2) — Joey, 2026-11-20 on #2048: Polar Align holds the mount for its whole run, the adjust loop and its
+        // solves included, not only while a motor turns. A GoTo, Park or Home between its turns is refused too; a sync
+        // still goes through.
+        [Test]
+        public async Task GoTo_Park_and_Home_are_refused_while_Polar_Align_holds_the_mount_between_turns() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.MotionOwner).Returns(MotionOwners.PolarAlign);
+            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
+            var idle = new Mock<ISequencerService>();
+            idle.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false); // solving or adjusting: no motor runs
+
+            var goTo = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Force: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            var park = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            var home = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None));
+
+            Assert.That(new[] { goTo!.Cause, park!.Cause, home!.Cause }, Is.All.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            Assert.That(goTo.Message, Does.Contain("Stop polar alignment first"));
+            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            var sync = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Sync: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object);
+            Assert.That(sync, Is.InstanceOf<Accepted<OperationAcceptedDto>>(), "a sync moves nothing");
+        }
+
         [Test]
         public async Task Confirm_home_answers_204_when_the_mount_reports_home() {
             // #2070 — the user confirmed Home and the rig trusts the position again.
