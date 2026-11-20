@@ -49,8 +49,8 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// #2048 — Polar Align starts like NINA's Three Point Polar Alignment (rows 1–3 of the NINA comparison): from where the
     /// user pointed the mount, never with Find Home or a GoTo; never from a parked mount, which it refuses and never
-    /// unparks; and only after the user confirmed the start and the RA turn direction. The later stages' turns keep to the
-    /// band the user confirmed.
+    /// unparks; and only after the user confirmed the start and the RA turn direction. Each Start makes one measurement
+    /// (#2082), and its turns go the way the user confirmed.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
@@ -58,15 +58,15 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_run_on_the_fake_mount_never_sends_Find_Home_a_GoTo_or_an_unpark() {
-            // The fake mount can find Home and slew; the run, fine through check, uses its motors only.
+            // The fake mount can find Home and slew; a fine run and the Check from its adjust loop use its motors only.
             var mount = new FakeStopMount(tracking: true, canFindHome: true);
             var ws = new WsRecorder();
-            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: NewStore());
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
             mount.EventCount = () => ws.Events.Count;
 
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
 
             var log = mount.Log;
@@ -206,8 +206,8 @@ namespace OpenAstroAra.Test {
             var coarse = await svc.GetStartPlanAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That((check.StepDeg, check.MaxSweepDeg), Is.EqualTo((15.0, 30.0)));
-            Assert.That((coarse.Stage, coarse.StepDeg, coarse.MaxSweepDeg), Is.EqualTo(((string?)null, 10.0, 30.0)),
-                "a coarse start can move on to the check: its band holds the check's turns too");
+            Assert.That((coarse.Stage, coarse.StepDeg, coarse.MaxSweepDeg), Is.EqualTo(((string?)null, 10.0, 20.0)),
+                "#2082 — one measurement per Start: its own two turns, never a check after them");
         }
 
         // ── the band's readings come from the driver, never the cache ──────────────────────────
@@ -234,16 +234,21 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_stage_whose_driver_read_fails_fails_the_run_and_never_turns_from_the_cached_placeholder() {
-            // After the fine stage's turns the axis sits at the band's far edge, so the check turns back. Read from the
-            // placeholder, the axis would look back at the start and the check would turn further away, out of the band.
+            // The plan read the driver; the run's own first reading, where its turns start, fails (a WiFi hiccup). The cache is
+            // then the (0, 0) placeholder: a seed anchored there would turn from a pose that has nothing to do with the mount.
             var mount = new FakeStopMount(tracking: true);
+            var fake = NewFake();
+            fake.LeaseGate = active => {
+                if (active) {
+                    mount.DriverReadsFail = 1; // after the plan, before the run's first reading
+                }
+                return Task.CompletedTask;
+            };
             var ws = new WsRecorder();
-            using var svc = NewStopService(mount, ws);
-            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            using var svc = NewStopService(mount, ws, guider: fake);
             var at = mount.Count;
 
-            mount.DriverReadsFail = 2; // the check's tilt read (it falls back to the cache: no tilt) and its band read
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
@@ -251,36 +256,6 @@ namespace OpenAstroAra.Test {
             AssertNoMotionAfter(mount, at);
             Assert.That(mount.AtRest, Is.True);
             Assert.That(mount.Tracking, Is.False);
-        }
-
-        // ── the band the stages keep to ──────────────────────────────────────────────────────
-
-        // awaySign +1 (east). Columns: offset from the start, this stage's two turns, the band → direction, turn back first.
-        [TestCase(0.0, 20.0, 20.0, 1.0, 0.0, TestName = "The first stage turns away, the way the user confirmed")]
-        [TestCase(20.3, 20.0, 20.0, -1.0, 0.0, TestName = "A stage after one that turned away turns back over the arc")]
-        [TestCase(18.5, 20.0, 20.0, -1.0, 0.0, TestName = "Tracking drift between stages still turns back, ending within the tolerance")]
-        [TestCase(0.4, 20.0, 20.0, 1.0, 0.0, TestName = "A stage back at the start turns away again")]
-        [TestCase(10.0, 60.0, 60.0, 1.0, -10.0, TestName = "A long check after short turns goes back to the start first, then away")]
-        [TestCase(-5.0, 20.0, 20.0, 1.0, 0.0, TestName = "Past the start toward the meridian, the stage turns away into the band")]
-        [TestCase(70.0, 20.0, 60.0, -1.0, 0.0, TestName = "Beyond the band, the stage turns back toward it")]
-        public void PlanStageTurns_keeps_every_stage_inside_the_confirmed_band(
-                double offsetDeg, double travelDeg, double maxSweepDeg, double dirSign, double returnFirstDeg) {
-            var (dir, back) = PolarAlignService.PlanStageTurns(1.0, offsetDeg, travelDeg, maxSweepDeg);
-            Assert.That((dir, back), Is.EqualTo((dirSign, returnFirstDeg)));
-            // Wherever it ends, the stage's sweep stays inside the band, within the tolerance.
-            var from = offsetDeg + back;
-            var to = from + (dir * travelDeg);
-            if (offsetDeg is >= -PolarAlignService.BandToleranceDeg and <= 60.0) {
-                Assert.That(Math.Min(from, to), Is.GreaterThanOrEqualTo(-PolarAlignService.BandToleranceDeg));
-                Assert.That(Math.Max(from, to), Is.LessThanOrEqualTo(maxSweepDeg + PolarAlignService.BandToleranceDeg));
-            }
-        }
-
-        [Test]
-        public void PlanStageTurns_works_in_RA_reading_terms_for_a_westward_run() {
-            Assert.That(PolarAlignService.PlanStageTurns(-1.0, 0.0, 20.0, 20.0), Is.EqualTo((-1.0, 0.0)), "away = west = RA down");
-            Assert.That(PolarAlignService.PlanStageTurns(-1.0, 20.0, 20.0, 20.0), Is.EqualTo((1.0, 0.0)), "back = east = RA up");
-            Assert.That(PolarAlignService.PlanStageTurns(-1.0, 10.0, 60.0, 60.0), Is.EqualTo((-1.0, 10.0)), "back to the start is RA up");
         }
 
         // ── the retired use_home setting ─────────────────────────────────────────────────────

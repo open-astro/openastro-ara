@@ -102,7 +102,8 @@ namespace OpenAstroAra.Test {
         }
 
         // Emergency Stop latches the stop before its first rung. While a slow rung (here the sequence-run abort) still holds
-        // the ladder, the user's Next moves the run to the check stage: it must not turn tracking on or turn the mount.
+        // the ladder, the user's Check ends the adjust loop and starts the check (#2082): it must not turn tracking on or
+        // turn the mount.
         [Test]
         public async Task Emergency_Stop_during_PA_leaves_tracking_off() {
             var mount = new FakeStopMount(tracking: true);
@@ -125,9 +126,9 @@ namespace OpenAstroAra.Test {
             var stop = es.ExecuteAsync();
             await runAbortEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             try {
-                await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             } catch (InvalidOperationException) {
-                // The run already saw the latch and ended: nothing is waiting for a Next.
+                // The loop already saw the latch and failed: the Check started nothing.
             }
             await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             runAbortGate.SetResult(0);
