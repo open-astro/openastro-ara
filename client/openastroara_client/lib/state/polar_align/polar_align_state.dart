@@ -70,6 +70,10 @@ class PolarAlignLive {
   /// first measurement, and once the routine ends.
   final PolarAlignerRun? correction;
 
+  /// #2072 a caution on the live readout ([PolarAlignReadoutCautions]) from
+  /// the last progress event; null when the readout is sound.
+  final String? readoutCaution;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -89,6 +93,7 @@ class PolarAlignLive {
     this.checkSolvesTotal = 3,
     this.checkResult,
     this.correction,
+    this.readoutCaution,
   });
 
   /// True between a frame's `frame_started` and its `frame_complete`.
@@ -119,6 +124,8 @@ class PolarAlignLive {
     PolarAlignCheckResult? checkResult,
     PolarAlignerRun? correction,
     bool clearCorrection = false,
+    String? readoutCaution,
+    bool clearReadoutCaution = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -144,11 +151,16 @@ class PolarAlignLive {
         checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
         correction: clearCorrection ? null : correction ?? this.correction,
+        // The readout's own caution goes with it.
+        readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
       );
 }
 
 double? _num(Map<String, dynamic> payload, String key) =>
     (payload[key] as num?)?.toDouble();
+
+String? _str(Map<String, dynamic> payload, String key) =>
+    payload[key] is String ? payload[key] as String : null;
 
 /// Pure fold of one WS event into the live routine view. Returns null when the
 /// event is not a `polar_align.*` event (no state write). [now] stamps a
@@ -221,6 +233,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
+        // Every progress event says the readout's caution afresh (absent = sound).
+        readoutCaution: _str(event.payload, 'readout_caution'),
+        clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -325,6 +340,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkSolvesDone: status.checkSolvesDone,
       checkResult: status.checkResult,
       correction: status.correction,
+      readoutCaution: status.readoutCaution,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

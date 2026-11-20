@@ -10,6 +10,7 @@ import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/fit_pane.dart';
@@ -59,7 +60,8 @@ class _Reading extends BahtinovFocusNotifier {
 
 class _OagPhd2 extends Phd2SettingsNotifier {
   @override
-  Phd2Settings build() => const Phd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
+  LoadedSection<Phd2Settings> build() => LoadedSection(value: const Phd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      source: SectionSource.rig);
 }
 
 Widget _harness({

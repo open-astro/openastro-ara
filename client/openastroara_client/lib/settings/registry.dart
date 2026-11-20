@@ -565,8 +565,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.first_flip_confirmed',
     tier: SettingTier.advanced,
-    label: 'First-flip announce',
-    description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
+    label: 'Meridian flip confirmation',
+    description: 'Until you confirm a meridian flip on this profile, every flip posts a critical alert and waits 60 seconds before it starts — stop the run in that window if the scope could hit the mount. After a flip runs to the end, press Confirm here if the scope cleared the mount and the tripod and frames and guiding came back. Ara never confirms on its own; changing the optics train (or the Re-arm button here) asks again.',
     keywords: [
       'meridian',
       'flip',
@@ -586,21 +586,6 @@ const List<Setting> settingsRegistry = [
       'safety.policies.flip_safety_enabled',
       'safety.policies.meridian_flip_auto',
     ],
-  ),
-  Setting(
-    id: 'safety.policies.on_altitude_limit',
-    tier: SettingTier.advanced,
-    label: 'On altitude limit',
-    description: 'Action when a target drops below the minimum-altitude floor.',
-    keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
-    path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.enumValue([
-      'Skip target',
-      'Pause sequence',
-      'Abort sequence',
-    ]),
-    defaultValue: null,
-    profilePath: 'safety.on_altitude_limit',
   ),
   Setting(
     id: 'safety.policies.park_if_no_more_targets',
@@ -1491,8 +1476,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.polar.check_step_deg',
     tier: SettingTier.advanced,
-    label: 'Verify step (°)',
-    description: 'The RA turn between the three frames of Verify. Kept between 5° and 30°.',
+    label: 'Check step (°)',
+    description: 'The RA turn between the three frames of a Check, which turns the mount 2 × this step. Kept between 5° and 30°.',
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
@@ -2983,7 +2968,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: 'localhost',
+    defaultValue: null,
     profilePath: 'phd2.host',
   ),
   Setting(
@@ -2994,7 +2979,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'port', 'tcp', 'guider', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1024, max: 65535),
-    defaultValue: 4400,
+    defaultValue: null,
     profilePath: 'phd2.port',
   ),
   Setting(
@@ -3005,7 +2990,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'profile', 'equipment', 'guider'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.complex(),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.phd2_profile_id',
   ),
   Setting(
@@ -3023,7 +3008,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'phd2.dither_enabled',
   ),
   Setting(
@@ -3034,7 +3019,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dither', 'interval', 'frames', 'every', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1, max: 100),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'phd2.dither_every_n_frames',
   ),
   Setting(
@@ -3045,7 +3030,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dither', 'pixels', 'amplitude', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 0.5),
-    defaultValue: 5.0,
+    defaultValue: null,
     profilePath: 'phd2.dither_pixels',
   ),
   Setting(
@@ -3056,7 +3041,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
-    defaultValue: 1.5,
+    defaultValue: null,
     profilePath: 'phd2.settle_pixels',
   ),
   Setting(
@@ -3067,7 +3052,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'time', 'seconds', 'phd2', 'wait'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 120),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'phd2.settle_time_sec',
   ),
   Setting(
@@ -3078,7 +3063,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'timeout', 'seconds', 'phd2', 'limit'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1, max: 600),
-    defaultValue: 60,
+    defaultValue: null,
     profilePath: 'phd2.settle_timeout_sec',
   ),
   Setting(
@@ -3089,7 +3074,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['calibration', 'force', 'session', 'phd2', 'recalibrate'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'phd2.force_calibration_each_session',
   ),
   // §63.19 guide setup type — guide scope (focal length user-entered) vs
@@ -3110,7 +3095,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Guide scope', 'Off-axis guider (OAG)']),
-    defaultValue: 'Guide scope',
+    defaultValue: null,
     profilePath: 'phd2.guider_setup_type',
   ),
   // §63.5 guider-engine config — pushed to the guider daemon on connect.
@@ -3122,7 +3107,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guide', 'focal', 'length', 'scope', 'phd2', 'scale', 'mm'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 5000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.guide_focal_length',
   ),
   Setting(
@@ -3133,7 +3118,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guide', 'pixel', 'size', 'camera', 'phd2', 'scale', 'micron'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'phd2.guide_pixel_size',
   ),
   Setting(
@@ -3144,7 +3129,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['ra', 'aggressiveness', 'guiding', 'phd2', 'hysteresis', 'gain'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
-    defaultValue: 0.7,
+    defaultValue: null,
     profilePath: 'phd2.ra_aggressiveness',
   ),
   Setting(
@@ -3162,7 +3147,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
-    defaultValue: 0.7,
+    defaultValue: null,
     profilePath: 'phd2.dec_aggressiveness',
   ),
   Setting(
@@ -3182,7 +3167,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 5, step: 0.05),
-    defaultValue: 0.15,
+    defaultValue: null,
     profilePath: 'phd2.minimum_move',
   ),
   Setting(
@@ -3202,7 +3187,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 5, step: 0.05),
-    defaultValue: 0.15,
+    defaultValue: null,
     profilePath: 'phd2.dec_minimum_move',
   ),
   Setting(
@@ -3222,7 +3207,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Auto', 'North', 'South', 'Off']),
-    defaultValue: 'Auto',
+    defaultValue: null,
     profilePath: 'phd2.dec_guide_mode',
   ),
   // §63.17 guider equipment selection — device picks pushed to the guider
@@ -3245,7 +3230,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_camera',
   ),
   Setting(
@@ -3264,7 +3249,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_camera_id',
   ),
   Setting(
@@ -3283,7 +3268,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_mount',
   ),
   Setting(
@@ -3303,7 +3288,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_aux_mount',
   ),
   Setting(
@@ -3314,7 +3299,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['rotator', 'guider', 'equipment', 'phd2', 'angle', 'select'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_rotator',
   ),
   Setting(
@@ -3333,7 +3318,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_alpaca_host',
   ),
   Setting(
@@ -3344,7 +3329,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['alpaca', 'port', 'guider', 'equipment', 'phd2', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 65535),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.guider_alpaca_port',
   ),
 ];

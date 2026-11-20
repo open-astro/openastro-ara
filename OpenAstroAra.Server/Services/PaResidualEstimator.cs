@@ -18,13 +18,17 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>One polar-alignment residual fit (#1311). <see cref="PaErrorMinArcmin"/> is a lower
-/// bound on the polar axis error: Dec drift at one hour angle sees only one component of it.</summary>
+/// bound on the polar axis error: Dec drift at one hour angle sees only one component of it.
+/// <see cref="DecPulseNetMs"/> (North positive) and <see cref="DecPulseTotalMs"/> are the Dec pulses the fit added
+/// back, for the log (#2072): with the calibration's rate they say how much of the figure is rebuilt from pulses.</summary>
 internal readonly record struct PaResidualFit(
     double DriftArcsecPerMin,
     double PaErrorMinArcmin,
     double UncertaintyArcmin,
     int Frames,
-    double SampleSeconds);
+    double SampleSeconds,
+    double DecPulseNetMs = 0,
+    double DecPulseTotalMs = 0);
 
 /// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the guiding Ara already does.
@@ -127,6 +131,7 @@ internal sealed class PaResidualEstimator {
         // raises the next offset by rate × length, so taking it off leaves the free drift.
         var rebuilt = new List<(double[] T, double[] U)>();
         int n = 0;
+        double pulseNetMs = 0, pulseTotalMs = 0;
         foreach (var segment in Usable()) {
             var t = new double[segment.Count];
             var u = new double[segment.Count];
@@ -135,6 +140,8 @@ internal sealed class PaResidualEstimator {
                 t[k] = segment[k].TimeSec;
                 u[k] = segment[k].DecRawPx - applied;
                 applied += segment[k].DecDurationMs * ratePxPerMs;
+                pulseNetMs += segment[k].DecDurationMs;
+                pulseTotalMs += Math.Abs(segment[k].DecDurationMs);
             }
             rebuilt.Add((t, u));
             n += segment.Count;
@@ -183,7 +190,9 @@ internal sealed class PaResidualEstimator {
             PaErrorMinArcmin: Math.Abs(drift) * ArcminPerArcsecPerMin,
             UncertaintyArcmin: slopeSe * toArcsecPerMin * ArcminPerArcsecPerMin,
             Frames: n,
-            SampleSeconds: SampleSeconds);
+            SampleSeconds: SampleSeconds,
+            DecPulseNetMs: pulseNetMs,
+            DecPulseTotalMs: pulseTotalMs);
     }
 
     private static bool IsUsable(List<Sample>? segment) => segment is { Count: >= MinSegmentFrames };

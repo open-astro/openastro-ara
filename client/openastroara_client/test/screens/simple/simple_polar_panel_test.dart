@@ -47,15 +47,19 @@ class _Api implements PolarAlignClient {
   final calls = <String>[];
   late final section = _Section(calls);
 
+  /// The stage of each start the user confirmed (null: the default measurement).
+  final stages = <String?>[];
+
   /// The rig's copy of the profile's polar-align section.
   PolarAlignSettings get settings => section.initial!;
   set settings(PolarAlignSettings s) => section.initial = s;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async {
+    calls.add('start');
+    stages.add(plan.stage);
+  }
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -297,31 +301,6 @@ void main() {
     expect(api!.calls, ['capture']);
   });
 
-  testWidgets('waiting for Home: Continue tells the daemon the mount is at Home', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(phase: PolarAlignStates.homing, stage: PolarAlignStages.coarse, waitingForHome: true),
-    );
-    expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'nothing to hand over yet');
-    await tester.tap(find.byKey(const Key('simple-polar-continue')));
-    await tester.pump();
-    expect(api!.calls, ['next']);
-  });
-
-  testWidgets('rough stage: Next: fine hands the routine to the guide camera', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(
-          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse,
-          altErrorArcmin: 40, azErrorArcmin: 12, totalErrorArcmin: 41.8, zone: 'red'),
-    );
-    expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the fine buttons wait for the fine stage');
-    expect(find.byKey(const Key('simple-polar-continue')), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-polar-next-fine')));
-    await tester.pump();
-    expect(api!.calls, ['next']);
-  });
-
   testWidgets(
     'rough stage outside the tolerance: no Done, and the caption says so (#1875)',
     (tester) async {
@@ -340,7 +319,7 @@ void main() {
       expect(find.byKey(const Key('simple-polar-done-rough')), findsNothing);
       expect(
         find.text(
-          'Outside your 2′ tolerance: refine it, or stop with the shutter.',
+          'Outside your 2′ tolerance: stop with the shutter, then start again to refine it with the guide camera.',
         ),
         findsOneWidget,
       );
@@ -348,7 +327,7 @@ void main() {
   );
 
   testWidgets(
-    'rough stage inside the tolerance: Done is outlined, Next: fine stays the green primary (#1875)',
+    'rough stage inside the tolerance: Done is outlined, and no Next: fine leads on (#1875, #2082)',
     (tester) async {
       final api = await _pump(
         tester,
@@ -364,19 +343,13 @@ void main() {
       );
       expect(
         find.text(
-          'Inside your 2′ tolerance. Done keeps this alignment; Next: fine refines it.',
+          'Inside your 2′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.',
         ),
         findsOneWidget,
       );
       expect(find.byType(OutlinedButton), findsOneWidget);
-      expect(
-        find
-            .byKey(const Key('simple-polar-next-fine'))
-            .evaluate()
-            .single
-            .widget,
-        isA<FilledButton>(),
-      );
+      expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'one measurement per Start');
+      expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the rough step has no Check');
       await tester.tap(find.byKey(const Key('simple-polar-done-rough')));
       await tester.pump();
       expect(api!.calls, ['complete']);
@@ -397,7 +370,7 @@ void main() {
     expect(find.text('Rough'), findsOneWidget);
     expect(find.byIcon(Icons.check), findsNothing);
     expect(find.text('Fine'), findsOneWidget);
-    expect(find.text('Verify'), findsOneWidget);
+    expect(find.text('Check'), findsOneWidget);
   });
 
   testWidgets(
@@ -427,30 +400,31 @@ void main() {
   );
 
   testWidgets(
-    'the stepper ticks Rough once the routine is in the fine step (#1875)',
+    'the stepper ticks no step before the one running, and a finished check its own (#2082)',
     (tester) async {
       await _pump(
         tester,
         const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.fine,
-          totalErrorArcmin: 9,
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+          totalErrorArcmin: 0.4,
         ),
       );
       expect(
         find.descendant(
-          of: find.byKey(const Key('simple-polar-step-0')),
+          of: find.byKey(const Key('simple-polar-step-2')),
           matching: find.byIcon(Icons.check),
         ),
         findsOneWidget,
       );
+      expect(find.byIcon(Icons.check), findsOneWidget, reason: 'each step is its own Start: Rough and Fine never ran');
+      expect(find.text('Rough'), findsOneWidget);
+      expect(find.text('Fine'), findsOneWidget);
       expect(
         tester.widget<Icon>(find.byIcon(Icons.check)).semanticLabel,
         'Done',
         reason: 'a screen reader hears the tick',
       );
-      expect(find.text('Rough'), findsOneWidget);
-      expect(find.text('Fine'), findsOneWidget);
     },
   );
 
@@ -556,12 +530,12 @@ void main() {
       );
       expect(
         find.text(
-          'Verify moves the mount and takes three frames to confirm the alignment.',
+          'Check turns the mount 2 × 10° and takes three frames to measure the alignment.',
         ),
         findsOneWidget,
       );
       expect(
-        find.text('Verify'),
+        find.text('Check'),
         findsNWidgets(2),
         reason: 'the stepper step and the button',
       );
@@ -689,8 +663,31 @@ void main() {
         reason: 'enabled at the tolerance exactly (<=), not only below it',
       );
       await tester.tap(find.byKey(const Key('simple-polar-check')));
-      await tester.pump();
-      expect(api!.calls, ['next']);
+      await tester.pumpAndSettle();
+      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step (#2082)');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(api.stages, [PolarAlignStages.check], reason: 'a confirmed Start(check), never Next');
+    },
+  );
+
+  testWidgets(
+    'after Done, Check again says how far it turns and starts a confirmed check (#2082)',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(phase: PolarAlignStates.stopped, stage: PolarAlignStages.fine, totalErrorArcmin: 0.8),
+      );
+      expect(
+        find.text('Check turns the mount 2 × 10° and takes three frames to measure the alignment.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('simple-polar-check-again')));
+      await tester.pumpAndSettle();
+      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(api.stages, [PolarAlignStages.check]);
     },
   );
 
@@ -768,9 +765,23 @@ void main() {
     expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
   });
 
+  testWidgets('a readout weak in altitude says so while adjusting, in the chosen words (#2072)', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsNothing);
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    live.frame(_adjusting.copyWith(readoutCaution: PolarAlignReadoutCautions.altitudeWeak));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsOneWidget);
+    expect(find.text(en.polarReadoutCautionAltitudeWeak), findsOneWidget);
+  });
+
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
-    for (final t in tester.widgetList<Text>(find.byType(Text))) { debugPrint('TXT ${t.data}'); }
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);
   });
 

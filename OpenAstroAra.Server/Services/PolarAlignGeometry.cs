@@ -354,6 +354,19 @@ public static class PolarAlignGeometry {
         return AltAz(decDeg, latitudeDeg, lst - raDeg);
     }
 
+    /// <summary>The floor <see cref="AxisShiftFromPointingShift"/> puts under |cos ψ|.</summary>
+    public const double ReadoutCosPsiFloor = 0.1;
+
+    /// <summary>#2072 — cos ψ of the §45.8 readout: ψ is the camera's azimuth from the pole's at the seed. The
+    /// altitude knob moves the camera in altitude by cos ψ of its own move, so near ψ = ±90° (the camera due east or
+    /// west of the pole's azimuth) the readout divides by a small number: solve noise grows by 1 / |cos ψ|, and under
+    /// <see cref="ReadoutCosPsiFloor"/> the altitude knob is under-read.</summary>
+    public static double ReadoutCosPsi(double seedAzDeg, double latitudeDeg) =>
+        Math.Cos(CameraAzimuthFromPoleRad(seedAzDeg, latitudeDeg));
+
+    private static double CameraAzimuthFromPoleRad(double seedAzDeg, double latitudeDeg) =>
+        Deg2Rad(seedAzDeg - (latitudeDeg > 0 ? 0.0 : 180.0));
+
     /// <summary>
     /// §45.8 — the camera's alt/az shift since the seed (<paramref name="dAltDeg"/>, <paramref name="dAzDeg"/>,
     /// azimuth wrapped to ±180°) mapped back to the shift of the polar axis: the altitude knob's raise of the
@@ -363,13 +376,13 @@ public static class PolarAlignGeometry {
     /// </summary>
     public static (double AltShiftDeg, double AzShiftDeg) AxisShiftFromPointingShift(
             double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
-        var poleAzDeg = latitudeDeg > 0 ? 0.0 : 180.0;
-        var psi = Deg2Rad(seedAzDeg - poleAzDeg);
-        // shortcut: |cos ψ| is floored at 0.1 (keeping its sign), so a camera within ~6° of ψ = ±90° under-reads the
-        // altitude knob; the fine stage can leave the camera there. Upgrade if that band needs a real reading.
+        var psi = CameraAzimuthFromPoleRad(seedAzDeg, latitudeDeg);
+        // shortcut: |cos ψ| is floored at ReadoutCosPsiFloor (keeping its sign), so a camera within ~6° of ψ = ±90°
+        // under-reads the altitude knob; the fine stage can leave the camera there. The routine warns in that band and
+        // near it (#2072, PolarAlignService.WeakReadoutCosPsi). Upgrade if that band needs a real reading.
         var cosPsi = Math.Cos(psi);
-        if (Math.Abs(cosPsi) < 0.1) {
-            cosPsi = Math.CopySign(0.1, cosPsi);
+        if (Math.Abs(cosPsi) < ReadoutCosPsiFloor) {
+            cosPsi = Math.CopySign(ReadoutCosPsiFloor, cosPsi);
         }
         var altShiftDeg = dAltDeg / cosPsi;
         var tanAlt = Math.Tan(Deg2Rad(Math.Min(seedAltDeg, 89.9)));

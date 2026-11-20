@@ -96,6 +96,9 @@ namespace OpenAstroAra.Test {
             /// <summary>#2089 — one fresh read fails (the cache turns to the placeholder) once the RA motor runs at or past this
             /// RA: a WiFi hiccup in the middle of a turn. Guarded by the lock.</summary>
             public double? FailReadPastRaDeg { get; set; }
+            /// <summary>Awaited by the next MoveAxis 0 (once, then cleared; the axis has stopped by then): a test holds a stop
+            /// here to keep the end that sent it in flight.</summary>
+            public Func<Task>? StopGate { get; set; }
             /// <summary>How many WS events were published when a command arrived: the order against the run's last event.</summary>
             public Func<int>? EventCount { get; set; }
 
@@ -205,6 +208,10 @@ namespace OpenAstroAra.Test {
                             _rates[axis] = rate;
                             if (rate != 0) {
                                 FirstMove.TrySetResult();
+                            }
+                            if (rate == 0 && StopGate is { } gate) {
+                                StopGate = null;
+                                return gate();
                             }
                             return Task.CompletedTask;
                         }
@@ -319,6 +326,20 @@ namespace OpenAstroAra.Test {
                 get {
                     lock (_lock) {
                         return _raDeg;
+                    }
+                }
+            }
+
+            /// <summary>The mount's Dec reading; set it to put the scope somewhere else between two of the routine's reads.</summary>
+            public double DecDeg {
+                get {
+                    lock (_lock) {
+                        return _decDeg;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _decDeg = value;
                     }
                 }
             }

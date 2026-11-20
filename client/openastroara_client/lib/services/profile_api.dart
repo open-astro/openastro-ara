@@ -601,13 +601,26 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
 
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Answers the rig's policies with their new
-  /// tag (#1807): this device's own write, so no `profile.updated` reloads it.
-  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() async {
+  /// §58.8 — re-arm the unconfirmed-flip announce (the daemon clears
+  /// `first_flip_confirmed` and the completed-flip record, so the next flip
+  /// alerts and waits again). Answers the rig's policies with their new tag
+  /// (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() =>
+      _postSafetyAction('first-flip/rearm');
+
+  /// #1589 — confirm the profile's completed meridian flip: the user watched
+  /// it and the scope cleared the mount. The daemon sets
+  /// `first_flip_confirmed` and keeps the record; with no completed flip on
+  /// record it refuses (409 `first-flip-not-completed`). Answers the rig's
+  /// policies with their new tag, as [rearmFirstFlip] does.
+  Future<({SafetyPolicies value, String? etag})> confirmFirstFlip() =>
+      _postSafetyAction('first-flip/confirm');
+
+  Future<({SafetyPolicies value, String? etag})> _postSafetyAction(
+    String route,
+  ) async {
     final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
+      '/api/v1/profile/safety/$route',
     );
     return (
       value: _safetyFromRig(res.data ?? const {}),
@@ -621,6 +634,13 @@ class ProfileApi {
     PolarAlignSettings v, {
     String? ifMatch,
   }) => _putTagged('polar-align', v.toJson(), _polarAlignFromRig, ifMatch);
+
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
+      _getTagged('phd2', _phd2FromRig);
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) => _putTagged('phd2', phd2SettingsToJson(v), _phd2FromRig, ifMatch);
 
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
@@ -912,6 +932,17 @@ class ProfileApi {
       flipSafetyEnabled: j['flip_safety_enabled'] as bool,
       expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
       firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      // #1589 — the daemon's completed-flip record (null: no flip on record;
+      // the key is still there).
+      firstFlipCompletedUtc: switch (nullable('first_flip_completed_utc')) {
+        null => null,
+        final String at => DateTime.parse(at).toUtc(),
+        final other => throw FormatException(
+          'bad first_flip_completed_utc',
+          other,
+        ),
+      },
+      firstFlipPierSideChanged: j['first_flip_pier_side_changed'] as bool,
       unattendedEscalation: j['unattended_escalation'] as bool,
       unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
       unattendedShutdownWaitMinutes:
@@ -1009,11 +1040,11 @@ class ProfileApi {
     return safetyPoliciesFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's safety policies. `first_flip_confirmed` is
-  /// daemon-owned and ignored server-side on PUT (the stored value is
-  /// preserved and echoed back) — a stale panel Save can never clobber a
-  /// confirmation an overnight flip set; re-arming goes through
-  /// [rearmFirstFlip].
+  /// PUT the active profile's safety policies. `first_flip_confirmed` and
+  /// the completed-flip record are daemon-owned and ignored server-side on
+  /// PUT (the stored values are preserved and echoed back) — a stale panel
+  /// Save can never clobber them; confirming and re-arming go through
+  /// [confirmFirstFlip] and [rearmFirstFlip].
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
@@ -1396,6 +1427,53 @@ class ProfileApi {
     guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
   );
 
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as the client's own default (localhost, dither every frame, no
+  // guide camera), which a Save would then write over the rig's guider
+  // settings. The Dec minimum move of a profile from before the split and an
+  // Automatic guider profile come as null, but their keys are there.
+  static Phd2Settings _phd2FromRig(Map<String, dynamic> j) {
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final decMinimumMove = nullable('dec_minimum_move') as num?;
+    final profileId = nullable('phd2_profile_id') as num?;
+    return Phd2Settings(
+      host: j['host'] as String,
+      port: (j['port'] as num).toInt(),
+      phd2Profile: j['phd2_profile'] as String,
+      ditherEnabled: j['dither_enabled'] as bool,
+      ditherEveryNFrames: (j['dither_every_n_frames'] as num).toInt(),
+      ditherPixels: (j['dither_pixels'] as num).toDouble(),
+      settlePixels: (j['settle_pixels'] as num).toDouble(),
+      settleTimeSec: (j['settle_time_sec'] as num).toInt(),
+      settleTimeoutSec: (j['settle_timeout_sec'] as num).toInt(),
+      forceCalibrationEachSession: j['force_calibration_each_session'] as bool,
+      guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
+        j['guider_setup_type'] as String,
+      ),
+      guideFocalLength: (j['guide_focal_length'] as num).toInt(),
+      guidePixelSize: (j['guide_pixel_size'] as num).toDouble(),
+      raAggressiveness: (j['ra_aggressiveness'] as num).toDouble(),
+      decAggressiveness: (j['dec_aggressiveness'] as num).toDouble(),
+      minimumMove: (j['minimum_move'] as num).toDouble(),
+      decMinimumMove: (decMinimumMove ?? j['minimum_move'] as num).toDouble(),
+      decGuideMode: j['dec_guide_mode'] as String,
+      guiderCamera: j['guider_camera'] as String,
+      guiderCameraId: j['guider_camera_id'] as String,
+      guiderCameraAlpacaUniqueId: j['guider_camera_alpaca_unique_id'] as String,
+      guiderMount: j['guider_mount'] as String,
+      guiderAuxMount: j['guider_aux_mount'] as String,
+      guiderRotator: j['guider_rotator'] as String,
+      guiderAlpacaHost: j['guider_alpaca_host'] as String,
+      guiderAlpacaPort: (j['guider_alpaca_port'] as num).toInt(),
+      guideExposureMinMs: (j['guide_exposure_min_ms'] as num).toInt(),
+      guideExposureMaxMs: (j['guide_exposure_max_ms'] as num).toInt(),
+      guideExposureMs: (j['guide_exposure_ms'] as num).toInt(),
+      guideCameraGain: (j['guide_camera_gain'] as num).toInt(),
+      guiderProfileId: profileId?.toInt() ?? 0,
+    );
+  }
+
   /// The guider settings as sent on PUT (also how the guider panel tells a
   /// real edit from a write that changes nothing).
   static Map<String, dynamic> phd2SettingsToJson(Phd2Settings v) => {
@@ -1629,6 +1707,11 @@ class ProfileApi {
     expectedFlipSlewSeconds:
         (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
     firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+    firstFlipCompletedUtc: j['first_flip_completed_utc'] is String
+        ? DateTime.tryParse(j['first_flip_completed_utc'] as String)?.toUtc()
+        : null,
+    firstFlipPierSideChanged:
+        (j['first_flip_pier_side_changed'] as bool?) ?? false,
     unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
     unattendedShutdownEnabled:
         (j['unattended_shutdown_enabled'] as bool?) ?? true,
@@ -1693,6 +1776,10 @@ class ProfileApi {
     'flip_safety_enabled': v.flipSafetyEnabled,
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
     'first_flip_confirmed': v.firstFlipConfirmed,
+    'first_flip_completed_utc': v.firstFlipCompletedUtc
+        ?.toUtc()
+        .toIso8601String(),
+    'first_flip_pier_side_changed': v.firstFlipPierSideChanged,
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,

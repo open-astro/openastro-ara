@@ -106,7 +106,7 @@ void main() {
         'Polar align',
         'Tolerance',
         'Turn',
-        'Verify step',
+        'Check step',
         'Rough step exposure',
         'Stop tracking when polar align ends',
       ]) {

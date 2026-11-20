@@ -2398,14 +2398,20 @@ paths:
     post:
       tags:
         - Equipment
+      summary: 'Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.'
+      operationId: PolarAlignNext
       parameters:
         - name: Idempotency-Key
           in: header
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/stop:
     post:
       tags:
@@ -6890,7 +6896,7 @@ paths:
     put:
       tags:
         - Profile
-      summary: Replace the active profile's safety policies. first_flip_confirmed is daemon-owned and ignored on PUT (the stored value is preserved and echoed) — use POST /safety/first-flip/rearm to re-arm the §58.8 announce.
+      summary: 'Replace the active profile''s safety policies. first_flip_confirmed, first_flip_completed_utc and first_flip_pier_side_changed are daemon-owned and ignored on PUT (the stored values are preserved and echoed) — use POST /safety/first-flip/confirm and POST /safety/first-flip/rearm.'
       operationId: PutSafetyPolicies
       parameters:
         - name: If-Match
@@ -6920,7 +6926,7 @@ paths:
     post:
       tags:
         - Profile
-      summary: Re-arm the §58.8 one-time first-flip announce (clears first_flip_confirmed). Returns the updated safety policies.
+      summary: Re-arm the §58.8 unconfirmed-flip announce (clears first_flip_confirmed and the completed-flip record). Returns the updated safety policies.
       operationId: RearmFirstFlipAnnounce
       responses:
         '200':
@@ -6929,6 +6935,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
+  /api/v1/profile/safety/first-flip/confirm:
+    post:
+      tags:
+        - Profile
+      summary: '#1589 Confirm the active profile''s completed meridian flip (sets first_flip_confirmed; later flips run without the §58.8 announce). Refused with first-flip-not-completed when no completed flip is on record. Returns the updated safety policies.'
+      operationId: ConfirmFirstFlip
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafetyPoliciesDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/autofocus:
     get:
       tags:
@@ -13987,6 +14012,10 @@ components:
           type:
             - 'null'
             - string
+        above_align:
+          type:
+            - 'null'
+            - boolean
     ParkRequestDto:
       type: object
       properties:
@@ -15134,6 +15163,8 @@ components:
         - polar-align-unconfirmed
         - polar-align-sweep-limit
         - polar-align-moving-mount
+        - polar-align-on-axis
+        - first-flip-not-completed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
@@ -15720,6 +15751,14 @@ components:
             - string
           format: double
           default: 50
+        first_flip_completed_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        first_flip_pier_side_changed:
+          type: boolean
+          default: false
     SavedTargetDto:
       required:
         - name

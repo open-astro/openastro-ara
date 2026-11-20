@@ -301,6 +301,31 @@ void main() {
       expect(old.stage, isNull);
     });
 
+    test('each progress event says the readout caution afresh; a snapshot carries it too (#2072)', () {
+      final weak = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 4.0, 'readout_caution': 'altitude_weak'}),
+      )!;
+      expect(weak.readoutCaution, PolarAlignReadoutCautions.altitudeWeak);
+      final again = foldPolarAlignEvent(
+        weak,
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 3.0, 'readout_caution': 'altitude_weak'}),
+      )!;
+      expect(again.readoutCaution, PolarAlignReadoutCautions.altitudeWeak);
+      expect(again.totalErrorArcmin, 3.0);
+      final sound = foldPolarAlignEvent(
+        again,
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 2.0, 'readout_caution': null}),
+      )!;
+      expect(sound.readoutCaution, isNull, reason: 'a new seed with a sound readout clears it');
+      expect(
+        liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting', 'readout_caution': 'altitude_weak'}))
+            .readoutCaution,
+        PolarAlignReadoutCautions.altitudeWeak,
+      );
+      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting'})).readoutCaution, isNull);
+    });
+
     test('the status snapshot hydrates stage, home wait, solves and the check result', () {
       final live = liveFromStatus(PolarAlignStatus.fromJson(const {
         'state': 'checked',

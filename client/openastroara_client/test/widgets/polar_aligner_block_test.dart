@@ -26,8 +26,6 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
-  Future<void> next() async {}
-  @override
   Future<void> stop() async {}
   @override
   Future<void> complete() async {}
@@ -216,7 +214,7 @@ void main() {
   testWidgets('converged: the tolerance and the moves, no buttons', (tester) async {
     await _pump(tester, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('Inside your 2′ tolerance after 4 moves. Finish with Verify or Done. '
+        find.text('Inside your 2′ tolerance after 4 moves. Finish with Check or Done. '
             'If the error drifts out, the motors correct again.'),
         findsOneWidget);
     expect(find.byType(ButtonStyleButton), findsNothing);
