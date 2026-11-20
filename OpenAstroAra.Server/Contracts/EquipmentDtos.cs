@@ -970,7 +970,9 @@ public static class PolarAlignDirections {
 /// wire name from when the fine stage led into the check; it is the readout of the last run that ended with one, null
 /// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), and the verdict band
-/// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
+/// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).
+/// <c>DecSpreadArcsec</c> (#2081): how far the mount's Dec reading spread across the check's three points, when that is
+/// over 2″ (NINA's warning: the mount moved in Dec, so the result may be off); null otherwise.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -980,7 +982,8 @@ public sealed record PolarAlignCheckResultDto(
     double? FineErrorArcmin,
     double? FineDeltaArcmin,
     string Verdict,
-    DateTimeOffset MeasuredAt);
+    DateTimeOffset MeasuredAt,
+    double? DecSpreadArcsec = null);
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
@@ -1012,7 +1015,10 @@ public sealed record PolarAlignStateDto(
     PolarAlignCorrectionDto? Correction = null,
     // #2072 — a caution on the live readout from the last seed (PolarAlignReadoutCautions), also on each
     // polar_align.progress event; null when the readout is sound, before the first seed, and outside adjusting/paused.
-    string? ReadoutCaution = null);
+    string? ReadoutCaution = null,
+    // #2081 — the mount's Dec spread across the seed's three points (arcseconds) when over 2″ (NINA's warning: the
+    // readout may be off), also on each polar_align.progress event; null otherwise and outside adjusting/paused.
+    double? DecSpreadArcsec = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

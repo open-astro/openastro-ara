@@ -222,6 +222,8 @@ namespace OpenAstroAra.Server.Services {
                     LastFrameId: _lastFrameId,
                     WaitingForCapture: _waitingForCapture,
                     LastFrame: _lastFrame,
+                    // #2081 — the seed's Dec-spread warning describes the live readout too: shown only while one runs.
+                    DecSpreadArcsec: _state is "adjusting" or "paused" ? _decSpreadArcsec : null,
                     Stage: _stage,
                     WaitingForHome: false,
                     CheckSolvesDone: _checkSolvesDone,
@@ -1631,13 +1633,16 @@ namespace OpenAstroAra.Server.Services {
             var total = Math.Sqrt(altErrArcmin * altErrArcmin + azErrArcmin * azErrArcmin);
             string? stage;
             string? caution;
+            double? decSpread;
             lock (_gate) {
                 stage = _stage;
                 caution = _readoutCaution;
+                decSpread = _decSpreadArcsec;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
                 ["readout_caution"] = caution,
+                ["dec_spread_arcsec"] = decSpread,
                 ["iteration"] = iteration,
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),
                 ["azimuth_error_arcmin"] = Math.Round(azErrArcmin, 2),

@@ -70,6 +70,10 @@ namespace OpenAstroAra.Test.PolarAlign {
         private readonly double[] _rate = new double[2];
         private readonly bool[] _runaway = new bool[2];
         private readonly TimeSpan?[] _leaseUntil = new TimeSpan?[2];
+        // #2067 — TelescopeService's own lease per axis (the rate it last sent and until when): a renewal at that rate while
+        // it lasts only extends it and never reaches the driver, even when the firmware stopped the axis meanwhile (a soft
+        // limit). Cleared by a stop, an abort and its own lapse.
+        private readonly (double Rate, TimeSpan Until)?[] _serviceLease = new (double Rate, TimeSpan Until)?[2];
         private readonly int[] _openMotor = { -1, -1 };
 
         private TimeSpan _t;
@@ -588,7 +592,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 if (TrulyMovingLocked()) {
                     _fullReadsWhileMoving++;
                 }
-                return Task.FromResult(ReadLocked(positionOnly: false));
+                return Task.FromResult(ReadLocked(readSlewing: true, readSide: true));
             }
         }
 
@@ -599,9 +603,38 @@ namespace OpenAstroAra.Test.PolarAlign {
                 if (TrulyMovingLocked()) {
                     _positionReadsWhileMoving++;
                 }
-                return Task.FromResult(ReadLocked(positionOnly: true));
+                return Task.FromResult(ReadLocked(readSlewing: false, readSide: false));
             }
         }
+
+        /// <summary>#2067 — runs at the start of every <see cref="ReadPoseNowAsync"/> (a turn's poll), before the mount is
+        /// read: something that happens to the mount mid-turn.</summary>
+        public Action? OnPoseRead { get; set; }
+
+        /// <summary>#2067 — the pier side every reading reports instead of its own (a driver that flips its answer); null:
+        /// the mount's own.</summary>
+        public PierSide? ReportedSideOverride { get; set; }
+
+        /// <summary>#2067 — the position and the pier side, no Slewing (a turn's poll). Counted as a position read.</summary>
+        public Task<MountReading?> ReadPoseNowAsync(CancellationToken ct) {
+            OnPoseRead?.Invoke();
+            TakeFreshReadTime();
+            lock (_lock) {
+                IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _positionReadsWhileMoving++;
+                }
+                return Task.FromResult(ReadLocked(readSlewing: false, readSide: true));
+            }
+        }
+
+        /// <summary>#2083 — the rate bands the mount reports for its axes (AxisRates); null: any rate is taken as asked.</summary>
+        public IReadOnlyList<(double Min, double Max)>? AxisRateBands { get; set; }
+
+        /// <summary>As TelescopeService: the fastest band rate at or below the request, never above; the request itself
+        /// when the fake reports no bands.</summary>
+        public double? MatchMoveAxisRate(int axis, double requested) =>
+            AxisRateBands is null ? requested : TelescopeService.MatchMoveAxisRateAtOrBelow(requested, AxisRateBands);
 
         /// <summary>#2066 — how often <see cref="ReadNowAsync"/> (position, Slewing and pier side) and
         /// <see cref="ReadPositionNowAsync"/> were called while a motor or a GoTo truly moved the mount.</summary>
@@ -616,7 +649,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         private int _fullReadsWhileMoving;
         private int _positionReadsWhileMoving;
 
-        private MountReading? ReadLocked(bool positionOnly) {
+        private MountReading? ReadLocked(bool readSlewing, bool readSide) {
             if (FreshReadFailsLocked()) {
                 return null;
             }
@@ -626,8 +659,8 @@ namespace OpenAstroAra.Test.PolarAlign {
                 _commandsAtReconnect = _commands.Count;
             }
             var s = SampleLocked();
-            bool? slewing = positionOnly || SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
-            var side = positionOnly || PierSource is PierSideSource.Unknown or PierSideSource.Error ? PierSide.pierUnknown : s.Side;
+            bool? slewing = !readSlewing || SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
+            var side = !readSide || PierSource is PierSideSource.Unknown or PierSideSource.Error ? PierSide.pierUnknown : ReportedSideOverride ?? s.Side;
             if (_sentinelReads > 0) {
                 _sentinelReads--;
                 return new MountReading(0.0, 0.0, slewing, side, _t0 + _t, _sessionEpoch);
@@ -971,6 +1004,19 @@ namespace OpenAstroAra.Test.PolarAlign {
             lock (_lock) {
                 IntegrateLocked();
                 var text = string.Create(CultureInfo.InvariantCulture, $"move {(axis == 0 ? "primary" : "secondary")} {rate}");
+                // As TelescopeService: a renewal at the rate the service last sent, while its lease lasts, extends the lease
+                // only (after the pose and abort checks a renewal is refused by) and the driver is not asked again.
+                if (rate != 0 && leaseMs is int renewMs && _serviceLease[axis] is { } held && held.Rate == rate && held.Until > _t
+                        && !(unlessAbortedSince is not null && PositionUnverifiedReason is not null)
+                        && !(unlessAbortedSince is long renewSince && renewSince != _abortEpoch)) {
+                    var until = _t + TimeSpan.FromMilliseconds(Math.Clamp(renewMs, 250, 5000));
+                    _serviceLease[axis] = (rate, until);
+                    if (_rate[axis] != 0 && !_runaway[axis]) {
+                        _leaseUntil[axis] = until;
+                    }
+                    return;
+                }
+                _serviceLease[axis] = null;
                 if (rate == 0) {
                     CommandLocked(text, isMotion: false);
                     _slewReadsThrow = false;
@@ -1012,6 +1058,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                     _openMotor[axis] = OpenMotionLocked(kind, rate, target: null, otherMotion);
                 }
                 _leaseUntil[axis] = leaseMs is int ms ? _t + TimeSpan.FromMilliseconds(Math.Clamp(ms, 250, 5000)) : null;
+                _serviceLease[axis] = _leaseUntil[axis] is TimeSpan leased ? (rate, leased) : null;
                 FirstMove.TrySetResult();
             }
         }
@@ -1025,6 +1072,8 @@ namespace OpenAstroAra.Test.PolarAlign {
                 _abortCount++;
                 _leaseUntil[0] = null; // TelescopeService cancels every lease on an abort
                 _leaseUntil[1] = null;
+                _serviceLease[0] = null;
+                _serviceLease[1] = null;
                 var honoured = true;
                 // Only an abort with something to stop is ignored: one sent to a still mount would use up the count
                 // and leave the abort the scenario is about honoured (as MoveAxisStopIgnored counts moving axes only).

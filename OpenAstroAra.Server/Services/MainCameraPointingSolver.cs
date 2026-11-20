@@ -188,6 +188,6 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
             return new PolarAlignSolveOutcome(false, 0, 0);
         }
         var apparent = result.Coordinates.Transform(Epoch.JNOW);
-        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec);
+        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result));
     }
 }
