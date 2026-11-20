@@ -15,12 +15,22 @@ sha="$2"
 since="$3"
 
 # workflow_run.pull_requests is empty for a fork PR, so find the PR by its head.
-pr="$(gh pr list --repo "$repo" --state open --limit 200 --json number,headRefOid \
-  | jq -r --arg sha "$sha" '[.[] | select(.headRefOid == $sha) | .number] | first // ""')"
-if [ -z "$pr" ]; then
+match="$(gh pr list --repo "$repo" --state open --limit 200 --json number,headRefOid,headRefName \
+  | jq -c --arg sha "$sha" '[.[] | select(.headRefOid == $sha)] | first // empty')"
+if [ -z "$match" ]; then
   echo "No open pull request has head ${sha}."
   exit 0
 fi
+pr="$(jq -r .number <<<"$match")"
+head_ref="$(jq -r '.headRefName // ""' <<<"$match")"
+# A merge down must keep its merge commit, and master's queue squashes, so a
+# maintainer merges it by hand (docs/RELEASES.md "Merge down").
+case "$head_ref" in
+  merge-down/*)
+    echo "Pull request #${pr} is a merge down: a maintainer merges it with a merge commit."
+    exit 0
+    ;;
+esac
 
 state() {
   gh api graphql -F owner="${repo%%/*}" -F name="${repo#*/}" -F n="$pr" -f query='
@@ -58,7 +68,8 @@ case "$verdict" in
     if [ "$queued" = true ] || [ "$auto" = true ]; then
       echo "Pull request #${pr} is approved and already on its way to the queue."
     else
-      # No method flag: the merge queue sets it, and gh refuses one here.
+      # No method flag: the merge queue sets it (squash on master, merge
+      # commit on stable/X.Y), and gh refuses one here.
       gh pr merge "$pr" --repo "$repo" --auto
       echo "Pull request #${pr} is approved on ${sha}: auto-merge enabled."
     fi

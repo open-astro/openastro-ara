@@ -8583,6 +8583,8 @@
     "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
     "placeholders": {"offset": {"type": "String"}}
   },
+  "refusalPolarAlignMovingMount": "Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.",
+  "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",
@@ -8741,5 +8743,10 @@
   "clockWrongStartAnyway": "Start anyway",
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
+  },
+  "versionMismatchWarning": "Server {server} and app {app} differ; update both from the same release.",
+  "@versionMismatchWarning": {
+    "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",
+    "placeholders": {"server": {"type": "String"}, "app": {"type": "String"}}
   }
 }

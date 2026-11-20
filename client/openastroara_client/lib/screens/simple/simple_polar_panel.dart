@@ -212,7 +212,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         const PolarAlignSettings();
     final command = ref.watch(polarAlignActionProvider);
     final busy = command.busy;
-    final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
+    final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
     final active = simplePolarActive(live);
     final total = live.totalErrorArcmin;
     final step = simplePolarStep(live);

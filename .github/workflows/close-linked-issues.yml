@@ -1,0 +1,52 @@
+# Close the issues a PR merged into stable/** names with a closing keyword
+# (Closes/Fixes/Resolves #N). GitHub closes linked issues only for a PR merged
+# into the default branch (master), and fixes for a beta merge into stable/X.Y
+# (docs/RELEASES.md). Ported from AlpacaBridge's close-linked-issues.yml.
+#
+# pull_request_target: a fork PR's pull_request run gets a read-only token, and
+# closing an issue needs issues: write. That trigger runs with write access, so
+# this job checks out the merged commit on the stable branch only (never the PR
+# head): it runs only for a merged PR, so that commit was reviewed and is on
+# the branch. master may not have the script yet before the first merge down.
+# It passes
+# the untrusted PR body to scripts/close-linked-issues.py through the
+# environment, never through a `${{ }}` expansion in `run:`. Only integers
+# parsed from the body reach `gh`.
+
+name: Close linked issues
+
+on:
+  pull_request_target:  # zizmor: ignore[dangerous-triggers] -- merged PRs only; checks out the merged stable commit, never the head; PR body via env only
+    types: [closed]
+    branches: ['stable/**']
+
+permissions: {}
+
+jobs:
+  close-issues:
+    name: close-issues (stable PR)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read  # the checkout of the merged stable commit
+      issues: write   # close the linked issues and comment on them
+    steps:
+      - name: Checkout the merged stable commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          lfs: false
+          persist-credentials: false
+
+      - name: Close issues named by the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 scripts/close-linked-issues.py --repo "${REPO}" --pr "${PR_NUMBER}" \
+            --base "${BASE_REF}" --sha "${MERGE_SHA}"

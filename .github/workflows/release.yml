@@ -1,0 +1,273 @@
+# Publish a GitHub Release for every version tag (docs/RELEASES.md).
+#
+# Ara releases are SOURCE ONLY. A Release is the tag, its plain-language notes
+# and one source tarball with every git submodule inside
+# (openastro-ara-<semver>-source.tar.gz, built by scripts/source-archive.sh)
+# plus its .sha256. No .deb, apt package or app binary is attached: users build
+# the release themselves. GitHub's own "Source code" links leave the
+# submodules out, which is why the tarball is attached.
+#
+# Ported from AlpacaBridge's release.yml, without its .deb, attestation, apt and
+# prune jobs.
+#
+# Flow: /bump-release (.claude/commands/bump-release.md) cuts the release on a
+# PR into stable/X.Y (VERSION, README badge, pubspec version, notes in
+# docs/releases/<semver>.md, and for a stable release the dated CHANGELOG.md
+# section), a maintainer merges it, tags the merge commit with an annotated tag
+# and pushes the tag. This workflow then checks the tag and publishes.
+#
+#   Beta tag   vX.Y.Z-beta.N: VERSION holds X.Y.Z~betaN, the tag must sit on its
+#              own stable/X.Y, the notes come only from
+#              docs/releases/X.Y.Z-beta.N.md, and the Release is a pre-release.
+#   Stable tag vX.Y.Z: VERSION holds X.Y.Z, CHANGELOG.md must have the dated
+#              "## [X.Y.Z] - YYYY-MM-DD" section; the notes are
+#              docs/releases/X.Y.Z.md with a link to that section, or the
+#              section itself when there is no notes file.
+#
+# Dry run: `gh workflow run release.yml --ref <branch> -f tag=vX.Y.Z-beta.N`
+# runs every check, builds the notes and the tarball from the branch's checkout
+# and uploads them as a run artifact to look at. Nothing is published.
+#
+# Two jobs, so the write token exists only where it is used: `build` (read-only)
+# does every check and builds the assets, `publish` (contents: write, tag pushes
+# only) creates the Release from build's artifact and runs no repository code.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to dry-run (vX.Y.Z or vX.Y.Z-beta.N); the checkout's VERSION must match. Nothing is published."
+        required: true
+        type: string
+
+permissions: {}
+
+# One run per tag at a time; a re-pushed tag waits for the run before it, so two
+# runs never edit the same Release at once.
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Check the tag and build the source release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # The pushed tag, or the tag a dry run names. Read only through this
+      # variable so the two paths cannot drift.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    outputs:
+      semver: ${{ steps.tag.outputs.semver }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - name: Checkout (full history, every submodule)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # Full history: the beta check compares the tag with stable/X.Y, and
+          # the tarball is stamped with the tagged commit's time.
+          fetch-depth: 0
+          submodules: recursive  # the tarball carries third_party/erfa, supernovas and astap
+          lfs: false
+          persist-credentials: false
+
+      - name: Map tag to VERSION
+        id: tag
+        run: |
+          set -euo pipefail
+          python3 scripts/release-tag.py --self-test
+          # version=<VERSION spelling>, semver=<display>, prerelease=true|false,
+          # notes_name=<semver>.md, stable_branch=stable/X.Y. Exit 2 on a bad tag.
+          python3 scripts/release-tag.py "${RELEASE_TAG}" | tee -a "${GITHUB_OUTPUT}"
+
+      - name: Require a beta tag on its own stable branch
+        # Beta tags only: vX.Y.Z-beta.N must sit on stable/X.Y for its own X.Y.
+        # Any stable/* is not enough: a newer stable branch cut from master
+        # holds all of master's older history, so a 1.0 beta tag on a master
+        # commit would pass as "on stable/1.1" and publish master's unreleased
+        # work. A stable tag is gated by its bare VERSION and dated CHANGELOG
+        # section, which only /bump-release writes. A dry run is checked the
+        # same way as the tag it names.
+        if: steps.tag.outputs.prerelease == 'true'
+        env:
+          STABLE_BRANCH: ${{ steps.tag.outputs.stable_branch }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify --quiet "refs/remotes/origin/${STABLE_BRANCH}" > /dev/null; then
+            echo "ERROR: there is no ${STABLE_BRANCH}; beta tag ${RELEASE_TAG} must be cut from it." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD "refs/remotes/origin/${STABLE_BRANCH}"; then
+            echo "ERROR: beta tag ${RELEASE_TAG} ($(git rev-parse HEAD)) is not on ${STABLE_BRANCH}." >&2
+            echo "Tag the release PR's merge commit on ${STABLE_BRANCH} (docs/RELEASES.md); a beta never sits on master or another stable branch." >&2
+            exit 1
+          fi
+          echo "${RELEASE_TAG} is on ${STABLE_BRANCH}."
+
+      - name: Verify tag matches VERSION
+        env:
+          TAG_VERSION: ${{ steps.tag.outputs.version }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          if [ "${TAG_VERSION}" != "${file_version}" ]; then
+            echo "ERROR: tag ${RELEASE_TAG} needs VERSION ${TAG_VERSION}, but the VERSION file holds ${file_version}." >&2
+            if [ "${PRERELEASE}" = "true" ]; then
+              echo "Cut the beta on a PR into stable/X.Y first (VERSION ${TAG_VERSION}, README badge, pubspec version, docs/releases/${RELEASE_TAG#v}.md; no dated CHANGELOG section), then tag its merge commit." >&2
+            else
+              echo "Cut the release on a PR first (VERSION, README badge, pubspec version, dated CHANGELOG section), then tag its merge commit." >&2
+            fi
+            exit 1
+          fi
+          # VERSION is valid, and the client pubspec and the README badge carry the same version.
+          python3 scripts/version.py --check
+          echo "Tag ${RELEASE_TAG} matches VERSION ${file_version}."
+
+      - name: Build release notes
+        env:
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          SEMVER: ${{ steps.tag.outputs.semver }}
+          NOTES_NAME: ${{ steps.tag.outputs.notes_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          notes=release/release-notes.md
+          docs="https://github.com/${GITHUB_REPOSITORY}/blob/${RELEASE_TAG}/docs/RELEASES.md"
+          if [ "${PRERELEASE}" = "true" ]; then
+            # A beta has no dated CHANGELOG section; its notes file is required.
+            if [ ! -f "docs/releases/${NOTES_NAME}" ]; then
+              echo "ERROR: beta tag ${RELEASE_TAG} needs docs/releases/${NOTES_NAME} on the tagged commit." >&2
+              exit 1
+            fi
+            cp "docs/releases/${NOTES_NAME}" "${notes}"
+            # Force a newline-terminated body: without one the "---" below
+            # would render as a setext heading over the file's last line.
+            [ "$(tail -c1 "${notes}")" = "" ] || echo "" >> "${notes}"
+            {
+              echo ""
+              echo "---"
+              echo "This is a beta, for testers who want the next release early. How betas work: ${docs}"
+            } >> "${notes}"
+          else
+            # Always run the extractor: it fails if the CHANGELOG section is
+            # missing or still UNRELEASED, so a tag never publishes an uncut
+            # version even when plain-language notes exist for it.
+            python3 scripts/changelog-section.py --self-test
+            python3 scripts/changelog-section.py "${SEMVER}" > /dev/null
+            anchor="$(python3 scripts/changelog-section.py --anchor "${SEMVER}")"
+            if [ -f "docs/releases/${NOTES_NAME}" ]; then
+              # Plain-language notes written by /bump-release; the CHANGELOG
+              # keeps the technical detail and is linked instead of pasted.
+              cp "docs/releases/${NOTES_NAME}" "${notes}"
+              [ "$(tail -c1 "${notes}")" = "" ] || echo "" >> "${notes}"
+              {
+                echo ""
+                echo "---"
+                echo "Full technical changelog: https://github.com/${GITHUB_REPOSITORY}/blob/${RELEASE_TAG}/CHANGELOG.md#${anchor}"
+              } >> "${notes}"
+            else
+              python3 scripts/changelog-section.py "${SEMVER}" > "${notes}"
+              {
+                echo ""
+                echo "---"
+              } >> "${notes}"
+            fi
+          fi
+          {
+            echo ""
+            echo "Build it from source: ${docs}#building-a-release"
+            echo "Use the attached openastro-ara-${SEMVER}-source.tar.gz (it includes the submodules), not GitHub's \"Source code\" links."
+          } >> "${notes}"
+          echo "::group::Release notes"
+          cat "${notes}"
+          echo "::endgroup::"
+
+      - name: Build the source tarball
+        env:
+          SEMVER: ${{ steps.tag.outputs.semver }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            # The tag itself: source-archive.sh also checks VERSION at the tag.
+            scripts/source-archive.sh "${RELEASE_TAG}" release
+          else
+            # A dry run has no tag yet; the branch checkout stands in for it.
+            scripts/source-archive.sh HEAD release "${SEMVER}"
+          fi
+          tarball="openastro-ara-${SEMVER}-source.tar.gz"
+          (cd release && sha256sum -c "${tarball}.sha256")
+          # Every submodule must be inside, or the tarball does not build.
+          for sub in third_party/erfa third_party/supernovas third_party/astap; do
+            count="$(tar -tzf "release/${tarball}" | grep -c "^openastro-ara-${SEMVER}/${sub}/." || true)"
+            if [ "${count}" = "0" ]; then
+              echo "ERROR: ${tarball} has no files under ${sub}/." >&2
+              exit 1
+            fi
+            echo "${sub}: ${count} entries"
+          done
+          ls -l release
+
+      - name: Keep the release files for the publish job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2 pinned per zizmor immutable-ref policy
+        with:
+          name: source-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Dry run complete
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+        run: |
+          echo "Dry run for ${RELEASE_TAG} (prerelease=${PRERELEASE}): notes and tarball built (run artifact source-release), nothing published."
+
+  publish:
+    name: Publish the GitHub Release
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # gh release create/edit/upload
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      SEMVER: ${{ needs.build.outputs.semver }}
+      PRERELEASE: ${{ needs.build.outputs.prerelease }}
+    steps:
+      - name: Fetch the release files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: source-release
+          path: release
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tarball="openastro-ara-${SEMVER}-source.tar.gz"
+          (cd release && sha256sum -c "${tarball}.sha256")
+          # Explicit on both paths: a re-run of a stable tag clears a pre-release
+          # mark that was set by hand, instead of leaving it as it was.
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists; updating its notes and assets."
+            gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_TAG}" --notes-file release/release-notes.md --prerelease="${PRERELEASE}"
+          else
+            gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_TAG}" --notes-file release/release-notes.md --verify-tag --prerelease="${PRERELEASE}"
+          fi
+          # --clobber: a re-run of the tag replaces the assets instead of failing.
+          gh release upload "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --clobber \
+            "release/${tarball}" "release/${tarball}.sha256"
+          echo "Published ${RELEASE_TAG} with ${tarball} and its .sha256."

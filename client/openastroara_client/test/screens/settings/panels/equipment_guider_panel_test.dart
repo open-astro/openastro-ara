@@ -62,8 +62,12 @@ class _FakeProfileApi extends ProfileApi {
     return value.copyWith();
   }
 
+  /// The optics read fails, as against a rig that is still booting.
+  bool failOptics = false;
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => failOptics
+      ? throw DioException(requestOptions: RequestOptions(path: '/profile/optics'))
+      : (value: const OpticsSettings(focalLengthMm: 400, reducerFactor: 0.8), etag: '"v1"');
   @override
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() async =>
@@ -161,10 +165,12 @@ typedef _Harness = ({
   _FakeGuiderApi guider,
 });
 
-Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false}) async {
+Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false, bool failOptics = false}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 2400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final profile = _FakeProfileApi(stored)..failGet = failLoad;
+  final profile = _FakeProfileApi(stored)
+    ..failGet = failLoad
+    ..failOptics = failOptics;
   final equipment = _FakeEquipmentApi();
   final names = _FakeAlpacaNames();
   final guider = _FakeGuiderApi();
@@ -375,6 +381,23 @@ void main() {
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
     expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    expect(h.equipment.calls, isNot(contains('push')));
+  });
+
+  testWidgets('an OAG guide focal length is never derived from optics that did not load: Apply writes nothing (ADR 0015)',
+      (tester) async {
+    final h = await _pump(
+        tester,
+        const Phd2Settings(
+            guiderSetupType: 'oag',
+            guideFocalLength: 320,
+            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+            guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
+        failOptics: true);
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'no focal length derived from optics the rig never sent');
     expect(h.equipment.calls, isNot(contains('push')));
   });
 

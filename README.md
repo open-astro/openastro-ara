@@ -1,5 +1,7 @@
 # OpenAstro Ara
 
+#### [0.0.1] - 2026-11-19 · [Changelog](CHANGELOG.md)
+
 [![Server license: MPL 2.0](https://img.shields.io/badge/Server%20License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/) [![Client license: AGPL v3](https://img.shields.io/badge/Client%20License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
 
 A headless ASP.NET Core daemon on .NET 10 (`OpenAstroAra.Server`) + a cross-platform Flutter client (`client/openastroara_client`) for deep-sky astrophotography. The daemon controls all equipment **exclusively over ASCOM Alpaca (no COM)** — which is what lets it run headless on Linux. It **deploys on ARM64 Linux** — Raspberry Pi 4/5 is the reference platform; other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Debian Trixie arm64 are best-effort per playbook §13.1. The client runs on **Windows, iOS, Linux, macOS, and Android** from one Flutter codebase, and discovers the daemon on the LAN via mDNS.
@@ -8,7 +10,7 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 ## Status
 
-**Pre-release** — **v0.0.1 is feature-complete and pending its first tagged release (`v0.0.1-ara.1`)**; v0.1.0 feature work is already underway. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the product spec; open work is tracked as GitHub issues labelled `P1`–`P5`.
+**Pre-release.** No version has been tagged yet. The first release will be **`v1.0.0-beta.1`**. Releases are **source only**: a tag, plain-language notes and a source tarball, with no installer, `.deb` or app download. You build the daemon and the app yourself; see [`docs/RUNNING.md`](docs/RUNNING.md) and [`docs/RELEASES.md`](docs/RELEASES.md). Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the product spec; open work is tracked as GitHub issues labelled `P1`–`P5`.
 
 > **Contributions are paused.** Outside pull requests, issues and comments are temporarily disabled.
 
@@ -32,9 +34,10 @@ openastro-ara/                       (this repo)
 ## Documentation
 
 - [`docs/RUNNING.md`](docs/RUNNING.md) — build & run the daemon + client from source on Linux, macOS, or Windows.
-- [`docs/DEPLOY.md`](docs/DEPLOY.md) — install a released build on a Raspberry Pi (production).
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — set up a daemon you built from source on a Raspberry Pi (production).
+- [`docs/RELEASES.md`](docs/RELEASES.md) — versions, betas, stable branches and how to build a release.
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — using ARA once it's installed.
-- [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md) — per-release highlights (full change history in [`CHANGELOG.md`](CHANGELOG.md)).
+- [`docs/releases/`](docs/releases/README.md) — plain-language notes for each release (full change history in [`CHANGELOG.md`](CHANGELOG.md)).
 
 ## License
 

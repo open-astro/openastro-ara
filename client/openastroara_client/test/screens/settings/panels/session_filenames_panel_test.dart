@@ -8,6 +8,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/storage_fixture.dart';
 
@@ -31,20 +32,39 @@ class _FakeRig extends FakeStorageApi {
     String? ifMatch,
   }) async => (value: value, etag: '"f1"');
 
+  /// Every site save that reached the rig.
+  final sitePuts = <SiteSettings>[];
+
   @override
-  Future<SiteSettings> getSiteSettings() async {
+  Future<({SiteSettings value, String? etag})> getSiteSection() async {
     if (failSite != null) throw failSite!;
-    return const SiteSettings();
+    return (value: const SiteSettings(latitudeDeg: 51.477833), etag: '"s1"');
   }
 
   @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async => value;
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings value, {
+    String? ifMatch,
+  }) async {
+    sitePuts.add(value);
+    return (value: value, etag: '"s2"');
+  }
+
+  /// Every optics save that reached the rig.
+  final opticsPuts = <OpticsSettings>[];
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(focalLengthMm: 382), etag: '"o1"');
 
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings value) async => value;
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings value, {
+    String? ifMatch,
+  }) async {
+    opticsPuts.add(value);
+    return (value: value, etag: '"o2"');
+  }
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeRig api) async {
@@ -126,10 +146,64 @@ void main() {
     final api = _FakeRig()..failSite = StateError('Site did not answer.');
     await _pump(tester, api);
     expect(
-      tester.getSemantics(find.text('Site did not answer.')),
+      tester.getSemantics(find.textContaining('Site did not answer.')),
       isSemantics(isLiveRegion: true),
     );
   });
+
+  testWidgets(
+    'File naming: the telescope name is saved with the optics copy from the rig (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig();
+      final container = await _pump(tester, api);
+      expect(find.widgetWithText(EditableTextRow, 'Telescope'), findsOneWidget);
+      container
+          .read(opticsSettingsProvider.notifier)
+          .setTelescopeName('RedCat 51');
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.opticsPuts.single.telescopeName, 'RedCat 51');
+      expect(
+        api.opticsPuts.single.focalLengthMm,
+        382,
+        reason: 'the rest of the rig\'s copy goes back unchanged',
+      );
+    },
+  );
+
+  testWidgets(
+    'File naming: the observer name is saved with the site copy from the rig (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig();
+      final container = await _pump(tester, api);
+      expect(find.widgetWithText(EditableTextRow, 'Observer'), findsOneWidget);
+      container.read(siteSettingsProvider.notifier).setObserverName('J. Troy');
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.sitePuts.single.observerName, 'J. Troy');
+      expect(
+        api.sitePuts.single.latitudeDeg,
+        51.477833,
+        reason: 'the rest of the rig\'s copy goes back unchanged',
+      );
+    },
+  );
+
+  testWidgets(
+    'File naming: Save with the site not loaded from the rig writes no site (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig()..failSite = StateError('Site did not answer.');
+      final container = await _pump(tester, api);
+      expect(find.textContaining('Not loaded'), findsOneWidget);
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.sitePuts, isEmpty);
+      expect(
+        find.textContaining('Settings not loaded from the rig'),
+        findsWidgets,
+      );
+    },
+  );
 
   testWidgets('Save that retries the other loads keeps the Storage edits', (
     tester,

@@ -76,6 +76,10 @@ void main() {
       (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
+    // ADR 0015: the edits land on the rig's copy of the site.
+    await tester.runAsync(
+      () => loadSection(container, siteSettingsProvider, 'site'),
+    );
     container.read(siteSettingsProvider.notifier)
       ..setObserverName('Test Observer')
       ..setLatitudeDeg(51.477811)
@@ -121,6 +125,9 @@ void main() {
     container.read(filenamesSettingsProvider.notifier).setHeaderSite(false);
     // Real coordinates exist, but the group is off — the sheet must show the
     // generic example, not data it just said won't be written.
+    await tester.runAsync(
+      () => loadSection(container, siteSettingsProvider, 'site'),
+    );
     container.read(siteSettingsProvider.notifier)
       ..setLatitudeDeg(51.477811)
       ..setLongitudeDeg(-0.001475);

@@ -6664,6 +6664,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignMovingMount =>
+      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6807,4 +6811,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }

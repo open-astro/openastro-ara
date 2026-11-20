@@ -6664,6 +6664,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignMovingMount =>
+      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6807,6 +6811,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13523,6 +13532,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get refusalPolarAlignMovingMount =>
+      'O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
+
+  @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';
 
   @override
@@ -13667,4 +13680,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clockWrongStartAnyway => 'Iniciar mesmo assim';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'O servidor $server e o app $app são de versões diferentes; atualize os dois a partir da mesma versão.';
+  }
 }

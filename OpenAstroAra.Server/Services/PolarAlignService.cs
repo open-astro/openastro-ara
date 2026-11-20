@@ -406,6 +406,20 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
             }
+            // #2066 — the run's one reading of the mount's stop count, taken at the call like a REST GoTo's: a Stop Mount,
+            // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
+            var abortEpochAtCall = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
+            var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
+            // The reading the run keeps (_abortWatch). Re-read at the launch when only Polar Align's own stops moved the
+            // count since the call: a Start pressed right after a failed turn must not inherit the old run's resent
+            // AbortSlew, or the telescope service would refuse the new run's first motor command.
+            (long Epoch, long OwnAborts) RunAbortBaseline() {
+                var epochNow = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
+                var ownNow = Interlocked.Read(ref _ownAborts);
+                return epochNow - abortEpochAtCall <= ownNow - ownAbortsAtCall
+                    ? (epochNow, ownNow)
+                    : (abortEpochAtCall, ownAbortsAtCall);
+            }
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
             try {
                 lock (_gate) {
@@ -536,6 +550,12 @@ namespace OpenAstroAra.Server.Services {
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                         gen = ++_generation;
+                        var (baselineEpoch, baselineOwn) = RunAbortBaseline();
+                        _abortWatch = (gen, baselineEpoch, baselineOwn);
+                        // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
+                        // no stop; a stop that was never confirmed) is not this run's, which has moved nothing yet, and must
+                        // not keep the telescope endpoints refusing Park and GoTo (IsMovingMount) while it only solves.
+                        EndMotion();
                         _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
                         // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
                         // abandoned by the just-stopped run has delivered its event by now.
@@ -632,7 +652,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var unwound = run is null || await AwaitRunUnwindAsync(run).ConfigureAwait(false);
                 cts?.Dispose();
-                if (!unwound && end is { MountStopped: null }) {
+                if (!unwound && end is { MountStopped: null } && endRequest != TakenOver) {
                     // The run is stuck in a call that ignores cancellation and never reached its exit: confirm the stop here,
                     // and turn tracking off now (it may never unwind; a mount left tracking runs on toward the pier). An end
                     // that hands tracking back leaves it as it is: the run gives it back when it unwinds.
@@ -709,6 +729,7 @@ namespace OpenAstroAra.Server.Services {
         /// switch-on and its slew (CM4, 2026-11-05: six seconds later). Checked just before a slew, not
         /// during one: the iOptron reports tracking off while it slews.</summary>
         private async Task KeepTrackingOnForSlewAsync(int gen, CancellationToken ct) {
+            ThrowIfStoppedFromOutside(gen); // #2066 — a stop from outside since the Start: no switch-on, no turn
             if (_mount.GetInfo().TrackingEnabled) {
                 return;
             }
@@ -732,6 +753,8 @@ namespace OpenAstroAra.Server.Services {
             if (!TryMarkTrackingTouched(gen)) {
                 throw new OperationCanceledException("the run was superseded before it turned tracking on");
             }
+            // #2066 — Stop Mount or Emergency Stop (its first step) landed before this switch-on: tracking stays as the stop left it.
+            ThrowIfStoppedFromOutside(gen);
             try {
                 bool accepted;
                 try {
@@ -762,8 +785,11 @@ namespace OpenAstroAra.Server.Services {
         /// task is reported as reason <c>internal_error</c>.</summary>
         [SuppressMessage("Design", "CA1032:Implement standard exception constructors",
             Justification = "Private, never serialized or thrown without a reason code; the standard ctors would allow constructing it without one.")]
-        private sealed class RoutineFailedException(string reason, string message) : Exception(message) {
+        private sealed class RoutineFailedException(string reason, string message, bool mountTakenOver = false) : Exception(message) {
             public string Reason { get; } = reason;
+            /// <summary>#2066 — the stop that ended the run handed the mount to its sender (Emergency Stop, a park, a Find
+            /// Home): the exit leaves the mount to it.</summary>
+            public bool MountTakenOver { get; } = mountTakenOver;
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -787,7 +813,7 @@ namespace OpenAstroAra.Server.Services {
             // check's verdict is reported (the mount is safe by the time the client hears of the end), else in the finally.
             var exited = false;
             bool? exitStopped = null;
-            async Task<bool?> ExitMountOnceAsync(bool finished, string why, bool handedToGuiding = false) {
+            async Task<bool?> ExitMountOnceAsync(bool finished, string why, bool handedToGuiding = false, bool takenOver = false) {
                 if (exited) {
                     return exitStopped;
                 }
@@ -795,6 +821,13 @@ namespace OpenAstroAra.Server.Services {
                 if (!NoNewerRunStarted(startSeq)) {
                     // A newer run owns the mount (and has its own exit): a stop from here would cut its moves short.
                     LogExitLeftToSuccessor();
+                    return null;
+                }
+                if (takenOver || end.Requested == TakenOver) {
+                    // #2066 — Emergency Stop, the safety park, a park or a Find Home owns the mount now: it stops and checks
+                    // the mount itself (Emergency Stop's second pass), or moves it on purpose. A stop round from here would
+                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound.
+                    LogExitLeftToTakeover(why);
                     return null;
                 }
                 lock (_gate) {
@@ -847,6 +880,7 @@ namespace OpenAstroAra.Server.Services {
                 // stage starts where the last one left the mount: no Home, no GoTo back (#2048); its
                 // turns keep to the band the user confirmed (TurnDirectionForStageAsync).
                 if (stage == PolarAlignStages.Coarse) {
+                    ThrowIfStoppedFromOutside(gen); // #2066 — between the stages too
                     // StartAsync refused a coarse start without the main camera's solver.
                     await RunCoarseStageAsync(
                         mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
@@ -854,9 +888,11 @@ namespace OpenAstroAra.Server.Services {
                     stage = PolarAlignStages.Fine;
                 }
                 if (stage == PolarAlignStages.Fine) {
+                    ThrowIfStoppedFromOutside(gen);
                     await RunFineStageAsync(guiderClient, site, settings, band, workDir, renew, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Check;
                 }
+                ThrowIfStoppedFromOutside(gen);
                 var verdict = await RunCheckStageAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
                 // The check's verdict is a finished run: the mount is stopped and confirmed before the client hears of it.
                 if (await ExitMountOnceAsync(finished: true, "checked").ConfigureAwait(false) == false) {
@@ -872,7 +908,7 @@ namespace OpenAstroAra.Server.Services {
                 // surface the solver's own actionable message, not internal_error.
                 await FailRoutineAsync("solver_configuration", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver)).ConfigureAwait(false);
             } catch (Exception ex) when (IsCurrent(gen)) {
                 await FailRoutineAsync("internal_error", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (Exception ex) {
@@ -963,6 +999,8 @@ namespace OpenAstroAra.Server.Services {
             var hint = initialHint;
 
             while (!ct.IsCancellationRequested) {
+                // #2066 — Stop Mount or Emergency Stop while the user adjusts ends the run too.
+                ThrowIfStoppedFromOutside(gen);
                 if (TakeAdvanceRequest(gen)) {
                     return; // the user moves the routine on — the caller owns the next stage
                 }
@@ -1131,6 +1169,8 @@ namespace OpenAstroAra.Server.Services {
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
                 var s = await capture(attemptId, hint, settings, timing, ct).ConfigureAwait(false);
                 await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
+                // #2066 — a stop during the exposure or the solve: no further attempt, and no turn after it.
+                ThrowIfStoppedFromOutside(gen);
                 keptFrame = timing.KeptFramePath;
                 if (s.Success) {
                     return s;

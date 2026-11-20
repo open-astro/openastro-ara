@@ -68,10 +68,13 @@ public static class RefusalCatalog {
     // #2089 — the RA axis has turned too far from where Polar Align started this session (offset_deg from the origin,
     // limit_deg the bound): slew it back near the pole and confirm again.
     public static readonly RefusalCause PolarAlignSweepLimit = new("polar-align-sweep-limit", 409, "The mount has turned too far from where Polar Align started", "offset_deg", "limit_deg");
+    // #2066 — a GoTo, a pad move, Home or Park while Polar Align turns the mount (or its stop is not confirmed yet): stop
+    // Polar Align first. A pad stop (rate 0) and Stop Mount are never refused.
+    public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
-        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, MountClockNotVerified,
+        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, MountClockNotVerified,
     ];
 }
