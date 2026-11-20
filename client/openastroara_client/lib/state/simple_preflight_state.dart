@@ -356,17 +356,9 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     if (step == SimplePreflightStep.polarAlign) _polarFinished = false;
     state = step;
     ref.read(simpleShowingProvider.notifier)._show(step.screen);
-    // Entering polar align starts the routine (a Preflight-only exception
-    // to the shutter starting things; its red square still stops it).
-    // Not over a finished check: coming back to the step must show the
-    // verdict, not wipe it and send the mount Home again unasked.
-    final polarLive = ref.read(polarAlignLiveProvider);
-    if (step == SimplePreflightStep.polarAlign &&
-        !polarLive.isActive &&
-        polarLive.phase != PolarAlignStates.checked) {
-      final api = ref.read(polarAlignApiProvider);
-      if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
-    }
+    // #2048 — entering polar align no longer starts the routine: it turns the
+    // mount from where it points, so the user points it near the pole and
+    // starts it from the shutter, through the confirm step.
     // Entering guide starts the guider's routine, the same exception; leaving
     // the step keeps it guiding (imaging wants it). Not while the main camera
     // is busy (a shot, a loop, a plan's exposure): calibration turns the

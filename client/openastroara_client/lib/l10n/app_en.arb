@@ -5105,6 +5105,10 @@
   "@simpleGuiderCalibrationFailed": {
     "description": "Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open"
   },
+  "simpleCoolerNotResponding": "Cooler not responding: is the camera's 12 V connected?",
+  "@simpleCoolerNotResponding": {
+    "description": "Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)"
+  },
   "simpleDewWarning": "Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.",
   "@simpleDewWarning": {
     "description": "Simple Mode warning pill while the daemon's dew_formation diagnostic is open"
@@ -7884,18 +7888,6 @@
   "@polarKnobToleranceHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobUseHome": "Send the mount Home first",
-  "@polarKnobUseHome": {
-    "description": "Imaging > Polar align settings panel hint"
-  },
-  "polarKnobUseHomeOn": "Every stage starts from Home",
-  "@polarKnobUseHomeOn": {
-    "description": "Imaging > Polar align settings panel hint"
-  },
-  "polarKnobUseHomeOff": "Off: where the mount points now counts as Home",
-  "@polarKnobUseHomeOff": {
-    "description": "Imaging > Polar align settings panel hint"
-  },
   "polarKnobTurnHint": "Kept between 5° and 30°",
   "@polarKnobTurnHint": {
     "description": "Imaging > Polar align settings panel hint"
@@ -8209,6 +8201,18 @@
   "polarKnobAlignerAutoOff": "Off: Polar align shows the turns and you make them",
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobStopTracking": "Stop tracking when polar align ends",
+  "@polarKnobStopTracking": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)"
+  },
+  "polarKnobStopTrackingOn": "Every end of a run turns tracking off",
+  "@polarKnobStopTrackingOn": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is on"
+  },
+  "polarKnobStopTrackingOff": "Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off",
+  "@polarKnobStopTrackingOff": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is off"
   },
   "polarAdvancedTitle": "Advanced",
   "@polarAdvancedTitle": {
@@ -8545,8 +8549,74 @@
     "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
     "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
   },
+  "refusalCounterweightLimit": "That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.",
+  "@refusalCounterweightLimit": {
+    "description": "Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees",
+    "placeholders": {"hourAngle": {"type": "String"}, "angle": {"type": "String"}, "limit": {"type": "String"}}
+  },
   "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
   "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
+  "refusalMountPositionUnverified": "The mount's position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount's zero search from its hand controller or app, or confirm it is physically at Home.",
+  "@refusalMountPositionUnverified": {"description": "Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss"},
+  "refusalMountPositionNotReadYet": "The mount's position has not been read since it connected. Try again in a few seconds.",
+  "@refusalMountPositionNotReadYet": {"description": "Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read"},
+  "mountPositionUnverifiedTitle": "Mount position unverified",
+  "@mountPositionUnverifiedTitle": {"description": "Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)"},
+  "mountPositionUnverifiedBody": "The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.",
+  "@mountPositionUnverifiedBody": {"description": "Mount window: what the unverified-position warning means and what still works"},
+  "mountPositionUnverifiedRunZeroSearch": "Run the mount's zero search from its hand controller or app. When it reports Home, confirm it here.",
+  "@mountPositionUnverifiedRunZeroSearch": {"description": "Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)"},
+  "mountConfirmAtHome": "The mount IS at Home",
+  "@mountConfirmAtHome": {"description": "Mount window: button that confirms the mount is physically at Home, so its position is trusted again"},
+  "mountConfirmAtHomeQuestion": "Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.",
+  "@mountConfirmAtHomeQuestion": {"description": "Mount window: the question asked before confirming Home"},
+  "mountConfirmAtHomeYes": "Yes, it is at Home",
+  "@mountConfirmAtHomeYes": {"description": "Mount window: the confirm button of the Home question"},
+  "mountCouldntConfirmHome": "Couldn't confirm Home",
+  "@mountCouldntConfirmHome": {"description": "Mount window: notice when the rig refused the Home confirmation"},
+  "refusalPolarAlignMountParked": "The mount is parked. Unpark it and point it near the pole first.",
+  "@refusalPolarAlignMountParked": {"description": "Refusal (polar-align-mount-parked): polar alignment was started on a parked mount; it never unparks the mount itself"},
+  "refusalPolarAlignUnconfirmed": "Polar alignment moves the mount only after you confirm it. Start it again and confirm.",
+  "@refusalPolarAlignUnconfirmed": {"description": "Refusal (polar-align-unconfirmed): a start reached the rig without the confirm step, or the turn direction changed since the user confirmed it"},
+  "refusalPolarAlignSweepLimit": "The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.",
+  "@refusalPolarAlignSweepLimit": {
+    "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
+    "placeholders": {"offset": {"type": "String"}}
+  },
+  "polarConfirmTitle": "Before the mount moves",
+  "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
+  "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",
+  "@polarConfirmPoint": {"description": "Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo"},
+  "polarConfirmTurns": "RA will turn about {step}° twice toward the {direction} ({total}° in all).",
+  "@polarConfirmTurns": {
+    "description": "Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest",
+    "placeholders": {"step": {"type": "String"}, "direction": {"type": "String"}, "total": {"type": "String"}}
+  },
+  "polarConfirmBand": "Later steps turn back over the same arc: never more than {max}° from where it starts.",
+  "@polarConfirmBand": {
+    "description": "Polar align start confirm dialog: the most the whole run turns the RA axis from where it starts, whole degrees",
+    "placeholders": {"max": {"type": "String"}}
+  },
+  "polarConfirmFromOrigin": "RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.",
+  "@polarConfirmFromOrigin": {
+    "description": "Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start",
+    "placeholders": {"offset": {"type": "String"}, "direction": {"type": "String"}}
+  },
+  "polarConfirmNewOrigin": "This pose is Polar Align's new start: until the mount is moved some other way, RA stays within {limit}° of it.",
+  "@polarConfirmNewOrigin": {
+    "description": "Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees",
+    "placeholders": {"limit": {"type": "String"}}
+  },
+  "polarConfirmPower": "Keep a hand on the mount's power switch.",
+  "@polarConfirmPower": {"description": "Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier"},
+  "polarConfirmGo": "Move the mount",
+  "@polarConfirmGo": {"description": "Polar align start confirm dialog: the button that starts the routine and lets the mount move"},
+  "polarConfirmCancel": "Cancel",
+  "@polarConfirmCancel": {"description": "Polar align start confirm dialog: the button that closes it; nothing moves"},
+  "polarDirectionEast": "east",
+  "@polarDirectionEast": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
+  "polarDirectionWest": "west",
+  "@polarDirectionWest": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"

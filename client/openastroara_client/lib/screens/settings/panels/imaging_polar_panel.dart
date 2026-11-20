@@ -82,13 +82,6 @@ class ImagingPolarPanel extends ConsumerWidget {
           range: (min: 0.1, max: 10),
           hint: l10n.polarKnobToleranceHint,
         ),
-        SettingsSwitchRow(
-          label: l10n.polarKnobUseHome,
-          helpKey: 'img.polar.use_home',
-          value: s.useHome,
-          onChanged: (v) => save(s.copyWith(useHome: v)),
-          hint: s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
-        ),
         // #1971 a profile setting: shown with or without a Polar Aligner connected.
         SettingsSwitchRow(
           label: l10n.polarKnobAlignerAuto,
@@ -96,6 +89,14 @@ class ImagingPolarPanel extends ConsumerWidget {
           value: s.polarAlignerAuto,
           onChanged: (v) => save(s.copyWith(polarAlignerAuto: v)),
           hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
+        ),
+        // #2048 NINA's StopTrackingWhenDone: on by default.
+        SettingsSwitchRow(
+          label: l10n.polarKnobStopTracking,
+          helpKey: 'img.polar.stop_tracking_when_done',
+          value: s.stopTrackingWhenDone,
+          onChanged: (v) => save(s.copyWith(stopTrackingWhenDone: v)),
+          hint: s.stopTrackingWhenDone ? l10n.polarKnobStopTrackingOn : l10n.polarKnobStopTrackingOff,
         ),
         number(
           l10n.polarKnobTurn,

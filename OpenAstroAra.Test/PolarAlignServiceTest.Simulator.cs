@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
                 var store = new InMemoryProfileStore();
                 store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = latitudeDeg, LongitudeDeg = longitudeDeg });
                 store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0, UseHome: false));
+                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0));
                 var ws = new WsRecorder();
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
                     new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
@@ -184,7 +184,7 @@ namespace OpenAstroAra.Test {
                     AxisSettle = TimeSpan.Zero,
                 };
 
-                await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
                 await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrection
                         && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))

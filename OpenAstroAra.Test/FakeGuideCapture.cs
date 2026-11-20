@@ -184,6 +184,9 @@ namespace OpenAstroAra.Test {
         Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
             Custody.TakeAsync(use, _port, stop, ct);
 
+        /// <summary>Guide pressed while a setup activity holds the camera: what GuiderService does before it guides.</summary>
+        public Task TakeForGuidingAsync() => Custody.TakeForGuidingAsync(_port, CancellationToken.None);
+
         public Task WaitForCaptureIdleAsync(CancellationToken ct) {
             Interlocked.Increment(ref _idleWaits);
             return CaptureBusy is { } message ? Task.FromException(new InvalidOperationException(message)) : Task.CompletedTask;

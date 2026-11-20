@@ -323,11 +323,18 @@ void main() {
       expect(defaults.seedRotationDeg, 10.0);
       expect(defaults.checkStepDeg, 10.0);
       expect(defaults.coarseExposureSeconds, 3.0);
-      expect(defaults.useHome, isTrue);
-      final json = defaults.copyWith(useHome: false, checkStepDeg: 15).toJson();
-      expect(json['use_home'], isFalse);
+      final json = defaults.copyWith(checkStepDeg: 15).toJson();
+      expect(json.containsKey('use_home'), isFalse, reason: '#2048 retired use_home: the routine never sends the mount Home');
       expect(PolarAlignSettings.fromJson(json).checkStepDeg, 15.0);
-      expect(PolarAlignSettings.fromJson(json).useHome, isFalse);
+      expect(PolarAlignSettings.fromJson({...json, 'use_home': true}).checkStepDeg, 15.0, reason: "an older daemon's use_home is ignored");
+    });
+
+    test('settings carry stop_tracking_when_done, on unless the daemon says off (#2048)', () {
+      expect(const PolarAlignSettings().stopTrackingWhenDone, isTrue, reason: "NINA's default");
+      expect(PolarAlignSettings.fromJson(const {}).stopTrackingWhenDone, isTrue, reason: 'an older daemon');
+      final json = const PolarAlignSettings().copyWith(stopTrackingWhenDone: false).toJson();
+      expect(json['stop_tracking_when_done'], isFalse);
+      expect(PolarAlignSettings.fromJson(json).stopTrackingWhenDone, isFalse);
     });
   });
 

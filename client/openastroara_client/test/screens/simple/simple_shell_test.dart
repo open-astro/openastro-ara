@@ -331,6 +331,15 @@ class _Camera extends CameraStatusNotifier with _Calls<CameraStatus> {
       }));
 }
 
+/// #2076 — a camera whose cooler the daemon switched on but which has no 12 V.
+class _UnpoweredCooler extends _Camera {
+  _UnpoweredCooler() : super(EquipmentConnectionState.connected);
+  void notResponding(bool value) => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('Uranus-C Pro', state0),
+        'runtime': {'state': 'idle', 'cooler_on': false, 'cooler_not_responding': value},
+      }));
+}
+
 class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
   _Focuser(this.state0);
   final EquipmentConnectionState state0;
@@ -682,6 +691,9 @@ class _PolarAlignerDown extends _PolarAligner {
 
 /// The profile's polar-align section: [puts] records each save.
 class _PolarProfile implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarAlignerAuto: true);
   final puts = <Map<String, dynamic>>[];
   @override
@@ -694,7 +706,7 @@ class _PolarProfile implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override
@@ -6073,6 +6085,31 @@ void main() {
     expect(pill.kind, SimpleMessageKind.error);
     expect(pill.title, contains('Calibration failed: star did not move enough'));
     expect(pill.origin, SimpleStatusOrigin.guide);
+  });
+
+  testWidgets('a cooler that does not respond shows one amber camera pill, and responding takes it away (#2076)', (tester) async {
+    final camera = _UnpoweredCooler();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
+
+    camera.notResponding(true);
+    await tester.pump();
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.kind, SimpleMessageKind.warning);
+    expect(pill.title, "Cooler not responding: is the camera's 12 V connected?");
+    expect(pill.origin, SimpleStatusOrigin.camera);
+
+    camera.notResponding(true); // the next poll: still one pill
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), hasLength(1));
+
+    camera.notResponding(false);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   group('the failed-connect pill (#1559)', () {

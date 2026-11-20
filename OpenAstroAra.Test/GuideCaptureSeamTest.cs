@@ -113,7 +113,7 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, UseHome: false));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0));
             return new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver ?? new ScriptedSolver(SolveA, SolveB),
                 NewMount().Object, store, ws, log: null, fetcher ?? new FileFetcher()) {
                 PausedRetryDelay = TimeSpan.Zero,
@@ -121,6 +121,10 @@ namespace OpenAstroAra.Test {
                 TrackingConfirmPoll = TimeSpan.Zero,
                 AxisMovePoll = TimeSpan.FromMilliseconds(1),
                 AxisSettle = TimeSpan.Zero,
+                StopVerifyPoll = TimeSpan.FromMilliseconds(1),
+                StopVerifyStillFor = TimeSpan.Zero,
+                StopVerifyNotBefore = TimeSpan.Zero,
+                StopVerifyWindow = TimeSpan.FromMilliseconds(500),
             };
         }
 
@@ -131,7 +135,7 @@ namespace OpenAstroAra.Test {
             var fetcher = new FileFetcher();
             using var svc = NewPolarAlign(guider, fetcher: fetcher);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await guider.WhenCapturedAsync(2).WaitAsync(Timeout).ConfigureAwait(false);
 
             Assert.That(guider.Custody.Holder, Is.EqualTo(CameraUse.PolarAlign));
@@ -156,7 +160,7 @@ namespace OpenAstroAra.Test {
             var guider = new FakeGuideCapture { AppState = state };
             using var svc = NewPolarAlign(guider);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(ex!.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"));
             Assert.That(guider.LeaseCalls, Is.Empty);
@@ -172,7 +176,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewPolarAlign(guider, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await ws.WhenAsync(WsEventCatalog.PolarAlignError).WaitAsync(Timeout).ConfigureAwait(false);
             await guider.WhenLeaseReleasedAsync().WaitAsync(Timeout).ConfigureAwait(false);
 
@@ -190,7 +194,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewPolarAlign(guider, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await ws.WhenAsync(WsEventCatalog.PolarAlignError).WaitAsync(Timeout).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("capture_rejected"));
@@ -204,7 +208,7 @@ namespace OpenAstroAra.Test {
             var guider = new FakeGuideCapture { Script = _ => FakeCaptureOutcome.NeverCompletes };
             using var svc = NewPolarAlign(guider);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await guider.WhenCapturedAsync(1).WaitAsync(Timeout).ConfigureAwait(false);
             Assert.That(guider.Subscribers, Is.EqualTo(1), "the run listens while the capture is out");
 

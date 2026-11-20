@@ -41,6 +41,8 @@ namespace OpenAstroAra.Test {
                 path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "2"
                     : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
                     : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                    // An unscripted read answers true: a mount at Home on connect is unverified (#2070) and never slews.
+                    : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
                     : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "6.0"
                     : path.EndsWith("/declination", StringComparison.Ordinal) ? "45.0"
                     : null,

@@ -166,7 +166,11 @@ public sealed record CameraStateDto(
     // #1185 (§25.5.5) — the cooler's hot side (ASCOM HeatSinkTemperature); null when the driver
     // does not report it. A heat sink that climbs while CCD temperature holds is a fan or airflow
     // problem the cooler-power figure alone does not show.
-    double? HeatSinkTemperatureC = null);
+    double? HeatSinkTemperatureC = null,
+    // #2076 — true while a cooler Ara switched on does not respond: CoolerOn has read back off
+    // for a minute, or on at 0 % power with the sensor well above its set-point and not moving
+    // (a camera with no 12 V). Cleared when the cooler responds, is switched off, or on reconnect.
+    bool CoolerNotResponding = false);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
@@ -296,7 +300,19 @@ public sealed record TelescopeStateDto(
     double? TargetDeclinationDegrees = null,
     // #1649 — the mount's drive rate ("Sidereal" | "Lunar" | "Solar" | "King", ASCOM DriveRate
     // names as in SupportedSiderealRates); null when the mount can't report it.
-    string? TrackingRate = null);
+    string? TrackingRate = null,
+    // #2070 — the mount's reported position is not trusted (it reported Home right after it
+    // connected, or its position jumped with nothing commanded): GoTo, Park, Home and polar
+    // alignment are refused until the user confirms Home. The reason is one of
+    // at_home_on_connect | pose_jump_on_reconnect | at_home_without_command | pose_jump_in_session.
+    bool PositionUnverified = false,
+    string? PositionUnverifiedReason = null);
+
+/// <summary>#2070 — one mount whose position is unverified, as the daemon keeps it across restarts.</summary>
+public sealed record MountPoseEntry(string DeviceId, string Reason);
+
+/// <summary>#2070 — on-disk shape of the unverified-mount file (<c>mount-pose.json</c>).</summary>
+public sealed record MountPoseFile(IReadOnlyList<MountPoseEntry> Unverified);
 
 /// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
 /// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
@@ -896,10 +912,11 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount goes
-/// Home, then the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower frames, for the big moves);
-/// <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — back Home, three
-/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
+/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — from where the user
+/// pointed the mount, the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower
+/// frames, for the big moves); <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — three
+/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting. No stage sends the mount Home or
+/// slews it (#2048, NINA's start).</summary>
 public static class PolarAlignStages {
     public const string Coarse = "coarse";
     public const string Fine = "fine";
@@ -908,9 +925,41 @@ public static class PolarAlignStages {
     public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
 }
 
-/// <summary><c>POST /polaralign/start</c> body (optional): the stage to begin at. Null/absent = coarse, or
-/// fine when the coarse stage cannot run (main camera off, optics unset, no solver).</summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null);
+/// <summary><c>POST /polaralign/start</c> body: the stage to begin at (null/absent = coarse, or fine when the coarse
+/// stage cannot run: main camera off, optics unset, no solver), and the user's confirmation of the start (#2048). The
+/// routine starts from where the mount points now; it moves only with <c>Confirmed</c> true and <c>Direction</c> equal
+/// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
+/// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now). <c>NewOrigin</c> echoes the plan's
+/// <see cref="PolarAlignStartPlanDto.NewOrigin"/>: a start whose plan changed between a new start pose and a continued
+/// one since the user saw it is refused the same way.</summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false);
+
+/// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
+/// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
+/// first, chosen away from the meridian from the mount's current pointing; <c>StepDeg</c> is each of the
+/// <c>Turns</c> turns; <c>MaxSweepDeg</c> bounds how far the run turns the RA axis from where it starts, over every
+/// stage the user moves on to. <c>Stage</c> echoes the request.
+/// <para>#2089 — the session's sweep origin, from RA differences the mount reports (never its clock, LST or absolute
+/// RA): <c>NewOrigin</c> is true when this start's pose becomes Polar Align's origin (the first start since the mount
+/// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
+/// <c>OriginOffsetDeg</c> is how far the RA axis has turned from the origin (signed: + east, − west), and
+/// <c>Direction</c> turns back toward it. No turn takes the axis more than <c>SweepLimitDeg</c> from the
+/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para></summary>
+public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
+    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0);
+
+/// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
+/// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
+/// they saw made this pose Polar Align's new origin.</summary>
+public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false);
+
+/// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
+public static class PolarAlignDirections {
+    /// <summary>The mount's RA reading increases: the tube turns toward the east.</summary>
+    public const string East = "east";
+    /// <summary>The mount's RA reading decreases: the tube turns toward the west.</summary>
+    public const string West = "west";
+}
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the
 /// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
@@ -946,7 +995,7 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastFrameDto? LastFrame = null,
     // Which stage is running (PolarAlignStages); null when idle/stopped before any run.
     string? Stage = null,
-    // The mount cannot find Home itself: the routine waits for POST /polaralign/next.
+    // Always false since #2048: no stage sends the mount Home or waits for it. Kept for older clients.
     bool WaitingForHome = false,
     // Check stage: solves done so far (0–3).
     int CheckSolvesDone = 0,

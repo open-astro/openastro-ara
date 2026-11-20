@@ -3963,6 +3963,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'Cooler not responding: is the camera\'s 12 V connected?';
+
+  @override
   String get simpleDewWarning =>
       'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 
@@ -6108,16 +6112,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Done turns on once the error is inside it';
 
   @override
-  String get polarKnobUseHome => 'Send the mount Home first';
-
-  @override
-  String get polarKnobUseHomeOn => 'Every stage starts from Home';
-
-  @override
-  String get polarKnobUseHomeOff =>
-      'Off: where the mount points now counts as Home';
-
-  @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
@@ -6339,6 +6333,16 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarKnobAlignerAutoOff =>
       'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
+
+  @override
+  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
 
   @override
   String get polarAdvancedTitle => 'Advanced';
@@ -6602,8 +6606,104 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'That target is below the pole, at hour angle $hourAngle h: the counterweight would swing $angle° up from hanging straight down, past the $limit° limit. Pick another target, or wait until this one is higher.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
+  String get refusalMountPositionUnverified =>
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'The mount\'s position has not been read since it connected. Try again in a few seconds.';
+
+  @override
+  String get mountPositionUnverifiedTitle => 'Mount position unverified';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountConfirmAtHome => 'The mount IS at Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Yes, it is at Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Couldn\'t confirm Home';
+
+  @override
+  String get refusalPolarAlignMountParked =>
+      'The mount is parked. Unpark it and point it near the pole first.';
+
+  @override
+  String get refusalPolarAlignUnconfirmed =>
+      'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
+
+  @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'The mount has turned $offset° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.';
+  }
+
+  @override
+  String get polarConfirmTitle => 'Before the mount moves';
+
+  @override
+  String get polarConfirmPoint =>
+      'Point the tube near the pole, with the counterweights down.';
+
+  @override
+  String polarConfirmTurns(String step, String direction, String total) {
+    return 'RA will turn about $step° twice toward the $direction ($total° in all).';
+  }
+
+  @override
+  String polarConfirmBand(String max) {
+    return 'Later steps turn back over the same arc: never more than $max° from where it starts.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'RA is $offset° $direction of where Polar Align started; these turns go back toward it.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within $limit° of it.';
+  }
+
+  @override
+  String get polarConfirmPower => 'Keep a hand on the mount\'s power switch.';
+
+  @override
+  String get polarConfirmGo => 'Move the mount';
+
+  @override
+  String get polarConfirmCancel => 'Cancel';
+
+  @override
+  String get polarDirectionEast => 'east';
+
+  @override
+  String get polarDirectionWest => 'west';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
@@ -10699,6 +10799,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O guia não conseguiu calibrar, então está guiando com a calibração anterior. A guiagem pode ficar menos precisa esta noite.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'O resfriador não está respondendo: os 12 V da câmera estão conectados?';
+
+  @override
   String get simpleDewWarning =>
       'Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco programado espera até passar.';
 
@@ -12857,16 +12961,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O Concluir liga quando o erro fica dentro dela';
 
   @override
-  String get polarKnobUseHome => 'Enviar a montagem para Home antes';
-
-  @override
-  String get polarKnobUseHomeOn => 'Todas as etapas começam em Home';
-
-  @override
-  String get polarKnobUseHomeOff =>
-      'Desligado: onde a montagem aponta agora conta como Home';
-
-  @override
   String get polarKnobTurnHint => 'Mantido entre 5° e 30°';
 
   @override
@@ -13090,6 +13184,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobAlignerAutoOff =>
       'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get polarKnobStopTracking =>
+      'Parar o rastreamento quando o alinhamento polar terminar';
+
+  @override
+  String get polarKnobStopTrackingOn =>
+      'Todo fim de uma execução desliga o rastreamento';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Desligado: uma execução que termina devolve o rastreamento que encontrou. Parar sempre deixa o rastreamento desligado';
 
   @override
   String get polarAdvancedTitle => 'Avançado';
@@ -13354,8 +13460,106 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'Esse alvo está abaixo do polo, no ângulo horário $hourAngle h: o contrapeso subiria $angle° a partir da posição vertical para baixo, além do limite de $limit°. Escolha outro alvo ou espere este subir mais.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
+
+  @override
+  String get refusalMountPositionUnverified =>
+      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Rode a busca de zero da montagem pelo controle de mão ou app dela, ou confirme que ela está fisicamente em Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'A posição da montagem ainda não foi lida desde que ela conectou. Tente de novo em alguns segundos.';
+
+  @override
+  String get mountPositionUnverifiedTitle =>
+      'Posição da montagem não verificada';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'A montagem pode ter perdido energia: ela diz estar em Home para onde quer que aponte. GoTo, Estacionar, Home e Alinhamento polar estão bloqueados. Parar, o direcional e o rastreamento continuam funcionando.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Rode a busca de zero da montagem pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.';
+
+  @override
+  String get mountConfirmAtHome => 'A montagem ESTÁ em Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'A montagem está fisicamente em Home, com os contrapesos para baixo e o tubo ao longo do eixo polar? Confirme só se você conferiu com os próprios olhos.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Sim, está em Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Não foi possível confirmar Home';
+
+  @override
+  String get refusalPolarAlignMountParked =>
+      'A montagem está estacionada. Tire-a do estacionamento e aponte-a perto do polo primeiro.';
+
+  @override
+  String get refusalPolarAlignUnconfirmed =>
+      'O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.';
+
+  @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
+  }
+
+  @override
+  String get polarConfirmTitle => 'Antes de a montagem se mover';
+
+  @override
+  String get polarConfirmPoint =>
+      'Aponte o tubo perto do polo, com os contrapesos para baixo.';
+
+  @override
+  String polarConfirmTurns(String step, String direction, String total) {
+    return 'A AR vai girar cerca de $step° duas vezes em direção ao $direction ($total° no total).';
+  }
+
+  @override
+  String polarConfirmBand(String max) {
+    return 'As etapas seguintes voltam pelo mesmo arco: nunca mais de $max° de onde começa.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'A AR está $offset° a $direction de onde o alinhamento polar começou; estes giros voltam em direção a esse ponto.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'Esta posição é o novo início do alinhamento polar: até a montagem ser movida de outra forma, a AR fica a no máximo $limit° dela.';
+  }
+
+  @override
+  String get polarConfirmPower =>
+      'Mantenha a mão no interruptor de energia da montagem.';
+
+  @override
+  String get polarConfirmGo => 'Mover a montagem';
+
+  @override
+  String get polarConfirmCancel => 'Cancelar';
+
+  @override
+  String get polarDirectionEast => 'leste';
+
+  @override
+  String get polarDirectionWest => 'oeste';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

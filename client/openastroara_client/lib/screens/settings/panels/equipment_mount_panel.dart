@@ -133,6 +133,10 @@ class _MountBody extends ConsumerWidget {
         ],
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
+        // #2070 — the rig does not trust the mount's position (it may have
+        // lost power): GoTo, Park, Home and Polar Align are refused until the
+        // user confirms Home.
+        if (s.positionUnverified) _PositionUnverified(status: s),
         if (s.isBusy)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -214,7 +218,7 @@ class _MountBody extends ConsumerWidget {
           children: [
             if ((caps?.canPark ?? false) && !s.parked)
               OutlinedButton(
-                onPressed: s.isBusy
+                onPressed: s.isBusy || s.positionUnverified
                     ? null
                     : () => _run(
                         context,
@@ -240,7 +244,7 @@ class _MountBody extends ConsumerWidget {
             // unpark first) or busy. Shown only when the mount supports FindHome.
             if (caps?.canFindHome ?? false)
               OutlinedButton(
-                onPressed: (s.isBusy || s.parked)
+                onPressed: (s.isBusy || s.parked || s.positionUnverified)
                     ? null
                     : () => _run(
                         context,
@@ -305,6 +309,91 @@ class _MountBody extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
+    }
+  }
+}
+
+/// #2070 — the rig does not trust the mount's reported position (a mount
+/// without absolute encoders reports Home wherever it points after a power
+/// loss). The confirmation shows once the mount reports Home, and asks first.
+class _PositionUnverified extends ConsumerWidget {
+  final MountStatus status;
+  const _PositionUnverified({required this.status});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return Padding(
+      key: const Key('mount_position_unverified'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber,
+                color: AraColors.accentError,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.mountPositionUnverifiedTitle,
+                  style: const TextStyle(color: AraColors.errorText),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(l10n.mountPositionUnverifiedBody),
+          const SizedBox(height: 4),
+          if (status.atHome)
+            OutlinedButton(
+              key: const Key('mount_confirm_home'),
+              onPressed: () => _confirm(context, ref),
+              child: Text(l10n.mountConfirmAtHome),
+            )
+          else
+            Text(l10n.mountPositionUnverifiedRunZeroSearch),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirm(BuildContext context, WidgetRef ref) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.mountPositionUnverifiedTitle),
+        content: Text(l10n.mountConfirmAtHomeQuestion),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.deviceCancel),
+          ),
+          TextButton(
+            key: const Key('mount_confirm_home_yes'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.mountConfirmAtHomeYes),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    try {
+      await ref.read(mountProvider.notifier).confirmHome();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.mountCouldntConfirmHome}: ${failureReason(l10n, e)}',
+          ),
           backgroundColor: AraColors.accentError,
         ),
       );

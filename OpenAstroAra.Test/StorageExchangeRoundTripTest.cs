@@ -77,11 +77,16 @@ namespace OpenAstroAra.Test {
 
         private StorageHelperPaths Paths => new(helper, unitTemplate, exchange);
 
+        private static readonly string[] StartPrefix = ["--no-ask-password", "start"];
+
         // The daemon's `systemctl start openastroara-storage@<id>.service` becomes a direct run of
         // the wrapper with the overrides; everything else (lsblk/findmnt) is not reached here.
         private Task<(int ExitCode, string Output)> RunViaWrapper(string file, string[] args, CancellationToken ct) {
             Assert.That(file, Is.EqualTo("systemctl"), "only the unit start is expected on this path");
-            var id = args[1]["openastroara-storage@".Length..^".service".Length];
+            Assert.That(args, Has.Length.EqualTo(3));
+            Assert.That(args[..2], Is.EqualTo(StartPrefix),
+                "never an interactive polkit prompt: the rig's rule allows the start without one");
+            var id = args[2]["openastroara-storage@".Length..^".service".Length];
             return RunWrapperAsync(id);
         }
 

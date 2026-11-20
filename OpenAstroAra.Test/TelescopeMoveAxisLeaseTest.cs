@@ -182,6 +182,57 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
         }
 
+        // #2048 — Polar Align confirms its stop on this read: the driver's Slewing now, not the 2 s refresh.
+        [TestCase("true", true)]
+        [TestCase("false", false)]
+        public async Task ReadSlewingNow_returns_the_drivers_slewing_at_once(string answer, bool expected) {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            // The cache was filled with "false": a true answer can only come from a read of the driver now.
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? answer : mount(path));
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.EqualTo(expected));
+        }
+
+        // #2089 — Polar Align forgets its sweep origin when the mount session changes: a connect and a disconnect each count.
+        [Test]
+        public async Task SessionEpoch_changes_on_connect_and_on_disconnect() {
+            using var idle = new TelescopeService();
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var connected = svc.SessionEpoch;
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            var sw = Stopwatch.StartNew();
+            while (svc.SessionEpoch == connected && sw.Elapsed < TimeSpan.FromSeconds(15)) {
+                await Task.Delay(20);
+            }
+
+            Assert.That(connected, Is.GreaterThan(idle.SessionEpoch), "the connect began a new session");
+            Assert.That(svc.SessionEpoch, Is.GreaterThan(connected), "the disconnect ended it");
+        }
+
+        [Test]
+        public async Task ReadSlewingNow_is_null_without_a_mount() {
+            using var svc = new TelescopeService();
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ReadSlewingNow_is_null_when_the_driver_read_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.Null);
+        }
+
         // A polar-align move renews its lease four times a second: the snap warning belongs to the driver call only.
         [Test]
         public async Task A_snapped_rate_is_logged_once_per_driver_call_not_per_renewal() {

@@ -16,26 +16,36 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// The <c>systemctl</c> seam's no-crash contract. It's environment-dependent (the unit isn't
-    /// installed on dev/CI), so we only assert it degrades safely: a defined status, never a throw,
-    /// and a no-op restart. The §63.3 decision logic is covered by
-    /// <see cref="GuiderRecoveryCoordinatorTest"/> against a fake supervisor.
+    /// The <c>systemctl</c> seam. Start and restart are asserted through the process seam only: a real
+    /// <c>systemctl start|restart openastro-guider</c> from a test run reaches polkit, and on a Linux
+    /// desktop with an auth agent that popped a password dialog on every run. The read-only is-active
+    /// call needs no authorisation, so its no-crash contract still runs against the real process.
+    /// The §63.3 decision logic is covered by <see cref="GuiderRecoveryCoordinatorTest"/> against a
+    /// fake supervisor.
     /// </summary>
     [TestFixture]
     public class SystemctlGuiderProcessSupervisorTest {
+        private static readonly string[] StartArgs = ["--no-ask-password", "start", "openastro-guider"];
+        private static readonly string[] RestartArgs = ["--no-ask-password", "restart", "openastro-guider"];
+        private static readonly string[] IsActiveArgs = ["--no-ask-password", "is-active", "openastro-guider"];
 
-        private static SystemctlGuiderProcessSupervisor NewSupervisor() =>
-            new(NullLogger<SystemctlGuiderProcessSupervisor>.Instance);
+        private static SystemctlGuiderProcessSupervisor NewSupervisor(List<string[]> launched,
+                Func<string[], CancellationToken, Task<string?>>? readStdout = null, Action<string[]>? launch = null) =>
+            new(NullLogger<SystemctlGuiderProcessSupervisor>.Instance,
+                launch ?? launched.Add,
+                readStdout ?? ((_, _) => Task.FromResult<string?>(null)));
 
         [Test]
         public async Task QueryStatusAsync_returns_a_defined_status_and_never_throws() {
-            var supervisor = NewSupervisor();
+            var supervisor = new SystemctlGuiderProcessSupervisor(NullLogger<SystemctlGuiderProcessSupervisor>.Instance);
             // On a host without the openastro-guider unit (every dev/CI box) this is Unknown or Inactive;
             // the contract under test is simply "a valid enum, no exception".
             var status = await supervisor.QueryStatusAsync(CancellationToken.None);
@@ -50,15 +60,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void RequestRestart_does_not_throw_when_systemctl_is_unavailable() {
-            var supervisor = NewSupervisor();
-            Assert.DoesNotThrow(supervisor.RequestRestart);
+        public void RequestStart_runs_systemctl_no_ask_password_start_of_the_guider_unit() {
+            var launched = new List<string[]>();
+            NewSupervisor(launched).RequestStart();
+            Assert.That(launched, Is.EqualTo(new[] { StartArgs }));
         }
 
         [Test]
-        public void RequestStart_does_not_throw_when_systemctl_is_unavailable() {
-            var supervisor = NewSupervisor();
-            Assert.DoesNotThrow(supervisor.RequestStart);
+        public void RequestRestart_runs_systemctl_no_ask_password_restart_of_the_guider_unit() {
+            var launched = new List<string[]>();
+            NewSupervisor(launched).RequestRestart();
+            Assert.That(launched, Is.EqualTo(new[] { RestartArgs }));
+        }
+
+        [Test]
+        public async Task QueryStatusAsync_runs_systemctl_no_ask_password_is_active_of_the_guider_unit() {
+            string[]? asked = null;
+            var supervisor = NewSupervisor([], (args, _) => {
+                asked = args;
+                return Task.FromResult<string?>("active\n");
+            });
+
+            var status = await supervisor.QueryStatusAsync(CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(asked, Is.EqualTo(IsActiveArgs));
+                Assert.That(status, Is.EqualTo(GuiderProcessStatus.Active));
+            });
+        }
+
+        [TestCase("activating", GuiderProcessStatus.Activating)]
+        [TestCase("reloading", GuiderProcessStatus.Activating)]
+        [TestCase("failed", GuiderProcessStatus.Failed)]
+        [TestCase("inactive", GuiderProcessStatus.Inactive)]
+        [TestCase("deactivating", GuiderProcessStatus.Inactive)]
+        [TestCase("unknown-word", GuiderProcessStatus.Unknown)]
+        public async Task QueryStatusAsync_classifies_the_is_active_word(string word, GuiderProcessStatus expected) {
+            var supervisor = NewSupervisor([], (_, _) => Task.FromResult<string?>(word + "\n"));
+            Assert.That(await supervisor.QueryStatusAsync(CancellationToken.None), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task QueryStatusAsync_is_Unknown_when_systemctl_cannot_run() {
+            var supervisor = NewSupervisor([], (_, _) => throw new Win32Exception(2, "No such file or directory"));
+            Assert.That(await supervisor.QueryStatusAsync(CancellationToken.None), Is.EqualTo(GuiderProcessStatus.Unknown));
+        }
+
+        [Test]
+        public void RequestStart_and_RequestRestart_do_not_throw_when_systemctl_is_unavailable() {
+            var supervisor = NewSupervisor([], launch: _ => throw new Win32Exception(2, "No such file or directory"));
+            Assert.Multiple(() => {
+                Assert.DoesNotThrow(supervisor.RequestStart);
+                Assert.DoesNotThrow(supervisor.RequestRestart);
+            });
         }
     }
 }

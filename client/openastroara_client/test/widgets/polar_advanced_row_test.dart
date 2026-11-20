@@ -17,6 +17,9 @@ import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 /// The fake Polar Align client of the Settings panel's tests: scripted
 /// settings, every PUT recorded.
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignSettings settings = const PolarAlignSettings();
   final saved = <PolarAlignSettings>[];
   Object? getError;
@@ -39,7 +42,7 @@ class _Api implements PolarAlignClient {
   }
 
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override
@@ -62,7 +65,6 @@ class _Live extends PolarAlignLiveNotifier {
 }
 
 const _toggle = Key('polar-advanced-toggle');
-const _home = Key('polar-advanced-use-home');
 const _seed = Key('polar-advanced-seed');
 const _check = Key('polar-advanced-check-step');
 const _coarse = Key('polar-advanced-coarse');
@@ -138,7 +140,7 @@ void main() {
       expect(find.byKey(_seed), findsOneWidget);
       expect(find.byKey(_check), findsOneWidget);
       expect(find.byKey(_coarse), findsOneWidget);
-      expect(find.byKey(_home), findsOneWidget);
+      expect(find.byKey(const Key('polar-advanced-use-home')), findsNothing, reason: '#2048: no Home switch');
     },
   );
 
@@ -210,16 +212,6 @@ void main() {
     expect(_text(tester, _check), '20');
   });
 
-  testWidgets('the Home switch in the row saves use_home (#1736)', (
-    tester,
-  ) async {
-    final api = await _pump(tester);
-    await tester.ensureVisible(find.byKey(_home));
-    await tester.tap(find.byKey(_home));
-    await tester.pumpAndSettle();
-    expect(api.saved.single.useHome, isFalse);
-  });
-
   testWidgets(
     'a failed save puts the row\'s field back to the rig\'s value and says so (#1736)',
     (tester) async {
@@ -259,7 +251,6 @@ void main() {
       );
       expect(advanced, findsOneWidget);
       expect(find.byKey(_seed), findsNothing);
-      expect(find.byKey(_home), findsNothing);
       expect(rig.saved, isEmpty);
       rig.getError = null;
       await tester.tap(advanced);
@@ -277,8 +268,9 @@ void main() {
     bool enabled() =>
         tester.widget<ButtonStyleButton>(find.byKey(start)).enabled;
     expect(enabled(), isTrue);
-    await tester.ensureVisible(find.byKey(_home));
-    await tester.tap(find.byKey(_home));
+    await tester.ensureVisible(find.byKey(_check));
+    await tester.enterText(find.byKey(_check), '20');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(rig.saved, hasLength(1));
     expect(enabled(), isFalse);
@@ -288,13 +280,12 @@ void main() {
   });
 
   testWidgets(
-    'each of the four controls has its knob name for a screen reader (#1736)',
+    'each of the three controls has its knob name for a screen reader (#1736)',
     (tester) async {
       final handle = tester.ensureSemantics();
       await _pump(tester);
       final l10n = AppLocalizations.of(tester.element(find.byKey(_toggle)))!;
       for (final (key, name) in [
-        (_home, l10n.polarKnobUseHome),
         (_seed, l10n.polarKnobTurn),
         (_check, l10n.polarKnobVerifyStep),
         (_coarse, l10n.polarKnobRoughExposure),

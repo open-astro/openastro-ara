@@ -165,6 +165,17 @@ class MountStatus extends EquipmentDeviceStatus {
   /// say (#1649).
   final String? trackingRate;
 
+  /// The rig does not trust the mount's reported position (#2070): it reported
+  /// Home right after it connected, as a mount without absolute encoders does
+  /// after a power loss wherever it points, or its position jumped with nothing
+  /// commanded. GoTo, Park, Home and Polar Align are refused until Home is
+  /// confirmed.
+  final bool positionUnverified;
+
+  /// Why [positionUnverified] (`at_home_on_connect`, `pose_jump_on_reconnect`,
+  /// `at_home_without_command`, `pose_jump_in_session`); null when trusted.
+  final String? positionUnverifiedReason;
+
   MountStatus({
     required this.deviceId,
     required this.name,
@@ -179,6 +190,8 @@ class MountStatus extends EquipmentDeviceStatus {
     required this.parked,
     required this.atHome,
     this.trackingRate,
+    this.positionUnverified = false,
+    this.positionUnverifiedReason,
   });
 
   /// The mount is mid-slew (the only long-running motion; tracking is steady).
@@ -206,6 +219,8 @@ class MountStatus extends EquipmentDeviceStatus {
       parked: r['parked'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
       trackingRate: r['tracking_rate'] as String?,
+      positionUnverified: r['position_unverified'] as bool? ?? false,
+      positionUnverifiedReason: r['position_unverified_reason'] as String?,
     );
   }
 
@@ -225,13 +240,15 @@ class MountStatus extends EquipmentDeviceStatus {
           other.tracking == tracking &&
           other.parked == parked &&
           other.atHome == atHome &&
-          other.trackingRate == trackingRate);
+          other.trackingRate == trackingRate &&
+          other.positionUnverified == positionUnverified &&
+          other.positionUnverifiedReason == positionUnverifiedReason);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
       runtimeState, rightAscensionHours, declinationDegrees,
       targetRightAscensionHours, targetDeclinationDegrees, tracking, parked,
-      atHome, trackingRate);
+      atHome, trackingRate, positionUnverified, positionUnverifiedReason);
 }
 
 /// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`. Clamped to
