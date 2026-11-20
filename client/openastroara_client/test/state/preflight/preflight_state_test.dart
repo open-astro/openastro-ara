@@ -10,6 +10,7 @@ import 'package:openastroara/services/preflight_prefs_service.dart';
 import 'package:openastroara/state/preflight/preflight_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -27,7 +28,8 @@ class _Site extends SiteSettingsNotifier {
   _Site(this._site);
   final SiteSettings _site;
   @override
-  SiteSettings build() => _site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _site, source: SectionSource.rig);
 }
 
 class _MemPrefs extends PreflightPrefsService {

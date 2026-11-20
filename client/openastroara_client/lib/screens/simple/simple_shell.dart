@@ -4792,6 +4792,40 @@ class _ThisRig extends ConsumerWidget {
     }
   }
 
+  /// Keep [change] in the profile's site: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015). Returns whether it
+  /// was saved.
+  static Future<bool> _saveSite(
+    BuildContext context,
+    WidgetRef ref,
+    SiteSettings Function(SiteSettings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return false;
+    }
+    try {
+      await ref.read(siteSettingsProvider.notifier).changeAndSave(change);
+      return true;
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
+        error: true,
+      );
+      return false;
+    }
+  }
+
   /// The site from this device (its GPS, or the rig's held fix): the same
   /// lookup as the full UI's Fill from GPS, with the time zone those
   /// coordinates fall in, saved at once; and this device's clock to the rig.
@@ -4817,31 +4851,18 @@ class _ThisRig extends ConsumerWidget {
       notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;
     }
-    final site = ref.read(siteSettingsProvider.notifier);
-    site.setLatitudeDeg(r.lat);
-    site.setLongitudeDeg(r.lng);
-    if (r.alt != null) site.setElevationM(r.alt!);
-    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
-      notify(
-        l10n.shellCouldntSaveSite,
-        detail: l10n.shellRigNotConnected,
-        error: true,
-      );
-      return;
-    }
-    try {
-      await site.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.shellCouldntSaveSite,
-        detail: friendlyError(l10n, e),
-        error: true,
-      );
-      return;
-    }
-    notify(l10n.shellSiteFrom(r.sourceLabel));
+    final saved = await _saveSite(
+      context,
+      ref,
+      (c) => SiteSettingsNotifier.withFix(
+        c,
+        lat: r.lat,
+        lng: r.lng,
+        alt: r.alt,
+        timeZone: tz_map.latLngToTimezoneString(r.lat, r.lng),
+      ),
+    );
+    if (saved) notify(l10n.shellSiteFrom(r.sourceLabel));
   }
 
   /// The profile's guide optics. With [retry] (the guider connected): the
@@ -5077,47 +5098,62 @@ class _ThisRig extends ConsumerWidget {
             ],
           ),
         ),
-        for (final (id, label, value, set)
-            in <(String, String, double, void Function(double))>[
-              (
-                'lat',
-                l10n.shellLatitude,
-                ref.watch(siteSettingsProvider).latitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
-              ),
-              (
-                'lng',
-                l10n.shellLongitude,
-                ref.watch(siteSettingsProvider).longitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
-              ),
-            ])
-          _RigWheelRow.coordinate(
-            l10n,
-            id: id,
-            label: label,
-            value: value,
-            onSet: (v) => _save(
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(siteSettingsProvider) case final site
+            when site.value == null)
+          SectionNotLoaded(
+            section: site,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(siteSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else ...[
+          for (final (id, label, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  double,
+                  SiteSettings Function(SiteSettings, double),
+                )
+              >[
+                (
+                  'lat',
+                  l10n.shellLatitude,
+                  ref.watch(siteSettingsProvider).value!.latitudeDeg,
+                  SiteSettingsNotifier.withLatitude,
+                ),
+                (
+                  'lng',
+                  l10n.shellLongitude,
+                  ref.watch(siteSettingsProvider).value!.longitudeDeg,
+                  SiteSettingsNotifier.withLongitude,
+                ),
+              ])
+            _RigWheelRow.coordinate(
+              l10n,
+              id: id,
+              label: label,
+              value: value,
+              onSet: (v) => _saveSite(context, ref, (c) => change(c, v)),
+            ),
+          _RigStepper(
+            id: 'elevation',
+            label: l10n.shellElevation,
+            unit: 'm',
+            value: ref.watch(siteSettingsProvider).value!.elevationM,
+            onSet: (v) => _saveSite(
               context,
               ref,
-              () => set(v),
-              (api) =>
-                  ref.read(siteSettingsProvider.notifier).persistToServer(api),
+              (c) => SiteSettingsNotifier.withElevation(c, v),
             ),
           ),
-        _RigStepper(
-          id: 'elevation',
-          label: l10n.shellElevation,
-          unit: 'm',
-          value: ref.watch(siteSettingsProvider).elevationM,
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref.read(siteSettingsProvider.notifier).setElevationM(v),
-            (api) =>
-                ref.read(siteSettingsProvider.notifier).persistToServer(api),
-          ),
-        ),
+        ],
         Align(
           key: _siteKey,
           alignment: Alignment.centerLeft,

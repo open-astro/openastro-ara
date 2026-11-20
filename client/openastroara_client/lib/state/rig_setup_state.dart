@@ -82,17 +82,21 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   if (api == null) return false;
   try {
     // Read here, not through the planner's bootstrap: it swallows a failed read.
-    // Optics is on the section module (it loads itself): its load reports a
-    // failure instead of throwing, and a copy already in from the rig is kept.
+    // Site and optics are on the section module (they load themselves): a
+    // load reports a failure instead of throwing, and a copy already in from
+    // the rig is kept.
+    final site = ref.read(siteSettingsProvider);
     final optics = ref.read(opticsSettingsProvider);
-    final (_, _, opticsLoaded) = await (
-      ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
+    final (siteLoaded, _, opticsLoaded) = await (
+      site.canSave
+          ? Future.value(true)
+          : ref.read(siteSettingsProvider.notifier).load(api),
       ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
       optics.canSave
           ? Future.value(true)
           : ref.read(opticsSettingsProvider.notifier).load(api),
     ).wait;
-    if (!opticsLoaded) return false;
+    if (!siteLoaded || !opticsLoaded) return false;
     // Kept until the rig changes: a read when a dropped link comes back would
     // undo a Settings edit not saved yet.
     if (ref.mounted) ref.keepAlive();
@@ -121,10 +125,10 @@ final rigSetupCalibrationProvider =
 final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
   if (!ref.watch(serverLinkUpProvider)) return null;
   if (!(ref.watch(rigSetupHydratedProvider).value ?? false)) return null;
-  final site = ref.watch(siteSettingsProvider);
   // Back to not loaded (a rig or profile change): not trusted until it is in.
+  final site = ref.watch(siteSettingsProvider).value;
   final optics = ref.watch(opticsSettingsProvider).value;
-  if (optics == null) return null;
+  if (site == null || optics == null) return null;
   final guide = ref.watch(phd2SettingsProvider);
   final guider = ref.watch(guiderStatusProvider).value;
   final connected = guider?.isConnected ?? false;

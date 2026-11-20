@@ -8,6 +8,7 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
@@ -74,7 +75,8 @@ class _Site extends SiteSettingsNotifier {
   _Site(this.lat);
   final double lat;
   @override
-  SiteSettings build() => SiteSettings(latitudeDeg: lat);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(latitudeDeg: lat), source: SectionSource.rig);
 }
 
 const _base = PolarAligner(

@@ -140,8 +140,9 @@ Future<List<CustomHorizonPoint>?> _tryHorizon(ProfileApi api) async {
 /// Seed the planning settings notifiers from [profileId]'s cached sections so
 /// an offline session plans with the user's real gear instead of constructor
 /// defaults. Returns false when no snapshot exists for that profile (the
-/// notifiers keep their defaults). Uses each notifier's hydrateGuarded seam —
-/// the same one server hydration uses — so a later real hydrate wins races.
+/// notifiers keep what they hold). Each section is seeded as a cache copy
+/// (ADR 0015): readable for planning, never saved, and replaced by the rig's
+/// copy once it loads.
 Future<bool> seedPlanningFromCache(
     ProviderContainer container, String profileId) async {
   final cache = await container.read(profileCacheServiceProvider).load();
@@ -175,9 +176,11 @@ Future<bool> seedPlanningFromCache(
         .read(unguidedSettingsProvider.notifier)
         .seed(ProfileApi.unguidedSettingsFromJson(sec('unguided')));
   }
-  await container
-      .read(siteSettingsProvider.notifier)
-      .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));
+  if (snap['site'] is Map) {
+    container
+        .read(siteSettingsProvider.notifier)
+        .seed(ProfileApi.siteSettingsFromJson(sec('site')));
+  }
   if (snap['filter_set'] is Map) {
     container
         .read(filterSetProvider.notifier)

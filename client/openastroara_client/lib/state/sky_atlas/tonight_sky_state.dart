@@ -90,7 +90,9 @@ Future<List<TonightSkyObject>> _rankAt(
   // Ensure the settings this ranker reads are actually loaded from the daemon
   // (fresh launch: nothing else hydrates them until an Options panel mounts).
   await ref.watch(planningSettingsBootstrapProvider.future);
-  final site = ref.watch(siteSettingsProvider);
+  // Planning reads what is loaded (the rig, or the offline cache); a site not
+  // loaded reads as unset (0/0, the empty state below), never saved from here.
+  final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
   // An unset site (the constructor's 0,0) would silently rank for a spot in
   // the Gulf of Guinea — return empty instead; the panel's empty state
   // explains how to get a site (Settings → Site, or a cached profile).
@@ -194,7 +196,7 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     // must flip on once it is actually dark (review #1105 — the first build
     // used to be the only one).
     ref.watch(skyClockProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     if (_pinned) return state;
     // The site's own twilight line: the list's dark windows open there, so a
     // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).

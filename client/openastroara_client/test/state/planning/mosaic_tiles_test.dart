@@ -16,8 +16,8 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 /// #1622 — the mosaic size: prefs parse, and the ranking follows it.
 class _Seeded extends SiteSettingsNotifier {
   @override
-  SiteSettings build() =>
-      const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015), source: SectionSource.rig);
 }
 
 class _Optics extends OpticsSettingsNotifier {

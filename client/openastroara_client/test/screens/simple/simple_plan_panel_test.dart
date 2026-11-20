@@ -269,7 +269,8 @@ class _Electronics extends CameraElectronicsNotifier {
 
 class _Site extends SiteSettingsNotifier {
   @override
-  SiteSettings build() => SiteSettings(bortleClass: 6);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(bortleClass: 6), source: SectionSource.rig);
 }
 
 /// A filter wheel the daemon retains, or none.
@@ -288,7 +289,8 @@ class _SiteAt extends SiteSettingsNotifier {
   _SiteAt(this.site);
   final SiteSettings site;
   @override
-  SiteSettings build() => site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: site, source: SectionSource.rig);
 }
 
 class _NoSkyModel extends SkyModelCalibrationNotifier {

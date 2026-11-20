@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
@@ -46,6 +47,7 @@ const _paths = [
   'notifications',
   'optics',
   'plate-solve',
+  'site',
   'storage',
   'unguided',
 ];
@@ -59,6 +61,7 @@ final _selfLoading = {
   filterWheelPolicyProvider,
   imagingDefaultsProvider,
   opticsSettingsProvider,
+  siteSettingsProvider,
 };
 
 String _routeOf(String path) => path.split('/').first;
@@ -176,6 +179,8 @@ void main() {
         c.read(autofocusSettingsProvider.notifier).setExposureSeconds(8),
     'optics': (c) =>
         c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382),
+    'site': (c) =>
+        c.read(siteSettingsProvider.notifier).setLatitudeDeg(-33.856784),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -281,6 +286,11 @@ void main() {
       {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
     ],
     'optics': [null, ...without(rigDefaults['optics']!)],
+    'site': [
+      null,
+      ...without(rigDefaults['site']!),
+      {...rigDefaults['site']!, 'twilight_definition': 'bogus'},
+    ],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -322,6 +332,7 @@ void main() {
     'imaging-defaults': 'cooler_target_c',
     'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
+    'site': 'latitude_deg',
     'unguided': 'guard_enabled',
   };
   for (final MapEntry(key: route, value: key) in replyDrops.entries) {
@@ -364,6 +375,50 @@ void main() {
     expect(put.ifMatch, isNot('"optics-v1"'), reason: 'the tag of the copy the daemon wrote');
     expect((put.body as Map)['sensor_width_px'], 6248, reason: 'the daemon\'s fill is kept');
     expect((put.body as Map)['focal_length_mm'], 382);
+  });
+
+  test('site: a time sync write announced by profile.updated reloads the '
+      'copy, so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own site save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(siteSettingsProvider).canSave);
+    // A GPS fix at time sync fills the site on the rig; the daemon announces it.
+    rig.daemonWrote('site', {
+      ...rigDefaults['site']!,
+      'latitude_deg': 51.477833,
+      'longitude_deg': -0.0015,
+      'elevation_m': 42.0,
+    });
+    await applyProfileUpdated(c, 'site');
+    c.read(siteSettingsProvider.notifier).setObserverName('J. Troy');
+    await c.read(siteSettingsProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, '"site-v2"', reason: 'the tag of the copy the daemon wrote');
+    final body = put.body as Map;
+    expect(body['latitude_deg'], 51.477833, reason: 'the daemon\'s fix is kept');
+    expect(body['observer_name'], 'J. Troy');
+  });
+
+  test('site: the pier switch saves only the pier, with the loaded tag, and '
+      'keeps an unsaved edit (ADR 0015)', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(siteSettingsProvider).canSave);
+    final tag = rig.etagOf('site');
+    // Typed in Settings > Location & sky; Save not pressed yet.
+    c.read(siteSettingsProvider.notifier).setLatitudeDeg(51.477833);
+    await c
+        .read(siteSettingsProvider.notifier)
+        .saveOnRigCopy((s) => s.copyWith(permanentPier: true));
+    final put = rig.puts.single;
+    expect(put.ifMatch, tag);
+    expect((put.body as Map)['permanent_pier'], isTrue);
+    expect((put.body as Map)['latitude_deg'], 0.0, reason: 'the edit is not sent');
+    final shown = c.read(siteSettingsProvider);
+    expect(shown.value!.latitudeDeg, 51.477833, reason: 'the edit stays');
+    expect(shown.value!.permanentPier, isTrue);
+    expect(shown.etag, rig.etagOf('site'), reason: 'the next Save is not refused');
   });
 
   // The diagnostics radios save on each tap (replaceAndSave).

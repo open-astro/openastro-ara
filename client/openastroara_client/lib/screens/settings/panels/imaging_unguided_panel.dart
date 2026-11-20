@@ -259,7 +259,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
               optics:
                   ref.watch(opticsSettingsProvider).value ??
                   const OpticsSettings(),
-              seeingArcsec: ref.watch(siteSettingsProvider).typicalSeeingArcsec,
+              seeingArcsec: (ref.watch(siteSettingsProvider).value ?? const SiteSettings()).typicalSeeingArcsec,
             )
             case final gap?)
           Padding(
