@@ -314,24 +314,29 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         var what = fault.Details switch {
             "star_lost" => "Guide star lost",
             "equipment_disconnected" => "Guide camera dropped",
+            "dec_runaway" => "Dec guiding ran away",
             _ => "Guiding lost",
         };
+        // #1589 — the daemon stopped guiding itself: guiding on the same calibration would run away again.
+        var advice = fault.Details == "dec_runaway"
+            ? " Guiding was stopped. Calibrate the guider again (after a meridian flip, check the guider's 'Meridian flip reverses Dec' setting) before you resume."
+            : "";
         if (plan.Skip || plan.TerminalAction == FaultTerminalAction.Abort) {
             var acted = plan.Skip ? await SkipActiveRunsAsync().ConfigureAwait(false) : await AbortActiveRunsAsync().ConfigureAwait(false);
             if (acted == 0) {
                 await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
             } else if (plan.Skip) {
                 await PublishActionAsync(fault, "skipped", extra: p => p["skipped_runs"] = acted).ConfigureAwait(false);
                 await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — current target skipped",
-                    $"'{label}' reported {fault.Details} and your safety policy is set to skip: the current instructions were skipped.").ConfigureAwait(false);
+                    $"'{label}' reported {fault.Details} and your safety policy is set to skip: the current instructions were skipped.{advice}").ConfigureAwait(false);
             } else {
                 await PublishActionAsync(fault, "gave_up", persistAs: "gave_up:abort", extra: p => {
                     p["terminal"] = "abort";
                     p["aborted_runs"] = acted;
                 }).ConfigureAwait(false);
                 await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence aborted",
-                    $"'{label}' reported {fault.Details} and your safety policy is set to abort: {acted} run(s) aborted, the mount was not parked.").ConfigureAwait(false);
+                    $"'{label}' reported {fault.Details} and your safety policy is set to abort: {acted} run(s) aborted, the mount was not parked.{advice}").ConfigureAwait(false);
             }
             return;
         }
@@ -341,13 +346,13 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         _guiderEpisodes?.Invoke()?.Paused(fault, paused);
         if (paused.Count == 0) {
             await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
             return;
         }
         await PublishActionAsync(fault, "sequence_paused", extra: p => p["paused_runs"] = paused.Count).ConfigureAwait(false);
         await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence paused",
             $"'{label}' reported {fault.Details}: {paused.Count} run(s) paused so no unguided frame burns sky time. "
-            + "They resume on their own once the guider is back; otherwise Resume them.").ConfigureAwait(false);
+            + $"They resume on their own once the guider is back; otherwise Resume them.{advice}").ConfigureAwait(false);
 
         while (!recovered.IsCompleted) {
             await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);

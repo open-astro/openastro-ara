@@ -333,6 +333,11 @@ Ara assumes you're asleep while it works:
   the rig, hands over as soon as you pause, resume or stop the run yourself, will not slew to a
   target that has sunk below your horizon limit, and tells you once when the daemon has no plate
   solver. A dither that must restart guiding after a gap of 3 min or more re-centers first too.
+- **Dec guiding runs away**: when the Dec error keeps growing for 10 guide frames in a row while the
+  Dec corrections are at their maximum (a wrong Dec direction after a meridian flip does this), Ara
+  stops guiding and runs **"When the guider is lost"**, with a notification. Calibrate the guider again
+  (after a flip, check the guider's **Meridian flip reverses Dec** setting), then start guiding: once
+  guiding has settled, a paused run resumes on its own.
 - **Guider loss mid-sequence**: if the guider connection drops while a run is executing, the
   daemon applies **Settings → Safety → Policies → "When the guider is lost"** immediately —
   pause the run (default), skip the current target, or abort — while §63.3 process recovery
