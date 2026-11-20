@@ -3972,6 +3972,41 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('#2041 a wheel whose own optics read is overtaken by a newer read saves nothing and says Couldn\'t save',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), feature: true, gear: [profileApiProvider.overrideWithValue(api)]);
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    final before = api.reads.length;
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    expect(api.reads, hasLength(before + 1), reason: 'the wheel reads the optics before it saves');
+    final wheelRead = api.reads.last;
+    // A newer reader starts while the wheel's read is in flight: the wheel's result is dropped.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    wheelRead.complete(rig);
+    await tester.pumpAndSettle();
+    expect(api.puts, isEmpty, reason: 'the wheel\'s read did not land: nothing may be written');
+    expect([for (final m in c.read(simpleMessagesProvider)) (m.kind, m.title)],
+        contains((SimpleMessageKind.error, "Couldn't save that")));
+    for (final read in api.reads) {
+      if (!read.isCompleted) read.complete(rig);
+    }
+    await other;
+    await tester.pumpAndSettle();
+    expect(api.puts, isEmpty);
+    // The Rig page's other reads fail on this fake and retry: stop them.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
