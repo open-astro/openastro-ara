@@ -72,9 +72,10 @@ public interface IMountMotionControl {
     Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadNowAsync(ct);
 
     /// <summary>#2066 (ARA-2) — the routine that holds the mount's single motion owner (<see cref="MotionOwners"/>), or
-    /// null. While one holds it, a GoTo (the REST one, Center, the sequencer's and every other mediator GoTo), a REST Park
-    /// and a REST Home are refused. A stop never is: Emergency Stop, Stop Mount, AbortSlew, a pad stop (MoveAxis rate 0),
-    /// tracking off, and the safety, fault and shutdown parks always reach the mount.</summary>
+    /// null. While one holds it, a GoTo (the REST one, Center, the sequencer's and every other mediator GoTo), a sync, a
+    /// Park and a Home (REST or mediator) are refused. A stop never is: Emergency Stop, Stop Mount, AbortSlew, a pad stop
+    /// (MoveAxis rate 0) and tracking off always reach the mount; the safety, fault and shutdown parks end the routine
+    /// through its takeover first.</summary>
     string? MotionOwner => null;
 
     /// <summary>#2066 (ARA-2) — take the motion owner for <paramref name="owner"/> (a <see cref="MotionOwners"/> name)

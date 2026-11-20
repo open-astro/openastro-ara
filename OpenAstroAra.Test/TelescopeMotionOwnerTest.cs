@@ -217,6 +217,75 @@ namespace OpenAstroAra.Test {
             Assert.That(Put(box, "synctocoordinates"), Is.True);
         }
 
+        // Joey, 2026-11-20 on #2048: Park and Home are refused for Polar Align's whole run, the sequencer's too (its Park
+        // Scope and Find Home, an end-of-sequence park, a failed flip's safe rest). Only the safety, fault and shutdown
+        // parks get through, and they end Polar Align first. A refused park leaves tracking as it is: the run tracks.
+        [Test]
+        public async Task A_sequencer_park_or_Find_Home_is_refused_while_Polar_Align_holds_the_mount() {
+            var (box, svc) = await ConnectedAsync();
+            await using var device = box;
+            using var service = svc;
+            var progress = new Progress<ApplicationStatus>();
+
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(progress, CancellationToken.None));
+                var home = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.FindHome(progress, CancellationToken.None));
+                Assert.That(park!.Message, Does.Contain("Polar alignment is running").And.Contain("park"));
+                Assert.That(home!.Message, Does.Contain("Polar alignment is running").And.Contain("Find Home"));
+            }
+
+            Assert.Multiple(() => {
+                Assert.That(Put(box, "park"), Is.False, "no park reached the mount");
+                Assert.That(Put(box, "findhome"), Is.False, "no Find Home reached the mount");
+                Assert.That(Put(box, "tracking"), Is.False, "tracking left as it was");
+            });
+        }
+
+        // End Night's (and the unattended shutdown's) Find Home and park go through the mediator, which refuses them while
+        // Polar Align holds the mount: the shutdown ladder ends Polar Align through its takeover first, as the safety and
+        // fault parks do, so the shutdown is never blocked and Polar Align's motor never runs beside its Find Home or park.
+        [Test]
+        public async Task End_Night_ends_Polar_Align_before_its_Find_Home_and_park_and_both_reach_the_mount() {
+            var homed = false;
+            var parked = false;
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                    path.EndsWith("/athome", StringComparison.Ordinal) ? (Volatile.Read(ref homed) ? "true" : "false")
+                    : path.EndsWith("/atpark", StringComparison.Ordinal) ? (Volatile.Read(ref parked) ? "true" : "false")
+                    : Mount()(path),
+                putResponder: path => {
+                    if (path.EndsWith("/findhome", StringComparison.Ordinal)) {
+                        Volatile.Write(ref homed, true);
+                    } else if (path.EndsWith("/park", StringComparison.Ordinal)) {
+                        Volatile.Write(ref parked, true);
+                    }
+                    return null;
+                });
+            using var svc = await ConnectAsync(box);
+            await WaitForAsync(() => svc.GetInfo() is { CanFindHome: true, CanPark: true }, "the mount's capabilities were never read");
+            var hold = svc.AcquireMotion(MotionOwners.PolarAlign);
+            var takeovers = new List<string>();
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsActive).Returns(() => svc.MotionOwner is not null);
+            polarAlign.Setup(p => p.StopForTakeoverAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns((string by, CancellationToken _) => {
+                takeovers.Add(by);
+                hold.Dispose(); // the run's end gives the mount back
+                return Task.FromResult(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.stop", DateTimeOffset.UtcNow, null));
+            });
+            var ladder = new ShutdownLadder(telescope: svc, polarAlign: () => polarAlign.Object);
+
+            var home = await ladder.FindHomeAsync();
+            hold = svc.AcquireMotion(MotionOwners.PolarAlign); // a run started again before the park step
+            var rest = await ladder.RestMountAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(home.Outcome, Is.EqualTo(LadderOutcome.Done), home.Text);
+                Assert.That(rest.Rest, Is.EqualTo(MountRest.Parked), rest.Step.Text);
+                Assert.That(Put(box, "findhome"), Is.True, "the shutdown's Find Home reached the mount");
+                Assert.That(Put(box, "park"), Is.True, "the shutdown park reached the mount");
+                Assert.That(takeovers, Has.Count.EqualTo(2), "Polar Align was ended before each move");
+            });
+        }
+
         // #2048 ARA-2 — the owner never blocks a stop: Emergency Stop's and Stop Mount's AbortSlew, a pad stop (rate 0),
         // tracking off, and the safety and fault parks (they call the service's ParkAsync, not the REST endpoint).
         [Test]

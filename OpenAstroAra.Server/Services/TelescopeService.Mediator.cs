@@ -519,11 +519,19 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
-        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo would run beside
-        // its next turn. Refused before the try (never an op fault), and it throws, so a blind SlewScopeToRaDec shows it.
-        // Checked and counted with the owner in one step, right before the send: a routine that took the mount while
-        // this GoTo read the pose or the coordinate system still refuses it, and none can take it while it goes out.
-        using var dispatch = op == "telescope.slew" ? BeginMotionDispatchOrThrow(op, "GoTo") : null;
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo, a Park Scope or
+        // Find Home instruction, an end-of-sequence park or a failed flip's safe rest would run beside its next turn
+        // (Joey, 2026-11-20 on #2048). Refused before the try (never an op fault), and it throws, so a blind
+        // SlewScopeToRaDec shows it. A refused park leaves tracking as it is (the run tracks). Checked and counted with
+        // the owner in one step, right before the send: a routine that took the mount while this GoTo read the pose or
+        // the coordinate system still refuses it, and none can take it while the move goes out. The shutdown ladder's
+        // Find Home and park end Polar Align through its takeover first; the safety and fault parks do not come here.
+        using var dispatch = op switch {
+            "telescope.slew" => BeginMotionDispatchOrThrow(op, "GoTo"),
+            "telescope.park" => BeginMotionDispatchOrThrow(op, "park"),
+            "telescope.findhome" => BeginMotionDispatchOrThrow(op, "Find Home"),
+            _ => null,
+        };
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
