@@ -16,7 +16,13 @@ import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/focus/focus_presets.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
 
 /// A focuser that records where it was sent.
 class _Focuser extends FocuserNotifier {
@@ -86,6 +92,9 @@ class _Wheel extends FilterWheelNotifier {
 late _Live _live;
 late ProviderContainer _c;
 
+/// The profile's autofocus section, as the rig served it (no HTTP).
+late FakeAutofocusSection _af;
+
 Future<_Focuser> _pump(
   WidgetTester tester,
   Map<String, dynamic> wire, {
@@ -94,6 +103,7 @@ Future<_Focuser> _pump(
   bool scrolling = false,
   bool inSettings = false,
   List<String>? wheel,
+  bool afLoaded = true,
 }) async {
   // Tall: the window's Simple settings (#1544) make it taller than the default surface; the shell scrolls it.
   tester.view.physicalSize = const Size(800, 1600);
@@ -101,8 +111,13 @@ Future<_Focuser> _pump(
   addTearDown(tester.view.reset);
   final focuser = _Focuser(wire);
   _live = _Live();
+  _af = FakeAutofocusSection(
+    initial: afLoaded ? const AutofocusSettings() : null,
+  );
   final c = _c = ProviderContainer(
     overrides: [
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      autofocusSettingsProvider.overrideWith(() => _af),
       autofocusLiveProvider.overrideWith(() => _live),
       focuserProvider.overrideWith(() => focuser),
       deviceDriverProvider.overrideWith((ref, type) async => null),
@@ -154,6 +169,8 @@ Future<_Focuser> _pump(
       ),
     ),
   );
+  await tester.pump();
+  // The profile's autofocus section loads itself (SelfLoadingSection).
   await tester.pump();
   return focuser;
 }
@@ -682,7 +699,7 @@ void main() {
       await _pump(tester, _wire());
       await tester.tap(chipFor('simple-focuser-sharp-tight'));
       await tester.pump();
-      var s = _c.read(autofocusSettingsProvider);
+      var s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (
           s.runAfterFilterChange,
@@ -700,7 +717,7 @@ void main() {
       );
       await tester.tap(chipFor('simple-focuser-sharp-relaxed'));
       await tester.pump();
-      s = _c.read(autofocusSettingsProvider);
+      s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours),
         (3.0, 25.0, 4),
@@ -714,7 +731,7 @@ void main() {
       await _pump(tester, _wire());
       await tester.tap(chipFor('simple-focuser-plans-off'));
       await tester.pump();
-      final s = _c.read(autofocusSettingsProvider);
+      final s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (
           s.runAfterFilterChange,
@@ -738,7 +755,7 @@ void main() {
       );
       await tester.tap(chipFor('simple-focuser-plans-on'));
       await tester.pump();
-      final back = _c.read(autofocusSettingsProvider);
+      final back = _c.read(autofocusSettingsProvider).value!;
       expect(
         (back.triggerTempDeltaC, back.triggerHfrDriftPct, back.everyNHours),
         (2.0, 15.0, 2),
@@ -765,13 +782,13 @@ void main() {
       await tester.tap(chipFor('simple-focuser-sharp-custom'));
       await tester.pump();
       expect(
-        _c.read(autofocusSettingsProvider).triggerTempDeltaC,
+        _c.read(autofocusSettingsProvider).value!.triggerTempDeltaC,
         7,
         reason: 'Custom is never applied',
       );
       await tester.tap(chipFor('simple-focuser-sharp-normal'));
       await tester.pump();
-      final s = _c.read(autofocusSettingsProvider);
+      final s = _c.read(autofocusSettingsProvider).value!;
       expect(
         (s.triggerTempDeltaC, s.triggerHfrDriftPct, s.everyNHours),
         (2.0, 15.0, 2),
@@ -791,7 +808,59 @@ void main() {
       expect(chipFor('simple-focuser-af-filter-L'), findsOneWidget);
       await tester.tap(chipFor('simple-focuser-af-filter-G'));
       await tester.pump();
-      expect(_c.read(autofocusSettingsProvider).afFilter, 'G');
+      expect(_c.read(autofocusSettingsProvider).value!.afFilter, 'G');
+    },
+  );
+
+  testWidgets(
+    'the autofocus rows wait for the profile from the rig: no default shows and nothing can be sent (ADR 0015)',
+    (tester) async {
+      await _pump(tester, _wire(), afLoaded: false);
+      expect(find.textContaining('Not loaded'), findsOneWidget);
+      expect(find.byKey(const Key('section-retry')), findsOneWidget);
+      expect(chipFor('simple-focuser-plans-off'), findsNothing);
+      expect(find.text('Keep focus sharp'), findsNothing);
+      expect(_af.puts, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'a Keep focus sharp pick on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
+    (tester) async {
+      await _pump(tester, _wire(), afLoaded: false);
+      _c.read(autofocusSettingsProvider.notifier).seed(const AutofocusSettings());
+      await tester.pump();
+      expect(_c.read(autofocusSettingsProvider).source, SectionSource.cache);
+      await tester.tap(chipFor('simple-focuser-sharp-tight'));
+      await tester.pump();
+      expect(_af.puts, isEmpty);
+      expect(
+        _c.read(autofocusSettingsProvider).value!.triggerTempDeltaC,
+        2.0,
+        reason: 'the copy shown is unchanged',
+      );
+      expect(
+        find.textContaining("Couldn't save that: Settings not loaded from the rig"),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 5));
+    },
+  );
+
+  testWidgets(
+    'a Simple Mode autofocus change that the rig fails goes back to the rig copy (ADR 0015)',
+    (tester) async {
+      await _pump(tester, _wire());
+      _af.refuse = Exception('rig error');
+      await tester.tap(chipFor('simple-focuser-plans-off'));
+      await tester.pump();
+      expect(_af.puts, isEmpty);
+      expect(
+        autofocusDuringPlans(_c.read(autofocusSettingsProvider).value!),
+        isTrue,
+      );
+      expect(find.textContaining("Couldn't save that"), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
     },
   );
 

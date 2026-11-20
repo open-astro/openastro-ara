@@ -341,7 +341,10 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   late final _frames = TextEditingController(
-    text: ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+    text:
+        (ref.read(safetyPoliciesProvider).value ?? const SafetyPolicies())
+            .flatFramesPerFilter
+            .toString(),
   );
   final _coolTo = TextEditingController();
   bool _busy = false;
@@ -373,8 +376,19 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   @override
   void initState() {
     super.initState();
-    _coolTo.text = _degrees(ref.read(imagingDefaultsProvider).coolerTargetC);
+    // Empty until the profile's copy is in from the rig (build fills it).
+    final target = ref.read(imagingDefaultsProvider).value?.coolerTargetC;
+    _coolTo.text = target == null ? '' : _degrees(target);
     _loadSetpoint();
+  }
+
+  /// The profile's copy came in from the rig after the dialog opened: the
+  /// cool-to field takes its target unless the user or the lights' set-point
+  /// already filled it.
+  void _fillCoolTo(double? target) {
+    if (target != null && _coolTo.text.isEmpty && _lightsSetpointC == null) {
+      _coolTo.text = _degrees(target);
+    }
   }
 
   Future<void> _loadSetpoint() async {
@@ -548,6 +562,10 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(
+      imagingDefaultsProvider.select((s) => s.value?.coolerTargetC),
+      (_, target) => _fillCoolTo(target),
+    );
     final partlyCovered = _covered.isNotEmpty && !_allCovered;
     final nothingToShoot = !_flats && !_afterFlats;
     final sectionStyle = Theme.of(context).textTheme.titleSmall;
@@ -845,10 +863,22 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
   bool _busy = false;
   String? _error;
 
+  // What [_defaultTemperatures] last put in the field: while the field
+  // still holds it, the user hasn't typed and a later default may replace it.
+  String _filledTemps = '';
+
   @override
   void initState() {
     super.initState();
-    _temps.text = _defaultTemperatures();
+    _temps.text = _filledTemps = _defaultTemperatures();
+  }
+
+  /// The profile's copy came in from the rig after the form opened (the
+  /// first read starts its load, so it is often not in yet): refill the
+  /// field unless the user has typed in it.
+  void _refillTemperatures() {
+    if (_temps.text != _filledTemps) return;
+    _temps.text = _filledTemps = _defaultTemperatures();
   }
 
   // Darks only calibrate lights taken at the same temperature, so start from
@@ -871,9 +901,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
             ?.capabilities
             ?.canSetTemperature ==
         true;
-    return canCool
-        ? _MatchingFlatsDialogState._degrees(
-            ref.read(imagingDefaultsProvider).coolerTargetC)
+    final target = ref.read(imagingDefaultsProvider).value?.coolerTargetC;
+    return canCool && target != null
+        ? _MatchingFlatsDialogState._degrees(target)
         : '';
   }
 
@@ -965,6 +995,10 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(
+      imagingDefaultsProvider.select((s) => s.value?.coolerTargetC),
+      (_, _) => _refillTemperatures(),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

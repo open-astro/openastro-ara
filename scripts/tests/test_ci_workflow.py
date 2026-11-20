@@ -7,6 +7,7 @@ context that passes with a failed shard behind it, a cache that never hits.
 
 import re
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -237,6 +238,95 @@ class CiRunTimeTest(unittest.TestCase):
             names.index("Cache astap_cli (linux-arm64)"),
             "the restore must land in the publish directory after dotnet publish writes it",
         )
+
+
+class ReleaseLineCiTest(unittest.TestCase):
+    """#2093: CI on the release branches, and the .deb version of a build."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = CI.read_text()
+
+    def test_ci_runs_on_pushes_to_master_and_every_stable_branch(self):
+        push = self.text.split("\n  push:\n", 1)[1].split("\n  workflow_dispatch:", 1)[0]
+        self.assertIn("\n      - master\n", push + "\n")
+        self.assertIn("\n      - 'stable/**'", push)
+
+    def test_the_sanity_job_checks_the_version_file(self):
+        self.assertIn("python3 scripts/version.py --check", steps(job(self.text, "sanity"))["Version file"])
+
+    def deb_version(self, version_file, tags=(), branch="master", release_tag_script=None, expect_fail=False):
+        """Run the workflow's .deb version step in a throwaway repository; return its version output."""
+        step = steps(job(self.text, "server-build"))["Compute .deb version"]
+        self.assertIn("BUILD_BRANCH: ${{ github.base_ref || github.event.merge_group.base_ref || github.ref_name }}", step)
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            for name in ("version.py", "release-tag.py"):
+                (root / "scripts" / name).write_text((REPO_ROOT / "scripts" / name).read_text())
+            if release_tag_script is not None:
+                (root / "scripts" / "release-tag.py").write_text(release_tag_script)
+            # The nightly rule has its own tests (test_nightly_version.py); here only the hand-off.
+            (root / "scripts" / "nightly-version.py").write_text(
+                "import sys\nprint('nightly ' + ' '.join(sys.argv[1:]))\n"
+            )
+            (root / "VERSION").write_text(version_file + "\n")
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            (bin_dir / "python3").symlink_to(sys.executable)
+            env = {
+                "PATH": f"{bin_dir}:/usr/bin:/bin",
+                "HOME": tmp,
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+            }
+            for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "c"]):
+                subprocess.run(["git", *cmd], cwd=root, env=env, check=True)
+            for tag in tags:
+                subprocess.run(["git", "tag", "-a", tag, "-m", tag], cwd=root, env=env, check=True)
+            out = root / "github-output"
+            run = subprocess.run(
+                ["bash", "-c", script],
+                cwd=root,
+                env={**env, "GITHUB_OUTPUT": str(out), "BUILD_BRANCH": branch},
+                capture_output=True,
+                text=True,
+            )
+            if expect_fail:
+                self.assertNotEqual(run.returncode, 0, run.stdout)
+                return run.stdout + run.stderr
+            self.assertEqual(run.returncode, 0, run.stderr)
+            lines = [ln for ln in out.read_text().splitlines() if ln.startswith("version=")]
+            self.assertEqual(len(lines), 1, out.read_text())
+            return lines[0][len("version="):]
+
+    def test_a_release_tag_on_head_builds_the_release_version(self):
+        self.assertEqual(self.deb_version("1.0.0~beta1", tags=["v1.0.0-beta.1"]), "1.0.0~beta1")
+        self.assertEqual(self.deb_version("1.0.0", tags=["phase-10.5-complete", "v1.0.0"]), "1.0.0")
+
+    def test_a_tag_whose_version_file_disagrees_builds_a_nightly(self):
+        # The NINA fork's inherited v1.10.1 looks like a release tag but holds no matching VERSION.
+        self.assertEqual(self.deb_version("0.0.1", tags=["v1.10.1"]), "nightly --branch master")
+
+    def test_a_tag_that_is_no_ara_release_shape_builds_a_nightly(self):
+        # NINA's v.1.8 is refused by release-tag.py with exit 2, which only means "not ours".
+        self.assertEqual(self.deb_version("0.0.1", tags=["v.1.8"]), "nightly --branch master")
+
+    def test_a_crashing_release_tag_script_fails_the_step(self):
+        out = self.deb_version("1.0.0", tags=["v1.0.0"], expect_fail=True,
+                               release_tag_script="import sys\nsys.exit(1)\n")
+        self.assertIn("release-tag.py failed on tag v1.0.0", out)
+
+    def test_a_merge_group_into_a_stable_branch_stays_on_that_line(self):
+        # A merge group's base arrives as refs/heads/stable/1.0; ref_name would be the queue branch.
+        self.assertEqual(self.deb_version("1.0.0~beta1", branch="refs/heads/stable/1.0"),
+                         "nightly --branch stable/1.0")
+
+    def test_an_untagged_build_passes_its_branch_to_the_nightly_version(self):
+        self.assertEqual(self.deb_version("1.0.0~beta2", branch="stable/1.0"), "nightly --branch stable/1.0")
 
 
 if __name__ == "__main__":

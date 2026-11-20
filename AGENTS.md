@@ -25,6 +25,13 @@ Client state is hand-written Riverpod 3 providers (`Notifier`, `AsyncNotifier`) 
 
 A user-visible change adds `changelog.d/<branch-slug>.md`; never edit `CHANGELOG.md` (only the release step writes it). Format and commands: `changelog.d/README.md`; CI runs `scripts/changelog-fragments.py --check`.
 
+## Releases
+
+The process is `docs/RELEASES.md`; `/bump-release` drives it. Releases are source only (tag, notes, source tarball).
+
+- Never edit `VERSION`, the README badge line, the `pubspec.yaml` version or the client's `kAraAppVersion` in a feature PR. Only a release PR or a merge down changes them.
+- A PR targets `stable/X.Y` only when it fixes a defect introduced after the previous stable release; everything else targets `master`. Fixes reach `master` by a merge-down PR (merge commit, never squash), never by cherry-pick.
+
 ## Pull request body
 
 The PR body follows `.github/pull_request_template.md`. The `PR body` workflow checks it when a PR is opened, edited or pushed (three jobs, optional until branch protection requires them):

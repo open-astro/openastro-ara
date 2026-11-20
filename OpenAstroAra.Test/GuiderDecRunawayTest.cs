@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
             public readonly FaultReactionService Reaction;
             public GuiderService Service = null!;
 
-            public Rig(string onGuiderLost = "pause_and_retry", bool runActive = true, double settleTime = 0) {
+            public Rig(string onGuiderLost = "pause_and_retry", bool runActive = true, int settleTime = 0) {
                 // The profile default (10 s) would make the resume wait 10 s.
                 Profile.ActiveProfile.GuiderSettings.SettleTime = settleTime;
                 var profiles = new Mock<IProfileStore>();

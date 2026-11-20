@@ -1418,6 +1418,9 @@ public partial class Program {
         // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
         // section-specific endpoint pairs on top of the same IProfileStore.
         app.MapProfileEndpoints();
+        // #1807 — a section the daemon writes itself (time sync, plate solve, a connect-time fill, the flip
+        // executor, the guider, ...) publishes profile.updated too, so a client reloads it before its next Save.
+        app.PublishDaemonProfileWrites();
 
         // §37/§30 multi-profile management — CRUD over the known-profiles set.
         app.MapProfilesEndpoints();

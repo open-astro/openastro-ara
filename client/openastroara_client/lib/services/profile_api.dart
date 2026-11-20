@@ -568,6 +568,65 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
+      _getTagged('imaging-defaults', _imagingDefaultsFromRig);
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'imaging-defaults',
+    imagingDefaultsToJson(v),
+    _imagingDefaultsFromRig,
+    ifMatch,
+  );
+
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _getTagged('optics', _opticsFromRig);
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
+
+  Future<({SiteSettings value, String? etag})> getSiteSection() =>
+      _getTagged('site', _siteFromRig);
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) => _putTagged('site', siteSettingsToJson(v), _siteFromRig, ifMatch);
+
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
+      _getTagged('safety', _safetyFromRig);
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies v, {
+    String? ifMatch,
+  }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
+
+  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
+  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
+  /// executor ever confirms a flip). Answers the rig's policies with their new
+  /// tag (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profile/safety/first-flip/rearm',
+    );
+    return (
+      value: _safetyFromRig(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
+      _getTagged('autofocus', _autofocusSettingsFromRig);
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'autofocus',
+    autofocusSettingsToJson(v),
+    _autofocusSettingsFromRig,
+    ifMatch,
+  );
+
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() =>
       _getTagged('equipment-connection', _equipmentConnectionFromRig);
@@ -693,6 +752,201 @@ class ProfileApi {
         .toDouble(),
   );
 
+  // Strict like the readers above: an unknown frame type, autofocus method or
+  // telescope type fails the load instead of reading as light, the V-curve or
+  // `other` (the lenient readers stay for the offline cache and the wizard).
+  static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
+      ImagingDefaults(
+        defaultExposure: Duration(
+          seconds: (j['exposure_seconds'] as num).toInt(),
+        ),
+        defaultGain: (j['gain'] as num).toInt(),
+        defaultOffset: (j['offset'] as num).toInt(),
+        defaultBin: (j['bin'] as num).toInt(),
+        defaultFrameKind: FrameKind.values.firstWhere(
+          (k) => k.name == j['frame_kind'],
+          orElse: () => throw FormatException('unknown frame kind', j['frame_kind']),
+        ),
+        coolerTargetC: (j['cooler_target_c'] as num).toDouble(),
+        coolerRampRatePerMin: (j['cooler_ramp_c_per_min'] as num).toDouble(),
+        warmupAtSessionEnd: j['warmup_at_session_end'] as bool,
+      );
+
+  static AutofocusSettings _autofocusSettingsFromRig(Map<String, dynamic> j) =>
+      AutofocusSettings(
+        method: AutofocusMethod.values.firstWhere(
+          (m) => _autofocusMethodToString(m) == j['method'],
+          orElse: () => throw FormatException('unknown method', j['method']),
+        ),
+        steps: (j['steps'] as num).toInt(),
+        stepSize: (j['step_size'] as num).toInt(),
+        stepSizeAuto: j['step_size_auto'] as bool,
+        exposureSeconds: (j['exposure_seconds'] as num).toInt(),
+        binning: (j['binning'] as num).toInt(),
+        afFilter: j['af_filter'] as String,
+        runAfterFilterChange: j['run_after_filter_change'] as bool,
+        triggerTempDeltaC: (j['trigger_temp_delta_c'] as num).toDouble(),
+        triggerHfrDriftPct: (j['trigger_hfr_drift_pct'] as num).toDouble(),
+        everyNHours: (j['every_n_hours'] as num).toInt(),
+        abortSequenceOnAfFailure: j['abort_sequence_on_af_failure'] as bool,
+        restorePositionOnFailure: j['restore_position_on_failure'] as bool,
+        telescopeType: TelescopeType.values.firstWhere(
+          (t) => telescopeTypeToWire(t) == j['telescope_type'],
+          orElse: () =>
+              throw FormatException('unknown telescope type', j['telescope_type']),
+        ),
+        backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
+        backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
+      );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as 0 ("unset") or a 1.0 reducer, which a Save would then write
+  // over the rig's sensor or focal length (#2041). The reducer is read as the
+  // rig holds it; the daemon refuses a Save of one at or below 0.
+  static OpticsSettings _opticsFromRig(Map<String, dynamic> j) =>
+      OpticsSettings(
+        focalLengthMm: (j['focal_length_mm'] as num).toDouble(),
+        reducerFactor: (j['reducer_factor'] as num).toDouble(),
+        sensorWidthPx: (j['sensor_width_px'] as num).toInt(),
+        sensorHeightPx: (j['sensor_height_px'] as num).toInt(),
+        pixelSizeUm: (j['pixel_size_um'] as num).toDouble(),
+        apertureMm: (j['aperture_mm'] as num).toDouble(),
+        telescopeName: j['telescope_name'] as String,
+      );
+
+  // Strict like the readers above: a missing key, or a twilight line the
+  // client does not know, fails the load instead of reading as "Backyard" at
+  // 0/0, which a Save would then write over the rig's site.
+  static SiteSettings _siteFromRig(Map<String, dynamic> j) => SiteSettings(
+    siteName: j['site_name'] as String,
+    latitudeDeg: (j['latitude_deg'] as num).toDouble(),
+    longitudeDeg: (j['longitude_deg'] as num).toDouble(),
+    elevationM: (j['elevation_m'] as num).roundToDouble(),
+    timeZone: j['time_zone'] as String,
+    useCustomHorizon: j['use_custom_horizon'] as bool,
+    defaultHorizonAltitudeDeg: (j['default_horizon_altitude_deg'] as num)
+        .toDouble(),
+    bortleClass: (j['bortle_class'] as num).toInt(),
+    sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num).toDouble(),
+    typicalSeeingArcsec: (j['typical_seeing_arcsec'] as num).toDouble(),
+    twilightDefinition: TwilightDefinition.values.byName(
+      j['twilight_definition'] as String,
+    ),
+    maxSequenceRuntimeMin: (j['max_sequence_runtime_min'] as num).toInt(),
+    softWarningAltitudeDeg: (j['soft_warning_altitude_deg'] as num).toDouble(),
+    observerName: j['observer_name'] as String,
+    permanentPier: j['permanent_pier'] as bool,
+  );
+
+  // Strict like the readers above: a missing key, or an action the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (pause and park, auto flip on), which a Save would then write over
+  // the rig's unattended running rules. The guider mode of a profile from
+  // before the mode and a blank unattended window come as null, but their keys
+  // are there.
+  static SafetyPolicies _safetyFromRig(Map<String, dynamic> j) {
+    E pick<E>(List<E> values, String Function(E) wire, String key) {
+      final raw = j[key];
+      return values.firstWhere(
+        (v) => wire(v) == raw,
+        orElse: () => throw FormatException('unknown $key', raw),
+      );
+    }
+
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final recal = nullable('meridian_guider_recal');
+    return SafetyPolicies(
+      onUnsafe: pick(UnsafeAction.values, _unsafeActionToString, 'on_unsafe'),
+      autoResumeWhenSafe: j['auto_resume_when_safe'] as bool,
+      resumeDelayMin: (j['resume_delay_min'] as num).toInt(),
+      meridianFlipAuto: j['meridian_flip_auto'] as bool,
+      meridianPauseMin: (j['meridian_pause_min'] as num).toInt(),
+      meridianRecenter: j['meridian_recenter'] as bool,
+      meridianRecalGuider: j['meridian_recal_guider'] as bool,
+      meridianRefocus: pick(
+        MeridianRefocusMode.values,
+        _meridianRefocusToString,
+        'meridian_refocus',
+      ),
+      meridianRefocusTempThresholdC:
+          (j['meridian_refocus_temp_threshold_c'] as num).toDouble(),
+      meridianGuiderRecal: recal == null
+          ? null
+          : pick<GuiderRecalMode>(
+              GuiderRecalMode.values,
+              _guiderRecalToString,
+              'meridian_guider_recal',
+            ),
+      unattendedWindowStart:
+          (nullable('unattended_window_start') as String?) ?? '',
+      unattendedWindowEnd: (nullable('unattended_window_end') as String?) ?? '',
+      onAltitudeLimit: pick(
+        AltitudeLimitAction.values,
+        _altitudeLimitActionToString,
+        'on_altitude_limit',
+      ),
+      parkIfNoMoreTargets: j['park_if_no_more_targets'] as bool,
+      onGuiderLost: pick(
+        GuiderLostAction.values,
+        _guiderLostActionToString,
+        'on_guider_lost',
+      ),
+      guiderRetryTimeoutSec: (j['guider_retry_timeout_sec'] as num).toInt(),
+      skipTargetIfRecoveryFails: j['skip_target_if_recovery_fails'] as bool,
+      // The lenient reader takes any case here; so does this one.
+      onDiskSpaceCritical: DiskSpaceCriticalAction.values.firstWhere(
+        (a) => a.name == (j['on_disk_space_critical'] as String).toLowerCase(),
+        orElse: () => throw FormatException(
+          'unknown on_disk_space_critical',
+          j['on_disk_space_critical'],
+        ),
+      ),
+      flipSafetyEnabled: j['flip_safety_enabled'] as bool,
+      expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
+      firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      unattendedEscalation: j['unattended_escalation'] as bool,
+      unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
+      unattendedShutdownWaitMinutes:
+          (j['unattended_shutdown_wait_minutes'] as num).toInt(),
+      calibrationCaptureDefault: pick(
+        CalibrationCaptureDefault.values,
+        _calibrationCaptureDefaultToString,
+        'calibration_capture_default',
+      ),
+      weatherTriggersEnabled: j['weather_triggers_enabled'] as bool,
+      maxWindKmh: (j['max_wind_kmh'] as num).toInt(),
+      maxHumidityPct: (j['max_humidity_pct'] as num).toInt(),
+      minDewDeltaC: (j['min_dew_delta_c'] as num).toDouble(),
+      flatTargetAdu: (j['flat_target_adu'] as num).toInt(),
+      flatTargetPercent: (j['flat_target_percent'] as num).toDouble(),
+      flatTargetAduTolerancePct: (j['flat_target_adu_tolerance_pct'] as num)
+          .toDouble(),
+      flatFramesPerFilter: (j['flat_frames_per_filter'] as num).toInt(),
+      postFlatParkMount: j['post_flat_park_mount'] as bool,
+      skyFlatTargetAdu: (j['sky_flat_target_adu'] as num).toInt(),
+      skyFlatFramesPerFilter: (j['sky_flat_frames_per_filter'] as num).toInt(),
+      skyFlatTargetAzimuth: (j['sky_flat_target_azimuth'] as num).toDouble(),
+      skyFlatTargetAltitude: (j['sky_flat_target_altitude'] as num).toDouble(),
+      skyFlatStopAtMaxAdu: (j['sky_flat_stop_at_max_adu'] as num).toDouble(),
+      skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
+      skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
+      unmodeled: _safetyUnmodeled(j),
+    );
+  }
+
+  /// Every safety key the client has a field for.
+  static final Set<String> _safetyModeledKeys = safetyPoliciesToJson(
+    const SafetyPolicies(),
+  ).keys.toSet();
+
+  /// The keys of a safety reply the client has no field for, as served, so a
+  /// Save sends them back unchanged (SafetyPolicies.unmodeled).
+  static Map<String, Object?> _safetyUnmodeled(Map<String, dynamic> j) => {
+    for (final e in j.entries)
+      if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
+  };
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -732,16 +986,6 @@ class ProfileApi {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
       data: safetyPoliciesToJson(value),
-    );
-    return safetyPoliciesFromJson(res.data ?? const {});
-  }
-
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Returns the updated policies.
-  Future<SafetyPolicies> rearmFirstFlip() async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
     );
     return safetyPoliciesFromJson(res.data ?? const {});
   }
@@ -1384,10 +1628,11 @@ class ProfileApi {
         (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
     skyFlatSunAltitude:
         (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
+    unmodeled: _safetyUnmodeled(j),
   );
 
-  @visibleForTesting
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
+    ...v.unmodeled,
     'on_unsafe': _unsafeActionToString(v.onUnsafe),
     'auto_resume_when_safe': v.autoResumeWhenSafe,
     'resume_delay_min': v.resumeDelayMin,

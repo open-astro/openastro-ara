@@ -654,12 +654,13 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final guider = ref.watch(guiderStatusProvider).value;
     final safetyMon = ref.watch(safetyMonitorProvider).value;
     final weatherSt = ref.watch(weatherProvider).value;
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Null until the rig's copy is in: no limits, no breaches (ADR 0015).
+    final policies = ref.watch(safetyPoliciesProvider).value;
     final messages = ref.watch(simpleMessagesProvider);
     final storage = ref.watch(storageSpaceProvider).value;
     final coolerOff = ref.watch(monitorCoolerOffProvider);
     final trends = ref.watch(monitorTrendsProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final guidingRms = ref.watch(guidingRmsProvider).value;
     ref.watch(skyClockProvider);
 
@@ -720,7 +721,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? MonitorDevice.weather
         : null;
 
-    final breaches = weatherSt != null && weatherSt.isConnected && policies.weatherTriggersEnabled
+    final breaches = weatherSt != null && weatherSt.isConnected && policies != null && policies.weatherTriggersEnabled
         ? weatherBreaches(weatherSt, policies)
         : const <({WeatherBreach kind, double value, double limit})>[];
     final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;

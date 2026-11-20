@@ -293,7 +293,7 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
             §12.5, §40.2
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
-Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
+Phase 15  — TODO sweep + RPi smoke test + first release (now v1.0.0-beta.1, source only: docs/RELEASES.md)
             §22, docs/DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see the `P1`–`P5` issue backlog)
 ```
 
@@ -1084,9 +1084,7 @@ sudo chown root:openastroara /etc/openastroara
 sudo chmod 750 /etc/openastroara
 ```
 
-Per release, GitHub Actions builds:
-- `linux-arm64` self-contained, gzipped as `openastroara-server-0.0.1-ara.N-linux-arm64.tar.gz`.
-- Optional `.deb` via `dotnet-packaging` (lower priority; tarball works).
+Releases are source only (#2093): `release.yml` publishes the notes and `openastro-ara-<version>-source.tar.gz` with its `.sha256`, and users build the server themselves (`docs/RELEASES.md`, `docs/RUNNING.md`). CI's `.deb` is a dev artifact and is never published.
 
 systemd unit at `/etc/systemd/system/openastroara-server.service` (installed by .deb postinst per §34.3):
 
@@ -1215,7 +1213,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 
 A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 
-Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. `release.yml` runs on a `vX.Y.Z` or `vX.Y.Z-beta.N` tag and publishes the source-only GitHub Release; `issue-labels.yml` keeps the type/priority/size reminder on issues; `close-linked-issues.yml` closes the issues a PR merged into `stable/**` names (`docs/RELEASES.md`, #2093).
 
 The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 
@@ -1554,9 +1552,9 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 | Server log path | Linux: `/var/log/openastroara/`; macOS dev: `~/Library/Logs/OpenAstroAra/`; Windows dev: `%LOCALAPPDATA%\OpenAstroAra\Logs\` |
 | Server config path | `/etc/openastroara/` (Linux); equivalents on dev OSes |
 | Client local storage | platform-default app data dir, scoped to bundle ID |
-| Version | Server: `0.0.1-ara.1` (assembly: `0.0.1.0`); Client: `0.0.1+1` (Flutter format) |
+| Version | One root `VERSION` file (`X.Y.Z` or `X.Y.Z~betaN`) drives the daemon, the client constant and `pubspec.yaml`; spellings in `docs/RELEASES.md` |
 | Phase tags | `phase-N-complete` |
-| Release tag form | `v0.0.1-ara.N` |
+| Release tag form | `vX.Y.Z` or `vX.Y.Z-beta.N`, on `stable/X.Y` (`docs/RELEASES.md`) |
 | App icon / branding assets | placeholder during AI port; `TODO(branding): replace before public release` markers wherever icons are referenced |
 
 ### 17.2 MPL 2.0 preservation
@@ -1801,16 +1799,7 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
    - Run a 2-target sequence with simulator camera + simulator mount; openastro-phd2 connects and dithers.
    - Disconnect the client mid-sequence; wait 5 minutes; reconnect; verify session continued and frames were captured.
    - Open every section of the app. Note regressions.
-4. Update `CHANGELOG.md` (per §33.7) — run `python3 scripts/changelog-fragments.py --release 0.0.1-ara.1 --date <date>`, which writes `## [0.0.1-ara.1] - <date>` from the `changelog.d/` fragments and deletes them (#1812); add a fragment first with sections:
-   - Headless server + cross-platform desktop client architecture
-   - Alpaca-only equipment (per §52, §68)
-   - Plugin support deferred — see the `P1`–`P5` issue backlog
-   - Mobile (iOS / Android) deferred — see the `P1`–`P5` issue backlog per §18.G + §41
-   - Behavioral parity goals vs. upstream NINA where applicable
-   - Lineage attribution
-   - Known issues, install instructions
-5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes from `scripts/changelog-fragments.py --preview` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
+4. **Version, changelog and release.** The `0.0.1-ara.N` scheme is retired (#2093). The version lives in the root `VERSION` file, and releases are source-only tags cut from `stable/X.Y` branches: see [docs/RELEASES.md](../docs/RELEASES.md) and `/bump-release`.
 
 ---
 
@@ -3848,6 +3837,8 @@ Compare:
 
 ### 33.2.1 Compatibility matrix + graceful degradation
 
+**Superseded (#2093):** the shipped rule is simpler. The app shows a warning when the daemon comes from a different X.Y release line (`lib/version/ara_version.dart` `mismatchedVersions`, `docs/RELEASES.md` "The app and the daemon must match"). The bands below were never built and are kept as history.
+
 The §33.2 table is the headline UX; this subsection is the full decision matrix when WILMA and server versions don't match exactly. The two main signals the server exposes:
 
 1. **`GET /api/v1/server/info`** → `{server_version, api_version, protocol_minor}` (per §33.2)
@@ -4148,9 +4139,9 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 
 **Release process integration:**
 
-- The Phase 15 PR (final port → master) adds the `## [0.0.1-ara.1] - <date>` section to CHANGELOG.md with `--release`
+- A stable release adds its dated `## [X.Y.Z] - <date>` section to CHANGELOG.md with `--release` (betas do not; `docs/RELEASES.md`)
 - Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
-- Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- Release tags (manual, user-driven, `/bump-release`): push the tag on `stable/X.Y`, and `release.yml` publishes the notes and the source tarball (no binaries)
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**
@@ -12592,7 +12583,9 @@ Server-side distribution (.deb via apt.openastro.net) is §34 — completely sep
 
 ### 75.1 Build matrix
 
-GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.0.1-ara.*`) produces three artifacts per release:
+**Superseded (#2093):** releases are source only, so no client binaries are built or published. The real `release.yml` is described in `docs/RELEASES.md`. The plan below is kept as history.
+
+The original plan: a `release.yml` firing on a release tag would produce three artifacts per release:
 
 | Platform | Artifact | Build runner | Build command | Approx size |
 |---|---|---|---|---|
@@ -12748,7 +12741,7 @@ Implementation: `path_provider` package's `getApplicationSupportDirectory()` ret
 
 ### 75.8 CI release pipeline (`.github/workflows/release.yml`)
 
-Triggered by tag push matching `v*-ara.*`. Three parallel jobs (one per OS):
+**Superseded (#2093):** the real `release.yml` publishes a source tarball only (`docs/RELEASES.md`). This was the original binary plan, kept as history. Three parallel jobs (one per OS):
 
 ```yaml
 name: Release

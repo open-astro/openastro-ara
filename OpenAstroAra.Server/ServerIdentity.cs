@@ -44,7 +44,12 @@ public static class ServerIdentity {
     /// </summary>
     public static string Nickname => Dns.GetHostName();
 
-    /// <summary>Assembly version. Aligns with §33.2 version-matrix entry.</summary>
-    public static string Version =>
-        typeof(ServerIdentity).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+    /// <summary>
+    /// Product version in the SemVer display spelling (<c>1.0.0</c>, <c>1.0.0-beta.1</c>), from the
+    /// root VERSION file via the build (#2093); no <c>+sha</c> suffix. <c>/server/info</c>,
+    /// <c>/server/versions</c> and the mDNS TXT record report it.
+    /// </summary>
+    public static string Version { get; } = AraVersion.FromInformationalVersion(
+        typeof(ServerIdentity).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+        typeof(ServerIdentity).Assembly.GetName().Version);
 }

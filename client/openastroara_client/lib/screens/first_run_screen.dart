@@ -16,6 +16,7 @@ import '../l10n/l10n.dart';
 import '../widgets/adaptive_refresh.dart';
 import '../widgets/plan_offline_button.dart';
 import '../widgets/adaptive_controls.dart';
+import '../widgets/version_mismatch_warning.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
 /// Polish + UX lands in Phase 12a (app shell + §25 visual design); this is
@@ -296,6 +297,8 @@ class _HandshakePanel extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(context.l10n.firstRunServerVersion(info.version)),
+                    // #2093: a server from another X.Y release line.
+                    VersionMismatchWarning(serverVersion: info.version),
                     Text(context.l10n.firstRunApiVersion(info.apiVersion)),
                     Text(context.l10n.firstRunAddress(server.baseUrl)),
                     const SizedBox(height: 12),

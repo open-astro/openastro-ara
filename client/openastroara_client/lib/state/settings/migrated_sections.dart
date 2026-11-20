@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
+import 'autofocus_settings_state.dart';
 import 'camera_electronics_state.dart';
 import 'cooling_fan_state.dart';
 import 'custom_horizon_state.dart';
@@ -13,9 +14,13 @@ import 'filenames_settings_state.dart';
 import 'filter_set_state.dart';
 import 'filter_wheel_labels_state.dart';
 import 'filter_wheel_policy_state.dart';
+import 'imaging_defaults_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
+import 'optics_settings_state.dart';
 import 'plate_solve_settings_state.dart';
+import 'safety_policies_state.dart';
+import 'site_settings_state.dart';
 import 'storage_settings_state.dart';
 import 'unguided_settings_state.dart';
 
@@ -44,6 +49,7 @@ typedef MigratedSection = ({
 /// that [resetMigratedSections] and the live-sync table (profile_live_sync.dart)
 /// read, and a test checks both against.
 final List<MigratedSection> migratedSections = [
+  (route: 'autofocus', provider: autofocusSettingsProvider),
   (route: 'camera-electronics', provider: cameraElectronicsProvider),
   (route: 'cooling-fan', provider: coolingFanProvider),
   (route: 'custom-horizon', provider: customHorizonProvider),
@@ -54,8 +60,12 @@ final List<MigratedSection> migratedSections = [
   (route: 'filter-set', provider: filterSetProvider),
   (route: 'filter-wheel', provider: filterWheelLabelsProvider),
   (route: 'filter-wheel', provider: filterWheelPolicyProvider),
+  (route: 'imaging-defaults', provider: imagingDefaultsProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
+  (route: 'optics', provider: opticsSettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),
+  (route: 'safety', provider: safetyPoliciesProvider),
+  (route: 'site', provider: siteSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
   (route: 'unguided', provider: unguidedSettingsProvider),
 ];
