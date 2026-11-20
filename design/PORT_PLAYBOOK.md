@@ -6259,7 +6259,9 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
    confirmed + that direction, or the daemon refuses
    (polar-align-unconfirmed). A parked mount is refused
    (polar-align-mount-parked), never unparked. No stage sends the
-   mount Home or slews it: every stage starts where the mount points
+   mount Home or slews it: every stage starts where the mount points.
+   One measurement per Start (#2082): no stage leads into another,
+   and a tube within 3° of the pole is refused (polar-align-on-axis)
 4. Server: runs autofocus on main camera (fast — uses bundled exposure
    defaults from profile)
 5. Server: captures 1 dark frame at the PA exposure/bin/temp (~3 sec)
@@ -6441,6 +6443,7 @@ Failure events:
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
 | Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
 | Mount is parked at Start (#2048) | Refused before anything moves (`polar-align-mount-parked`: "Mount is parked — unpark it and point near the pole first"); the routine never unparks |
+| The scope points within 3° of the pole at Start (#2082) | Refused before anything moves (`polar-align-on-axis`: "point it 2–5° from the pole, counterweights down, then start again"); no Dec motor tilts it off any more. A mount moved there after the confirmed start fails the run as `on_axis` before any turn |
 | Start without the user's confirmation, or with a direction that changed since (#2048) | Refused before anything moves (`polar-align-unconfirmed`, with the direction the run would turn now) |
 | A start whose turns would take the RA axis more than 30° from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
 | Mount reads tracking on in the live loop (#2072) | Tracking off (and not slewing) is confirmed, on a connected mount, before the first live frame and checked every frame; a mount that keeps or resumes tracking, or slews, ends the run `failed` with `tracking_not_off` (its sentence names which), before the readout can mistake the mount's turn for a knob move |
@@ -6459,7 +6462,7 @@ Polar Alignment section of profile (default values shown):
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
 - Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
-- Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
+- Check turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns, so a Check turns the mount 2 × the step)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
 - ~~Use Home~~ (`use_home`): retired by #2048. Polar Align never sends the mount Home; every run starts from where the user pointed it, after the confirm step. A stored `use_home` is ignored.
 - Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
@@ -6594,6 +6597,16 @@ inside the band the user confirmed (`PlanStageTurns`): back over the arc when th
 with the RA motor first; coarse → fine → check at 10° runs 0 → 20 → 0 → 20. NINA's own start GoTo
 (Alt = latitude + 2°, Az 1°) is not built: it waits for the mount-clock check (#2071), AlpacaBridge
 #2395 (the `:MS2#` re-aim) and a pier-side read after the slew.
+
+**Revisited 2026-11-20 (#2082): one measurement per Start.** A Start could run up to three full
+measurements (coarse → fine → check), each with its own turns, a Next tap apart; NINA's TPPA makes one
+per Start. Now a Start runs one: `fine` by default (the guide camera), `coarse` only as "Rough first
+(main camera)" after the guide camera could not solve the pole field, or `check`. Next answers 409.
+The in-run turn-back (`PlanStageTurns`) is gone: every Start, a Check included, goes through the
+session's sweep plan (`PlanSweep`, #2089) and its confirm step, so the 30° limit holds across repeated
+Checks. Check on the adjust screen ends the live loop like Stop, then starts the confirmed check; the
+check compares with the last run's readout. The Dec tilt is gone too: a start within 3° of the pole is
+refused before anything moves, and the user points the tube 2–5° off it, as NINA's start does.
 
 ---
 

@@ -101,14 +101,27 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Tracking, Is.False);
         }
 
+        private static readonly string[] OnlyTheCheckStarted = { PolarAlignStages.Check };
+
         // Emergency Stop latches the stop before its first rung. While a slow rung (here the sequence-run abort) still holds
-        // the ladder, the user's Next moves the run to the check stage: it must not turn tracking on or turn the mount.
+        // the ladder, the user's Check ends the adjust loop and starts the check (#2082): it must not turn tracking on or
+        // turn the mount. The loop is parked in single-frame mode, so it has not seen the latch: the check keeps the loop's
+        // reading of the stop count, taken at its Start, and fails before it moves.
         [Test]
         public async Task Emergency_Stop_during_PA_leaves_tracking_off() {
             var mount = new FakeStopMount(tracking: true);
             var ws = new WsRecorder();
-            using var svc = NewStopService(mount, ws);
-            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            mount.EventCount = () => ws.Events.Count;
+            var store = TenDegreeStore(); // the check's 2 × 10° fit inside the sweep limit: it gets past its plan
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { LoopMode = PolarAlignLoopModes.SingleFrame });
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: store);
+            svc.CaptureRequestPoll = TimeSpan.FromMilliseconds(10);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var deadline = DateTime.UtcNow + SignalTimeout;
+            while (!(await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).WaitingForCapture) {
+                Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the adjust loop parks for a frame request");
+                await Task.Delay(10).ConfigureAwait(false);
+            }
             Assert.That(mount.Tracking, Is.False, "the adjust loop runs with tracking off");
 
             var runAbortEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -124,12 +137,12 @@ namespace OpenAstroAra.Test {
             var at = mount.Count;
             var stop = es.ExecuteAsync();
             await runAbortEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
-            try {
-                await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
-            } catch (InvalidOperationException) {
-                // The run already saw the latch and ended: nothing is waiting for a Next.
-            }
+            var mark = ws.Events.Count;
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            var started = ws.Events.Skip(mark).Where(e => e.Type == WsEventCatalog.PolarAlignStarted).ToArray();
+            Assert.That(started.Select(e => e.Payload.GetProperty("stage").GetString()), Is.EqualTo(OnlyTheCheckStarted),
+                "the Check got past its plan, ended the loop and started");
             runAbortGate.SetResult(0);
             var result = await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
 

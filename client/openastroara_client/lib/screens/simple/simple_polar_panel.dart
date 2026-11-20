@@ -103,8 +103,9 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
       _ => l10n.polarPhaseReady,
     };
 
-/// Which stepper step the routine is on: 0 Rough, 1 Fine, 2 Verify. Null when
-/// nothing runs and there is no verdict to show. A null stage is an older
+/// Which stepper step the routine is on: 0 Rough, 1 Fine, 2 Check. Null when
+/// nothing runs and there is no verdict to show. Each is its own Start
+/// (#2082): none leads into another. A null stage is an older
 /// daemon's one-stage routine: the fine step. Pure — unit-tested.
 int? simplePolarStep(PolarAlignLive live) {
   if (live.phase == PolarAlignStates.checking ||
@@ -135,9 +136,9 @@ String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
 
 /// Polar align's panel beside the right rail: the routine's settings
 /// (exposure, Loop/Single); while it runs, the phase, the total error with its
-/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single) and
-/// Done (once inside the profile's tolerance). The rail's shutter starts and
-/// stops it.
+/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single),
+/// Check and Done (once inside the profile's tolerance); after Done (or a
+/// Stop), Check again. The rail's shutter starts and stops it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
 
@@ -172,6 +173,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     return ref
         .read(polarAlignActionProvider.notifier)
         .run(op, describe: (e) => friendlyError(l10n, e, action: action));
+  }
+
+  /// #2082 — Check: a confirmed Start(check) through the rig's sweep plan. From
+  /// the adjust loop the rig ends the loop first (like Stop), then measures.
+  Future<void> _check() {
+    final l10n = context.l10n;
+    return _run(
+      l10n.polarActionCheck,
+      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.check),
+    );
   }
 
   void _save(PolarAlignSettings next) => _run(
@@ -226,6 +237,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     // Verify and Done step aside (user, 2026-11-16).
     final motorsBusy = polarAlignerMotorsBusy(live);
     final aligner = polarAlignerShown(ref.watch(polarAlignerProvider));
+    // How far Check turns the mount, said before it moves (#2082).
+    final checkCaption = l10n.polarCheckCaption(settings.checkStepDeg.toStringAsFixed(0));
+    // After Done or a Stop, and beside a verdict: a new Check from where the mount is.
+    final checkAgain = !active &&
+        (live.phase == PolarAlignStates.stopped || live.phase == PolarAlignStates.checked);
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
@@ -346,6 +362,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               _PolarStepper(
                 key: const Key('simple-polar-stepper'),
                 step: step,
+                done: live.phase == PolarAlignStates.checked,
                 doneLabel: l10n.polarStepDone,
                 labels: [
                   l10n.polarStepRough,
@@ -417,15 +434,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
                 maxLines: 4,
               ),
-            // Waiting for the user to put the mount at Home.
-            if (active && live.waitingForHome)
-              Text(
-                l10n.polarNeedsHomeHint,
-                key: const Key('simple-polar-needs-home'),
-                style: kSimpleText,
-                maxLines: 4,
-              ),
-            // The check's verdict beside the fine readout.
+            // The check's verdict beside the last run's readout (#2082).
             if (live.phase == PolarAlignStates.checked && live.checkResult != null)
               Text(
                 live.checkResult!.fineDeltaArcmin == null
@@ -487,20 +496,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            if (active && live.waitingForHome)
-              FilledButton(
-                key: const Key('simple-polar-continue'),
-                style: kSimpleGoStyle,
-                onPressed: busy
-                    ? null
-                    : () => _run(l10n.polarActionContinue, (api) => api.next()),
-                child: Text(l10n.polarContinue),
-              ),
             if (active &&
                 live.stage == PolarAlignStages.coarse &&
                 !live.waitingForHome) ...[
               // Inside the tolerance (#1875): the rough alignment may be enough.
-              // Fine stays the green primary, Done is outlined.
+              // #2082 — no Next: fine; the guide camera is a new Start.
               if (total != null)
                 Text(
                   inTolerance
@@ -514,32 +514,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   style: AraText.caption,
                   maxLines: 3,
                 ),
-              Row(
-                spacing: AraSpace.s8,
-                children: [
-                  if (inTolerance && !motorsBusy)
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const Key('simple-polar-done-rough'),
-                        onPressed: busy ? null : () => _done(inSimplePreflight),
-                        child: Text(_doneLabel(l10n, inSimplePreflight)),
-                      ),
-                    ),
-                  Expanded(
-                    child: FilledButton(
-                      key: const Key('simple-polar-next-fine'),
-                      style: kSimpleGoStyle,
-                      onPressed: busy || total == null
-                          ? null
-                          : () => _run(
-                              l10n.polarActionNextFine,
-                              (api) => api.next(),
-                            ),
-                      child: Text(l10n.polarNextFine),
-                    ),
-                  ),
-                ],
-              ),
+              if (inTolerance && !motorsBusy)
+                OutlinedButton(
+                  key: const Key('simple-polar-done-rough'),
+                  onPressed: busy ? null : () => _done(inSimplePreflight),
+                  child: Text(_doneLabel(l10n, inSimplePreflight)),
+                ),
             ],
             if (live.phase == PolarAlignStates.checked)
               FilledButton(
@@ -548,13 +528,28 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 onPressed: busy ? null : () => _done(inSimplePreflight),
                 child: Text(_doneLabel(l10n, inSimplePreflight)),
               ),
+            // #2082 — after Done (or a Stop), and beside a verdict: Check again,
+            // a confirmed new measurement that says how far it turns.
+            if (checkAgain) ...[
+              Text(
+                checkCaption,
+                key: const Key('simple-polar-check-again-caption'),
+                style: AraText.caption,
+                maxLines: 3,
+              ),
+              OutlinedButton(
+                key: const Key('simple-polar-check-again'),
+                onPressed: busy ? null : _check,
+                child: Text(l10n.polarCheck),
+              ),
+            ],
             if (active &&
                 !motorsBusy &&
                 live.stage != PolarAlignStages.coarse &&
                 (live.phase == PolarAlignStates.adjusting ||
                     live.phase == PolarAlignStates.paused))
               Text(
-                l10n.polarVerifyCaption,
+                checkCaption,
                 key: const Key('simple-polar-verify-caption'),
                 style: AraText.caption,
                 maxLines: 3,
@@ -585,10 +580,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
-                      onPressed: !busy && inTolerance
-                          ? () =>
-                                _run(l10n.polarActionCheck, (api) => api.next())
-                          : null,
+                      onPressed: !busy && inTolerance ? _check : null,
                       child: Text(l10n.polarCheck),
                     ),
                   ),
@@ -634,17 +626,22 @@ class SimplePolarFrame extends ConsumerWidget {
   }
 }
 
-/// Rough → Fine → Verify: the step the routine is on is filled, the steps
-/// before it carry a tick.
+/// Rough · Fine · Check: the step the routine is on is filled, with a tick
+/// once a check finished. Each is its own Start (#2082), so no step before it
+/// carries a tick.
 class _PolarStepper extends StatelessWidget {
   const _PolarStepper({
     super.key,
     required this.step,
+    required this.done,
     required this.doneLabel,
     required this.labels,
   });
 
   final int step;
+
+  /// The step the routine is on has finished (a check's verdict).
+  final bool done;
   final String doneLabel;
   final List<String> labels;
 
@@ -670,7 +667,7 @@ class _PolarStepper extends StatelessWidget {
                 spacing: AraSpace.s4,
                 children: [
                   // An icon, not U+2713: the glyph falls back to a box in Roboto.
-                  if (i < step)
+                  if (i == step && done)
                     Icon(
                       Icons.check,
                       size: AraText.caption.fontSize,
@@ -681,9 +678,7 @@ class _PolarStepper extends StatelessWidget {
                     child: Text(
                       labels[i],
                       style: AraText.caption.copyWith(
-                        color: i < step
-                            ? AraColors.accentConnected
-                            : i == step
+                        color: i == step
                             ? AraColors.selectionFg
                             : AraColors.textSecondary,
                       ),

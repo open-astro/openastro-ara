@@ -40,8 +40,6 @@ class _PolarApi implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
   @override
-  Future<void> next() async => calls.add('next');
-  @override
   Future<void> stop() async => calls.add('stop');
   @override
   Future<void> complete() async => calls.add('complete');

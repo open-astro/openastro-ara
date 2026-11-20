@@ -474,18 +474,21 @@ public interface IPolarAlignService {
     /// <summary>#2048 — what a start at <paramref name="stage"/> would do, for the confirm step: the RA turn direction
     /// from the mount's current pointing, the step and the most the run turns the RA axis from where it starts. Refuses
     /// like <see cref="StartAsync"/> does before any motion: a mount not connected, a parked mount
-    /// (<c>polar-align-mount-parked</c>), no site latitude.</summary>
+    /// (<c>polar-align-mount-parked</c>), no site latitude, a pointing within 3° of the pole (<c>polar-align-on-axis</c>),
+    /// turns past the session's sweep limit (<c>polar-align-sweep-limit</c>). A null stage plans the fine measurement.</summary>
     Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
-    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
-    /// when the coarse stage cannot run), from where the mount points now: no stage sends the mount Home or slews
-    /// it (#2048). The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run
-    /// would turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
-    /// (<c>polar-align-mount-parked</c>) and never unparked. Throws <see cref="ArgumentException"/> for an unknown
+    /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
+    /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
+    /// another. The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run would
+    /// turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
+    /// (<c>polar-align-mount-parked</c>) and never unparked; a pointing within 3° of the pole is refused
+    /// (<c>polar-align-on-axis</c>). A <c>check</c> while the routine adjusts ends the loop like Stop once the check's
+    /// plan and confirmation hold (the adjust screen's Check). Throws <see cref="ArgumentException"/> for an unknown
     /// stage (the endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
     /// failed preflight.</summary>
     Task<OperationAcceptedDto> StartAsync(string? stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, CancellationToken ct);
-    /// <summary>Advance: Next from the coarse stage to the fine stage, Next from the fine stage to the check. Throws
-    /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
+    /// <summary>Retired (#2082): a Start makes one measurement and never leads into another. Always throws
+    /// <see cref="InvalidOperationException"/> (→ 409).</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when no routine is running with a Polar Aligner.</summary>
