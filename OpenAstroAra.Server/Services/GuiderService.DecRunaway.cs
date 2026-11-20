@@ -114,6 +114,8 @@ public sealed partial class GuiderService {
         return true;
     }
 
+    // OnFault can call this on the thread that holds _gate (PublishFaultLocked), so the lock below re-enters
+    // it. That is safe only because _gate is a Monitor, which is re-entrant.
     void IGuiderEpisodeListener.Released(EquipmentFaultEvent fault) {
         lock (_gate) {
             if (ReferenceEquals(fault, _decRunawayFault)) {

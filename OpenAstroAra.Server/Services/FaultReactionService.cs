@@ -316,7 +316,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             bool guiderEpisode;
             lock (_gate) {
                 _episodes.Remove(key);
-                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter) && waiter.Fault == fault;
+                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter) && ReferenceEquals(waiter.Fault, fault);
             }
             // #1589 — after the slot is free, so a fault the guider publishes in answer starts its own episode.
             if (guiderEpisode) {
