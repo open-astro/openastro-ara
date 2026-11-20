@@ -54,6 +54,10 @@ namespace OpenAstroAra.Test {
             public int SlewingReads;
             public int SlewingFor;
             public bool RefuseWrite;
+            /// <summary>The next this many UTCDate writes fail (a transient bridge error).</summary>
+            public int WriteFailures;
+            /// <summary>Like AlpacaBridge: UTCDate reads "not established" until a write has landed.</summary>
+            public bool UtcUnknownUntilWritten;
             public bool UtcNotImplemented;
             /// <summary>Runs after each clock or site reading is taken: a slow bridge's round trip.</summary>
             public Action? AfterRead;
@@ -62,12 +66,18 @@ namespace OpenAstroAra.Test {
                 return value;
             }
             public bool Slewing => ++SlewingReads <= SlewingFor;
-            public DateTime UtcDate => UtcNotImplemented ? throw new ASCOM.PropertyNotImplementedException("UTCDate", false) : Answer(Clock);
+            public DateTime UtcDate => UtcNotImplemented ? throw new ASCOM.PropertyNotImplementedException("UTCDate", false)
+                : UtcUnknownUntilWritten ? throw new ASCOM.InvalidOperationException("UTCDate not established") : Answer(Clock);
             public double SiderealTime => Answer(Lst(new DateTimeOffset(Clock), longitude));
             public void SetUtcDate(DateTime utc) {
                 if (RefuseWrite) {
                     throw new ASCOM.InvalidOperationException("the driver keeps its own clock");
                 }
+                if (WriteFailures > 0) {
+                    WriteFailures--;
+                    throw new ASCOM.DriverException("bridge timeout");
+                }
+                UtcUnknownUntilWritten = false;
                 Assert.That(utc.Kind, Is.EqualTo(DateTimeKind.Utc), "the wire carries no offset: only UTC goes out");
                 Writes.Add("utc");
                 Clock = utc;
@@ -301,6 +311,52 @@ namespace OpenAstroAra.Test {
             rig.Svc.WatchMountClock();
             Assert.That(rig.UtcWrites, Is.EqualTo(1), "a recheck of a clock never written writes it");
             Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+        }
+
+        [Test]
+        public void A_UTCDate_write_that_failed_once_at_connect_is_written_again_by_the_recheck() {
+            // #2087 review — on an NTP-only rig with no app, the connect's write failed once and the mount then could not
+            // report its clock: a read-only recheck kept the gate closed for the whole session.
+            using var rig = new Rig { KernelSynced = true };
+            rig.Mount.UtcUnknownUntilWritten = true;
+            rig.Mount.WriteFailures = 1;
+            rig.Svc.OnMountConnected();
+            Assert.That(rig.UtcWrites, Is.Zero);
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Does.Contain("did not report its clock"));
+
+            rig.Tick += 31_000;
+            rig.Wall += TimeSpan.FromSeconds(31);
+            rig.Svc.WatchMountClock();
+
+            Assert.That(rig.UtcWrites, Is.EqualTo(1), "the recheck writes the trusted time again");
+            Assert.That(rig.Mount.Clock, Is.EqualTo(rig.Wall.UtcDateTime));
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null, string.Join(" | ", rig.Log.Lines));
+        }
+
+        [Test]
+        public async Task A_GoTo_that_reads_the_gate_as_a_host_clock_step_is_recorded_waits_for_the_push() {
+            // #2087 review — between the step's unverified record and the push being counted, the gate read "not
+            // verified" with no push in flight, so a GoTo landing there was refused at once instead of waiting.
+            using var rig = new Rig();
+            await rig.SyncAsync();
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null);
+            Task<string?>? goTo = null;
+            var completedAtOnce = false;
+            // The push reads the mount's clock source right after the step is recorded, before it runs: a GoTo lands there.
+            rig.Svc.MountClockSource = () => {
+                if (goTo is null) {
+                    goTo = rig.Svc.MountClockRefusalAfterPushAsync(CancellationToken.None);
+                    completedAtOnce = goTo.IsCompleted;
+                }
+                return rig.Mount;
+            };
+
+            rig.Wall += TimeSpan.FromMinutes(1);
+            rig.Svc.WatchMountClock();
+
+            Assert.That(goTo, Is.Not.Null, "the GoTo landed inside the window");
+            Assert.That(completedAtOnce, Is.False, "the GoTo waits for the push instead of being refused at once");
+            Assert.That(await goTo!.WaitAsync(TimeSpan.FromSeconds(10)), Is.Null, "the push set the clock: the GoTo goes");
         }
 
         // ─── the kernel's NTP sync (no client) ───

@@ -767,6 +767,23 @@ void main() {
       expect(find.textContaining('seed_solve_failed'), findsOneWidget);
     });
 
+    // #2107 the full UI words a stop from outside from its stopped_by too.
+    testWidgets('Advanced: a run the fault reaction ended names the fault reaction, not Stop Mount', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.failed,
+            errorReason: 'slew_aborted_externally',
+            errorMessage: 'the mount was stopped from outside polar alignment (Stop Mount)',
+            errorStoppedBy: 'fault_reaction',
+          )));
+      await tester.pumpAndSettle();
+      await _expand(tester);
+      expect(find.textContaining(_en.polarAlignStoppedFromOutside('fault_reaction')), findsOneWidget);
+      expect(find.textContaining('Stop Mount'), findsNothing);
+    });
+
     testWidgets('under 2′ the bullseye becomes the near-pole reticle', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(

@@ -1465,7 +1465,7 @@ public static partial class EquipmentEndpoints {
             // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
             // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
             // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
-            svc.FenceMotion(PolarAlignService.PadStop);
+            svc.FenceMotion(MountStopReasons.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

@@ -277,7 +277,10 @@ framing/focus loop when you need to point or focus by eye.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
-  check the mount before you start again. Then tracking goes off, as NINA does by default, so the mount
+  check the mount before you start again. Ara then stops trusting where the mount says it points,
+  as after a power loss: GoTo, Park, Home and Polar Align stay blocked until you run the mount's zero
+  search from its hand controller or app and confirm Home in the mount window. The same happens when
+  the mount disconnects and connects again while Polar Align is open. Then tracking goes off, as NINA does by default, so the mount
   cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
   (Settings › Imaging › Polar align), Done and the end of a Check give back the tracking the run found;
   a Stop or a failure still leaves tracking off. A GoTo turns tracking on again by itself; a sequence
@@ -296,8 +299,9 @@ framing/focus loop when you need to point or focus by eye.
   **Verify**, or start again with the scope nearer the pole.
 - **Stop Mount and Emergency Stop end Polar Align.** Any stop Polar Align did not send itself ends
   the run at once, even between two turns while it solves a frame or while you turn the knobs:
-  **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**. The card
-  says what stopped it, and no further turn starts. Emergency Stop latches before any of its other
+  **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**, the
+  direction pad, or the safety or equipment-fault reaction when it could not park the mount. The card
+  says what stopped it, in the app's language, and no further turn starts. Emergency Stop latches before any of its other
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
   While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
   ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
