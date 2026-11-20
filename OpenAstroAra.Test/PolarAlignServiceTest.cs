@@ -101,7 +101,12 @@ namespace OpenAstroAra.Test {
             public ConcurrentQueue<(string Type, JsonElement Payload)> Events { get; } = new();
             public long CurrentSequence => 0;
 
+            /// <summary>Called with each event's type before it is recorded, on the publisher's thread: a test can hold
+            /// the publisher there.</summary>
+            public Action<string>? OnPublish { get; set; }
+
             public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
+                OnPublish?.Invoke(eventType);
                 Events.Enqueue((eventType, payload.Clone()));
                 List<TaskCompletionSource> due;
                 lock (_gate) {

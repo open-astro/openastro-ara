@@ -730,6 +730,19 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        /// <summary>Called with the reason as a routine marks the position unverified, before the mount records it: a test
+        /// can hold the routine there.</summary>
+        public Action<string>? OnMarkPositionUnverified { get; set; }
+
+        /// <summary>As TelescopeService (#2066): a routine marks the pose unverified; an earlier reason stays.</summary>
+        public void MarkPositionUnverified(string reason) {
+            OnMarkPositionUnverified?.Invoke(reason);
+            lock (_lock) {
+                CommandLocked("pose unverified " + reason, isMotion: false);
+                PositionUnverifiedReason ??= reason;
+            }
+        }
+
         public IDisposable AcquireMotion(string owner) {
             lock (_lock) {
                 if (_inhibited) {
