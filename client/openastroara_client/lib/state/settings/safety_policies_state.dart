@@ -132,6 +132,12 @@ class SafetyPolicies {
   final double skyFlatStopAtMinAdu;
   final double skyFlatSunAltitude;
 
+  // The rest of the rig's copy, kept as served and sent back on every Save:
+  // the daemon's fault policies (hot reconnect, camera, mount and tracking
+  // lost, switch tolerance) have no field here, and the daemon fills a key a
+  // PUT leaves out with its own default (#1807).
+  final Map<String, Object?> unmodeled;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -174,6 +180,7 @@ class SafetyPolicies {
     this.skyFlatStopAtMaxAdu = 50000.0,
     this.skyFlatStopAtMinAdu = 5000.0,
     this.skyFlatSunAltitude = -9.0,
+    this.unmodeled = const {},
   });
 
   SafetyPolicies copyWith({
@@ -218,6 +225,7 @@ class SafetyPolicies {
     double? skyFlatStopAtMaxAdu,
     double? skyFlatStopAtMinAdu,
     double? skyFlatSunAltitude,
+    Map<String, Object?>? unmodeled,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -277,6 +285,7 @@ class SafetyPolicies {
         skyFlatStopAtMaxAdu: skyFlatStopAtMaxAdu ?? this.skyFlatStopAtMaxAdu,
         skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
         skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
+        unmodeled: unmodeled ?? this.unmodeled,
       );
 }
 

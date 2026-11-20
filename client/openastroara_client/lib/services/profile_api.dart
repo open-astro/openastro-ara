@@ -931,8 +931,21 @@ class ProfileApi {
       skyFlatStopAtMaxAdu: (j['sky_flat_stop_at_max_adu'] as num).toDouble(),
       skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
       skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
+      unmodeled: _safetyUnmodeled(j),
     );
   }
+
+  /// Every safety key the client has a field for.
+  static final Set<String> _safetyModeledKeys = safetyPoliciesToJson(
+    const SafetyPolicies(),
+  ).keys.toSet();
+
+  /// The keys of a safety reply the client has no field for, as served, so a
+  /// Save sends them back unchanged (SafetyPolicies.unmodeled).
+  static Map<String, Object?> _safetyUnmodeled(Map<String, dynamic> j) => {
+    for (final e in j.entries)
+      if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
+  };
 
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
@@ -1615,9 +1628,11 @@ class ProfileApi {
         (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
     skyFlatSunAltitude:
         (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
+    unmodeled: _safetyUnmodeled(j),
   );
 
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
+    ...v.unmodeled,
     'on_unsafe': _unsafeActionToString(v.onUnsafe),
     'auto_resume_when_safe': v.autoResumeWhenSafe,
     'resume_delay_min': v.resumeDelayMin,

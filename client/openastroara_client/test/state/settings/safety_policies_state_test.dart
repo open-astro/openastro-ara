@@ -59,8 +59,9 @@ void main() {
       expect(isClockText('23:59'), isTrue);
     });
 
-    test("the rig's defaults match playbook §35", () {
-      final s = container.read(safetyPoliciesProvider).value!;
+    // The fallback the read-only panels show while the rig's copy is not in.
+    test('defaults match playbook §35', () {
+      const s = SafetyPolicies();
       expect(s.onUnsafe, UnsafeAction.pauseAndPark);
       expect(s.autoResumeWhenSafe, isTrue);
       expect(s.resumeDelayMin, 10);
@@ -185,4 +186,35 @@ void main() {
           reason: 'unsaved edits must not be clobbered by the re-arm echo');
     });
   });
+
+  // The daemon's fault policies are in the same section; the client has no
+  // field for them, and the daemon fills a key a PUT leaves out with its own
+  // default.
+  const faultPolicies = {
+    'hot_reconnect_enabled': false,
+    'on_camera_lost': 'pause',
+    'on_mount_lost': 'notify_only',
+    'on_tracking_lost': 'pause',
+    'switch_value_tolerance_pct': 12.5,
+  };
+
+  test(
+    "safety: a Save keeps the rig's fault policies the client has no field for (ADR 0015)",
+    () async {
+      final rig = FakeSectionRig({
+        'safety': {...rigDefaults['safety']!, ...faultPolicies},
+      });
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(safetyPoliciesProvider.notifier);
+      expect(await n.load(rig.api()), isTrue);
+      n.setMeridianPauseMin(7);
+      await n.save(rig.api());
+      final body = rig.puts.single.body as Map;
+      expect(body['meridian_pause_min'], 7);
+      for (final e in faultPolicies.entries) {
+        expect(body[e.key], e.value, reason: e.key);
+      }
+    },
+  );
 }

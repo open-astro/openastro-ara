@@ -299,7 +299,17 @@ void main() {
     'safety': [
       null,
       // Every key the client reads (not the daemon's fault policies).
-      ...without({...rigDefaults['safety']!}..remove('hot_reconnect_enabled')),
+      ...without(
+        {...rigDefaults['safety']!}..removeWhere(
+          (key, _) => const {
+            'hot_reconnect_enabled',
+            'on_camera_lost',
+            'on_mount_lost',
+            'on_tracking_lost',
+            'switch_value_tolerance_pct',
+          }.contains(key),
+        ),
+      ),
       for (final key in [
         'on_unsafe',
         'meridian_refocus',

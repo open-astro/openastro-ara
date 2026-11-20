@@ -476,6 +476,27 @@ class _FlakyPoliciesApi extends ProfileApi {
   }
 }
 
+/// The rig's copy, already in with an unsaved edit (Unattended running).
+class _EditedPolicies extends SafetyPoliciesNotifier {
+  @override
+  LoadedSection<SafetyPolicies> build() => const LoadedSection(
+    value: SafetyPolicies(weatherTriggersEnabled: true, meridianPauseMin: 12),
+    source: SectionSource.rig,
+    etag: '"v1"',
+  );
+}
+
+/// Counts its safety-policies reads; answers the class values.
+class _CountingPoliciesApi extends ProfileApi {
+  _CountingPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
+    calls++;
+    return (value: const SafetyPolicies(), etag: '"v2"');
+  }
+}
+
 /// The rig the app talks to; [use] switches to another server.
 class _Rig extends Notifier<ProfileApi?> {
   _Rig(this.first);
@@ -7217,6 +7238,25 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
         findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets(
+      'the Safety pill does not load the policies again when the rig\'s copy is in, so an unsaved edit stays (ADR 0015)',
+      (tester) async {
+    final api = _CountingPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+      safetyPoliciesProvider.overrideWith(_EditedPolicies.new),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, 0, reason: 'the rig\'s copy is in already');
+    expect(c.read(safetyPoliciesProvider).value!.meridianPauseMin, 12,
+        reason: 'the unsaved edit stays');
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'the copy in is the rig\'s, so the pill reads it');
   });
 
   testWidgets('a failed policies load is retried', (tester) async {

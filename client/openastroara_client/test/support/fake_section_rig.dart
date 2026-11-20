@@ -272,8 +272,13 @@ const rigDefaults = <String, Map<String, Object?>>{
     'sky_flat_stop_at_max_adu': 50000.0,
     'sky_flat_stop_at_min_adu': 5000.0,
     'sky_flat_sun_altitude': -9.0,
-    // The daemon's fault policies, which the client neither reads nor edits.
+    // The daemon's fault policies, which the client neither reads nor edits
+    // (kept as served and sent back on a Save).
     'hot_reconnect_enabled': true,
+    'on_camera_lost': 'reconnect_then_pause',
+    'on_mount_lost': 'reconnect_then_abort_park',
+    'on_tracking_lost': 'reenable_then_pause',
+    'switch_value_tolerance_pct': 5.0,
   },
   'site': {
     'site_name': 'Backyard',

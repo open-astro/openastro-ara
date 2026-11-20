@@ -1692,8 +1692,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// The api the policies were (being) loaded from: another server loads again.
   ProfileApi? _loadedFor;
 
+  /// The api changed under the pill: the copy in may be the old server's.
+  bool _apiChanged = false;
+
   Future<void> _hydratePolicies(ProfileApi api) async {
-    final ok = await ref.read(safetyPoliciesProvider.notifier).load(api);
+    // Already in from the rig when the pill mounts: a load would replace it,
+    // dropping unsaved edits in Unattended running and a conflict it shows.
+    final ok =
+        (!_apiChanged && ref.read(safetyPoliciesProvider).canSave) ||
+        await ref.read(safetyPoliciesProvider.notifier).load(api);
     if (!mounted || _loadedFor != api) return;
     // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
     ok ? setState(() => _policiesLoaded = true) : _hydrating = false;
@@ -1833,6 +1840,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     );
     final profileApi = ref.watch(profileApiProvider);
     if (profileApi != _loadedFor) {
+      _apiChanged = _loadedFor != null;
       _loadedFor = profileApi;
       _hydrating = false;
       _policiesLoaded = false;
