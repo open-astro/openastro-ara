@@ -382,8 +382,9 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(MountPoseTrust.AtHomeOnConnect);
             using var svc = NewService(fake, new ScriptedSolver(), mount);
 
+            // Refused before the pointing is read for the plan (#2048), whatever the user confirmed.
             var refusal = await Assert.ThrowsAsync<OpenAstroAra.Server.Contracts.Refusals.RefusalException>(
-                () => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
+                () => svc.StartAsync(PolarAlignStages.Check, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None));
 
             Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.MountPositionUnverified));
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");

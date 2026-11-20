@@ -66,7 +66,7 @@ namespace OpenAstroAra.Test {
             // #2070 — RefusalException is an InvalidOperationException: the not-connected catch must not turn
             // the unverified-mount refusal into a "guider not connected" 409 with no reason.
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<PolarAlignStartConfirmation?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(TelescopeService.PositionUnverifiedRefusal(MountPoseTrust.AtHomeOnConnect));
 
             var thrown = await Assert.ThrowsAsync<RefusalException>(
