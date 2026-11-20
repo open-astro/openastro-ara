@@ -1881,52 +1881,22 @@ abstract class AppLocalizations {
   /// **' and '**
   String get polarSideJoin;
 
-  /// Simple Mode Polar align panel: what to do when the mount cannot find Home
-  ///
-  /// In en, this message translates to:
-  /// **'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.'**
-  String get polarNeedsHomeHint;
-
   /// Simple Mode Polar align panel: the check's verdict
   ///
   /// In en, this message translates to:
   /// **'Three-point check: {verdict}'**
   String polarCheckedLine(String verdict);
 
-  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage
+  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the readout of the last run (#2082)
   ///
   /// In en, this message translates to:
-  /// **'Three-point check: {verdict}, {delta}′ from the fine readout'**
+  /// **'Three-point check: {verdict}, {delta}′ from the last run\'s readout'**
   String polarCheckedVsFine(String verdict, String delta);
 
-  /// Simple Mode Polar align panel: button once the mount is at Home by hand
+  /// Polar align: the button that starts a three-point check, a confirmed new measurement (#2082): on the adjust screen it ends the adjust loop first
   ///
   /// In en, this message translates to:
-  /// **'Continue'**
-  String get polarContinue;
-
-  /// Completes "Couldn't …" for the Continue button
-  ///
-  /// In en, this message translates to:
-  /// **'continue polar alignment'**
-  String get polarActionContinue;
-
-  /// Simple Mode Polar align panel: button from the rough stage to the fine stage
-  ///
-  /// In en, this message translates to:
-  /// **'Next: fine'**
-  String get polarNextFine;
-
-  /// Completes "Couldn't …" for the Next: fine button
-  ///
-  /// In en, this message translates to:
-  /// **'move on to the fine step'**
-  String get polarActionNextFine;
-
-  /// Simple Mode Polar align panel: button from the fine stage to the three-point check
-  ///
-  /// In en, this message translates to:
-  /// **'Verify'**
+  /// **'Check'**
   String get polarCheck;
 
   /// Completes "Couldn't …" for the Check it button
@@ -10212,7 +10182,7 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align stepper: the verify step
   ///
   /// In en, this message translates to:
-  /// **'Verify'**
+  /// **'Check'**
   String get polarStepVerify;
 
   /// Simple Mode Polar align panel: heading over the routine's settings
@@ -10230,20 +10200,26 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance
   ///
   /// In en, this message translates to:
-  /// **'Inside your {tolerance}′ tolerance. Done keeps this alignment; Next: fine refines it.'**
+  /// **'Inside your {tolerance}′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.'**
   String polarInsideTolerance(String tolerance);
 
   /// Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance
   ///
   /// In en, this message translates to:
-  /// **'Outside your {tolerance}′ tolerance: refine it, or stop with the shutter.'**
+  /// **'Outside your {tolerance}′ tolerance: stop with the shutter, then start again to refine it with the guide camera.'**
   String polarOutsideTolerance(String tolerance);
 
-  /// Simple Mode Polar align fine step: caption under the Verify button
+  /// Polar align (#2082): caption with the Check button, how far it turns the mount (the profile's check step, whole degrees) before it moves
   ///
   /// In en, this message translates to:
-  /// **'Verify moves the mount and takes three frames to confirm the alignment.'**
-  String get polarVerifyCaption;
+  /// **'Check turns the mount 2 × {step}° and takes three frames to measure the alignment.'**
+  String polarCheckCaption(String step);
+
+  /// Polar align (#2082): after the guide camera could not solve the pole field, a start that measures with the main camera first (it goes through the confirm step)
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first (main camera)'**
+  String get polarRoughFirst;
 
   /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
   ///
@@ -10272,7 +10248,7 @@ abstract class AppLocalizations {
   /// Settings → Imaging → Polar align: Verify step field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Verify step (°, 5 to 30)'**
+  /// **'Check step (°, 5 to 30)'**
   String get polarKnobVerifyStep;
 
   /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
@@ -10350,7 +10326,7 @@ abstract class AppLocalizations {
   /// Polar Aligner block: the motors rest inside the tolerance
   ///
   /// In en, this message translates to:
-  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
+  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.'**
   String polarAlignerConverged(int moves, String tolerance);
 
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
@@ -11179,6 +11155,12 @@ abstract class AppLocalizations {
   /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
 
+  /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
+  ///
+  /// In en, this message translates to:
+  /// **'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.'**
+  String get refusalPolarAlignOnAxis;
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:
@@ -11188,7 +11170,7 @@ abstract class AppLocalizations {
   /// Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo
   ///
   /// In en, this message translates to:
-  /// **'Point the tube near the pole, with the counterweights down.'**
+  /// **'Point the tube 2–5° from the pole, with the counterweights down.'**
   String get polarConfirmPoint;
 
   /// Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest
@@ -11196,12 +11178,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RA will turn about {step}° twice toward the {direction} ({total}° in all).'**
   String polarConfirmTurns(String step, String direction, String total);
-
-  /// Polar align start confirm dialog: the most the whole run turns the RA axis from where it starts, whole degrees
-  ///
-  /// In en, this message translates to:
-  /// **'Later steps turn back over the same arc: never more than {max}° from where it starts.'**
-  String polarConfirmBand(String max);
 
   /// Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start
   ///

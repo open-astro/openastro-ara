@@ -60,11 +60,11 @@ void main() {
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     await api.stop();
     await api.complete();
-    await api.next();
+    await api.requestCapture();
     expect(d.seen, [
       ('POST /api/v1/equipment/polaralign/stop', PolarAlignApi.endTimeout),
       ('POST /api/v1/equipment/polaralign/complete', PolarAlignApi.endTimeout),
-      ('POST /api/v1/equipment/polaralign/next', null),
+      ('POST /api/v1/equipment/polaralign/capture', null),
     ]);
   });
 

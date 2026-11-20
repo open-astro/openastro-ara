@@ -44,8 +44,6 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
-  Future<void> next() async {}
-  @override
   Future<void> stop() async {}
   @override
   Future<void> complete() async {}
