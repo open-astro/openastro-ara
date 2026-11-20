@@ -691,6 +691,33 @@ void main() {
     },
   );
 
+  testWidgets("Check again names only the rig's own step: no caption until the profile loads (ADR 0015)",
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        ...polarAlignSectionOverrides(api.section),
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
+            phase: PolarAlignStates.stopped, stage: PolarAlignStages.fine, totalErrorArcmin: 0.8))),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-check-again-caption')), findsNothing,
+        reason: 'no made-up step is said before the mount turns');
+    expect(find.byKey(const Key('simple-polar-check-again')), findsOneWidget);
+
+    api.settings = rigPolarAlign.copyWith(checkStepDeg: 20);
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Check turns the mount 2 × 20° and takes three frames to measure the alignment.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'checked: Done completes the routine and leaves the verdict alone',
     (tester) async {

@@ -6156,7 +6156,7 @@ class AppLocalizationsEn extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Verify and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
   }
 
   @override

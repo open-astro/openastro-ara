@@ -225,7 +225,7 @@ void main() {
       (tester) async {
     await _pump(tester, loaded: false, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('Inside your tolerance after 4 moves. Verify and Done wait for your polar-align settings to load. '
+        find.text('Inside your tolerance after 4 moves. Check and Done wait for your polar-align settings to load. '
             'If the error drifts out, the motors correct again.'),
         findsOneWidget);
     expect(find.text('Motors off. Turn the bolts by hand.'), findsNothing);

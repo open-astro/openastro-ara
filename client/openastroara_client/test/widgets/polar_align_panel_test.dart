@@ -673,6 +673,26 @@ void main() {
       expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-align-done'))).enabled, isTrue);
     });
 
+    testWidgets("Check's caption names only the rig's own step: none until the profile loads (ADR 0015)",
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      api.section.initial = null; // the rig does not answer
+      await tester.pumpWidget(_harness(api, const PolarAlignLive()));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-check-caption')), findsNothing,
+          reason: 'no made-up step is said before the mount turns');
+      expect(find.byKey(const Key('polar-align-start-check')), findsOneWidget);
+
+      api.settings = rigPolarAlign.copyWith(checkStepDeg: 20);
+      await tester.ensureVisible(find.byKey(const Key('section-retry')).first);
+      await tester.tap(find.byKey(const Key('section-retry')).first);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Check turns the mount 2 × 20° and takes three frames to measure the alignment.'),
+        findsOneWidget,
+      );
+    });
+
     const solvedFrame = PolarAlignLive(
       phase: PolarAlignStates.adjusting,
       totalErrorArcmin: 30,
