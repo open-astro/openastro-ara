@@ -469,6 +469,38 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
 
+        [Test]
+        public async Task M05_a_seed_c_frame_turned_180_degrees_fails_the_run_as_pier_flip_after_the_second_turn() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws, solver: new AngledSkySolver(mount, 10.0, 12.0, 192.0));
+
+            var (reason, message) = await GuardedRunFailureAsync(mount, ws, svc).ConfigureAwait(false);
+
+            Assert.That(reason, Is.EqualTo(PolarAlignService.PierFlip), message);
+            Assert.That(message, Does.Contain("seed-c"));
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(2), mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
+        }
+
+        [TestCase(new[] { 10.0, 190.0 }, "check-2", 1)]
+        [TestCase(new[] { 10.0, 12.0, 192.0 }, "check-3", 2)]
+        public async Task M05_a_check_frame_turned_180_degrees_fails_the_check_as_pier_flip_with_no_verdict(double[] angles, string frameId, int turns) {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws, solver: new AngledSkySolver(mount, angles));
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PierFlip));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain(frameId));
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignChecked), Is.False, "no verdict on flipped frames");
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(turns), mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
         /// <summary>Two frames of a camera <paramref name="fromAxisDeg"/> from a mount axis <paramref name="axisOffPoleDeg"/>
         /// off the pole, at <paramref name="phiDeg"/> around it, before and after an RA turn of <paramref name="turnDeg"/>
         /// (RA increasing for a positive turn), each with its true position angle (east of north).</summary>
