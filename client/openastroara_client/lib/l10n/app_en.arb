@@ -8587,12 +8587,16 @@
   "@refusalMountPositionUnverified": {"description": "Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss"},
   "refusalMountPositionNotReadYet": "The mount's position has not been read since it connected. Try again in a few seconds.",
   "@refusalMountPositionNotReadYet": {"description": "Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read"},
+  "refusalMountPositionStopUnconfirmed": "The mount's position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount's zero search from its hand controller or app, or confirm it is physically at Home.",
+  "@refusalMountPositionStopUnconfirmed": {"description": "Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park, Home and Polar Align are blocked because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it"},
   "mountPositionUnverifiedTitle": "Mount position unverified",
   "@mountPositionUnverifiedTitle": {"description": "Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)"},
   "mountPositionUnverifiedBody": "The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.",
   "@mountPositionUnverifiedBody": {"description": "Mount window: what the unverified-position warning means and what still works"},
   "mountPositionUnverifiedRunZeroSearch": "Run the mount's zero search from its hand controller or app. When it reports Home, confirm it here.",
   "@mountPositionUnverifiedRunZeroSearch": {"description": "Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)"},
+  "mountPositionStopUnconfirmedBody": "Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.",
+  "@mountPositionStopUnconfirmedBody": {"description": "Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works"},
   "mountConfirmAtHome": "The mount IS at Home",
   "@mountConfirmAtHome": {"description": "Mount window: button that confirms the mount is physically at Home, so its position is trusted again"},
   "mountConfirmAtHomeQuestion": "Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.",
@@ -8612,8 +8616,21 @@
   },
   "refusalPolarAlignMovingMount": "Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.",
   "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
+  "polarAlignStoppedFromOutside": "{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount's position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount's position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}",
+  "@polarAlignStoppedFromOutside": {
+    "description": "Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token",
+    "placeholders": {"by": {"type": "String"}}
+  },
+  "polarAlignStopNotConfirmed": "Ara could not confirm that the mount stopped. Cut the mount's power now, and check the mount before you start again.",
+  "@polarAlignStopNotConfirmed": {
+    "description": "Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving"
+  },
   "refusalPolarAlignOnAxis": "The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.",
   "@refusalPolarAlignOnAxis": {"description": "Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more"},
+  "refusalPolarAlignPointingUnknown": "Polar Align got no fresh reading of where the mount points. Check the mount's connection, then start again.",
+  "@refusalPolarAlignPointingUnknown": {"description": "Refusal (polar-align-pointing-unknown, #2066): polar alignment plans only from a reading of the mount taken now; none came, it was the (0, 0) placeholder, or it was more than 2 s old"},
+  "refusalPolarAlignPoseAmbiguous": "The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.",
+  "@refusalPolarAlignPoseAmbiguous": {"description": "Refusal (polar-align-pose-ambiguous, #2066): the mount reads a declination beyond ±90° (its Dec axis over the pole, e.g. after a sync), so which side of the pier it is on is ambiguous; polar alignment moves nothing"},
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"

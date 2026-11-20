@@ -82,7 +82,9 @@ public interface ICameraService {
     (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame();
 }
 
-public interface ITelescopeService {
+/// <summary>The mount. #2066 — it is the daemon's <see cref="IMountMotionControl"/>: a routine that drives the motors itself
+/// (Polar Align) takes that seam, never this interface.</summary>
+public interface ITelescopeService : IMountMotionControl {
     /// <summary>#1710 — keep the profile's site out of the mount while a profile switch swaps the devices; dispose when they are done.</summary>
     IDisposable? HoldSiteFollow() => null;
 
@@ -120,7 +122,7 @@ public interface ITelescopeService {
     /// <summary><see cref="AbortSlewAsync(CancellationToken)"/> with the caller named in the abort's log line and its
     /// <c>slew_aborted</c> event (<c>user_request</c> for Stop Mount; <c>polar_align</c> for the routine's own stop).
     /// Like it, the abort reaches the driver even when <paramref name="ct"/> is already cancelled.</summary>
-    Task AbortSlewAsync(string reason, CancellationToken ct) => AbortSlewAsync(ct);
+    Task IMountMotionControl.AbortSlewAsync(string reason, CancellationToken ct) => AbortSlewAsync(ct);
 
     /// <summary>The mount's Slewing read from the driver now, not the 2 s refresh; null when not connected or the read
     /// fails. A routine that stops the mount confirms the stop on it.</summary>
@@ -128,29 +130,14 @@ public interface ITelescopeService {
 
     /// <summary>The mount's RA (hours) and Dec (degrees) read from the driver now, not the 2 s refresh, in the
     /// mount's own frame (<see cref="OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator.GetCurrentPosition"/>'s);
-    /// null when not connected or the read fails. Polar alignment stops its motor moves on it.</summary>
+    /// null when not connected or the read fails. Polar Align reads <see cref="IMountMotionControl.ReadNowAsync"/>.</summary>
     Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
         Task.FromResult<(double RaHours, double DecDegrees)?>(null);
 
-    /// <summary>Counts every slew abort (Stop Mount, Emergency Stop, the watchdog), and every park and Find Home (#2066). A
-    /// routine that drives the motors itself reads it when its run starts, and treats any change it did not raise as a stop
-    /// it must obey.</summary>
-    long AbortEpoch => 0;
-
-    /// <summary>#2066 — count a stop in <see cref="AbortEpoch"/> without sending the mount anything: Emergency Stop's first
+    /// <summary>#2066 — count a stop in <see cref="IMountMotionControl.AbortEpoch"/> without sending the mount anything: Emergency Stop's first
     /// step, before any of its rungs. Every routine and queued GoTo or Park that read the count before treats it as a stop:
     /// a leased motor renewal is refused (its lease then runs out and stops the axis), and Polar Align fails its run.</summary>
     void FenceMotion(string reason) { }
-
-    /// <summary>#2066 — what raised the first count after <paramref name="abortEpoch"/> other than
-    /// <paramref name="except"/>: <c>user_request</c> (Stop Mount), <c>emergency_stop</c>, <c>watchdog</c>, <c>park</c>,
-    /// <c>findhome</c>, <c>polar_align</c>. Null when there is none, or it is no longer known.</summary>
-    string? AbortReasonSince(long abortEpoch, string? except) => null;
-
-    /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
-    /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it
-    /// changes: a reconnected mount may have been moved, re-homed or swapped meanwhile.</summary>
-    long SessionEpoch => 0;
 
     /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
     /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
@@ -159,20 +146,20 @@ public interface ITelescopeService {
 
     /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
     /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
-    /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal
-    /// must never restart a motor the user just stopped.</summary>
-    Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
+    /// came since <paramref name="unlessAbortedSince"/> (an <see cref="IMountMotionControl.AbortEpoch"/> reading): a
+    /// routine's lease renewal must never restart a motor the user just stopped.</summary>
+    Task IMountMotionControl.MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, ct);
-
-    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park, Home or
-    /// polar alignment; otherwise why not (a <c>position_unverified_reason</c> token, or
-    /// <c>not_read_yet</c> before the session's first position read). Reads the mount once when the
-    /// session has not read it yet.</summary>
-    Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult<string?>(null);
 
     /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
     /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
     Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors marks the mount's position unverified with
+    /// <paramref name="reason"/> (<c>stop_unconfirmed</c>): its stop was not confirmed, or the mount reconnected while it
+    /// ran. GoTo, Park, Home and polar alignment are then refused, as after a power loss, until
+    /// <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
+    void MarkPositionUnverified(string reason) { }
 }
 
 public interface IFocuserService {

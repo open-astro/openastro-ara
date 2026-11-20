@@ -328,7 +328,9 @@ namespace OpenAstroAra.Test {
                     e => e.Type == "telescope.slew_started")),
                 TimeSpan.FromSeconds(15), "slew_started never published");
 
+#pragma warning disable CA1859 // the abort goes through the interface the endpoints and Polar Align call
             ITelescopeService service = svc;
+#pragma warning restore CA1859
             if (reason is null) {
                 await service.AbortSlewAsync(CancellationToken.None);
             } else {

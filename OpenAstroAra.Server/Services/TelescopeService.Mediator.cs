@@ -476,7 +476,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // so a watchdog-killed flip slew no longer reads as a normal slew_complete (the
         // #836 r4 follow-up from PORT_TODO).
         _ = Task.Run(
-            () => AbortSlewCoreAsync(client, reason: "watchdog", rethrow: false),
+            () => AbortSlewCoreAsync(client, reason: MountStopReasons.Watchdog, rethrow: false),
             CancellationToken.None);
     }
 
@@ -539,8 +539,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
-        // #2066 — a raced REST GoTo's second abort must not stop this move: noted from here (not from its send, after the
-        // pose check below) and settled when its call returns or throws.
+        // #2066 — a raced REST GoTo's second abort must not stop this move: noted here, it counts from its send (SendMotion,
+        // which first waits for a second abort already on its way) and is settled when its call returns or throws.
         long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
@@ -562,6 +562,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             NoteMountCommand(op is "telescope.park" or "telescope.findhome"
                 ? w => w.NoteParkCommanded()
                 : w => w.NoteMotionCommanded());
+            // #2066 — the move's checks are done: from here a raced GoTo keeps its second abort back for it (SendMotion,
+            // on the op's thread, waits first for one already on its way).
+            if (motion is long sending) {
+                _ = NoteMotionOnTheWire(sending);
+            }
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
             var opTask = Task.Run(() => {

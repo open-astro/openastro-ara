@@ -1040,8 +1040,9 @@ namespace OpenAstroAra.Test {
             }
 
             Assert.That(ActionPayload("escalated").GetProperty("parked").GetBoolean(), Is.False);
-            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once,
-                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends)");
+            telescope.Verify(t => t.AbortSlewAsync(MountStopReasons.FaultReaction, It.IsAny<CancellationToken>()), Times.Once,
+                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends), under its own name (#2107)");
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Never, "never counted as Stop Mount");
             telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once,
                 "the mount stops tracking instead of parking");
             Assert.That(posted.Any(n => n.Severity == NotificationSeverity.Critical

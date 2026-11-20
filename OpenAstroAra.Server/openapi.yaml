@@ -15177,6 +15177,8 @@ components:
         - polar-align-sweep-limit
         - polar-align-moving-mount
         - polar-align-on-axis
+        - polar-align-pointing-unknown
+        - polar-align-pose-ambiguous
         - first-flip-not-completed
         - mount-clock-not-verified
       type: string

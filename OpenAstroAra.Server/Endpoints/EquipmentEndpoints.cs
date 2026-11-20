@@ -875,8 +875,9 @@ public static partial class EquipmentEndpoints {
         // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
         // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
         // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
-        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis. A check while the routine
-        // adjusts ends the loop first (the adjust screen's Check).
+        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis; no fresh reading of the
+        // mount polar-align-pointing-unknown, a Dec past the pole polar-align-pose-ambiguous (#2066). A check while the
+        // routine adjusts ends the loop first (the adjust screen's Check).
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
@@ -1465,7 +1466,7 @@ public static partial class EquipmentEndpoints {
             // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
             // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
             // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
-            svc.FenceMotion(PolarAlignService.PadStop);
+            svc.FenceMotion(MountStopReasons.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

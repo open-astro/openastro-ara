@@ -196,7 +196,7 @@ public sealed partial class EmergencyStopService {
         // alignment's result.
         var polarOutcome = await RungAsync("stop polar alignment",
             _polarAlign is null ? null : () => Task.FromResult(_polarAlign.IsActive),
-            _polarAlign is null ? null : async ct => await _polarAlign.StopForTakeoverAsync("emergency_stop", ct).ConfigureAwait(false)).ConfigureAwait(false);
+            _polarAlign is null ? null : async ct => await _polarAlign.StopForTakeoverAsync(MountStopReasons.EmergencyStop, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
@@ -271,7 +271,7 @@ public sealed partial class EmergencyStopService {
         Justification = "Best-effort latch: a fault must never block the rungs; the first mount pass still aborts the slew. Logged, never rethrown.")]
     private void FenceMountQuietly() {
         try {
-            _telescope?.FenceMotion("emergency_stop");
+            _telescope?.FenceMotion(MountStopReasons.EmergencyStop);
         } catch (Exception ex) {
             LogRungFailed("latch the stop", ex);
         }

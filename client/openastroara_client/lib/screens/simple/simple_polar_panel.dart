@@ -10,6 +10,7 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../util/polar_align_error_text.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../state/profile_management_state.dart';
@@ -279,7 +280,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
-            ? live.errorMessage ?? live.errorReason
+            ? polarAlignErrorText(context.l10n, live)
             : null);
 
     // A turn as a tile: the axis, a big arrow and the move, read at arm's

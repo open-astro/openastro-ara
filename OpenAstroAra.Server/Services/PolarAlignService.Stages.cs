@@ -161,7 +161,7 @@ namespace OpenAstroAra.Server.Services {
             // axis is the circle through the three pointings — no reliance on the mount's reported
             // turn, which the fit only cross-checks (a slipping clutch, a stalled motor).
             // Read from the driver like the turns' own readings, so the mount turns compare like with like.
-            var (ra0, dec0) = await StartPointingOffTheAxisAsync(ct).ConfigureAwait(false);
+            var (ra0, dec0) = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
             var (a, aTime) = await SolveSeedFrameAsync(capture, "seed-a", (ra0, dec0), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
 
@@ -237,7 +237,7 @@ namespace OpenAstroAra.Server.Services {
             var step = settings.CheckStepDeg; // always in range: PolarAlignSettingsClamp on every read
             var dirSign = band.AwaySign;
             // Read from the driver like the turns' own readings, so the mount turns compare like with like.
-            var (ra0, dec0) = await StartPointingOffTheAxisAsync(ct).ConfigureAwait(false);
+            var (ra0, dec0) = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
             // A check frame on the main camera may need the blind fallback, like a seed frame.
             LiveCapture capture = mainCamera is not null
                 ? (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, blindFailover: true, gen, timing, token)
@@ -408,10 +408,10 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>#2082 — the measurement's first reading, from the driver: where its turns start. A pointing within
         /// 3° of the pole (the mount was moved there since the confirmed start) fails the run before anything moves:
-        /// a camera looking along the axis gives the three frames no circle to fit, and nothing tilts it off any more.</summary>
-        private async Task<(double RaDeg, double DecDeg)> StartPointingOffTheAxisAsync(CancellationToken ct) {
-            var pointing = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", "the mount did not report where it points, so the turns were not started — check its connection, then start again");
+        /// a camera looking along the axis gives the three frames no circle to fit, and nothing tilts it off any more.
+        /// #2066 — a reading the run cannot trust fails it too (<see cref="RunPointingJnowAsync"/>).</summary>
+        private async Task<(double RaDeg, double DecDeg)> StartPointingOffTheAxisAsync(int gen, CancellationToken ct) {
+            var pointing = await RunPointingJnowAsync(gen, ct).ConfigureAwait(false);
             if (Math.Abs(pointing.DecDeg) > OnAxisDecDeg) {
                 throw new RoutineFailedException("on_axis", OnAxisMessage);
             }
@@ -419,9 +419,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>The mount's own signed RA turn (its sky-RA reading's change) from two of its pointing readings.
-        /// A synced mount can report Dec past ±90° (the Dec axis over the pole), and <see cref="CurrentMountPointingJnow"/>
-        /// folds such a reading by 180° in RA; one folded reading between two solves would make a 30° turn read as
-        /// 150°. A turn is at most 30°, so the turn and its 180° complement are never confused.</summary>
+        /// A synced mount can report Dec past ±90° (the Dec axis over the pole), and a reading folded by 180° in RA
+        /// between two solves would make a 30° turn read as 150° (#1536). The routine refuses such a reading now
+        /// (#2066, <c>pose_ambiguous</c>); the fold stays here as the last guard. A turn is at most 30°, so the turn and
+        /// its 180° complement are never confused.</summary>
         internal static double FoldTolerantSignedTurnDeg(double rawDeltaDeg) {
             var a = Wrap180(rawDeltaDeg);
             return Math.Abs(a) > 90.0 ? a - Math.CopySign(180.0, a) : a;
@@ -493,9 +494,10 @@ namespace OpenAstroAra.Server.Services {
                 int gen, CancellationToken ct, Action<(double RaDeg, double DecDeg)>? beforeMove = null) {
             // #2089 — every reading of a move comes from the driver, never the cache: after a failed status poll the cache
             // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
-            // it away from the band (and the session's origin) until the stall bound. A failed read stops the move.
-            var start = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
+            // it away from the band (and the session's origin) until the stall bound. #2066 — a reading the run cannot trust
+            // (none, the placeholder, another mount session, older than 2 s, Dec past the pole) stops the move and fails it.
+            var (startRa, startDec, startSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
+            var start = (startRa, startDec);
             // The caller's check of the move from the reading it starts at, before the motor runs (a turn's sweep limit).
             beforeMove?.Invoke(start);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
@@ -528,9 +530,9 @@ namespace OpenAstroAra.Server.Services {
                     }
                     ThrowIfStoppedFromOutside(gen);
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
-                    var now = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
-                        ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
-                    NoteMountLeft(now);
+                    // The poll reads the position only: the pier side is the turn's start reading's until its end reading.
+                    var now = await RunPointingJnowAsync(gen, ct, positionOnly: true).ConfigureAwait(false);
+                    NoteMountLeft(now, startSide);
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {
                         break;
@@ -609,28 +611,21 @@ namespace OpenAstroAra.Server.Services {
             // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();
             await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
-            var after = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
-            NoteMountLeft(after);
+            var (afterRa, afterDec, afterSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
+            var after = (afterRa, afterDec);
+            NoteMountLeft(after, afterSide);
             var moved = progress(start, after);
             LogAxisMoveDone(axis, moved);
             return after;
         }
 
-        /// <summary>The daemon's leased motor command (the same one the app's direction pad uses) when the
-        /// mount is the daemon's telescope service; the mediator's own call otherwise (tests). Production always
-        /// takes the first branch: <c>TelescopeService</c>'s mediator <c>MoveAxis</c> is a no-op stub, so never
-        /// route a real move through the fallback.</summary>
+        /// <summary>The daemon's leased motor command (the same one the app's direction pad uses), through the seam
+        /// (#2066). Never the mediator's <c>MoveAxis</c>: <c>TelescopeService</c>'s is a no-op stub.</summary>
         private Task RunAxisAsync(TelescopeAxes axis, double rate, long? abortEpoch = null) =>
-            _mount is ITelescopeService service
-                ? service.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, rate == 0 ? null : abortEpoch, CancellationToken.None)
-                : Task.Run(() => _mount.MoveAxis(axis, rate));
-
-        private const string MoveReadFailedMessage =
-            "the mount did not report where it points during the turn, so the motor was stopped — check its connection, then start again";
+            _motionControl.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, rate == 0 ? null : abortEpoch, CancellationToken.None);
 
         private bool AbortedSince(long? abortEpoch) =>
-            abortEpoch is long since && _mount is ITelescopeService service && service.AbortEpoch != since;
+            abortEpoch is long since && _motionControl.AbortEpoch != since;
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The stop is best-effort on every exit; its fault must not mask the move's outcome, and the lease stops the axis anyway.")]
