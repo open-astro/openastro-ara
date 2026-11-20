@@ -28,18 +28,24 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// #2064 — the key Stop, exit and sweep scenarios run against <see cref="FakeGemMount"/>: the production leased-motor
-    /// path (the fake is the daemon's telescope service), real time, and asserts on the mount's TRUE pose from its ledger
-    /// rather than on what it reported. Every scenario ends with the five common asserts of #2048
-    /// (<see cref="FakeGemMount.AssertCommon"/>).
+    /// path (the fake is the daemon's telescope service), and asserts on the mount's TRUE pose from its ledger rather than
+    /// on what it reported. A test that measures where a turn lands runs the mount on the routine's own reads
+    /// (<see cref="PolledGemAt"/>); the Stop tests, which only need the turn cut short, run it in real time. Every
+    /// scenario ends with the five common asserts of #2048 (<see cref="FakeGemMount.AssertCommon"/>).
     /// </summary>
     public partial class PolarAlignServiceTest {
 
         /// <summary>#2048's default counterweight limit L.</summary>
         private const double CounterweightLimitDeg = 60.0;
 
-        /// <summary>The RA axis's true turn past its step a bench move may make: the stop lands on a reading up to one poll
-        /// late at the slow speed, plus the tracking between the turns.</summary>
-        private const double TrueTurnToleranceDeg = 0.6;
+        /// <summary>How long each of the routine's fresh reads takes on a polled mount's clock (<see cref="PolledGemAt"/>).</summary>
+        private static readonly TimeSpan FreshRead = TimeSpan.FromMilliseconds(10);
+
+        /// <summary>The RA axis's true turn past its step a bench move may make on a polled mount: the stop lands on the
+        /// first reading past the step, so at most one read's travel at the bench's slow 10°/s (0.1°), plus the tracking
+        /// of the reads while it turns (under 0.01°). Exact whatever the test machine's load: the mount moves only when
+        /// the routine reads it.</summary>
+        private const double TrueTurnToleranceDeg = (10.0 * 0.010) + 0.01;
 
         /// <summary>A plate solve of the frame: where the tube really points (the mount's readings play no part).</summary>
         private sealed class TrueSkySolver(FakeGemMount mount) : IPolarAlignFrameSolver {
@@ -62,6 +68,15 @@ namespace OpenAstroAra.Test {
             return svc;
         }
 
+        /// <summary>A counterweight-down mount at (<paramref name="haHours"/>, Dec 85°), LST 20 h, that tracks, on a
+        /// <see cref="ManualMountClock"/> that only the routine's own fresh reads move (<see cref="FreshRead"/> each): it
+        /// turns a fixed amount per poll, so where a bench turn lands does not depend on how late a poll ran.</summary>
+        private static FakeGemMount PolledGemAt(double haHours) {
+            var mount = FakeGemMount.CounterweightDownAt(haHours, 85.0, lstHours: 20.0, clock: new ManualMountClock());
+            mount.FreshReadTakes = FreshRead;
+            return mount;
+        }
+
         /// <summary>The index of the last <paramref name="type"/> event: the run's end event for the common asserts.</summary>
         private static int LastEventIndex(WsRecorder ws, string type) {
             var events = ws.Events.ToArray();
@@ -81,7 +96,7 @@ namespace OpenAstroAra.Test {
         [TestCase(2.0, PolarAlignDirections.West, 60.0, 40.0, PierSide.pierEast)]
         public async Task A_fine_seed_on_the_GEM_turns_the_true_RA_axis_twice_by_its_step_and_never_raises_the_counterweight(
                 double haHours, string direction, double phiStartDeg, double phiEndDeg, PierSide side) {
-            var mount = FakeGemMount.CounterweightDownAt(haHours, 85.0, lstHours: 20.0);
+            var mount = PolledGemAt(haHours);
             Assert.That(mount.TruePhiDeg, Is.EqualTo(phiStartDeg).Within(0.01), "the start pose (the mount tracks from here on)");
             Assert.That(mount.TrueSide, Is.EqualTo(side));
             var ws = new WsRecorder();
@@ -175,7 +190,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Repeated_starts_on_the_GEM_keep_the_true_RA_axis_within_20_degrees_of_the_origin() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
 
