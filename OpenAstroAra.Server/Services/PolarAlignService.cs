@@ -385,8 +385,9 @@ namespace OpenAstroAra.Server.Services {
         /// (connected guider, connected and unparked mount, a configured site latitude, a pointing 3° or more from the
         /// pole, the user's <paramref name="confirmation"/> of the turn direction), then the guide-camera PA-session lease,
         /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept, except a
-        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which plans and confirms the check
-        /// first (a refusal leaves the loop running), then ends the loop like Stop and starts the check. Throws
+        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which checks the mount's clock and
+        /// plans and confirms the check first (those refusals leave the loop running), then ends the loop like Stop and
+        /// starts the check. A mount clock push in flight is waited for first, as a GoTo waits (#2071). Throws
         /// <see cref="InvalidOperationException"/> on a failed preflight (409 by the endpoint; a <see cref="RefusalException"/>
         /// carries its cause). The lease is taken through the custody module before the guider's capture idles and its loop
         /// stops; when either fails, the lease is given back.
@@ -438,6 +439,11 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
             }
+            // #2071 — like a GoTo, a Start just after the app connects waits (up to about 10 s) for the mount clock push in
+            // flight; the gate is read again below, after the preflight. Before the lock: a Stop must not wait behind it.
+            if (_mountClock is { } clockGate) {
+                await clockGate.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
+            }
             if (handOver) {
                 var adjustWatch = await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false);
                 // The loop's end is the one end request this Start makes itself; any other since the call still counts.
@@ -485,9 +491,7 @@ namespace OpenAstroAra.Server.Services {
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
-                if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
-                    throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
-                }
+                ThrowIfMountClockNotVerified();
                 // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
@@ -621,6 +625,13 @@ namespace OpenAstroAra.Server.Services {
                 new Dictionary<string, object?> { ["direction"] = plan.Direction });
         }
 
+        /// <summary>#2071 — the routine turns the mount against its sidereal time: refused while its clock is not verified.</summary>
+        private void ThrowIfMountClockNotVerified() {
+            if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+            }
+        }
+
         /// <summary>The run is in its live adjust loop (adjusting, or paused on failed solves).</summary>
         private bool IsAdjusting() {
             lock (_gate) {
@@ -629,14 +640,15 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>#2082 — the Check button of the adjust screen: a confirmed Start(check) through the session's sweep plan
-        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The check is planned and its
-        /// confirmation verified while the loop still runs (a refusal leaves it running), then the loop ends like Stop (the
-        /// mount stopped and confirmed, its readout kept as the last run's) before the check starts. It makes exactly one
-        /// end request (<see cref="StartAsync"/> allows that one and no other).</summary>
+        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The mount's clock is checked, the check
+        /// planned and its confirmation verified while the loop still runs (any of those refusals leaves it running), then
+        /// the loop ends like Stop (the mount stopped and confirmed, its readout kept as the last run's) before the check
+        /// starts. It makes exactly one end request (<see cref="StartAsync"/> allows that one and no other).</summary>
         /// <returns>The loop's reading of the mount's stop count (<c>_abortWatch</c>), for the check to keep; null when the
         /// loop had none (a mount that keeps no count).</returns>
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
             MountPreflight();
+            ThrowIfMountClockNotVerified(); // #2071: a refused Check leaves the loop running, the mount untouched
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             var (plan, _, _) = await PlanStartAsync(PolarAlignStages.Check, settings, ct).ConfigureAwait(false);
             ThrowIfNotConfirmed(confirmation, plan);
