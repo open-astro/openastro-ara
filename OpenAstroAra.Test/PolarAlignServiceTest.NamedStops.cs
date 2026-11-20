@@ -164,6 +164,36 @@ namespace OpenAstroAra.Test {
             Assert.That(RaTurns(mount), Has.Length.EqualTo(turns), mount.Describe());
         }
 
+        // A run stuck in a call that ignores cancellation never reaches its own exit, and the Stop that gives up on it fences
+        // that exit: the stop path's own check is the only one. When the mount cannot be read (a Wi-Fi drop that keeps the
+        // session), that check cannot confirm the stop, and the stop path flags the pose itself.
+        [Test]
+        public async Task A_stuck_run_whose_stop_path_cannot_confirm_the_stop_leaves_the_pose_unverified() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            var solver = new StuckSolver();
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(1.5);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var session = mount.SessionEpoch;
+
+            try {
+                mount.FreshReadsFail = int.MaxValue;
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+                var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+                Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+                Assert.That(mount.SessionEpoch, Is.EqualTo(session), "the same session: only the unconfirmed stop flags it");
+                Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed),
+                    "flagged while the run is still stuck. " + mount.Describe());
+            } finally {
+                mount.FreshReadsFail = 0;
+                solver.Release();
+            }
+        }
+
         // ── the late mount_did_not_stop is told once ─────────────────────────────────────────
 
         /// <summary>Stop timings for the late-report tests: each stop check gives up after 2 s. The stop path waits 3 s for
