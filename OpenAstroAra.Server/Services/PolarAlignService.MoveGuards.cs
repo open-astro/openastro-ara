@@ -35,8 +35,10 @@ namespace OpenAstroAra.Server.Services {
     /// mount that runs on past the step by more than 2° is stopped with the confirmed stop and the run fails. The turn must
     /// then have arrived: within max(2°, 10%) of its step, with the Dec within 1° (<see cref="TurnMismatch"/>). After the
     /// three points the mount's Dec spread is logged, and a spread over 2″ is a warning on the result (NINA's TPPA warns the
-    /// same). Between the frames of a measurement the solved position angle must stay within 10° (an RA turn of an
-    /// equatorial mount keeps it); about 180° is a pier flip (<see cref="PierFlip"/>), which ends the run with tracking off.
+    /// same). Between the frames of a measurement the solved position angle must change as the RA turn changes it: within
+    /// 10° of 0° (an RA turn of an equatorial mount keeps it), or of the change the geometry predicts on a roughly aligned
+    /// mount (<see cref="FieldRotationFailure"/>); about 180° more is a pier flip (<see cref="PierFlip"/>), which ends the
+    /// run with tracking off.
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -76,8 +78,9 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The mount's Dec spread across the three points above which the result carries a warning (NINA's TPPA).</summary>
         internal const double DecSpreadWarnArcsec = 2.0;
 
-        /// <summary>How far the solved position angle may turn between two frames of a measurement (ARA-13, Joey's rule on
-        /// #2048, 2026-11-20): an RA turn of an equatorial mount keeps it near 0°; within this of 180° is a pier flip.</summary>
+        /// <summary>How far the solved position angle may turn between two frames of a measurement from what the RA turn does
+        /// (ARA-13, Joey's rule on #2048, 2026-11-20): an RA turn of an equatorial mount keeps it near 0° (or turns it by
+        /// <see cref="PredictedFieldTurnDeg"/> on a roughly aligned mount); within this of 180° more is a pier flip.</summary>
         internal const double FieldRotationToleranceDeg = 10.0;
 
         /// <summary>A poll's RA change beyond what the motor could turn since the last change (twice its fastest rate) plus
@@ -233,25 +236,101 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>ARA-13 — the solved position angle between two consecutive frames of a measurement: within
-        /// <see cref="FieldRotationToleranceDeg"/> of 0° (an RA turn of an equatorial mount keeps it); within it of 180° the
-        /// pier flipped (<see cref="PierFlip"/>: the run ends, tracking off); anything else the field rotated as no RA turn
-        /// does (<see cref="TurnMismatch"/>). Skipped when either solve gave no angle.</summary>
-        internal static void ThrowIfFieldRotated(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, string frameId) {
-            if (earlier.PositionAngleDeg is not double a || later.PositionAngleDeg is not double b) {
+        /// <summary>ARA-13 — the solved position angle between two consecutive frames of a measurement, around the RA turn
+        /// <paramref name="mountTurnDeg"/> between them (the mount's signed RA-reading turn): fails the run when
+        /// <see cref="FieldRotationFailure"/> says so. Skipped when either solve gave no angle.</summary>
+        internal static void ThrowIfFieldRotated(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, double mountTurnDeg, string frameId) {
+            if (FieldRotationFailure(earlier, later, mountTurnDeg) is not { } reason) {
                 return;
             }
-            var turned = Math.Abs(Wrap180(b - a));
-            if (turned <= FieldRotationToleranceDeg) {
-                return;
-            }
-            if (turned >= 180.0 - FieldRotationToleranceDeg) {
+            var turned = Math.Abs(Wrap180(later.PositionAngleDeg!.Value - earlier.PositionAngleDeg!.Value));
+            if (reason == PierFlip) {
                 throw new RoutineFailedException(PierFlip, string.Create(CultureInfo.InvariantCulture,
                     $"the {frameId} frame is turned {turned:F0}° from the one before it: the mount flipped to the other side of the pier — Polar Align stopped it and turned tracking off; check where it points, then start again"));
             }
             throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
                 $"the {frameId} frame is turned {turned:F0}° from the one before it, which an RA turn does not do — check the mount turns only in RA, then start again"));
         }
+
+        /// <summary>ARA-13 — null when the field turned between two frames as an RA turn turns it; <see cref="PierFlip"/>
+        /// when it turned by about 180° more; else <see cref="TurnMismatch"/>. Null when either solve gave no angle. "As an
+        /// RA turn turns it": within <see cref="FieldRotationToleranceDeg"/> of 0° (Joey's rule: an equatorial mount keeps
+        /// the position angle while it turns in RA), or of the turn <see cref="PredictedFieldTurnDeg"/> gives (either sign:
+        /// the solver's angle convention). The camera turns about the mount's RA axis, not the true pole, so on a roughly
+        /// aligned mount close to the pole (the 2–5° start the app asks for) the position angle, measured from true north,
+        /// swings by up to ~20° in a 10° turn although nothing flipped. Far from the pole the two agree.</summary>
+        internal static string? FieldRotationFailure(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, double mountTurnDeg) {
+            if (earlier.PositionAngleDeg is not double a || later.PositionAngleDeg is not double b) {
+                return null;
+            }
+            var turned = Wrap180(b - a);
+            var predicted = PredictedFieldTurnDeg(earlier, later, mountTurnDeg) ?? 0.0;
+            bool Near(double target) => Math.Abs(Wrap180(turned - target)) <= FieldRotationToleranceDeg;
+            if (Near(0.0) || Near(predicted) || Near(-predicted)) {
+                return null;
+            }
+            return Near(180.0) || Near(180.0 + predicted) || Near(180.0 - predicted) ? PierFlip : TurnMismatch;
+        }
+
+        /// <summary>
+        /// The position-angle change (degrees, east of north) of a camera that turned rigidly about the axis that takes
+        /// <paramref name="earlier"/>'s centre to <paramref name="later"/>'s by the mount's signed RA turn
+        /// <paramref name="mountTurnDeg"/> (RA increasing = right-handed about the north celestial pole). That axis is solved
+        /// from the two centres and the turn (Rodrigues: g = tan(ψ/2)·n with g × (a + b) = b − a; of its two solutions the
+        /// one nearer the pole's line), and true north at the first frame is turned with it. Null when the turn or the
+        /// frames give no axis (a turn under 0.5°, a frame on the pole, antipodal centres).
+        /// </summary>
+        internal static double? PredictedFieldTurnDeg(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, double mountTurnDeg) {
+            if (Math.Abs(mountTurnDeg) < 0.5 || Math.Abs(mountTurnDeg) > 170.0) {
+                return null;
+            }
+            var a = UnitVector(earlier.RaDegJnow, earlier.DecDegJnow);
+            var b = UnitVector(later.RaDegJnow, later.DecDegJnow);
+            var t = Math.Tan(mountTurnDeg * Math.PI / 360.0);
+            var sum = Add(a, b);
+            var sum2 = Dot(sum, sum);
+            if (sum2 < 1e-9) {
+                return null;
+            }
+            var basis = Scale(Cross(a, b), 2.0 / sum2);
+            var lambda = Math.Sqrt(Math.Max(0.0, ((t * t) - Dot(basis, basis)) / sum2));
+            var g1 = Add(basis, Scale(sum, lambda));
+            var g2 = Add(basis, Scale(sum, -lambda));
+            var g = g1.Z / t >= g2.Z / t ? g1 : g2; // the axis direction n = g / tan(ψ/2) nearer the north pole's line
+            var (northA, _) = LocalNorthEast(earlier.RaDegJnow, earlier.DecDegJnow);
+            var (northB, eastB) = LocalNorthEast(later.RaDegJnow, later.DecDegJnow);
+            if (northA is null || northB is null) {
+                return null;
+            }
+            var n = northA.Value;
+            var gxn = Cross(g, n);
+            var turnedNorth = Add(n, Scale(Add(gxn, Cross(g, gxn)), 2.0 / (1.0 + Dot(g, g))));
+            return Math.Atan2(Dot(turnedNorth, eastB), Dot(turnedNorth, northB.Value)) * 180.0 / Math.PI;
+        }
+
+        private static (double X, double Y, double Z) UnitVector(double raDeg, double decDeg) {
+            var ra = raDeg * Math.PI / 180.0;
+            var dec = decDeg * Math.PI / 180.0;
+            return (Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+        }
+
+        /// <summary>The unit vectors toward north and east on the sky at (RA, Dec); north is null on the pole.</summary>
+        private static ((double X, double Y, double Z)? North, (double X, double Y, double Z) East) LocalNorthEast(double raDeg, double decDeg) {
+            var ra = raDeg * Math.PI / 180.0;
+            var dec = decDeg * Math.PI / 180.0;
+            var east = (-Math.Sin(ra), Math.Cos(ra), 0.0);
+            return Math.Cos(dec) < 1e-9 ? (null, east) : ((-Math.Sin(dec) * Math.Cos(ra), -Math.Sin(dec) * Math.Sin(ra), Math.Cos(dec)), east);
+        }
+
+        private static (double X, double Y, double Z) Add((double X, double Y, double Z) u, (double X, double Y, double Z) v) =>
+            (u.X + v.X, u.Y + v.Y, u.Z + v.Z);
+
+        private static (double X, double Y, double Z) Scale((double X, double Y, double Z) u, double k) => (u.X * k, u.Y * k, u.Z * k);
+
+        private static double Dot((double X, double Y, double Z) u, (double X, double Y, double Z) v) => (u.X * v.X) + (u.Y * v.Y) + (u.Z * v.Z);
+
+        private static (double X, double Y, double Z) Cross((double X, double Y, double Z) u, (double X, double Y, double Z) v) =>
+            ((u.Y * v.Z) - (u.Z * v.Y), (u.Z * v.X) - (u.X * v.Z), (u.X * v.Y) - (u.Y * v.X));
 
         /// <summary>NINA's check after its three points: the mount's Dec readings at the three points, logged with their
         /// spread; a spread over <see cref="DecSpreadWarnArcsec"/> is kept for the result (status, progress, check result)
@@ -310,12 +389,12 @@ namespace OpenAstroAra.Server.Services {
         private partial void LogFieldRotation(string frameId, double positionAngleDeg, double turnedDeg);
 
         /// <summary><see cref="ThrowIfFieldRotated"/> with the log line of each compared frame.</summary>
-        private void CheckFieldRotation(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, string frameId) {
+        private void CheckFieldRotation(PolarAlignSolveOutcome earlier, PolarAlignSolveOutcome later, double mountTurnDeg, string frameId) {
             if (earlier.PositionAngleDeg is double a && later.PositionAngleDeg is double b) {
                 var turned = Wrap180(b - a);
                 LogFieldRotation(frameId, b, turned);
             }
-            ThrowIfFieldRotated(earlier, later, frameId);
+            ThrowIfFieldRotated(earlier, later, mountTurnDeg, frameId);
         }
     }
 }

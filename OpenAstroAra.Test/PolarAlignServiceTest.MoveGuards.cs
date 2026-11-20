@@ -469,6 +469,68 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
 
+        /// <summary>Two frames of a camera <paramref name="fromAxisDeg"/> from a mount axis <paramref name="axisOffPoleDeg"/>
+        /// off the pole, at <paramref name="phiDeg"/> around it, before and after an RA turn of <paramref name="turnDeg"/>
+        /// (RA increasing for a positive turn), each with its true position angle (east of north).</summary>
+        private static (PolarAlignSolveOutcome Before, PolarAlignSolveOutcome After) FramesAroundAxis(
+                double axisOffPoleDeg, double fromAxisDeg, double phiDeg, double turnDeg) {
+            static (double X, double Y, double Z) Unit(double raDeg, double decDeg) {
+                var ra = raDeg * Math.PI / 180.0;
+                var dec = decDeg * Math.PI / 180.0;
+                return (Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+            }
+            static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+                (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+            static double Dot((double X, double Y, double Z) a, (double X, double Y, double Z) b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+            static (double X, double Y, double Z) Turn((double X, double Y, double Z) v, (double X, double Y, double Z) k, double deg) {
+                var t = deg * Math.PI / 180.0;
+                var c = Cross(k, v);
+                var d = Dot(k, v);
+                return (v.X * Math.Cos(t) + c.X * Math.Sin(t) + k.X * d * (1 - Math.Cos(t)),
+                        v.Y * Math.Cos(t) + c.Y * Math.Sin(t) + k.Y * d * (1 - Math.Cos(t)),
+                        v.Z * Math.Cos(t) + c.Z * Math.Sin(t) + k.Z * d * (1 - Math.Cos(t)));
+            }
+            static PolarAlignSolveOutcome Solved((double X, double Y, double Z) p, (double X, double Y, double Z) up) {
+                var raDeg = (Math.Atan2(p.Y, p.X) * 180.0 / Math.PI + 360.0) % 360.0;
+                var decDeg = Math.Asin(p.Z) * 180.0 / Math.PI;
+                var ra = raDeg * Math.PI / 180.0;
+                var dec = decDeg * Math.PI / 180.0;
+                var north = (-Math.Sin(dec) * Math.Cos(ra), -Math.Sin(dec) * Math.Sin(ra), Math.Cos(dec));
+                var east = (-Math.Sin(ra), Math.Cos(ra), 0.0);
+                var pa = Math.Atan2(Dot(up, east), Dot(up, north)) * 180.0 / Math.PI;
+                return new PolarAlignSolveOutcome(true, raDeg, decDeg, pa);
+            }
+            var axis = Unit(40.0, 90.0 - axisOffPoleDeg);
+            var side = Cross(axis, (1.0, 0.0, 0.0));
+            var n = Math.Sqrt(Dot(side, side));
+            side = (side.X / n, side.Y / n, side.Z / n);
+            var field = Turn(Turn(axis, side, fromAxisDeg), axis, phiDeg);
+            var fieldDec = Math.Asin(field.Z);
+            var fieldRa = Math.Atan2(field.Y, field.X);
+            var up = (-Math.Sin(fieldDec) * Math.Cos(fieldRa), -Math.Sin(fieldDec) * Math.Sin(fieldRa), Math.Cos(fieldDec)); // north at the start
+            return (Solved(field, up), Solved(Turn(field, axis, turnDeg), Turn(up, axis, turnDeg)));
+        }
+
+        [TestCase(10.0)]
+        [TestCase(-10.0)]
+        [TestCase(30.0)]
+        public void A_field_turned_by_a_roughly_aligned_axis_near_the_pole_passes_and_a_flip_of_it_does_not(double turnDeg) {
+            // The camera turns about the mount's RA axis, not the true pole: a field 3° from an axis 2° off the pole (the
+            // 2–5° start the app asks for, on a compass-aligned mount) turns its position angle by up to ~20° in a 10° turn.
+            // That is the RA turn, not a flip: compared with the turn the geometry predicts it passes; 180° from it is a flip.
+            var widest = 0.0;
+            for (var phi = 0.0; phi < 360.0; phi += 10.0) {
+                var (before, after) = FramesAroundAxis(axisOffPoleDeg: 2.0, fromAxisDeg: 3.0, phi, turnDeg);
+                var raw = after.PositionAngleDeg!.Value - before.PositionAngleDeg!.Value;
+                widest = Math.Max(widest, Math.Abs(((raw + 540.0) % 360.0) - 180.0));
+
+                Assert.That(PolarAlignService.FieldRotationFailure(before, after, turnDeg), Is.Null, $"φ {phi}°");
+                var flipped = after with { PositionAngleDeg = after.PositionAngleDeg + 180.0 };
+                Assert.That(PolarAlignService.FieldRotationFailure(before, flipped, turnDeg), Is.EqualTo(PolarAlignService.PierFlip), $"φ {phi}°");
+            }
+            Assert.That(widest, Is.GreaterThan(PolarAlignService.FieldRotationToleranceDeg), "the raw position angle swings past 10°");
+        }
+
         [Test]
         public async Task Frames_whose_field_stays_within_10_degrees_measure_as_before() {
             var mount = PolledGemAt(-4.0);

@@ -168,14 +168,14 @@ namespace OpenAstroAra.Server.Services {
             var b = await SolveSeedFrameAsync(capture, "seed-b", p1, settings, gen, ct).ConfigureAwait(false);
             var bTime = DateTimeOffset.UtcNow;
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
-            CheckFieldRotation(a, b, "seed-b"); // #2067 ARA-13 — before the next turn: a flipped mount turns no further
+            CheckFieldRotation(a, b, mountTurn1, "seed-b"); // #2067 ARA-13 — before the next turn: a flipped mount turns no further
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantSignedTurnDeg(p2.RaDeg - p1.RaDeg);
             var c = await SolveSeedFrameAsync(capture, "seed-c", p2, settings, gen, ct).ConfigureAwait(false);
             var cTime = DateTimeOffset.UtcNow;
             LogSeedSolve("seed-c", c.RaDegJnow, c.DecDegJnow);
-            CheckFieldRotation(b, c, "seed-c");
+            CheckFieldRotation(b, c, mountTurn2, "seed-c");
             NoteDecSpread(gen, "seed", dec0, p1.DecDeg, p2.DecDeg); // #2081 — NINA's 2″ Dec-spread warning
 
             var (axis, _) = FitThreePointOrFail((a, aTime), (b, bTime), (c, cTime), mountTurn1, mountTurn2, north);
@@ -247,14 +247,14 @@ namespace OpenAstroAra.Server.Services {
             var s2 = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
             var t2 = DateTimeOffset.UtcNow;
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
-            CheckFieldRotation(s1, s2, "check-2"); // #2067 ARA-13
+            CheckFieldRotation(s1, s2, mountTurn1, "check-2"); // #2067 ARA-13
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * step, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantSignedTurnDeg(p2.RaDeg - p1.RaDeg);
             var s3 = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
-            CheckFieldRotation(s2, s3, "check-3");
+            CheckFieldRotation(s2, s3, mountTurn2, "check-3");
             NoteDecSpread(gen, "check", dec0, p1.DecDeg, p2.DecDeg); // #2081 — NINA's 2″ Dec-spread warning
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
             var at = DateTimeOffset.UtcNow;
