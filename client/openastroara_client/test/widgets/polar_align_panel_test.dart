@@ -430,7 +430,7 @@ void main() {
       expect(api.calls, isNot(contains('frame')), reason: 'the guider has no picture of this run');
     });
 
-    testWidgets('a main-camera run that could not solve offers no Rough first (#2082)', (tester) async {
+    testWidgets('idle after a main-camera run could not solve offers no Rough first (#2082)', (tester) async {
       // Rough first is the fallback for a guide camera that could not solve: the main camera just failed.
       await tester.pumpWidget(_harness(_FakePolarAlignClient(), const PolarAlignLive(
         phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
