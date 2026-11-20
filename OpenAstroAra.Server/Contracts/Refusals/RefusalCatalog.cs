@@ -72,9 +72,13 @@ public static class RefusalCatalog {
     // Polar Align first. A pad stop (rate 0) and Stop Mount are never refused.
     public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
 
+    // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
+    public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
-        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, MountClockNotVerified,
+        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount,
+        FirstFlipNotCompleted, MountClockNotVerified,
     ];
 }

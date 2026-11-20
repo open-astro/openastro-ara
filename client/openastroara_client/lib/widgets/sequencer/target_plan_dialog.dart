@@ -360,7 +360,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                 subtitle: Text(
                   _guide
                       ? 'Starts guiding after autofocus, dithers every '
-                          '${ref.read(phd2SettingsProvider).ditherEveryNFrames} '
+                          '${(ref.read(phd2SettingsProvider).value ?? const Phd2Settings()).ditherEveryNFrames} '
                           'frame(s).'
                       : 'No guiding steps in the run.',
                   style: const TextStyle(

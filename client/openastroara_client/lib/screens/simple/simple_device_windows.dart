@@ -2739,24 +2739,31 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
 
 /// Changes the guider settings and saves them to the profile; [live] also
 /// sends the guider its tuning (exposure, gain) without stopping guiding.
+/// [change] is applied to the rig's copy (loaded once more first when it
+/// isn't in) and saved whole. Not loaded, refused or stale: nothing is sent,
+/// the rig's value shows again and it says why (ADR 0015).
 Future<void> simpleSaveGuider(
   BuildContext context,
   WidgetRef ref,
-  void Function(Phd2SettingsNotifier) change, {
+  Phd2Settings Function(Phd2Settings) change, {
   bool live = false,
 }) async {
   // The container, not ref: a mode change can unmount the panel while the
   // save is out, and a disposed ref would turn a saved setting into
   // "Couldn't save that" (review, #1490).
   final container = ProviderScope.containerOf(context, listen: false);
-  final p = container.read(phd2SettingsProvider.notifier);
-  change(p);
-  final api = container.read(profileApiProvider);
-  if (api == null) return;
   final notify = userNotifier(context);
   final l10n = context.l10n;
+  if (container.read(profileApiProvider) == null) {
+    notify(
+      l10n.deviceCouldntSaveThat,
+      detail: l10n.shellRigNotConnected,
+      error: true,
+    );
+    return;
+  }
   try {
-    await p.persistToServer(api);
+    await container.read(phd2SettingsProvider.notifier).changeAndSave(change);
     if (live &&
         container.read(guiderStatusProvider).value?.isConnected == true) {
       await container
@@ -2766,7 +2773,9 @@ Future<void> simpleSaveGuider(
   } catch (e) {
     notify(
       l10n.deviceCouldntSaveThat,
-      detail: failureReason(l10n, e),
+      detail: e is SectionNotLoadedException || e is SectionConflictException
+          ? e.toString()
+          : failureReason(l10n, e),
       error: true,
     );
   }
@@ -2825,8 +2834,12 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
 
   @override
   Widget build(BuildContext context) {
+    // Not in from the rig yet: the class value shows; a change is refused.
     final gain =
-        _drag ?? ref.watch(phd2SettingsProvider).guideCameraGain.toDouble();
+        _drag ??
+        (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+            .guideCameraGain
+            .toDouble();
     // Merged: Slider's own node carries the value as its label, so a plain
     // Semantics parent would leave VoiceOver's adjustable node unnamed.
     final slider = MergeSemantics(
@@ -2845,7 +2858,7 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
             simpleSaveGuider(
               context,
               ref,
-              (p) => p.setGuideCameraGain(v.round()),
+              (p) => p.copyWith(guideCameraGain: v.round().clamp(0, 100)),
               live: true,
             );
           },

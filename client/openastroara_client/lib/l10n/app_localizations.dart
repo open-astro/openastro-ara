@@ -11179,6 +11179,60 @@ abstract class AppLocalizations {
   /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
 
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'confirm the meridian flip'**
+  String get actionConfirmFlip;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): the user confirmed a completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.'**
+  String get safetyFirstFlipConfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): no flip confirmed and none completed since the last re-arm
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.'**
+  String get safetyFirstFlipUnconfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported a new pier side. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedPierChanged(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported no pier side, or the same one. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedCheckByEye(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): button that confirms the completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get safetyFirstFlipConfirmButton;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Confirm succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed. Later flips run without the alert.'**
+  String get safetyFirstFlipConfirmedSnack;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Re-arm succeeds; the confirmation and any completed-flip record are cleared
+  ///
+  /// In en, this message translates to:
+  /// **'Re-armed. Every flip alerts and waits 60 s again until you confirm one.'**
+  String get safetyFirstFlipRearmedSnack;
+
+  /// Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change
+  ///
+  /// In en, this message translates to:
+  /// **'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.'**
+  String get refusalFirstFlipNotCompleted;
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:
@@ -11424,6 +11478,178 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start anyway'**
   String get clockWrongStartAnyway;
+
+  /// Guiding strip chip: the polar-alignment residual is being measured (elapsed / target, m:ss)
+  ///
+  /// In en, this message translates to:
+  /// **'PA residual · measuring {elapsed} / {target}'**
+  String paResidualChipMeasuring(String elapsed, String target);
+
+  /// Guiding strip chip tooltip while the polar-alignment residual is measured
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure for polar alignment: measuring the error left after Align from the Dec corrections over the first {target} of clean guiding (dithers and settling are left out).'**
+  String paResidualTipMeasuring(String target);
+
+  /// Guiding strip chip: no polar-alignment residual for this guiding run
+  ///
+  /// In en, this message translates to:
+  /// **'PA residual n/a'**
+  String get paResidualChipUnavailable;
+
+  /// Guiding strip chip tooltip: no residual, with the reason sentence
+  ///
+  /// In en, this message translates to:
+  /// **'No polar alignment residual for this guiding run. {reason}'**
+  String paResidualTipUnavailable(String reason);
+
+  /// Guiding strip chip: the residual (a lower bound) and its rating word
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · {rating}'**
+  String paResidualChipRated(String value, String rating);
+
+  /// Guiding strip chip: the residual is well above what Polar Align measured (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · disagrees with Polar Align'**
+  String paResidualChipDisagrees(String value);
+
+  /// Guiding strip chip: the residual is too uncertain for a firm figure
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · noisy'**
+  String paResidualChipNoisy(String value);
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.'**
+  String get paResidualReasonLockShift;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.'**
+  String get paResidualReasonAo;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.'**
+  String get paResidualReasonGuidingNotHolding;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'A settle failed during this run, so guiding was not holding the star.'**
+  String get paResidualReasonSettleFailed;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.'**
+  String get paResidualReasonMountNotTracking;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The guider\'s calibration data could not be read.'**
+  String get paResidualReasonNoCalibration;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The guider has not reported its pixel scale.'**
+  String get paResidualReasonNoPixelScale;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough clean guiding to fit the drift.'**
+  String get paResidualReasonNoFit;
+
+  /// Guiding residual tooltip, first line: what the figure measures and its value (a lower bound)
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over {duration} of guiding: at least {value}.'**
+  String paResidualDetailFigure(String duration, String value);
+
+  /// Guiding residual tooltip, first line with the 1-sigma uncertainty
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over {duration} of guiding: at least {value} (± {sigma}).'**
+  String paResidualDetailFigureSigma(
+    String duration,
+    String value,
+    String sigma,
+  );
+
+  /// Guiding residual tooltip: the Dec drift the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'Dec drift {drift}″/min'**
+  String paResidualDetailDrift(String drift);
+
+  /// Guiding residual tooltip: the hour angle the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'hour angle {hours} h'**
+  String paResidualDetailHourAngle(String hours);
+
+  /// Guiding residual tooltip: the Dec drift and the hour angle the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'Dec drift {drift}″/min at hour angle {hours} h'**
+  String paResidualDetailDriftAtHourAngle(String drift, String hours);
+
+  /// Guiding residual tooltip: why the figure is a lower bound
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding at one hour angle sees only part of the error, so the total can be larger.'**
+  String get paResidualDetailLowerBound;
+
+  /// Guiding residual tooltip: the residual is well above Polar Align's figure; names both causes and how to tell them apart (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align and guiding disagree ({align} vs at least {guiding}). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.'**
+  String paResidualDetailDisagree(String align, String guiding);
+
+  /// Guiding residual tooltip: the figure is too uncertain
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding was too noisy for a firm figure.'**
+  String get paResidualDetailNoisy;
+
+  /// Guiding residual tooltip: tonight's last Polar Align result for comparison
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: {value}, from plate solves at the time of the run.'**
+  String paResidualDetailAlign(String value);
+
+  /// Guiding residual tooltip: tonight's last Polar Align result and when it was measured
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: {value}, from plate solves at {time}.'**
+  String paResidualDetailAlignAt(String value, String time);
+
+  /// Polar align full UI: what the live readout measures, and the azimuth convention (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).'**
+  String get polarReadoutMeasures;
+
+  /// Polar align full UI checked card: what the check's figure measures, and the azimuth convention (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).'**
+  String get polarCheckMeasures;
+
+  /// Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.'**
+  String get polarReadoutCautionAltitudeWeak;
 
   /// Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'
   ///

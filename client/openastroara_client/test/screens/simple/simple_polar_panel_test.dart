@@ -724,6 +724,21 @@ void main() {
     expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
   });
 
+  testWidgets('a readout weak in altitude says so while adjusting, in the chosen words (#2072)', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsNothing);
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    live.frame(_adjusting.copyWith(readoutCaution: PolarAlignReadoutCautions.altitudeWeak));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsOneWidget);
+    expect(find.text(en.polarReadoutCautionAltitudeWeak), findsOneWidget);
+  });
+
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);

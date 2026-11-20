@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+
+import '../../support/phd2_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -887,6 +889,8 @@ void main() {
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
         filterWheelProvider.overrideWith(() => _Wheel(true)),
+        // The guider settings as the rig's copy (ADR 0015).
+        phd2FromRig(),
       ]);
       addTearDown(c.dispose);
       c.listen(simpleRunProvider, (_, _) {});
