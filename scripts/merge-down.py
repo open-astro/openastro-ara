@@ -108,7 +108,7 @@ def exempt(head_ref, base_ref, base_rev, head_rev="HEAD", stable_remote="origin"
     for merge in merges.stdout.split():
         edited = merge_edits(merge, cwd)
         if edited is None:
-            return False, "could not re-merge %s to inspect it" % merge[:12]
+            return False, "could not re-merge %s to inspect it (an octopus merge, or git older than 2.38 without merge-tree --write-tree)" % merge[:12]
         tests = [p for p in edited if is_test_path(p)]
         if tests:
             return False, "merge %s changes test files beyond the automatic merge: %s" % (merge[:12], ", ".join(tests))

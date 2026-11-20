@@ -100,6 +100,11 @@ Only a release PR (`/bump-release`) or a merge down changes them.
   or `Resolves` through `.github/workflows/close-linked-issues.yml`
   (`scripts/close-linked-issues.py`). `Refs #N`, other repositories and PR
   numbers are ignored.
+- **Bootstrap of a new stable branch.** `close-linked-issues.yml` runs the
+  script from the merged commit on the stable branch, so it works from the first
+  fix. `issue-labels.yml` runs on issue events, which use the default branch's
+  workflows, so it does nothing until the first merge down brings it to
+  `master`.
 - CI also runs on pushes to `stable/**`. The repository ruleset "stable branch
   protection" on `refs/heads/stable/**` allows pull requests only, blocks
   deletion and force-push, allows only the merge-commit method, and needs the

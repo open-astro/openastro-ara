@@ -49,5 +49,18 @@ class CloseLinkedIssuesTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+
+class CloseLinkedIssuesWorkflowTest(unittest.TestCase):
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "close-linked-issues.yml"
+
+    def test_the_job_runs_the_script_from_the_merged_stable_commit(self):
+        # master has no scripts/close-linked-issues.py until the first merge down,
+        # so a checkout of the default branch could not run it.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("ref: ${{ github.event.pull_request.merge_commit_sha }}", text)
+        self.assertNotIn("default_branch", text)
+        self.assertIn("if: github.event.pull_request.merged == true", text)
+
+
 if __name__ == "__main__":
     unittest.main()
