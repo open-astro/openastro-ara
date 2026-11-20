@@ -70,6 +70,24 @@ void main() {
     expect(rig.started.single.stage, PolarAlignStages.fine);
   });
 
+  testWidgets('the confirm step says when the run measures with the main camera (#2082)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.coarse,
+      direction: PolarAlignDirections.east,
+      stepDeg: 10,
+      camera: PolarAlignCameras.main,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.coarse);
+    expect(find.text('This measurement uses the main camera.'), findsOneWidget);
+    expect(find.text('RA will turn about 10° twice toward the east (20° in all).'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('polar-start-confirm-cancel')));
+    await tester.pumpAndSettle();
+
+    final guide = _Rig(const PolarAlignStartPlan(stage: PolarAlignStages.fine, direction: PolarAlignDirections.east));
+    await _open(tester, guide, stage: PolarAlignStages.fine);
+    expect(find.text('This measurement uses the main camera.'), findsNothing);
+  });
+
   testWidgets('a later start says how far RA has turned from where Polar Align started, and turns back (#2089)', (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(
       stage: PolarAlignStages.fine,

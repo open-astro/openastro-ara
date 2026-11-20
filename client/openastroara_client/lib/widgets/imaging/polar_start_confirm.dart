@@ -59,6 +59,8 @@ class PolarStartConfirmDialog extends StatelessWidget {
         direction,
         deg(plan.stepDeg * plan.turns),
       ),
+      // #2082 Rough first, or the profile's camera set to main.
+      if (plan.camera == PolarAlignCameras.main) l10n.polarConfirmMainCamera,
       // #2089 — where this run stands against the session's first start.
       if (plan.newOrigin)
         l10n.polarConfirmNewOrigin(deg(plan.sweepLimitDeg))

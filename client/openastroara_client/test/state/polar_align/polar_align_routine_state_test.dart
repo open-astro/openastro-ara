@@ -85,6 +85,23 @@ void main() {
     expect(api.frameCalls, 0);
   });
 
+  test('a fine run on the main camera fetches no frame: the guider has none of it (#2082)', () async {
+    c.listen(polarAlignFrameProvider, (_, _) {});
+    live().set(PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        stage: PolarAlignStages.fine,
+        camera: PolarAlignCameras.main,
+        lastFrame: _frame(1)));
+    await pumpEventQueue();
+    api.status = PolarAlignStatus.fromJson({
+      'state': PolarAlignStates.adjusting,
+      'stage': PolarAlignStages.fine,
+      'camera': PolarAlignCameras.main,
+    });
+    await c.read(polarAlignFrameProvider.notifier).hydrate();
+    expect(api.frameCalls, 0);
+  });
+
   test('a failed fetch keeps the previous frame', () async {
     c.listen(polarAlignFrameProvider, (_, _) {});
     live().set(PolarAlignLive(phase: PolarAlignStates.adjusting, lastFrame: _frame(1)));

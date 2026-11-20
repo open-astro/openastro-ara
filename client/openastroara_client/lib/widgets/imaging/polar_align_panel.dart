@@ -417,6 +417,18 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// the adjust loop the rig ends the loop first (like Stop), then measures.
   Future<void> _check() => _start(stage: PolarAlignStages.check);
 
+  /// #2082 Rough first (the main camera's measurement) is offered only after
+  /// the guide camera could not solve the pole field (Joey, 2026-11-20).
+  static bool _roughFirstOffered(PolarAlignLive live) =>
+      live.phase == PolarAlignStates.failed && live.errorReason == 'seed_solve_failed';
+
+  /// The Rough first caption: the rig's own turn, twice. Null until its
+  /// settings are in (ADR 0015).
+  String? get _roughFirstCaption => switch (_settings) {
+    final s? => context.l10n.polarRoughFirstCaption(s.seedRotationDeg.toStringAsFixed(0)),
+    null => null,
+  };
+
   /// The Check button's caption: how far it turns the mount before it moves.
   /// Only the rig's own step: null until its settings are in (ADR 0015).
   String? get _checkCaption => switch (_settings) {
@@ -632,6 +644,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     ),
                   ],
                 ),
+                // #2082 a check point stayed scattered after its retake.
+                if (r != null && r.noisy) ...[
+                  const SizedBox(height: 12),
+                  _callout(context.l10n.polarNoisyMeasurement, AraColors.accentBusy, Icons.grain,
+                      key: const Key('polar-align-check-noisy')),
+                ],
                 if (delta != null && delta > 2.0) ...[
                   const SizedBox(height: 12),
                   _callout(
@@ -744,7 +762,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
             // #2082 — the main camera's measurement, once the guide camera could not
             // solve the pole field (Joey, 2026-11-20).
-            if (live.phase == PolarAlignStates.failed && live.errorReason == 'seed_solve_failed')
+            if (_roughFirstOffered(live))
               TextButton(
                 key: const Key('polar-align-start-rough'),
                 onPressed: _busy ? null : () => _start(stage: PolarAlignStages.coarse),
@@ -760,6 +778,16 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
           ),
         ],
+        // #2082 Rough first says how far it turns the mount, like Check.
+        if (_roughFirstOffered(live))
+          if (_roughFirstCaption case final caption?) ...[
+            const SizedBox(height: 4),
+            Text(
+              caption,
+              key: const Key('polar-align-rough-caption'),
+              style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+            ),
+          ],
         // #1736 the routine's four knobs, collapsed.
         const PolarAdvancedRow(),
       ],
@@ -1162,13 +1190,20 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   /// #2072 the readout's caution, amber, while the live readout runs: the
-  /// camera sits where it reads the altitude bolt poorly.
+  /// camera sits where it reads the altitude bolt poorly. #2082 a measurement
+  /// whose point stayed scattered after its retake says so too.
   List<Widget> _readoutCaution(PolarAlignLive live) => [
         if (live.readoutCaution == PolarAlignReadoutCautions.altitudeWeak &&
             (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
           const SizedBox(height: 12),
           _callout(context.l10n.polarReadoutCautionAltitudeWeak, AraColors.accentBusy, Icons.warning_amber_outlined,
               key: const Key('polar-align-readout-caution')),
+        ],
+        if (live.measurementNoisy &&
+            (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
+          const SizedBox(height: 12),
+          _callout(context.l10n.polarNoisyMeasurement, AraColors.accentBusy, Icons.grain,
+              key: const Key('polar-align-noisy')),
         ],
       ];
 
@@ -1414,7 +1449,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// [imageHeight] null: the image takes the card's spare height (the card
   /// needs a bounded height).
   Widget _cameraCard(PolarAlignLive live, {double? imageHeight}) {
-    final coarse = live.stage == PolarAlignStages.coarse;
+    // #2082 the rough stage, or the profile's camera set to main.
+    final coarse = live.usesMainCamera;
     // The main camera's snapshot has no preview endpoint: the card shows the solve readout only.
     final jpeg = coarse ? null : ref.watch(polarAlignFrameProvider);
     final fill = imageHeight == null;

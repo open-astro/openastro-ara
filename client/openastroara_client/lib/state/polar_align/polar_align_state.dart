@@ -74,6 +74,14 @@ class PolarAlignLive {
   /// the last progress event; null when the readout is sound.
   final String? readoutCaution;
 
+  /// #2082 the run's camera ([PolarAlignCameras]) from `started` or the
+  /// status; null before a run or from an older daemon.
+  final String? camera;
+
+  /// #2082 a point of the measurement stayed scattered over 3″ after its
+  /// retake (from each progress event and the status).
+  final bool measurementNoisy;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -94,7 +102,14 @@ class PolarAlignLive {
     this.checkResult,
     this.correction,
     this.readoutCaution,
+    this.camera,
+    this.measurementNoisy = false,
   });
+
+  /// #2082 the run shoots the main camera (Rough first, or the profile's
+  /// camera): the guider has no picture of it to show.
+  bool get usesMainCamera =>
+      stage == PolarAlignStages.coarse || camera == PolarAlignCameras.main;
 
   /// True between a frame's `frame_started` and its `frame_complete`.
   bool get frameInProgress => frameStartedAt != null;
@@ -126,6 +141,7 @@ class PolarAlignLive {
     bool clearCorrection = false,
     String? readoutCaution,
     bool clearReadoutCaution = false,
+    bool? measurementNoisy,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -153,6 +169,8 @@ class PolarAlignLive {
         correction: clearCorrection ? null : correction ?? this.correction,
         // The readout's own caution goes with it.
         readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
+        camera: camera,
+        measurementNoisy: clearReadout ? false : measurementNoisy ?? this.measurementNoisy,
       );
 }
 
@@ -177,6 +195,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
             : PolarAlignStages.fine,
+        camera: _str(event.payload, 'camera'),
       );
     case PolarAlignWsEvents.stopped:
       // The run's end clears the correction without an event of its own.
@@ -236,6 +255,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         // Every progress event says the readout's caution afresh (absent = sound).
         readoutCaution: _str(event.payload, 'readout_caution'),
         clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
+        measurementNoisy: event.payload['measurement_noisy'] == true,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -341,6 +361,8 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkResult: status.checkResult,
       correction: status.correction,
       readoutCaution: status.readoutCaution,
+      camera: status.camera,
+      measurementNoisy: status.measurementNoisy,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

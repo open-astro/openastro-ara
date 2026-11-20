@@ -51,6 +51,33 @@ void main() {
       expect(folded.consecutiveSolveFailures, 0, reason: 'a solved iteration clears the retry streak');
     });
 
+    test('started carries the run camera and progress the noisy flag; a new run clears it (#2082)', () {
+      final started = foldPolarAlignEvent(
+        const PolarAlignLive(),
+        _event(PolarAlignWsEvents.started, {'state': 'seeding', 'stage': 'fine', 'camera': 'main'}),
+      )!;
+      expect(started.camera, PolarAlignCameras.main);
+      expect(started.usesMainCamera, isTrue);
+      final noisy = foldPolarAlignEvent(
+        started,
+        _event(PolarAlignWsEvents.progress, {
+          'iteration': 0,
+          'altitude_error_arcmin': 1.0,
+          'azimuth_error_arcmin': 1.0,
+          'total_error_arcmin': 1.41,
+          'measurement_noisy': true,
+        }),
+      )!;
+      expect(noisy.measurementNoisy, isTrue);
+      expect(noisy.camera, PolarAlignCameras.main, reason: 'progress keeps the run camera');
+      final next = foldPolarAlignEvent(noisy, _event(PolarAlignWsEvents.started, {'stage': 'fine', 'camera': 'guide'}))!;
+      expect((next.measurementNoisy, next.usesMainCamera), (false, false));
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson({
+        'state': 'adjusting', 'stage': 'fine', 'camera': 'main', 'measurement_noisy': true,
+      }));
+      expect((fromStatus.camera, fromStatus.measurementNoisy), (PolarAlignCameras.main, true));
+    });
+
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),
