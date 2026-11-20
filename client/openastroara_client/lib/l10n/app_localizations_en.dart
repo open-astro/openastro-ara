@@ -6927,9 +6927,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarCheckMeasures =>
-      'The Check\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).';
+      'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).';
 
   @override
   String get polarReadoutCautionAltitudeWeak =>
-      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust the Check, or start again with the scope nearer the pole.';
+      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
 }

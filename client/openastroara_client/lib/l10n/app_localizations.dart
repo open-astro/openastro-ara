@@ -11576,13 +11576,13 @@ abstract class AppLocalizations {
   /// Polar align full UI checked card: what the check's figure measures, and the azimuth convention (#2072)
   ///
   /// In en, this message translates to:
-  /// **'The Check\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).'**
+  /// **'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).'**
   String get polarCheckMeasures;
 
   /// Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)
   ///
   /// In en, this message translates to:
-  /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust the Check, or start again with the scope nearer the pole.'**
+  /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.'**
   String get polarReadoutCautionAltitudeWeak;
 }
 

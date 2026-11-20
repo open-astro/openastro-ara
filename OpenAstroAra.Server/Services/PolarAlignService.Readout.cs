@@ -113,7 +113,7 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4594, Level = LogLevel.Information, Message = "§45 polar-align live readout reference: seed pointing alt {AltDeg:F4}° az {AzDeg:F4}°, cos ψ {CosPsi:F3}")]
         private partial void LogReadoutReference(double altDeg, double azDeg, double cosPsi);
 
-        [LoggerMessage(EventId = 4595, Level = LogLevel.Warning, Message = "§45 polar-align: the camera sits where the live readout reads the altitude knob poorly (cos ψ {CosPsi:F3}, under {Limit:F2}) — trust the Check, or start nearer the pole")]
+        [LoggerMessage(EventId = 4595, Level = LogLevel.Warning, Message = "§45 polar-align: the camera sits where the live readout reads the altitude knob poorly (cos ψ {CosPsi:F3}, under {Limit:F2}) — trust Verify, or start nearer the pole")]
         private partial void LogReadoutWeak(double cosPsi, double limit);
     }
 }

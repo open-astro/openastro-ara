@@ -1912,5 +1912,5 @@
   "paResidualDetailAlignAt": "Número do Polar Align: {value}, por plate solve às {time}.",
   "polarReadoutMeasures": "Número do Polar Align: o eixo de AR contra o polo refratado, por plate solve, ao vivo enquanto você gira os parafusos. O azimute é o arco real no céu (cos alt aplicado).",
   "polarCheckMeasures": "Número da verificação: uma nova medição em três pontos do eixo de AR contra o polo refratado. O azimute é o arco real no céu (cos alt aplicado).",
-  "polarReadoutCautionAltitudeWeak": "A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Confie na verificação, ou comece de novo com o telescópio mais perto do polo."
+  "polarReadoutCautionAltitudeWeak": "A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo."
 }
