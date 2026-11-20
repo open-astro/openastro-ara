@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
@@ -17,8 +18,11 @@ import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
@@ -42,7 +46,10 @@ const _paths = [
   'filter-wheel/policy',
   'imaging-defaults',
   'notifications',
+  'optics',
   'plate-solve',
+  'safety',
+  'site',
   'storage',
   'unguided',
 ];
@@ -55,6 +62,9 @@ final _selfLoading = {
   filterWheelLabelsProvider,
   filterWheelPolicyProvider,
   imagingDefaultsProvider,
+  opticsSettingsProvider,
+  safetyPoliciesProvider,
+  siteSettingsProvider,
 };
 
 String _routeOf(String path) => path.split('/').first;
@@ -170,6 +180,12 @@ void main() {
         c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-20),
     'autofocus': (c) =>
         c.read(autofocusSettingsProvider.notifier).setExposureSeconds(8),
+    'optics': (c) =>
+        c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382),
+    'site': (c) =>
+        c.read(siteSettingsProvider.notifier).setLatitudeDeg(-33.856784),
+    'safety': (c) =>
+        c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -274,6 +290,37 @@ void main() {
       {...rigDefaults['autofocus']!, 'method': 'bogus'},
       {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
     ],
+    'optics': [null, ...without(rigDefaults['optics']!)],
+    'site': [
+      null,
+      ...without(rigDefaults['site']!),
+      {...rigDefaults['site']!, 'twilight_definition': 'bogus'},
+    ],
+    'safety': [
+      null,
+      // Every key the client reads (not the daemon's fault policies).
+      ...without(
+        {...rigDefaults['safety']!}..removeWhere(
+          (key, _) => const {
+            'hot_reconnect_enabled',
+            'on_camera_lost',
+            'on_mount_lost',
+            'on_tracking_lost',
+            'switch_value_tolerance_pct',
+          }.contains(key),
+        ),
+      ),
+      for (final key in [
+        'on_unsafe',
+        'meridian_refocus',
+        'meridian_guider_recal',
+        'on_altitude_limit',
+        'on_guider_lost',
+        'on_disk_space_critical',
+        'calibration_capture_default',
+      ])
+        {...rigDefaults['safety']!, key: 'bogus'},
+    ],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -313,7 +360,10 @@ void main() {
     'filter-wheel/labels': 'labels',
     'filter-wheel/policy': 'use_filter_wheel_offsets',
     'imaging-defaults': 'cooler_target_c',
+    'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
+    'safety': 'meridian_pause_min',
+    'site': 'latitude_deg',
     'unguided': 'guard_enabled',
   };
   for (final MapEntry(key: route, value: key) in replyDrops.entries) {
@@ -335,6 +385,167 @@ void main() {
       expect(c.read(section.provider).etag, etag);
     });
   }
+
+  test('optics: a daemon write announced by profile.updated reloads the copy, '
+      'so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own optics save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(opticsSettingsProvider).canSave);
+    // A camera connect fills the sensor on the rig; the daemon announces it.
+    rig.daemonWrote('optics', {
+      ...rigDefaults['optics']!,
+      'sensor_width_px': 6248,
+      'sensor_height_px': 4176,
+      'pixel_size_um': 3.76,
+    });
+    await applyProfileUpdated(c, 'optics');
+    c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382);
+    await c.read(opticsSettingsProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, isNot('"optics-v1"'), reason: 'the tag of the copy the daemon wrote');
+    expect((put.body as Map)['sensor_width_px'], 6248, reason: 'the daemon\'s fill is kept');
+    expect((put.body as Map)['focal_length_mm'], 382);
+  });
+
+  test('site: a time sync write announced by profile.updated reloads the '
+      'copy, so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own site save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(siteSettingsProvider).canSave);
+    // A GPS fix at time sync fills the site on the rig; the daemon announces it.
+    rig.daemonWrote('site', {
+      ...rigDefaults['site']!,
+      'latitude_deg': 51.477833,
+      'longitude_deg': -0.0015,
+      'elevation_m': 42.0,
+    });
+    await applyProfileUpdated(c, 'site');
+    c.read(siteSettingsProvider.notifier).setObserverName('J. Troy');
+    await c.read(siteSettingsProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, '"site-v2"', reason: 'the tag of the copy the daemon wrote');
+    final body = put.body as Map;
+    expect(body['latitude_deg'], 51.477833, reason: 'the daemon\'s fix is kept');
+    expect(body['observer_name'], 'J. Troy');
+  });
+
+  test('site: the pier switch saves only the pier, with the loaded tag, and '
+      'keeps an unsaved edit (ADR 0015)', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(siteSettingsProvider).canSave);
+    final tag = rig.etagOf('site');
+    // Typed in Settings > Location & sky; Save not pressed yet.
+    c.read(siteSettingsProvider.notifier).setLatitudeDeg(51.477833);
+    await c
+        .read(siteSettingsProvider.notifier)
+        .saveOnRigCopy((s) => s.copyWith(permanentPier: true));
+    final put = rig.puts.single;
+    expect(put.ifMatch, tag);
+    expect((put.body as Map)['permanent_pier'], isTrue);
+    expect((put.body as Map)['latitude_deg'], 0.0, reason: 'the edit is not sent');
+    final shown = c.read(siteSettingsProvider);
+    expect(shown.value!.latitudeDeg, 51.477833, reason: 'the edit stays');
+    expect(shown.value!.permanentPier, isTrue);
+    expect(shown.etag, rig.etagOf('site'), reason: 'the next Save is not refused');
+  });
+
+  test('safety: a meridian flip write announced by profile.updated reloads '
+      'the copy, so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own safety save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    // The flip executor confirms the first flip on the rig and announces it.
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'first_flip_confirmed': true,
+    });
+    await applyProfileUpdated(c, 'safety');
+    c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12);
+    await c.read(safetyPoliciesProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
+    expect((put.body as Map)['meridian_pause_min'], 12);
+    expect(c.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isTrue);
+  });
+
+  // The re-arm POST answers the rig's policies with their new tag.
+  Map<String, Object?> rearmed(Object? copy) => {
+    ...copy! as Map<String, Object?>,
+    'first_flip_confirmed': false,
+  };
+
+  test('safety: the first-flip re-arm keeps the tag it answers and an unsaved '
+      'edit, so the next Save is not refused (ADR 0015)', () async {
+    final rig = _rig()
+      ..actions['safety/first-flip/rearm'] = (
+        section: 'safety',
+        change: rearmed,
+      );
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'first_flip_confirmed': true,
+    });
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    final n = c.read(safetyPoliciesProvider.notifier);
+    n.setMeridianPauseMin(12); // typed in the panel; Save not pressed yet
+    await n.rearmFirstFlip();
+    final shown = c.read(safetyPoliciesProvider);
+    expect(shown.value!.firstFlipConfirmed, isFalse);
+    expect(shown.value!.meridianPauseMin, 12, reason: 'the edit stays');
+    expect(shown.etag, rig.etagOf('safety'));
+    expect(shown.conflict, isFalse);
+    await n.save(rig.api());
+    expect(rig.puts.single.ifMatch, shown.etag);
+    expect((rig.puts.single.body as Map)['meridian_pause_min'], 12);
+  });
+
+  test('safety: a re-arm answered with a copy another device saved keeps the '
+      'old tag and offers Reload (ADR 0015)', () async {
+    final rig = _rig()
+      ..actions['safety/first-flip/rearm'] = (
+        section: 'safety',
+        change: rearmed,
+      );
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    final tag = c.read(safetyPoliciesProvider).etag;
+    // Another device turned auto flip off; this one did not hear of it.
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'meridian_flip_auto': false,
+      'first_flip_confirmed': true,
+    });
+    final n = c.read(safetyPoliciesProvider.notifier);
+    await n.rearmFirstFlip();
+    final shown = c.read(safetyPoliciesProvider);
+    expect(shown.value!.firstFlipConfirmed, isFalse);
+    expect(shown.etag, tag, reason: 'the copy shown is not the rig\'s');
+    expect(shown.conflict, isTrue);
+    await expectLater(
+      n.save(rig.api()),
+      throwsA(isA<SectionConflictException>()),
+    );
+    expect(rig.puts, isEmpty, reason: 'auto flip stays off on the rig');
+  });
+
+  // A self-loading section starts its own first read as it is built. A change
+  // made at once loads too; that load is superseded by the first read and
+  // lands nothing, so _loadOnce loads once more instead of refusing.
+  test('site: a change made before its first read lands is saved, not '
+      'refused', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await c
+        .read(siteSettingsProvider.notifier)
+        .editAndSave((s) => s.copyWith(siteName: 'Ridge'));
+    expect(rig.puts, hasLength(1));
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Ridge');
+  });
 
   // The diagnostics radios save on each tap (replaceAndSave).
   const mode = 'diagnostics-mode', tapped = DiagnosticsMode.abortOnCritical;

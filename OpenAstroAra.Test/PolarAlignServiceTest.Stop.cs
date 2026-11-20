@@ -106,8 +106,8 @@ namespace OpenAstroAra.Test {
                 Mock.Setup(m => m.GetInfo()).Returns(() => {
                     lock (_lock) {
                         return new TelescopeInfo {
-                            Connected = true, SiderealTime = 20.0, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(), SideOfPier = _side,
+                            Connected = true, SiderealTime = Lst, TrackingEnabled = _tracking, CanFindHome = canFindHome,
+                            Slewing = SlewingLocked(), SideOfPier = _side ?? CounterweightDownSide(Lst, _raDeg),
                         };
                     }
                 });
@@ -228,7 +228,11 @@ namespace OpenAstroAra.Test {
             private bool SlewingLocked() => _rates[0] != 0 || _rates[1] != 0 || _runaway;
 
             private long _sessionEpoch;
-            private PierSide _side = PierSide.pierUnknown;
+            /// <summary>#2064 — the bench's LST, set explicitly: RA 0 is then HA −4 h, east of the meridian.</summary>
+            private const double Lst = 20.0;
+            /// <summary>A side the test set; null = the hour-angle model's side of the pose (#2064: a counterweight-down
+            /// mount at RA 0 is on the west side, which default(PierSide) would call east).</summary>
+            private PierSide? _side;
 
             /// <summary>#2089 — the user moves the mount by other means (a slew, the hand pad, by hand) to this RA.</summary>
             public void MoveByHand(double raDeg) {
@@ -240,7 +244,7 @@ namespace OpenAstroAra.Test {
             /// <summary>#2089 — the mount disconnects and connects again: a new mount session.</summary>
             public void Reconnect() => Interlocked.Increment(ref _sessionEpoch);
 
-            /// <summary>The pier side the mount reports.</summary>
+            /// <summary>The pier side the mount reports, in place of the hour-angle model's.</summary>
             public PierSide Side {
                 set {
                     lock (_lock) {

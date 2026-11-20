@@ -77,22 +77,26 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
   ///
   /// [andThen] saves what the panel still saves the old way, after the
   /// sections and before the message; when it fails after the sections were
-  /// saved, the message starts with [andThenFailed].
+  /// saved, the message starts with [andThenFailed]. When a section fails
+  /// after an earlier one was saved, the message starts with [partlySaved].
   Future<String?> saveSections({
     Future<void> Function(ProfileApi api)? andThen,
     String andThenFailed = '',
+    String partlySaved = '',
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     String? error;
     var saved = false;
+    var sectionsSaved = 0;
     if (api == null) {
       error = l10n.deviceChooserNotConnected;
     } else {
       try {
         for (final s in sections) {
           await ref.read(s.notifier).save(api);
+          sectionsSaved++;
         }
         saved = true;
         await andThen?.call(api);
@@ -100,7 +104,11 @@ mixin SectionPanel<W extends ConsumerStatefulWidget> on ConsumerState<W> {
         error = e is SectionNotLoadedException || e is SectionConflictException
             ? e.toString()
             : friendlyError(l10n, e, action: l10n.actionSave);
-        if (saved) error = '$andThenFailed$error';
+        if (saved) {
+          error = '$andThenFailed$error';
+        } else if (sectionsSaved > 0) {
+          error = '$partlySaved$error';
+        }
       }
     }
     if (mounted) {

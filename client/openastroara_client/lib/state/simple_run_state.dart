@@ -141,7 +141,7 @@ DateTime simpleNextAt(DateTime t, DateTime now) {
 final simpleDarkStartProvider = Provider<DateTime?>((ref) {
   ref.watch(skyClockProvider);
   return darkStart(
-    ref.watch(siteSettingsProvider),
+    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
     ref.watch(clockProvider)().toUtc(),
   )?.toLocal();
 });
@@ -151,7 +151,7 @@ final simpleDarkStartProvider = Provider<DateTime?>((ref) {
 final simpleScheduleAllowedProvider = Provider<bool>((ref) {
   ref.watch(skyClockProvider);
   return scheduleAllowed(
-    ref.watch(siteSettingsProvider),
+    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
     ref.watch(clockProvider)().toUtc(),
   );
 });
@@ -559,7 +559,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final dawn = queue != null
         ? state.dawnStop
         : dawnStopFor(
-            ref.read(siteSettingsProvider),
+            ref.read(siteSettingsProvider).value ?? const SiteSettings(),
             (startsAt ??
                     (ref.read(simpleScheduleAllowedProvider)
                         ? ref.read(simpleDarkStartProvider)
@@ -1169,7 +1169,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     if (api == null || id == null || active || state.busy) return true;
     final dawn = dawnStopFor(
-      ref.read(siteSettingsProvider),
+      ref.read(siteSettingsProvider).value ?? const SiteSettings(),
       (state.startAt ?? ref.read(clockProvider)()).toUtc(),
     );
     if (dawn == state.dawnStop) return true;

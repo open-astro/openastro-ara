@@ -6664,6 +6664,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalFirstFlipNotCompleted =>
+      'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -13522,6 +13526,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalPolarAlignSweepLimit(String offset) {
     return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
   }
+
+  @override
+  String get refusalFirstFlipNotCompleted =>
+      'Nenhuma virada de meridiano terminou neste perfil ainda. Acompanhe uma virada do início ao fim e depois confirme.';
 
   @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';

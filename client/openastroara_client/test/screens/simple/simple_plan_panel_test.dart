@@ -252,8 +252,11 @@ void _whole(WidgetTester tester, Finder text) {
 // target_plan_dialog_test).
 class _Optics extends OpticsSettingsNotifier {
   @override
-  OpticsSettings build() => const OpticsSettings(
-      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+  LoadedSection<OpticsSettings> build() => const LoadedSection(
+    value: OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91),
+    source: SectionSource.rig,
+  );
 }
 
 class _Electronics extends CameraElectronicsNotifier {
@@ -266,7 +269,8 @@ class _Electronics extends CameraElectronicsNotifier {
 
 class _Site extends SiteSettingsNotifier {
   @override
-  SiteSettings build() => SiteSettings(bortleClass: 6);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(bortleClass: 6), source: SectionSource.rig);
 }
 
 /// A filter wheel the daemon retains, or none.
@@ -285,7 +289,8 @@ class _SiteAt extends SiteSettingsNotifier {
   _SiteAt(this.site);
   final SiteSettings site;
   @override
-  SiteSettings build() => site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: site, source: SectionSource.rig);
 }
 
 class _NoSkyModel extends SkyModelCalibrationNotifier {

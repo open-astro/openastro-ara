@@ -24,7 +24,9 @@ class EquipmentWeatherPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(weatherProvider);
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
+    final policies =
+        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
     final notifier = ref.read(weatherProvider.notifier);
 
     return ListView(
@@ -134,7 +136,7 @@ class _WeatherBody extends ConsumerWidget {
     // Computed, not station sensors: the sun/moon geometry belongs with the
     // sky conditions the observer plans around, so it rides in the same list.
     final nowUtc = DateTime.now().toUtc();
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     // Same unset-site guard as tonight_sky_state._rankAt: the (0,0) default
     // would confidently report Null Island altitudes — skip the rows instead.
     final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;

@@ -12,6 +12,7 @@ import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../util/guide_optics.dart';
@@ -96,8 +97,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     _loading = true;
     try {
       // §63.19 — optics first: the OAG-derived guide focal length reads the
-      // main optics section, which is hydrated by a different panel.
-      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+      // main optics section. It is on the section module (ADR 0015), whose
+      // load reports a failure instead of throwing: a guider Save must not
+      // derive the focal length from optics that never loaded.
+      final optics = ref.read(opticsSettingsProvider.notifier);
+      if (!await optics.load(api)) {
+        throw ref.read(opticsSettingsProvider).lastFailure ??
+            const SectionNotLoadedException(null);
+      }
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
       _savedJson = _json();
@@ -134,7 +141,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// on setup-type change, and before every save/apply.
   void _syncDerivedFocalLength() {
     if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
-    final optics = ref.read(opticsSettingsProvider);
+    // Not loaded (a rig or profile change since the panel loaded it): keep
+    // the stored value rather than derive one from no optics.
+    final optics = ref.read(opticsSettingsProvider).value;
+    if (optics == null) return;
     _syncingDerived = true;
     try {
       ref
@@ -449,7 +459,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType == 'oag')
           Builder(
             builder: (context) {
-              final optics = ref.watch(opticsSettingsProvider);
+              final optics =
+                  ref.watch(opticsSettingsProvider).value ??
+                  const OpticsSettings();
               final derived = derivedOagGuideFocalLength(
                 optics.focalLengthMm,
                 optics.reducerFactor,
@@ -481,8 +493,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType != 'oag' &&
             guideFocalLengthLooksCopiedFromMainScope(
               phd2.guideFocalLength,
-              ref.watch(opticsSettingsProvider).focalLengthMm,
-              ref.watch(opticsSettingsProvider).reducerFactor,
+              ref.watch(opticsSettingsProvider).value?.focalLengthMm ?? 0,
+              ref.watch(opticsSettingsProvider).value?.reducerFactor ?? 1,
             ))
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),

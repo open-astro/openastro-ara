@@ -28,12 +28,12 @@ lib/screens/settings/panels/imaging_autofocus_panel.dart 18
 lib/screens/settings/panels/imaging_defaults_panel.dart 26
 lib/screens/settings/panels/imaging_plate_solve_panel.dart 18
 lib/screens/settings/panels/imaging_unguided_panel.dart 27
-lib/screens/settings/panels/optics_panel.dart 16
+lib/screens/settings/panels/optics_panel.dart 13
 lib/screens/settings/panels/profile_active_panel.dart 9
 lib/screens/settings/panels/profile_wizard_panel.dart 5
-lib/screens/settings/panels/safety_policies_panel.dart 47
+lib/screens/settings/panels/safety_policies_panel.dart 44
 lib/screens/settings/panels/safety_site_panel.dart 26
-lib/screens/settings/panels/session_calibration_panel.dart 19
+lib/screens/settings/panels/session_calibration_panel.dart 18
 lib/screens/settings/panels/session_filenames_panel.dart 44
 lib/screens/settings/panels/session_notifications_panel.dart 18
 lib/screens/settings/panels/session_stats_panel.dart 19

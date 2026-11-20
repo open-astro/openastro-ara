@@ -1,99 +1,92 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/safety_policies_panel.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/safety_section.dart';
 
 /// #1589 — a meridian flip is confirmed by the user, after a flip completed.
 /// The daemon owns the confirmation and the completed-flip record; the client
 /// reads them, offers Confirm only when a completed flip is on record, and
 /// patches only those fields from the daemon's answer.
-class _FakeProfileApi extends ProfileApi {
-  _FakeProfileApi(this.echo) : super(const AraServer(hostname: 'test', port: 1));
-  final SafetyPolicies echo;
-  int confirms = 0;
-  int rearms = 0;
-
-  @override
-  Future<SafetyPolicies> confirmFirstFlip() async {
-    confirms++;
-    return echo;
-  }
-
-  @override
-  Future<SafetyPolicies> rearmFirstFlip() async {
-    rearms++;
-    return echo;
-  }
-}
-
-class _Seeded extends SafetyPoliciesNotifier {
-  _Seeded(this.seed);
-  final SafetyPolicies seed;
-  @override
-  SafetyPolicies build() => seed;
-}
 
 final _completed = DateTime.utc(2026, 11, 20, 3, 0);
+const _completedWire = '2026-11-20T03:00:00+00:00';
+
+/// A rig whose safety copy holds [safety] over the daemon's defaults, with
+/// the confirm and re-arm routes the daemon serves.
+FakeSectionRig _rig(Map<String, Object?> safety) => FakeSectionRig({
+  'safety': {...rigDefaults['safety']!, ...safety},
+})
+  ..actions['safety/first-flip/confirm'] = (
+    section: 'safety',
+    change: (copy) => {
+      ...copy! as Map<String, Object?>,
+      'first_flip_confirmed': true,
+    },
+  )
+  ..actions['safety/first-flip/rearm'] = (
+    section: 'safety',
+    change: (copy) => {
+      ...copy! as Map<String, Object?>,
+      'first_flip_confirmed': false,
+      'first_flip_completed_utc': null,
+      'first_flip_pier_side_changed': false,
+    },
+  );
+
+Future<ProviderContainer> _loaded(FakeSectionRig rig) async {
+  final c = ProviderContainer(
+    overrides: [profileApiProvider.overrideWithValue(rig.api())],
+  );
+  addTearDown(c.dispose);
+  c.listen(safetyPoliciesProvider, (_, _) {});
+  await settle(() => c.read(safetyPoliciesProvider).canSave);
+  return c;
+}
 
 void main() {
   test('confirmFirstFlip patches only the daemon-owned fields', () async {
-    final c = ProviderContainer(
-      overrides: [
-        safetyPoliciesProvider.overrideWith(
-          () => _Seeded(
-            SafetyPolicies(
-              resumeDelayMin: 42,
-              firstFlipCompletedUtc: _completed,
-              firstFlipPierSideChanged: true,
-            ),
-          ),
-        ),
-      ],
-    );
-    addTearDown(c.dispose);
-    // The daemon's echo is the PERSISTED policies: resume delay 10, not the staged 42.
-    final api = _FakeProfileApi(
-      SafetyPolicies(
-        firstFlipConfirmed: true,
-        firstFlipCompletedUtc: _completed,
-        firstFlipPierSideChanged: true,
-      ),
-    );
+    final rig = _rig({
+      'first_flip_completed_utc': _completedWire,
+      'first_flip_pier_side_changed': true,
+    });
+    final c = await _loaded(rig);
+    final loaded = c.read(safetyPoliciesProvider).value!;
+    expect(loaded.firstFlipCompletedUtc, _completed,
+        reason: 'the rig\'s completed-flip record is read');
+    expect(loaded.firstFlipPierSideChanged, isTrue);
+    final n = c.read(safetyPoliciesProvider.notifier);
+    n.setResumeDelayMin(42); // typed in the panel; Save not pressed yet
 
-    await c.read(safetyPoliciesProvider.notifier).confirmFirstFlip(api);
+    await n.confirmFirstFlip();
 
-    final s = c.read(safetyPoliciesProvider);
-    expect(api.confirms, 1);
+    final shown = c.read(safetyPoliciesProvider);
+    final s = shown.value!;
     expect(s.firstFlipConfirmed, isTrue);
     expect(s.firstFlipCompletedUtc, _completed);
     expect(s.resumeDelayMin, 42, reason: 'unsaved edits survive the echo');
+    expect(shown.etag, rig.etagOf('safety'),
+        reason: 'the confirm\'s tag is kept, so the next Save is not stale');
+    expect(shown.conflict, isFalse);
   });
 
   test('rearmFirstFlip clears the completed-flip record too', () async {
-    final c = ProviderContainer(
-      overrides: [
-        safetyPoliciesProvider.overrideWith(
-          () => _Seeded(
-            SafetyPolicies(
-              firstFlipConfirmed: true,
-              firstFlipCompletedUtc: _completed,
-              firstFlipPierSideChanged: true,
-            ),
-          ),
-        ),
-      ],
-    );
-    addTearDown(c.dispose);
+    final rig = _rig({
+      'first_flip_confirmed': true,
+      'first_flip_completed_utc': _completedWire,
+      'first_flip_pier_side_changed': true,
+    });
+    final c = await _loaded(rig);
 
-    await c
-        .read(safetyPoliciesProvider.notifier)
-        .rearmFirstFlip(_FakeProfileApi(const SafetyPolicies()));
+    await c.read(safetyPoliciesProvider.notifier).rearmFirstFlip();
 
-    final s = c.read(safetyPoliciesProvider);
+    final s = c.read(safetyPoliciesProvider).value!;
     expect(s.firstFlipConfirmed, isFalse);
     expect(s.firstFlipCompletedUtc, isNull);
     expect(s.firstFlipPierSideChanged, isFalse);
@@ -131,7 +124,7 @@ void main() {
         key: UniqueKey(),
         overrides: [
           activeServerProvider.overrideWithValue(null),
-          safetyPoliciesProvider.overrideWith(() => _Seeded(seed)),
+          safetyFromRig(seed),
         ],
         child: const MaterialApp(home: Scaffold(body: SafetyPoliciesPanel())),
       ),

@@ -50,8 +50,8 @@ class _Api extends ProfileApi {
   final SafetyPolicies? policies;
 
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async =>
-      policies ?? (throw StateError('unreachable'));
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: policies ?? (throw StateError('unreachable')), etag: '"v1"');
 }
 
 /// 02:14 local, 1 h 12 min before "now".

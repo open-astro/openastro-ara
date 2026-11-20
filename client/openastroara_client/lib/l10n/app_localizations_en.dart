@@ -6664,6 +6664,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get refusalFirstFlipNotCompleted =>
+      'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override

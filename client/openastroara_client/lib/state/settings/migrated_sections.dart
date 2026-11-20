@@ -17,7 +17,10 @@ import 'filter_wheel_policy_state.dart';
 import 'imaging_defaults_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
+import 'optics_settings_state.dart';
 import 'plate_solve_settings_state.dart';
+import 'safety_policies_state.dart';
+import 'site_settings_state.dart';
 import 'storage_settings_state.dart';
 import 'unguided_settings_state.dart';
 
@@ -59,7 +62,10 @@ final List<MigratedSection> migratedSections = [
   (route: 'filter-wheel', provider: filterWheelPolicyProvider),
   (route: 'imaging-defaults', provider: imagingDefaultsProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
+  (route: 'optics', provider: opticsSettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),
+  (route: 'safety', provider: safetyPoliciesProvider),
+  (route: 'site', provider: siteSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
   (route: 'unguided', provider: unguidedSettingsProvider),
 ];
