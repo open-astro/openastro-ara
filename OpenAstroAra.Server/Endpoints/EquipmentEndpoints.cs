@@ -54,9 +54,14 @@ public static partial class EquipmentEndpoints {
     /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
     /// meridian on a German equatorial mount with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
     /// without the host.</summary>
-    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null) {
+    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null, IPolarAlignService? polarAlign = null) {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
+        ArgumentNullException.ThrowIfNull(request);
+        // #2066 — a sync moves nothing and stays allowed; force does not bypass it.
+        if (request.Sync != true) {
+            ThrowIfPolarAlignMovesTheMount(polarAlign, "slew");
+        }
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
         }
@@ -78,6 +83,32 @@ public static partial class EquipmentEndpoints {
             }
         }
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
+    }
+
+    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a pad move, Home or Park while Polar Align
+    /// turns the mount, or its stop is not confirmed yet: two commands would drive the motors at once. Stop Polar Align (or
+    /// Stop Mount, which ends it) first. A pad stop (rate 0) and Stop Mount are never refused.</summary>
+    internal static void ThrowIfPolarAlignMovesTheMount(IPolarAlignService? polarAlign, string what) {
+        if (polarAlign is { IsMovingMount: true }) {
+            throw new RefusalException(RefusalCatalog.PolarAlignMovingMount,
+                $"Polar alignment is turning the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it).");
+        }
+    }
+
+    /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "park");
+        return Results.Accepted(value: await telescope.ParkAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+    }
+
+    /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    internal static async Task<IResult> TelescopeFindHomeAsync(string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "home");
+        return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
     }
 
     /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
@@ -371,19 +402,24 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, local => svc.ConnectAsync(local, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
-                SlewAsync(request, key, svc, sequencer, profiles, ct, logger))
+        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, IPolarAlignService polarAlign, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
+                SlewAsync(request, key, svc, sequencer, profiles, ct, logger, polarAlign))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit or counterweight-limit Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit, counterweight-limit or polar-align-moving-mount Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
-        telescope.MapPost("/park", async ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.ParkAsync(request ?? new ParkRequestDto(), key, ct)));
+        // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align turns the mount.
+        telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeParkAsync(request, key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
-        telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
+        telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeFindHomeAsync(key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
         // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
         telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
             .Produces(StatusCodes.Status204NoContent)
@@ -399,8 +435,11 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
-        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) =>
-            await MoveAxisAsync(request, svc, ct));
+        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            await MoveAxisAsync(request, svc, ct, polarAlign))
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict); // not connected, a rate the mount cannot run, or the polar-align-moving-mount Refusal
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });
@@ -1404,7 +1443,7 @@ public static partial class EquipmentEndpoints {
     // while within 4x of it, moved to the nearest discrete step in a gap) — the UI speed picker is
     // UX only, never the guard; not connected, an axis with no usable rate, or a rate more than 4x
     // slower than the lowest band (#1085) refuses the nudge (409).
-    public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) {
+    public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct, IPolarAlignService? polarAlign = null) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(svc);
         if (request.Axis is < 0 or > 1) {
@@ -1414,6 +1453,10 @@ public static partial class EquipmentEndpoints {
         if (!double.IsFinite(request.Rate)) {
             return Results.Problem("rate must be a finite number of degrees per second.",
                 statusCode: StatusCodes.Status400BadRequest);
+        }
+        // #2066 — outside the try below, whose 409 would drop the Refusal's reason. A stop (rate 0) always goes through.
+        if (request.Rate != 0) {
+            ThrowIfPolarAlignMovesTheMount(polarAlign, "move");
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

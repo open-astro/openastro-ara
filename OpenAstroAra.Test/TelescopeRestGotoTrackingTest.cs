@@ -231,6 +231,47 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        // #2066 — a Find Home has the park's window (it waits for the guider before the homing): Emergency Stop's latch, or a
+        // Stop Mount, that lands in it must not be followed by the homing.
+        [TestCase("emergency_stop")]
+        [TestCase("stop_mount")]
+        public async Task A_stop_that_lands_after_the_find_home_was_accepted_drops_the_homing(string stop) {
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            var stopAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                stopAsked.TrySetResult();
+                return stopDone.Task;
+            });
+            using var svc = await ConnectedAsync(box, log, () => guider.Object);
+
+            var home = svc.FindHomeAsync(idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            if (stop == "emergency_stop") {
+                svc.FenceMotion("emergency_stop");
+            } else {
+                await svc.AbortSlewAsync(CancellationToken.None);
+            }
+            stopDone.SetResult(true);
+            await home;
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("Find Home dropped", StringComparison.Ordinal)), "the homing was not dropped after the stop");
+            Assert.That(PutIndex(box, "findhome"), Is.EqualTo(-1), "the homing never reaches the mount after the stop");
+        }
+
+        [Test]
+        public async Task A_find_home_with_no_stop_reaches_the_mount() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            using var svc = await ConnectedAsync(box);
+
+            await svc.FindHomeAsync(idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutIndex(box, "findhome") >= 0, "the mount never received the Find Home");
+        }
+
         [Test]
         public async Task A_park_with_no_stop_turns_tracking_on_then_parks() {
             await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));

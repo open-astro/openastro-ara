@@ -211,18 +211,61 @@ namespace OpenAstroAra.Test {
                     });
                 service.Setup(s => s.AbortSlewAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .Returns((string reason, CancellationToken _) => {
-                        lock (_lock) {
-                            Record("abort " + reason);
-                            Interlocked.Increment(ref _epoch);
-                            if (IgnoresStops) {
-                                _runaway = true;
-                                return Task.CompletedTask;
-                            }
-                            _rates[0] = 0;
-                            _rates[1] = 0;
-                        }
+                        Abort(reason);
                         return Task.CompletedTask;
                     });
+                // #2066 — the daemon's other stop sources, as TelescopeService counts them: Stop Mount and Emergency Stop's
+                // passes (AbortSlew), its first step (the latch, no command), and what raised each count.
+                service.Setup(s => s.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                    .Returns((CancellationToken _) => {
+                        Abort("user_request");
+                        return Task.CompletedTask;
+                    });
+                service.Setup(s => s.FenceMotion(It.IsAny<string>())).Callback((string reason) => {
+                    lock (_lock) {
+                        Record("fence " + reason);
+                        _reasons.Add((Interlocked.Increment(ref _epoch), reason));
+                    }
+                });
+                service.Setup(s => s.AbortReasonSince(It.IsAny<long>(), It.IsAny<string?>()))
+                    .Returns((long since, string? except) => {
+                        lock (_lock) {
+                            return _reasons.Where(r => r.Epoch > since && r.Reason != except).Select(r => r.Reason).FirstOrDefault();
+                        }
+                    });
+                service.Setup(s => s.SetTrackingAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                    .Returns((bool on, CancellationToken _) => {
+                        Mock.Object.SetTrackingEnabled(on);
+                        return Task.CompletedTask;
+                    });
+                service.Setup(s => s.GetAsync(It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new TelescopeDto("t1", "Mount", EquipmentConnectionState.Connected, null, null!));
+            }
+
+            private readonly List<(long Epoch, string Reason)> _reasons = new();
+
+            private void Abort(string reason) {
+                lock (_lock) {
+                    Record("abort " + reason);
+                    _reasons.Add((Interlocked.Increment(ref _epoch), reason));
+                    if (IgnoresStops) {
+                        _runaway = true;
+                        return;
+                    }
+                    _rates[0] = 0;
+                    _rates[1] = 0;
+                }
+            }
+
+            /// <summary>#2066 — the user taps Stop Mount in the app (MountStopHandler's AbortSlew).</summary>
+            public void StopMount() => Abort("user_request");
+
+            /// <summary>#2066 — a park from outside Polar Align: TelescopeService counts it as a stop, then the mount parks.</summary>
+            public void ParkFromOutside() {
+                lock (_lock) {
+                    Record("park");
+                    _reasons.Add((Interlocked.Increment(ref _epoch), "park"));
+                }
             }
 
             private bool SlewingLocked() => _rates[0] != 0 || _rates[1] != 0 || _runaway;

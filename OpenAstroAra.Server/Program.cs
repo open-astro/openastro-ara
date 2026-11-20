@@ -1058,7 +1058,10 @@ public partial class Program {
                 () => sp.GetService<ICenteringService>(),
                 sp.GetService<TargetRecenter>(),
                 // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
-                () => sp.GetService<DomeFollower>()));
+                () => sp.GetService<DomeFollower>(),
+                // #2066 — the park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
@@ -1089,7 +1092,10 @@ public partial class Program {
                 // §42.5 — the reaction outcome lands on the fault-log row.
                 sp.GetService<IFaultLogService>(),
                 // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
-                () => sp.GetService<GuiderService>()));
+                () => sp.GetService<GuiderService>(),
+                // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());

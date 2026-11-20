@@ -66,6 +66,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private readonly ILogger<FaultReactionService> _logger;
     private readonly IFaultLogService? _faultLog;
     private readonly Func<IGuiderEpisodeListener?>? _guiderEpisodes;
+    // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first, as the safety park does.
+    // Func<>: polar alignment is built from services registered around this one.
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly IPolarAlignerService? _polarAligner;
 
     private readonly object _gate = new();
     // Keyed by normalized DeviceType for recovery-running kinds (their ladder must not stack);
@@ -94,6 +98,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     internal TimeSpan ReleasePollInterval { get; set; } = TimeSpan.FromSeconds(2);
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
     internal int LingerMaxAttempts { get; set; } = 30;
+    /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
+    /// hangs must not hold the park back: the park also counts as a stop, so the routine starts no move after it.</summary>
+    internal TimeSpan StopPolarAlignBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     public FaultReactionService(
             EquipmentFaultHub? hub = null,
@@ -105,7 +112,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             IWsBroadcaster? ws = null,
             ILogger<FaultReactionService>? logger = null,
             IFaultLogService? faultLog = null,
-            Func<IGuiderEpisodeListener?>? guiderEpisodes = null) {
+            Func<IGuiderEpisodeListener?>? guiderEpisodes = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null,
+            IPolarAlignerService? polarAligner = null) {
+        _polarAlignResolver = polarAlignResolver;
+        _polarAligner = polarAligner;
         _hub = hub;
         _reconnector = reconnector;
         _profiles = profiles;
@@ -726,6 +737,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return false;
         }
         try {
+            // #2066 — a polar alignment turning the RA motor (and its Polar Aligner) is stopped before the park: the stop
+            // its turn sends when it ends would otherwise land on the park.
+            await StopPolarAlignQuietlyAsync().ConfigureAwait(false);
             await _telescope.ParkAsync(new ParkRequestDto("equipment.fault"), null, CancellationToken.None)
                 .ConfigureAwait(false);
             return true;
@@ -736,6 +750,30 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogRungFailed("park", ex);
             return false;
+        }
+    }
+
+    /// <summary>#2066 — the park's first step, as in <see cref="SafetyReactionService"/>: a running polar alignment ends
+    /// and leaves the mount to the park (no stop confirmation of its own, which would hold the park back), then the Polar
+    /// Aligner stops. Each step is bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>; a fault or a hang is logged and
+    /// the park goes ahead.</summary>
+    private async Task StopPolarAlignQuietlyAsync() {
+        var polarAlign = _polarAlignResolver?.Invoke();
+        if (polarAlign is { IsActive: true }) {
+            await BoundedQuietlyAsync("stop_polar_align", () => polarAlign.StopForTakeoverAsync("fault_park", CancellationToken.None)).ConfigureAwait(false);
+        }
+        if (_polarAligner is { IsPresent: true } aligner) {
+            await BoundedQuietlyAsync("stop_polar_aligner", () => aligner.StopAsync(null, CancellationToken.None)).ConfigureAwait(false);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort step before the park: a routine or aligner that faults or hangs must not block the park; logged, never rethrown.")]
+    private async Task BoundedQuietlyAsync(string rung, Func<Task> step) {
+        try {
+            await step().WaitAsync(StopPolarAlignBeforeParkTimeout).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed(rung, ex);
         }
     }
 

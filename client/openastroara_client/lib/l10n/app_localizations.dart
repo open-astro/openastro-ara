@@ -11173,6 +11173,12 @@ abstract class AppLocalizations {
   /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
   String refusalPolarAlignSweepLimit(String offset);
 
+  /// Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
+  String get refusalPolarAlignMovingMount;
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:

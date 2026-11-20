@@ -271,6 +271,81 @@ namespace OpenAstroAra.Test {
             Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(2));
         }
 
+        // #2066 — Emergency Stop's first step counts the stop before any rung, with no command to the mount and no lease
+        // cancelled. A routine's renewal at the same speed would only extend its lease: it is refused all the same, so the
+        // lease runs out and stops the axis.
+        [Test]
+        public async Task A_renewal_after_Emergency_Stops_latch_is_refused_though_its_lease_still_runs() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            svc.FenceMotion("emergency_stop");
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(svc.AbortReasonSince(since, except: "polar_align"), Is.EqualTo("emergency_stop"));
+            Assert.That(box.Puts.Any(p => p.Path.EndsWith("/abortslew", StringComparison.Ordinal)), Is.False, "the latch sends nothing");
+        }
+
+        // #2066 — a REST Park or Find Home ends a routine that drives the motors: it counts as a stop, named for what raised it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public async Task A_park_or_find_home_counts_as_a_stop_for_a_routines_renewal(string what) {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            await (what == "park"
+                ? svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None)
+                : svc.FindHomeAsync(null, CancellationToken.None));
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            Assert.That(svc.AbortEpoch, Is.Not.EqualTo(since));
+            Assert.That(svc.AbortReasonSince(since, except: "polar_align"), Is.EqualTo(what));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+        }
+
+        // #2066 — a Park or Find Home counts as a stop only when no stop came since its request read the count: a Stop Mount or
+        // Emergency Stop's latch that landed while the request checked the pose keeps the request's reading, so the park or
+        // homing is still dropped before it goes out. Counting over it would hide that stop and send the move after it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public void A_stop_since_the_request_keeps_its_reading_and_is_not_counted_over(string what) {
+            using var svc = new TelescopeService();
+            var request = svc.AbortEpoch;
+            svc.FenceMotion("emergency_stop");
+
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(request, what), Is.EqualTo(request), "the request keeps its own reading");
+            Assert.That(svc.AbortEpoch, Is.EqualTo(request + 1), "no count of its own over the stop");
+            Assert.That(svc.AbortReasonSince(request, except: null), Is.EqualTo("emergency_stop"));
+
+            var quiet = svc.AbortEpoch;
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(quiet, what), Is.EqualTo(quiet + 1), "no stop since: it counts as one");
+            Assert.That(svc.AbortReasonSince(quiet, except: null), Is.EqualTo(what));
+        }
+
+        // #2066 — a Find Home ends the leases, as a Park does: a lease left to run out would send MoveAxis 0 in the middle
+        // of the homing.
+        [Test]
+        public async Task A_find_home_ends_the_leases_so_no_lease_stop_lands_on_the_homing() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None); // a pad press, leased
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            var stopsBefore = MoveAxisPuts(box).Count(b => IsStop(b, 0));
+            clock.Now = clock.Now.AddSeconds(5);
+            svc.CheckLeases();
+
+            Assert.That(MoveAxisPuts(box).Count(b => IsStop(b, 0)), Is.EqualTo(stopsBefore), "no lease-expiry stop after the Find Home");
+        }
+
         // The race the check before the driver call cannot see: Stop Mount lands while the move's own PUT is in flight,
         // so the move may reach the mount after the AbortSlew. The service stops the axis again and refuses the move.
         [Test]
