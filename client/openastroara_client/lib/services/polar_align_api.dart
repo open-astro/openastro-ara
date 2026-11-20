@@ -5,16 +5,22 @@ import 'package:dio/dio.dart';
 import '../models/polar_align.dart';
 import '../models/server.dart';
 import 'profile_api.dart';
+import 'refusal.dart';
 
 /// The §45 polar-align operations the state layer depends on. An interface so
 /// tests supply a pure fake; [PolarAlignApi] is the Dio-backed implementation.
 abstract interface class PolarAlignClient {
   Future<PolarAlignStatus?> getStatus();
 
-  /// Begin at [stage] ([PolarAlignStages]; null = coarse).
-  Future<void> start({String? stage});
+  /// #2048 — what a start at [stage] would do, for the confirm step the user
+  /// answers before the mount moves.
+  Future<PolarAlignStartPlan> startPlan({String? stage});
 
-  /// Continue (mount at Home) / Next (coarse → fine, fine → check).
+  /// Begin the [plan] the user confirmed: from where the mount points, at its
+  /// stage, turning its direction.
+  Future<void> start(PolarAlignStartPlan plan);
+
+  /// Next (coarse → fine, fine → check).
   Future<void> next();
   Future<void> stop();
   Future<void> complete();
@@ -61,18 +67,53 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  /// Begin the routine (preflight: connected guider + mount, configured site)
-  /// at [stage] (null = coarse). 202-Accepted; a failed preflight surfaces as
-  /// a 409/422 `DioException`.
+  /// #2048 — the confirm step's plan: the RA turn direction from where the
+  /// mount points now, the step, and the most the run turns. A parked mount is
+  /// the `polar-align-mount-parked` [Refusal].
   @override
-  Future<void> start({String? stage}) async {
-    await _dio.post<void>(
-      '/api/v1/equipment/polaralign/start',
-      data: stage == null ? null : <String, dynamic>{'stage': stage},
-    );
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async {
+    final Response<dynamic> res;
+    try {
+      res = await _dio.get<dynamic>(
+        '/api/v1/equipment/polaralign/start-plan',
+        queryParameters: stage == null ? null : <String, dynamic>{'stage': stage},
+      );
+    } on DioException catch (e) {
+      final refusal = Refusal.fromDio(e);
+      if (refusal != null) throw refusal;
+      rethrow;
+    }
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('start-plan returned a non-object body');
+    }
+    return PolarAlignStartPlan.fromJson(data, stage: stage);
   }
 
-  /// Continue / Next. 202-Accepted; a 409 when nothing waits on the user.
+  /// Begin the routine (preflight: connected guider + mount, configured site)
+  /// at the [plan]'s stage, confirmed by the user with the plan's direction
+  /// (#2048). 202-Accepted; a failed preflight surfaces as a 409/422 — a
+  /// parked mount, or a direction that changed since, is a [Refusal].
+  @override
+  Future<void> start(PolarAlignStartPlan plan) async {
+    try {
+      await _dio.post<void>(
+        '/api/v1/equipment/polaralign/start',
+        data: <String, dynamic>{
+          if (plan.stage != null) 'stage': plan.stage,
+          'confirmed': true,
+          'direction': plan.direction,
+          'new_origin': plan.newOrigin,
+        },
+      );
+    } on DioException catch (e) {
+      final refusal = Refusal.fromDio(e);
+      if (refusal != null) throw refusal;
+      rethrow;
+    }
+  }
+
+  /// Next. 202-Accepted; a 409 when nothing waits on the user.
   @override
   Future<void> next() async {
     await _dio.post<void>('/api/v1/equipment/polaralign/next');

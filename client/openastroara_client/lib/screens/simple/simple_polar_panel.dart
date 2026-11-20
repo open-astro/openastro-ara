@@ -14,6 +14,7 @@ import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
 import '../../widgets/imaging/polar_aligner_block.dart';
+import '../../widgets/imaging/polar_start_confirm.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
@@ -79,7 +80,8 @@ class SimplePolarShutter extends ConsumerWidget {
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
-          : () => run(l10n.polarActionStart, (api) => api.start()),
+          // #2048 — through the confirm step: nothing moves until the user says so.
+          : () => run(l10n.polarActionStart, (api) => confirmAndStartPolarAlign(context, api)),
     );
   }
 }
@@ -210,7 +212,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         const PolarAlignSettings();
     final command = ref.watch(polarAlignActionProvider);
     final busy = command.busy;
-    final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
+    final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
     final active = simplePolarActive(live);
     final total = live.totalErrorArcmin;
     final step = simplePolarStep(live);

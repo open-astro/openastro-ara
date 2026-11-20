@@ -8,6 +8,7 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
@@ -15,6 +16,9 @@ import 'package:openastroara/widgets/imaging/polar_aligner_block.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 2);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
@@ -23,7 +27,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => settings = next;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override
@@ -71,7 +75,8 @@ class _Site extends SiteSettingsNotifier {
   _Site(this.lat);
   final double lat;
   @override
-  SiteSettings build() => SiteSettings(latitudeDeg: lat);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(latitudeDeg: lat), source: SectionSource.rig);
 }
 
 const _base = PolarAligner(

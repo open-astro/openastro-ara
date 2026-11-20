@@ -88,6 +88,18 @@ namespace OpenAstroAra.Test {
             Assert.That(seen, Does.Contain("\"section\":\"site\""));
         }
 
+        /// <summary>#1807 — <c>PublishDaemonProfileWrites</c> in Program.cs: a section the daemon writes itself,
+        /// outside the profile routes (here the store write time sync makes), reaches the broadcaster too.</summary>
+        [Test]
+        public async Task A_daemon_site_write_reaches_the_broadcaster_as_profile_updated() {
+            var store = app.Services.GetRequiredService<IProfileStore>();
+            var seen = await Collect(() => {
+                store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = 38.85, LongitudeDeg = -77.04 });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }, "profile.updated");
+            Assert.That(seen, Does.Contain("\"section\":\"site\""));
+        }
+
         [Test]
         public async Task A_client_settings_patch_over_HTTP_reaches_the_broadcaster_as_client_settings_updated() {
             var seen = await Collect(() => http.PatchAsync(new Uri("/api/v1/client-settings", UriKind.Relative),

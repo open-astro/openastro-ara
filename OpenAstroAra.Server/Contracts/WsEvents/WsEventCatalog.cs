@@ -152,12 +152,10 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignFrameComplete = new("polar_align.frame_complete");
     public static readonly WsEvent PolarAlignPaused = new("polar_align.paused");
     public static readonly WsEvent PolarAlignError = new("polar_align.error");
-    // Stages: stage when the routine moves to a new stage ({stage, state}); needs_home when the
-    // mount cannot find Home and the routine waits for the user's Continue ({stage, message});
-    // checked when the three-point check has its result (the PolarAlignCheckResultDto fields).
+    // Stages: stage when the routine moves to a new stage ({stage, state}); checked when the three-point check has its
+    // result (the PolarAlignCheckResultDto fields). needs_home was retired by #2048: the routine never sends the mount Home.
     // started and progress also carry {stage}.
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
-    public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
     // #1971 — the Polar Aligner's state in a running routine, on every change: {state, moves,
     // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectionDto).
@@ -273,7 +271,8 @@ public static class WsEventCatalog {
     public static readonly WsEvent DiagnosticsSnapshot = new("diagnostics.snapshot");
 
     // #1644 — multi-device preference sync. profile.updated { section } after a successful profile-section
-    // write; client_settings.updated { keys, updated_utc } after a client-settings replace or merge.
+    // write, a route's or (#1807) the daemon's own (ProfileSectionChangePublisher); client_settings.updated
+    // { keys, updated_utc } after a client-settings replace or merge.
     public static readonly WsEvent ProfileUpdated = new("profile.updated");
     public static readonly WsEvent ClientSettingsUpdated = new("client_settings.updated");
 
@@ -362,7 +361,6 @@ public static class WsEventCatalog {
         PolarAlignPaused,
         PolarAlignError,
         PolarAlignStage,
-        PolarAlignNeedsHome,
         PolarAlignChecked,
         PolarAlignCorrection,
         AutofocusCollimationVerdict,

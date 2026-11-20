@@ -125,10 +125,10 @@ double suggestedSubSeconds(
   Map<String, double> skyCalibrationK = const {},
 }) {
   final outcome = resolveOptimalSubLocal(
-    optics: ref.read(opticsSettingsProvider),
+    optics: ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
     electronics:
         ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
-    site: ref.read(siteSettingsProvider),
+    site: ref.read(siteSettingsProvider).value ?? const SiteSettings(),
     filterSet: ref.read(filterSetProvider).value ?? const FilterSetSettings(),
     filterName: filterName,
     raDeg: raDeg,
@@ -219,7 +219,8 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   }
 
   List<FilterPlanStep> _steps(List<PlanningFilter> picked) {
-    final defaults = ref.read(imagingDefaultsProvider);
+    final defaults =
+        ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
     final defaultExposure = defaults.defaultExposure.inMilliseconds /
         Duration.millisecondsPerSecond;
     return [
@@ -359,7 +360,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                 subtitle: Text(
                   _guide
                       ? 'Starts guiding after autofocus, dithers every '
-                          '${ref.read(phd2SettingsProvider).ditherEveryNFrames} '
+                          '${(ref.read(phd2SettingsProvider).value ?? const Phd2Settings()).ditherEveryNFrames} '
                           'frame(s).'
                       : 'No guiding steps in the run.',
                   style: const TextStyle(

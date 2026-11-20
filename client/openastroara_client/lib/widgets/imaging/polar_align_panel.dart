@@ -21,6 +21,7 @@ import '../help_icon.dart';
 import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
+import 'polar_start_confirm.dart';
 import '../adaptive_controls.dart';
 
 export 'polar_align_readout.dart';
@@ -183,7 +184,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   /// Facing the south celestial pole: east and west swap sides on screen.
-  bool get _southern => ref.watch(siteSettingsProvider).latitudeDeg < 0;
+  bool get _southern => (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +379,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     }
   }
 
-  Future<void> _start({String? stage}) => _run('start polar alignment', (api) => api.start(stage: stage));
+  /// #2048 — every start goes through the confirm step: the rig says which way
+  /// RA will turn from where the mount points, and nothing moves until the
+  /// user confirms.
+  Future<void> _start({String? stage}) => _run(
+        'start polar alignment',
+        (api) => confirmAndStartPolarAlign(context, api, stage: stage),
+      );
 
   Future<void> _next(String action) => _run(action, (api) => api.next());
 
@@ -654,10 +661,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Three steps. Rough: the mount goes Home and the main camera shows how far '
-          'from the pole you are and on which side, while you make the big moves. '
-          'Fine: the guide camera measures the axis around an RA turn and guides the '
-          'knobs live. Check: back Home, three solves measure the result exactly.',
+          'Point the tube near the pole, counterweights down: the routine starts there, never Home or a GoTo. '
+          'Rough: the main camera shows how far from the pole you are and on which side, for the big moves. '
+          'Fine: the guide camera measures the axis around two RA turns and guides the knobs live. '
+          'Check: three solves measure the result exactly.',
           style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
         ),
         if (live.phase == PolarAlignStates.failed && live.errorReason != null) ...[

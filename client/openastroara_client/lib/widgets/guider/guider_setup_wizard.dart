@@ -8,6 +8,7 @@ import '../../state/guider/guider_calibration_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
@@ -49,10 +50,10 @@ enum _WizStep { connection, camera, optics, mount, apply, darks }
 class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   _WizStep _step = _WizStep.connection;
 
-  // The local draft + the daemon's copy it was forked from (see the class
-  // comment — Apply PUTs `_serverCopy + edited fields`, never provider state).
+  // The local draft, forked from the rig's copy of the guider section (see
+  // the class comment — Apply saves the edited fields over the rig's copy,
+  // with its tag, never provider state; ADR 0015).
   Phd2Settings? _draft;
-  Phd2Settings? _serverCopy;
 
   GuiderEquipmentChoices? _choices;
   bool _busy = false;
@@ -80,10 +81,15 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     }
     setState(() => _busy = true);
     try {
-      final fresh = await api.getPhd2Settings();
+      // The section loads itself; one more load when it isn't in from the rig
+      // (a load over a copy that is in would drop edits staged elsewhere).
+      final fresh = await ref.read(phd2SettingsProvider.notifier).rigCopy();
       if (!mounted) return;
+      if (fresh == null) {
+        throw ref.read(phd2SettingsProvider).lastFailure ??
+            const SectionNotLoadedException(null);
+      }
       setState(() {
-        _serverCopy = fresh;
         _draft = fresh;
         _error = null;
       });
@@ -211,60 +217,51 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
     final equipment = ref.read(guiderEquipmentApiProvider);
-    final serverCopy = _serverCopy;
     final draft = _draft;
-    if (api == null || equipment == null || serverCopy == null || draft == null) {
-      return;
-    }
+    if (api == null || equipment == null || draft == null) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final toSave = serverCopy.copyWith(
-        host: draft.host,
-        port: draft.port,
-        guiderCamera: draft.guiderCamera,
-        guiderCameraId: draft.guiderCameraId,
-        // #1308 — the id travels with the PICK only: filling it at Apply from
-        // whatever sits at that number now could pin the imaging camera for a
-        // profile saved before the renumber (review r2).
-        guiderCameraAlpacaUniqueId: draft.guiderCameraAlpacaUniqueId,
-        guidePixelSize: draft.guidePixelSize,
-        guiderSetupType: draft.guiderSetupType,
-        guideFocalLength: draft.guideFocalLength,
-        guiderMount: draft.guiderMount,
-        guiderAuxMount: draft.guiderAuxMount,
-        guiderRotator: draft.guiderRotator,
-        guiderAlpacaHost: draft.guiderAlpacaHost,
-        guiderAlpacaPort: draft.guiderAlpacaPort,
-      );
-      final echoed = await api.putPhd2Settings(toSave);
+      // The edited fields over the rig's copy, with its tag; they show in
+      // the shared section too, whose other staged edits stay. A copy another
+      // device saved since is refused, nothing written (ADR 0015).
+      await ref
+          .read(phd2SettingsProvider.notifier)
+          .saveOnRigCopy(
+            (c) => c.copyWith(
+              host: draft.host,
+              port: draft.port,
+              guiderCamera: draft.guiderCamera,
+              guiderCameraId: draft.guiderCameraId,
+              // #1308 — the id travels with the PICK only: filling it at
+              // Apply from whatever sits at that number now could pin the
+              // imaging camera for a profile saved before the renumber
+              // (review r2).
+              guiderCameraAlpacaUniqueId: draft.guiderCameraAlpacaUniqueId,
+              guidePixelSize: draft.guidePixelSize,
+              guiderSetupType: draft.guiderSetupType,
+              guideFocalLength: draft.guideFocalLength,
+              guiderMount: draft.guiderMount,
+              guiderAuxMount: draft.guiderAuxMount,
+              guiderRotator: draft.guiderRotator,
+              guiderAlpacaHost: draft.guiderAlpacaHost,
+              guiderAlpacaPort: draft.guiderAlpacaPort,
+            ),
+          );
       if (!mounted) return;
-      setState(() => _serverCopy = echoed);
       await equipment.pushProfile();
       if (!mounted) return;
-      // The wizard's fields are now Ara's truth — reflect them into
-      // the shared provider through the bounded setters.
-      final n = ref.read(phd2SettingsProvider.notifier);
-      n.setHost(draft.host);
-      n.setPort(draft.port);
-      n.setGuiderCamera(draft.guiderCamera);
-      n.setGuiderCameraId(draft.guiderCameraId);
-      n.setGuiderCameraAlpacaUniqueId(draft.guiderCameraAlpacaUniqueId);
-      n.setGuidePixelSize(draft.guidePixelSize);
-      n.setGuiderSetupType(draft.guiderSetupType);
-      n.setGuideFocalLength(draft.guideFocalLength);
-      n.setGuiderMount(draft.guiderMount);
-      n.setGuiderAuxMount(draft.guiderAuxMount);
-      n.setGuiderRotator(draft.guiderRotator);
-      n.setGuiderAlpacaHost(draft.guiderAlpacaHost);
-      n.setGuiderAlpacaPort(draft.guiderAlpacaPort);
       setState(() => _applied = true);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyDaemonError(e,
-            fallback: "Couldn't apply the profile"));
+        setState(
+          () => _error =
+              e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : friendlyDaemonError(e, fallback: "Couldn't apply the profile"),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -556,7 +553,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               if (norm == 'oag') {
                 // §63.19 — OAG derives the guide focal length from the main
                 // optics (focal length × reducer), same rule as the panel.
-                final optics = ref.read(opticsSettingsProvider);
+                final optics = ref.read(opticsSettingsProvider).value ??
+                    const OpticsSettings();
                 _edit((d) => d.copyWith(
                     guideFocalLength: derivedOagGuideFocalLength(
                         optics.focalLengthMm, optics.reducerFactor)));

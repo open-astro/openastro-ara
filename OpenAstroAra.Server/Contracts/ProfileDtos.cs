@@ -523,7 +523,7 @@ public sealed record Phd2SettingsDto(
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
 /// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
 /// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure of the
-/// coarse stage; <c>UseHome</c> whether every stage starts by sending the mount Home (a fine start too);
+/// coarse stage;
 /// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
@@ -544,9 +544,9 @@ public sealed record PolarAlignSettingsDto(
     double CheckStepDeg = 10.0,
     // Coarse stage: the main-camera exposure (the pole field is sparse; longer than a guide frame).
     double CoarseExposureSeconds = 3.0,
-    // Every stage starts by sending the mount Home (Find Home when it can, else the routine waits
-    // for the user — needs_home), a fine start included. Off = use the current pointing as "home".
-    bool UseHome = true,
+    // #2048: there is no use_home any more. Polar Align never sends the mount Home (NINA's start): every run starts
+    // from where the user pointed it, after the confirm step. A use_home key in an older profile.json or PUT body is
+    // an unknown member, which the deserializer ignores.
     // #1971: with a Polar Aligner on the rig, the live stages move its motors after each
     // measurement. Off = the person turns the bolts, as on a rig without one.
     bool PolarAlignerAuto = true,

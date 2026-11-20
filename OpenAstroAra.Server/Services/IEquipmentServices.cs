@@ -132,9 +132,25 @@ public interface ITelescopeService {
     Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
         Task.FromResult<(double RaHours, double DecDegrees)?>(null);
 
-    /// <summary>Counts every slew abort (Stop Mount, Emergency Stop, the watchdog). A routine that drives the motors
-    /// itself reads it when a move starts, and treats any change as a stop it must obey.</summary>
+    /// <summary>Counts every slew abort (Stop Mount, Emergency Stop, the watchdog), and every park and Find Home (#2066). A
+    /// routine that drives the motors itself reads it when its run starts, and treats any change it did not raise as a stop
+    /// it must obey.</summary>
     long AbortEpoch => 0;
+
+    /// <summary>#2066 — count a stop in <see cref="AbortEpoch"/> without sending the mount anything: Emergency Stop's first
+    /// step, before any of its rungs. Every routine and queued GoTo or Park that read the count before treats it as a stop:
+    /// a leased motor renewal is refused (its lease then runs out and stops the axis), and Polar Align fails its run.</summary>
+    void FenceMotion(string reason) { }
+
+    /// <summary>#2066 — what raised the first count after <paramref name="abortEpoch"/> other than
+    /// <paramref name="except"/>: <c>user_request</c> (Stop Mount), <c>emergency_stop</c>, <c>watchdog</c>, <c>park</c>,
+    /// <c>findhome</c>, <c>polar_align</c>. Null when there is none, or it is no longer known.</summary>
+    string? AbortReasonSince(long abortEpoch, string? except) => null;
+
+    /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
+    /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it
+    /// changes: a reconnected mount may have been moved, re-homed or swapped meanwhile.</summary>
+    long SessionEpoch => 0;
 
     /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
     /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
@@ -449,14 +465,20 @@ public interface IPolarAlignService {
     /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
-    Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>#2048 — what a start at <paramref name="stage"/> would do, for the confirm step: the RA turn direction
+    /// from the mount's current pointing, the step and the most the run turns the RA axis from where it starts. Refuses
+    /// like <see cref="StartAsync"/> does before any motion: a mount not connected, a parked mount
+    /// (<c>polar-align-mount-parked</c>), no site latitude.</summary>
+    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
     /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
-    /// when the coarse stage cannot run). Throws <see cref="ArgumentException"/> for an unknown stage (the
-    /// endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
+    /// when the coarse stage cannot run), from where the mount points now: no stage sends the mount Home or slews
+    /// it (#2048). The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run
+    /// would turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
+    /// (<c>polar-align-mount-parked</c>) and never unparked. Throws <see cref="ArgumentException"/> for an unknown
+    /// stage (the endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
     /// failed preflight.</summary>
-    Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
-    /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
-    /// stage to the fine stage, Next from the fine stage to the check. Throws
+    Task<OperationAcceptedDto> StartAsync(string? stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Advance: Next from the coarse stage to the fine stage, Next from the fine stage to the check. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws
@@ -472,6 +494,14 @@ public interface IPolarAlignService {
     /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
     /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>
     Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct);
+    /// <summary>#2066 — Emergency Stop or the safety park takes the mount over (<paramref name="by"/> names it in the log):
+    /// the run ends like a Stop (its first stop round goes out before any wait, state <c>stopped</c>), but its exit sends
+    /// no stop of its own, does not confirm one and writes no tracking. The caller stops and checks the mount itself, or
+    /// parks it. Bounded by the run's unwind, not by the stop's confirmation.</summary>
+    Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) => StopAsync(null, ct);
+    /// <summary>#2066 — a run's motor move is under way, or its stop is not confirmed yet: the telescope endpoints answer
+    /// GoTo, pad moves, Home and Park with the <c>polar-align-moving-mount</c> Refusal meanwhile.</summary>
+    bool IsMovingMount => false;
     /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
     /// outcome <c>complete</c> (§45.13).</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);

@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
-import '../../services/profile_api.dart';
 import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../widgets/settings/section_load_state.dart';
 import 'simple_device_windows.dart' show simpleWindowRow, simpleWindowStepper;
 
 /// Lowest altitude's range in Simple Mode (Advanced takes 0 to 90).
@@ -34,8 +35,9 @@ int simpleLimitStep(num v, int dir, int lo, int hi) {
 /// Lowest altitude (the site's flat horizon; read-only with a measured one),
 /// At the meridian (flip Auto) or Stop before meridian (flip Off), and a sky
 /// arc drawn from the same values. Each tap saves at once with a sentence
-/// pill; a failed save puts the old value back. The highest-altitude row
-/// waits for its server field (#1589), so it is not built.
+/// pill, applied to the rig's copy of the section (ADR 0015); a failed save
+/// puts the rig's value back. The highest-altitude row waits for its server
+/// field (#1589), so it is not built.
 class SimpleMountLimits extends ConsumerStatefulWidget {
   const SimpleMountLimits({super.key});
 
@@ -44,123 +46,83 @@ class SimpleMountLimits extends ConsumerStatefulWidget {
 }
 
 class _SimpleMountLimitsState extends ConsumerState<SimpleMountLimits> {
-  /// Saves run one after another, so a quick second tap cannot land first.
-  Future<void> _saving = Future<void>.value();
-
-  @override
-  void initState() {
-    super.initState();
-    // Show the rig's values, not the client's defaults; a write reads the
-    // section again before it puts, so a failed load loses nothing.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
-  }
-
-  Future<void> _load() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null || !mounted) return;
-    await Future.wait([
-      ref
-          .read(siteSettingsProvider.notifier)
-          .hydrateFromServer(api)
-          .catchError((Object _) {}),
-      ref
-          .read(safetyPoliciesProvider.notifier)
-          .hydrateFromServer(api)
-          .catchError((Object _) {}),
-    ]);
-  }
-
-  /// Writes one change to the rig: [write] reads the rig's section and puts
-  /// it back with the change. Success: [pill], and [apply] again (a failed
-  /// earlier tap may have put an older value back). Failure: [restore] and
-  /// the couldn't-save pill.
-  void _save({
+  /// Saves [write] (a section's changeAndSave): applied to the rig's copy at
+  /// once (loaded once more first when it isn't in) and saved whole; the
+  /// section chains its saves, so a quick second tap cannot land first.
+  /// Success: [pill]. Not loaded, refused, stale or failed: the rig's value
+  /// shows again and the couldn't-save pill says why.
+  Future<void> _save({
     required String pill,
-    required Future<void> Function(ProfileApi api) write,
-    required VoidCallback apply,
-    required VoidCallback restore,
-  }) {
-    apply();
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
+    required Future<void> Function() write,
+  }) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
-    _saving = _saving.then((_) async {
-      try {
-        await write(api);
-        if (!mounted) return;
-        apply();
-        notify(pill);
-      } catch (e) {
-        if (!mounted) return;
-        restore();
-        notify(
-          l10n.limitsCouldntSave,
-          detail: failureReason(l10n, e),
-          error: true,
-        );
-      }
-    });
+    try {
+      await write();
+      if (!mounted) return;
+      notify(pill);
+    } catch (e) {
+      if (!mounted) return;
+      notify(
+        l10n.limitsCouldntSave,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
+        error: true,
+      );
+    }
   }
 
-  void _setLowest(int deg) {
-    final site = ref.read(siteSettingsProvider.notifier);
-    final old = ref.read(siteSettingsProvider).defaultHorizonAltitudeDeg;
+  void _setLowest(int deg) => unawaited(
     _save(
       pill: context.l10n.limitsPillLowest(deg),
-      write: (api) async {
-        final stored = await api.getSiteSettings();
-        await api.putSiteSettings(
-          stored.copyWith(defaultHorizonAltitudeDeg: deg.toDouble()),
-        );
-      },
-      apply: () => site.setDefaultHorizonAltitudeDeg(deg.toDouble()),
-      restore: () => site.setDefaultHorizonAltitudeDeg(old),
-    );
-  }
+      write: () => ref
+          .read(siteSettingsProvider.notifier)
+          .changeAndSave(
+            (c) => c.copyWith(defaultHorizonAltitudeDeg: deg.toDouble()),
+          ),
+    ),
+  );
 
   void _setMeridian(int v) {
     final l10n = context.l10n;
-    final policies = ref.read(safetyPoliciesProvider.notifier);
-    final old = ref.read(safetyPoliciesProvider);
-    _save(
-      pill: v < 0
-          ? l10n.limitsPillBefore(-v)
-          : v == 0
-          ? l10n.limitsPillOn
-          : l10n.limitsPillAfter(v),
-      write: (api) async => api.putSafetyPolicies(
-        withMeridianTimingMin(await api.getSafetyPolicies(), v),
+    unawaited(
+      _save(
+        pill: v < 0
+            ? l10n.limitsPillBefore(-v)
+            : v == 0
+            ? l10n.limitsPillOn
+            : l10n.limitsPillAfter(v),
+        write: () => ref
+            .read(safetyPoliciesProvider.notifier)
+            .changeAndSave((p) => withMeridianTimingMin(p, v)),
       ),
-      apply: () => policies.setMeridianTimingMin(v),
-      restore: () => policies.restoreMeridianWindow(old),
     );
   }
 
   void _setStopBefore(int min) {
     final l10n = context.l10n;
-    final policies = ref.read(safetyPoliciesProvider.notifier);
-    final old = ref.read(safetyPoliciesProvider).stopBeforeMeridianMin;
-    _save(
-      pill: min > 0 ? l10n.limitsPillStop(min) : l10n.limitsPillStopOff,
-      write: (api) async {
-        final stored = await api.getSafetyPolicies();
-        await api.putSafetyPolicies(
-          stored.copyWith(stopBeforeMeridianMin: min),
-        );
-      },
-      apply: () => policies.setStopBeforeMeridianMin(min),
-      restore: () => policies.setStopBeforeMeridianMin(old),
+    unawaited(
+      _save(
+        pill: min > 0 ? l10n.limitsPillStop(min) : l10n.limitsPillStopOff,
+        write: () => ref
+            .read(safetyPoliciesProvider.notifier)
+            .changeAndSave((p) => p.copyWith(stopBeforeMeridianMin: min)),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final site = ref.watch(siteSettingsProvider);
-    final safety = ref.watch(safetyPoliciesProvider);
-    final low = site.defaultHorizonAltitudeDeg.round();
-    final measured = site.useCustomHorizon;
+    final siteSection = ref.watch(siteSettingsProvider);
+    final site = siteSection.value;
+    // Null until the profile's copy is in from the rig (ADR 0015). The
+    // Meridian flip row above already says so for the safety section, with
+    // Retry; its rows here wait for it.
+    final safety = ref.watch(safetyPoliciesProvider).value;
+    final low = site?.defaultHorizonAltitudeDeg.round() ?? 0;
+    final measured = site?.useCustomHorizon ?? false;
     final children = <Widget>[
       const Divider(height: AraSpace.s12, color: AraColors.border),
       Semantics(
@@ -168,7 +130,20 @@ class _SimpleMountLimitsState extends ConsumerState<SimpleMountLimits> {
         child: Text(l10n.limitsTitle.toUpperCase(), style: AraText.section),
       ),
     ];
-    if (measured) {
+    if (site == null) {
+      children.add(
+        SectionNotLoaded(
+          section: siteSection,
+          padding: EdgeInsets.zero,
+          onRetry: () {
+            final api = ref.read(profileApiProvider);
+            if (api != null) {
+              ref.read(siteSettingsProvider.notifier).load(api);
+            }
+          },
+        ),
+      );
+    } else if (measured) {
       children
         ..add(
           simpleWindowRow(
@@ -203,7 +178,9 @@ class _SimpleMountLimitsState extends ConsumerState<SimpleMountLimits> {
         ),
       );
     }
-    if (safety.meridianFlipAuto) {
+    if (safety == null) {
+      // Nothing to show: the flip row above says Not loaded.
+    } else if (safety.meridianFlipAuto) {
       final v = meridianTimingMin(safety);
       children
         ..add(
@@ -285,7 +262,9 @@ class _SimpleMountLimitsState extends ConsumerState<SimpleMountLimits> {
         );
     }
     // A measured horizon depends on the azimuth, which one arc cannot draw.
-    if (!measured) children.add(SimpleLimitsArc(lowestDeg: low));
+    if (site != null && !measured) {
+      children.add(SimpleLimitsArc(lowestDeg: low));
+    }
     return Column(
       key: const Key('simple-mount-limits'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

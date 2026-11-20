@@ -23,6 +23,9 @@ import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
 
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
@@ -31,7 +34,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => next;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async => calls.add('next');
   @override

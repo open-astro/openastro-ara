@@ -11,9 +11,9 @@ import '../../util/friendly_error.dart';
 import '../help_icon.dart';
 import '../settings/section_load_state.dart';
 
-/// #1736 The Start card's collapsed Advanced row: the routine's four knobs
-/// (`use_home`, `check_step_deg`, `coarse_exposure_seconds`,
-/// `seed_rotation_deg`), edited through the same module as the Settings panel
+/// #1736 The Start card's collapsed Advanced row: the routine's three knobs
+/// (`check_step_deg`, `coarse_exposure_seconds`, `seed_rotation_deg`; #2048
+/// retired `use_home`: the routine never sends the mount Home), edited through the same module as the Settings panel
 /// ([polarAlignSettingsProvider], ADR 0013 rule 3): nothing shows or saves
 /// until the rig's copy is loaded, each edit saves at once, a failed save puts
 /// the field back, and a value outside the range is refused in the field.
@@ -124,7 +124,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
 
   Widget _knobs(AppLocalizations l10n, PolarAlignSettings s) {
     final fields = [
-      _homeField(l10n, s),
       _numberField(
         const Key('polar-advanced-seed'),
         l10n.polarKnobTurn,
@@ -197,34 +196,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
         ),
       ),
       HelpIcon(helpKey: helpKey),
-    ],
-  );
-
-  Widget _homeField(AppLocalizations l10n, PolarAlignSettings s) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _label(l10n.polarKnobUseHome, 'img.polar.use_home'),
-      Row(
-        children: [
-          Semantics(
-            label: l10n.polarKnobUseHome,
-            child: Switch(
-              key: const Key('polar-advanced-use-home'),
-              value: s.useHome,
-              onChanged: (v) => _save(s.copyWith(useHome: v)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AraColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
     ],
   );
 

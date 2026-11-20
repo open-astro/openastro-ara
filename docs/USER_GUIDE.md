@@ -213,20 +213,37 @@ framing/focus loop when you need to point or focus by eye.
   dialog is reopened. **Start** waits while the guider is guiding (a run's or your own): stop guiding
   first, because the assistant needs the star to drift uncorrected. Run it on a calm night after polar alignment, and again after you change the
   guide camera, scope or mount.
-- **Polar Align in three steps.** *Rough*: the mount goes Home (or you put it there and tap
-  Continue), tilts 5° off the axis with the Dec motor and makes two 10° RA turns with the RA motor
-  (never a GoTo with *Send the mount Home first* on, as NINA's three-point alignment), the main camera solving a frame at each of the three
+- **Starting Polar Align.** Point the tube near the pole with the counterweights down, then start.
+  Polar Align starts from there: it never sends the mount Home and never slews it, as NINA's
+  three-point alignment. A parked mount is refused ("Mount is parked — unpark it and point near the
+  pole first"); Polar Align never unparks it. Before anything moves, a confirm step shows which way
+  RA will turn (east or west: on the first start away from the meridian, later back toward Polar
+  Align's start; about 10° twice) and the most the whole run
+  turns; the mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
+- **Polar Align keeps RA near where it first started.** The first start after the mount connects is
+  Polar Align's start for the session. Every later run (**Adjust again**, or a new Start) turns back
+  toward it, and the confirm step says how far RA is from it ("RA is 20° east of where Polar Align
+  started"). A run that would take RA more than 30° from it is refused: slew the mount back near the
+  pole, counterweights down, and start again. When you move the mount some other way (a slew, the hand
+  pad, by hand) or reconnect it, the confirm step says the pose is a new start, and it becomes the start.
+  Tracking that stays on (or stays off) does not count as moving it: after a long time tracking
+  (guiding, say) RA may have turned far enough that the next run is refused until you slew back.
+  Turning tracking on or off between runs can count as a move, and the next start is then a new start.
+  In Simple Mode's Preflight, the polar step no longer starts on its own: start it from the shutter.
+- **Polar Align in three steps.** *Rough*: from where you pointed it (when the tube looks right at the
+  pole, the Dec motor first tilts it 5° off the axis), the RA motor makes two 10° turns, never a GoTo,
+  the main camera solving a frame at each of the three
   stops; the circle through them is where the mount's axis really points, so the card says
   how far from the pole you are and on which side — above or below, east or west — while you make
   the big moves. The main camera's frames take a few seconds each. Tap **Next: fine** when you are
-  within a few arcminutes. *Fine*: the mount goes Home again and the guide camera measures the axis
-  the same way, a frame a second, then guides the knobs live, as before. *Check*: once inside the
-  tolerance, **Verify** sends the mount Home again and takes three solves (10° apart by default, the same motor moves); the result is
+  within a few arcminutes. *Fine*: from where the rough step left the mount, the guide camera measures
+  the axis the same way, turning back over the rough step's arc, a frame a second, then guides the knobs live. *Check*: once inside the
+  tolerance, **Verify** takes three solves from where the mount is (10° apart by default, the same motor moves, inside the arc you confirmed); the result is
   measured on its own, not read off the loop, so it says how good the alignment really is and how far
   it disagrees with the fine readout. **Done** skips the check. The Start card also offers *Skip the
   rough step* (a permanent pier) and *Check only*.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of Verify all stop the
-  mount where it is: Ara aborts a GoTo or Find Home, stops both motors, and checks on fresh readings
+  mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
   check the mount before you start again. Then tracking goes off, as NINA does by default, so the mount
   cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
@@ -235,6 +252,15 @@ framing/focus loop when you need to point or focus by eye.
   started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
+- **Stop Mount and Emergency Stop end Polar Align.** Any stop Polar Align did not send itself ends
+  the run at once, even between two turns while it solves a frame or while you turn the knobs:
+  **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**. The card
+  says what stopped it, and no further turn starts. Emergency Stop latches before any of its other
+  steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
+  While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
+  ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
+  turns unsafe, or a device fault ends in a park, the park stops Polar Align and the Polar Aligner
+  first. A Home you tap just before Stop Mount or Emergency Stop does not start after the stop.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
@@ -283,8 +309,9 @@ Ara assumes you're asleep while it works:
 - **Emergency stop**: the red **Emergency Stop** button on the app's bottom status bar is always
   there, on every tab. Press and hold it for 2 s ("Hold to confirm"; letting go early sends nothing).
   With a keyboard or screen reader, activating it opens a "Stop everything now?" confirmation
-  instead (in Simple Mode, press it again within 3 s). It then makes the daemon abort the running sequence, stop the mount where it is (it never parks), halt the rotator (it stops where it is), abort
-  the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout, a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment was running, switch the flat panel light off, and switch the camera's cooler off — then reports honestly what each step did (an unreachable mount is called out loudly so you go check,
+  instead (in Simple Mode, press it again within 3 s). Before anything else it latches the stop, so a
+  polar alignment cannot start another turn meanwhile. It then makes the daemon abort the running sequence, stop the mount where it is (it never parks), halt the rotator (it stops where it is), abort
+  the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout, a running autofocus and polar alignment, stop guiding, stop the mount and the Polar Aligner again if a polar alignment was running, switch the flat panel light off, and switch the camera's cooler off — then reports honestly what each step did (an unreachable mount is called out loudly so you go check,
   never papered over). A panicked double-press is ignored while the first stop is running.
 - **Audible alarm**: when anything above reports UNSAFE, the app pops a safety modal at once and,
   after a short silent delay (default 5 s — silence it from the screen before it ever rings),

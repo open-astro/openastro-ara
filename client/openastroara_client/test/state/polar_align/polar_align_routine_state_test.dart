@@ -11,6 +11,9 @@ import 'package:openastroara/state/settings/loaded_section.dart' show SectionNot
 
 /// Fake rig: frame fetches wait on [frames] in order; settings and status scripted.
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final frames = <Completer<Uint8List?>>[];
   int frameCalls = 0;
   PolarAlignStatus? status;
@@ -45,7 +48,7 @@ class _Api implements PolarAlignClient {
   }
 
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> next() async {}
   @override
@@ -130,18 +133,18 @@ void main() {
     await expectLater(c.read(polarAlignSettingsProvider.future), throwsStateError);
     final notifier = c.read(polarAlignSettingsProvider.notifier);
     await expectLater(
-      notifier.save(const PolarAlignSettings(useHome: false)),
+      notifier.save(const PolarAlignSettings(checkStepDeg: 15)),
       throwsA(isA<SectionNotLoadedException>()),
     );
     expect(api.getCalls, 2, reason: 'the save loads once more');
     // The retry loads, but the edit was built on no loaded copy: still nothing written.
     api.getError = null;
     await expectLater(
-      notifier.save(const PolarAlignSettings(useHome: false)),
+      notifier.save(const PolarAlignSettings(checkStepDeg: 15)),
       throwsA(isA<SectionNotLoadedException>()),
     );
     expect(api.putCalls, 0);
-    expect(c.read(polarAlignSettingsProvider).value?.useHome, isTrue);
+    expect(c.read(polarAlignSettingsProvider).value?.checkStepDeg, 10.0);
   });
 
   test('opening a panel seeds the live view from the rig', () async {

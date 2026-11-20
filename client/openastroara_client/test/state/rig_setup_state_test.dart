@@ -42,13 +42,18 @@ class _Profile extends ProfileApi {
   final OpticsSettings? optics;
   final Phd2Settings phd2;
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      site ?? (throw Exception('connection refused'));
+  Future<({SiteSettings value, String? etag})> getSiteSection() async => (
+    value: site ?? (throw Exception('connection refused')),
+    etag: '"v1"',
+  );
   @override
-  Future<OpticsSettings> getOptics() async =>
-      optics ?? (throw Exception('connection refused'));
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => (
+    value: optics ?? (throw Exception('connection refused')),
+    etag: '"v1"',
+  );
   @override
-  Future<Phd2Settings> getPhd2Settings() async => phd2;
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: phd2, etag: '"v1"');
 }
 
 /// The daemon holds no Guider, so its status read is a 404: nothing has
@@ -328,8 +333,24 @@ void main() {
       // The user types a focal length in Settings and has not saved it yet.
       c.read(opticsSettingsProvider.notifier).setFocalLengthMm(1000);
       await _relink(c);
-      expect(c.read(opticsSettingsProvider).focalLengthMm, 1000);
+      expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 1000);
       expect(c.read(rigSetupFactsProvider), isNotNull);
+    });
+
+    test('optics back to not loaded (a rig or profile change) leave the facts untrusted (ADR 0015)', () async {
+      final c = await _trust(_Profile());
+      expect(c.read(rigSetupFactsProvider), isNotNull);
+      c.read(opticsSettingsProvider.notifier).reset();
+      expect(c.read(rigSetupFactsProvider), isNull, reason: 'no client default stands in for the rig\'s optics');
+      expect(c.read(rigSetupGapsProvider), isEmpty);
+    });
+
+    test('the site back to not loaded (a rig or profile change) leaves the facts untrusted (ADR 0015)', () async {
+      final c = await _trust(_Profile());
+      expect(c.read(rigSetupFactsProvider), isNotNull);
+      c.read(siteSettingsProvider.notifier).reset();
+      expect(c.read(rigSetupFactsProvider), isNull, reason: 'no "Backyard" at 0/0 stands in for the rig\'s site');
+      expect(c.read(rigSetupGapsProvider), isEmpty);
     });
 
     test(

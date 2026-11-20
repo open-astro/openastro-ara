@@ -14,7 +14,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
-import '../../state/profile_management_state.dart' show profileApiProvider;
+import '../../state/settings/loaded_section.dart';
 import '../../state/simple_messages_state.dart'
     show SimpleStatusOrigin, userNotifier;
 import '../../theme/ara_colors.dart';
@@ -131,7 +131,10 @@ void simpleOpenFocusOffsets(WidgetRef ref) {
   final reference = offsetReference(
     slots,
     picks,
-    ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)),
+    // Not loaded yet: no AF filter, so the L or Lum slot, as the daemon
+    // picks with none set.
+    ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ??
+        '',
   );
   return ({...picks, ?reference}, reference);
 }
@@ -187,8 +190,8 @@ final simpleGuideExposureProvider =
 double? simpleFocusExposureShown(WidgetRef ref, double? picked) =>
     picked ??
     ref
-        .watch(autofocusSettingsProvider.select((s) => s.exposureSeconds))
-        .toDouble();
+        .watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds))
+        ?.toDouble();
 
 /// Whether the focus run's frame, its measured stars circled, fills the screen
 /// behind Focus's panels (session only; off to start).
@@ -320,7 +323,7 @@ class SimpleGuideLiveShutter extends ConsumerWidget {
         null;
     final gated =
         ref.watch(
-          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
         ) &&
         !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return SimpleShutterButton(
@@ -697,19 +700,21 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
 
   /// Saves the pick to the profile, as the daemon reads the next run's
   /// exposure from there (it is not sent with the run).
+  /// Not loaded from the rig: one more load first, else refused with nothing
+  /// sent, and says why. Refused as stale: the rig's newer copy shows.
   Future<void> _setExposure(int seconds) async {
-    final af = ref.read(autofocusSettingsProvider.notifier);
-    af.setExposureSeconds(seconds);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.focus);
     final l10n = context.l10n;
     try {
-      await af.persistToServer(api);
+      await ref
+          .read(autofocusSettingsProvider.notifier)
+          .changeAndSave((s) => s.copyWith(exposureSeconds: seconds));
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveThat,
-        detail: failureReason(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
         error: true,
       );
     }
@@ -721,12 +726,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
   /// heading, pills and buttons, without the mock's one-line descriptions (no
   /// room for them on an iPad beside the chart).
   List<Widget> _autofocusExtras(AppLocalizations l10n, bool locked) {
+    // Null until the profile's copy is in from the rig: no chip is picked.
     final seconds = ref.watch(
-      autofocusSettingsProvider.select((s) => s.exposureSeconds),
+      autofocusSettingsProvider.select((s) => s.value?.exposureSeconds),
     );
     // A profile value outside the four shows as its own chip, never rewritten
     // until the user picks one of the four.
-    final choices = {...kSimpleAutofocusExposures, seconds}.toList()..sort();
+    final choices = {...kSimpleAutofocusExposures, ?seconds}.toList()..sort();
     final wheel = ref.watch(filterWheelProvider).value;
     final hasWheel = wheel?.isConnected ?? false;
     final (picks, reference) = simpleOffsetPicks(ref);
@@ -1207,7 +1213,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final status = live.status;
     final guider = ref.watch(guiderStatusProvider).asData?.value;
     final oag = ref.watch(
-      phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+      phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
     );
     final gated =
         oag &&

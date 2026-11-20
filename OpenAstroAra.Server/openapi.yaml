@@ -549,8 +549,18 @@ paths:
                 - type: 'null'
                 - $ref: '#/components/schemas/ParkRequestDto'
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/unpark:
     post:
       tags:
@@ -573,8 +583,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/confirm-home:
     post:
       tags:
@@ -608,8 +628,20 @@ paths:
               $ref: '#/components/schemas/MoveAxisRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/tracking:
     post:
       tags:
@@ -2313,6 +2345,36 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/polaralign/start-plan:
+    get:
+      tags:
+        - Equipment
+      summary: 'What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.'
+      operationId: GetPolarAlignStartPlan
+      parameters:
+        - name: stage
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignStartPlanDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/start:
     post:
       tags:
@@ -14476,15 +14538,62 @@ components:
             - string
           format: double
           default: 3
-        use_home:
-          type: boolean
-          default: true
         polar_aligner_auto:
           type: boolean
           default: true
         stop_tracking_when_done:
           type: boolean
           default: true
+    PolarAlignStartPlanDto:
+      required:
+        - stage
+        - direction
+        - step_deg
+        - turns
+        - max_sweep_deg
+      type: object
+      properties:
+        stage:
+          type:
+            - 'null'
+            - string
+        direction:
+          type: string
+        step_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        turns:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        max_sweep_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        new_origin:
+          type: boolean
+          default: true
+        origin_offset_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        sweep_limit_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 30
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -14492,6 +14601,16 @@ components:
           type:
             - 'null'
             - string
+        confirmed:
+          type: boolean
+          default: false
+        direction:
+          type:
+            - 'null'
+            - string
+        new_origin:
+          type: boolean
+          default: false
     PreflightChecklistDto:
       required:
         - generated_utc
@@ -15011,6 +15130,10 @@ components:
         - below-horizon-limit
         - mount-position-unverified
         - counterweight-limit
+        - polar-align-mount-parked
+        - polar-align-unconfirmed
+        - polar-align-sweep-limit
+        - polar-align-moving-mount
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

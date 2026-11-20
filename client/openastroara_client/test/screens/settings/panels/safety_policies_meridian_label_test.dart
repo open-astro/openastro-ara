@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/settings/panels/safety_policies_panel.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
+import '../../../support/safety_section.dart';
+
 /// #2044: meridian_pause_min is minutes BEFORE the meridian, so the row says so.
 void main() {
   testWidgets(
@@ -14,7 +16,10 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [activeServerProvider.overrideWithValue(null)],
+          overrides: [
+            activeServerProvider.overrideWithValue(null),
+            safetyFromRig(),
+          ],
           child: const MaterialApp(home: Scaffold(body: SafetyPoliciesPanel())),
         ),
       );

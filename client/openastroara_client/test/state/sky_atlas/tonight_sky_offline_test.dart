@@ -33,7 +33,8 @@ class _SeededOptics extends OpticsSettingsNotifier {
   _SeededOptics(this._v);
   final OpticsSettings _v;
   @override
-  OpticsSettings build() => _v;
+  LoadedSection<OpticsSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededElectronics extends CameraElectronicsNotifier {
@@ -56,7 +57,8 @@ class _SeededSite extends SiteSettingsNotifier {
   _SeededSite(this._site);
   final SiteSettings _site;
   @override
-  SiteSettings build() => _site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _site, source: SectionSource.rig);
 }
 
 class _SeededCalibration extends SkyModelCalibrationNotifier {

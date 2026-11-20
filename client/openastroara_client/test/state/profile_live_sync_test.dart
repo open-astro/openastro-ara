@@ -27,8 +27,19 @@ import '../support/section_load.dart';
 /// (whatever name it currently holds), the profile list, and any other
 /// section's stored JSON in [stored].
 class _Rig implements HttpClientAdapter {
-  String siteName = 'Backyard';
+  /// The site name the rig holds; setting it is another device's save, so
+  /// the copy's tag moves too.
+  String get siteName => _siteName;
+  set siteName(String name) {
+    _siteName = name;
+    siteVersion++;
+  }
+
+  String _siteName = 'Backyard';
   int siteReads = 0;
+
+  /// The site copy's version, served as its `ETag`; each write moves it.
+  int siteVersion = 1;
 
   /// Other sections' JSON by request path, and how often each path was read.
   final stored = <String, Object>{};
@@ -62,9 +73,12 @@ class _Rig implements HttpClientAdapter {
       reads.update(options.path, (n) => n + 1, ifAbsent: () => 1);
     }
     Object body;
-    if (options.path.endsWith('/profile/site')) {
+    final site = options.path.endsWith('/profile/site');
+    if (site) {
       if (options.method == 'GET') siteReads++;
-      body = {'site_name': siteName};
+      if (options.method != 'GET' && status == 200) siteVersion++;
+      // The whole section, as the rig serves it (ADR 0015: no client default).
+      body = {...rigDefaults['site']!, 'site_name': siteName};
     } else if (options.path.endsWith('/profiles')) {
       body = {'active_id': null, 'profiles': <Object>[]};
     } else {
@@ -75,6 +89,7 @@ class _Rig implements HttpClientAdapter {
       status,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
+        if (site) 'etag': ['"site-v$siteVersion"'],
       },
     );
   }
@@ -121,14 +136,16 @@ void main() {
   setUp(ProfileApi.forgetOwnWrites);
 
   test('profile.updated for a section re-reads it, so an open screen never shows stale values', () async {
-    final rig = _Rig()..siteName = 'Seen on the other device';
+    final rig = _Rig();
     final cache = _Cache();
     final c = _container(rig, cache: cache);
-    expect(c.read(siteSettingsProvider).siteName, 'Backyard');
+    await settleLoaded(c, siteSettingsProvider);
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Backyard');
+    rig.siteName = 'Seen on the other device';
 
     await applyProfileUpdated(c, 'site');
 
-    expect(c.read(siteSettingsProvider).siteName, 'Seen on the other device');
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Seen on the other device');
     expect(
       cache.listSaves,
       1,
@@ -141,19 +158,15 @@ void main() {
     () async {
       final rig = _Rig()..siteName = 'Saved';
       final c = _container(rig);
+      await settleLoaded(c, siteSettingsProvider);
       // The write this device just made (the event for it comes back too).
-      await c
-          .read(profileApiProvider)!
-          .putSiteSettings(const SiteSettings(siteName: 'Saved'));
-      c
-          .read(siteSettingsProvider.notifier)
-          .setSiteName('Typing after the save');
-      final reads = rig.siteReads;
+      final site = c.read(siteSettingsProvider.notifier)..setSiteName('Saved');
+      await site.save(c.read(profileApiProvider)!);
+      site.setSiteName('Typing after the save');
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).siteName, 'Typing after the save');
-      expect(rig.siteReads, reads);
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing after the save');
     },
   );
 
@@ -164,31 +177,28 @@ void main() {
         ..siteName = 'Saved'
         ..holdWrites = Completer<void>();
       final c = _container(rig);
-      final put = c
-          .read(profileApiProvider)!
-          .putSiteSettings(const SiteSettings(siteName: 'Saved'));
+      await settleLoaded(c, siteSettingsProvider);
+      final site = c.read(siteSettingsProvider.notifier)..setSiteName('Saved');
+      final put = site.save(c.read(profileApiProvider)!);
       await _sent(rig, 1); // the answer is still held
-      c
-          .read(siteSettingsProvider.notifier)
-          .setSiteName('Typing while it saves');
-      final reads = rig.siteReads;
+      site.setSiteName('Typing while it saves');
 
-      await applyProfileUpdated(c, 'site');
+      final event = applyProfileUpdated(c, 'site');
       rig.holdWrites!.complete();
       await put;
+      await event;
 
-      expect(c.read(siteSettingsProvider).siteName, 'Typing while it saves');
-      expect(rig.siteReads, reads);
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing while it saves');
     },
   );
 
   test(
     "a write the rig refused does not hide another device's change",
     () async {
-      final rig = _Rig()
-        ..siteName = 'Set on the other device'
-        ..refuseWrites = 1;
+      final rig = _Rig()..refuseWrites = 1;
       final c = _container(rig);
+      await settleLoaded(c, siteSettingsProvider);
+      rig.siteName = 'Set on the other device';
       await expectLater(
         c.read(profileApiProvider)!.putSiteSettings(const SiteSettings()),
         throwsA(isA<DioException>()),
@@ -196,7 +206,7 @@ void main() {
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).siteName, 'Set on the other device');
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Set on the other device');
     },
   );
 
@@ -214,11 +224,8 @@ void main() {
       rig.holdWrites!.complete();
       await expectLater(refused, throwsA(isA<DioException>()));
       await saved;
-      final reads = rig.siteReads;
 
-      await applyProfileUpdated(c, 'site'); // the event for the saved write
-
-      expect(rig.siteReads, reads);
+      expect(ProfileApi.wroteRecently('site'), isTrue);
     },
   );
 

@@ -12,6 +12,7 @@ import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../util/guide_optics.dart';
@@ -23,6 +24,7 @@ import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/adaptive_controls.dart';
 
@@ -52,22 +54,31 @@ class EquipmentGuiderPanel extends ConsumerStatefulWidget {
       _EquipmentGuiderPanelState();
 }
 
-class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
+class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
+    with SectionPanel {
   String? _lastError;
 
   // Every change saves on its own (like the device pages), shortly after the
-  // edit so a burst of changes is one PUT. Nothing saves until the panel has
-  // loaded the stored settings, and a pending save is flushed on leaving.
-  bool _hydrated = false;
-  bool _loading = false; // the load's own state writes are not edits
+  // edit so a burst of changes is one PUT, through the section module (ADR
+  // 0015): only over the rig's copy, with its tag. A pending save is flushed
+  // on leaving.
   bool _syncingDerived = false;
+  bool _loading = false; // the panel's own loads are not edits
   Timer? _autoSave;
   Future<void> Function()? _pendingFlush;
   // The settings as last loaded or saved: a write that leaves them unchanged
-  // (another screen re-loading them) is not a change and saves nothing.
+  // is not a change and saves nothing.
   String? _savedJson;
 
-  String _json() => jsonEncode(ProfileApi.phd2SettingsToJson(ref.read(phd2SettingsProvider)));
+  // §63.19 — the guide focal length of an OAG is derived from the main
+  // optics, so a guider Save needs the optics in from the rig too.
+  @override
+  List<PanelSection> get sections => [phd2SettingsProvider, opticsSettingsProvider];
+
+  String _json() {
+    final v = ref.read(phd2SettingsProvider).value;
+    return v == null ? '' : jsonEncode(ProfileApi.phd2SettingsToJson(v));
+  }
 
   // §63.17 guider equipment — transient discovery/apply UI state.
   bool _applying = false;
@@ -84,47 +95,44 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   Map<String, String> get _alpacaNames =>
       ref.watch(guiderAlpacaDevicesProvider).names;
 
+  /// Load the guider settings and the optics from the rig (on open, Retry
+  /// and Reload, and after a rig or profile change), then derive an OAG focal
+  /// length and read the Alpaca servers the settings name.
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
+  Future<void> loadSections() async {
+    _autoSave?.cancel();
+    _pendingFlush = null;
     _loading = true;
     try {
-      // §63.19 — optics first: the OAG-derived guide focal length reads the
-      // main optics section, which is hydrated by a different panel.
-      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
-      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      _syncDerivedFocalLength();
-      _savedJson = _json();
-      _hydrated = true;
-      _loading = false;
-      final phd2 = ref.read(phd2SettingsProvider);
-      // Choices already loaded before this panel built: ref.listen only
-      // fires on a later change, so resolve their servers here too.
-      final loaded = ref.read(guiderEquipmentProvider).value?.choices;
-      final endpoints = <String>[
-        if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0)
-          '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}',
-        ...choiceEndpoints(loaded),
-      ];
-      // Opening the panel reads the servers again, as it did on its own.
-      await ref
-          .read(guiderAlpacaDevicesProvider.notifier)
-          .resolve(endpoints, fresh: true);
-    } catch (e) {
-      _loading = false;
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
+      await super.loadSections();
+      // A load the section's own first load superseded lands nothing and
+      // fails nothing: load once more (the module's rigCopy).
+      for (final section in sections) {
+        final now = mounted ? ref.read(section) : null;
+        if (now != null && !now.canSave && now.lastFailure == null) {
+          await ref.read(section.notifier).rigCopy();
+        }
       }
+    } finally {
+      _loading = false;
     }
+    if (!mounted) return;
+    final phd2 = ref.read(phd2SettingsProvider).value;
+    if (phd2 == null || !ref.read(opticsSettingsProvider).canSave) return;
+    _syncDerivedFocalLength();
+    _savedJson = _json();
+    // Choices already loaded before this panel built: ref.listen only
+    // fires on a later change, so resolve their servers here too.
+    final loaded = ref.read(guiderEquipmentProvider).value?.choices;
+    final endpoints = <String>[
+      if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0)
+        '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}',
+      ...choiceEndpoints(loaded),
+    ];
+    // Opening the panel reads the servers again, as it did on its own.
+    await ref
+        .read(guiderAlpacaDevicesProvider.notifier)
+        .resolve(endpoints, fresh: true);
   }
 
   /// §63.19 — when the setup type is OAG the guide focal length is derived
@@ -133,8 +141,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// settings in this client, so the recompute is explicit: on panel load,
   /// on setup-type change, and before every save/apply.
   void _syncDerivedFocalLength() {
-    if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
-    final optics = ref.read(opticsSettingsProvider);
+    if (ref.read(phd2SettingsProvider).value?.guiderSetupType != 'oag') return;
+    // Not loaded (a rig or profile change since the panel loaded it): keep
+    // the stored value rather than derive one from no optics.
+    final optics = ref.read(opticsSettingsProvider).value;
+    if (optics == null) return;
     _syncingDerived = true;
     try {
       ref
@@ -150,30 +161,30 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     }
   }
 
-  /// Never save over the rig's settings when they never loaded; say the
-  /// edit was not kept instead of dropping it silently.
-  void _notifyNotLoaded() {
-    const msg = "Not saved: your guider settings haven't loaded from the rig. "
-        'Reopen this page once connected.';
-    if (_lastError != msg) {
-      setState(() => _lastError = msg);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(msg)));
+  /// An edit schedules a save; a new copy from the rig (a load, a save's
+  /// answer, a live-sync reload after the daemon wrote it) is what the rig
+  /// holds already, so it saves nothing.
+  void _onSectionChanged(
+    LoadedSection<Phd2Settings>? before,
+    LoadedSection<Phd2Settings> now,
+  ) {
+    if (!now.canSave || _loading) return;
+    if (before?.etag != now.etag || before?.source != now.source) {
+      if (!(_autoSave?.isActive ?? false)) _savedJson = _json();
+      return;
     }
+    _scheduleSave();
   }
 
   void _scheduleSave() {
-    if (_syncingDerived || _loading) return;
-    if (!_hydrated) {
-      _notifyNotLoaded();
-      return;
-    }
+    if (_syncingDerived) return;
     if (_json() == _savedJson) {
       _autoSave?.cancel(); // changed back before the save went out
       return;
     }
     final api = _api();
     final notifier = ref.read(phd2SettingsProvider.notifier);
-    _pendingFlush = api == null ? null : () => notifier.persistToServer(api);
+    _pendingFlush = api == null ? null : () => notifier.save(api);
     _autoSave?.cancel();
     _autoSave = Timer(const Duration(milliseconds: 500), () {
       _pendingFlush = null;
@@ -217,14 +228,20 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     final previous = _savedJson;
     _savedJson = _json();
     try {
-      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
+      await ref.read(phd2SettingsProvider.notifier).save(api);
     } catch (e) {
       _savedJson = previous;
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
+      setState(() => _lastError = _failure(e, context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
+
+  /// A refusal by the section module says it in its own words.
+  String _failure(Object e, String action) =>
+      e is SectionNotLoadedException || e is SectionConflictException
+      ? e.toString()
+      : friendlyError(context.l10n, e, action: action);
 
   Future<void> _discoverAlpaca() async {
     setState(() => _equipmentStatus = null);
@@ -255,13 +272,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// Save the panel's OpenAstro Guider settings (so the daemon-side profile carries the
   /// current selections), then ask the daemon to re-push them to the guider.
   Future<void> _applyToGuider() async {
-    if (!_hydrated) {
-      _notifyNotLoaded();
-      return;
-    }
+    final current = ref.read(phd2SettingsProvider).value;
+    if (current == null) return; // not offered until the rig's copy is in
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
-    final unserved = describeUnservedAlpacaSelection(ref.read(phd2SettingsProvider));
+    final unserved = describeUnservedAlpacaSelection(current);
     if (unserved != null) {
       // #1306 — the daemon would refuse this push with the same reason (422);
       // say it here before anything is saved or disconnected.
@@ -288,7 +303,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     _savedJson = _json();
     var saved = false;
     try {
-      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
+      await ref.read(phd2SettingsProvider.notifier).save(api);
       saved = true;
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       if (!mounted) return;
@@ -300,7 +315,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     } catch (e) {
       if (!saved) _savedJson = previous;
       if (!mounted) return;
-      final msg = friendlyDaemonError(e, fallback: "Couldn't apply to the guider");
+      final msg = e is SectionNotLoadedException || e is SectionConflictException
+          ? e.toString()
+          : friendlyDaemonError(e, fallback: "Couldn't apply to the guider");
       setState(() => _equipmentStatus = msg);
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     } finally {
@@ -312,28 +329,42 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final phd2 = ref.watch(phd2SettingsProvider);
+    // Not in from the rig: Connect stays (it reads the host from the rig
+    // itself), the settings wait with Retry (ADR 0015).
+    if (sectionGate() case final gate?) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SettingsSectionHeader('Connection'),
+          GuiderConnectionSection(onBeforeConnect: _flushPendingSave),
+          gate,
+        ],
+      );
+    }
+    final phd2 = ref.watch(phd2SettingsProvider).value!;
     final phd2N = ref.read(phd2SettingsProvider.notifier);
-    ref.listen(phd2SettingsProvider, (_, _) => _scheduleSave());
+    ref.listen(phd2SettingsProvider, _onSectionChanged);
     final guiderStatus = ref.watch(guiderStatusProvider).asData?.value;
+    Phd2Settings now() => ref.read(phd2SettingsProvider).value!;
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         const SettingsSectionHeader('Connection'),
         GuiderConnectionSection(onBeforeConnect: _flushPendingSave),
         EditableTextRow(
           label: 'Host',
           helpKey: 'eq.guider.host',
           currentValue: phd2.host,
-          getCanonical: () => ref.read(phd2SettingsProvider).host,
+          getCanonical: () => now().host,
           parse: phd2N.setHost,
         ),
         EditableNumberRow(
           label: 'Port',
           helpKey: 'eq.guider.port',
           currentValue: phd2.port.toString(),
-          getCanonical: () => ref.read(phd2SettingsProvider).port.toString(),
+          getCanonical: () => now().port.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setPort(v);
@@ -364,7 +395,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.dither_every_n',
           currentValue: phd2.ditherEveryNFrames.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).ditherEveryNFrames.toString(),
+              now().ditherEveryNFrames.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setDitherEveryNFrames(v);
@@ -375,7 +406,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.dither_pixels',
           currentValue: phd2.ditherPixels.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).ditherPixels.toString(),
+              now().ditherPixels.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDitherPixels(v);
@@ -386,7 +417,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.settle_pixels',
           currentValue: phd2.settlePixels.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).settlePixels.toString(),
+              now().settlePixels.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setSettlePixels(v);
@@ -397,7 +428,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.settle_time',
           currentValue: phd2.settleTimeSec.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).settleTimeSec.toString(),
+              now().settleTimeSec.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setSettleTimeSec(v);
@@ -408,7 +439,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.settle_timeout_sec',
           currentValue: phd2.settleTimeoutSec.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).settleTimeoutSec.toString(),
+              now().settleTimeoutSec.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setSettleTimeoutSec(v);
@@ -449,7 +480,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType == 'oag')
           Builder(
             builder: (context) {
-              final optics = ref.watch(opticsSettingsProvider);
+              final optics =
+                  ref.watch(opticsSettingsProvider).value ??
+                  const OpticsSettings();
               final derived = derivedOagGuideFocalLength(
                 optics.focalLengthMm,
                 optics.reducerFactor,
@@ -472,7 +505,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
             helpKey: 'eq.guider.guide_focal_length',
             currentValue: phd2.guideFocalLength.toString(),
             getCanonical: () =>
-                ref.read(phd2SettingsProvider).guideFocalLength.toString(),
+                now().guideFocalLength.toString(),
             parse: (s) {
               final v = int.tryParse(s);
               if (v != null) phd2N.setGuideFocalLength(v);
@@ -481,8 +514,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         if (phd2.guiderSetupType != 'oag' &&
             guideFocalLengthLooksCopiedFromMainScope(
               phd2.guideFocalLength,
-              ref.watch(opticsSettingsProvider).focalLengthMm,
-              ref.watch(opticsSettingsProvider).reducerFactor,
+              ref.watch(opticsSettingsProvider).value?.focalLengthMm ?? 0,
+              ref.watch(opticsSettingsProvider).value?.reducerFactor ?? 1,
             ))
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),
@@ -500,7 +533,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.guide_pixel_size',
           currentValue: phd2.guidePixelSize.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).guidePixelSize.toString(),
+              now().guidePixelSize.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setGuidePixelSize(v);
@@ -511,7 +544,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.ra_aggressiveness',
           currentValue: phd2.raAggressiveness.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).raAggressiveness.toString(),
+              now().raAggressiveness.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setRaAggressiveness(v);
@@ -522,7 +555,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.dec_aggressiveness',
           currentValue: phd2.decAggressiveness.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).decAggressiveness.toString(),
+              now().decAggressiveness.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDecAggressiveness(v);
@@ -533,7 +566,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.minimum_move',
           currentValue: phd2.minimumMove.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).minimumMove.toString(),
+              now().minimumMove.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setMinimumMove(v);
@@ -544,7 +577,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           helpKey: 'eq.guider.dec_minimum_move',
           currentValue: phd2.decMinimumMove.toString(),
           getCanonical: () =>
-              ref.read(phd2SettingsProvider).decMinimumMove.toString(),
+              now().decMinimumMove.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDecMinimumMove(v);
@@ -621,7 +654,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   // side Alpaca discovery, and the on-demand profile push. A pick saves to the
   // profile on its own; "Apply to guider" saves AND pushes.
   List<Widget> _equipmentSection(BuildContext context) {
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value!;
+    Phd2Settings now() => ref.read(phd2SettingsProvider).value!;
     final discovery = ref.watch(guiderDiscoveryProvider);
     final phd2N = ref.read(phd2SettingsProvider.notifier);
     final equipment = ref.watch(guiderEquipmentProvider);
@@ -763,7 +797,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         label: 'Guide camera ID',
         helpKey: 'eq.guider.guide_camera_id',
         currentValue: phd2.guiderCameraId,
-        getCanonical: () => ref.read(phd2SettingsProvider).guiderCameraId,
+        getCanonical: () => now().guiderCameraId,
         parse: phd2N.setGuiderCameraId,
         hint: 'Only needed when two cameras share a name',
       ),
@@ -838,7 +872,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         label: 'Alpaca host',
         helpKey: 'eq.guider.alpaca_host',
         currentValue: phd2.guiderAlpacaHost,
-        getCanonical: () => ref.read(phd2SettingsProvider).guiderAlpacaHost,
+        getCanonical: () => now().guiderAlpacaHost,
         parse: phd2N.setGuiderAlpacaHost,
         hint: 'Leave blank to keep the guider\'s setting',
       ),
@@ -847,7 +881,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         helpKey: 'eq.guider.alpaca_port',
         currentValue: phd2.guiderAlpacaPort.toString(),
         getCanonical: () =>
-            ref.read(phd2SettingsProvider).guiderAlpacaPort.toString(),
+            now().guiderAlpacaPort.toString(),
         parse: (s) {
           final v = int.tryParse(s);
           if (v != null) phd2N.setGuiderAlpacaPort(v);

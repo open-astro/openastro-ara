@@ -11,7 +11,9 @@ import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import '../../support/imaging_sections.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
 /// Captures the key a degraded create stamps into the draft.
@@ -62,8 +64,9 @@ class _ThrowingClient implements SequenceClient {
 
 class _GuiderPhd2 extends Phd2SettingsNotifier {
   @override
-  Phd2Settings build() =>
-      const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
+  LoadedSection<Phd2Settings> build() => LoadedSection(
+      value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      source: SectionSource.rig);
 }
 
 void main() {
@@ -85,6 +88,7 @@ void main() {
     final owned = container == null;
     container ??= ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => api),
     ]);
     if (owned) addTearDown(container.dispose);
@@ -131,6 +135,7 @@ void main() {
     // it does not (the night of 2026-10-02 a rig with a guider got none).
     final plain = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => null),
     ]);
     addTearDown(plain.dispose);
@@ -141,6 +146,7 @@ void main() {
 
     final guided = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => null),
       phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
     ]);
@@ -155,6 +161,7 @@ void main() {
   testWidgets('no server: a second add APPENDS to the open draft', (tester) async {
     final container = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => null),
     ]);
     addTearDown(container.dispose);
@@ -182,6 +189,7 @@ void main() {
       (tester) async {
     final container = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => null),
     ]);
     addTearDown(container.dispose);

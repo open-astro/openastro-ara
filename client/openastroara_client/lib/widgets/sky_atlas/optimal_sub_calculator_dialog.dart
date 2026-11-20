@@ -18,10 +18,11 @@ import '../settings/settings_row.dart';
 /// profile (optics, camera electronics, site sky, the first filter's passband,
 /// the noise-tolerance knob and the fitted sky-model k for that filter's kind).
 Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
-  final optics = ref.read(opticsSettingsProvider);
+  final optics =
+      ref.read(opticsSettingsProvider).value ?? const OpticsSettings();
   final cam =
       ref.read(cameraElectronicsProvider).value ?? const CameraElectronics();
-  final site = ref.read(siteSettingsProvider);
+  final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
   final filters = ref.read(filterSetProvider).value?.filters ?? const [];
   final k =
       ref.read(skyModelCalibrationProvider).asData?.value?.appliedK ??

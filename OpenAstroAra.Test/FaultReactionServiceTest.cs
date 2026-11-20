@@ -160,6 +160,65 @@ namespace OpenAstroAra.Test {
                 Is.True, "the escalation posts an Error notification naming the pattern");
         }
 
+        private static readonly string[] PolarAlignThenAlignerThenPark = ["polar fault_park", "aligner", "park"];
+
+        // #2066 — the fault park, like the safety park, first ends a running polar alignment (told to leave the mount to the
+        // park: no stop of its own that could land on the park) and stops its Polar Aligner.
+        [Test]
+        public async Task The_fault_park_stops_a_running_polar_alignment_first() {
+            var calls = new List<string>();
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopForTakeoverAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((by, _) => { lock (calls) { calls.Add("polar " + by); } }).ReturnsAsync(Accepted);
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(a => a.IsPresent).Returns(true);
+            aligner.Setup(a => a.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("aligner"); } }).ReturnsAsync(Accepted);
+            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("park"); } }).ReturnsAsync(Accepted);
+            service.Dispose();
+            service = new FaultReactionService(
+                hub: null, reconnector.Object, profiles.Object, () => sequencer.Object,
+                telescope.Object, notifications.Object, ws.Object,
+                polarAlignResolver: () => polar.Object, polarAligner: aligner.Object) {
+                DelayShaper = _ => TimeSpan.Zero,
+            };
+
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(calls, Is.EqualTo(PolarAlignThenAlignerThenPark));
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "not the Stop that confirms its own stop first");
+        }
+
+        // #2066 — a polar alignment that hangs on its stop must not hold the fault park back.
+        [Test]
+        public async Task A_polar_alignment_that_hangs_on_its_stop_does_not_hold_the_fault_park_back() {
+            var never = new TaskCompletionSource<OperationAcceptedDto>();
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopForTakeoverAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(never.Task);
+            service.Dispose();
+            service = new FaultReactionService(
+                hub: null, reconnector.Object, profiles.Object, () => sequencer.Object,
+                telescope.Object, notifications.Object, ws.Object,
+                polarAlignResolver: () => polar.Object) {
+                DelayShaper = _ => TimeSpan.Zero,
+                StopPolarAlignBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
+            };
+
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            }
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            never.TrySetResult(Accepted);
+        }
+
         [Test]
         public async Task The_third_camera_op_fault_pauses_the_sequence() {
             var run = Guid.NewGuid();

@@ -156,8 +156,9 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
       }
       if (outcome.success) {
         // The daemon wrote the Storage section itself (new save directory,
-        // new ETag) and no profile.updated follows this route: reload it, or
-        // the next Save sends the old tag and gets a false 412 (ADR 0015).
+        // new ETag). A daemon with #1807 publishes profile.updated for it; an
+        // older one does not: reload it, or the next Save sends the old tag
+        // and gets a false 412 (ADR 0015).
         final profile = ref.read(profileApiProvider);
         if (profile != null) {
           unawaited(ref.read(storageSettingsProvider.notifier).load(profile));

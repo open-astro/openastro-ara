@@ -2,25 +2,33 @@
 
 This guide covers running `OpenAstroAra.Server` on a Raspberry Pi. Reference platform is **Raspberry Pi 4 (4 GB+) or Pi 5** on **64-bit Debian Trixie** or newer. Other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Trixie arm64 work best-effort. Bookworm is not supported: its glibc (2.36) is too old for the bundled astrometry libraries, so the package refuses to install there (`libc6 (>= 2.38)`) rather than installing and failing at boot.
 
-The Flutter client (`OpenAstroAra.Client`) runs on macOS, iOS, Android, Windows, and Linux desktops — pull the appropriate build from [Releases](https://github.com/open-astro/openastro-ara/releases).
+The Flutter client (`OpenAstroAra.Client`) runs on macOS, iOS, Android, Windows, and Linux desktops. Releases are **source only**: no app, `.deb` or apt package is published. Build the client and the daemon yourself from the same release ([RELEASES.md](RELEASES.md#building-a-release), [RUNNING.md](RUNNING.md)); the app warns when their versions differ.
 
 ---
 
-## Quick start (APT install)
+## Quick start (build the .deb from source)
 
-The daemon is released through the OpenAstro APT repository at **apt.openastro.net** (playbook §34).
+Ara is released as source only (see [RELEASES.md](RELEASES.md)). There is no apt
+repository for Ara and no published `.deb`. You build the package from a release
+and install the file. Build on the Pi itself, or in an arm64 Debian trixie
+machine or container ([RUNNING.md](RUNNING.md) lists the .NET SDK and tools).
 
 ```bash
-# 1. Add the OpenAstro APT repo (one-time) — matches the live instructions at
-#    https://apt.openastro.net (suite `trixie`, pre-dearmored keyring)
-sudo curl -fsSL https://apt.openastro.net/repo/openastro-archive-keyring.gpg \
-  -o /usr/share/keyrings/openastro-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openastro-archive-keyring.gpg] https://apt.openastro.net trixie main" \
-  | sudo tee /etc/apt/sources.list.d/openastro.list
-sudo apt update
+# 1. Get the release source, submodules included (or unpack the release's
+#    openastro-ara-<version>-source.tar.gz after checking its .sha256).
+#    Do not use GitHub's "Source code" links: they leave out the submodules.
+git clone --branch v1.0.0-beta.1 --recurse-submodules https://github.com/open-astro/openastro-ara.git
+cd openastro-ara
 
-# 2. Install (apt resolves libcfitsio10 transitively; the ASTAP solver is bundled)
-sudo apt install openastroara-server
+# 2. Build the daemon, its astrometry natives and the ASTAP solver, then the .deb
+#    (`sudo apt install build-essential fpc` first; see "Manual install" below for details).
+dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -p:PublishAot=false -o ./publish/arm64
+scripts/build-astrometry-natives.sh ./publish/arm64
+scripts/build-astap-cli.sh ./publish/arm64
+packaging/build-deb.sh ./publish/arm64 "$(python3 scripts/version.py --deb)" ./dist
+
+# Install it (apt resolves libcfitsio10 transitively; the ASTAP solver is bundled)
+sudo apt install ./dist/openastroara-server_*_arm64.deb
 
 # 3. Star database for the plate solver: download it from the app, not the shell.
 #    The setup wizard's review screen works out each camera's field of view and
@@ -46,13 +54,13 @@ curl http://$(hostname -s).local:5555/healthz   # expect "ok"
 
 That's it. The Flutter client auto-discovers the daemon via mDNS (`_openastroara._tcp.local`) on the same LAN.
 
-The install also pulls in the sibling packages the full experience expects — the AlpacaBridge
-equipment hub and the guider daemon — via apt Recommends; pass `--no-install-recommends` for a
-daemon-only install.
+The package recommends the sibling packages the full experience expects — the AlpacaBridge
+equipment hub and the guider daemon. Those projects publish their own packages; apt installs
+them only when their repository is configured. Pass `--no-install-recommends` for a daemon-only
+install.
 
-**Offline / one-off install:** every release's `.deb` also lives in the repo pool
-(`https://apt.openastro.net/pool/main/`) — download it on another machine
-and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
+**Offline / one-off install:** build the `.deb` on another arm64 machine, copy it to the Pi
+and `sudo apt install ./openastroara-server_<version>_arm64.deb` there.
 
 ---
 
@@ -140,12 +148,12 @@ curl http://localhost:5555/api/v1/server/state | jq
 
 ## Updating
 
-The daemon does NOT auto-update. New releases land on apt.openastro.net and install like any
-other package:
+The daemon does NOT auto-update, and no apt repository carries Ara. To update, build the
+`.deb` from the new release (Quick start steps 1 and 2) and install the file over the old one.
+Rebuild the app from the same release too:
 
 ```bash
-sudo apt update
-sudo apt install --only-upgrade openastroara-server
+sudo apt install ./dist/openastroara-server_*_arm64.deb
 # systemd unit + DB schema migrations apply automatically on restart
 ```
 

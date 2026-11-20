@@ -8,6 +8,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -18,7 +19,17 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
+import '../support/fake_section_rig.dart';
 import '../support/section_load.dart';
+
+/// The rig this device talks to, null until it connects.
+class _Api extends Notifier<ProfileApi?> {
+  @override
+  ProfileApi? build() => null;
+  void connect(ProfileApi api) => state = api;
+}
+
+final _apiOf = NotifierProvider<_Api, ProfileApi?>(_Api.new);
 
 /// ProfileApi double serving fixed section payloads for the capture path.
 class _FakeApi extends ProfileApi {
@@ -195,9 +206,10 @@ void main() {
     addTearDown(c.dispose);
     final seeded = await seedPlanningFromCache(c, 'p1');
     expect(seeded, isTrue);
-    expect(c.read(opticsSettingsProvider).focalLengthMm, 382);
-    expect(c.read(imagingDefaultsProvider).defaultGain, 101);
-    expect(c.read(siteSettingsProvider).siteName, 'South GA');
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 382);
+    expect(c.read(imagingDefaultsProvider).value!.defaultGain, 101);
+    expect(c.read(autofocusSettingsProvider).value!.steps, 9);
+    expect(c.read(siteSettingsProvider).value!.siteName, 'South GA');
     expect(c.read(filterSetProvider).value!.filters.single.name, 'Ha');
     expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);
   });
@@ -236,6 +248,149 @@ void main() {
     expect(c.read(filterSetProvider).value!.filters.map((f) => f.name), [
       'Ha',
     ], reason: 'an edit on a cache copy is ignored');
+  });
+
+  test('imaging defaults and autofocus from the snapshot are cache copies: '
+      'readable, never saved (ADR 0015)', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final rig = FakeSectionRig({
+      'imaging-defaults': rigDefaults['imaging-defaults'],
+      'autofocus': rigDefaults['autofocus'],
+    })..failGet.addAll(['imaging-defaults', 'autofocus']);
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(imagingDefaultsProvider).source, SectionSource.cache);
+    expect(c.read(autofocusSettingsProvider).source, SectionSource.cache);
+    c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-25);
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -10,
+        reason: 'an edit on a cache copy is ignored');
+    await expectLater(
+      c.read(autofocusSettingsProvider.notifier).changeAndSave(
+        (s) => s.copyWith(exposureSeconds: 8),
+      ),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    for (final SectionNotifier<Object?> n in [
+      c.read(imagingDefaultsProvider.notifier),
+      c.read(autofocusSettingsProvider.notifier),
+    ]) {
+      await expectLater(
+        n.save(rig.api()),
+        throwsA(isA<SectionNotLoadedException>()),
+      );
+    }
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a snapshot without imaging defaults or autofocus leaves them not '
+      'loaded (ADR 0015)', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+    });
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(imagingDefaultsProvider).value, isNull);
+    expect(c.read(autofocusSettingsProvider).value, isNull);
+  });
+
+  test('a cache copy gives way to the rig copy once the rig connects '
+      '(ADR 0015)', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final rig = FakeSectionRig({
+      'imaging-defaults': {...rigDefaults['imaging-defaults']!, 'gain': 250},
+    });
+    final api = _Api();
+    final c = ProviderContainer(
+      overrides: [
+        profileCacheServiceProvider.overrideWithValue(cache),
+        profileApiProvider.overrideWith((ref) => ref.watch(_apiOf)),
+        _apiOf.overrideWith(() => api),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(imagingDefaultsProvider, (_, _) {});
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(imagingDefaultsProvider).source, SectionSource.cache);
+    api.connect(rig.api());
+    await settle(() => c.read(imagingDefaultsProvider).canSave);
+    expect(c.read(imagingDefaultsProvider).value!.defaultGain, 250);
+    expect(c.read(imagingDefaultsProvider).etag, rig.etagOf('imaging-defaults'));
+  });
+
+  test('the optics from the snapshot are a cache copy: readable, never saved '
+      '(ADR 0015)', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final rig = FakeSectionRig({'optics': rigDefaults['optics']})
+      ..failGet.add('optics');
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(opticsSettingsProvider).source, SectionSource.cache);
+    c.read(opticsSettingsProvider.notifier).setSensorWidthPx(0);
+    expect(c.read(opticsSettingsProvider).value!.sensorWidthPx, 6248);
+    await expectLater(
+      c.read(opticsSettingsProvider.notifier).save(rig.api()),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a snapshot without the optics leaves them not loaded (ADR 0015)',
+      () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'site': ProfileApi.siteSettingsToJson(const SiteSettings()),
+    });
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(opticsSettingsProvider).value, isNull);
+  });
+
+  test('the site from the snapshot is a cache copy: readable, never saved '
+      '(ADR 0015)', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final rig = FakeSectionRig({'site': rigDefaults['site']})
+      ..failGet.add('site');
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(siteSettingsProvider).source, SectionSource.cache);
+    c.read(siteSettingsProvider.notifier).setSkyBortle(9);
+    expect(c.read(siteSettingsProvider).value!.bortleClass, 4);
+    await expectLater(
+      c.read(siteSettingsProvider.notifier).save(rig.api()),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a snapshot without the site leaves it not loaded (ADR 0015)',
+      () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+    });
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(siteSettingsProvider).source, SectionSource.notLoaded);
+    expect(c.read(siteSettingsProvider).value, isNull);
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',

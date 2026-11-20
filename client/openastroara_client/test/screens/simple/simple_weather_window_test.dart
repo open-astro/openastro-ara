@@ -13,6 +13,7 @@ import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
@@ -34,7 +35,8 @@ class _Policies extends SafetyPoliciesNotifier {
   final SafetyPolicies policies;
 
   @override
-  SafetyPolicies build() => policies;
+  LoadedSection<SafetyPolicies> build() =>
+      LoadedSection(value: policies, source: SectionSource.rig, etag: '"v1"');
 }
 
 Map<String, dynamic> _wire({
@@ -81,7 +83,9 @@ Future<void> _pump(
   final c = ProviderContainer(
     overrides: [
       weatherProvider.overrideWith(() => _Weather(wire)),
-      safetyPoliciesProvider.overrideWith(() => _Policies(policies)),
+      // A rig given here loads the policies itself (ADR 0015).
+      if (api == null)
+        safetyPoliciesProvider.overrideWith(() => _Policies(policies)),
       deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'observingconditions' ? driver : null,
       ),
@@ -121,7 +125,8 @@ class _OkPolicies extends ProfileApi {
   final SafetyPolicies policies;
 
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => policies;
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: policies, etag: '"v1"');
 }
 
 /// A rig whose safety policies can't be read.
@@ -129,7 +134,7 @@ class _NoPolicies extends ProfileApi {
   _NoPolicies() : super(const AraServer(hostname: 'test', port: 1));
 
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async =>
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
       throw StateError('unreachable');
 }
 

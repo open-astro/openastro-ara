@@ -142,8 +142,9 @@ class _ReferenceDialog extends ConsumerWidget {
   /// settings (already hydrated by the panel that opens this sheet). Anything
   /// unset stays on the catalog's generic example.
   Map<String, String> _liveValues(WidgetRef ref) {
-    final site = ref.watch(siteSettingsProvider);
-    final optics = ref.watch(opticsSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    final optics =
+        ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
     final live = <String, String>{};
     if (site.observerName.isNotEmpty) live['OBSERVER'] = site.observerName;
     if (optics.telescopeName.isNotEmpty) {

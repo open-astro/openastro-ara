@@ -361,6 +361,9 @@ namespace OpenAstroAra.Server.Services {
             foreach (var group in info.SimultaneousMoves ? [moves] : moves.Select(m => new List<(PolarAlignerAxis Axis, double Arcmin)> { m })) {
                 foreach (var (axis, arcmin) in group) {
                     ct.ThrowIfCancellationRequested();
+                    // #2066 — the Polar Aligner moves the mount's polar axis: a Stop Mount or Emergency Stop (its latch) that
+                    // landed during the frame this move answers, or during the last move's wait, ends the run before it.
+                    ThrowIfStoppedFromOutside(gen);
                     await SetAlignerAsync(gen, new PolarAlignCorrectionDto(kind, Axis: AxisToken(axis), Arcmin: Math.Round(arcmin, 2))).ConfigureAwait(false);
                     lock (_gate) {
                         if (run.Stopped) {

@@ -53,6 +53,10 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly IWsBroadcaster? _ws;
     // #1689 — an unsafe reaction wins over following the mount.
     private readonly Func<DomeFollower?>? _domeFollower;
+    // #2066 — the park stops a running polar alignment and the Polar Aligner first. Func<>: polar alignment is built from
+    // services registered around this one.
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly IPolarAlignerService? _polarAligner;
     private readonly ILogger<SafetyReactionService> _logger;
 
     private readonly object _lock = new();
@@ -104,6 +108,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     internal TimeSpan RecenterTimeout { get; set; } = TimeSpan.FromMinutes(10);
     /// <summary>Cadence of the unpark read-back poll inside <see cref="UnparkTimeout"/>.</summary>
     internal TimeSpan UnparkPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
+    /// hangs must not hold the park back: the park also counts as a stop, so the routine starts no move after it.</summary>
+    internal TimeSpan StopPolarAlignBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     public SafetyReactionService(
             ISafetyMonitorService? safetyMonitor = null,
@@ -117,8 +124,12 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             ILogger<SafetyReactionService>? logger = null,
             Func<ICenteringService?>? centeringResolver = null,
             TargetRecenter? recenter = null,
-            Func<DomeFollower?>? domeFollower = null) {
+            Func<DomeFollower?>? domeFollower = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null,
+            IPolarAlignerService? polarAligner = null) {
         _domeFollower = domeFollower;
+        _polarAlignResolver = polarAlignResolver;
+        _polarAligner = polarAligner;
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -653,6 +664,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             if (_telescope is null) {
                 return false;
             }
+            // #2066 — a polar alignment turning the RA motor (and its Polar Aligner) is stopped before the park: its next
+            // turn, or its own stop, would otherwise land on the park.
+            await StopPolarAlignQuietlyAsync().ConfigureAwait(false);
             await _telescope.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None).ConfigureAwait(false);
             return true;
         } catch (RefusalException refusal) when (refusal.Cause == RefusalCatalog.MountPositionUnverified) {
@@ -662,6 +676,29 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         } catch (Exception ex) {
             LogRungFailed("park", ex);
             return false;
+        }
+    }
+
+    /// <summary>#2066 — the park's first step: a running polar alignment ends and leaves the mount to the park (no stop
+    /// confirmation of its own, which would hold the park back), then the Polar Aligner stops. Each step is bounded by
+    /// <see cref="StopPolarAlignBeforeParkTimeout"/>; a fault or a hang is logged and the park goes ahead.</summary>
+    private async Task StopPolarAlignQuietlyAsync() {
+        var polarAlign = _polarAlignResolver?.Invoke();
+        if (polarAlign is { IsActive: true }) {
+            await BoundedQuietlyAsync("stop_polar_align", () => polarAlign.StopForTakeoverAsync("safety_park", CancellationToken.None)).ConfigureAwait(false);
+        }
+        if (_polarAligner is { IsPresent: true } aligner) {
+            await BoundedQuietlyAsync("stop_polar_aligner", () => aligner.StopAsync(null, CancellationToken.None)).ConfigureAwait(false);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort step before the park: a routine or aligner that faults or hangs must not block the park; logged, never rethrown.")]
+    private async Task BoundedQuietlyAsync(string rung, Func<Task> step) {
+        try {
+            await step().WaitAsync(StopPolarAlignBeforeParkTimeout).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed(rung, ex);
         }
     }
 

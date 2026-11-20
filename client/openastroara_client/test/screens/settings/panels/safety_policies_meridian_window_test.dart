@@ -6,13 +6,19 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
+import '../../../support/safety_section.dart';
+
 /// #2044 (ADR 0009 rule 1): the full UI edits the three meridian fields Simple
 /// Mode's Limits group reads, beside "Stop before meridian (min)".
 Future<ProviderContainer> _pump(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1600, 4000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  final c = ProviderContainer(overrides: [activeServerProvider.overrideWithValue(null)]);
+  final c = ProviderContainer(overrides: [
+    activeServerProvider.overrideWithValue(null),
+    // The rig's copy of the section (ADR 0015): the rows edit it.
+    safetyFromRig(),
+  ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -36,7 +42,7 @@ void main() {
     final c = await _pump(tester);
     await _type(tester, 'Flip after the meridian (min)', '15');
     await _type(tester, 'Latest flip after the meridian (min)', '20');
-    final s = c.read(safetyPoliciesProvider);
+    final s = c.read(safetyPoliciesProvider).value!;
     expect((s.minutesAfterMeridian, s.maxMinutesAfterMeridian), (15, 20));
   });
 
@@ -45,7 +51,7 @@ void main() {
     expect(find.text('Stop before meridian (min)'), findsOneWidget);
     expect(find.text('Stop before meridian, flip off (min)'), findsOneWidget);
     await _type(tester, 'Stop before meridian, flip off (min)', '10');
-    final s = c.read(safetyPoliciesProvider);
+    final s = c.read(safetyPoliciesProvider).value!;
     expect((s.stopBeforeMeridianMin, s.meridianPauseMin), (10, 5));
   });
 }
