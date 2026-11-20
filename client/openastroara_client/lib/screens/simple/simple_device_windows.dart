@@ -1240,9 +1240,10 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
         ),
       );
-      // #2044 — under the switch: what the mount must not do.
-      children.add(const SimpleMountLimits());
       _addPadAndPointing(context, children, m, planRunning: planRunning);
+      // #2044 — what the mount must not do, across the full width under the
+      // rows and the pad, so the pad and Check stay at the top of the window.
+      children.add(const SimpleMountLimits());
     }
     if (widget.inSettings) {
       children.addAll(

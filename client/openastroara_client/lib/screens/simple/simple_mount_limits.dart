@@ -29,7 +29,7 @@ int simpleLimitStep(num v, int dir, int lo, int hi) {
   return next.clamp(lo, hi);
 }
 
-/// #2044 — the Mount window's Limits group, under the Meridian flip switch:
+/// #2044 — the Mount window's Limits group, under its rows and the pad:
 /// Lowest altitude (the site's flat horizon; read-only with a measured one),
 /// At the meridian (flip Auto) or Stop before meridian (flip Off), and a sky
 /// arc drawn from the same values. Each tap saves at once with a sentence
