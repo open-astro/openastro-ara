@@ -1166,7 +1166,18 @@ jobs:
           file_version="$(tr -d '[:space:]' < VERSION)"
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
-            tag_version="$(python3 scripts/release-tag.py "$tag" 2>/dev/null | sed -n 's/^version=//p')" || true
+            # Exit 2 means "not an Ara release tag" (v.1.8 and other NINA
+            # shapes). Any other failure is a broken script: fail loudly
+            # rather than quietly build a nightly on a release commit.
+            rc=0
+            tag_info="$(python3 scripts/release-tag.py "$tag" 2>/dev/null)" || rc=$?
+            if [ "$rc" = 2 ]; then
+              continue
+            elif [ "$rc" != 0 ]; then
+              echo "::error::scripts/release-tag.py failed on tag $tag (exit $rc)"
+              exit 1
+            fi
+            tag_version="$(sed -n 's/^version=//p' <<<"$tag_info")"
             if [ -n "$tag_version" ] && [ "$tag_version" = "$file_version" ]; then
               release_tag="$tag"
               break

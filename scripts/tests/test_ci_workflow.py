@@ -255,7 +255,7 @@ class ReleaseLineCiTest(unittest.TestCase):
     def test_the_sanity_job_checks_the_version_file(self):
         self.assertIn("python3 scripts/version.py --check", steps(job(self.text, "sanity"))["Version file"])
 
-    def deb_version(self, version_file, tags=(), branch="master"):
+    def deb_version(self, version_file, tags=(), branch="master", release_tag_script=None, expect_fail=False):
         """Run the workflow's .deb version step in a throwaway repository; return its version output."""
         step = steps(job(self.text, "server-build"))["Compute .deb version"]
         self.assertIn("BUILD_BRANCH: ${{ github.base_ref || github.ref_name }}", step)
@@ -265,6 +265,8 @@ class ReleaseLineCiTest(unittest.TestCase):
             (root / "scripts").mkdir()
             for name in ("version.py", "release-tag.py"):
                 (root / "scripts" / name).write_text((REPO_ROOT / "scripts" / name).read_text())
+            if release_tag_script is not None:
+                (root / "scripts" / "release-tag.py").write_text(release_tag_script)
             # The nightly rule has its own tests (test_nightly_version.py); here only the hand-off.
             (root / "scripts" / "nightly-version.py").write_text(
                 "import sys\nprint('nightly ' + ' '.join(sys.argv[1:]))\n"
@@ -293,6 +295,9 @@ class ReleaseLineCiTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
+            if expect_fail:
+                self.assertNotEqual(run.returncode, 0, run.stdout)
+                return run.stdout + run.stderr
             self.assertEqual(run.returncode, 0, run.stderr)
             lines = [ln for ln in out.read_text().splitlines() if ln.startswith("version=")]
             self.assertEqual(len(lines), 1, out.read_text())
@@ -305,6 +310,15 @@ class ReleaseLineCiTest(unittest.TestCase):
     def test_a_tag_whose_version_file_disagrees_builds_a_nightly(self):
         # The NINA fork's inherited v1.10.1 looks like a release tag but holds no matching VERSION.
         self.assertEqual(self.deb_version("0.0.1", tags=["v1.10.1"]), "nightly --branch master")
+
+    def test_a_tag_that_is_no_ara_release_shape_builds_a_nightly(self):
+        # NINA's v.1.8 is refused by release-tag.py with exit 2, which only means "not ours".
+        self.assertEqual(self.deb_version("0.0.1", tags=["v.1.8"]), "nightly --branch master")
+
+    def test_a_crashing_release_tag_script_fails_the_step(self):
+        out = self.deb_version("1.0.0", tags=["v1.0.0"], expect_fail=True,
+                               release_tag_script="import sys\nsys.exit(1)\n")
+        self.assertIn("release-tag.py failed on tag v1.0.0", out)
 
     def test_an_untagged_build_passes_its_branch_to_the_nightly_version(self):
         self.assertEqual(self.deb_version("1.0.0~beta2", branch="stable/1.0"), "nightly --branch stable/1.0")

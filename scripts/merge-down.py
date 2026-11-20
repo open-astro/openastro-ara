@@ -74,7 +74,14 @@ def strip_remote(ref, cwd=None):
 
 
 def exempt(head_ref, base_ref, base_rev, head_rev="HEAD", stable_remote="origin", same_repo=True, cwd=None):
-    """(True, reason) or (False, reason)."""
+    """(True, reason) or (False, reason).
+
+    head_rev defaults to HEAD. Under a pull_request run HEAD is GitHub's
+    synthetic merge of the head into the base, so it is one more merge commit
+    that the merge-tree check below re-creates. That works because the
+    synthetic merge is an automatic one with no hand edits; pass the PR head
+    SHA as head_rev to check the branch itself.
+    """
     if not same_repo:
         return False, "the head is not a branch of this repository"
     parsed = parse_head(head_ref)
