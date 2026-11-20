@@ -1440,7 +1440,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(status.State, Is.EqualTo("failed"));
             var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
             Assert.That(error.GetProperty("message").GetString(), Does.Contain("Stop Mount"));
             Assert.That(afterAbort.Where(c => c.Rate != 0), Is.Empty, "no motor command after the abort");
             Assert.That(afterAbort.Count(c => c.Rate == 0), Is.GreaterThanOrEqualTo(1), "the routine's own stop still goes out");
