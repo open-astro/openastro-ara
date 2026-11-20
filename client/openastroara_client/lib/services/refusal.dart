@@ -21,7 +21,8 @@ enum RefusalCause {
   polarAlignMountParked('polar-align-mount-parked'),
   polarAlignUnconfirmed('polar-align-unconfirmed'),
   polarAlignSweepLimit('polar-align-sweep-limit'),
-  polarAlignMovingMount('polar-align-moving-mount');
+  polarAlignMovingMount('polar-align-moving-mount'),
+  polarAlignAlreadyRunning('polar-align-already-running');
 
   const RefusalCause(this.token);
 

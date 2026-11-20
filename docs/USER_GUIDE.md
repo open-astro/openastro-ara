@@ -226,10 +226,13 @@ framing/focus loop when you need to point or focus by eye.
   the mount's power switch the first time you run this on a mount.
 - **Turning RA by hand.** The confirm step also offers **Turn RA by hand**, like NINA's manual mode:
   you turn RA yourself (the hand pad, or the clutch open) and Ara moves nothing. No motor move, no
-  GoTo, no Find Home, and tracking is never switched on (it is still switched off for the knob loop,
-  which needs the camera still, and at the end like any run). The card asks for each turn ("Turn RA by
-  hand about 10° toward the east, then let go"), shows how far the frames say you have turned, and
-  takes the next frame once the mount is still; then the readout works as usual. Point the tube a few
+  GoTo, no Find Home, no Polar Aligner motor (you turn its bolts), and tracking is never switched on
+  while it measures. It is still switched off for the knob loop, which needs the camera still; at the
+  end it is off, or given back as it was if *Stop tracking when polar align ends* is off, like any
+  run. The card asks for each turn ("Turn RA by hand about 10° toward the east, then let go"), shows
+  how far the frames say you have turned, and takes the next frame once the mount is still; then the
+  readout works as usual. When a later step would take RA too far from where you started, it first
+  asks you to turn back there. Point the tube a few
   degrees off the pole first: a hand-turn run does not tilt it for you, and fails if the camera looks
   along the RA axis. The mount still has to be connected. An older rig does not offer it.
 - **The azimuth number is a true arc.** Ara shows the azimuth error as an arc on the sky (cos alt

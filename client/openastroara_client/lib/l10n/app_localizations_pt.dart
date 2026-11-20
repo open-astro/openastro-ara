@@ -6668,6 +6668,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -13580,6 +13584,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignMovingMount =>
       'O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
+
+  @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'O alinhamento polar já está rodando e gira a AR do outro jeito que você escolheu (à mão ou com o motor). Pare-o primeiro e inicie de novo.';
 
   @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';

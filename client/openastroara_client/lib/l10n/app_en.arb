@@ -8585,6 +8585,8 @@
   },
   "refusalPolarAlignMovingMount": "Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.",
   "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
+  "refusalPolarAlignAlreadyRunning": "Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.",
+  "@refusalPolarAlignAlreadyRunning": {"description": "Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",

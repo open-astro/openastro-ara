@@ -388,7 +388,8 @@ namespace OpenAstroAra.Server.Services {
         /// starts from the current pointing (#2048: no Home, no GoTo). Preflight (connected guider, connected and unparked
         /// mount, a configured site latitude, the user's <paramref name="confirmation"/> of the turn direction), then the
         /// guide-camera PA-session lease, then the run on a background task. Idempotent — Start on an already-running
-        /// routine is a no-op accept. Throws <see cref="InvalidOperationException"/> on a failed preflight (409 by the
+        /// routine is a no-op accept, unless its confirmation picked the other way of turning RA (#2083:
+        /// <c>polar-align-already-running</c>). Throws <see cref="InvalidOperationException"/> on a failed preflight (409 by the
         /// endpoint; a <see cref="RefusalException"/> carries its cause). The lease is taken through the custody module
         /// before the guider's capture idles and its loop stops; when either fails, the lease is given back.
         /// </summary>
@@ -423,6 +424,15 @@ namespace OpenAstroAra.Server.Services {
             try {
                 lock (_gate) {
                     if (_active) {
+                        // #2083 — a retry of the same start is a no-op accept; a start that confirmed the other way of
+                        // turning RA (by hand while the motor turns it, or the reverse) is refused: the user was promised
+                        // something the running run does not do.
+                        if (confirmation is not null && confirmation.HandTurn != _handTurn) {
+                            throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning,
+                                _handTurn
+                                    ? "polar alignment is already running, and in it you turn RA by hand — stop it first, then start again"
+                                    : "polar alignment is already running, and it turns RA with the mount's motor — stop it first, then start again");
+                        }
                         return Accepted("polar-align.start", idempotencyKey);
                     }
                 }

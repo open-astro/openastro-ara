@@ -1846,6 +1846,7 @@
   "refusalPolarAlignUnconfirmed": "O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.",
   "refusalPolarAlignSweepLimit": "A montagem girou {offset}° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.",
   "refusalPolarAlignMovingMount": "O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.",
+  "refusalPolarAlignAlreadyRunning": "O alinhamento polar já está rodando e gira a AR do outro jeito que você escolheu (à mão ou com o motor). Pare-o primeiro e inicie de novo.",
   "polarConfirmTitle": "Antes de a montagem se mover",
   "polarConfirmPoint": "Aponte o tubo perto do polo, com os contrapesos para baixo.",
   "polarConfirmTurns": "A AR vai girar cerca de {step}° duas vezes em direção ao {direction} ({total}° no total).",

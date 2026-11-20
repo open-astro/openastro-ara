@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.Test.PolarAlign;
@@ -40,18 +41,20 @@ namespace OpenAstroAra.Test {
         }
 
         /// <summary>Waits until the run asks for the turn to <paramref name="point"/> (its first <c>hand_turn</c> event for
-        /// it), then turns the true RA axis <paramref name="deg"/> the way it asked (east: the hour angle falls), with the
-        /// clutch open. Returns the direction asked.</summary>
-        private static async Task<string> TurnByHandWhenAskedAsync(WsRecorder ws, FakeGemMount mount, int point, double deg) {
+        /// it from event <paramref name="from"/> on), then turns the true RA axis <paramref name="deg"/> (null: the turn
+        /// asked) the way it asked (east: the hour angle falls), with the clutch open. Returns the direction asked.</summary>
+        private static async Task<string> TurnByHandWhenAskedAsync(WsRecorder ws, FakeGemMount mount, int point, double? deg, int from = 0) {
             static bool Asks((string Type, System.Text.Json.JsonElement Payload) e, int point) =>
                 e.Type == WsEventCatalog.PolarAlignHandTurn
                 && e.Payload.GetProperty("point").GetInt32() == point
                 && e.Payload.GetProperty("waiting").GetBoolean();
-            await ws.WhenAsync(events => events.Any(e => Asks(e, point))).WaitAsync(SignalTimeout).ConfigureAwait(false);
-            var direction = ws.Events.First(e => Asks(e, point)).Payload.GetProperty("direction").GetString()!;
+            await ws.WhenAsync(events => events.Skip(from).Any(e => Asks(e, point))).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var asked = ws.Events.Skip(from).First(e => Asks(e, point)).Payload;
+            var direction = asked.GetProperty("direction").GetString()!;
+            var turnDeg = deg ?? asked.GetProperty("target_deg").GetDouble();
             var pose = mount.TruePose;
             var sign = direction == PolarAlignDirections.East ? -1.0 : 1.0;
-            mount.MoveByOtherMeans(pose with { MechHaDeg = pose.MechHaDeg + (sign * deg) }, encodersFollow: false);
+            mount.MoveByOtherMeans(pose with { MechHaDeg = pose.MechHaDeg + (sign * turnDeg) }, encodersFollow: false);
             return direction;
         }
 
@@ -74,6 +77,8 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("adjusting"),
                 string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
             Assert.That(status.HandTurn, Is.True);
+            Assert.That(ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignStarted).Payload.GetProperty("hand_turn").GetBoolean(),
+                Is.True, "polar_align.started says the run turns by hand");
             Assert.That(plan.HandTurnAvailable, Is.True, "the plan tells the app this rig takes a hand-turn start");
             Assert.That((asked2, asked3), Is.EqualTo((plan.Direction, plan.Direction)), "the turns go the way the user confirmed");
             Assert.That(status.CurrentErrorArcmin, Is.LessThan(3.0), "the fake's axis sits on the pole: only refraction is left");
@@ -114,7 +119,9 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_hand_turn_check_gives_its_verdict_with_no_motor_move() {
-            var mount = PolledGemAt(-4.0);
+            // Tracking off at the start, as the fine stage's live loop leaves it: a check that turned it on would show.
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0, tracking: false, clock: new ManualMountClock());
+            mount.FreshReadTakes = FreshRead;
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
 
@@ -129,6 +136,114 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Motions, Is.Empty, mount.Describe());
             Assert.That(TrackingOnSent(mount), Is.False);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignChecked), CounterweightLimitDeg);
+        }
+
+        [Test]
+        public async Task A_hand_turn_check_after_short_fine_turns_asks_for_a_turn_back_to_the_start_first_and_never_passes_the_start() {
+            // Two 8.5° turns are taken (80 % of 10°), so the fine stage ends 17° from the start. The check's two 10° turns fit
+            // neither back over the arc (they would end 3° past the start, toward the meridian) nor away (37°, past the
+            // 20° band): the user is asked to turn back to the start first, as the motor run turns back first.
+            var mount = PolledGemAt(-4.0);
+            var phiStart = mount.TruePhiDeg;
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            var plan = await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 8.5).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 8.5).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var checkFrom = ws.Events.Count;
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var back = await TurnByHandWhenAskedAsync(ws, mount, point: 1, deg: null, from: checkFrom).ConfigureAwait(false);
+            var backAsked = ws.Events.Skip(checkFrom).First(e => e.Type == WsEventCatalog.PolarAlignHandTurn).Payload;
+            var asked2 = await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, from: checkFrom).ConfigureAwait(false);
+            var asked3 = await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, from: checkFrom).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"),
+                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
+            Assert.That(back, Is.Not.EqualTo(plan.Direction), "the turn back goes toward the meridian");
+            Assert.That(backAsked.GetProperty("target_deg").GetDouble(), Is.EqualTo(17.0).Within(0.3), "back by the fine stage's two turns");
+            Assert.That((asked2, asked3), Is.EqualTo((plan.Direction, plan.Direction)), "then away, the way the user confirmed");
+            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(phiStart + 0.5),
+                "the axis never went past the start toward the meridian. " + mount.Describe());
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+        }
+
+        [Test]
+        public async Task A_hand_turn_run_never_drives_the_Polar_Aligner_and_leaves_its_bolts_to_the_user() {
+            // A host-driven Polar Aligner with auto on (the default): a motor run would probe and correct with it.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10);
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws, aligner: aligner);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Manual).ConfigureAwait(false);
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(status.Correction?.State, Is.EqualTo(PolarAlignCorrectionStates.Manual), "the person turns the bolts, as with auto off");
+            Assert.That(aligner.Moves, Is.Empty, "a hand-turn run moves no Polar Aligner motor");
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+        }
+
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        public async Task A_finished_hand_turn_run_leaves_tracking_as_stop_tracking_when_done_says(bool stopTrackingWhenDone, bool trackingAfter) {
+            // Tracking on at the start; the live loop turns it off. Done gives back the tracking the run found only when
+            // stop_tracking_when_done is off, as every run does: the one time a hand-turn run sends tracking on.
+            var mount = PolledGemAt(-4.0);
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = stopTrackingWhenDone });
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws, store);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var trackingWhileAdjusting = mount.Tracking;
+            var tracksOnBeforeDone = mount.Commands.Count(c => c.Text == "tracking on");
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(trackingWhileAdjusting, Is.False, "the live loop needs the camera still");
+            Assert.That(tracksOnBeforeDone, Is.Zero, "nothing turned tracking on while the run measured");
+            mount.AssertEndedStopped(tracking: trackingAfter);
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+        }
+
+        [Test]
+        public async Task A_start_that_picks_the_other_way_of_turning_RA_while_a_run_is_active_is_refused_and_a_matching_retry_is_accepted() {
+            // Two devices: a motor run turns the mount (the daemon's own speeds and 30° steps, so it is still turning), and
+            // the other device, which has not seen it start yet, confirms Turn RA by hand.
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None)
+                .ConfigureAwait(false);
+            await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            RefusalException? refusal = null;
+            try {
+                await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, HandTurn: true), null,
+                    CancellationToken.None).ConfigureAwait(false);
+            } catch (RefusalException ex) {
+                refusal = ex;
+            }
+            var retry = await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null,
+                CancellationToken.None).ConfigureAwait(false);
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(refusal?.Cause, Is.EqualTo(RefusalCatalog.PolarAlignAlreadyRunning), "the hand start is refused, never a silent accept");
+            Assert.That(retry, Is.Not.Null, "the same start again is a no-op accept");
+            Assert.That(status.HandTurn, Is.False, "the motor run goes on");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.EqualTo(1), "no second run started");
         }
 
         [Test]

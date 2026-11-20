@@ -11179,6 +11179,12 @@ abstract class AppLocalizations {
   /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
 
+  /// Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.'**
+  String get refusalPolarAlignAlreadyRunning;
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:

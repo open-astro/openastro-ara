@@ -6668,6 +6668,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override

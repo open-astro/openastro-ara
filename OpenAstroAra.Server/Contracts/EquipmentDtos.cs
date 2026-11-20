@@ -934,7 +934,8 @@ public static class PolarAlignStages {
 /// one since the user saw it is refused the same way.
 /// <para>#2083 — <c>HandTurn</c> (NINA's manual mode): the user turns the RA axis by hand (the hand pad, or the clutch)
 /// between the three solves, and the run detects each turn from the solves. Such a run sends the mount no motor move,
-/// no GoTo and no Find Home, and never turns tracking on. Per run, not a profile setting.</para></summary>
+/// no GoTo and no Find Home, never drives a Polar Aligner's motors, and never turns tracking on while it runs (its end
+/// gives back the tracking it found where every run does). Per run, not a profile setting.</para></summary>
 public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false,
     bool HandTurn = false);
 
@@ -962,7 +963,8 @@ public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, dou
 public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool HandTurn = false);
 
 /// <summary>#2083 — a hand-turn run waiting for the user to turn the RA axis (<c>hand_turn_wait</c> on the status, and
-/// the <c>polar_align.hand_turn</c> payload). <c>Point</c> is the solve it waits for (2 or 3 of three);
+/// the <c>polar_align.hand_turn</c> payload). <c>Point</c> is the solve it waits for (2 or 3 of three; 1 for a
+/// turn back toward the run's start before a later stage's three points, which the band needs as a motor run's does);
 /// <c>Direction</c> (<c>east</c> | <c>west</c>) and <c>TargetDeg</c> are the turn asked for; <c>TurnedDeg</c> is how far
 /// the solves say the RA axis has turned that way since the last point (negative: the other way), null before a solve.
 /// <c>Waiting</c> turns false once the turn is taken (the event's last payload for that point).</summary>

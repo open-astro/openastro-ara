@@ -217,6 +217,15 @@ void main() {
       }),
     )!;
     expect(taken.handTurnWait, isNull, reason: 'the turn is in');
+    final nextStage = foldPolarAlignEvent(
+      asked,
+      _event(PolarAlignWsEvents.stage, {'stage': 'check', 'state': 'checking'}),
+    )!;
+    expect(
+      nextStage.handTurnWait,
+      isNull,
+      reason: "a stage that ended during the wait leaves no turn prompt behind",
+    );
     final seeded = foldPolarAlignEvent(
       asked,
       _event(PolarAlignWsEvents.progress, {
