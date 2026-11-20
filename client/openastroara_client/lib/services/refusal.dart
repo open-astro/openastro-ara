@@ -18,6 +18,9 @@ enum RefusalCause {
   endNightInProgress('end-night-in-progress'),
   mountPositionUnverified('mount-position-unverified'),
   counterweightLimit('counterweight-limit'),
+  polarAlignMountParked('polar-align-mount-parked'),
+  polarAlignUnconfirmed('polar-align-unconfirmed'),
+  polarAlignSweepLimit('polar-align-sweep-limit'),
   mountClockNotVerified('mount-clock-not-verified');
 
   const RefusalCause(this.token);
@@ -52,7 +55,7 @@ class Refusal implements Exception {
   final String? detail;
 
   /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`,
-  /// `position_unverified_reason`, `hour_angle_hours`, `counterweight_angle_deg`).
+  /// `position_unverified_reason`, `hour_angle_hours`, `counterweight_angle_deg`, `direction`, `offset_deg`).
   final Map<String, Object?> parameters;
   final int? status;
 

@@ -826,13 +826,22 @@ public static partial class EquipmentEndpoints {
         var polar = equipment.MapGroup("/polaralign");
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
-        // Optional body {stage: coarse|fine|check}; none = coarse (Home + main-camera solves), or fine when
-        // the coarse stage cannot run (main camera off, optics unset, no solver).
+        // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
+        // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
+        polar.MapGet("/start-plan", async (string? stage, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignStartPlanAsync(svc, stage, ct))
+            .WithName("GetPolarAlignStartPlan")
+            .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
+            .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
+        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = coarse (main-camera solves), or fine when
+        // the coarse stage cannot run (main camera off, optics unset, no solver). The routine starts from where the mount
+        // points (no Home, no GoTo) and moves only with confirmed: true and the plan's direction (#2048); else the
+        // polar-align-unconfirmed Refusal. A parked mount is the polar-align-mount-parked Refusal.
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, body?.Stage, key, ct));
-        // Continue (mount put at Home by hand) / Next (coarse → fine, fine → check). 409 when nothing waits.
+            await PolarAlignStartAsync(svc, body, key, ct));
+        // Next (coarse → fine, fine → check). 409 when nothing waits.
         polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignNextAsync(svc, key, ct));
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
@@ -1209,18 +1218,37 @@ public static partial class EquipmentEndpoints {
     // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
     // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
     // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
-    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
+    /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
+    /// service refuses a start without one).</summary>
+    internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin) : null;
+
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        var stage = body?.Stage;
         // A typo in the stage is the caller's mistake (400), not a busy routine (409).
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
         try {
-            return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
+            return Results.Accepted(value: await svc.StartAsync(stage, StartConfirmation(body), idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
-            // A declared Refusal (#2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler).
+            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        if (stage is not null && !PolarAlignStages.IsValid(stage)) {
+            return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
+        }
+        try {
+            return Results.Ok(await svc.GetStartPlanAsync(stage, ct));
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 

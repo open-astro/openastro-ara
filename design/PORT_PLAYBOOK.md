@@ -6257,7 +6257,15 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 1. User taps "Polar Align" in WILMA
 2. Server prompts: "Roughly point your mount at the celestial pole"
    (Polaris in N hemisphere, Sigma Octantis area in S hemisphere)
-3. User confirms rough alignment
+3. User confirms rough alignment. As built (#2048, NINA's start): the
+   app reads GET /polaralign/start-plan (the RA turn direction from the
+   mount's pointing, the step, the most the run turns) and shows "tube
+   near the pole, counterweights down; RA will turn ~10° twice toward
+   <direction>; keep a hand on power". POST /polaralign/start carries
+   confirmed + that direction, or the daemon refuses
+   (polar-align-unconfirmed). A parked mount is refused
+   (polar-align-mount-parked), never unparked. No stage sends the
+   mount Home or slews it: every stage starts where the mount points
 4. Server: runs autofocus on main camera (fast — uses bundled exposure
    defaults from profile)
 5. Server: captures 1 dark frame at the PA exposure/bin/temp (~3 sec)
@@ -6281,7 +6289,7 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 10. If user aborts or backs out: server kills the loop, mount stops
     where it is (no slewing back to "home" or anything). Every end of a
     run (Stop, Done, failure, the check's verdict, shutdown) sends
-    AbortSlew when a GoTo, Find Home or motor move may run, then MoveAxis 0
+    AbortSlew when a motor move may run, then MoveAxis 0
     on both axes, confirms the stop on fresh reads, and leaves tracking off
     (`stop_tracking_when_done`, #2048)
 ```
@@ -6436,6 +6444,9 @@ Failure events:
 |---|---|
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
 | Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
+| Mount is parked at Start (#2048) | Refused before anything moves (`polar-align-mount-parked`: "Mount is parked — unpark it and point near the pole first"); the routine never unparks |
+| Start without the user's confirmation, or with a direction that changed since (#2048) | Refused before anything moves (`polar-align-unconfirmed`, with the direction the run would turn now) |
+| A start whose turns would take the RA axis more than 30° from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
 | Mount does not confirm it stopped (any end of a run, #2048) | The stop (AbortSlew, MoveAxis 0 on both axes) is sent three times, 2 s apart; after 8 s without two still, not-slewing fresh reads 1.5 s apart, the daemon logs a Critical line and the run ends `failed` with `mount_did_not_stop` (or its own failure reason with the same sentence): "cut the mount's power" |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
@@ -6451,7 +6462,7 @@ Polar Alignment section of profile (default values shown):
 - Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
 - Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
-- Use Home: on (`use_home`; every stage sends the mount Home first, a mount without Find Home is asked; off starts from the current pointing)
+- ~~Use Home~~ (`use_home`): retired by #2048. Polar Align never sends the mount Home; every run starts from where the user pointed it, after the confirm step. A stored `use_home` is ignored.
 - Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
@@ -6570,8 +6581,20 @@ second), and the axis is the circle through the three pointings (`FitAxisThreePo
 moved to the last one's time). The 2-point seed's noise numbers above no longer apply: the
 three-point fit has no read-back-Δ term (the mount's turns only cross-check it), and a short arc
 trades amplification for safety — on the rig the fine stage and the check agreed to 0.62′ (check
-0.79′, turn mismatch 0.05°). No polar-align move is a GoTo except the `use_home: false` return to the
-start pointing. API_CONTRACT.md 2026-11-19 has the wire shape.
+0.79′, turn mismatch 0.05°). No polar-align move is a GoTo. API_CONTRACT.md 2026-11-19 has the wire shape.
+
+**Revisited 2026-11-20 (#2048): start like NINA.** RC51 (HAE29C on AlpacaBridge) went into the pier
+after Find Home: AlpacaBridge answers "at Home" from a fresh status read, and the routine took that
+flag as proof of where the mount was. NINA's TPPA never calls Find Home or Park (PolarAlignment.cs
+165-169, 510-526) and refuses a parked mount (1108-1110). Now no stage homes, no stage slews (the
+`use_home: false` return GoTo is gone with `use_home`), and a parked mount is refused. Every run
+starts from where the user pointed the mount, after a confirm step that shows the first turn's
+direction (away from the meridian, unchanged). With no Home between the stages, a later stage turns
+inside the band the user confirmed (`PlanStageTurns`): back over the arc when that ends no more than
+2° past the start, away when that ends inside the band (2 × the larger step), else back to the start
+with the RA motor first; coarse → fine → check at 10° runs 0 → 20 → 0 → 20. NINA's own start GoTo
+(Alt = latitude + 2°, Az 1°) is not built: it waits for the mount-clock check (#2071), AlpacaBridge
+#2395 (the `:MS2#` re-aim) and a pier-side read after the slew.
 
 ---
 

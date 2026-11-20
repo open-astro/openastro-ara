@@ -107,6 +107,11 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       r.parameters['position_unverified_reason'] == 'not_read_yet'
           ? l.refusalMountPositionNotReadYet
           : l.refusalMountPositionUnverified,
+    RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
+    RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
+    RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
+      _unsignedWholeDegrees(r.parameters['offset_deg']),
+    ),
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     null => _firstLine(r.detail),
   };
@@ -121,6 +126,10 @@ String _wholeDegrees(Object? value) =>
 
 /// A refusal's hour angle in hours, one decimal; "?" when absent.
 String _hours(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
+
+/// A refusal's angle in whole degrees, unsigned; "?" when absent.
+String _unsignedWholeDegrees(Object? value) =>
+    value is num ? value.abs().toStringAsFixed(0) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

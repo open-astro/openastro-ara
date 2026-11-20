@@ -1455,17 +1455,6 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.target_tolerance_arcmin',
   ),
   Setting(
-    id: 'img.polar.use_home',
-    tier: SettingTier.advanced,
-    label: 'Send the mount Home first',
-    description: 'Every polar align stage starts by sending the mount Home. Off uses where the mount points now as Home, for a mount whose Home is not on the pole or whose Find Home is unreliable.',
-    keywords: ['polar', 'alignment', 'home', 'find home', 'paramount'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.bool(),
-    defaultValue: true,
-    profilePath: 'polar_align.use_home',
-  ),
-  Setting(
     id: 'img.polar.polar_aligner_auto',
     tier: SettingTier.advanced,
     label: "Correct with the Polar Aligner's motors",

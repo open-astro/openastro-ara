@@ -196,6 +196,25 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.EqualTo(expected));
         }
 
+        // #2089 — Polar Align forgets its sweep origin when the mount session changes: a connect and a disconnect each count.
+        [Test]
+        public async Task SessionEpoch_changes_on_connect_and_on_disconnect() {
+            using var idle = new TelescopeService();
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var connected = svc.SessionEpoch;
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            var sw = Stopwatch.StartNew();
+            while (svc.SessionEpoch == connected && sw.Elapsed < TimeSpan.FromSeconds(15)) {
+                await Task.Delay(20);
+            }
+
+            Assert.That(connected, Is.GreaterThan(idle.SessionEpoch), "the connect began a new session");
+            Assert.That(svc.SessionEpoch, Is.GreaterThan(connected), "the disconnect ended it");
+        }
+
         [Test]
         public async Task ReadSlewingNow_is_null_without_a_mount() {
             using var svc = new TelescopeService();

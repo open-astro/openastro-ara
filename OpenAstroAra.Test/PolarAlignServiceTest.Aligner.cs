@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
             if (moveTimeout is { } t) {
                 svc.AlignerMoveTimeout = t;
             }
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             return (svc, ws);
         }
 
@@ -449,7 +449,7 @@ namespace OpenAstroAra.Test {
             var source = new SwappableSource(dead);
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, aligner: source);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
 
             var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
