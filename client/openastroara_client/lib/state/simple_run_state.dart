@@ -1290,3 +1290,14 @@ final simpleMountStoppedProvider =
       SimpleMountStoppedNotifier.new,
     );
 
+/// #2044 — red stub.
+class SimpleMountLimitNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+}
+
+final simpleMountLimitProvider =
+    NotifierProvider<SimpleMountLimitNotifier, String?>(
+      SimpleMountLimitNotifier.new,
+    );
+
