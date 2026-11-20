@@ -245,8 +245,18 @@ framing/focus loop when you need to point or focus by eye.
   the 30° Polar Align keeps RA within, so repeated Checks are refused once RA is too far from where
   Polar Align started. **Rough first (main camera)**: offered when the guide camera could not solve
   the pole field; the same measurement on the main camera, whose frames take a few seconds each, and
-  the card says how far from the pole you are and on which side, for the big moves. Within a few
-  arcminutes, stop and start again: the guide camera refines it.
+  the card says how far from the pole you are and on which side, for the big moves. Like Check, it
+  says how far it turns ("Rough first turns the mount 2 × 10°") and goes through the confirm step.
+  Within a few arcminutes, stop and start again: the guide camera refines it.
+- **Polar Align's camera and frames per point.** Settings › Imaging › Polar align › *Camera* picks
+  the camera for every measurement, its live readout and Check: the guide camera (the default) or
+  the main camera, with its own plate solver at the rough step exposure. Use the main camera when the
+  guide camera cannot solve the pole field; Start refuses while it is not connected, and the confirm
+  step says the run uses it. *Frames per point* (1 to 5, 3 by default) is how many frames each of the
+  three points takes with the mount still; they are averaged, so one bad solve does not move the
+  axis, and their scatter is in the log. A point whose solves scatter more than 3″ is taken again
+  once; if it is still scattered, the run goes on but says the measurement is noisy, under the
+  readout or under the Check. Check focus and seeing, or take more frames per point.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
