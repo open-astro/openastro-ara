@@ -781,52 +781,19 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    /// <summary>#2066 — the park's first step, as in <see cref="SafetyReactionService"/>: a running polar alignment ends
-    /// and leaves the mount to the park (no stop confirmation of its own, which would hold the park back), then the Polar
-    /// Aligner stops. Each step is bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>; a fault or a hang is logged and
-    /// the park goes ahead.</summary>
-    private async Task StopPolarAlignQuietlyAsync() {
-        var polarAlign = _polarAlignResolver?.Invoke();
-        if (polarAlign is { IsActive: true }) {
-            await BoundedQuietlyAsync("stop_polar_align", () => polarAlign.StopForTakeoverAsync("fault_park", CancellationToken.None)).ConfigureAwait(false);
-        }
-        if (_polarAligner is { IsPresent: true } aligner) {
-            await BoundedQuietlyAsync("stop_polar_aligner", () => aligner.StopAsync(null, CancellationToken.None)).ConfigureAwait(false);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort step before the park: a routine or aligner that faults or hangs must not block the park; logged, never rethrown.")]
-    private async Task BoundedQuietlyAsync(string rung, Func<Task> step) {
-        try {
-            await step().WaitAsync(StopPolarAlignBeforeParkTimeout).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogRungFailed(rung, ex);
-        }
-    }
+    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopPolarAlignBeforeParkAsync"/>, shared with the
+    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>.</summary>
+    private Task StopPolarAlignQuietlyAsync() =>
+        ReactionMountStops.StopPolarAlignBeforeParkAsync(_polarAlignResolver, _polarAligner, MountStopReasons.FaultPark,
+            StopPolarAlignBeforeParkTimeout, LogRungFailed);
 
     // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
     // tracking (best effort) and say so loudly, since the run ended with the mount unparked. The abort
     // also ends any axis lease (a pad move): the refused park no longer cancels them itself.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort rung: a motion or tracking stop that fails is logged and named in the alert, never thrown.")]
     private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
-        var motionStopped = false;
-        var stopped = false;
-        if (_telescope is not null) {
-            try {
-                await _telescope.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
-                motionStopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("abort_slew", ex);
-            }
-            try {
-                await _telescope.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
-                stopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("tracking_off", ex);
-            }
-        }
+        // #2107 — counted under its own reason: a polar alignment this stop ends names this reaction, not Stop Mount.
+        var (motionStopped, stopped) = await ReactionMountStops.StopMotionAndTrackingAsync(_telescope, MountStopReasons.FaultReaction, LogRungFailed)
+            .ConfigureAwait(false);
         LogParkRefusedUnverified(stopped);
         await NotifyQuietlyAsync(NotificationSeverity.Critical, "Mount NOT parked (position unverified)",
             "An equipment fault asked for a park, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "
