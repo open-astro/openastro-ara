@@ -2056,3 +2056,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/IMountMotionControl.cs`, `Services/TelescopeService.FreshReads.cs` (`ReadNowAsync`), `Services/PolarAlignService.FreshReads.cs` (`ReadFreshPointingAsync`, `StartPointingJnowAsync`, `RunPointingJnowAsync`, `ThrowIfStoppedFromOutside`, `ThrowIfMountReconnected`), `Services/PolarAlignService.MountStop.cs` (`ThrowIfAbortedFromOutside`, `ReadStillnessAsync`), `Services/PolarAlignService.SweepOrigin.cs` (`PlanSweep`, `NoteMountLeft`), `Contracts/Refusals/RefusalCatalog.cs`.
 
 **Related:** #2066, #2048, #2081, #2067, #1536, #2075, ADR 0022; tests `PolarAlignServiceTest` (`M18_*`, `Dec_over_90_reading_refuses_turns`, `The_cache_is_never_read_while_the_mount_moves`, `A_park_with_a_reconnect_*`, `A_stale_reading_never_confirms_the_stop`, `A_placeholder_reading_never_confirms_the_stop`, `A_turn_polls_the_mount_with_the_position_only_read`, `A_pier_flip_the_refresh_cache_missed_is_a_new_start`), `TelescopeMoveAxisLeaseTest` (`ReadNow_*`, `ReadPositionNow_*`), `RefusalHandlerTest`.
+
+---
+
+## 2026-11-20 — #2071 the mount clock recheck writes again after a failed write; a polar-align start waits for a clock push
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/polaralign/start` (every stage, and the Check from the adjust loop); the daemon's mount clock check (`mount-clock-not-verified`). No wire shape changes.
+
+**Decision:** the 30 s recheck of an unverified mount clock now writes the mount's `UTCDate` again, from the trusted time only, whenever no trusted time has landed in the mount's clock: never written (the mount was slewing, or no trusted time had reached it), a write that failed (a transient bridge or driver error; a driver that does not implement the write is only read), or a mount that still cannot report its `UTCDate` (AlpacaBridge's "not established"). Before, only the first two were written again, so a connect whose write failed once kept the gate closed for the whole session on an NTP-only rig with no app. A host clock step counts as a push from the moment the check goes unverified, so a GoTo, Sync or Center in that instant waits for the push instead of being refused. A polar-align start now waits for a clock push in flight, up to 10 s, as GoTo, Sync and Center do, then answers 409 `mount-clock-not-verified` only if the check still fails; with no push in flight a closed gate refuses at once. A Check pressed in the adjust loop while the gate is closed answers 409 and leaves the loop running: the mount is not stopped.
+
+**Reasoning:** the #2087 review: a read-only recheck could never open a gate the first write failed to open, and the polar-align start was the one move that did not wait for the push the app's connect starts.
+
+**Spec ref:** `Services/TelescopeService.MountClock.cs` (`MountClockCheck.WriteOwed`, `WatchMountClock`), `Services/PolarAlignService.cs` (`StartRunAsync`, `EndAdjustForCheckAsync`). Tests `MountClockTest`, `PolarAlignServiceTest.MountClock.cs`.
+
+**Related:** #2071, #2087, ADR 0022
