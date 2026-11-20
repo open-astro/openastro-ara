@@ -1672,14 +1672,19 @@ namespace OpenAstroAra.Test {
         /// call log records what tracking was at each slew. <paramref name="dropAtPointingRead"/> drops it
         /// on that pointing read, as a §42.3 mount reconnect did on the CM4 on 2026-11-05.</summary>
         private static (Mock<ITelescopeMediator> Mount, CallLog Calls) TrackingMount(
-                bool tracking, Func<bool, bool>? onSet = null, int dropAtPointingRead = 0) {
+                bool tracking, Func<bool, bool>? onSet = null, int dropAtPointingRead = 0,
+                Func<bool>? connected = null, Func<bool>? slewing = null) {
             var mount = NewMount(tracking: tracking);
             var calls = new CallLog();
             var state = tracking;
             var reads = 0;
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = true, SiderealTime = 20.0, TrackingEnabled = state, SideOfPier = PierSide.pierWest, // NewMount's pose
+                // As TelescopeService does: a disconnected mount reads tracking (and slewing) off.
+                Connected = connected?.Invoke() ?? true, SiderealTime = 20.0,
+                TrackingEnabled = (connected?.Invoke() ?? true) && state,
+                Slewing = (connected?.Invoke() ?? true) && (slewing?.Invoke() ?? false),
+                SideOfPier = PierSide.pierWest, // NewMount's pose
             });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => {
                 if (++reads == dropAtPointingRead) {
@@ -1944,6 +1949,54 @@ namespace OpenAstroAra.Test {
             var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
             Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
             Assert.That(failure.GetProperty("message").GetString(), Does.Contain("started tracking during the live readout"));
+        }
+
+        [Test]
+        public async Task A_mount_that_drops_its_connection_at_tracking_off_ends_the_run_as_tracking_not_off() {
+            // #2072 — the write finds no mount (it answers false) and a disconnected mount reads tracking off: that confirms
+            // nothing, and the mount, still tracking where it was left, would turn the readout.
+            var linked = true;
+            var (mount, _) = TrackingMount(tracking: true, onSet: on => {
+                if (!on) {
+                    linked = false;
+                }
+                return linked;
+            }, connected: () => linked);
+            var ws = new WsRecorder();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(NewFake(), solver, mount, ws);
+            svc.TrackingConfirmTimeout = TimeSpan.FromMinutes(5); // a wait for the confirm would time the test out
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"), "no live readout without a mount to confirm tracking off");
+            var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
+            Assert.That(failure.GetProperty("message").GetString(), Does.Contain("not connected"));
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress), Is.False, "no readout was shown");
+        }
+
+        [Test]
+        public async Task A_mount_that_slews_during_the_live_readout_ends_the_run_as_tracking_not_off() {
+            // #2072 — an iOptron reads tracking off while it slews: a hand-pad slew mid-loop must still end the readout.
+            var moving = false;
+            var (mount, _) = TrackingMount(tracking: true, slewing: () => Volatile.Read(ref moving));
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), solver, mount, ws);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            Volatile.Write(ref moving, true); // not the routine's move; tracking still reads off
+
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
+            Assert.That(failure.GetProperty("message").GetString(), Does.Contain("reads as slewing in the live readout"));
         }
 
         [Test]

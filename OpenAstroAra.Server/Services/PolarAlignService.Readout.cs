@@ -44,6 +44,14 @@ namespace OpenAstroAra.Server.Services {
             "the mount refused tracking off, so the live readout cannot tell a knob turn from the mount's own motion — " +
             "check that the mount accepts tracking off, then start again";
 
+        private const string MountGoneMessage =
+            "the mount is not connected, so Polar Align cannot confirm tracking is off for the live readout — " +
+            "reconnect the mount, then start again";
+
+        private const string MountMovingMessage =
+            "the mount reads as slewing in the live readout, so the readout no longer shows only your knob turns — " +
+            "something moved the mount (the hand pad, another app); start again";
+
         private const string TrackingCameOnMessage =
             "the mount started tracking during the live readout, so the readout no longer shows only your knob turns — " +
             "something turned tracking on (the hand pad, another app, the mount's firmware); start again";
@@ -61,9 +69,10 @@ namespace OpenAstroAra.Server.Services {
         // it only while a live readout runs (adjusting or paused).
         private string? _readoutCaution;
 
-        /// <summary>Turn tracking off for a live loop and wait until the mount reports it off: the run fails
-        /// <see cref="TrackingNotOff"/> at once when the mount refuses the write and still reads tracking on, and once the
-        /// confirm window ends when it accepts the write and keeps tracking. A thrown write fails the run as before
+        /// <summary>Turn tracking off for a live loop and wait until the mount reports it off and still: the run fails
+        /// <see cref="TrackingNotOff"/> at once when the mount refuses the write and still reads tracking on, or is not
+        /// connected (a disconnected mount reads tracking off, which confirms nothing), and once the confirm window ends
+        /// when it accepts the write and keeps tracking or slewing. A thrown write fails the run as before
         /// (<c>internal_error</c>). A superseded run writes nothing.</summary>
         private async Task TurnTrackingOffForLiveLoopAsync(int gen, CancellationToken ct) {
             if (!TryMarkTrackingTouched(gen)) {
@@ -75,26 +84,37 @@ namespace OpenAstroAra.Server.Services {
             } finally {
                 _ownTrackingWrites = _mount.TrackingWriteCount; // a refused or thrown write is still ours
             }
-            if (!accepted && _mount.GetInfo().TrackingEnabled) {
-                LogTrackingOffRefused();
-                throw new RoutineFailedException(TrackingNotOff, TrackingRefusedMessage);
+            var info = _mount.GetInfo();
+            if (!accepted && (!info.Connected || info.TrackingEnabled)) {
+                LogTrackingOffRefused(info.Connected);
+                throw new RoutineFailedException(TrackingNotOff, info.Connected ? TrackingRefusedMessage : MountGoneMessage);
             }
             var deadline = DateTimeOffset.UtcNow + TrackingConfirmTimeout;
-            while (_mount.GetInfo().TrackingEnabled) {
+            while (!info.Connected || info.TrackingEnabled || info.Slewing) {
                 if (DateTimeOffset.UtcNow >= deadline) {
-                    LogTrackingStayedOn(TrackingConfirmTimeout.TotalSeconds);
-                    throw new RoutineFailedException(TrackingNotOff, TrackingStayedOnMessage);
+                    LogTrackingStayedOn(TrackingConfirmTimeout.TotalSeconds, info.Connected, info.TrackingEnabled, info.Slewing);
+                    throw new RoutineFailedException(TrackingNotOff,
+                        !info.Connected ? MountGoneMessage : info.TrackingEnabled ? TrackingStayedOnMessage : MountMovingMessage);
                 }
                 await Task.Delay(TrackingConfirmPoll, ct).ConfigureAwait(false);
+                info = _mount.GetInfo();
             }
             LogTrackingOffConfirmed();
         }
 
-        /// <summary>Every live frame: the mount must still read tracking off. Returns the state read (false) for the log.</summary>
+        /// <summary>Every live frame: the mount must still read tracking off and not slewing (an iOptron reads tracking off
+        /// while it slews, so tracking alone would miss a hand-pad slew). A mount that dropped its connection mid-loop is not
+        /// failed here: it cannot change its own tracking while disconnected, and the first frame after the reconnect reads
+        /// it again. Returns the tracking state read (false) for the log.</summary>
         private bool RequireTrackingOff(string frameId) {
-            if (_mount.GetInfo().TrackingEnabled) {
+            var info = _mount.GetInfo();
+            if (info.TrackingEnabled) {
                 LogTrackingCameOn(frameId);
                 throw new RoutineFailedException(TrackingNotOff, TrackingCameOnMessage);
+            }
+            if (info.Slewing) {
+                LogMountMovedInReadout(frameId);
+                throw new RoutineFailedException(TrackingNotOff, MountMovingMessage);
             }
             return false;
         }
@@ -119,14 +139,17 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4590, Level = LogLevel.Information, Message = "§45 polar-align: tracking off confirmed for the live readout")]
         private partial void LogTrackingOffConfirmed();
 
-        [LoggerMessage(EventId = 4591, Level = LogLevel.Warning, Message = "§45 polar-align: the mount still reads tracking on {Seconds:F0} s after tracking off was sent — the run ends (tracking_not_off)")]
-        private partial void LogTrackingStayedOn(double seconds);
+        [LoggerMessage(EventId = 4591, Level = LogLevel.Warning, Message = "§45 polar-align: tracking off not confirmed {Seconds:F0} s after it was sent (connected {Connected}, tracking {Tracking}, slewing {Slewing}) — the run ends (tracking_not_off)")]
+        private partial void LogTrackingStayedOn(double seconds, bool connected, bool tracking, bool slewing);
 
-        [LoggerMessage(EventId = 4593, Level = LogLevel.Warning, Message = "§45 polar-align: the mount refused tracking off and reads tracking on — the run ends (tracking_not_off)")]
-        private partial void LogTrackingOffRefused();
+        [LoggerMessage(EventId = 4593, Level = LogLevel.Warning, Message = "§45 polar-align: the mount refused tracking off and reads tracking on or is not connected (connected {Connected}) — the run ends (tracking_not_off)")]
+        private partial void LogTrackingOffRefused(bool connected);
 
         [LoggerMessage(EventId = 4592, Level = LogLevel.Warning, Message = "§45 polar-align live frame {FrameId}: the mount reads tracking on — the run ends (tracking_not_off)")]
         private partial void LogTrackingCameOn(string frameId);
+
+        [LoggerMessage(EventId = 4596, Level = LogLevel.Warning, Message = "§45 polar-align live frame {FrameId}: the mount reads slewing — the run ends (tracking_not_off)")]
+        private partial void LogMountMovedInReadout(string frameId);
 
         [LoggerMessage(EventId = 4594, Level = LogLevel.Information, Message = "§45 polar-align live readout reference: seed pointing alt {AltDeg:F4}° az {AzDeg:F4}°, cos ψ {CosPsi:F3}")]
         private partial void LogReadoutReference(double altDeg, double azDeg, double cosPsi);

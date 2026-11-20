@@ -257,8 +257,9 @@ framing/focus loop when you need to point or focus by eye.
   azimuth is the true arc on the sky (cos alt applied, so it can read smaller than NINA's unscaled
   azimuth). The guiding residual is a lower bound from Dec drift, taken later. The live readout
   needs the camera to stand still: Polar Align turns tracking off, checks that the mount reports it
-  off before the first live frame and on every frame, and ends the run (*the mount kept tracking*,
-  or *started tracking during the live readout*) when it does not. When the camera points nearly due
+  off (and not slewing) before the first live frame and on every frame, and ends the run (*the mount
+  kept tracking*, *started tracking during the live readout*, *reads as slewing*, or *is not
+  connected* when tracking off is sent) when it does not. When the camera points nearly due
   east or west of the pole, the readout reads the altitude bolt poorly and the card says so: trust
   **Verify**, or start again with the scope nearer the pole.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
