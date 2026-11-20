@@ -91,7 +91,7 @@ namespace OpenAstroAra.Test {
             Assert.That(OpenAstroAra.Server.Endpoints.ProfileEndpoints
                     .PreserveDaemonOwnedSafetyFields(optimisticIncoming, armedStored).FirstFlipConfirmed,
                 Is.False,
-                "nor can a client PUT ever CONFIRM a flip — only the executor does that");
+                "nor can a client PUT ever CONFIRM a flip — only the user's POST /safety/first-flip/confirm does that");
         }
 
         [Test]
