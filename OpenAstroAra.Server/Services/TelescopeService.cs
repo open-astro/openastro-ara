@@ -509,17 +509,25 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return null;
     }
 
-    /// <summary>#2066 — the park or Find Home counted since <paramref name="abortEpoch"/>, if any: a move that a later
-    /// AbortSlew would stop.</summary>
-    private string? MoveCountedSince(long abortEpoch) {
+    /// <summary>#2066 — what the counts since <paramref name="abortEpoch"/> leave in force. <c>Move</c> is the park or Find
+    /// Home, when one was the LATEST count: a move that a later AbortSlew would stop. A park or Find Home that a stop then
+    /// stopped is not in force, so <c>Move</c> is null and the GoTo is aborted again. <c>Stop</c> is the first count that
+    /// is not a park or Find Home, the reason the re-abort carries.</summary>
+    private (string? Move, string? Stop) CountedSince(long abortEpoch) {
+        string? latest = null;
+        string? stop = null;
         lock (_abortReasonsGate) {
             foreach (var (epoch, reason) in _abortReasons) {
-                if (epoch > abortEpoch && reason is "park" or "findhome") {
-                    return reason;
+                if (epoch <= abortEpoch) {
+                    continue;
+                }
+                latest = reason;
+                if (stop is null && reason is not ("park" or "findhome")) {
+                    stop = reason;
                 }
             }
         }
-        return null;
+        return (latest is "park" or "findhome" ? latest : null, stop);
     }
 
     // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
@@ -884,14 +892,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 client.SlewToCoordinatesAsync(raHours, decDeg);
                 // #2066 (ADR rule 3) — a stop that landed while the GoTo's PUT was on the wire (Emergency Stop's latch, Stop
                 // Mount, the watchdog) may have reached the mount before the GoTo did: the mount then slews after the stop.
-                // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home that came
-                // since is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it.
-                if (AbortedSince(abortEpoch) && MoveCountedSince(abortEpoch) is { } move) {
-                    LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
-                    return;
-                }
+                // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home counted
+                // LAST is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it. One
+                // that a later stop stopped wins nothing: the GoTo is aborted again.
                 if (AbortedSince(abortEpoch)) {
-                    var by = AbortReasonSince(abortEpoch, except: null) ?? "user_request";
+                    var (move, stop) = CountedSince(abortEpoch);
+                    if (move is not null) {
+                        LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
+                        return;
+                    }
+                    var by = stop ?? "user_request";
                     LogSlewAbortedAgain(raHours, decDeg, by);
                     await AbortSlewCoreAsync(client, by, rethrow: false, counted: true).ConfigureAwait(false);
                     return;

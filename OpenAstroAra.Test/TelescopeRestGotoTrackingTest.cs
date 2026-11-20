@@ -311,6 +311,33 @@ namespace OpenAstroAra.Test {
             Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the GoTo's re-abort would stop the " + later + " that came after it");
         }
 
+        // #2066 — the latest count decides: a park or Find Home that a Stop Mount then stopped does not shield the GoTo, which
+        // would otherwise slew after the user's last stop.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public async Task A_stop_after_a_park_still_aborts_a_raced_GoTo(string earlier) {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) {
+                    Thread.Sleep(200); // the PUT on the wire
+                    svc!.FenceMotion(earlier); // a park or Find Home, then a Stop Mount before the PUT returns
+                    svc.FenceMotion("user_request");
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutIndex(box, "abortslew") >= 0, "the GoTo that raced the last stop was never aborted again");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(PutIndex(box, GotoVerb)), "the abort follows the GoTo");
+                Assert.That(log.Messages, Has.Some.Contains("a stop (user_request) landed"), "the abort is the stop's, not the " + earlier + "'s");
+            });
+        }
+
         [Test]
         public async Task A_find_home_with_no_stop_reaches_the_mount() {
             await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
