@@ -193,7 +193,8 @@ namespace OpenAstroAra.Test {
             var excursion = mount.MaxTrueRaExcursionDeg(TimeSpan.Zero);
             Assert.That(excursion, Is.EqualTo(20.0).Within(2 * TrueTurnToleranceDeg), mount.Describe());
             Assert.That(excursion, Is.LessThan(PolarAlignService.MaxSweepFromOriginDeg));
-            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(30.0 + 0.05), "every turn stayed between φ 30° and φ 10°");
+            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(30.0 + TrueTurnToleranceDeg),
+                "every turn stayed between φ 30° and φ 10°, give or take a turn back to the origin landing a little past it");
             Assert.That(mount.TotalTrueRaSweepDeg, Is.EqualTo(100.0).Within(10 * TrueTurnToleranceDeg));
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);

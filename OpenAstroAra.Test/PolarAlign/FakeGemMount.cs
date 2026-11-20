@@ -804,12 +804,17 @@ namespace OpenAstroAra.Test.PolarAlign {
                 var kind = axis == 0 ? MotionKind.RaMotor : MotionKind.DecMotor;
                 // A renewal or a reversal of this axis's own move is not "sent while slewing"; another motion is.
                 var otherMotion = _goto is not null || _rate[1 - axis] != 0 || _runaway[axis];
+                // As TelescopeService (#2070): a routine's move (unlessAbortedSince set) on an unverified pose is refused
+                // first, with the daemon's own refusal; the pad's nudge is not.
+                if (unlessAbortedSince is not null && PositionUnverifiedReason is { } why) {
+                    RefusedMotionLocked(kind, rate, target: null, "the mount's position is unverified (" + why + ")", otherMotion);
+                    throw TelescopeService.PositionUnverifiedRefusal(why);
+                }
                 var refusal = !_connected ? "the mount is not connected"
                     : _atPark ? "the mount is parked"
                     : _inhibited ? "the motion latch is set (Emergency Stop): no new motion"
                     : MoveAxisRefused ? "the mount refused the move"
                     : unlessAbortedSince is long since && since != _abortEpoch ? "the mount was stopped (Stop Mount) after this move began; the move is not restarted"
-                    : unlessAbortedSince is not null && PositionUnverifiedReason is { } why ? "the mount's position is unverified (" + why + ")"
                     : null;
                 if (refusal is not null) {
                     RefusedMotionLocked(kind, rate, target: null, refusal, otherMotion);

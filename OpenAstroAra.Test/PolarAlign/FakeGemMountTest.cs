@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Linq;
@@ -535,7 +536,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         public async Task FakeGemMount_routine_move_is_refused_while_the_pose_is_unverified() {
             var (mount, _) = At(-4.0, 85.0);
             mount.PositionUnverifiedReason = "power_cycle";
-            await Assert.ThrowsAsync<InvalidOperationException>(() => mount.MoveAxisAsync(0, 1.0, 3000, mount.AbortEpoch, CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => mount.MoveAxisAsync(0, 1.0, 3000, mount.AbortEpoch, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified), "the daemon's own refusal");
             await mount.MoveAxisAsync(0, 1.0, 3000, CancellationToken.None); // the pad's own nudge is allowed, as TelescopeService
             Assert.That(mount.IsMoving, Is.True);
         }

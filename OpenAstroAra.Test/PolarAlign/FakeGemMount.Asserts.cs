@@ -71,6 +71,9 @@ namespace OpenAstroAra.Test.PolarAlign {
             Assert.That(MaxTruePhiDeg, Is.LessThanOrEqualTo(limitDeg), Describe());
 
         /// <summary>How far the motors really moved the mount since <paramref name="since"/> (a time on <see cref="Now"/>).</summary>
+        /// <remarks>The end point is the live travel (<see cref="Trajectory"/> adds a sample now). Take
+        /// <paramref name="since"/> at a stop or abort, which add a sample too, for an exact start; between samples the
+        /// start is the last sample before it, so the answer can only be larger.</remarks>
         public double MotorTravelSince(TimeSpan since) {
             var samples = Trajectory;
             var at = samples.LastOrDefault(p => p.At <= since) ?? samples[0];
