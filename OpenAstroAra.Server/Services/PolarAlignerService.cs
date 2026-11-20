@@ -109,12 +109,15 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
     private static string KeyOf(Chosen chosen) => chosen.Carrier + "/" + chosen.Device.DeviceId;
 
     /// <inheritdoc />
-    /// <remarks>The device connected now owes a Stop; with none connected, any device does (nothing is driven then).</remarks>
+    /// <remarks>The device connected now owes a Stop. With none connected there is nothing to stop and nothing that can
+    /// move: false. The owed Stop stays with its device, which owes it again if it comes back.</remarks>
     public bool StopOwed {
         get {
-            var chosen = Choose();
+            if (Choose() is not { } chosen) {
+                return false;
+            }
             lock (_gate) {
-                return chosen is null ? _stopOwedBy.Count > 0 : _stopOwedBy.Contains(KeyOf(chosen));
+                return _stopOwedBy.Contains(KeyOf(chosen));
             }
         }
     }

@@ -113,9 +113,10 @@ internal interface IPolarAlignerDriver {
 internal interface IPolarAlignerSource {
     IPolarAligner? Current();
 
-    /// <summary>#2069 (ARA-19) — the last verified Stop of the rig's Polar Aligner was not confirmed: whoever
+    /// <summary>#2069 (ARA-19) — the last verified Stop of the Polar Aligner connected now was not confirmed: whoever
     /// sent it (the routine, the Stop route, Emergency Stop, a park), the next one to drive the device sends Stop
-    /// again first, and moves nothing until a Stop is confirmed.</summary>
+    /// again first, and moves nothing until a Stop is confirmed. False with no Polar Aligner connected: nothing can
+    /// be stopped or moved then, and the Stop stays owed by its device if it comes back.</summary>
     bool StopOwed => false;
 
     /// <summary>Records the outcome of a verified Stop (<see cref="PolarAlignerVerifiedStop"/>).</summary>
@@ -123,7 +124,7 @@ internal interface IPolarAlignerSource {
 }
 
 /// <summary>What one verified Stop found: whether the device reported both axes still, how many Stops went out,
-/// and the device's last error text when a call failed.</summary>
+/// and why not, from the latest call: a failed call's text, or <see cref="PolarAlignerVerifiedStop.StillMoving"/>.</summary>
 internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Sends, string? Error);
 
 /// <summary>
@@ -145,6 +146,8 @@ internal static class PolarAlignerVerifiedStop {
     internal const int Sends = 3;
 
     private const string NoAnswerInWindow = "the Polar Aligner did not answer within the stop's window";
+    /// <summary>The outcome's <c>Error</c> when the last thing the stop heard was a delivered Stop and a moving read.</summary>
+    internal const string StillMoving = "an axis still reports moving";
 
     /// <summary>The device calls block (HTTP): call this off a caller's thread. Never throws for a device call: any failure
     /// of one is no answer, and a stop without a confirming read is not confirmed (owed).</summary>
@@ -163,6 +166,7 @@ internal static class PolarAlignerVerifiedStop {
                 try {
                     await WithinAsync(() => { device.Stop(); return true; }, window - clock.Elapsed).ConfigureAwait(false);
                     delivered = true;
+                    error = null; // an earlier send's failure is not this outcome's
                 } catch (PolarAlignerException ex) {
                     error = ex.Message;
                     // A refusal is an answer: the link works and nothing sent before it is still on the way, so a still
@@ -179,13 +183,17 @@ internal static class PolarAlignerVerifiedStop {
                 return new PolarAlignerStopOutcome(false, sends, error);
             }
             try {
-                if (delivered && !(await WithinAsync(device.Status, window - clock.Elapsed).ConfigureAwait(false)).Moving) {
-                    return new PolarAlignerStopOutcome(true, sends, null);
+                if (delivered) {
+                    if (!(await WithinAsync(device.Status, window - clock.Elapsed).ConfigureAwait(false)).Moving) {
+                        return new PolarAlignerStopOutcome(true, sends, null);
+                    }
+                    error = StillMoving; // the latest outcome: the device answered, and an axis still moves
                 }
             } catch (PolarAlignerException ex) {
                 error = ex.Message;
             } catch (TimeoutException) {
-                error = NoAnswerInWindow;
+                // A read the window's end cut short does not hide what the last read that answered said.
+                error ??= NoAnswerInWindow;
             } catch (Exception ex) {
                 error = ex.Message;
             }

@@ -1145,6 +1145,63 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_check_with_no_Polar_Aligner_connected_is_not_failed_by_a_stop_its_absent_device_owes() {
+            // #2069 — the Polar Aligner owed a Stop, then its carrier was disconnected (the person cut its power). With no
+            // device connected there is nothing to stop and nothing that can move: the check gives its verdict.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, Present = false };
+            var logger = new EventSignalLogger(4641); // the run's end could not confirm the stop
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), NewPoleMount(), ws, store: NewStore(), logger: logger, aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "no aligner_did_not_stop");
+            Assert.That(logger.Logged.IsCompleted, Is.False, "no Critical could-not-confirm line");
+            Assert.That(aligner.SourceStopOwed, Is.True, "still owed by its device, for when it comes back");
+        }
+
+        [Test]
+        public async Task A_run_with_no_Polar_Aligner_connected_is_not_stopped_by_a_stop_its_absent_device_owes() {
+            // #2069 — as above in the live stages: no stop_not_confirmed state, and the person's Stop ends the run stopped.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, Present = false };
+            var logger = new EventSignalLogger(4641);
+            var (svc, ws) = await StartWithAlignerAsync(aligner, logger: logger).ConfigureAwait(false);
+            using var _ = svc;
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 4).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignCorrection), Is.Zero, "no stop_not_confirmed: nothing to stop");
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "no aligner_did_not_stop");
+            Assert.That(logger.Logged.IsCompleted, Is.False, "no Critical could-not-confirm line");
+            Assert.That(aligner.SourceStopOwed, Is.True, "still owed by its device");
+        }
+
+        [Test]
+        public async Task A_device_without_backlash_handling_may_lose_most_of_the_first_move_after_a_reversal() {
+            // #2069 — the test moves go out (+2′); the first correction on each axis turns the other way, and the device takes
+            // up its backlash again: it goes 0.3 of the amount sent. Its position shows that; it is not a wrong_scale.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { ReportsPosition = true, InfoReply = AlignerInfo(backlashHandled: false) };
+            aligner.OnMove = n => {
+                (aligner.AzResponse, aligner.AltResponse) = n is 3 or 4 ? (0.3, 0.3) : (1.0, 1.0);
+                return null;
+            };
+            var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
+            using var _ = svc;
+
+            var end = await AlignerEventAsync(ws, e => e.GetProperty("state").GetString()
+                is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
+
+            Assert.That(end.GetProperty("state").GetString(), Is.EqualTo(PolarAlignCorrectionStates.Converged), end.ToString());
+            Assert.That(aligner.Moves[2].Arcmin, Is.Negative, "the first correction reversed the test move");
+        }
+
+        [Test]
         public async Task A_driver_exception_from_Stop_is_an_unconfirmed_stop_and_the_run_still_cleans_up() {
             // #2069 — a Stop that throws something other than the aligner's own error (a driver bug, a disposed client) is
             // no answer: the run's end owes the Stop and says so, and still deletes its work dir.

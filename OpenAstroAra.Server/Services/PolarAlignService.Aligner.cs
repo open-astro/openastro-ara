@@ -129,7 +129,8 @@ namespace OpenAstroAra.Server.Services {
             // #2069 — run task. Kept across a resume: the axes do not forget where the run took them.
             public (double Az, double Alt)? FirstOffset; // each axis's offset from the pole at the first measurement (device arcmin)
             public double NetAz, NetAlt;                  // signed sum of the moves sent on each axis
-            public bool AzMoved, AltMoved;                // a move went out on the axis (its first may lose some to backlash)
+            public int AzLastSign, AltLastSign;           // the sign of the axis's last move, 0 before its first (a first move,
+                                                          // or one that reverses the last, may lose some to backlash)
 
             // Run task. A resume re-reads the device: it may be another one, or recalibrated.
             public void Rearm() {
@@ -194,9 +195,11 @@ namespace OpenAstroAra.Server.Services {
             if ((_alignerSource?.Current() ?? run.Device) is { } device) {
                 await Task.Run(() => StopDeviceVerifiedAsync(run, device), CancellationToken.None).ConfigureAwait(false);
             }
+            // Read before _gate: the source takes the Switch, mount and aligner locks, never under the routine's.
+            var sourceOwed = _alignerSource?.StopOwed == true;
             bool confirmedLate;
             lock (_gate) {
-                confirmedLate = NoteOwedStopConfirmedLocked(run);
+                confirmedLate = NoteOwedStopConfirmedLocked(run, sourceOwed);
             }
             LogAlignerStopped(confirmedLate ? PolarAlignCorrectionCauses.StopConfirmed : PolarAlignCorrectionCauses.StoppedByUser, null);
             // #2069 — an unconfirmed stop is reported as such (stop_not_confirmed), not as the person's stop.
@@ -209,12 +212,14 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>After a stop: correct with the motors again, starting from a new probe.</summary>
         public async Task<OperationAcceptedDto> ResumeAlignerAsync(string? idempotencyKey, CancellationToken ct) {
             int gen;
+            // Read before _gate: the source takes the Switch, mount and aligner locks, never under the routine's.
+            var sourceOwed = _alignerSource?.StopOwed == true;
             lock (_gate) {
                 if (!_active || _alignerRun is not { Stopped: true } run) {
                     throw new InvalidOperationException("the Polar Aligner is not stopped");
                 }
                 // #2069 — no move while a Stop is owed: the device may still be moving.
-                if (run.StopOwed || _alignerSource?.StopOwed == true) {
+                if (run.StopOwed || sourceOwed) {
                     throw new InvalidOperationException(
                         "the Polar Aligner's Stop is not confirmed yet; Ara sends it again at each measurement. Resume once it reports still");
                 }
@@ -280,8 +285,10 @@ namespace OpenAstroAra.Server.Services {
             // An owed Stop goes to the device that answers now: after a reconnect that is a new object.
             var device = owed ? _alignerSource?.Current() ?? run.Device : run.Device;
             var confirmed = true;
-            if (run.Engaged || owed) {
-                confirmed = device is not null && await StopDeviceVerifiedAsync(run, device).ConfigureAwait(false);
+            // No device (none connected, and the run never read one; a run that moved one always has it): nothing to stop
+            // and nothing that can move. The Stop stays owed by its device for when it comes back.
+            if ((run.Engaged || owed) && device is not null) {
+                confirmed = await StopDeviceVerifiedAsync(run, device).ConfigureAwait(false);
                 if (!confirmed) {
                     LogAlignerStopNotConfirmedAtEnd();
                 }
@@ -344,14 +351,16 @@ namespace OpenAstroAra.Server.Services {
                 stopOwed = run.StopOwed;
             }
             // An owed Stop goes to the device that answers now: after a reconnect that is a new object. #2069 — one the
-            // Stop route, Emergency Stop or an earlier run left owed too; nothing moves until a Stop is confirmed.
-            if (stopOwed || _alignerSource!.StopOwed) {
-                if ((_alignerSource!.Current() ?? run.Device) is { } owed) {
-                    await StopDeviceVerifiedAsync(run, owed).ConfigureAwait(false);
-                }
+            // Stop route, Emergency Stop or an earlier run left owed too; nothing moves until a Stop is confirmed. With no
+            // device to send it to (none connected, none read yet) there is nothing to stop and nothing that moves: the run
+            // goes on by hand, and the Stop stays owed by its device for when it comes back.
+            if ((stopOwed || _alignerSource!.StopOwed) && (_alignerSource!.Current() ?? run.Device) is { } owed) {
+                await StopDeviceVerifiedAsync(run, owed).ConfigureAwait(false);
+                // Read before _gate: the source takes the Switch, mount and aligner locks, never under the routine's.
+                var sourceOwed = _alignerSource.StopOwed;
                 var confirmedLate = false;
                 lock (_gate) {
-                    stopOwed = run.StopOwed || _alignerSource.StopOwed;
+                    stopOwed = run.StopOwed || sourceOwed;
                     if (stopOwed && !run.Stopped) {
                         // A Stop owed from before this run (the Stop route, Emergency Stop, an earlier run's end) that is
                         // still not confirmed: the run stops correcting and says why, so the person is not left with
@@ -359,7 +368,7 @@ namespace OpenAstroAra.Server.Services {
                         run.Stopped = true;
                         run.LastStop = (PolarAlignCorrectionCauses.StopNotConfirmed, null, null);
                     } else {
-                        confirmedLate = NoteOwedStopConfirmedLocked(run);
+                        confirmedLate = NoteOwedStopConfirmedLocked(run, sourceOwed);
                     }
                 }
                 if (confirmedLate) {
@@ -574,18 +583,23 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // #2069 (ARA-19) — with PositionArcmin, each finished move changes the axis's position by 0.5× to 2× the amount
-        // sent, with its sign; a first move on a device that does not take up its own backlash may lose more (0.2×). One
-        // step of the device's resolution is allowed either side, so a move of a step or two is not misread.
+        // sent, with its sign; on a device that does not take up its own backlash, an axis's first move and the first move
+        // after it reverses direction may lose more (0.2×). One step of the device's resolution is allowed either side, so
+        // a move of a step or two is not misread.
         private void CheckFollowed(AlignerRun run, PolarAlignerInfo info, List<(PolarAlignerAxis Axis, double Arcmin)> group,
                 PolarAlignerStatus before, PolarAlignerStatus after) {
             foreach (var (axis, arcmin) in group) {
                 var azimuth = axis == PolarAlignerAxis.Azimuth;
                 var axisInfo = azimuth ? info.Azimuth! : info.Altitude!;
-                var first = !(azimuth ? run.AzMoved : run.AltMoved);
-                if (azimuth) {
-                    run.AzMoved = true;
-                } else {
-                    run.AltMoved = true;
+                // The axis's first move, or the first after it reverses: the backlash is taken up again.
+                var sign = Math.Sign(arcmin);
+                var takesUpBacklash = sign != 0 && sign != (azimuth ? run.AzLastSign : run.AltLastSign);
+                if (sign != 0) {
+                    if (azimuth) {
+                        run.AzLastSign = sign;
+                    } else {
+                        run.AltLastSign = sign;
+                    }
                 }
                 var (from, to) = azimuth
                     ? (before.Azimuth.PositionArcmin, after.Azimuth.PositionArcmin)
@@ -600,7 +614,7 @@ namespace OpenAstroAra.Server.Services {
                 if (ratio < 0 && Math.Abs(moved) > axisInfo.ResolutionArcmin) {
                     throw new AlignerStopException(PolarAlignCorrectionCauses.WrongDirection, null, AxisToken(axis));
                 }
-                var floor = first && !axisInfo.BacklashHandled ? 0.2 : 0.5;
+                var floor = takesUpBacklash && !axisInfo.BacklashHandled ? 0.2 : 0.5;
                 if (ratio < floor - slack || ratio > 2 + slack) {
                     throw new AlignerStopException(PolarAlignCorrectionCauses.WrongScale, null, AxisToken(axis));
                 }
@@ -661,7 +675,7 @@ namespace OpenAstroAra.Server.Services {
                 LogAlignerStopConfirmed(outcome.Sends);
             } else {
                 // Owed: sent again at each measurement, so it goes out as soon as the device answers.
-                LogAlignerStopFailed(outcome.Sends, outcome.Error ?? "an axis still reports moving");
+                LogAlignerStopFailed(outcome.Sends, outcome.Error ?? PolarAlignerVerifiedStop.StillMoving);
             }
             return outcome.Confirmed;
         }
@@ -670,8 +684,9 @@ namespace OpenAstroAra.Server.Services {
         /// because a Stop was owed (<c>stop_not_confirmed</c>) whose Stop is confirmed now stays stopped and waits for the
         /// person's Resume (<c>stop_confirmed</c>). A device that would not stop does not start moving again by itself;
         /// Resume drives it from a new device read and probe. True when it changed the cause.</summary>
-        private bool NoteOwedStopConfirmedLocked(AlignerRun run) {
-            if (run.StopOwed || _alignerSource?.StopOwed == true || !run.Stopped
+        /// <param name="sourceOwed">The source's <c>StopOwed</c>, read by the caller before it took <c>_gate</c>.</param>
+        private static bool NoteOwedStopConfirmedLocked(AlignerRun run, bool sourceOwed) {
+            if (run.StopOwed || sourceOwed || !run.Stopped
                     || run.LastStop?.Cause != PolarAlignCorrectionCauses.StopNotConfirmed) {
                 return false;
             }

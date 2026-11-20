@@ -434,6 +434,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_owed_stop_is_not_owed_while_no_polar_aligner_is_connected_and_returns_with_its_device() {
+            // #2069 — the person cut the owing device's power (its carrier disconnected): nothing can be stopped or moved, so
+            // nothing is owed now. The same device on a new connection owes it again.
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            Assert.That(service.StopOwed, Is.False, "no device connected owes a Stop");
+
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            Assert.That(service.StopOwed, Is.True, "the same device came back: still owed");
+        }
+
+        [Test]
+        public async Task Home_with_no_polar_aligner_connected_says_so_while_a_stop_is_owed() {
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+            _switches.Connected.Clear();
+
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));
+        }
+
+        [Test]
+        public async Task A_stop_delivered_after_a_failed_send_that_still_reads_moving_reports_the_axis_moving() {
+            // #2069 — the first send is lost (link down), the second gets through but an axis still reads moving: the 409
+            // says what the latest send found, not the first send's error.
+            var actions = Healthy(); // an axis reads moving whatever is sent
+            var sends = 0;
+            actions.Replies["PolarAlign:Stop"] = () => ++sends == 1 ? throw new ASCOM.NotConnectedException("link down") : string.Empty;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            // At least two sends must start inside the window, also on a loaded CI runner.
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => service.StopAsync(null, CancellationToken.None));
+
+            Assert.That(refused!.Message, Does.StartWith("stop_not_confirmed"));
+            Assert.That(sends, Is.GreaterThanOrEqualTo(2));
+            Assert.That(refused.Message, Does.Contain(PolarAlignerVerifiedStop.StillMoving));
+            Assert.That(refused.Message, Does.Not.Contain("link down"));
+        }
+
+        [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),
                 Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));
