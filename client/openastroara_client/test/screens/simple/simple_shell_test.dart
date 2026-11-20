@@ -3845,6 +3845,26 @@ void main() {
     expect(value('aperture', '80 mm'), findsOneWidget);
   });
 
+  testWidgets('#2041 Rig shows the main camera\'s sensor and pixel size read only, Not set until the camera fills them',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    Finder value(String id, String text) => find.descendant(of: find.byKey(Key('simple-rig-$id')), matching: find.text(text));
+    expect(value('sensor', 'Not set'), findsOneWidget);
+    expect(value('pixel', 'Not set'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsOneWidget);
+    c.read(opticsSettingsProvider.notifier)
+      ..setSensorWidthPx(6248)
+      ..setSensorHeightPx(4176)
+      ..setPixelSizeUm(3.76);
+    await tester.pump();
+    expect(value('sensor', '6248 × 4176 px'), findsOneWidget);
+    expect(value('pixel', '3.76 µm'), findsOneWidget);
+    for (final id in ['sensor', 'pixel']) {
+      expect(tester.widget<TextButton>(find.byKey(Key('simple-rig-$id'))).onPressed, isNull, reason: '$id is read only');
+    }
+  });
+
   testWidgets('Rig\'s Name and Profile read like its other rows, a 44 pt row each', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
@@ -8246,7 +8266,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header next fix for the optics opens the optics panel',
+      '#2041 Set up optics in the Rig page header stays in Simple Mode and brings the telescope rows into view',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8256,12 +8276,25 @@ void main() {
             opticsConfigured: false,
           ),
           dismissed: true,
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(find.byTooltip('Settings'));
         await tester.pump();
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(
+          view.contains(tester.getCenter(sensor)),
+          isFalse,
+          reason: 'precondition: the telescope rows start below the fold',
+        );
         await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
         await end(tester);
       },
     );
@@ -8383,7 +8416,7 @@ void main() {
     );
 
     testWidgets(
-      'the Main camera and telescope line opens the optics panel over Simple Mode',
+      '#2041 the Main camera and telescope line opens Settings › Rig at the telescope rows, in Simple Mode',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8392,12 +8425,20 @@ void main() {
             longitudeDeg: 151.215297,
             opticsConfigured: false,
           ),
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(
           find.byKey(const Key('simple-rig-setup-optics-action')),
         );
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
         await end(tester);
       },
     );

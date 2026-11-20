@@ -2792,6 +2792,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellGuidePixelSize => 'Guide camera pixel size';
 
   @override
+  String get shellMainSensor => 'Main camera sensor';
+
+  @override
+  String get shellMainPixelSize => 'Main camera pixel size';
+
+  @override
+  String get shellFromMainCamera => 'Filled in when the main camera connects';
+
+  @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
 
@@ -9576,6 +9585,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellGuidePixelSize => 'Pixel da câmera de guia';
+
+  @override
+  String get shellMainSensor => 'Sensor da câmera principal';
+
+  @override
+  String get shellMainPixelSize => 'Pixel da câmera principal';
+
+  @override
+  String get shellFromMainCamera =>
+      'Preenchido quando a câmera principal conecta';
 
   @override
   String get searchWordsGuideScope =>

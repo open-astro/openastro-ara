@@ -4815,6 +4815,24 @@ abstract class AppLocalizations {
   /// **'Guide camera pixel size'**
   String get shellGuidePixelSize;
 
+  /// Settings › Rig: the main camera's sensor size in pixels, read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera sensor'**
+  String get shellMainSensor;
+
+  /// Settings › Rig: the main camera's pixel size (µm), read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera pixel size'**
+  String get shellMainPixelSize;
+
+  /// Settings › Rig: the hint under the main camera sensor row; the rig reads it from the camera
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in when the main camera connects'**
+  String get shellFromMainCamera;
+
   /// Simple search: other words that find the guide scope rows (not shown)
   ///
   /// In en, this message translates to:
@@ -9003,7 +9021,7 @@ abstract class AppLocalizations {
   /// **'The sensor or the focal length is not set.'**
   String get rigSetupOpticsMissing;
 
-  /// Rig setup: button that opens the optics panel
+  /// Rig setup: button that opens Simple Mode's Settings › Rig at the telescope rows
   ///
   /// In en, this message translates to:
   /// **'Set up optics'**

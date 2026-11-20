@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-16T22:47:20+13:00",
+  "generatedAt": "2026-11-20T17:25:07+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -918,7 +918,7 @@
       "name": "Rig Setup Header and Sheet (Simple Mode)",
       "kind": "custom",
       "refersTo": "client/openastroara_client/lib/screens/simple/simple_rig_setup_sheet.dart",
-      "description": "#1562, redone 2026-11-13 (mock design/preview/simple-rig-setup-mock.html, layout B). Settings › Rig opens with a header while the rig lacks a first-night fact: Panel Alt box with a Hairline, the title and \"N of M done\" (caption), a 4 px Connected Green bar on Input Fill, then \"Next: <item>\" with what is missing and that item's fix as an amber outlined SimpleWindowButton (accent: Busy Amber outline and label, no fill). The menu has no Rig setup row. The first-time sheet boxes each missing line in amber (10 % fill, 45 % border, 8 px radius) around its words and its amber fix; done lines are flat with a tick; a footer under a Hairline holds the count and Not now as a plain Dim Text button."
+      "description": "#1562, redone 2026-11-13 (mock design/preview/simple-rig-setup-mock.html, layout B). Settings › Rig opens with a header while the rig lacks a first-night fact: Panel Alt box with a Hairline, the title and \"N of M done\" (caption), a 4 px Connected Green bar on Input Fill, then \"Next: <item>\" with what is missing and that item's fix as an amber outlined SimpleWindowButton (accent: Busy Amber outline and label, no fill). The menu has no Rig setup row. The first-time sheet boxes each missing line in amber (10 % fill, 45 % border, 8 px radius) around its words and its amber fix; done lines are flat with a tick; a footer under a Hairline holds the count and Not now as a plain Dim Text button. Set up optics, in the header and the sheet, opens Settings › Rig at the telescope rows, never the full UI; the main camera's sensor and pixel size there are read-only disabled tiles the rig fills from the camera (#2041)."
     },
     {
       "name": "Polar Aligner Block (Simple Mode)",

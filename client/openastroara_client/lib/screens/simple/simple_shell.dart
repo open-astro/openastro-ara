@@ -909,6 +909,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  /// #2041 — Settings › Rig scrolled to the telescope rows, a frame late so
+  /// the page is up.
+  void _showRigOptics() {
+    _showRigPage();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ThisRig._reveal(_ThisRig.opticsKey, 0),
+    );
+  }
+
   /// A search hit, opened where it lives in Simple Mode.
   void _openHit(SimpleSearchHit hit) {
     setState(() => _popover = _Popover.none);
@@ -1773,6 +1782,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: SimpleRigSetupHost(
                                   autoOpened: _rigSetupOpened,
                                   onOpenRig: _showRigPage,
+                                  onOpenOptics: _showRigOptics,
                                   onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
                                 ),
                               ),
@@ -4668,6 +4678,49 @@ Widget _gearRow({
   );
 }
 
+/// A Settings › Rig value the rig finds out itself: its button, never
+/// enabled, read as text, in the same tile as the wheels above it.
+class _RigReadOnlyRow extends StatelessWidget {
+  const _RigReadOnlyRow({required this.id, required this.label, required this.value, this.hint});
+
+  final String id;
+  final String label;
+  final String value;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: kSimpleText),
+              if (hint case final hint?) Text(hint, style: AraText.caption),
+            ],
+          ),
+        ),
+        Semantics(
+          excludeSemantics: true,
+          label: value,
+          child: TextButton(
+            key: Key('simple-rig-$id'),
+            style: TextButton.styleFrom(
+              backgroundColor: AraColors.tileFill,
+              disabledBackgroundColor: AraColors.tileFill,
+              minimumSize: const Size(kSimpleRigControlWidth, 44),
+            ),
+            onPressed: null,
+            child: Text(value, style: kSimpleText),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Settings › Rig: what belongs to no device. The rig's figures, the rig
 /// and profile with the way to change them, the one setting Ara can't find out
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
@@ -4687,6 +4740,11 @@ class _ThisRig extends ConsumerWidget {
   /// One Rig page is up at a time, so a global key by name is safe.
   static const _siteKey = GlobalObjectKey('simple-rig-site');
   static const _guideKey = GlobalObjectKey('simple-rig-guide-scope');
+  static const opticsKey = GlobalObjectKey('simple-rig-optics');
+
+  /// A pixel size, or Not set.
+  static String _micrometres(AppLocalizations l10n, double um) =>
+      um > 0 ? '${um.toStringAsFixed(2)} µm' : l10n.shellNotSet;
 
   /// Scrolls the Rig page so [key]'s block shows: [alignment] 0 puts it at
   /// the top, 1 at the bottom.
@@ -4872,7 +4930,7 @@ class _ThisRig extends ConsumerWidget {
               case RigSetupGap.guideScope:
                 _reveal(_guideKey, 0);
               case RigSetupGap.mainOptics:
-                openSettingsPanel(ref, 'img.optics');
+                _reveal(opticsKey, 0);
               case RigSetupGap.guiderCalibration:
                 onOpenGuider?.call();
             }
@@ -4904,7 +4962,7 @@ class _ThisRig extends ConsumerWidget {
           ),
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
-        const Divider(height: AraSpace.s16),
+        const Divider(key: opticsKey, height: AraSpace.s16),
         for (final (id, label, digits, value, set)
             in <(String, String, int?, double, void Function(double))>[
               // Aperture on one wheel of millimetres; focal length per digit.
@@ -4938,6 +4996,23 @@ class _ThisRig extends ConsumerWidget {
                   .persistToServer(api),
             ),
           ),
+        // #2041 — read only: the rig takes the sensor from the main camera
+        // when it connects.
+        _RigReadOnlyRow(
+          id: 'sensor',
+          label: l10n.shellMainSensor,
+          hint: l10n.shellFromMainCamera,
+          value: switch (ref.watch(opticsSettingsProvider)) {
+            final o when o.sensorWidthPx > 0 && o.sensorHeightPx > 0 =>
+              '${o.sensorWidthPx} × ${o.sensorHeightPx} px',
+            _ => l10n.shellNotSet,
+          },
+        ),
+        _RigReadOnlyRow(
+          id: 'pixel',
+          label: l10n.shellMainPixelSize,
+          value: _micrometres(l10n, ref.watch(opticsSettingsProvider).pixelSizeUm),
+        ),
         // The guide scope: read from the guider when the profile left it
         // unset, kept in the profile (polar alignment solves with it).
         _GuideOpticsReader(
@@ -4966,41 +5041,11 @@ class _ThisRig extends ConsumerWidget {
             ),
           ),
         ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
-              ),
-              // Read only (it comes from the guider), in the same tile as
-              // the value above it: its button, never enabled, read as text.
-              Builder(
-                builder: (context) {
-                  final pixel = switch (ref
-                      .watch(phd2SettingsProvider)
-                      .guidePixelSize) {
-                    final p when p > 0 => '${p.toStringAsFixed(2)} µm',
-                    _ => l10n.shellNotSet,
-                  };
-                  return Semantics(
-                    excludeSemantics: true,
-                    label: pixel,
-                    child: TextButton(
-                      key: const Key('simple-rig-guidepixel'),
-                      style: TextButton.styleFrom(
-                        backgroundColor: AraColors.tileFill,
-                        disabledBackgroundColor: AraColors.tileFill,
-                        minimumSize: const Size(kSimpleRigControlWidth, 44),
-                      ),
-                      onPressed: null,
-                      child: Text(pixel, style: kSimpleText),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+        // Read only: it comes from the guider.
+        _RigReadOnlyRow(
+          id: 'guidepixel',
+          label: l10n.shellGuidePixelSize,
+          value: _micrometres(l10n, ref.watch(phd2SettingsProvider).guidePixelSize),
         ),
         for (final (id, label, value, set)
             in <(String, String, double, void Function(double))>[
