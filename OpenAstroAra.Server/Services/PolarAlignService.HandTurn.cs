@@ -28,12 +28,14 @@ namespace OpenAstroAra.Server.Services {
     /// <summary>
     /// #2083 — the hand-turn run, NINA's Three Point Polar Alignment "manual mode": the user turns the RA axis by hand
     /// (the hand pad, or the clutch open) between the three solves, and the run sees each turn in the solves. It sends the
-    /// mount no motor move, no GoTo and no Find Home, never tilts the tube off the axis, never drives a Polar Aligner's
+    /// mount no motor move, no GoTo and no Find Home, never drives a Polar Aligner's
     /// motors (the person turns its bolts, as with auto off) and never turns tracking on while it runs: the only mount
     /// writes it makes are tracking off for the live adjust loop (§45.8 needs the camera still in alt/az) and the exit's,
     /// as every run's — the stop, and tracking off or the tracking it found given back (<c>stop_tracking_when_done</c>
     /// off and the run finished, or Guiding taking the camera). The rest of the routine — the three-point fit, the live
-    /// loop, the check's verdict — is the motor run's own.
+    /// loop, the check's verdict — is the motor run's own. Like a motor run (#2082) it makes one measurement per Start, its
+    /// two turns go the way the user confirmed (<see cref="PlanSweep"/>), and a start within 3° of the pole is refused
+    /// before it begins (<c>polar-align-on-axis</c>, or the run's <c>on_axis</c> when the mount was moved there since).
     /// <para>A turn is taken once two solves in a row show the RA axis at least <see cref="HandTurnTakenFraction"/> of the
     /// step past the last point, the way the user confirmed, and within <see cref="HandTurnStillDeg"/> of each other (the
     /// mount has stopped). Frames that do not solve while the user turns (trailed stars) are expected and only retried.</para>
@@ -51,77 +53,28 @@ namespace OpenAstroAra.Server.Services {
         private bool _handTurn;
         private PolarAlignHandTurnDto? _handTurnWait;
 
-        // The RA axis's turn from the run's start pose by the user's hand, measured from the solves, positive away from
-        // the meridian (the way the user confirmed). Guarded by _gate; StartAsync resets it.
-        private double _handOffsetDeg;
-
         /// <summary>How far the RA axis turned between two solves, in RA-reading terms (+ east), by the user's hand: the
         /// solved RA's change, less the Earth's turn when the mount does not track (tracking holds the solve still while
         /// the axis stands, so with tracking on the change is the turn itself). Pure, for the tests.</summary>
         internal static double HandTurnDeg(double fromRaDeg, double toRaDeg, double elapsedSeconds, bool tracking) =>
             Wrap180(toRaDeg - fromRaDeg - (tracking ? 0.0 : elapsedSeconds * SiderealDegPerSecond));
 
-        /// <summary>The way this stage asks the user to turn (RA-reading sign: +1 east), inside the band the user
-        /// confirmed, from the turns the solves measured: the motor run's rule (<see cref="PlanStageTurns"/>). Where the
-        /// band wants a turn back to the start first, the user is asked for it by hand before the three points
-        /// (<see cref="ThreePointsByHandAsync"/>), as the motor run turns back first: turning back over the arc instead
-        /// would end past the start, toward the meridian.</summary>
-        /// <returns>The sign of the stage's two turns, and how far to turn back toward the start first (degrees, 0 for
-        /// none).</returns>
-        private (double DirSign, double ReturnDeg) HandTurnDirection(RunBand band, double travelDeg) {
-            double offsetDeg;
-            lock (_gate) {
-                offsetDeg = _handOffsetDeg;
-            }
-            var (dirSign, returnFirst) = PlanStageTurns(band.AwaySign, offsetDeg, travelDeg, band.MaxSweepDeg);
-            var stage = CurrentStage() ?? "?";
-            var direction = dirSign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West;
-            var returnDeg = Math.Abs(returnFirst);
-            LogHandTurnStage(stage, offsetDeg, direction, returnDeg);
-            return (dirSign, returnDeg);
-        }
-
-        /// <summary>How far a hand turn back to the start must get before it counts: within <see cref="BandToleranceDeg"/>
-        /// of the start, and at least the usual share of the turn.</summary>
-        internal static double HandReturnTakenDeg(double returnDeg) =>
-            Math.Max(returnDeg - BandToleranceDeg, HandTurnTakenFraction * returnDeg);
-
-        /// <summary>Adds a hand turn the solves measured to the axis's offset from the run's start (positive away from
-        /// the meridian). <paramref name="dirSign"/> is the RA-reading way it was asked.</summary>
-        private void AddHandTurn(RunBand band, double dirSign, double turnedDeg, int gen) {
-            lock (_gate) {
-                if (_generation == gen) {
-                    _handOffsetDeg += band.AwaySign * dirSign * turnedDeg;
-                }
-            }
-        }
-
-        /// <summary>The three points of a hand-turn stage: a solve where the mount points, then two solves after the user
-        /// turned RA by about <paramref name="stepDeg"/> each, the way <see cref="HandTurnDirection"/> picks. No mount
-        /// command at all: the mount's reading is only read, as the first frame's solve hint.</summary>
+        /// <summary>The three points of a hand-turn measurement: a solve where the mount points, then two solves after the
+        /// user turned RA by about <paramref name="stepDeg"/> each, the way the user confirmed (<c>band.AwaySign</c>). No
+        /// mount command at all: the mount's reading is only read, as the first frame's solve hint and for the on-axis
+        /// check every run makes (<see cref="StartPointingOffTheAxisAsync"/>).</summary>
         /// <param name="names">The three frames' ids.</param>
         /// <param name="noteSolve">Called with 1, 2, 3 as each point is taken (the check's progress).</param>
         private async Task<((PolarAlignSolveOutcome S, DateTimeOffset At) A, (PolarAlignSolveOutcome S, DateTimeOffset At) B,
                 (PolarAlignSolveOutcome S, DateTimeOffset At) C)> ThreePointsByHandAsync(
                 LiveCapture capture, string[] names, double stepDeg, RunBand band, Func<Task> renew,
                 PolarAlignSettingsDto settings, int gen, CancellationToken ct, Func<int, Task>? noteSolve = null) {
-            var hint = await FreshMountPointingJnowAsync(ct).ConfigureAwait(false);
+            var hint = await StartPointingOffTheAxisAsync(ct).ConfigureAwait(false);
             var a = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
             var aAt = DateTimeOffset.UtcNow;
             LogSeedSolve(names[0], a.RaDegJnow, a.DecDegJnow);
-            // A camera along the axis gives the fit no circle, and a hand run never tilts the tube itself.
-            if (Math.Abs(a.DecDegJnow) > OnAxisDecDeg) {
-                throw new RoutineFailedException(HandTurnOnAxis,
-                    $"the camera looks along the RA axis (Dec {a.DecDegJnow:F1}°) — turn the Dec axis by hand so the tube points about 5° from the pole, then start again");
-            }
-            var (dirSign, returnDeg) = HandTurnDirection(band, 2.0 * stepDeg);
-            if (returnDeg > 0.0) {
-                // Back toward the start first (point 1 again): its last solve is the stage's first point.
-                var back = await WaitForHandTurnAsync(capture, names[0] + "-back", (a, aAt), point: 1, -band.AwaySign, returnDeg,
-                    HandReturnTakenDeg(returnDeg), renew, settings, gen, ct).ConfigureAwait(false);
-                AddHandTurn(band, -band.AwaySign, back.TurnedDeg, gen);
-                (a, aAt) = (back.S, back.At);
-            }
+            var dirSign = band.AwaySign;
+            LogHandTurnMeasurement(dirSign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, stepDeg);
             if (noteSolve is not null) {
                 await noteSolve(1).ConfigureAwait(false);
             }
@@ -131,7 +84,6 @@ namespace OpenAstroAra.Server.Services {
                 await noteSolve(2).ConfigureAwait(false);
             }
             var c = await WaitForHandTurnAsync(capture, names[2], (b.S, b.At), point: 3, dirSign, stepDeg, takenDeg, renew, settings, gen, ct).ConfigureAwait(false);
-            AddHandTurn(band, dirSign, b.TurnedDeg + c.TurnedDeg, gen);
             if (noteSolve is not null) {
                 await noteSolve(3).ConfigureAwait(false);
             }
@@ -225,12 +177,9 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A solved turn about the fitted axis under this is no turn: the fit has nothing to stand on.</summary>
         internal const double MinHandTurnAboutAxisDeg = 1.0;
 
-        /// <summary>The cause of a hand-turn run that started with the camera along the RA axis.</summary>
-        internal const string HandTurnOnAxis = "hand_turn_on_axis";
-
         // ── the hand-turn stages ─────────────────────────────────────────────────────────────
 
-        /// <summary>The coarse and fine stages' seed by hand, then the shared live adjust loop
+        /// <summary>The coarse and fine measurements' seed by hand, then the shared live adjust loop
         /// (<see cref="AdjustFromSeedAsync"/>).</summary>
         private async Task RunSeededAdjustByHandAsync(
                 LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings,
@@ -248,9 +197,8 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignCheckResultDto> RunCheckByHandAsync(
                 IGuideCaptureLink guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 RunBand band, int gen, CancellationToken ct) {
-            if (_runFrameSize is null) {
-                _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
-            }
+            // StartAsync clears the frame size per run: a check reads it afresh, as the motor check does.
+            _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
             LiveCapture capture = (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token);
             var (p1, p2, p3) = await ThreePointsByHandAsync(capture, ["check-1", "check-2", "check-3"], settings.CheckStepDeg, band,
                 () => RenewLeaseAsync(ct), settings, gen, ct, noteSolve: done => NoteCheckSolveAsync(gen, done)).ConfigureAwait(false);
@@ -286,10 +234,10 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4590, Level = LogLevel.Information, Message = "§45 polar-align hand-turn run: the user turns RA by hand; the run sends the mount no motor move, GoTo or Find Home, drives no Polar Aligner and never turns tracking on while it runs")]
         private partial void LogHandTurnRun();
 
-        [LoggerMessage(EventId = 4591, Level = LogLevel.Information, Message = "§45 polar-align {Stage} stage by hand: the RA axis is {OffsetDeg:F1}° from the run's start by the solves; asking for turns toward the {Direction} (turn back to the start first {ReturnDeg:F1}°)")]
-        private partial void LogHandTurnStage(string stage, double offsetDeg, string direction, double returnDeg);
+        [LoggerMessage(EventId = 4591, Level = LogLevel.Information, Message = "§45 polar-align measurement by hand: asking for two turns of about {StepDeg:F0}° toward the {Direction}, the way the user confirmed")]
+        private partial void LogHandTurnMeasurement(string direction, double stepDeg);
 
-        [LoggerMessage(EventId = 4592, Level = LogLevel.Information, Message = "§45 polar-align: waiting for the user to turn RA about {StepDeg:F0}° toward the {Direction} (point {Point} of 3; point 1 is a turn back to the start)")]
+        [LoggerMessage(EventId = 4592, Level = LogLevel.Information, Message = "§45 polar-align: waiting for the user to turn RA about {StepDeg:F0}° toward the {Direction} (point {Point} of 3)")]
         private partial void LogHandTurnAsked(int point, double stepDeg, string direction);
 
         [LoggerMessage(EventId = 4593, Level = LogLevel.Information, Message = "§45 polar-align: the user's turn for point {Point} is in, {TurnedDeg:F1}° by the solves")]

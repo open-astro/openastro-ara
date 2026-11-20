@@ -3285,8 +3285,8 @@ When user confirms a gear change (checkbox ticked + [Continue]), the affected su
 | **Telescope / focal length / reducer** | Pixel scale (affects §62 dither + §59 AF feature sizing + framing FOV); §58 first-flip-confirm reset | All of the above; user reminded to verify focal length in Settings → Telescope |
 | **Focuser** | Smart Focus calibration table (§59); backlash values (§59.7); focus-temp slope | Smart Focus recalibrates on next AF trigger (~5 min one-time cost) |
 | **Filter wheel / filters** | Per-filter focus offsets (§59); filter-specific dither cadence (future); flat library matching (§39) | Per-filter AF runs on first use of each filter; flat-matching warns if filter names changed |
-| **Mount** | §58 first-flip-confirm reset; meridian flip pause windows verified; polar-align result flagged stale | First flip on new mount fires the §58.8 60-second confirm prompt again |
-| **Pier / tripod / dovetail / saddle** | §58 first-flip-confirm reset; `pause_after_min` flagged for verification | First flip fires confirm; wizard's mount screen surfaces a banner *"Verify your `pause_after_min` value still fits your physical rig"* |
+| **Mount** | §58 first-flip-confirm reset; meridian flip pause windows verified; polar-align result flagged stale | Every flip on the new mount fires the §58.8 60-second warning again until the user confirms one |
+| **Pier / tripod / dovetail / saddle** | §58 first-flip-confirm reset; `pause_after_min` flagged for verification | Every flip fires the §58.8 warning until the user confirms one; wizard's mount screen surfaces a banner *"Verify your `pause_after_min` value still fits your physical rig"* |
 | **Guide scope / guide camera / PHD2** | PHD2 calibration; dither settle params; guider RMS baseline (§50) | PHD2 recalibrates on next guiding start (full cal, not auto-restore) |
 | **Something else** | Generic flag | Server adds a banner to main app: *"You indicated some gear changed but didn't specify. Calibrations may be stale. Verify before unattended use."* |
 
@@ -5770,7 +5770,8 @@ Per-fault action is configurable in profile safety policies (§35 extension), wi
 | Rotator (CAA) runaway / position drift | Reported angle differs from commanded > tolerance (default 0.5°) | Re-issue → Notify | Mechanical issues |
 | Guider (PHD2): loses calibration | PHD2 calibration-failed event | Recalibrate → Pause if persistent | Common after meridian flip |
 | Guider (PHD2): loses guide star | PHD2 star-lost event for > 30s | Pause (the frame in progress stops and is taken again) → wait for recovery (clouds passing) → after 3 min, probe the guide frame once a minute (`get_star_centroids`); stars back → stop guiding, re-center by plate solve, restart guiding, resume once guiding has settled (SettlePixels for SettleTime), as a relock does; a failed attempt retries after 5/10/15 min, never parks | Often transient. This is the safety-policy fault for a guided run; a dither that meets the lost star has its own handling in the dither row below. The long-outage half (2026-10-20): a star that returns outside the search box never relocks, so the relock-only resume left the run paused all night. The recovery defers to the safety engine, hands over on any user action, skips the slew below the horizon limit, and the resumed run's flip trigger evaluates on its next tick |
-| Guider (PHD2): link down / guide camera dropped | The socket dropped or the ping streak failed (link down); the guider reports `EquipmentDisconnected` for the guide camera | `on_guider_lost` (default `pause_and_retry`) | Same shared path as every other device: the guider publishes `equipment.fault` (`device_type` `guider`, details `link_down` / `equipment_disconnected` / `star_lost`) and the reaction service runs the plan below; the guider service keeps its own recoveries (§63.3 process restart, star-lost re-center) and reports the recovery to the hub, which resumes exactly the runs the reaction paused. The retired `guider.fault_action_taken` event is gone |
+| Guider (PHD2): Dec runs away (#1589) | 10 guide frames in a row with the Dec pulse at (within 5 % of) the largest the run has sent, the Dec distance never shrinking, and ending at least 3x and 1 px above where the streak began (`GuideAxisRunaway`, the polar alignment residual's rule), with PHD2 reporting the tripping frame's Dec pulse cut to its Max Dec Duration (`DecLimited`, so growing pulses in Dec backlash do not count); settle frames count; dithers, star loss or a new calibration restart the streak; while the guider is paused the watch skips its frames, and the resume clears the streak | Stop guiding → `on_guider_lost` → resume once guiding is started again and has settled | A wrong Dec direction after a meridian flip. One trip per guided run. Dec only: RA running away is the mount not tracking. Calibrating again is the user's step (#1716) |
+| Guider (PHD2): link down / guide camera dropped | The socket dropped or the ping streak failed (link down); the guider reports `EquipmentDisconnected` for the guide camera | `on_guider_lost` (default `pause_and_retry`) | Same shared path as every other device: the guider publishes `equipment.fault` (`device_type` `guider`, details `link_down` / `equipment_disconnected` / `star_lost` / `dec_runaway`) and the reaction service runs the plan below; the guider service keeps its own recoveries (§63.3 process restart, star-lost re-center) and reports the recovery to the hub, which resumes exactly the runs the reaction paused. The retired `guider.fault_action_taken` event is gone |
 | Guider (PHD2): dither timeout | Dither not settled within the settle timeout | Warning, then the next frame starts | A settle timeout is never a reason to pause: no second dither, no pause (2026-11-15, #1894); a lost star or runaway is the star-lost watch's. A dither refused with the star lost waits up to 20 s for it (2026-10-18); one refused because the guider is stopped restarts guiding once (re-centering by plate solve first when guiding has been off for 3 min or more, whatever stopped it: a star loss, a park, or a plan that left guiding off between targets, 2026-10-20) and dithers when that works, and parks the run only when the restart fails; Resume restarts guiding itself. A guider that is calibrating or deliberately paused is never restarted: the run parks with that reason |
 | Plate solve failure | After §28.2 retries (3 attempts) | Pause + notify | User can re-frame target or skip |
 | ASTAP / Astrometry.net executable crash | Process exit code != 0 | Retry once → Notify | Re-invoke; bad images usually cause this |
@@ -6258,7 +6259,9 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
    confirmed + that direction, or the daemon refuses
    (polar-align-unconfirmed). A parked mount is refused
    (polar-align-mount-parked), never unparked. No stage sends the
-   mount Home or slews it: every stage starts where the mount points
+   mount Home or slews it: every stage starts where the mount points.
+   One measurement per Start (#2082): no stage leads into another,
+   and a tube within 3° of the pole is refused (polar-align-on-axis)
 4. Server: runs autofocus on main camera (fast — uses bundled exposure
    defaults from profile)
 5. Server: captures 1 dark frame at the PA exposure/bin/temp (~3 sec)
@@ -6354,6 +6357,8 @@ To find `P_mount_axis`, server captures three frames with the mount's RA motor t
 
 Once `P_mount_axis` is known (after the initial 3-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
+The reverse projection holds only while the camera is fixed in alt/az, so the live loop needs tracking off (#2072): the routine confirms the mount reports tracking off and not slewing before the first live frame (within `TrackingConfirmTimeout`) and checks both on every frame; a mount still or again tracking, one that reads slewing (an iOptron reads tracking off while it slews), or one not connected when tracking off is sent (a disconnected mount reads tracking off, which confirms nothing) ends the run with `tracking_not_off`. A mount that drops its connection mid-loop is read again on the first frame after the reconnect. The projection divides the altitude shift by cos ψ (ψ = the camera's azimuth from the pole's at the seed, floored at |cos ψ| = 0.1); under |cos ψ| = 0.2 the status and each `polar_align.progress` carry `readout_caution: "altitude_weak"` and the client says to trust Verify (the check stage). Each live frame logs its solved RA/Dec and the tracking state (EventId 4529); each seed logs the seed pointing and cos ψ (4594).
+
 This is the same math iPolar uses internally; we're just running it on the main camera at lower resolution instead of a dedicated PA cam.
 
 ### 45.9 API endpoints + WebSocket events
@@ -6438,8 +6443,10 @@ Failure events:
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
 | Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
 | Mount is parked at Start (#2048) | Refused before anything moves (`polar-align-mount-parked`: "Mount is parked — unpark it and point near the pole first"); the routine never unparks |
+| The scope points within 3° of the pole at Start (#2082) | Refused before anything moves (`polar-align-on-axis`: "point it 2–5° from the pole, counterweights down, then start again"); no Dec motor tilts it off any more. A mount moved there after the confirmed start fails the run as `on_axis` before any turn |
 | Start without the user's confirmation, or with a direction that changed since (#2048) | Refused before anything moves (`polar-align-unconfirmed`, with the direction the run would turn now) |
 | A start whose turns would take the RA axis more than 30° from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
+| Mount reads tracking on in the live loop (#2072) | Tracking off (and not slewing) is confirmed, on a connected mount, before the first live frame and checked every frame; a mount that keeps or resumes tracking, or slews, ends the run `failed` with `tracking_not_off` (its sentence names which), before the readout can mistake the mount's turn for a knob move |
 | A stop Polar Align did not raise (#2066, #2067): Stop Mount, Emergency Stop, the meridian-flip watchdog, a park or a Find Home | The run reads the mount's stop count once, when Start is called, and checks it before every motor move, Polar Aligner move and tracking switch-on, after every seed frame and each live frame, between the stages and on every poll of a move. Any count it did not raise fails the run with `slew_aborted_externally`, worded by what stopped it (Stop Mount, Emergency Stop, the watchdog, a park, a Find Home): no further turn, no tracking on. After Stop Mount or the watchdog the exit stops the mount and confirms it as on any end. After Emergency Stop, a park or a Find Home the mount is the sender's: the exit sends no stop of its own (it would abort the park) and writes no tracking |
 | A GoTo, a pad move, Home or Park while Polar Align turns the mount (#2066) | Refused (`polar-align-moving-mount`, 409) while a motor move runs or its stop is not confirmed yet. A sync, a pad stop (rate 0) and Stop Mount are never refused. The safety park and the equipment-fault park stop Polar Align (handing them the mount, as Emergency Stop does) and the Polar Aligner first, each bounded at 10 s |
 | Mount does not confirm it stopped (any end of a run the routine does not hand to Emergency Stop, a park or a Find Home, #2048, #2066) | The stop (AbortSlew, MoveAxis 0 on both axes) is sent three times, 2 s apart; after 8 s without two still, not-slewing fresh reads 1.5 s apart, the daemon logs a Critical line and the run ends `failed` with `mount_did_not_stop` (or its own failure reason with the same sentence): "cut the mount's power". When Emergency Stop, the safety park or the fault park takes the mount over, or the run fails on a park, Find Home or Emergency Stop count, the exit sends no stop round and waits for no confirmation (the mount is the sender's), so that run never ends `mount_did_not_stop` |
@@ -6455,7 +6462,7 @@ Polar Alignment section of profile (default values shown):
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
 - Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
-- Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
+- Check turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns, so a Check turns the mount 2 × the step)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
 - ~~Use Home~~ (`use_home`): retired by #2048. Polar Align never sends the mount Home; every run starts from where the user pointed it, after the confirm step. A stored `use_home` is ignored.
 - Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
@@ -6590,6 +6597,16 @@ inside the band the user confirmed (`PlanStageTurns`): back over the arc when th
 with the RA motor first; coarse → fine → check at 10° runs 0 → 20 → 0 → 20. NINA's own start GoTo
 (Alt = latitude + 2°, Az 1°) is not built: it waits for the mount-clock check (#2071), AlpacaBridge
 #2395 (the `:MS2#` re-aim) and a pier-side read after the slew.
+
+**Revisited 2026-11-20 (#2082): one measurement per Start.** A Start could run up to three full
+measurements (coarse → fine → check), each with its own turns, a Next tap apart; NINA's TPPA makes one
+per Start. Now a Start runs one: `fine` by default (the guide camera), `coarse` only as "Rough first
+(main camera)" after the guide camera could not solve the pole field, or `check`. Next answers 409.
+The in-run turn-back (`PlanStageTurns`) is gone: every Start, a Check included, goes through the
+session's sweep plan (`PlanSweep`, #2089) and its confirm step, so the 30° limit holds across repeated
+Checks. Check on the adjust screen ends the live loop like Stop, then starts the confirmed check; the
+check compares with the last run's readout. The Dec tilt is gone too: a start within 3° of the pole is
+refused before anything moves, and the user points the tube 2–5° off it, as NINA's start does.
 
 ---
 
@@ -8551,7 +8568,9 @@ This is a starting suggestion; user adjusts for their specific setup. Pier heigh
 
 ### 58.5 Side-of-pier verification
 
-After the flip, ARA queries Alpaca's `SideOfPier`. If it didn't change (or driver returns `pierUnknown`), log a warning but continue — some Alpaca drivers lie about pier side. If the driver doesn't expose `SideOfPier` at all (`CanSetPierSide = false`), ARA infers pier side from hour angle. No brand-quirk database (per §52 Alpaca-only commitment).
+As soon as the flip slew returns, before the re-center, re-focus or guider restart, ARA reads Alpaca's `SideOfPier` and compares it with the value read before the slew (#1589). A changed pier side verifies the flip. An unknown pier side (`pierUnknown`, before or after) verifies nothing: log a warning and continue. An unchanged known pier side means the mount likely did not flip: with the §58.9 layers on (`flip_safety_enabled`, the default) the flip fails there and goes to the Layer-4 safe rest, so nothing re-centers or guides an unflipped mount; with them off, ARA posts a Warning notification at once and continues, because some Alpaca drivers lie about pier side. No brand-quirk database (per §52 Alpaca-only commitment).
+
+The hour-angle inference this section once named for a driver without `SideOfPier` was dropped on purpose (#1589), and the code has none: the target crosses the meridian whether or not the mount flipped, so a side inferred from hour angle would always look changed and verify nothing. A mount that reports no pier side is the unknown case above.
 
 ### 58.6 Profile schema
 
@@ -8591,15 +8610,13 @@ All equipment-impacting failures are subject to the unattended-safety pipeline i
 
 ### 58.8 First-flip confirmation safety net
 
-When a profile fires its meridian-flip trigger **for the first time** (`first_flip_confirmed: false`), instead of flipping autonomously, ARA sends a critical notification ~60 seconds before the flip:
+When a profile with no confirmed flip (`first_flip_confirmed: false`) fires its meridian-flip trigger, instead of flipping silently, ARA sends a critical notification after the pre-flip flight check passes and before it touches the guider or the mount, then waits 60 seconds. It does this on every flip until the user confirms one, not only the first:
 
-> ⚠ **First meridian flip on this profile**
+> **Meridian flip not confirmed on this profile**
 >
-> About to flip in 60 seconds. This is the first flip ARA has run for "C14 on CEM120" — verify your `pause_after_min` value (currently 2 min after meridian) is safe for this rig.
->
-> [Proceed] [Pause sequence — let me check]
+> This profile's meridian flips are not confirmed yet. A flip starts in 60 s. Stop the run if the scope could hit the mount. Confirm a completed flip in Settings → Unattended running → When to stop.
 
-If user confirms or doesn't respond in 60 s, flip proceeds. Sets `first_flip_confirmed: true` on the profile so subsequent flips run silently. Reset on any equipment change in the profile (the safety net assumes the rig hasn't changed since user verified).
+The notification has no buttons. During the wait the run status counts down ("Meridian flip — not confirmed yet, starting in 0:59"). If the user doesn't stop the run in 60 s, the flip proceeds; a stop during the wait leaves the mount as it was. The wait is not a confirmation (#1589). When a flip runs to the end on an unconfirmed profile, ARA records it (`first_flip_completed_utc`, and `first_flip_pier_side_changed`: false when the mount reported no pier side, or the same pier side with flip safety off, so a driver that misreports pier side can still be confirmed after a check by eye) and posts a Warning asking the user to confirm it. The user confirms in Settings → Unattended running → When to stop (`POST /api/v1/profile/safety/first-flip/confirm`) if the scope cleared the mount and the tripod and frames and guiding came back; that sets `first_flip_confirmed: true` so later flips run silently. With no completed flip on record the confirm is refused (`first-flip-not-completed`). A flip that fails or is stopped records nothing (with flip safety on, an unchanged pier side fails the flip). ARA never confirms on its own. Re-arm (offered on a confirmed flip and on a completed flip not yet confirmed), a shared profile, an optics-train change and a new profile (a clone of the active profile from the wizard or a duplicate, or a create body) clear the confirmation and the record (the safety net assumes the rig hasn't changed since the user verified). A stored `true` with no completed flip on record (written by the earlier executor, which confirmed when its 60 s wait ended) loads as unconfirmed.
 
 Catches the one failure mode that actually breaks gear: user creates a new profile, gets the timing number wrong, OTA tries to flip into the tripod. The 60-second pause is cheap insurance.
 
@@ -8788,7 +8805,7 @@ Beyond the §46.3 catalog entries (`meridian_flip.imminent` info, `meridian_flip
 |---|---|---|
 | `GET` | `/api/v1/meridian-flip/state` | Current flip state (idle/imminent/executing/complete/failed); time-to-next-flip estimate |
 | `POST` | `/api/v1/meridian-flip/skip` | Skip the upcoming flip; advance to next target instead |
-| `POST` | `/api/v1/meridian-flip/confirm-first` | User confirms the first-flip prompt (§58.8) |
+| `POST` | `/api/v1/profile/safety/first-flip/confirm` | User confirms the profile's completed flip (§58.8, #1589); `/api/v1/profile/safety/first-flip/rearm` asks again |
 | `GET` | `/api/v1/preflight/today` | Pre-sleep checklist data (§58.14) |
 | `POST` | `/api/v1/unattended-shutdown/acknowledge` | User acknowledges urgent failure, cancels countdown |
 

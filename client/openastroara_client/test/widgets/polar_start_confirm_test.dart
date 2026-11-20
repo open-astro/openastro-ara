@@ -58,9 +58,9 @@ void main() {
 
     expect(rig.planned, [PolarAlignStages.fine], reason: 'the direction comes from the rig, read from the mount');
     expect(find.text('Before the mount moves'), findsOneWidget);
-    expect(find.text('Point the tube near the pole, with the counterweights down.'), findsOneWidget);
+    expect(find.text('Point the tube 2–5° from the pole, with the counterweights down.'), findsOneWidget);
     expect(find.text('RA will turn about 10° twice toward the west (20° in all).'), findsOneWidget);
-    expect(find.text('Later steps turn back over the same arc: never more than 20° from where it starts.'), findsOneWidget);
+    expect(find.textContaining('Later steps'), findsNothing, reason: 'one measurement per Start (#2082): no later step');
     expect(find.text("Keep a hand on the mount's power switch."), findsOneWidget);
     expect(rig.started, isEmpty, reason: 'nothing moves while the user reads');
 

@@ -70,11 +70,30 @@ void main() {
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     await api.stop();
     await api.complete();
-    await api.next();
+    await api.requestCapture();
     expect(d.seen, [
       ('POST /api/v1/equipment/polaralign/stop', PolarAlignApi.endTimeout),
       ('POST /api/v1/equipment/polaralign/complete', PolarAlignApi.endTimeout),
-      ('POST /api/v1/equipment/polaralign/next', null),
+      ('POST /api/v1/equipment/polaralign/capture', null),
+    ]);
+  });
+
+  test('a Check waits as long as Stop: from the adjust screen it ends the loop first (#2082)', () async {
+    final d = _Daemon();
+    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    PolarAlignStartPlan plan(String stage) => PolarAlignStartPlan.fromJson(<String, dynamic>{
+      'stage': stage,
+      'direction': 'west',
+      'step_deg': 10,
+      'turns': 2,
+      'max_sweep_deg': 20,
+      'new_origin': false,
+    }, stage: stage);
+    await api.start(plan(PolarAlignStages.check));
+    await api.start(plan(PolarAlignStages.fine));
+    expect(d.seen, [
+      ('POST /api/v1/equipment/polaralign/start', PolarAlignApi.endTimeout),
+      ('POST /api/v1/equipment/polaralign/start', null),
     ]);
   });
 

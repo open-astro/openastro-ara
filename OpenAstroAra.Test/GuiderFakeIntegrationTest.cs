@@ -3179,6 +3179,7 @@ namespace OpenAstroAra.Test {
             var done = await DoneAsync(rig).ConfigureAwait(false);
             Assert.That(done.GetProperty("pa_error_min_arcmin").GetDouble(), Is.EqualTo(17.1).Within(0.1), "the value is still published");
             Assert.That(done.GetProperty("reliable").GetBoolean(), Is.False);
+            Assert.That(done.GetProperty("above_align").GetBoolean(), Is.True, "#2072 the daemon says the two disagree");
             Assert.That(await WaitUntilAsync(() => rig.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
             Assert.That(rig.Log.Rows[0].Reliable, Is.False, "history matches the strip");
         }
@@ -3192,6 +3193,7 @@ namespace OpenAstroAra.Test {
 
             var done = await DoneAsync(rig).ConfigureAwait(false);
             Assert.That(done.GetProperty("reliable").GetBoolean(), Is.True);
+            Assert.That(done.GetProperty("above_align").GetBoolean(), Is.False);
             Assert.That(done.GetProperty("align_error_arcmin").GetDouble(), Is.EqualTo(15.5));
         }
 

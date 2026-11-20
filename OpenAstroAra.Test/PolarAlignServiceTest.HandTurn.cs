@@ -29,7 +29,8 @@ namespace OpenAstroAra.Test {
     /// #2083 — the hand-turn run (NINA's manual mode) on <see cref="FakeGemMount"/>: the test plays the user, turning the
     /// true RA axis by hand when the run asks (<see cref="FakeGemMount.MoveByOtherMeans"/>, the clutch open, so the mount's
     /// own reading never moves), and the solves see where the tube really points. The run must measure the axis and reach
-    /// the live loop with nothing moved by Ara: no motor move, no GoTo, no Find Home, and tracking never turned on.
+    /// the live loop with nothing moved by Ara: no motor move, no GoTo, no Find Home, and tracking never turned on. Like a
+    /// motor run, each Start makes one measurement (#2082).
     /// </summary>
     public partial class PolarAlignServiceTest {
 
@@ -138,36 +139,37 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignChecked), CounterweightLimitDeg);
         }
 
+        private static readonly bool[] OneHandStart = { true };
+
         [Test]
-        public async Task A_hand_turn_check_after_short_fine_turns_asks_for_a_turn_back_to_the_start_first_and_never_passes_the_start() {
-            // Two 8.5° turns are taken (80 % of 10°), so the fine stage ends 17° from the start. The check's two 10° turns fit
-            // neither back over the arc (they would end 3° past the start, toward the meridian) nor away (37°, past the
-            // 20° band): the user is asked to turn back to the start first, as the motor run turns back first.
+        public async Task A_hand_turn_Check_from_the_adjust_loop_ends_it_and_takes_its_two_turns_by_hand_with_no_motor_move() {
+            // #2082 — Check on the adjust screen is a confirmed Start(check) through the session's sweep plan; the user picks
+            // Turn RA by hand in its confirm step too. The loop ends like Stop, then the check asks for its turns the way
+            // its plan says, and its verdict sits beside the loop's readout. Ara moves nothing in either run.
             var mount = PolledGemAt(-4.0);
-            var phiStart = mount.TruePhiDeg;
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
 
-            var plan = await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 8.5).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 8.5).ConfigureAwait(false);
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             var checkFrom = ws.Events.Count;
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var back = await TurnByHandWhenAskedAsync(ws, mount, point: 1, deg: null, from: checkFrom).ConfigureAwait(false);
-            var backAsked = ws.Events.Skip(checkFrom).First(e => e.Type == WsEventCatalog.PolarAlignHandTurn).Payload;
+            var plan = await StartByHandAsync(svc, PolarAlignStages.Check).ConfigureAwait(false);
             var asked2 = await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, from: checkFrom).ConfigureAwait(false);
             var asked3 = await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, from: checkFrom).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+            var status = await PollStateAsync(svc, checkFrom, "checked", "failed").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("checked"),
                 string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
-            Assert.That(back, Is.Not.EqualTo(plan.Direction), "the turn back goes toward the meridian");
-            Assert.That(backAsked.GetProperty("target_deg").GetDouble(), Is.EqualTo(17.0).Within(0.3), "back by the fine stage's two turns");
-            Assert.That((asked2, asked3), Is.EqualTo((plan.Direction, plan.Direction)), "then away, the way the user confirmed");
-            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(phiStart + 0.5),
-                "the axis never went past the start toward the meridian. " + mount.Describe());
+            Assert.That(status.HandTurn, Is.True);
+            Assert.That(status.CheckResult!.FineErrorArcmin, Is.Not.Null, "the loop's readout travels into the check");
+            Assert.That((asked2, asked3), Is.EqualTo((plan.Direction, plan.Direction)), "the check's turns go the way its plan says");
+            Assert.That(ws.Events.Skip(checkFrom).Where(e => e.Type == WsEventCatalog.PolarAlignStarted)
+                    .Select(e => e.Payload.GetProperty("hand_turn").GetBoolean()), Is.EqualTo(OneHandStart),
+                "the loop ended and one check started, by hand");
             Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            Assert.That(TrackingOnSent(mount), Is.False, "a hand-turn check never turns tracking on");
         }
 
         [Test]
@@ -247,19 +249,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_hand_turn_start_with_the_camera_on_the_axis_fails_and_never_tilts_the_tube() {
-            // Dec 88.5°: a motor run tilts the tube 5° off the axis with the Dec motor; a hand run asks the user to.
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 88.5, lstHours: 20.0, clock: new ManualMountClock());
-            mount.FreshReadTakes = FreshRead;
+        public async Task A_hand_turn_run_whose_first_reading_is_within_3_degrees_of_the_pole_fails_as_on_axis_and_asks_for_no_turn() {
+            // #2082 — the plan read Dec 86.9° and the user confirmed Turn RA by hand; the mount was moved to Dec 87.5° before
+            // the run's first reading. A hand-turn run makes the motor run's one on-axis check, so the user is never asked to
+            // turn a camera that looks along the axis.
+            var mount = new FakeStopMount(tracking: true) { DecDeg = 86.9 };
+            var fake = NewFake();
+            fake.LeaseGate = active => {
+                if (active) {
+                    mount.DecDeg = 87.5; // after the plan, before the run's first reading
+                }
+                return Task.CompletedTask;
+            };
             var ws = new WsRecorder();
-            using var svc = NewGemService(mount, ws);
+            using var svc = NewStopService(mount, ws, guider: fake);
 
             await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.HandTurnOnAxis));
-            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("on_axis"));
+            Assert.That(error.GetProperty("message").GetString(), Is.EqualTo(PolarAlignService.OnAxisMessage));
             Assert.That(ws.Count(WsEventCatalog.PolarAlignHandTurn), Is.Zero, "nothing was asked of the user");
+            Assert.That(mount.Log.Where(IsMotion), Is.Empty, "zero motions: " + string.Join(", ", mount.Log));
         }
 
         [Test]

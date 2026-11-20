@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.Test.PolarAlign;
@@ -119,6 +120,56 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.TotalTrueRaSweepDeg, Is.EqualTo(20.0).Within(2 * TrueTurnToleranceDeg));
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
+        }
+
+        // ── one measurement per Start (#2082) ────────────────────────────────────────────────
+
+        private static readonly string[] OnlyTheFineStage = { PolarAlignStages.Fine };
+
+        [Test]
+        public async Task One_Start_on_the_GEM_makes_two_RA_turns_and_no_Dec_move_and_Next_starts_nothing() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            // Next used to lead the run into the check: two more turns. It is retired: 409, and the loop runs on.
+            var next = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.NextAsync(null, CancellationToken.None));
+            Assert.That(next!.Message, Is.EqualTo(PolarAlignService.NextRetiredMessage));
+            var mark = ws.Events.Count;
+            await ws.WhenAsync(events => events.Skip(mark).Count(e => e.Type == WsEventCatalog.PolarAlignProgress) >= 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(2), "at most two primary-axis moves. " + mount.Describe());
+            Assert.That(RaTurns(mount).Select(t => Math.Abs(t.TrueDeltaHaDeg)), Has.All.EqualTo(10.0).Within(TrueTurnToleranceDeg), "each of SeedRotationDeg");
+            Assert.That(mount.Motions.Where(m => m.Kind == MotionKind.DecMotor), Is.Empty, "no secondary-axis move");
+            Assert.That(ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignStage).Select(e => e.Payload.GetProperty("stage").GetString()),
+                Is.EqualTo(OnlyTheFineStage), "one measurement, never a second stage");
+            mount.AssertEndedStopped(tracking: false);
+            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
+        }
+
+        [Test]
+        public async Task A_start_at_Dec_88_on_the_GEM_is_refused_before_any_motion() {
+            // Within 3° of the pole the camera looks along the RA axis. Polar Align used to tilt it 5° off with the Dec motor;
+            // it now asks the user to point 2–5° from the pole instead, before anything moves.
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 88.0, lstHours: 20.0, clock: new ManualMountClock());
+            mount.FreshReadTakes = FreshRead;
+            var ws = new WsRecorder();
+            var fake = NewFake();
+            using var svc = NewServiceOn(fake, new TrueSkySolver(mount), mount, ws, NewStore());
+
+            var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(null, CancellationToken.None));
+            var startRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
+                null, new PolarAlignStartConfirmation(PolarAlignDirections.East, NewOrigin: true), null, CancellationToken.None));
+
+            Assert.That(planRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignOnAxis), "the confirm step already says so");
+            Assert.That(startRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignOnAxis));
+            Assert.That(startRefusal.Message, Does.Contain("point it 2–5° from the pole"));
+            Assert.That(mount.Motions, Is.Empty, "zero motions. " + mount.Describe());
+            Assert.That(mount.MotorTravelDeg, Is.Zero);
+            Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
         }
 
         // ── Stop ─────────────────────────────────────────────────────────────────────────────

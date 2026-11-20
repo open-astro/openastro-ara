@@ -74,7 +74,8 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     // OpenAstro Guider (e.g. the SBC at :8080) the user had configured in Settings.
     if (host == null || port == null) {
       try {
-        final phd2 = await ref.read(profileApiProvider)?.getPhd2Settings();
+        final phd2 =
+            (await ref.read(profileApiProvider)?.getPhd2Section())?.value;
         host ??= phd2?.host ?? kDefaultGuiderHost;
         port ??= phd2?.port ?? kDefaultGuiderPort;
       } catch (_) {

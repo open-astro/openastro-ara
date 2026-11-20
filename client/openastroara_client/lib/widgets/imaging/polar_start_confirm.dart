@@ -84,9 +84,6 @@ class PolarStartConfirmDialog extends StatelessWidget {
           deg(plan.originOffsetDeg.abs()),
           offsetDirection,
         ),
-      // A check-only run has no later step to turn back.
-      if (plan.stage != PolarAlignStages.check)
-        l10n.polarConfirmBand(deg(plan.maxSweepDeg)),
       l10n.polarConfirmPower,
       if (plan.handTurnAvailable) l10n.polarConfirmHandTurnHint,
     ];

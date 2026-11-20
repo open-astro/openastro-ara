@@ -90,6 +90,7 @@ namespace OpenAstroAra.Test {
                 opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
             });
             _app = builder.Build();
+            _app.Use(RefusalHandler.Middleware); // #1589 — the confirm route's refusal, as Program.cs answers it
             _app.MapProfileEndpoints();
             _app.PublishDaemonProfileWrites();
             await _app.StartAsync();
@@ -109,8 +110,9 @@ namespace OpenAstroAra.Test {
 
         [SetUp]
         public void ClearEvents() {
-            // An optics change also clears a confirmed first flip (safety): start each test unconfirmed.
-            _store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = false });
+            // An optics change also clears the flip confirmation (safety): start each test unconfirmed,
+            // with no completed flip on record.
+            _store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = false, FirstFlipCompletedUtc = null, FirstFlipPierSideChanged = false });
             _ws.Clear();
         }
 
@@ -167,8 +169,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_locked_safety_update_publishes_safety() {
-            // The store call MeridianFlipExecutor makes to confirm the first flip (SetUp left it unconfirmed).
-            await AssertPublishes("safety", () => _store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = true }));
+            // The store call MeridianFlipExecutor makes to record a completed flip (SetUp left none).
+            await AssertPublishes("safety", () => _store.UpdateSafetyPolicies(current => current with { FirstFlipCompletedUtc = DateTimeOffset.UtcNow }));
         }
 
         [Test]
@@ -302,6 +304,45 @@ namespace OpenAstroAra.Test {
             Assert.That(post.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(post.Headers.ETag?.ToString(), Is.EqualTo(await Tag("safety")), "the re-arm answers the stored section's tag");
             Assert.That(Seen(), Is.EqualTo("safety"));
+        }
+
+        [Test]
+        public async Task The_first_flip_rearm_clears_the_completed_flip_record() {
+            _store.UpdateSafetyPolicies(current => current with { FirstFlipCompletedUtc = DateTimeOffset.UtcNow, FirstFlipPierSideChanged = true });
+            using var post = await _http.PostAsync(new Uri("/api/v1/profile/safety/first-flip/rearm", UriKind.Relative), null);
+            Assert.That(post.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(_store.GetSafetyPolicies().FirstFlipCompletedUtc, Is.Null, "re-arm asks for a new watched flip");
+            Assert.That(_store.GetSafetyPolicies().FirstFlipPierSideChanged, Is.False);
+        }
+
+        [Test]
+        public async Task Confirming_with_no_completed_flip_is_refused_first_flip_not_completed() {
+            using var post = await _http.PostAsync(new Uri("/api/v1/profile/safety/first-flip/confirm", UriKind.Relative), null);
+            Assert.That(post.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            using var json = JsonDocument.Parse(await post.Content.ReadAsStringAsync());
+            Assert.That(json.RootElement.GetProperty("reason").GetString(), Is.EqualTo("first-flip-not-completed"));
+            Assert.That(_store.GetSafetyPolicies().FirstFlipConfirmed, Is.False);
+            Assert.That(_ws.Sections(), Is.Empty, "a refusal writes nothing");
+        }
+
+        [Test]
+        public async Task Confirming_a_completed_flip_sets_the_flag_answers_the_safety_ETag_and_publishes_once() {
+            var completed = new DateTimeOffset(2026, 11, 20, 3, 0, 0, TimeSpan.Zero);
+            _store.UpdateSafetyPolicies(current => current with { FirstFlipCompletedUtc = completed, FirstFlipPierSideChanged = true });
+            _ws.Clear();
+            using var post = await _http.PostAsync(new Uri("/api/v1/profile/safety/first-flip/confirm", UriKind.Relative), null);
+            Assert.That(post.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var stored = _store.GetSafetyPolicies();
+            Assert.That(stored.FirstFlipConfirmed, Is.True);
+            Assert.That(stored.FirstFlipCompletedUtc, Is.EqualTo(completed), "the confirmed flip stays on record");
+            Assert.That(post.Headers.ETag?.ToString(), Is.EqualTo(await Tag("safety")), "the confirm answers the stored section's tag");
+            Assert.That(Seen(), Is.EqualTo("safety"));
+
+            // Confirming again changes nothing and still answers 200.
+            _ws.Clear();
+            using var again = await _http.PostAsync(new Uri("/api/v1/profile/safety/first-flip/confirm", UriKind.Relative), null);
+            Assert.That(again.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(_store.GetSafetyPolicies(), Is.EqualTo(stored));
         }
 
         [Test]

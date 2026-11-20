@@ -154,13 +154,14 @@ public sealed partial class FileProfileStore : IProfileStore {
     public OpticsSettingsDto GetOpticsSettings() { lock (_lock) { return _snapshot.Optics; } }
     public void PutOpticsSettings(OpticsSettingsDto value) => UpdateAndPersist(s => WithOptics(s, value));
 
-    // §58.8 — a genuine optics-train change invalidates the first-flip confirmation: the safety
-    // net assumes the rig hasn't changed since the user watched a flip succeed, and the optics
-    // section is the ARA profile's rig identity (mounts are Alpaca-discovered, not profile
-    // fields). An identical re-save keeps the confirmation. Shared by the Put and Update paths.
+    // §58.8 — a genuine optics-train change invalidates the first-flip confirmation and the
+    // completed flip waiting for one (#1589): the safety net assumes the rig hasn't changed since
+    // the user watched a flip succeed, and the optics section is the ARA profile's rig identity
+    // (mounts are Alpaca-discovered, not profile fields). An identical re-save keeps both. Shared
+    // by the Put and Update paths.
     private static ProfileSnapshotDto WithOptics(ProfileSnapshotDto s, OpticsSettingsDto value) {
-        var safety = value != s.Optics && s.SafetyPolicies.FirstFlipConfirmed
-            ? s.SafetyPolicies with { FirstFlipConfirmed = false }
+        var safety = value != s.Optics
+            ? ProfileSections.WithoutFirstFlip(s.SafetyPolicies)
             : s.SafetyPolicies;
         return s with { Optics = value, SafetyPolicies = safety };
     }

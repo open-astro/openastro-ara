@@ -69,6 +69,13 @@ public static class RefusalCatalog {
     // #2066 — a GoTo, a pad move, Home or Park while Polar Align turns the mount (or its stop is not confirmed yet): stop
     // Polar Align first. A pad stop (rate 0) and Stop Mount are never refused.
     public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
+    // #2082 — the scope points within 3° of the pole: the camera would look along the RA axis, and nothing tilts it off the
+    // axis any more. Point it 2–5° from the pole and start again.
+    public static readonly RefusalCause PolarAlignOnAxis = new("polar-align-on-axis", 409, "The scope points too close to the pole");
+
+    // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
+    public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
+
     // #2083 — a Start while a run is active that asks for the other way of turning RA (by hand, or with the motor): the
     // user confirmed something the running run does not do. A matching retry is still a no-op accept.
     public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
@@ -76,6 +83,7 @@ public static class RefusalCatalog {
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
-        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignAlreadyRunning,
+        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
+        FirstFlipNotCompleted, PolarAlignAlreadyRunning,
     ];
 }

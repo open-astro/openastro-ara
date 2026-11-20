@@ -16,12 +16,11 @@ abstract interface class PolarAlignClient {
   /// answers before the mount moves.
   Future<PolarAlignStartPlan> startPlan({String? stage});
 
-  /// Begin the [plan] the user confirmed: from where the mount points, at its
-  /// stage, turning its direction.
+  /// Begin the [plan] the user confirmed: from where the mount points, one
+  /// measurement at its stage, turning its direction (#2082: a measurement
+  /// never leads into another; a check started from the adjust loop ends the
+  /// loop first).
   Future<void> start(PolarAlignStartPlan plan);
-
-  /// Next (coarse → fine, fine → check).
-  Future<void> next();
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -93,7 +92,10 @@ class PolarAlignApi implements PolarAlignClient {
   /// Begin the routine (preflight: connected guider + mount, configured site)
   /// at the [plan]'s stage, confirmed by the user with the plan's direction
   /// (#2048). 202-Accepted; a failed preflight surfaces as a 409/422 — a
-  /// parked mount, or a direction that changed since, is a [Refusal].
+  /// parked mount, a direction that changed since, a scope within 3° of the
+  /// pole or turns past the sweep limit is a [Refusal]. `/polaralign/next` is
+  /// retired (#2082): this client never calls it. A check waits [endTimeout]:
+  /// from the adjust screen the daemon ends the loop (a confirmed stop) first.
   @override
   Future<void> start(PolarAlignStartPlan plan) async {
     try {
@@ -107,18 +109,13 @@ class PolarAlignApi implements PolarAlignClient {
           // #2083 — only when the user chose it: the rig then moves nothing.
           if (plan.handTurn) 'hand_turn': true,
         },
+        options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
       if (refusal != null) throw refusal;
       rethrow;
     }
-  }
-
-  /// Next. 202-Accepted; a 409 when nothing waits on the user.
-  @override
-  Future<void> next() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/next');
   }
 
   /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
