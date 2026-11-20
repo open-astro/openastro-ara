@@ -874,9 +874,22 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        /// <summary>#2066 (ARA-2) — opt-in: the mediator's <see cref="FindHome"/> and <see cref="ParkTelescope"/> refuse, as
+        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's). Off by default: other tests
+        /// call <see cref="ParkTelescope"/> as the safety park, which goes through the service's ParkAsync and is never refused.</summary>
+        public bool MediatorRefusesHomeAndParkWhileOwned { get; set; }
+
+        private void ThrowIfMediatorMoveOwnedLocked(string what) {
+            if (MediatorRefusesHomeAndParkWhileOwned && _motionOwner is { } owner) {
+                CommandLocked(what + " refused: " + owner + " holds the mount", isMotion: false);
+                throw new SequenceEntityFailedException(TelescopeService.MotionOwnedMessage(owner, what));
+            }
+        }
+
         public async Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) {
             int? entry;
             lock (_lock) {
+                ThrowIfMediatorMoveOwnedLocked("Find Home");
                 entry = CanFindHome ? BeginGoToLocked(MotionKind.FindHome, target: null, fixedTrueTarget: GemGeometry.Home(South)) : null;
             }
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
@@ -885,6 +898,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public async Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) {
             int? entry;
             lock (_lock) {
+                ThrowIfMediatorMoveOwnedLocked("park");
                 IntegrateLocked();
                 var park = ParkPose ?? GemGeometry.Home(South);
                 entry = BeginGoToLocked(MotionKind.Park, target: null, fixedTrueTarget: TrueFromBelieved(park));
