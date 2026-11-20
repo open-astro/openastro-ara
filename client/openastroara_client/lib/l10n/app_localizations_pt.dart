@@ -6700,6 +6700,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
 
   @override
+  String get refusalPolarAlignClutchTurned =>
+      'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -13768,6 +13772,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignAlreadyRunning =>
       'O alinhamento polar já está rodando e gira a AR do outro jeito que você escolheu (à mão ou com o motor). Pare-o primeiro e inicie de novo.';
+
+  @override
+  String get refusalPolarAlignClutchTurned =>
+      'A AR foi girada à mão com a embreagem solta, e a montagem não sabe mais para onde aponta. Sincronize-a (Centralizar faz isso) ou reconecte-a depois de levá-la à posição inicial e inicie de novo, ou use Girar a AR à mão.';
 
   @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';

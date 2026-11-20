@@ -231,9 +231,14 @@ framing/focus loop when you need to point or focus by eye.
   GoTo, no Find Home, no Polar Aligner motor (you turn its bolts), and tracking is never switched on
   while it measures. It is still switched off for the knob loop, which needs the camera still; at the
   end it is off, or given back as it was if *Stop tracking when polar align ends* is off, like any
-  run. The card asks for each turn ("Turn RA by hand about 10° toward the east, then let go"), shows
-  how far the frames say you have turned, and takes the next frame once the mount is still; then the
-  readout works as usual. Each Start is one measurement, its two turns the way the confirm step
+  run. The card asks for each turn ("Turn RA by hand about 10° toward the east, then let go") and
+  takes the next frame once the mount is still; then the readout works as usual. With the hand pad it
+  shows how far the mount says you have turned. With the clutch open it shows no number: the mount
+  does not see the turn, and the frames alone cannot measure it while the mount is off the pole, so
+  it waits until the view has moved far enough. A turn far past the two asked for ends the run. After
+  a turn with the clutch open the mount no longer knows where it points: **Move the mount** is
+  refused until you sync it (Center does) or reconnect it once it is homed; **Turn RA by hand** still
+  works. Each Start is one measurement, its two turns the way the confirm step
   says. A **Check** can be turned by hand the same way: pick **Turn RA by hand** on its confirm step.
   A tube within 3° of the pole is refused, as for the motor. The mount still has to be connected. An
   older rig does not offer it.

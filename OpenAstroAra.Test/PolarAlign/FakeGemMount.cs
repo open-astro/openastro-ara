@@ -471,6 +471,9 @@ namespace OpenAstroAra.Test.PolarAlign {
 
         public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
 
+        /// <summary>The syncs the mount accepted (#2083): a test bumps it to play a plate-solve sync (Sync itself is forbidden here).</summary>
+        public long SyncEpoch { get; set; }
+
         public ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
 
         public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>

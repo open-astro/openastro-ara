@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -36,9 +37,18 @@ namespace OpenAstroAra.Server.Services {
     /// loop, the check's verdict — is the motor run's own. Like a motor run (#2082) it makes one measurement per Start, its
     /// two turns go the way the user confirmed (<see cref="PlanSweep"/>), and a start within 3° of the pole is refused
     /// before it begins (<c>polar-align-on-axis</c>, or the run's <c>on_axis</c> when the mount was moved there since).
-    /// <para>A turn is taken once two solves in a row show the RA axis at least <see cref="HandTurnTakenFraction"/> of the
-    /// step past the last point, the way the user confirmed, and within <see cref="HandTurnStillDeg"/> of each other (the
-    /// mount has stopped). Frames that do not solve while the user turns (trailed stars) are expected and only retried.</para>
+    /// <para>How far a turn went is read from the mount when it can be: a hand-pad turn moves the mount's RA reading,
+    /// which turns about the mount's own axis wherever the pole is, so the run shows that angle and takes the turn at
+    /// <see cref="HandTurnTakenFraction"/> of the step. With the clutch open the reading stays put, and the solves alone
+    /// cannot give the angle (a solved RA change is an angle about the celestial pole, not about the RA axis, and with a
+    /// polar error of a few degrees a true 10° turn can read anywhere from backwards to 40°): the run then claims no
+    /// angle, and takes the turn once the solved pointing has moved at least what that share of the step moves it at
+    /// the least distance from the axis it allows for (<see cref="HandTurnPolarErrorAllowanceDeg"/>). Either way the
+    /// mount must have stopped: two solves in a row within <see cref="HandTurnStillDeg"/>. A turn that takes the axis
+    /// past the run's band (its two turns plus <see cref="BandToleranceDeg"/>) fails the run (<c>hand_turn_too_far</c>),
+    /// and a clutch turn leaves the mount's reading wrong, so a motor start is refused until the mount is synced or
+    /// reconnected (<see cref="NoteClutchTurned"/>). Frames that do not solve while the user turns (trailed stars) are
+    /// expected and only retried.</para>
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -49,9 +59,27 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Two solves this close (RA turn and Dec, degrees) mean the user has stopped turning.</summary>
         internal const double HandTurnStillDeg = 0.1;
 
+        /// <summary>A mount RA reading that moved this much (degrees, beyond tracking) since the last point turned with the
+        /// axis (the hand pad): the run measures the turn from it. Less, and the clutch is open.</summary>
+        internal const double HandTurnReadingFollowsDeg = 1.0;
+
+        /// <summary>The polar error a clutch turn allows for (degrees): the camera may sit this much nearer the RA axis, or
+        /// further from it, than its distance from the celestial pole. A first, eyeballed setup is often 2–3° out.</summary>
+        internal const double HandTurnPolarErrorAllowanceDeg = 3.0;
+
         // Guarded by _gate: whether the current run turns by hand (for the status), and what it waits for now.
         private bool _handTurn;
         private PolarAlignHandTurnDto? _handTurnWait;
+
+        /// <summary>One point of a hand-turn measurement: the solve, when, and the mount's RA/Dec reading then (null when
+        /// the read failed).</summary>
+        private sealed record HandPoint(PolarAlignSolveOutcome S, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading);
+
+        /// <summary>What one solve shows of a hand turn. <c>TurnedDeg</c>: the turn the asked way since the last point, by
+        /// the mount's reading; null when the reading did not move (the clutch is open), as no angle can be claimed then.
+        /// <c>Reached</c>: enough of a turn to take. <c>ByClutch</c>: the solves moved that far while the reading stood.
+        /// <c>SweepDeg</c>: how far the axis has turned from the measurement's first point, at least (either way).</summary>
+        internal sealed record HandTurnSample(double? TurnedDeg, bool Reached, bool ByClutch, double SweepDeg);
 
         /// <summary>How far the RA axis turned between two solves, in RA-reading terms (+ east), by the user's hand: the
         /// solved RA's change, less the Earth's turn when the mount does not track (tracking holds the solve still while
@@ -73,36 +101,102 @@ namespace OpenAstroAra.Server.Services {
             var a = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
             var aAt = DateTimeOffset.UtcNow;
             LogSeedSolve(names[0], a.RaDegJnow, a.DecDegJnow);
-            var dirSign = band.AwaySign;
-            LogHandTurnMeasurement(dirSign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, stepDeg);
+            LogHandTurnMeasurement(band.AwaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, stepDeg);
             if (noteSolve is not null) {
                 await noteSolve(1).ConfigureAwait(false);
             }
-            var takenDeg = HandTurnTakenFraction * stepDeg;
-            var b = await WaitForHandTurnAsync(capture, names[1], (a, aAt), point: 2, dirSign, stepDeg, takenDeg, renew, settings, gen, ct).ConfigureAwait(false);
+            var start = new HandPoint(a, aAt, hint);
+            var b = await WaitForHandTurnAsync(capture, names[1], start, start, point: 2, band, stepDeg, renew, settings, gen, ct).ConfigureAwait(false);
             if (noteSolve is not null) {
                 await noteSolve(2).ConfigureAwait(false);
             }
-            var c = await WaitForHandTurnAsync(capture, names[2], (b.S, b.At), point: 3, dirSign, stepDeg, takenDeg, renew, settings, gen, ct).ConfigureAwait(false);
+            var c = await WaitForHandTurnAsync(capture, names[2], start, b, point: 3, band, stepDeg, renew, settings, gen, ct).ConfigureAwait(false);
             if (noteSolve is not null) {
                 await noteSolve(3).ConfigureAwait(false);
             }
             return ((a, aAt), (b.S, b.At), (c.S, c.At));
         }
 
-        /// <summary>Ask the user to turn RA by about <paramref name="stepDeg"/> toward <paramref name="dirSign"/>, then
-        /// capture and solve until the turn is in (<paramref name="takenDeg"/> or more, two still solves). Publishes
-        /// <c>polar_align.hand_turn</c> after every solve, so the screen shows how far the axis has turned. Waits as long as
-        /// the user needs: Stop ends it.</summary>
-        /// <returns>The taken solve, when, and how far it shows the axis turned the asked way (degrees).</returns>
-        private async Task<(PolarAlignSolveOutcome S, DateTimeOffset At, double TurnedDeg)> WaitForHandTurnAsync(
-                LiveCapture capture, string frameId, (PolarAlignSolveOutcome S, DateTimeOffset At) from, int point, double dirSign,
-                double stepDeg, double takenDeg, Func<Task> renew, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+        /// <summary>What the solve <paramref name="now"/> shows of the turn from <paramref name="from"/> (the last point)
+        /// toward <paramref name="dirSign"/>, and how far the axis is from <paramref name="start"/> (the measurement's
+        /// first point). Pure, for the tests.</summary>
+        internal static HandTurnSample MeasureHandTurn(
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) start,
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) from,
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) now,
+                double dirSign, double stepDeg, bool tracking) {
+            double? readingTurn = null;
+            if (from.Reading is { } rf && now.Reading is { } rn) {
+                readingTurn = dirSign * ReadingTurnDeg(rf.RaDeg, rn.RaDeg, (now.At - from.At).TotalSeconds, tracking);
+            }
+            var takenDeg = HandTurnTakenFraction * stepDeg;
+            // The sweep from the first point: the mount's reading when it turned with the axis, and at least the turn the
+            // solved distance needs at the furthest the camera can sit from the axis (a lower bound with the clutch open).
+            var sweep = SolvedTurnAtLeastDeg(start, now, tracking);
+            if (start.Reading is { } rs && now.Reading is { } rn2) {
+                var byReading = Math.Abs(ReadingTurnDeg(rs.RaDeg, rn2.RaDeg, (now.At - start.At).TotalSeconds, tracking));
+                sweep = Math.Max(sweep, byReading);
+            }
+            if (readingTurn is double turned && Math.Abs(turned) >= HandTurnReadingFollowsDeg) {
+                return new HandTurnSample(turned, turned >= takenDeg, ByClutch: false, sweep);
+            }
+            var moved = UserFrameSeparationDeg(from, now, tracking);
+            var needed = ChordDeg(takenDeg, Math.Max(MinCheckConeDeg, PoleDistanceDeg(from.DecDeg) - HandTurnPolarErrorAllowanceDeg));
+            var reached = moved >= needed;
+            return new HandTurnSample(null, reached, ByClutch: reached, sweep);
+        }
+
+        /// <summary>The mount reading's turn (+ east) between two readings by the user's hand: the change less the Earth's
+        /// turn when the mount does not track (<see cref="HandTurnDeg"/>), folded like a motor turn's
+        /// (<see cref="FoldTolerantSignedTurnDeg"/>).</summary>
+        private static double ReadingTurnDeg(double fromRaDeg, double toRaDeg, double elapsedSeconds, bool tracking) =>
+            Wrap180(FoldTolerantSignedTurnDeg(toRaDeg - fromRaDeg) - (tracking ? 0.0 : elapsedSeconds * SiderealDegPerSecond));
+
+        /// <summary>The distance (degrees) the pointing moved between two solves by the user's hand: with tracking off the
+        /// earlier one is first moved by the Earth's turn since, as the camera stands still in the ground frame.</summary>
+        private static double UserFrameSeparationDeg(
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) from,
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) now, bool tracking) =>
+            PolarAlignGeometry.SeparationDeg(
+                from.RaDeg + (tracking ? 0.0 : (now.At - from.At).TotalSeconds * SiderealDegPerSecond), from.DecDeg,
+                now.RaDeg, now.DecDeg);
+
+        /// <summary>The least turn about the axis that moves the pointing the solved distance from the first point: the
+        /// camera at its furthest from the axis (its pole distance plus <see cref="HandTurnPolarErrorAllowanceDeg"/>).</summary>
+        private static double SolvedTurnAtLeastDeg(
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) start,
+                (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) now, bool tracking) {
+            var moved = UserFrameSeparationDeg(start, now, tracking);
+            var coneDeg = Math.Min(90.0, PoleDistanceDeg(start.DecDeg) + HandTurnPolarErrorAllowanceDeg);
+            var half = Math.Sin(moved * Math.PI / 360.0) / Math.Sin(coneDeg * Math.PI / 180.0);
+            return 2.0 * Math.Asin(Math.Min(1.0, half)) * 180.0 / Math.PI;
+        }
+
+        /// <summary>The distance (degrees) a pointing <paramref name="coneDeg"/> from the axis moves in a turn of
+        /// <paramref name="turnDeg"/> about it.</summary>
+        internal static double ChordDeg(double turnDeg, double coneDeg) =>
+            2.0 * Math.Asin(Math.Sin(coneDeg * Math.PI / 180.0) * Math.Sin(turnDeg * Math.PI / 360.0)) * 180.0 / Math.PI;
+
+        private static double PoleDistanceDeg(double decDeg) => 90.0 - Math.Min(90.0, Math.Abs(decDeg));
+
+        private static (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) Flat(HandPoint p) =>
+            (p.S.RaDegJnow, p.S.DecDegJnow, p.At, p.Reading);
+
+        /// <summary>Ask the user to turn RA by about <paramref name="stepDeg"/> the way <paramref name="band"/> says, then
+        /// capture and solve until the turn is in (<see cref="MeasureHandTurn"/>, two still solves). Publishes
+        /// <c>polar_align.hand_turn</c> after every solve, with how far the mount's reading shows the axis turned (none
+        /// with the clutch open). Waits as long as the user needs: Stop ends it; a turn past the band fails the run.</summary>
+        /// <returns>The taken point.</returns>
+        private async Task<HandPoint> WaitForHandTurnAsync(
+                LiveCapture capture, string frameId, HandPoint start, HandPoint from, int point, RunBand band,
+                double stepDeg, Func<Task> renew, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            var dirSign = band.AwaySign;
             var direction = dirSign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West;
+            var limitDeg = band.MaxSweepDeg + BandToleranceDeg;
             LogHandTurnAsked(point, stepDeg, direction);
             await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, TurnedDeg: null)).ConfigureAwait(false);
             (double RaDeg, double DecDeg)? hint = (from.S.RaDegJnow, from.S.DecDegJnow);
-            (double Turned, double DecDeg)? last = null;
+            HandPoint? last = null;
             var frame = 0;
             var failures = 0;
             try {
@@ -119,19 +213,29 @@ namespace OpenAstroAra.Server.Services {
                     if (s.Success) {
                         var at = DateTimeOffset.UtcNow;
                         hint = (s.RaDegJnow, s.DecDegJnow);
-                        var turned = dirSign * HandTurnDeg(from.S.RaDegJnow, s.RaDegJnow, (at - from.At).TotalSeconds,
-                            _mount.GetInfo().TrackingEnabled);
-                        var still = last is { } l
-                            && Math.Abs(turned - l.Turned) <= HandTurnStillDeg
-                            && Math.Abs(s.DecDegJnow - l.DecDeg) <= HandTurnStillDeg;
-                        if (turned >= takenDeg && still) {
-                            LogSeedSolve(frameId, s.RaDegJnow, s.DecDegJnow);
-                            LogHandTurnTaken(point, turned);
-                            await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, Math.Round(turned, 1), Waiting: false)).ConfigureAwait(false);
-                            return (s, at, turned);
+                        var tracking = _mount.GetInfo().TrackingEnabled;
+                        var now = new HandPoint(s, at, await DriverPointingJnowAsync(ct).ConfigureAwait(false));
+                        var sample = MeasureHandTurn(Flat(start), Flat(from), Flat(now), dirSign, stepDeg, tracking);
+                        if (sample.ByClutch) {
+                            NoteClutchTurned();
                         }
-                        last = (turned, s.DecDegJnow);
-                        await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, Math.Round(turned, 1))).ConfigureAwait(false);
+                        if (sample.SweepDeg > limitDeg) {
+                            LogHandTurnTooFar(point, sample.SweepDeg, limitDeg);
+                            throw new RoutineFailedException("hand_turn_too_far", string.Create(CultureInfo.InvariantCulture,
+                                $"RA has turned about {sample.SweepDeg:F0}° from the first frame, more than this measurement's {limitDeg:F0}° — turn it back near where you started, then start again"));
+                        }
+                        var still = last is { } l
+                            && Math.Abs(HandTurnDeg(l.S.RaDegJnow, s.RaDegJnow, (at - l.At).TotalSeconds, tracking)) <= HandTurnStillDeg
+                            && Math.Abs(s.DecDegJnow - l.S.DecDegJnow) <= HandTurnStillDeg;
+                        var turned = sample.TurnedDeg is double t ? Math.Round(t, 1) : (double?)null;
+                        if (sample.Reached && still) {
+                            LogSeedSolve(frameId, s.RaDegJnow, s.DecDegJnow);
+                            LogHandTurnTaken(point, sample.TurnedDeg ?? double.NaN, sample.ByClutch);
+                            await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, turned, Waiting: false)).ConfigureAwait(false);
+                            return now;
+                        }
+                        last = now;
+                        await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, turned)).ConfigureAwait(false);
                     } else {
                         last = null; // a trailed frame mid-turn: the next two solves decide
                     }
@@ -176,6 +280,55 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A solved turn about the fitted axis under this is no turn: the fit has nothing to stand on.</summary>
         internal const double MinHandTurnAboutAxisDeg = 1.0;
+
+        // ── a clutch turn leaves the mount's reading wrong ───────────────────────────────────
+
+        /// <summary>The mount session and sync count when a hand-turn run saw the axis turn with the clutch open; null when
+        /// none since. Guarded by <c>_gate</c>.</summary>
+        private (long SessionEpoch, long SyncEpoch)? _clutchTurned;
+
+        private long MountSyncEpoch => (_mount as ITelescopeService)?.SyncEpoch ?? 0;
+
+        /// <summary>The refusal's sentence (<c>polar-align-clutch-turned</c>).</summary>
+        internal const string ClutchTurnedMessage =
+            "RA was turned by hand with the clutch open, so the mount's reading no longer shows where it points and a motor turn could go too far — sync the mount with a plate solve (Center does it), or reconnect it once it is homed, or turn RA by hand again";
+
+        /// <summary>A hand-turn run's solves moved a turn's worth while the mount's RA reading stood: the clutch is open, and
+        /// the reading is now off by the user's turns. The session's sweep origin and the pose Polar Align left the mount at
+        /// are forgotten (both are readings), and a motor start is refused until the mount is synced or reconnected
+        /// (<see cref="ThrowIfClutchTurned"/>).</summary>
+        private void NoteClutchTurned() {
+            bool first;
+            lock (_gate) {
+                first = _clutchTurned is null;
+                _clutchTurned = (MountSessionEpoch, MountSyncEpoch);
+                _sweepOrigin = null;
+                _sweepLastLeft = null;
+            }
+            if (first) {
+                LogClutchTurned();
+            }
+        }
+
+        /// <summary>Refuses (<c>polar-align-clutch-turned</c>) a start that turns RA with the motor while a clutch turn
+        /// stands: none since in this mount session and with no sync since. A hand-turn start goes ahead.</summary>
+        private void ThrowIfClutchTurned(PolarAlignStartConfirmation? confirmation) {
+            if (confirmation is null || confirmation.HandTurn) {
+                return;
+            }
+            var session = MountSessionEpoch;
+            var sync = MountSyncEpoch;
+            lock (_gate) {
+                if (_clutchTurned is not { } c) {
+                    return;
+                }
+                if (c.SessionEpoch != session || c.SyncEpoch != sync) {
+                    _clutchTurned = null; // reconnected or synced since: the reading is the mount's word again
+                    return;
+                }
+            }
+            throw new RefusalException(RefusalCatalog.PolarAlignClutchTurned, ClutchTurnedMessage);
+        }
 
         // ── the hand-turn stages ─────────────────────────────────────────────────────────────
 
@@ -231,16 +384,22 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        [LoggerMessage(EventId = 4590, Level = LogLevel.Information, Message = "§45 polar-align hand-turn run: the user turns RA by hand; the run sends the mount no motor move, GoTo or Find Home, drives no Polar Aligner and never turns tracking on while it runs")]
+        [LoggerMessage(EventId = 4600, Level = LogLevel.Information, Message = "§45 polar-align hand-turn run: the user turns RA by hand; the run sends the mount no motor move, GoTo or Find Home, drives no Polar Aligner and never turns tracking on while it runs")]
         private partial void LogHandTurnRun();
 
-        [LoggerMessage(EventId = 4591, Level = LogLevel.Information, Message = "§45 polar-align measurement by hand: asking for two turns of about {StepDeg:F0}° toward the {Direction}, the way the user confirmed")]
+        [LoggerMessage(EventId = 4601, Level = LogLevel.Information, Message = "§45 polar-align measurement by hand: asking for two turns of about {StepDeg:F0}° toward the {Direction}, the way the user confirmed")]
         private partial void LogHandTurnMeasurement(string direction, double stepDeg);
 
-        [LoggerMessage(EventId = 4592, Level = LogLevel.Information, Message = "§45 polar-align: waiting for the user to turn RA about {StepDeg:F0}° toward the {Direction} (point {Point} of 3)")]
+        [LoggerMessage(EventId = 4602, Level = LogLevel.Information, Message = "§45 polar-align: waiting for the user to turn RA about {StepDeg:F0}° toward the {Direction} (point {Point} of 3)")]
         private partial void LogHandTurnAsked(int point, double stepDeg, string direction);
 
-        [LoggerMessage(EventId = 4593, Level = LogLevel.Information, Message = "§45 polar-align: the user's turn for point {Point} is in, {TurnedDeg:F1}° by the solves")]
-        private partial void LogHandTurnTaken(int point, double turnedDeg);
+        [LoggerMessage(EventId = 4603, Level = LogLevel.Information, Message = "§45 polar-align: the user's turn for point {Point} is in, {TurnedDeg:F1}° by the mount's reading (clutch open: {ByClutch}, no angle then)")]
+        private partial void LogHandTurnTaken(int point, double turnedDeg, bool byClutch);
+
+        [LoggerMessage(EventId = 4604, Level = LogLevel.Warning, Message = "§45 polar-align: waiting for point {Point}, RA has turned at least {SweepDeg:F1}° from the first frame, past the measurement's {LimitDeg:F0}°; the run fails")]
+        private partial void LogHandTurnTooFar(int point, double sweepDeg, double limitDeg);
+
+        [LoggerMessage(EventId = 4605, Level = LogLevel.Warning, Message = "§45 polar-align: the solves turned while the mount's RA reading stood (the clutch is open); its reading is off by the user's turns, so the sweep origin is forgotten and a motor start is refused until the mount is synced or reconnected")]
+        private partial void LogClutchTurned();
     }
 }

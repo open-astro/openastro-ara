@@ -968,7 +968,8 @@ public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigi
 /// <summary>#2083 — a hand-turn run waiting for the user to turn the RA axis (<c>hand_turn_wait</c> on the status, and
 /// the <c>polar_align.hand_turn</c> payload). <c>Point</c> is the solve it waits for (2 or 3 of three);
 /// <c>Direction</c> (<c>east</c> | <c>west</c>) and <c>TargetDeg</c> are the turn asked for; <c>TurnedDeg</c> is how far
-/// the solves say the RA axis has turned that way since the last point (negative: the other way), null before a solve.
+/// the mount's RA reading says the axis has turned that way since the last point (negative: the other way), null before a
+/// solve and whenever the reading has not moved (the clutch is open: the solves alone give no angle about the RA axis).
 /// <c>Waiting</c> turns false once the turn is taken (the event's last payload for that point).</summary>
 public sealed record PolarAlignHandTurnDto(int Point, string Direction, double TargetDeg, double? TurnedDeg, bool Waiting = true);
 

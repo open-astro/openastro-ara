@@ -152,6 +152,10 @@ public interface ITelescopeService {
     /// changes: a reconnected mount may have been moved, re-homed or swapped meanwhile.</summary>
     long SessionEpoch => 0;
 
+    /// <summary>#2083 — counts the syncs the mount accepted (a plate solve's, Center's): a routine that stopped trusting the
+    /// mount's reading (Polar Align after a clutch turn) trusts it again once this changes.</summary>
+    long SyncEpoch => 0;
+
     /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
     /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
     /// German equatorial mount, and treats null as one (fail-safe).</summary>

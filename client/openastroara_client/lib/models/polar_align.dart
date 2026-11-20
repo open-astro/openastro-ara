@@ -292,8 +292,9 @@ class PolarAlignFrameInfo {
 /// #2083 a hand-turn run waiting for the user to turn the RA axis
 /// (`hand_turn_wait` on the status, and the `polar_align.hand_turn` payload):
 /// the [point] it waits for (2 or 3 of three), the turn asked for
-/// ([direction], [targetDeg]) and how far the solves show the axis turned that
-/// way so far ([turnedDeg]; negative is the other way, null before a solve).
+/// ([direction], [targetDeg]) and how far the mount's reading shows the axis
+/// turned that way so far ([turnedDeg]; negative is the other way, null before
+/// a solve and with the clutch open, when no angle can be claimed).
 /// [waiting] is false once the turn is in.
 class PolarAlignHandTurn {
   final int point;

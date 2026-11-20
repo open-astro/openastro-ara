@@ -8600,6 +8600,8 @@
   "@refusalFirstFlipNotCompleted": {"description": "Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change"},
   "refusalPolarAlignAlreadyRunning": "Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.",
   "@refusalPolarAlignAlreadyRunning": {"description": "Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)"},
+  "refusalPolarAlignClutchTurned": "RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.",
+  "@refusalPolarAlignClutchTurned": {"description": "Refusal (polar-align-clutch-turned, #2083): a polar alignment start that turns RA with the motor, after a hand-turn run saw RA turned with the clutch open (the mount's reading is off by those turns); 'Turn RA by hand' is polarConfirmHandTurn"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube 2–5° from the pole, with the counterweights down.",

@@ -193,8 +193,9 @@ String? polarInitialErrorText(AppLocalizations l10n, double? initialArcmin) =>
     };
 
 /// #2083 what a hand-turn run asks of the user right now, in the user's
-/// language: the turn and its direction, then how far the axis has turned (or
-/// that it went the other way). Null when it waits for no turn. Pure —
+/// language: the turn and its direction, then how far the mount's reading says
+/// the axis has turned (or that it went the other way); the ask alone with the
+/// clutch open (no angle then). Null when it waits for no turn. Pure —
 /// unit-tested.
 String? polarHandTurnText(AppLocalizations l10n, PolarAlignHandTurn? wait) {
   if (wait == null || !wait.waiting) return null;

@@ -1853,6 +1853,7 @@
   "safetyFirstFlipRearmedSnack": "Rearmado. Toda virada volta a alertar e esperar 60 s até você confirmar uma.",
   "refusalFirstFlipNotCompleted": "Nenhuma virada de meridiano terminou neste perfil ainda. Acompanhe uma virada do início ao fim e depois confirme.",
   "refusalPolarAlignAlreadyRunning": "O alinhamento polar já está rodando e gira a AR do outro jeito que você escolheu (à mão ou com o motor). Pare-o primeiro e inicie de novo.",
+  "refusalPolarAlignClutchTurned": "A AR foi girada à mão com a embreagem solta, e a montagem não sabe mais para onde aponta. Sincronize-a (Centralizar faz isso) ou reconecte-a depois de levá-la à posição inicial e inicie de novo, ou use Girar a AR à mão.",
   "polarConfirmTitle": "Antes de a montagem se mover",
   "polarConfirmPoint": "Aponte o tubo de 2 a 5° do polo, com os contrapesos para baixo.",
   "polarConfirmTurns": "A AR vai girar cerca de {step}° duas vezes em direção ao {direction} ({total}° no total).",

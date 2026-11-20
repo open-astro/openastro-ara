@@ -80,10 +80,14 @@ public static class RefusalCatalog {
     // user confirmed something the running run does not do. A matching retry is still a no-op accept.
     public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
 
+    // #2083 — a hand-turn run saw RA turn with the clutch open, so the mount's reading is off by the user's turns: a start
+    // that turns RA with the motor is refused until the mount is synced or reconnected (a hand-turn start goes ahead).
+    public static readonly RefusalCause PolarAlignClutchTurned = new("polar-align-clutch-turned", 409, "RA was turned with the clutch open");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
-        FirstFlipNotCompleted, PolarAlignAlreadyRunning,
+        FirstFlipNotCompleted, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
     ];
 }

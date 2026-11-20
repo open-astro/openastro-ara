@@ -56,6 +56,7 @@ namespace OpenAstroAra.Test {
             new object[] { "polar-align-on-axis", 409, Array.Empty<string>() },
             new object[] { "first-flip-not-completed", 409, Array.Empty<string>() },
             new object[] { "polar-align-already-running", 409, Array.Empty<string>() },
+            new object[] { "polar-align-clutch-turned", 409, Array.Empty<string>() },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };
