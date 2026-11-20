@@ -78,6 +78,7 @@ String polarAlignerStopText(AppLocalizations l, PolarAlignerRun run) {
     PolarAlignerCauses.mountSlewing => l.polarAlignerStopMountSlewing,
     PolarAlignerCauses.stoppedByUser => l.polarAlignerStopByUser,
     PolarAlignerCauses.stopNotConfirmed => l.polarAlignerStopNotConfirmed,
+    PolarAlignerCauses.stopConfirmed => l.polarAlignerStopConfirmed,
     PolarAlignerCauses.travelLimit => l.polarAlignerStopTravelLimit,
     PolarAlignerCauses.moveLimit => l.polarAlignerStopMoveLimit,
     _ => unknown,

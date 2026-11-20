@@ -6268,6 +6268,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.';
 
   @override
+  String get polarAlignerStopConfirmed =>
+      'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.';
+
+  @override
   String get polarAlignerStopTravelLimit =>
       'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.';
 
@@ -13137,6 +13141,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarAlignerStopNotConfirmed =>
       'O Ara enviou Parar, mas o alinhador polar não confirmou que os motores pararam. Corte a energia dele se ainda estiver se movendo. O Ara envia Parar de novo a cada medição.';
+
+  @override
+  String get polarAlignerStopConfirmed =>
+      'O alinhador polar agora confirmou que os motores pararam. O Ara só vai movê-los de novo quando você tocar em Retomar.';
 
   @override
   String get polarAlignerStopTravelLimit =>

@@ -237,6 +237,8 @@ void main() {
     'stop_not_confirmed': (null, null,
         "Ara sent Stop, but the Polar Aligner didn't confirm its motors stopped. Cut its power if it still moves. "
             'Ara sends Stop again at each measurement.'),
+    'stop_confirmed': (null, null,
+        "The Polar Aligner has now confirmed its motors stopped. Ara won't move them again until you Resume."),
     'travel_limit': ('azimuth', null,
         'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.'),
     'move_limit': (null, null, 'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.'),

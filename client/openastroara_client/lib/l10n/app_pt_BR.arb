@@ -1737,6 +1737,7 @@
   "polarAlignerStopMountSlewing": "O alinhador polar não se move enquanto a montagem se desloca. Retome quando a montagem parar.",
   "polarAlignerStopByUser": "Você parou os motores.",
   "polarAlignerStopNotConfirmed": "O Ara enviou Parar, mas o alinhador polar não confirmou que os motores pararam. Corte a energia dele se ainda estiver se movendo. O Ara envia Parar de novo a cada medição.",
+  "polarAlignerStopConfirmed": "O alinhador polar agora confirmou que os motores pararam. O Ara só vai movê-los de novo quando você tocar em Retomar.",
   "polarAlignerStopTravelLimit": "O alinhador polar já se moveu o máximo permitido em uma execução, então o Ara parou os motores. Confira o alinhamento manualmente.",
   "polarAlignerStopMoveLimit": "O alinhador polar fez 40 movimentos sem chegar à sua tolerância, então o Ara parou os motores.",
   "polarAlignerStopUnknown": "O Ara parou os motores.",

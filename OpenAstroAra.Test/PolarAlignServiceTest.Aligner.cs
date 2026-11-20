@@ -818,12 +818,46 @@ namespace OpenAstroAra.Test {
             await Assert.ThatAsync(() => svc.ResumeAlignerAsync(null, CancellationToken.None), Throws.InvalidOperationException,
                 "no Resume while the Stop is owed").ConfigureAwait(false);
 
-            // The device answers again: the owed Stop is confirmed at a later measurement, and the run drives it again.
+            // The device answers again: the owed Stop is confirmed at a later measurement. The run waits for Resume, which
+            // drives it from a fresh test move.
             var mark = ws.Events.Count;
             aligner.StopFails = false;
-            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing, mark).ConfigureAwait(false);
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopConfirmed), mark).ConfigureAwait(false);
             Assert.That(aligner.SourceStopOwed, Is.False);
-            Assert.That(aligner.Moves, Is.Not.Empty);
+            Assert.That(aligner.Moves, Is.Empty, "the run waits for Resume");
+
+            mark = ws.Events.Count;
+            await svc.ResumeAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing, mark).ConfigureAwait(false);
+            // The measurement after the probing state: its move has gone out by then.
+            var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            Assert.That(aligner.Moves[0], Is.EqualTo((PolarAlignerAxis.Azimuth, PolarAlignService.AlignerProbeArcmin)),
+                "Resume starts from a fresh test move");
+        }
+
+        [Test]
+        public async Task An_owed_stop_confirmed_later_in_the_run_sends_no_move_until_Resume() {
+            // #2069: a device whose Stop from before the run was confirmed only at a later measurement does not
+            // start moving again by itself; the run says so and waits for the person's Resume.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, StopFails = true };
+            var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
+            using var _ = svc;
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
+
+            var mark = ws.Events.Count;
+            aligner.StopFails = false;
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopConfirmed), mark).ConfigureAwait(false);
+            var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(aligner.Moves, Is.Empty, "no move after the Stop is confirmed, until Resume");
+            Assert.That(ws.Events.Skip(mark).Where(e => e.Type == WsEventCatalog.PolarAlignCorrection)
+                    .Select(e => e.Payload.GetProperty("state").GetString()),
+                Has.All.EqualTo(PolarAlignCorrectionStates.Stopped), "the run never left stopped by itself");
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.Correction?.Cause, Is.EqualTo(PolarAlignCorrectionCauses.StopConfirmed));
+            AssertStillAdjustingByHand(svc, status);
         }
 
         [Test]

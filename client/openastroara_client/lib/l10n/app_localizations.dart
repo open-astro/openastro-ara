@@ -10521,6 +10521,12 @@ abstract class AppLocalizations {
   /// **'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.'**
   String get polarAlignerStopNotConfirmed;
 
+  /// Polar Aligner stop cause stop_confirmed (#2069): a Stop owed from before the run was confirmed at a later measurement; the run waits for the person's Resume
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.'**
+  String get polarAlignerStopConfirmed;
+
   /// Polar Aligner stop cause travel_limit (#2069): the next move would take an axis past the run's travel cap
   ///
   /// In en, this message translates to:

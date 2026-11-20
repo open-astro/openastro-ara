@@ -52,6 +52,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A Stop the device did not confirm (both axes still) within the verified stop's window: a Stop is
         /// owed, sent again at each measurement and at the end of the run, and nothing moves until one is confirmed.</summary>
         public const string StopNotConfirmed = "stop_not_confirmed";
+        /// <summary>A Stop owed from before the run (the Stop route, Emergency Stop, an earlier run's end) was confirmed
+        /// at a later measurement of this run: the device is still, and the run waits for the person's Resume before it
+        /// moves it again.</summary>
+        public const string StopConfirmed = "stop_confirmed";
         /// <summary>The next move would take an axis past the run's travel cap (<c>axis</c> names it).</summary>
         public const string TravelLimit = "travel_limit";
         /// <summary>The run has sent as many moves as one run may (<see cref="PolarAlignService.AlignerMoveLimit"/>).</summary>
@@ -327,7 +331,7 @@ namespace OpenAstroAra.Server.Services {
                 if ((_alignerSource!.Current() ?? run.Device) is { } owed) {
                     await StopDeviceVerifiedAsync(run, owed).ConfigureAwait(false);
                 }
-                var resumed = false;
+                var confirmedLate = false;
                 lock (_gate) {
                     stopOwed = run.StopOwed || _alignerSource.StopOwed;
                     if (stopOwed && !run.Stopped) {
@@ -337,21 +341,17 @@ namespace OpenAstroAra.Server.Services {
                         run.Stopped = true;
                         run.LastStop = (PolarAlignCorrectionCauses.StopNotConfirmed, null, null);
                     } else if (!stopOwed && run.Stopped && run.LastStop?.Cause == PolarAlignCorrectionCauses.StopNotConfirmed) {
-                        // That Stop is confirmed now, and it was the only reason the run stopped: it drives again from a
-                        // new device read and probe, as it would have had the first resend been confirmed.
-                        run.Stopped = false;
-                        run.LastStop = null;
-                        run.Rearm();
-                        stopped = false;
-                        resumed = true;
-                        _aligner = new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Measuring, Moves: _alignerMoves);
+                        // That Stop is confirmed now. The run stays stopped and waits for the person's Resume (#2069):
+                        // a device that would not stop does not start moving again by itself. Resume drives it from a new
+                        // device read and probe.
+                        run.LastStop = (PolarAlignCorrectionCauses.StopConfirmed, null, null);
+                        confirmedLate = true;
                     }
                 }
-                if (resumed) {
-                    await PublishAlignerAsync(gen).ConfigureAwait(false);
-                } else {
-                    await ReportStopAsync(gen, run).ConfigureAwait(false);
+                if (confirmedLate) {
+                    LogAlignerStopped(PolarAlignCorrectionCauses.StopConfirmed, null);
                 }
+                await ReportStopAsync(gen, run).ConfigureAwait(false);
                 if (stopOwed) {
                     return;
                 }

@@ -8117,6 +8117,10 @@
   "@polarAlignerStopNotConfirmed": {
     "description": "Polar Aligner stop cause stop_not_confirmed (#2069): the device did not report both axes still after three Stops in 3 s"
   },
+  "polarAlignerStopConfirmed": "The Polar Aligner has now confirmed its motors stopped. Ara won't move them again until you Resume.",
+  "@polarAlignerStopConfirmed": {
+    "description": "Polar Aligner stop cause stop_confirmed (#2069): a Stop owed from before the run was confirmed at a later measurement; the run waits for the person's Resume"
+  },
   "polarAlignerStopTravelLimit": "The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.",
   "@polarAlignerStopTravelLimit": {
     "description": "Polar Aligner stop cause travel_limit (#2069): the next move would take an axis past the run's travel cap"
