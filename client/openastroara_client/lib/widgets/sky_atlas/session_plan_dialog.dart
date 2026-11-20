@@ -110,7 +110,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // sub counts describe a session with dithering, guiding settles, plate
     // solving and autofocus in it — not an idealized shutter-open number.
     final phd2 = ref.read(phd2SettingsProvider);
-    final af = ref.read(autofocusSettingsProvider);
+    final af =
+        ref.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
     final overheads = SessionOverheads(
       ditherEnabled: phd2.ditherEnabled,
       ditherEveryNFrames: phd2.ditherEveryNFrames,

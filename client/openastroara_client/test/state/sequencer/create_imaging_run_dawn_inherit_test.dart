@@ -8,6 +8,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import '../../support/imaging_sections.dart';
 
 /// #1560 — a target the Full UI adds to a Simple Mode queue (which stops at
 /// dawn) stops at that dawn too, whether the queue is idle (PATCH) or imaging
@@ -79,7 +80,7 @@ List<Object?> _dawns(Map<String, dynamic> block) => [
 
 Future<void> _addM42(WidgetTester tester, _SeqClient seq) async {
   final container = ProviderContainer(
-    overrides: [sequenceApiProvider.overrideWith((ref) => seq)],
+    overrides: [...imagingSectionsFromRig(), sequenceApiProvider.overrideWith((ref) => seq)],
   );
   addTearDown(container.dispose);
   container.read(selectedSequenceIdProvider.notifier).select('queue');

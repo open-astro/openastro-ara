@@ -6,9 +6,15 @@ import 'package:openastroara/services/planning_prefs_service.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/planning/planning_prefs_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
+
+import '../../../support/fake_section_rig.dart';
+import '../../../support/imaging_sections.dart';
 
 /// #1140 — the Planning row writes the noise-tolerance knob (client-local).
 class _MemPrefs extends PlanningPrefsService {
@@ -199,5 +205,72 @@ void main() {
     ]))));
     expect(find.text('k 0.82 · scatter 7 % · 30 frames · applies'), findsOneWidget);
     expect(find.textContaining('All 4 frames share one exposure length'), findsOneWidget);
+  });
+
+  Future<FakeImagingDefaultsSection> pumpOnRig(
+    WidgetTester tester, {
+    bool loaded = true,
+  }) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final prior = FlutterError.onError;
+    FlutterError.onError = (d) {
+      if (!d.exceptionAsString().contains('overflowed')) prior?.call(d);
+    };
+    addTearDown(() => FlutterError.onError = prior);
+    final section = FakeImagingDefaultsSection(
+      initial: loaded ? const ImagingDefaults() : null,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeServerProvider.overrideWithValue(null),
+          profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+          imagingDefaultsProvider.overrideWith(() => section),
+          planningPrefsServiceProvider.overrideWithValue(_MemPrefs()),
+          skyModelCalibrationProvider.overrideWith(() => _Seeded(null)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ImagingDefaultsPanel())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return section;
+  }
+
+  testWidgets(
+    'Save with the section not loaded from the rig writes nothing and says so; the planning rows still show (ADR 0015)',
+    (tester) async {
+      final section = await pumpOnRig(tester, loaded: false);
+      expect(find.textContaining('Not loaded'), findsOneWidget);
+      expect(find.text('Default gain'), findsNothing, reason: 'no default shows');
+      expect(find.text('Planning'), findsOneWidget);
+      final panel =
+          tester.state(find.byType(ImagingDefaultsPanel))
+              as PanelSaveRegistration;
+      await panel.panelSave();
+      await tester.pump();
+      expect(section.puts, isEmpty);
+      expect(
+        find.textContaining('Settings not loaded from the rig'),
+        findsWidgets,
+      );
+    },
+  );
+
+  testWidgets('Imaging defaults: Save sends the edit made on the rig copy (ADR 0015)', (
+    tester,
+  ) async {
+    final section = await pumpOnRig(tester);
+    final row = find.widgetWithText(SettingsSwitchRow, 'Warm-up cooler at session end');
+    await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
+    await tester.pump();
+    final panel =
+        tester.state(find.byType(ImagingDefaultsPanel))
+            as PanelSaveRegistration;
+    await panel.panelSave();
+    await tester.pump();
+    expect(section.puts.single.warmupAtSessionEnd, isTrue);
+    expect(find.text('Saved.'), findsOneWidget);
   });
 }
