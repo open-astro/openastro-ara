@@ -68,6 +68,25 @@ void main() {
     ]);
   });
 
+  test('a Check waits as long as Stop: from the adjust screen it ends the loop first (#2082)', () async {
+    final d = _Daemon();
+    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    PolarAlignStartPlan plan(String stage) => PolarAlignStartPlan.fromJson(<String, dynamic>{
+      'stage': stage,
+      'direction': 'west',
+      'step_deg': 10,
+      'turns': 2,
+      'max_sweep_deg': 20,
+      'new_origin': false,
+    }, stage: stage);
+    await api.start(plan(PolarAlignStages.check));
+    await api.start(plan(PolarAlignStages.fine));
+    expect(d.seen, [
+      ('POST /api/v1/equipment/polaralign/start', PolarAlignApi.endTimeout),
+      ('POST /api/v1/equipment/polaralign/start', null),
+    ]);
+  });
+
   test("the end timeout outlasts the daemon's slowest end, a stuck run (#2048)", () {
     // The daemon's defaults (PolarAlignService.MountStop.cs EndWorstCase): each stop command or read 3 s, three
     // commands a round, the 15 s unwind grace, and the end's own confirmation (8 s window, 250 ms poll, two reads,

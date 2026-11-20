@@ -94,7 +94,8 @@ class PolarAlignApi implements PolarAlignClient {
   /// (#2048). 202-Accepted; a failed preflight surfaces as a 409/422 — a
   /// parked mount, a direction that changed since, a scope within 3° of the
   /// pole or turns past the sweep limit is a [Refusal]. `/polaralign/next` is
-  /// retired (#2082): this client never calls it.
+  /// retired (#2082): this client never calls it. A check waits [endTimeout]:
+  /// from the adjust screen the daemon ends the loop (a confirmed stop) first.
   @override
   Future<void> start(PolarAlignStartPlan plan) async {
     try {
@@ -106,6 +107,7 @@ class PolarAlignApi implements PolarAlignClient {
           'direction': plan.direction,
           'new_origin': plan.newOrigin,
         },
+        options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
