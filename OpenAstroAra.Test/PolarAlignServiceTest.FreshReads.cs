@@ -153,6 +153,43 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
 
+        // A park from outside that lands with a reconnect (a Wi-Fi blip, then the user's Park while nothing turns) is the
+        // park's mount: the run ends as stopped from outside, and its exit sends no stop that would abort the park.
+        [Test]
+        public async Task A_park_with_a_reconnect_while_adjusting_leaves_the_mount_to_the_park() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+
+            var at = mount.Count;
+            mount.ParkFromOutside();
+            mount.Reconnect();
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("parked"));
+            Assert.That(mount.Since(at + 1), Is.Empty, $"nothing after the park: {string.Join(", ", mount.Since(at))}");
+        }
+
+        [Test]
+        public async Task A_park_with_a_reconnect_before_a_reading_leaves_the_mount_to_the_park() {
+            // The reading after the first turn is of a new mount session, and a park came before it.
+            var mount = new FakeStopMount(tracking: true) { ParkAndReconnectBeforeTheNextRestRead = true };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("parked"));
+            var log = mount.Log;
+            var park = Array.IndexOf(log, "park");
+            Assert.That(park, Is.GreaterThan(0), string.Join(", ", log));
+            Assert.That(log.Skip(park + 1), Is.Empty, $"nothing after the park: {string.Join(", ", log)}");
+        }
+
         // ── a Dec past the pole ──────────────────────────────────────────────────────────────
 
         [Test]

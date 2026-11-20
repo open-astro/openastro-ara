@@ -86,8 +86,7 @@ namespace OpenAstroAra.Server.Services {
         /// and turns tracking on no more. Checked before every motor move, before every tracking switch-on, after every seed
         /// frame and each live frame, between the stages, and on every poll of a move.
         /// </summary>
-        private void ThrowIfStoppedFromOutside(int gen) {
-            ThrowIfMountReconnected(gen); // #2066 (ARA-5)
+        private void ThrowIfAbortedFromOutside(int gen) {
             var service = _motionControl;
             (long Epoch, long OwnAborts) watch;
             lock (_gate) {

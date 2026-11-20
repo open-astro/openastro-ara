@@ -95,6 +95,9 @@ namespace OpenAstroAra.Server.Services {
         /// <see cref="PoseAmbiguous"/>), so a turn neither starts nor goes on from it.</summary>
         private async Task<(double RaDeg, double DecDeg)> RunPointingJnowAsync(int gen, CancellationToken ct) {
             var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct).ConfigureAwait(false);
+            if (p.Why is not null || p.DecPastPoleDeg is not null) {
+                ThrowIfAbortedFromOutside(gen); // a park or Emergency Stop meanwhile owns the mount: its failure wins
+            }
             if (p.DecPastPoleDeg is double dec) {
                 LogPoseAmbiguous(dec);
                 throw new RoutineFailedException(PoseAmbiguous, PoseAmbiguousMessage(dec));
@@ -125,11 +128,21 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        /// <summary>The run-wide watch (#2066, #2067): a reconnect (<see cref="ThrowIfMountReconnected"/>), then a stop the
+        /// run did not raise (<see cref="ThrowIfAbortedFromOutside"/>). Checked before every motor move, before every tracking
+        /// switch-on, after every seed frame and each live frame, between the stages, and on every poll of a move.</summary>
+        private void ThrowIfStoppedFromOutside(int gen) {
+            ThrowIfMountReconnected(gen);
+            ThrowIfAbortedFromOutside(gen);
+        }
+
         /// <summary>#2066 — the run-wide watch's part for a reconnect: the mount session changed since the run's start (a
         /// connect, a disconnect, a fault trip), so the mount may have been moved, re-homed or swapped. Fails the run with
-        /// <see cref="PointingUnknown"/>.</summary>
+        /// <see cref="PointingUnknown"/>, unless a stop from outside came meanwhile: a park, Find Home or Emergency Stop then
+        /// owns the mount, and the run's exit must send no stop that would abort it.</summary>
         private void ThrowIfMountReconnected(int gen) {
             if (RunSessionEpoch(gen) is long session && _motionControl.SessionEpoch != session) {
+                ThrowIfAbortedFromOutside(gen); // read after the session: a park counted before the reconnect is seen
                 const string why = "the mount reconnected since the start";
                 LogPointingUnknown(why);
                 throw new RoutineFailedException(PointingUnknown, PointingUnknownMessage(why));

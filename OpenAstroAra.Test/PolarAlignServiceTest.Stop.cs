@@ -104,6 +104,11 @@ namespace OpenAstroAra.Test {
             public Func<int>? EventCount { get; set; }
 
             public TaskCompletionSource FirstMove { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>#2066 — the next fresh read taken with no motor running, once a motor has run, comes after a park from
+            /// outside and then a reconnect (a Wi-Fi blip, and the user's Park while nothing turns): that reading is of a new
+            /// mount session, and the park owns the mount. Guarded by the lock.</summary>
+            public bool ParkAndReconnectBeforeTheNextRestRead { get; set; }
+            private bool _motorRan;
 
             public FakeStopMount(bool tracking = true, bool canFindHome = false) {
                 _tracking = tracking;
@@ -175,6 +180,12 @@ namespace OpenAstroAra.Test {
                             return Task.FromResult<MountReading?>(null);
                         }
                         _cacheLost = false;
+                        if (ParkAndReconnectBeforeTheNextRestRead && _motorRan && _rates[0] == 0 && _rates[1] == 0) {
+                            ParkAndReconnectBeforeTheNextRestRead = false;
+                            Record("park");
+                            _reasons.Add((Interlocked.Increment(ref _epoch), "park"));
+                            Interlocked.Increment(ref _sessionEpoch);
+                        }
                         if (!Frozen) {
                             _raDeg = (_raDeg + (Math.Sign(_rates[0]) * StepDeg) + (_runaway ? StepDeg : 0.0) + 360.0) % 360.0;
                             var dec = Math.Sign(_rates[1]) * StepDeg;
@@ -204,6 +215,7 @@ namespace OpenAstroAra.Test {
                             }
                             _rates[axis] = rate;
                             if (rate != 0) {
+                                _motorRan = true;
                                 FirstMove.TrySetResult();
                             }
                             if (rate == 0 && StopGate is { } gate) {
