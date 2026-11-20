@@ -263,7 +263,8 @@ namespace OpenAstroAra.Server.Services {
             }
             run.End.Request(outcome);
             // Started before the cancel and awaited after it: the cancel runs the run's continuations, and a hung mount
-            // command must not hold the cancel back.
+            // command must not hold the cancel back. A mount that is not connected gets no stop here: the run's exit keeps
+            // trying while the client reconnects (StopMountMotionAsync).
             var stopping = active || CurrentMotion != MountMotion.None
                 ? SendMountStopAsync(outcome, forceAbort: false)
                 : Task.CompletedTask;
@@ -281,8 +282,9 @@ namespace OpenAstroAra.Server.Services {
         /// until two of them, at least <see cref="StopVerifyStillFor"/> apart and <see cref="StopVerifyNotBefore"/> after the
         /// last command, both say not slewing and differ by under <see cref="StopStillDeg"/> in RA and in Dec. The stop is
         /// sent again every <see cref="StopResendAfter"/>, <see cref="StopSends"/> times in all. A failed, missing or
-        /// slewing read never counts as stopped. False, logged as Critical, when the stop is not confirmed within
-        /// <see cref="StopVerifyWindow"/>.
+        /// slewing read never counts as stopped. #2066 — a mount that is not connected gets its stop once the client
+        /// reconnects: a round that cannot reach it is not a send, and it is tried again on every poll inside the window.
+        /// False, logged as Critical, when the stop is not confirmed within <see cref="StopVerifyWindow"/>.
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The exit must always finish: a fault here is 'not confirmed', logged as Critical, never an escape from the run's exit.")]
@@ -296,16 +298,25 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private async Task<bool> StopMountMotionCoreAsync(string why) {
-            if (_mount.GetInfo() is not { Connected: true }) {
-                LogMountStopNotConnected(why);
-                return false;
-            }
             var began = Stopwatch.GetTimestamp();
-            await SendMountStopAsync(why, forceAbort: false).ConfigureAwait(false);
-            var lastSent = Stopwatch.GetTimestamp();
-            var sends = 1;
+            var lastSent = began;
+            var sends = 0;
+            var waitingLogged = false;
             (double RaDeg, double DecDeg, long At)? anchor = null;
             while (Stopwatch.GetElapsedTime(began) < StopVerifyWindow) {
+                if (sends == 0) {
+                    if (!await SendMountStopAsync(why, forceAbort: false).ConfigureAwait(false)) {
+                        if (!waitingLogged) {
+                            waitingLogged = true;
+                            LogMountStopWaitsForReconnect(why, StopVerifyWindow.TotalSeconds);
+                        }
+                        await Task.Delay(StopVerifyPoll, CancellationToken.None).ConfigureAwait(false);
+                        continue;
+                    }
+                    sends = 1;
+                    lastSent = Stopwatch.GetTimestamp();
+                    continue; // the window is checked again before the first read: a late reconnect adds no pass of its own
+                }
                 await Task.Delay(StopVerifyPoll, CancellationToken.None).ConfigureAwait(false);
                 var reading = await ReadStillnessAsync().ConfigureAwait(false);
                 var at = Stopwatch.GetTimestamp();
@@ -324,23 +335,35 @@ namespace OpenAstroAra.Server.Services {
                     anchor = null;
                 }
                 if (sends < StopSends && Stopwatch.GetElapsedTime(lastSent) >= StopResendAfter) {
-                    sends++;
-                    LogMountStopResent(why, sends);
-                    // A mount that still reads as slewing, or gives no reading, gets the AbortSlew too.
-                    await SendMountStopAsync(why, forceAbort: reading is not { Slewing: false }).ConfigureAwait(false);
-                    lastSent = Stopwatch.GetTimestamp();
+                    // A mount that still reads as slewing, or gives no reading, gets the AbortSlew too. A round that could
+                    // not reach the mount (it dropped off since) is not counted and goes out again on the next poll.
+                    if (await SendMountStopAsync(why, forceAbort: reading is not { Slewing: false }).ConfigureAwait(false)) {
+                        sends++;
+                        LogMountStopResent(why, sends);
+                        lastSent = Stopwatch.GetTimestamp();
+                    }
                 }
             }
-            LogMountStopNotConfirmed(why, sends, StopVerifyWindow.TotalSeconds);
+            if (sends == 0) {
+                LogMountStopNotConnected(why, StopVerifyWindow.TotalSeconds);
+            } else {
+                LogMountStopNotConfirmed(why, sends, StopVerifyWindow.TotalSeconds);
+            }
             return false;
         }
 
         /// <summary>One round of stop commands, each bounded by <see cref="StopCommandTimeout"/> and none taking a token
-        /// that could already be cancelled.</summary>
-        private async Task SendMountStopAsync(string why, bool forceAbort) {
+        /// that could already be cancelled. True when the round reached a connected mount (a command that failed there
+        /// still counts: the confirmation decides); false when the mount is not connected, or dropped off during the round
+        /// (#2066: the caller tries again while the client reconnects).</summary>
+        private async Task<bool> SendMountStopAsync(string why, bool forceAbort) {
+            if (!MountConnected()) {
+                return false;
+            }
             var motion = CurrentMotion;
             var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
             LogMountStopSent(why, abort, motion);
+            var reached = true;
             if (abort) {
                 // Polar Align's own stops are counted from the reason the telescope service tagged each count with, so the
                 // run-wide watch never reads them as a stop from outside, and never reads a stop from outside that landed
@@ -348,26 +371,40 @@ namespace OpenAstroAra.Server.Services {
                 // one stop more than Polar Align's own; only a run that is already stopping (its generation moved) or a
                 // Start's baseline (re-read at the launch, RunAbortBaseline) can read then.
                 var countBefore = (_mount as ITelescopeService)?.AbortEpoch;
-                await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
+                reached &= await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
                     ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
                     : Task.Run(_mount.StopSlew, CancellationToken.None)).ConfigureAwait(false);
                 if (countBefore is long before && _mount is ITelescopeService counted) {
                     CountOwnAborts(counted, before);
                 }
             }
-            await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
-            await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0)).ConfigureAwait(false);
+            reached &= await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
+            reached &= await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0)).ConfigureAwait(false);
+            return reached;
         }
 
+        /// <summary>One stop command. False when it failed on a mount that is not connected (now); true otherwise.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Each stop command is best-effort: its fault is logged and the next command still goes out; the confirmation decides.")]
-        private async Task StopCommandAsync(string command, Func<Task> send) {
+        private async Task<bool> StopCommandAsync(string command, Func<Task> send) {
             try {
                 await send().WaitAsync(StopCommandTimeout).ConfigureAwait(false);
             } catch (TimeoutException) {
                 LogMountStopCommandTimedOut(command, StopCommandTimeout.TotalSeconds);
             } catch (Exception ex) {
                 LogMountStopCommandFailed(command, ex);
+                return MountConnected();
+            }
+            return true;
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A fault reading the cached connection is 'not connected': the stop is tried again on the next poll.")]
+        private bool MountConnected() {
+            try {
+                return _mount.GetInfo() is { Connected: true };
+            } catch (Exception) {
+                return false;
             }
         }
 
@@ -492,8 +529,11 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4558, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): COULD NOT CONFIRM THE MOUNT STOPPED after {Sends} stop sends in {Seconds:F0} s — cut the mount's power and check it")]
         private partial void LogMountStopNotConfirmed(string why, int sends, double seconds);
 
-        [LoggerMessage(EventId = 4559, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): the mount is not connected — Ara cannot stop it or confirm it stopped; cut the mount's power and check it")]
-        private partial void LogMountStopNotConnected(string why);
+        [LoggerMessage(EventId = 4559, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): the mount did not connect again within {Seconds:F0} s — Ara could not stop it or confirm it stopped; cut the mount's power and check it")]
+        private partial void LogMountStopNotConnected(string why, double seconds);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align ({Why}): the mount is not connected — its stop goes out as soon as it connects again (for up to {Seconds:F0} s)")]
+        private partial void LogMountStopWaitsForReconnect(string why, double seconds);
 
         [LoggerMessage(EventId = 4560, Level = LogLevel.Warning, Message = "§45 polar-align: the stop command {Command} failed")]
         private partial void LogMountStopCommandFailed(string command, Exception exception);

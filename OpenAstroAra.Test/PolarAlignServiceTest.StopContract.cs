@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -33,6 +34,83 @@ namespace OpenAstroAra.Test {
     /// run on its own defaults, not the bench's.
     /// </summary>
     public partial class PolarAlignServiceTest {
+
+        /// <summary>The daemon's stop timings (#2048's abort contract: 2 s before any confirmation, two reads 1.5 s apart,
+        /// resent every 2 s, an 8 s window, 3 s per command), read from a service built with its defaults, in place of the
+        /// bench's compressed ones.</summary>
+        private static void UseTheContractsStopTimings(PolarAlignService svc) {
+            using var daemon = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
+                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+            svc.StopCommandTimeout = daemon.StopCommandTimeout;
+            svc.StopVerifyPoll = daemon.StopVerifyPoll;
+            svc.StopVerifyStillFor = daemon.StopVerifyStillFor;
+            svc.StopVerifyNotBefore = daemon.StopVerifyNotBefore;
+            svc.StopResendAfter = daemon.StopResendAfter;
+            svc.StopVerifyWindow = daemon.StopVerifyWindow;
+        }
+
+        /// <summary>A run on the fake GEM in its first turn, at the daemon's motor speeds (the 30° step: about 12 s).</summary>
+        private static async Task<PolarAlignService> InFirstGemTurnAsync(FakeGemMount mount, WsRecorder ws, Action<PolarAlignService>? setUp = null) {
+            var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
+            setUp?.Invoke(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            return svc;
+        }
+
+        private static StopEntry[] AbortsSince(FakeGemMount mount, TimeSpan at) =>
+            mount.Stops.Where(s => s.Kind == StopKind.Abort && s.At >= at).ToArray();
+
+        // ── a stop to a mount that is not connected ──────────────────────────────────────────
+
+        [Test]
+        public async Task A_stop_that_finds_the_mount_disconnected_goes_out_once_it_reconnects_and_is_confirmed() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            using var svc = await InFirstGemTurnAsync(mount, ws, s => {
+                UseTheContractsStopTimings(s);
+                s.AxisMovePoll = TimeSpan.FromSeconds(2); // the run waits in its poll when the Stop lands
+            }).ConfigureAwait(false);
+
+            await mount.Disconnect().ConfigureAwait(false); // the Wi-Fi drops mid-turn; the RA motor runs on
+            var stop = svc.StopAsync(null, CancellationToken.None);
+            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            var reconnectedAt = mount.Now;
+            await mount.Connect().ConfigureAwait(false);
+            await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            var abort = AbortsSince(mount, TimeSpan.Zero).FirstOrDefault();
+            Assert.That(abort, Is.Not.Null, "no AbortSlew reached the mount. " + mount.Describe());
+            Assert.That(abort!.At, Is.GreaterThanOrEqualTo(reconnectedAt), "the stop went out once the mount was back");
+            Assert.That((abort.Reason, abort.Honoured), Is.EqualTo(("polar_align", true)));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "confirmed: no mount_did_not_stop");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1));
+            mount.AssertNoMotionSince(abort.At);
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public async Task A_stop_that_finds_the_mount_disconnected_keeps_trying_for_its_window_then_reports_mount_did_not_stop() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            using var svc = await InFirstGemTurnAsync(mount, ws, s => {
+                UseTheContractsStopTimings(s);
+                s.StopVerifyWindow = TimeSpan.FromSeconds(3); // shorter than the daemon's 8 s, for the test's time
+                s.AxisMovePoll = TimeSpan.FromSeconds(2);
+            }).ConfigureAwait(false);
+
+            await mount.Disconnect().ConfigureAwait(false);
+            var watch = Stopwatch.StartNew();
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var elapsed = watch.Elapsed;
+
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+            Assert.That(elapsed, Is.GreaterThanOrEqualTo(svc.StopVerifyWindow - TimeSpan.FromMilliseconds(250)),
+                "the stop waited its whole window for the mount to come back before it gave up");
+            Assert.That(AbortsSince(mount, TimeSpan.Zero), Is.Empty, "nothing reached a mount that never came back");
+            Assert.That(mount.IsMoving, Is.True, "the RA motor runs on: the reported 'not confirmed' is the truth");
+        }
 
         // ── Polar Align's own stops are the ones tagged polar_align ──────────────────────────
 
