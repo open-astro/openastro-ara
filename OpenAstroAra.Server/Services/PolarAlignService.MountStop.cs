@@ -66,11 +66,60 @@ namespace OpenAstroAra.Server.Services {
 
         // ── the run-wide watch for a stop from outside (#2066, #2067) ─────────────────────────
 
-        // Polar Align's own AbortSlew sends, counted before each send: the run tells its own stop from one it did not raise.
+        // Polar Align's own AbortSlew sends: the run tells its own stop from one it did not raise.
         private long _ownAborts;
+
+        // The mount's stop count up to which _ownAborts has looked at the reasons. Guarded by _ownAbortsGate.
+        private long _ownAbortsCountedThrough;
+        private readonly object _ownAbortsGate = new();
+
+        /// <summary>The farthest the stop count may move during one AbortSlew send and still be read count by count: the
+        /// telescope service keeps the last 32 reasons. Past it, none is counted as Polar Align's own (a stop from outside
+        /// then ends the run, never the other way round).</summary>
+        private const long OwnAbortsReadable = 16;
+
+        /// <summary>
+        /// #2066 — after Polar Align's AbortSlew send, count as its own only the stops the telescope service tagged
+        /// <see cref="AbortReason"/> since <paramref name="before"/> (the count when the send began). The count moving is
+        /// not enough: a send refused before it counts (a mount not connected) while Stop Mount lands would hide the Stop
+        /// Mount from the run-wide watch, and a Start's baseline would skip past it. Each count is read once, whichever of
+        /// two sends that overlap reads it first.
+        /// </summary>
+        private void CountOwnAborts(IMountMotionControl service, long before) {
+            lock (_ownAbortsGate) {
+                var after = service.AbortEpoch;
+                var from = Math.Max(before, _ownAbortsCountedThrough);
+                if (after - from <= OwnAbortsReadable) {
+                    for (var count = from; count < after; count++) {
+                        // The first reason after `count`: the one the count after it was raised with.
+                        if (string.Equals(service.AbortReasonSince(count, except: null), AbortReason, StringComparison.Ordinal)) {
+                            Interlocked.Increment(ref _ownAborts);
+                        }
+                    }
+                }
+                _ownAbortsCountedThrough = Math.Max(_ownAbortsCountedThrough, after);
+            }
+        }
 
         // The telescope's AbortEpoch and _ownAborts when the run's Start was called, for the run of this generation. Guarded by _gate.
         private (int Gen, long Epoch, long OwnAborts)? _abortWatch;
+
+        // #2066 — the stop fence a run was launched under (RunEnd.Fence), by generation, for its turns' own clean-up stops.
+        // Guarded by _gate.
+        private (int Gen, long Fence)? _runFence;
+
+        /// <summary>#2066 — whether the stops of the run launched as generation <paramref name="gen"/> are fenced. A run
+        /// that a newer launch replaced keeps no record: its turns' stops go out as before.</summary>
+        private bool RunStopsFenced(int gen) {
+            long fence;
+            lock (_gate) {
+                if (_runFence is not { } f || f.Gen != gen) {
+                    return false;
+                }
+                fence = f.Fence;
+            }
+            return StopsFenced(fence);
+        }
 
         /// <summary>The run's AbortEpoch reading (taken when its Start was called), for the leased motor commands; null for
         /// a superseded run or a mount that keeps no count.</summary>
@@ -111,21 +160,63 @@ namespace OpenAstroAra.Server.Services {
         /// moves it on purpose. The run's exit then sends no stop of its own (it would abort the park) and confirms none.</summary>
         internal static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
 
+        /// <summary>#2066 — the reason a pad stop counts with: a MoveAxis 0 from the app's direction pad (or any client of
+        /// <c>/moveaxis</c>) that lands while Polar Align turns the mount. The run ends and does not restart the motor.</summary>
+        public const string PadStop = "pad_stop";
+
         internal static string StoppedFromOutsideMessage(string? by) => by switch {
             "emergency_stop" => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
             "watchdog" => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
             "park" => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
             "findhome" => "the mount was sent Home from outside polar alignment — polar alignment ended. Start again when ready",
+            PadStop => "the mount was stopped from the direction pad — polar alignment ended. Start again when ready",
             _ => "the mount was stopped from outside polar alignment (Stop Mount) — polar alignment ended. Start again when ready",
         };
 
         /// <summary>The end request when Emergency Stop or the safety park takes the mount over (<see cref="StopForTakeoverAsync"/>).</summary>
         internal const string TakenOver = "taken_over";
 
+        /// <summary>
+        /// #2066 — how long a takeover waits for the routine to end. Inside the 10 s each caller gives it (Emergency Stop's
+        /// rung, the safety and the fault park's first step), so past it this call fences the run's stops and answers
+        /// before the caller gives up and parks: a run stuck in a call that ignores cancellation, or an earlier Stop still
+        /// confirming its stop, sends nothing once the park may be under way (an AbortSlew or a MoveAxis 0 would abort it).
+        /// </summary>
+        internal TimeSpan TakeoverStopBound { get; set; } = TimeSpan.FromSeconds(9);
+
         /// <inheritdoc />
-        public Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) {
+        public async Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) {
             LogTakenOver(by);
-            return EndRoutineAsync("polar-align.stop", outcome: "aborted", null, ct, endRequest: TakenOver);
+            var ending = EndRoutineAsync("polar-align.stop", outcome: "aborted", null, ct, endRequest: TakenOver);
+            try {
+                return await ending.WaitAsync(TakeoverStopBound, CancellationToken.None).ConfigureAwait(false);
+            } catch (TimeoutException) {
+                FenceStops();
+                LogTakeoverFenced(by, TakeoverStopBound.TotalSeconds);
+                // The abandoned end still holds _opLock until the stuck call returns (it is fenced, so it sends nothing): a
+                // Start after the park waits on it, within its own bounds, as it would behind any end still running.
+                _ = ending.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                return Accepted("polar-align.stop", null);
+            }
+        }
+
+        // ── the stop fence (#2066) ───────────────────────────────────────────────────────────
+
+        // Moved when a takeover gives up waiting for the routine, and when an end abandons a run stuck past its grace. A run
+        // keeps the value from its launch (RunEnd.Fence); once it moves, none of that run's stop commands goes out any more.
+        private long _stopFence;
+
+        private long StopFence => Interlocked.Read(ref _stopFence);
+
+        /// <summary>Whether the stops of a run launched under <paramref name="fence"/> are fenced: the mount is someone
+        /// else's now (a takeover's park, or the user after an end that abandoned the run).</summary>
+        private bool StopsFenced(long fence) => StopFence != fence;
+
+        /// <summary>No stop of any run launched so far goes out from here on. The motion mark goes too: the telescope
+        /// endpoints must not keep refusing a Park or a GoTo for a run that no longer answers for the mount.</summary>
+        private void FenceStops() {
+            Interlocked.Increment(ref _stopFence);
+            EndMotion();
         }
 
         // Instance (not const) so tests shrink them. The defaults follow the abort contract of #2048: a stop is never
@@ -197,6 +288,18 @@ namespace OpenAstroAra.Server.Services {
             public bool Reported => Volatile.Read(ref _reported) == 1;
 
             public void MarkReported() => Volatile.Write(ref _reported, 1);
+
+            /// <summary>#2066 — the stop fence when the run was launched (set before the run is published): once the fence
+            /// moves, no stop of this run goes out (<see cref="StopsFenced"/>).</summary>
+            public long Fence { get; set; }
+
+            private int _priorTracking = -1; // -1 not read yet, 0 off, 1 on
+
+            /// <summary>#2066 — the tracking the run found, for an end that abandons the run and hands it back itself.</summary>
+            public bool? PriorTracking {
+                get => Volatile.Read(ref _priorTracking) switch { 1 => true, 0 => false, _ => null };
+                set => Volatile.Write(ref _priorTracking, value switch { true => 1, false => 0, null => -1 });
+            }
         }
 
         // The current run's cancellation and end request, for the stop path, which must not wait on _opLock. Guarded by _gate.
@@ -229,9 +332,10 @@ namespace OpenAstroAra.Server.Services {
             }
             run.End.Request(outcome);
             // Started before the cancel and awaited after it: the cancel runs the run's continuations, and a hung mount
-            // command must not hold the cancel back.
+            // command must not hold the cancel back. A mount that is not connected gets no stop here: the run's exit keeps
+            // trying while the client reconnects (StopMountMotionAsync).
             var stopping = active || CurrentMotion != MountMotion.None
-                ? SendMountStopAsync(outcome, forceAbort: false)
+                ? SendMountStopAsync(outcome, forceAbort: false, run.End.Fence)
                 : Task.CompletedTask;
             try {
                 await run.Cts.CancelAsync().ConfigureAwait(false);
@@ -247,31 +351,47 @@ namespace OpenAstroAra.Server.Services {
         /// until two of them, at least <see cref="StopVerifyStillFor"/> apart and <see cref="StopVerifyNotBefore"/> after the
         /// last command, both say not slewing and differ by under <see cref="StopStillDeg"/> in RA and in Dec. The stop is
         /// sent again every <see cref="StopResendAfter"/>, <see cref="StopSends"/> times in all. A failed, missing or
-        /// slewing read never counts as stopped. False, logged as Critical, when the stop is not confirmed within
-        /// <see cref="StopVerifyWindow"/>.
+        /// slewing read never counts as stopped. #2066 — a mount that is not connected gets its stop once the client
+        /// reconnects: a round that cannot reach it is not a send, and it is tried again on every poll inside the window.
+        /// False, logged as Critical, when the stop is not confirmed within <see cref="StopVerifyWindow"/>. Null when the
+        /// run's stops were fenced (<paramref name="fence"/>): the mount is a takeover's, or the user's after an end
+        /// abandoned the run, and nothing more is sent.
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The exit must always finish: a fault here is 'not confirmed', logged as Critical, never an escape from the run's exit.")]
-        private async Task<bool> StopMountMotionAsync(string why) {
+        private async Task<bool?> StopMountMotionAsync(string why, long fence) {
             try {
-                return await StopMountMotionCoreAsync(why).ConfigureAwait(false);
+                return await StopMountMotionCoreAsync(why, fence).ConfigureAwait(false);
             } catch (Exception ex) {
                 LogMountStopFailed(why, ex);
                 return false;
             }
         }
 
-        private async Task<bool> StopMountMotionCoreAsync(string why) {
-            if (_mount.GetInfo() is not { Connected: true }) {
-                LogMountStopNotConnected(why);
-                return false;
-            }
+        private async Task<bool?> StopMountMotionCoreAsync(string why, long fence) {
             var began = Stopwatch.GetTimestamp();
-            await SendMountStopAsync(why, forceAbort: false).ConfigureAwait(false);
-            var lastSent = Stopwatch.GetTimestamp();
-            var sends = 1;
+            var lastSent = began;
+            var sends = 0;
+            var waitingLogged = false;
             (double RaDeg, double DecDeg, long At)? anchor = null;
             while (Stopwatch.GetElapsedTime(began) < StopVerifyWindow) {
+                if (StopsFenced(fence)) {
+                    LogMountStopFenced(why);
+                    return null;
+                }
+                if (sends == 0) {
+                    if (!await SendMountStopAsync(why, forceAbort: false, fence).ConfigureAwait(false)) {
+                        if (!waitingLogged && !StopsFenced(fence)) {
+                            waitingLogged = true;
+                            LogMountStopWaitsForReconnect(why, StopVerifyWindow.TotalSeconds);
+                        }
+                        await Task.Delay(StopVerifyPoll, CancellationToken.None).ConfigureAwait(false);
+                        continue;
+                    }
+                    sends = 1;
+                    lastSent = Stopwatch.GetTimestamp();
+                    continue; // the window is checked again before the first read: a late reconnect adds no pass of its own
+                }
                 await Task.Delay(StopVerifyPoll, CancellationToken.None).ConfigureAwait(false);
                 var reading = await ReadStillnessAsync().ConfigureAwait(false);
                 var at = Stopwatch.GetTimestamp();
@@ -290,48 +410,83 @@ namespace OpenAstroAra.Server.Services {
                     anchor = null;
                 }
                 if (sends < StopSends && Stopwatch.GetElapsedTime(lastSent) >= StopResendAfter) {
-                    sends++;
-                    LogMountStopResent(why, sends);
-                    // A mount that still reads as slewing, or gives no reading, gets the AbortSlew too.
-                    await SendMountStopAsync(why, forceAbort: reading is not { Slewing: false }).ConfigureAwait(false);
-                    lastSent = Stopwatch.GetTimestamp();
+                    // A mount that still reads as slewing, or gives no reading, gets the AbortSlew too. A round that could
+                    // not reach the mount (it dropped off since) is not counted and goes out again on the next poll.
+                    if (await SendMountStopAsync(why, forceAbort: reading is not { Slewing: false }, fence).ConfigureAwait(false)) {
+                        sends++;
+                        LogMountStopResent(why, sends);
+                        lastSent = Stopwatch.GetTimestamp();
+                    }
                 }
             }
-            LogMountStopNotConfirmed(why, sends, StopVerifyWindow.TotalSeconds);
+            if (StopsFenced(fence)) {
+                LogMountStopFenced(why);
+                return null;
+            }
+            if (sends == 0) {
+                LogMountStopNotConnected(why, StopVerifyWindow.TotalSeconds);
+            } else {
+                LogMountStopNotConfirmed(why, sends, StopVerifyWindow.TotalSeconds);
+            }
             return false;
         }
 
         /// <summary>One round of stop commands, each bounded by <see cref="StopCommandTimeout"/> and none taking a token
-        /// that could already be cancelled.</summary>
-        private async Task SendMountStopAsync(string why, bool forceAbort) {
+        /// that could already be cancelled. True when the round reached a connected mount (a command that failed there
+        /// still counts: the confirmation decides); false when the mount is not connected, or dropped off during the round
+        /// (#2066: the caller tries again while the client reconnects), or the run's stops are fenced (nothing more goes
+        /// out, not even the rest of this round).</summary>
+        private async Task<bool> SendMountStopAsync(string why, bool forceAbort, long fence) {
+            if (StopsFenced(fence) || !MountConnected()) {
+                return false;
+            }
             var motion = CurrentMotion;
             var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
             LogMountStopSent(why, abort, motion);
+            var reached = true;
             if (abort) {
-                // Counted once the send moved the mount's stop count, so the run-wide watch never reads Polar Align's own stop
-                // as one from outside. Never before: a send that is refused before it counts (a mount not connected) would
-                // then hide a later stop from outside. A watch that reads between the count and this line sees one stop more
-                // than Polar Align's own; only a run that is already stopping (its generation moved) or a Start's baseline
-                // (re-read at the launch, RunAbortBaseline) can read then.
+                // Polar Align's own stops are counted from the reason the telescope service tagged each count with, so the
+                // run-wide watch never reads them as a stop from outside, and never reads a stop from outside that landed
+                // during this send as one of them (CountOwnAborts). A watch that reads between the count and the tally sees
+                // one stop more than Polar Align's own; only a run that is already stopping (its generation moved) or a
+                // Start's baseline (re-read at the launch, RunAbortBaseline) can read then.
                 var countBefore = _motionControl.AbortEpoch;
-                await StopCommandAsync("AbortSlew", () => _motionControl.AbortSlewAsync(AbortReason, CancellationToken.None)).ConfigureAwait(false);
-                if (_motionControl.AbortEpoch != countBefore) {
-                    Interlocked.Increment(ref _ownAborts);
-                }
+                reached &= await StopCommandAsync("AbortSlew",
+                    () => _motionControl.AbortSlewAsync(AbortReason, CancellationToken.None), fence).ConfigureAwait(false);
+                CountOwnAborts(_motionControl, countBefore);
             }
-            await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
-            await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0)).ConfigureAwait(false);
+            reached &= await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0), fence).ConfigureAwait(false);
+            reached &= await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0), fence).ConfigureAwait(false);
+            return reached;
         }
 
+        /// <summary>One stop command. False when it was not sent because the run's stops are fenced, or it failed on a mount
+        /// that is not connected (now); true otherwise.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Each stop command is best-effort: its fault is logged and the next command still goes out; the confirmation decides.")]
-        private async Task StopCommandAsync(string command, Func<Task> send) {
+        private async Task<bool> StopCommandAsync(string command, Func<Task> send, long fence) {
+            if (StopsFenced(fence)) {
+                LogMountStopCommandFenced(command);
+                return false;
+            }
             try {
                 await send().WaitAsync(StopCommandTimeout).ConfigureAwait(false);
             } catch (TimeoutException) {
                 LogMountStopCommandTimedOut(command, StopCommandTimeout.TotalSeconds);
             } catch (Exception ex) {
                 LogMountStopCommandFailed(command, ex);
+                return MountConnected();
+            }
+            return true;
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A fault reading the cached connection is 'not connected': the stop is tried again on the next poll.")]
+        private bool MountConnected() {
+            try {
+                return _mount.GetInfo() is { Connected: true };
+            } catch (Exception) {
+                return false;
             }
         }
 
@@ -450,8 +605,23 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4558, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): COULD NOT CONFIRM THE MOUNT STOPPED after {Sends} stop sends in {Seconds:F0} s — cut the mount's power and check it")]
         private partial void LogMountStopNotConfirmed(string why, int sends, double seconds);
 
-        [LoggerMessage(EventId = 4559, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): the mount is not connected — Ara cannot stop it or confirm it stopped; cut the mount's power and check it")]
-        private partial void LogMountStopNotConnected(string why);
+        [LoggerMessage(EventId = 4559, Level = LogLevel.Critical, Message = "§45 polar-align ({Why}): the mount did not connect again within {Seconds:F0} s — Ara could not stop it or confirm it stopped; cut the mount's power and check it")]
+        private partial void LogMountStopNotConnected(string why, double seconds);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align ({Why}): the mount is not connected — its stop goes out as soon as it connects again (for up to {Seconds:F0} s)")]
+        private partial void LogMountStopWaitsForReconnect(string why, double seconds);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align ({Why}): the run's stops are fenced (a takeover owns the mount, or the run was abandoned) — no further stop, no confirmation")]
+        private partial void LogMountStopFenced(string why);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the stop command {Command} was not sent — the run's stops are fenced")]
+        private partial void LogMountStopCommandFenced(string command);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: {By} waited {Seconds:F0} s for polar alignment to end — its stops are fenced so none can land on what {By} does next")]
+        private partial void LogTakeoverFenced(string by, double seconds);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the stuck run was abandoned — its stops are fenced so a late one cannot land on what the mount does next")]
+        private partial void LogAbandonedRunFenced();
 
         [LoggerMessage(EventId = 4560, Level = LogLevel.Warning, Message = "§45 polar-align: the stop command {Command} failed")]
         private partial void LogMountStopCommandFailed(string command, Exception exception);
