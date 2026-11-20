@@ -3963,6 +3963,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'Cooler not responding: is the camera\'s 12 V connected?';
+
+  @override
   String get simpleDewWarning =>
       'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 
@@ -6602,8 +6606,49 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'That target is below the pole, at hour angle $hourAngle h: the counterweight would swing $angle° up from hanging straight down, past the $limit° limit. Pick another target, or wait until this one is higher.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
+  String get refusalMountPositionUnverified =>
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'The mount\'s position has not been read since it connected. Try again in a few seconds.';
+
+  @override
+  String get mountPositionUnverifiedTitle => 'Mount position unverified';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountConfirmAtHome => 'The mount IS at Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Yes, it is at Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Couldn\'t confirm Home';
 
   @override
   String get refusalMountClockNotVerified =>
@@ -10703,6 +10748,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O guia não conseguiu calibrar, então está guiando com a calibração anterior. A guiagem pode ficar menos precisa esta noite.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'O resfriador não está respondendo: os 12 V da câmera estão conectados?';
+
+  @override
   String get simpleDewWarning =>
       'Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco programado espera até passar.';
 
@@ -13358,8 +13407,50 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'Esse alvo está abaixo do polo, no ângulo horário $hourAngle h: o contrapeso subiria $angle° a partir da posição vertical para baixo, além do limite de $limit°. Escolha outro alvo ou espere este subir mais.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'O Encerrar noite já está em andamento. Espere terminar, ou cancele, antes de iniciar de novo.';
+
+  @override
+  String get refusalMountPositionUnverified =>
+      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Rode a busca de zero da montagem pelo controle de mão ou app dela, ou confirme que ela está fisicamente em Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'A posição da montagem ainda não foi lida desde que ela conectou. Tente de novo em alguns segundos.';
+
+  @override
+  String get mountPositionUnverifiedTitle =>
+      'Posição da montagem não verificada';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'A montagem pode ter perdido energia: ela diz estar em Home para onde quer que aponte. GoTo, Estacionar, Home e Alinhamento polar estão bloqueados. Parar, o direcional e o rastreamento continuam funcionando.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Rode a busca de zero da montagem pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.';
+
+  @override
+  String get mountConfirmAtHome => 'A montagem ESTÁ em Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'A montagem está fisicamente em Home, com os contrapesos para baixo e o tubo ao longo do eixo polar? Confirme só se você conferiu com os próprios olhos.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Sim, está em Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Não foi possível confirmar Home';
 
   @override
   String get refusalMountClockNotVerified =>

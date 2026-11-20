@@ -37,6 +37,7 @@ internal interface ITelescopeDevice : IDeviceAdapter {
     bool IsPulseGuiding { get; }
     PointingState SideOfPier { get; set; }
     EquatorialCoordinateType EquatorialSystem { get; }
+    AlignmentMode AlignmentMode { get; }
     bool CanSlewAsync { get; }
     bool CanSlew { get; }
     bool CanSync { get; }
@@ -96,6 +97,7 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
     public bool IsPulseGuiding => client.IsPulseGuiding;
     public PointingState SideOfPier { get => client.SideOfPier; set => client.SideOfPier = value; }
     public EquatorialCoordinateType EquatorialSystem => client.EquatorialSystem;
+    public AlignmentMode AlignmentMode => client.AlignmentMode;
     public bool CanSlewAsync => client.CanSlewAsync;
     public bool CanSlew => client.CanSlew;
     public bool CanSync => client.CanSync;

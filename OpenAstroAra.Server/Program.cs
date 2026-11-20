@@ -52,7 +52,7 @@ namespace OpenAstroAra.Server;
 public partial class Program {
 
     public static void Main(string[] args) {
-        var app = BuildApp(args);
+        var app = BuildApp(args, overrideServices: null);
         // Main returns void, so Environment.ExitCode (75 after a restart request) is the process exit status.
         try {
             app.Run();
@@ -89,8 +89,13 @@ public partial class Program {
     /// reverted to the headless stub because nothing ever built this graph outside <c>Main</c>.
     /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
     /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
+    /// <paramref name="overrideServices"/> runs on the finished service collection just before
+    /// <c>Build()</c>: a test host swaps the host-side seams there (the guider's <c>systemctl</c>
+    /// supervisor, the poweroff starter) so a test run never asks systemd or polkit for anything.
+    /// <c>Main</c> passes null. The parameter is required, not optional, so a new test host cannot
+    /// call <c>BuildApp</c> without deciding (<c>TestHostSeams.Replace</c>) and silently get the real seams.
     /// </summary>
-    internal static WebApplication BuildApp(string[] args) {
+    internal static WebApplication BuildApp(string[] args, Action<IServiceCollection>? overrideServices) {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions {
             Args = args,
             // The OpenAPI generator tags untagged routes (/healthz, /server/info) with the
@@ -373,6 +378,8 @@ public partial class Program {
             // parameter is passed by hand, #711).
             () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
             sp.GetService<IProfileStore>(),
+            // #2070 — registered below, once profileDir is known.
+            sp.GetService<IMountPoseStore>(),
             // #2071 — the mount's clock is set from, and checked against, the synced rig clock.
             () => sp.GetService<ITimeSyncService>()))));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
@@ -666,6 +673,9 @@ public partial class Program {
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+        // #2070 — the mounts whose position is unverified (a false zero after a power loss) stay so across a restart.
+        builder.Services.AddSingleton<IMountPoseStore>(sp =>
+            new FileMountPoseStore(profileDir, sp.GetService<ILogger<FileMountPoseStore>>()));
         // §63.4 — guider-twin deletes waiting for a connected, idle guider (survive a daemon restart).
         builder.Services.AddSingleton<IGuiderTwinDeleteStore>(sp =>
             new FileGuiderTwinDeleteStore(profileDir, sp.GetService<ILogger<FileGuiderTwinDeleteStore>>()));
@@ -1331,6 +1341,8 @@ public partial class Program {
         // background job of autofocus runs, refused while another focus routine or a plan runs.
         builder.Services.AddSingleton<FilterOffsetCalibrationService>();
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
+
+        overrideServices?.Invoke(builder.Services);
 
         var app = builder.Build();
 

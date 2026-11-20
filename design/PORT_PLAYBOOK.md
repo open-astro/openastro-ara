@@ -10278,6 +10278,7 @@ ARA's Pi-side integration with the service:
 
 - **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
 - **Restart authority:** ARA can request restart via `systemctl restart openastro-guider`. Authorised by a **polkit rule** ARA's .deb ships (`usr/share/polkit-1/rules.d/50-openastroara-guider.rules`: `org.freedesktop.systemd1.manage-units`, this unit, verbs start/restart, user openastroara) — NOT sudo: the daemon's unit runs with `NoNewPrivileges=true`, under which sudo refuses to run (verified on the Pi, #1093)
+- **No interactive authentication:** every `systemctl` the daemon runs (guider start/restart/is-active, the storage and update template units, poweroff) passes `--no-ask-password`. Where the polkit rule is installed this changes nothing; where it is not (a dev box, a CI runner, a test host) the call fails fast with an access-denied exit instead of popping a desktop polkit password dialog. Test hosts replace the guider supervisor and poweroff starter with fakes, so a test run never reaches the real `systemctl` start/restart/poweroff path
 - **Stop authority:** none granted — the polkit rule deliberately excludes `stop` (an admin's `systemctl stop openastro-guider` must not be undoable by the daemon); tests drive the fake guider instead
 - **Status observation:** ARA polls `systemctl is-active openastro-guider` for service-level health alongside the JSON-RPC ping (unprivileged; note `is-active` on a unit that does not exist prints `inactive`, which is how the old `openastro-phd2` name went unnoticed)
 
