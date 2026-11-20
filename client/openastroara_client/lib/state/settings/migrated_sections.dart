@@ -20,6 +20,7 @@ import 'notifications_settings_state.dart';
 import 'optics_settings_state.dart';
 import 'phd2_settings_state.dart';
 import 'plate_solve_settings_state.dart';
+import 'polar_align_settings_state.dart';
 import 'safety_policies_state.dart';
 import 'site_settings_state.dart';
 import 'storage_settings_state.dart';
@@ -66,6 +67,7 @@ final List<MigratedSection> migratedSections = [
   (route: 'optics', provider: opticsSettingsProvider),
   (route: 'phd2', provider: phd2SettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),
+  (route: 'polar-align', provider: polarAlignSettingsProvider),
   (route: 'safety', provider: safetyPoliciesProvider),
   (route: 'site', provider: siteSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),

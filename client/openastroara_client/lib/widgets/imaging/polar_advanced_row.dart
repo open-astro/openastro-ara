@@ -5,7 +5,9 @@ import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/loaded_section.dart';
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../help_icon.dart';
@@ -28,9 +30,16 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
   bool _open = false;
   String? _saveError;
 
-  void _retry() => ref.invalidate(polarAlignSettingsProvider);
+  void _retry() {
+    final api = ref.read(profileApiProvider);
+    if (api != null) ref.read(polarAlignSettingsProvider.notifier).load(api);
+  }
 
-  Future<void> _save(PolarAlignSettings next) async {
+  /// [change] on the rig's copy as it is when the edit lands (ADR 0015); a
+  /// 412 reloads the rig's copy (this row has no Reload of its own).
+  Future<void> _save(
+    PolarAlignSettings Function(PolarAlignSettings) change,
+  ) async {
     final l10n = context.l10n;
     setState(() => _saveError = null);
     // Through the routine's action module (ADR 0013 rule 3): busy while the
@@ -39,12 +48,17 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
     await ref
         .read(polarAlignActionProvider.notifier)
         .run(
-          (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
+          (_) => ref
+              .read(polarAlignSettingsProvider.notifier)
+              .changeAndSave(change),
           describe: (e) {
             if (mounted) {
               setState(
                 () => _saveError = l10n.polarAdvancedSaveFailed(
-                  friendlyError(l10n, e, action: l10n.polarActionSave),
+                  e is SectionNotLoadedException ||
+                          e is SectionConflictException
+                      ? e.toString()
+                      : friendlyError(l10n, e, action: l10n.polarActionSave),
                 ),
               );
             }
@@ -111,10 +125,7 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
           ),
           if (_open)
             if (!loaded)
-              SectionNotLoaded(
-                section: LoadedSection(lastFailure: settings.error),
-                onRetry: _retry,
-              )
+              SectionNotLoaded(section: settings, onRetry: _retry)
             else
               _knobs(l10n, s),
         ],
@@ -229,7 +240,7 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
               );
             }
             final now = ref.read(polarAlignSettingsProvider).value ?? current;
-            if (v != read(now)) _save(apply(now, v));
+            if (v != read(now)) _save((x) => apply(x, v));
             return null;
           },
         ),
