@@ -233,6 +233,50 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // A run fails on its own and its exit confirms the stop, then hangs on its last pointing read. The takeover gives up at
+        // its bound and fences the run, and the park goes out (tracking on first, as iOptron needs). When the read returns, the
+        // exit turned tracking off in the middle of the park.
+        [Test]
+        public async Task An_exit_whose_last_read_hangs_past_a_takeover_writes_no_tracking_after_it() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.GoToRateDegPerSec = 15.0;
+            mount.MoveAxisRefused = true; // the run fails at its first turn, and its exit stops and confirms
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
+            var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var pointingAfterStop = 0;
+            mount.OnFreshRead = kind => {
+                // The exit's confirmation reads position twice (the anchor, then the still read); its third is the last read.
+                if (kind == "pointing" && mount.Stops.Count > 0 && Interlocked.Increment(ref pointingAfterStop) == 3) {
+                    mount.HangReads = hang;
+                }
+            };
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var parkAt = mount.Now;
+                Assert.That(mount.SetTrackingEnabled(true), Is.True, "the park turns tracking on first");
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                mount.HangReads = null;
+                hang.TrySetResult(); // the exit's read returns now, in the middle of the park
+                var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false); // the exit has finished by now
+
+                Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
+                Assert.That(mount.Commands.Where(c => c.At >= parkAt).Select(c => c.Text), Has.None.EqualTo("tracking off"),
+                    "no tracking write from the fenced exit. " + mount.Describe());
+                Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
+                    "no stop from the fenced exit. " + mount.Describe());
+            } finally {
+                mount.HangReads = null;
+                hang.TrySetResult();
+            }
+        }
+
         // The Stop gave up on a run stuck past its grace and stopped the mount itself. The run unwinds whenever its call
         // returns: its exit then stopped the mount again and turned tracking off in the middle of whatever came next (here
         // the user's park). The end that abandoned it fences its stops.

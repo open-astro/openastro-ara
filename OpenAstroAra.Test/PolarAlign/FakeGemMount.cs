@@ -217,6 +217,10 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// when the first read hangs on it.</summary>
         public TaskCompletionSource? HangReads { get; set; }
 
+        /// <summary>Called with the read's kind (<c>pointing</c>, <c>slewing</c>, <c>now</c>) as each fresh read starts,
+        /// before <see cref="HangReads"/> is checked: a test can set the hang for a chosen read.</summary>
+        public Action<string>? OnFreshRead { get; set; }
+
         /// <summary>Completes when a fresh read first hangs on <see cref="HangReads"/>.</summary>
         public TaskCompletionSource ReadHung { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -528,7 +532,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public async Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
-            await SlowReadAsync().ConfigureAwait(false);
+            await SlowReadAsync("slewing").ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (!_connected || SlewingReadFails || _slewReadsThrow) {
@@ -539,7 +543,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public async Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
-            await SlowReadAsync().ConfigureAwait(false);
+            await SlowReadAsync("pointing").ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
@@ -551,7 +555,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public async Task<MountReading?> ReadNowAsync(CancellationToken ct) {
-            await SlowReadAsync().ConfigureAwait(false);
+            await SlowReadAsync("now").ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
@@ -565,7 +569,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         /// <summary>A slow GET (<see cref="SlowReads"/>): the wait ignores the caller's token, as a blocking HTTP call does.</summary>
-        private async Task SlowReadAsync() {
+        private async Task SlowReadAsync(string kind) {
+            OnFreshRead?.Invoke(kind);
             if (HangReads is { } hang) {
                 ReadHung.TrySetResult();
                 await hang.Task.ConfigureAwait(false);

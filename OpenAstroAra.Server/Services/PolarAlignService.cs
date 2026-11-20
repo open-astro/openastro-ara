@@ -654,7 +654,7 @@ namespace OpenAstroAra.Server.Services {
                     // gave up waiting fenced the run's stops meanwhile (null): the mount is its own, nothing is written.
                     var stopped = await StopMountMotionAsync(outcome, end.Fence).ConfigureAwait(false);
                     end.MountStopped = stopped;
-                    if (stopped is bool known
+                    if (stopped is bool known && !StopsFenced(end.Fence)
                             && (!known || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding))) {
                         TrackingOffBestEffort(outcome);
                     }
@@ -848,6 +848,12 @@ namespace OpenAstroAra.Server.Services {
                     end.MountStopped = exitStopped;
                     // #2089 — where this run left the mount: the next start tells a continued pose from a moved one by it.
                     await NoteMountLeftAfterStopAsync().ConfigureAwait(false);
+                    if (StopsFenced(end.Fence)) {
+                        // #2066 — fenced during that read (it may hang): the mount is a takeover's now, its park may be under
+                        // way, and a tracking write would land between the park's tracking on and its Park.
+                        LogExitLeftToTakeover(why);
+                        return exitStopped;
+                    }
                     // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into
                     // a stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
                     var requested = end.Requested;
