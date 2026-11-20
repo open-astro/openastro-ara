@@ -873,7 +873,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task With_safety_off_an_unchanged_pier_side_warns_at_the_slew_and_records_no_flip() {
+        public async Task With_safety_off_an_unchanged_pier_side_warns_at_the_slew_and_records_the_flip_to_check_by_eye() {
+            // A driver that always reports one pier side is why flip safety can be off: its flips
+            // must still be confirmable, or every flip alerts and waits 60 s for good.
             SetupProfile(recenter: true);
             SetupSafety(Safety(enabled: false, firstFlipConfirmed: false));
             // The SetUp mount reports pierEast before and after the "flip".
@@ -889,7 +891,11 @@ namespace OpenAstroAra.Test {
             Assert.That(warning.Severity, Is.EqualTo(NotificationSeverity.Warning));
             Assert.That(callLog.IndexOf("Notify:" + warning.Title), Is.LessThan(callLog.IndexOf("Recenter")),
                 "the warning goes out at the slew, before the recovery: " + string.Join(", ", callLog));
-            Assert.That(safetyWrites, Is.Empty, "an unflipped pier side is nothing to confirm");
+            var record = safetyWrites.Single();
+            Assert.That(record.FirstFlipCompletedUtc, Is.Not.Null, "the user can confirm what they watched");
+            Assert.That(record.FirstFlipPierSideChanged, Is.False, "the mount showed no pier-side change");
+            Assert.That(record.FirstFlipConfirmed, Is.False, "the executor never confirms a flip");
+            Assert.That(published.Last().Message, Does.Contain("same pier side").And.Contain("check by eye"));
         }
 
         [Test]

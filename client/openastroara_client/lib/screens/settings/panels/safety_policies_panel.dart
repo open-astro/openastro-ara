@@ -109,7 +109,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
     final when = DateFormat('yyyy-MM-dd HH:mm').format(completed.toLocal());
     final pier = s.firstFlipPierSideChanged
         ? 'the mount reported its pier side changed'
-        : 'the mount did not report its pier side — check by eye';
+        : 'the mount did not report a pier side change — check by eye';
     return 'A flip completed at $when: $pier. Confirm if the scope cleared '
         'the mount and the tripod, and frames and guiding came back.';
   }
@@ -359,8 +359,11 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
                 key: const Key('rearm_first_flip'),
                 // Immediate daemon round-trip (not deferred to Save): the
                 // fields are daemon-owned and the general Save deliberately
-                // can't touch them.
-                onPressed: s.firstFlipConfirmed ? _rearmFirstFlip : null,
+                // can't touch them. A completed flip awaiting Confirm can be
+                // dropped too (the rig changed since it ran).
+                onPressed: s.firstFlipConfirmed || s.firstFlipCompletedUtc != null
+                    ? _rearmFirstFlip
+                    : null,
                 child: const Text('Re-arm'),
               ),
             ],

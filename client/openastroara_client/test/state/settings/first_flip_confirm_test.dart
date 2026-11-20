@@ -136,6 +136,26 @@ void main() {
       .widget<FilledButton>(find.byKey(const Key('confirm_first_flip')))
       .enabled;
 
+  bool rearmEnabled(WidgetTester tester) => tester
+      .widget<OutlinedButton>(find.byKey(const Key('rearm_first_flip')))
+      .enabled;
+
+  testWidgets('Re-arm can drop a completed flip that is not confirmed yet',
+      (tester) async {
+    await pumpPanel(tester, const SafetyPolicies());
+    expect(rearmEnabled(tester), isFalse, reason: 'nothing to re-arm');
+
+    await pumpPanel(tester, SafetyPolicies(firstFlipCompletedUtc: _completed));
+    expect(rearmEnabled(tester), isTrue,
+        reason: 'a flip recorded before a rig change must not stay confirmable');
+
+    await pumpPanel(
+      tester,
+      SafetyPolicies(firstFlipConfirmed: true, firstFlipCompletedUtc: _completed),
+    );
+    expect(rearmEnabled(tester), isTrue);
+  });
+
   testWidgets('Confirm is enabled only after a completed flip', (tester) async {
     await pumpPanel(tester, const SafetyPolicies());
     expect(confirmEnabled(tester), isFalse, reason: 'no completed flip yet');

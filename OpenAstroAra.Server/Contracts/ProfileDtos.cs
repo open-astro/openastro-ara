@@ -385,8 +385,8 @@ public sealed record SafetyPoliciesDto(
     double FlatTargetPercent = 50,
     // §58.8 (#1589) — the profile's last meridian flip that ran to the end while the profile was
     // not confirmed: when it completed (UTC) and whether the mount reported a pier-side change
-    // (false = the mount reported an unknown pier side; a pier side that stayed the same fails or
-    // records nothing). Daemon-owned like FirstFlipConfirmed: only the flip executor writes them,
+    // (false = the mount reported an unknown pier side, or the same one with flip safety off; with
+    // it on, a pier side that stayed the same fails the flip and records nothing). Daemon-owned like FirstFlipConfirmed: only the flip executor writes them,
     // POST /safety/first-flip/confirm needs them, and re-arm, a share and an optics change clear
     // them. Optional ctor defaults keep an older profile.json deserializing.
     DateTimeOffset? FirstFlipCompletedUtc = null,

@@ -288,10 +288,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             await Settle(settings.SettleTime, progress, token);
 
             // #1589 — the flip ran to the end: an unconfirmed profile records it for the user to
-            // confirm. An unchanged pier side (safety off) proves no flip, so it records nothing.
-            if (pierSide != PierSideCheck.Unchanged) {
-                await RecordCompletedFlip(safety, pierSide == PierSideCheck.Changed);
-            }
+            // confirm. An unchanged pier side reaches here only with flip safety off (a driver that
+            // misreports pier side), so it is recorded too, for the user to check by eye: otherwise
+            // such a rig could never confirm a flip and every flip would alert and wait for good.
+            await RecordCompletedFlip(safety, pierSide);
 
             Logger.Info("Meridian Flip - Completed successfully.");
             return true;
@@ -872,14 +872,16 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
     /// <summary>#1589 — record a flip that ran to the end on a profile with no confirmed flip, so the
     /// user can confirm it (POST /profile/safety/first-flip/confirm), and ask them to. Never confirms.
-    /// <paramref name="pierSideChanged"/> is false when the mount reported no pier side. Re-checked
-    /// under the store lock, so a confirm made during the flip is not undone.</summary>
+    /// <paramref name="pierSide"/> is what the side-of-pier check read: only <c>Changed</c> records a
+    /// pier-side change; unknown or unchanged (flip safety off) asks the user to check by eye.
+    /// Re-checked under the store lock, so a confirm made during the flip is not undone.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Recording the completed flip is best-effort: a briefly-unwritable profile file must not fail a flip that worked — the only cost is that the user has no flip to confirm until the next one. CA1031's log-and-recover boundary applies.")]
-    private async Task RecordCompletedFlip(SafetyPoliciesDto? safety, bool pierSideChanged) {
+    private async Task RecordCompletedFlip(SafetyPoliciesDto? safety, PierSideCheck pierSide) {
         if (profileStore is null || safety is null || safety.FirstFlipConfirmed) {
             return;
         }
+        var pierSideChanged = pierSide == PierSideCheck.Changed;
         SafetyPoliciesDto recorded;
         try {
             var completed = UtcNow();
@@ -893,12 +895,14 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         if (recorded is not { FirstFlipConfirmed: false, FirstFlipCompletedUtc: not null }) {
             return;
         }
-        Logger.Info($"Meridian Flip - Recorded the completed flip for the user to confirm (pier side changed: {pierSideChanged}).");
+        Logger.Info($"Meridian Flip - Recorded the completed flip for the user to confirm (pier side: {pierSide}).");
         await Notify(NotificationSeverity.Warning, "Confirm this profile's meridian flip",
             "The meridian flip completed. "
-            + (pierSideChanged
-                ? "The mount reported its pier side changed. "
-                : "The mount did not report its pier side, so check by eye. ")
+            + (pierSide switch {
+                PierSideCheck.Changed => "The mount reported its pier side changed. ",
+                PierSideCheck.Unchanged => "The mount reported the same pier side as before the flip, so check by eye. ",
+                _ => "The mount did not report its pier side, so check by eye. ",
+            })
             + "If the scope cleared the mount and the tripod, and frames and guiding came back, confirm the flip in "
             + "Settings → Unattended running → When to stop. Until you do, every flip alerts and waits 60 s. "
             + "If Dec ran away after the flip, change the guider's \"Meridian flip reverses Dec\" for this mount and watch the next flip.");
