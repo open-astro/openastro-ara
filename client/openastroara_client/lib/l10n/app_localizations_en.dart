@@ -6653,7 +6653,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalPolarAlignMovingMount =>
-      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+      'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
   String get refusalPolarAlignOnAxis =>
@@ -6666,6 +6666,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalPolarAlignPoseAmbiguous =>
       'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.';
+
+  @override
+  String get refusalPolarAlignMountBusy =>
+      'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.';
 
   @override
   String get actionConfirmFlip => 'confirm the meridian flip';

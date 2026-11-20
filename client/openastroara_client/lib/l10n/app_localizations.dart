@@ -11149,10 +11149,10 @@ abstract class AppLocalizations {
   /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
   String refusalPolarAlignSweepLimit(String offset);
 
-  /// Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too
+  /// Refusal (polar-align-moving-mount, #2066): a GoTo, Center, Home or Park was refused because polar alignment holds the mount for its whole run (its turns, solves and adjust loop); a direction-pad move only while it turns the RA motor; Stop Mount ends polar alignment too
   ///
   /// In en, this message translates to:
-  /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
+  /// **'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
 
   /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
@@ -11172,6 +11172,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.'**
   String get refusalPolarAlignPoseAmbiguous;
+
+  /// Refusal (polar-align-mount-busy, #2066): polar alignment was started while the mount slews (or does not say whether it does), or while the guider guides or calibrates; it would turn the mount beside another motion
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.'**
+  String get refusalPolarAlignMountBusy;
 
   /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
