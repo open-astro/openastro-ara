@@ -27,17 +27,19 @@ namespace OpenAstroAra.Server.Services {
     /// the RA move sends MoveAxis 0 on any error or cancel, and its finally turns tracking off when StopTrackingWhenDone is
     /// set (NINA PolarAlignment.cs, the MoveAxis catch at 1037-1041 and the finally at 791-805). Here every exit — Stop,
     /// Done, a sequence start, a failure, an exception, a time bound, a lost guider, daemon shutdown and the check's
-    /// verdict — sends AbortSlew when a GoTo, Find Home or motor move may be running, then MoveAxis 0 on both axes, then
+    /// verdict — sends AbortSlew when a motor move may be running (the routine makes no GoTo and no Find Home, #2048),
+    /// then MoveAxis 0 on both axes, then
     /// confirms on fresh reads that the mount does not slew and its position stands still. Nothing on that path waits on
     /// a lock, a lease or the operation it stops, and no call on it takes the run's token.
     /// </summary>
     public sealed partial class PolarAlignService {
 
-        private enum MountMotion { None = 0, AxisMove = 1, GoTo = 2, FindHome = 3, Unpark = 4 }
+        // A motor move is the only motion the routine commands: it never homes, slews or unparks (#2048, NINA's start).
+        private enum MountMotion { None = 0, AxisMove = 1 }
 
         // The motion this routine commanded and has not seen end. Written by the run task (a superseded one too: the
         // mount knows nothing of generations), read by the stop path. Cleared only when the motion ended normally or a
-        // stop was confirmed: a GoTo whose wait was cancelled still runs on the mount.
+        // stop was confirmed: a motor move whose run was cancelled may still turn until its stop lands.
         private int _motion;
 
         private MountMotion CurrentMotion => (MountMotion)Volatile.Read(ref _motion);
@@ -169,7 +171,7 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>
-        /// Stop the mount and confirm it stopped: AbortSlew when a GoTo, Find Home or motor move of this routine may be
+        /// Stop the mount and confirm it stopped: AbortSlew when a motor move of this routine may be
         /// running (or the mount reads as slewing), MoveAxis 0 on the primary and the secondary axis, then fresh reads
         /// until two of them, at least <see cref="StopVerifyStillFor"/> apart and <see cref="StopVerifyNotBefore"/> after the
         /// last command, both say not slewing and differ by under <see cref="StopStillDeg"/> in RA and in Dec. The stop is

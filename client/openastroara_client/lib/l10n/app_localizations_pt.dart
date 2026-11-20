@@ -6112,16 +6112,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Done turns on once the error is inside it';
 
   @override
-  String get polarKnobUseHome => 'Send the mount Home first';
-
-  @override
-  String get polarKnobUseHomeOn => 'Every stage starts from Home';
-
-  @override
-  String get polarKnobUseHomeOff =>
-      'Off: where the mount points now counts as Home';
-
-  @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
@@ -6659,6 +6649,61 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get mountCouldntConfirmHome => 'Couldn\'t confirm Home';
+
+  @override
+  String get refusalPolarAlignMountParked =>
+      'The mount is parked. Unpark it and point it near the pole first.';
+
+  @override
+  String get refusalPolarAlignUnconfirmed =>
+      'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
+
+  @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'The mount has turned $offset° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.';
+  }
+
+  @override
+  String get polarConfirmTitle => 'Before the mount moves';
+
+  @override
+  String get polarConfirmPoint =>
+      'Point the tube near the pole, with the counterweights down.';
+
+  @override
+  String polarConfirmTurns(String step, String direction, String total) {
+    return 'RA will turn about $step° twice toward the $direction ($total° in all).';
+  }
+
+  @override
+  String polarConfirmBand(String max) {
+    return 'Later steps turn back over the same arc: never more than $max° from where it starts.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'RA is $offset° $direction of where Polar Align started; these turns go back toward it.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within $limit° of it.';
+  }
+
+  @override
+  String get polarConfirmPower => 'Keep a hand on the mount\'s power switch.';
+
+  @override
+  String get polarConfirmGo => 'Move the mount';
+
+  @override
+  String get polarConfirmCancel => 'Cancel';
+
+  @override
+  String get polarDirectionEast => 'east';
+
+  @override
+  String get polarDirectionWest => 'west';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
@@ -12916,16 +12961,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O Concluir liga quando o erro fica dentro dela';
 
   @override
-  String get polarKnobUseHome => 'Enviar a montagem para Home antes';
-
-  @override
-  String get polarKnobUseHomeOn => 'Todas as etapas começam em Home';
-
-  @override
-  String get polarKnobUseHomeOff =>
-      'Desligado: onde a montagem aponta agora conta como Home';
-
-  @override
   String get polarKnobTurnHint => 'Mantido entre 5° e 30°';
 
   @override
@@ -13469,6 +13504,62 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get mountCouldntConfirmHome => 'Não foi possível confirmar Home';
+
+  @override
+  String get refusalPolarAlignMountParked =>
+      'A montagem está estacionada. Tire-a do estacionamento e aponte-a perto do polo primeiro.';
+
+  @override
+  String get refusalPolarAlignUnconfirmed =>
+      'O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.';
+
+  @override
+  String refusalPolarAlignSweepLimit(String offset) {
+    return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
+  }
+
+  @override
+  String get polarConfirmTitle => 'Antes de a montagem se mover';
+
+  @override
+  String get polarConfirmPoint =>
+      'Aponte o tubo perto do polo, com os contrapesos para baixo.';
+
+  @override
+  String polarConfirmTurns(String step, String direction, String total) {
+    return 'A AR vai girar cerca de $step° duas vezes em direção ao $direction ($total° no total).';
+  }
+
+  @override
+  String polarConfirmBand(String max) {
+    return 'As etapas seguintes voltam pelo mesmo arco: nunca mais de $max° de onde começa.';
+  }
+
+  @override
+  String polarConfirmFromOrigin(String offset, String direction) {
+    return 'A AR está $offset° a $direction de onde o alinhamento polar começou; estes giros voltam em direção a esse ponto.';
+  }
+
+  @override
+  String polarConfirmNewOrigin(String limit) {
+    return 'Esta posição é o novo início do alinhamento polar: até a montagem ser movida de outra forma, a AR fica a no máximo $limit° dela.';
+  }
+
+  @override
+  String get polarConfirmPower =>
+      'Mantenha a mão no interruptor de energia da montagem.';
+
+  @override
+  String get polarConfirmGo => 'Mover a montagem';
+
+  @override
+  String get polarConfirmCancel => 'Cancelar';
+
+  @override
+  String get polarDirectionEast => 'leste';
+
+  @override
+  String get polarDirectionWest => 'oeste';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

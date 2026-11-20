@@ -377,9 +377,6 @@ class PolarAlignSettings {
   /// Coarse stage: the main-camera exposure.
   final double coarseExposureSeconds;
 
-  /// Coarse and check stages send the mount Home first.
-  final bool useHome;
-
   /// #1971 the routine turns the Polar Aligner's motors (off: by hand).
   final bool polarAlignerAuto;
 
@@ -398,7 +395,6 @@ class PolarAlignSettings {
     this.loopMode = PolarAlignLoopModes.loop,
     this.checkStepDeg = 10.0,
     this.coarseExposureSeconds = 3.0,
-    this.useHome = true,
     this.polarAlignerAuto = true,
     this.stopTrackingWhenDone = true,
   });
@@ -418,7 +414,6 @@ class PolarAlignSettings {
         checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 10.0,
         coarseExposureSeconds:
             (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
-        useHome: json['use_home'] != false,
         polarAlignerAuto: json['polar_aligner_auto'] != false,
         stopTrackingWhenDone: json['stop_tracking_when_done'] != false,
       );
@@ -433,7 +428,6 @@ class PolarAlignSettings {
         'loop_mode': loopMode,
         'check_step_deg': checkStepDeg,
         'coarse_exposure_seconds': coarseExposureSeconds,
-        'use_home': useHome,
         'polar_aligner_auto': polarAlignerAuto,
         'stop_tracking_when_done': stopTrackingWhenDone,
       };
@@ -448,7 +442,6 @@ class PolarAlignSettings {
     String? loopMode,
     double? checkStepDeg,
     double? coarseExposureSeconds,
-    bool? useHome,
     bool? polarAlignerAuto,
     bool? stopTrackingWhenDone,
   }) =>
@@ -464,8 +457,65 @@ class PolarAlignSettings {
         checkStepDeg: checkStepDeg ?? this.checkStepDeg,
         coarseExposureSeconds:
             coarseExposureSeconds ?? this.coarseExposureSeconds,
-        useHome: useHome ?? this.useHome,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
         stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
+      );
+}
+
+/// The RA turn directions of a [PolarAlignStartPlan].
+abstract final class PolarAlignDirections {
+  static const east = 'east';
+  static const west = 'west';
+}
+
+/// #2048 — what a start will do, read from the rig before the mount moves
+/// (`GET /api/v1/equipment/polaralign/start-plan`): the routine starts from
+/// where the mount points, and its RA axis turns [stepDeg] [turns] times toward
+/// [direction] first, never more than [maxSweepDeg] from where it starts. The
+/// user confirms it; the start sends [direction] back, and the rig refuses a
+/// start whose direction changed since.
+///
+/// #2089 — [newOrigin] is true when this pose becomes Polar Align's start for
+/// the session (the first start since the mount connected, or the mount was
+/// moved some other way since Polar Align last turned it); otherwise
+/// [originOffsetDeg] is how far RA has turned from that start (+ east,
+/// − west) and [direction] turns back toward it. No turn goes more than
+/// [sweepLimitDeg] from that start. The start sends [newOrigin] back too.
+class PolarAlignStartPlan {
+  /// The stage the start asks for ([PolarAlignStages]; null = the default).
+  final String? stage;
+
+  /// [PolarAlignDirections.east] or [PolarAlignDirections.west].
+  final String direction;
+  final double stepDeg;
+  final int turns;
+  final double maxSweepDeg;
+  final bool newOrigin;
+  final double originOffsetDeg;
+  final double sweepLimitDeg;
+
+  const PolarAlignStartPlan({
+    this.stage,
+    required this.direction,
+    this.stepDeg = 10.0,
+    this.turns = 2,
+    this.maxSweepDeg = 20.0,
+    this.newOrigin = true,
+    this.originOffsetDeg = 0.0,
+    this.sweepLimitDeg = 30.0,
+  });
+
+  factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
+      PolarAlignStartPlan(
+        stage: json['stage'] as String? ?? stage,
+        direction: json['direction'] == PolarAlignDirections.west
+            ? PolarAlignDirections.west
+            : PolarAlignDirections.east,
+        stepDeg: (json['step_deg'] as num?)?.toDouble() ?? 10.0,
+        turns: (json['turns'] as num?)?.toInt() ?? 2,
+        maxSweepDeg: (json['max_sweep_deg'] as num?)?.toDouble() ?? 20.0,
+        newOrigin: json['new_origin'] != false,
+        originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
+        sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
       );
 }

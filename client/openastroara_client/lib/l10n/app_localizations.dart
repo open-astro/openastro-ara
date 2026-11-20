@@ -10290,24 +10290,6 @@ abstract class AppLocalizations {
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Send the mount Home first'**
-  String get polarKnobUseHome;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
-  /// **'Every stage starts from Home'**
-  String get polarKnobUseHomeOn;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
-  /// **'Off: where the mount points now counts as Home'**
-  String get polarKnobUseHomeOff;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
   /// **'Kept between 5° and 30°'**
   String get polarKnobTurnHint;
 
@@ -11172,6 +11154,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t confirm Home'**
   String get mountCouldntConfirmHome;
+
+  /// Refusal (polar-align-mount-parked): polar alignment was started on a parked mount; it never unparks the mount itself
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is parked. Unpark it and point it near the pole first.'**
+  String get refusalPolarAlignMountParked;
+
+  /// Refusal (polar-align-unconfirmed): a start reached the rig without the confirm step, or the turn direction changed since the user confirmed it
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment moves the mount only after you confirm it. Start it again and confirm.'**
+  String get refusalPolarAlignUnconfirmed;
+
+  /// Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
+  String refusalPolarAlignSweepLimit(String offset);
+
+  /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
+  ///
+  /// In en, this message translates to:
+  /// **'Before the mount moves'**
+  String get polarConfirmTitle;
+
+  /// Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo
+  ///
+  /// In en, this message translates to:
+  /// **'Point the tube near the pole, with the counterweights down.'**
+  String get polarConfirmPoint;
+
+  /// Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'RA will turn about {step}° twice toward the {direction} ({total}° in all).'**
+  String polarConfirmTurns(String step, String direction, String total);
+
+  /// Polar align start confirm dialog: the most the whole run turns the RA axis from where it starts, whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Later steps turn back over the same arc: never more than {max}° from where it starts.'**
+  String polarConfirmBand(String max);
+
+  /// Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start
+  ///
+  /// In en, this message translates to:
+  /// **'RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.'**
+  String polarConfirmFromOrigin(String offset, String direction);
+
+  /// Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within {limit}° of it.'**
+  String polarConfirmNewOrigin(String limit);
+
+  /// Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier
+  ///
+  /// In en, this message translates to:
+  /// **'Keep a hand on the mount\'s power switch.'**
+  String get polarConfirmPower;
+
+  /// Polar align start confirm dialog: the button that starts the routine and lets the mount move
+  ///
+  /// In en, this message translates to:
+  /// **'Move the mount'**
+  String get polarConfirmGo;
+
+  /// Polar align start confirm dialog: the button that closes it; nothing moves
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get polarConfirmCancel;
+
+  /// Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarDirectionEast;
+
+  /// Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarDirectionWest;
 
   /// Add your devices: heading above the detected devices
   ///
