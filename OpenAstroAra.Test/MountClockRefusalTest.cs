@@ -78,6 +78,51 @@ namespace OpenAstroAra.Test {
             Assert.That(device.Slews, Is.Zero);
         }
 
+        /// <summary>A mount clock whose sidereal time follows its own clock at longitude 0.</summary>
+        private sealed class FollowingMountClock : TelescopeService.IMountClock {
+            private readonly Lock gate = new();
+            private DateTime clock = DateTime.UtcNow.AddHours(-7);
+            public DateTime UtcDate { get { lock (gate) { return clock; } } }
+            public void SetUtcDate(DateTime utc) { lock (gate) { clock = utc; } }
+            public double SiderealTime => SiteAstrometry.LocalSiderealTimeDeg(new DateTimeOffset(UtcDate), 0) / 15.0;
+            public double Latitude => 0;
+            public double Longitude => 0;
+            public bool Slewing => false;
+        }
+
+        [Test]
+        public async Task A_REST_Sync_sent_while_the_mount_clock_is_being_set_waits_for_it_and_goes_through() {
+            // #2087 review: right after the app connects, its time sync is still setting the mount's clock; a
+            // REST GoTo or Sync then was refused although the push was about to open the gate. It waits now,
+            // as a sequencer GoTo does (MountClockPushWait).
+            using var device = new FakeTelescopeDevice();
+            var time = new TimeSyncService(NullLogger<TimeSyncService>.Instance, Mock.Of<ISystemClockSetter>());
+            var clock = new FollowingMountClock();
+            var pushes = new System.Collections.Concurrent.ConcurrentQueue<Func<Task>>();
+            using var svc = new TelescopeService(timeSyncResolver: () => time) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => device,
+                MountClockSource = () => clock,
+                RunSitePush = push => push(),
+            };
+            svc.FollowTimeSync(time);
+            await svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
+            await WaitForAsync(() => svc.MountClockMotionRefusal()?.Contains("not been synced", StringComparison.Ordinal) == true,
+                "the connect's clock check never ran");
+            svc.RunSitePush = push => { pushes.Enqueue(push); return Task.CompletedTask; };
+
+            await time.PushAsync(new TimeSyncPushRequestDto("client", DateTimeOffset.UtcNow), CancellationToken.None);
+            Assert.That(pushes, Has.Count.EqualTo(1), "the sync started a mount-clock push");
+            var sync = svc.SlewAsync(new SlewRequestDto(5, 30, Sync: true), null, CancellationToken.None);
+            await Task.Delay(100);
+            Assert.That(sync.IsCompleted, Is.False, "the Sync waits for the push in flight instead of a refusal");
+
+            Assert.That(pushes.TryDequeue(out var push), Is.True);
+            await push!();
+            await sync;
+            await WaitForAsync(() => device.Syncs == 1, "the Sync never reached the mount after the clock was verified");
+        }
+
         [Test]
         public async Task A_REST_Sync_is_refused_and_nothing_reaches_the_mount() {
             var (svc, device) = await UnverifiedAsync();
@@ -92,10 +137,14 @@ namespace OpenAstroAra.Test {
         public async Task REST_park_a_safety_park_and_Home_go_ahead_with_the_mount_clock_unverified() {
             var (svc, device) = await UnverifiedAsync();
             using var _ = svc;
+            // One at a time: since #2066 a park or a Find Home accepted while another is still on its way to
+            // the mount counts as a stop, and the earlier one is dropped.
             await svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None);
+            await WaitForAsync(() => device.Parks == 1, "a REST park waited for the clock");
             await svc.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None);
+            await WaitForAsync(() => device.Parks == 2, "a safety park waited for the clock");
             await svc.FindHomeAsync(null, CancellationToken.None);
-            await WaitForAsync(() => device.Parks == 2 && device.Homes == 1, "a park or a home waited for the clock");
+            await WaitForAsync(() => device.Homes == 1, "a Find Home waited for the clock");
         }
 
         [Test]

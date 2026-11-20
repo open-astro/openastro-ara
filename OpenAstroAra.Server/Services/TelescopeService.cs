@@ -243,7 +243,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             throw new InvalidOperationException("telescope is not connected");
         }
         // #2071 — a GoTo or a Sync on a wrong mount clock points at (or bakes in) the wrong sky.
-        if (MountClockMotionRefusal() is { } clockRefusal) {
+        var clockRefusal = MountClockMotionRefusal();
+        if (clockRefusal is not null && !MountClockSettling()) {
             LogMountOpRejectedClock(request.Sync == true ? "telescope.sync" : "telescope.slew", clockRefusal);
             throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
         }
@@ -253,9 +254,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // #2073 — read before the pose check and the guider stop (up to StopGuidingBeforeMoveTimeout): an
         // abort or an emergency stop that lands after this request must win over its goto. See SlewInBackground.
         var abortEpoch = AbortEpoch;
+        if (clockRefusal is not null) {
+            // A clock push is running (the app's time sync just after it connects), or a host clock step
+            // is about to start one: wait for it, as a sequencer GoTo does, instead of refusing a GoTo
+            // the push is about to allow.
+            return SlewOnceMountClockSettledAsync(client, ra, dec, sync, idempotencyKey, abortEpoch, ct);
+        }
         // A sync moves nothing, so guiding carries on, and it is allowed while the position is
         // unverified (#2070). The checks above still throw synchronously.
         return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, ct);
+    }
+
+    private async Task<OperationAcceptedDto> SlewOnceMountClockSettledAsync(ITelescopeDevice client, double ra, double dec, bool sync,
+            string? idempotencyKey, long abortEpoch, CancellationToken ct) {
+        if (await MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false) is { } clockRefusal) {
+            LogMountOpRejectedClock(sync ? "telescope.sync" : "telescope.slew", clockRefusal);
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
+        return sync
+            ? DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)
+            : await SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, ct).ConfigureAwait(false);
     }
 
     private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch, CancellationToken ct) {

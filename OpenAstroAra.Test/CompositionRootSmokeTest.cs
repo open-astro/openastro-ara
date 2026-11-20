@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NUnit.Framework;
 using System.Linq;
 using System.Threading;
@@ -72,10 +73,74 @@ namespace OpenAstroAra.Test {
                 // What Program.cs itself registers, read before the test seams replace it.
                 productionSupervisor = services.Last(d => d.ServiceType == typeof(IGuiderProcessSupervisor)).ImplementationType;
                 TestHostSeams.Replace(services);
+                // #2071 — the time sync as Program.cs builds it, but with a clock setter that never touches
+                // this machine's clock and a kernel probe that reports no NTP sync (a CI runner usually has
+                // one), so the mount-clock test below starts with no trusted time on every host.
+                services.Replace(ServiceDescriptor.Singleton<TimeSyncService>(sp => new TimeSyncService(
+                    sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TimeSyncService>>(),
+                    clockSetter: new NoClockSetter(),
+                    profiles: sp.GetService<IProfileStore>(),
+                    kernelClock: new NoKernelSync())));
             });
         }
 
         private Type? productionSupervisor;
+
+        private sealed class NoClockSetter : ISystemClockSetter {
+            public bool TrySet(DateTimeOffset utc) => false;
+        }
+
+        private sealed class NoKernelSync : IKernelClockSyncProbe {
+            public bool IsSynchronized() => false;
+        }
+
+        /// <summary>A mount whose sidereal time follows its own clock, at the profile's site.</summary>
+        private sealed class WiredMountClock(double lat, double lng) : TelescopeService.IMountClock {
+            private readonly Lock gate = new();
+            private DateTime clock = DateTime.UtcNow - TimeSpan.FromHours(6.8); // RC51: hours slow
+            public int Writes;
+            public DateTime UtcDate { get { lock (gate) { return clock; } } }
+            public void SetUtcDate(DateTime utc) { lock (gate) { clock = utc; Writes++; } }
+            public double SiderealTime => SiteAstrometry.LocalSiderealTimeDeg(new DateTimeOffset(UtcDate), lng) / 15.0;
+            public double Latitude => lat;
+            public double Longitude => lng;
+            public bool Slewing => false;
+        }
+
+        [Test]
+        public async Task A_trusted_time_sync_sets_the_mount_clock_and_opens_the_GoTo_and_polar_align_gate() {
+            // #2071 — every other mount-clock test builds the services by hand. This one pins Program.cs: drop
+            // the time-sync resolver from the TelescopeService factory and the gate is off (GoTo on a stale
+            // mount clock again, the RC51 failure); drop FollowClock(...) and a sync never writes the mount's
+            // clock; drop mountClock: from the PolarAlignService factory and polar alignment is not gated.
+            var mount = app.Services.GetRequiredService<TelescopeService>();
+            Assert.That(app.Services.GetRequiredService<IMountClockGate>(), Is.SameAs(mount));
+            var polar = app.Services.GetRequiredService<IPolarAlignService>();
+            var polarGate = typeof(PolarAlignService)
+                .GetField("_mountClock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(polar);
+            Assert.That(polarGate, Is.SameAs(mount), "polar alignment asks the same mount-clock gate as GoTo");
+
+            var site = app.Services.GetRequiredService<IProfileStore>().GetSiteSettings();
+            var fake = new WiredMountClock(site.LatitudeDeg, site.LongitudeDeg);
+            mount.MountClockSource = () => fake;
+            try {
+                Assert.That(mount.MountClockMotionRefusal(), Does.StartWith("Mount clock not verified"),
+                    "with no trusted time and no check the gate is closed, which it only is when Program.cs wires the time sync");
+                await app.Services.GetRequiredService<ITimeSyncService>()
+                    .PushAsync(new TimeSyncPushRequestDto("client", DateTimeOffset.UtcNow), CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                while ((Volatile.Read(ref fake.Writes) == 0 || mount.MountClockMotionRefusal() is not null) && DateTime.UtcNow < deadline) {
+                    await Task.Delay(50);
+                }
+                Assert.Multiple(() => {
+                    Assert.That(Volatile.Read(ref fake.Writes), Is.GreaterThanOrEqualTo(1), "a client sync writes the mount's UTCDate");
+                    Assert.That(mount.MountClockMotionRefusal(), Is.Null, "the written and checked mount clock opens the gate");
+                });
+            } finally {
+                mount.MountClockSource = null;
+            }
+        }
 
         [Test]
         public void The_test_host_resolves_the_fake_guider_supervisor_not_systemctl() {

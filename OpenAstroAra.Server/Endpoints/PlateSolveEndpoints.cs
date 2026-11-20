@@ -134,7 +134,9 @@ public static class PlateSolveEndpoints {
         // running job (the §65.5 policy); one for OTHER coordinates is a 409 naming the running job,
         // not a silent join that reports the wrong target as centred.
         var identity = CenterIdentity(request.RaHours, request.DecDegrees);
-        // #2071 — the centring slews would be refused inside the job; answer the cause now instead.
+        // #2071 — the centring slews would be refused inside the job; answer the cause now instead. Checked
+        // before Enqueue on purpose: while the gate is closed a repeat Center for the running job's target
+        // is refused too rather than joining it, so the user sees the cause instead of a job that cannot slew.
         if (mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
             throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
         }

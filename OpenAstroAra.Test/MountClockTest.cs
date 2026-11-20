@@ -47,16 +47,23 @@ namespace OpenAstroAra.Test {
         private sealed class FakeMountClock : TelescopeService.IMountSite, TelescopeService.IMountClock {
             public readonly List<string> Writes = [];
             public DateTime Clock { get; set; }
-            public double Latitude { get; set; } = Lat;
-            public double Longitude { get; set; } = Lng;
+            private double latitude = Lat, longitude = Lng;
+            public double Latitude { get => Answer(latitude); set => latitude = value; }
+            public double Longitude { get => Answer(longitude); set => longitude = value; }
             public double Elevation { get; set; } = 120;
             public int SlewingReads;
             public int SlewingFor;
             public bool RefuseWrite;
             public bool UtcNotImplemented;
+            /// <summary>Runs after each clock or site reading is taken: a slow bridge's round trip.</summary>
+            public Action? AfterRead;
+            private T Answer<T>(T value) {
+                AfterRead?.Invoke();
+                return value;
+            }
             public bool Slewing => ++SlewingReads <= SlewingFor;
-            public DateTime UtcDate => UtcNotImplemented ? throw new ASCOM.PropertyNotImplementedException("UTCDate", false) : Clock;
-            public double SiderealTime => Lst(new DateTimeOffset(Clock), Longitude);
+            public DateTime UtcDate => UtcNotImplemented ? throw new ASCOM.PropertyNotImplementedException("UTCDate", false) : Answer(Clock);
+            public double SiderealTime => Answer(Lst(new DateTimeOffset(Clock), longitude));
             public void SetUtcDate(DateTime utc) {
                 if (RefuseWrite) {
                     throw new ASCOM.InvalidOperationException("the driver keeps its own clock");
@@ -127,6 +134,21 @@ namespace OpenAstroAra.Test {
         }
 
         // ─── the push ───
+
+        [Test]
+        public async Task A_slow_bridge_does_not_count_its_round_trips_as_mount_clock_error() {
+            // #2087 review: the trusted time was taken after the UTCDate, SiderealTime and site reads, so on a
+            // bridge with 2 s round trips a mount that is right was 8 s "off". Each reading now has its own.
+            using var rig = new Rig();
+            rig.Mount.AfterRead = () => {
+                rig.Wall += TimeSpan.FromSeconds(2);
+                rig.Tick += 2_000;
+                rig.Mount.Clock += TimeSpan.FromSeconds(2);
+            };
+            await rig.SyncAsync();
+            Assert.That(rig.UtcWrites, Is.EqualTo(1));
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null, string.Join(" | ", rig.Log.Lines));
+        }
 
         [Test]
         public async Task A_trusted_time_sync_sets_the_mount_clock_and_opens_the_gate() {

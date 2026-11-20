@@ -218,24 +218,32 @@ public sealed partial class TelescopeService : IMountClockGate {
             refused = ex.Message;
         }
         var after = ReadMountUtc(clock);
+        var afterAt = TrustedUtcOrNull(timeSync);
         var beforeText = Describe(before);
         var afterText = Describe(after);
         LogMountClockPushed(reason, beforeText, pushed.UtcDateTime, afterText);
         if (refused is not null) {
             LogMountClockWriteRefused(refused);
         }
-        VerifyMountClockCore(clock, session, after, alwaysLog: true);
+        VerifyMountClockCore(clock, session, (after, afterAt), alwaysLog: true);
     }
+
+    private static DateTimeOffset? TrustedUtcOrNull(ITimeSyncService? timeSync) =>
+        timeSync is not null && timeSync.TryGetTrustedUtc(out var utc) ? utc : null;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort profile read: a store fault leaves the check to the mount's own longitude.")]
-    private void VerifyMountClockCore(IMountClock clock, long session, (DateTime? Utc, bool NotImplemented)? utcRead, bool alwaysLog) {
-        var utc = utcRead ?? ReadMountUtc(clock);
+    private void VerifyMountClockCore(IMountClock clock, long session,
+            ((DateTime? Utc, bool NotImplemented) Read, DateTimeOffset? At)? utcRead, bool alwaysLog) {
+        var timeSync = _timeSyncResolver?.Invoke();
+        // Each mount reading is compared with the trusted time taken right after it: on a slow bridge the
+        // round trips of the reads that follow would otherwise count as clock error (5 s tolerance).
+        var (utc, utcAt) = utcRead ?? (ReadMountUtc(clock), TrustedUtcOrNull(timeSync));
         var lst = TryRead(() => clock.SiderealTime);
+        var lstAt = TrustedUtcOrNull(timeSync);
         var lat = TryRead(() => clock.Latitude);
         var lng = TryRead(() => clock.Longitude);
-        var timeSync = _timeSyncResolver?.Invoke();
-        if (timeSync is null || !timeSync.TryGetTrustedUtc(out var now)) {
+        if (utcAt is not { } now || lstAt is not { } lstNow) {
             RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog);
             return;
         }
@@ -248,7 +256,7 @@ public sealed partial class TelescopeService : IMountClockGate {
             // no profile site: the LST is checked against the mount's own longitude
         }
         var mountUtc = utc.Utc is { } u ? new DateTimeOffset(AlpacaTelescopeDevice.AsUtc(u)) : (DateTimeOffset?)null;
-        var (verified, why) = EvaluateMountClock(mountUtc, utc.NotImplemented, lst, lat, lng, now, siteLat, siteLng);
+        var (verified, why) = EvaluateMountClock(mountUtc, utc.NotImplemented, lst, lat, lng, now, siteLat, siteLng, lstNow);
         RecordMountClock(session, verified, why, alwaysLog);
     }
 
@@ -257,9 +265,11 @@ public sealed partial class TelescopeService : IMountClockGate {
     /// the profile has no site), and, when both are known, its site within 0.01° of the profile's. A
     /// UTCDate the driver cannot report (not implemented) leaves the SiderealTime check to decide; one it
     /// fails to report otherwise is not verified (AlpacaBridge answers "not established" when it does not
-    /// know the mount's clock).</summary>
+    /// know the mount's clock). <paramref name="trustedAtLst"/> is the trusted time when the SiderealTime was
+    /// read (<paramref name="trustedNow"/>, the one at the UTCDate read, when null).</summary>
     internal static (bool Verified, string Reason) EvaluateMountClock(DateTimeOffset? mountUtc, bool utcNotImplemented,
-            double? mountLstHours, double? mountLat, double? mountLng, DateTimeOffset trustedNow, double? siteLat, double? siteLng) {
+            double? mountLstHours, double? mountLat, double? mountLng, DateTimeOffset trustedNow, double? siteLat, double? siteLng,
+            DateTimeOffset? trustedAtLst = null) {
         var inv = CultureInfo.InvariantCulture;
         if (mountUtc is null && !utcNotImplemented) {
             return (false, "the mount did not report its clock (UTCDate)");
@@ -274,7 +284,7 @@ public sealed partial class TelescopeService : IMountClockGate {
         if (longitude is not double lngDeg || !double.IsFinite(lngDeg)) {
             return (false, "neither the profile nor the mount has a longitude to check the sidereal time against");
         }
-        var computed = SiteAstrometry.LocalSiderealTimeDeg(trustedNow, lngDeg) / 15.0;
+        var computed = SiteAstrometry.LocalSiderealTimeDeg(trustedAtLst ?? trustedNow, lngDeg) / 15.0;
         var lstOff = lst - computed;
         lstOff -= 24.0 * Math.Round(lstOff / 24.0); // wrap to ±12 h
         if (Math.Abs(lstOff) * 3600.0 > MountClockTolerance.TotalSeconds) {
