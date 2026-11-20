@@ -1451,7 +1451,7 @@ is connected, straight from its GuideStep events):
                        target_seconds, frames, drift_arcsec_per_min?,
                        pa_error_min_arcmin?, uncertainty_arcmin?, reliable?,
                        hour_angle_hours?, dec_deg?, align_error_arcmin?,
-                       align_ended_utc?, session_id?, reason? }
+                       align_ended_utc?, session_id?, reason?, above_align? }
       #1311 — the polar alignment residual from the first 300 s of clean
       guiding of each guided run: status measuring (at the start, then every
       30 s of sample) → done | unavailable (reason). pa_error_min_arcmin is a
@@ -1949,6 +1949,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #2048, #2066, #2067, #2086, #2089, ADR 0022
 
+## 2026-11-20 — Guider fault details `dec_runaway` (#1589)
+
+**Endpoint(s) or area:** WebSocket event `equipment.fault` (`device_type: "guider"`).
+
+**Decision:** a fourth guider `details` value, `dec_runaway`, with `kind` `tracking_lost`. The daemon publishes it when the Dec error grows for 10 guide frames in a row with the Dec pulses at their maximum, and stops guiding. The reaction is the existing guider one (`on_guider_lost`), and its `recovered` comes once guiding is started again and has settled. No new field, event or kind.
+
+**Reasoning:** `details` is free text that the client shows but does not map, so an added value needs no client change.
+
+**Spec ref:** `Services/GuiderService.DecRunaway.cs`, `Services/GuideAxisRunaway.cs`, `Services/FaultReactionService.cs` (`RunGuiderEpisodeAsync`). Tests `GuiderDecRunawayTest`, `GuideAxisRunawayTest`.
+
+**Related:** #1589, #1588, #1716
+
 ## 2026-11-20 — A daemon write of a client section publishes `profile.updated`; the first-flip re-arm answers an `ETag` (#1807)
 
 **Endpoint(s) or area:** WebSocket `profile.updated { section }`; `POST /api/v1/profile/safety/first-flip/rearm`.
@@ -1960,6 +1972,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/ProfileSectionChangePublisher.cs` (`ProfileSectionChangePublisher`, `ProfileWriteScope`), `Endpoints/ProfileEndpoints.cs` (`PublishUpdatedAfterWrite`, `PublishDaemonProfileWrites`, `SectionRoutes`), `Services/ProfileStoreSnapshot.cs` (`Apply`), `Program.cs`.
 
 **Related:** #1807, #1644; ADR 0015; tests `DaemonProfileWriteEventTest`, `PreferenceSyncWiringTest`.
+
+## 2026-11-20 — Polar Align says which number to trust: tracking off confirmed, `readout_caution`, `above_align` (#2072)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/polaralign/status` (`PolarAlignStateDto`) and the `polar_align.progress` payload gain the optional `readout_caution` (string, null when sound; today only `altitude_weak`); `polar_align.error` gains the reason `tracking_not_off`; `PaResidualDto` (`guider.pa_residual`, `runtime.pa_residual`, `GET …/guider/pa-residuals`) gains the optional `above_align` (bool; null with no Polar Align result to compare, and on stored rows).
+
+**Decision:** the live readout's §45.8 reverse projection needs a camera fixed in alt/az. The routine now sends tracking off and waits until the mount reports it off (`TrackingConfirmTimeout`, 10 s) before the first live frame, and reads it on every live frame; a mount that refuses the write (and still reads tracking on, or is not connected: a disconnected mount reads tracking off, which confirms nothing) fails at once, and one that keeps tracking or reads slewing, or starts either mid-loop, ends the run `failed` with `tracking_not_off` (the message says which). Before, the off write's answer was thrown away and nothing read it back. `readout_caution: "altitude_weak"` is set from each seed, once tracking is confirmed off, when |cos ψ| < 0.2; the status shows it only while adjusting or paused; ψ the camera's azimuth from the pole's (`PolarAlignGeometry.ReadoutCosPsi`): the readout amplifies altitude noise 5× or more there and, under the 0.1 floor, under-reads the altitude bolt. `above_align` is the #1731 rule on its own (value − 2σ > Polar Align + 2′); `reliable` is unchanged and still false when it holds. The client takes `above_align` when present and applies the same rule itself for an older daemon or a stored row; its wording names both causes (Dec backlash inflates the guiding figure; a shifted mount or a wrong reference deflates the Align figure) and says to run Polar Align again. Logs: EventId 4529 adds each live solve's JNOW RA/Dec and the tracking state; 4594 logs the seed pointing and cos ψ; the "PA residual from guiding" line adds the Dec rate, the Dec pulses added back (net and total ms), the hour angle and Dec, the Polar Align figure and `above_align`.
+
+**Reasoning:** on 2026-11-19 the live readout said 0.2′ and the guiding residual two hours later said ≥ 16′. A mount that kept tracking through the live loop circles the camera about the axis at about 1.3′ a minute 5° from it, and the readout would read that as knob motion while the user chased it to zero; nothing confirmed tracking was off. The #1731 text blamed backlash alone, which cannot be told from a shifted mount without new evidence. σ propagation is out of this change (PR A, after #2082).
+
+**Spec ref:** `Services/PolarAlignService.Readout.cs`, `Services/PolarAlignService.cs` (`SolveLoopAsync`, `GetStatusAsync`, `PublishProgressAsync`), `Services/PolarAlignService.Stages.cs` (`RunSeededAdjustAsync`), `Services/PolarAlignGeometry.cs` (`ReadoutCosPsi`), `Services/GuiderService.PaResidual.cs`, `Services/PaResidualEstimator.cs`, `Contracts/EquipmentDtos.cs`; client `lib/models/pa_residual.dart`, `lib/widgets/imaging/polar_error_rating.dart`, `lib/widgets/imaging/guiding_strip.dart`, `lib/widgets/imaging/polar_align_panel.dart`, `lib/screens/simple/simple_polar_panel.dart`.
+
+**Related:** #2072, #1731, #1983, #2082, #2083, #2048
 
 ## 2026-11-20 — Polar Align makes one measurement per Start: `/polaralign/next` retired, `polar-align-on-axis` (#2082)
 

@@ -257,6 +257,16 @@ framing/focus loop when you need to point or focus by eye.
   started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
+- **Which number to trust (#2072).** The two numbers measure different things. Polar Align's figure
+  is the RA axis against the refracted pole, from plate solves, live while you turn the bolts; its
+  azimuth is the true arc on the sky (cos alt applied, so it can read smaller than NINA's unscaled
+  azimuth). The guiding residual is a lower bound from Dec drift, taken later. The live readout
+  needs the camera to stand still: Polar Align turns tracking off, checks that the mount reports it
+  off (and not slewing) before the first live frame and on every frame, and ends the run (*the mount
+  kept tracking*, *started tracking during the live readout*, *reads as slewing*, or *is not
+  connected* when tracking off is sent) when it does not. When the camera points nearly due
+  east or west of the pole, the readout reads the altitude bolt poorly and the card says so: trust
+  **Verify**, or start again with the scope nearer the pole.
 - **Stop Mount and Emergency Stop end Polar Align.** Any stop Polar Align did not send itself ends
   the run at once, even between two turns while it solves a frame or while you turn the knobs:
   **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**. The card
@@ -280,8 +290,11 @@ framing/focus loop when you need to point or focus by eye.
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
-  figure; "above Polar Align" means it came out higher than tonight's Polar Align result, which a
-  lower bound can't be, so Dec backlash is the likelier cause; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
+  figure; "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
+  which a lower bound can't be: either Dec backlash ate guide pulses (the guiding figure is too
+  high), or the mount shifted since the alignment or its reference was wrong (the Polar Align figure
+  is too low). Run Polar Align again: about the same figure again points at backlash, a much larger
+  one at the mount or the alignment; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
   Guiding that stops after 2 minutes still reports what it has.
 
 ## 7. Unattended safety (the 3 a.m. story)
@@ -348,6 +361,12 @@ Ara assumes you're asleep while it works:
   the rig, hands over as soon as you pause, resume or stop the run yourself, will not slew to a
   target that has sunk below your horizon limit, and tells you once when the daemon has no plate
   solver. A dither that must restart guiding after a gap of 3 min or more re-centers first too.
+- **Dec guiding runs away**: when the Dec error keeps growing for 10 guide frames in a row while the
+  Dec corrections are at the guider's Max Dec Duration (a wrong Dec direction after a meridian flip
+  does this), Ara
+  stops guiding and runs **"When the guider is lost"**, with a notification. Calibrate the guider again
+  (after a flip, check the guider's **Meridian flip reverses Dec** setting), then start guiding: once
+  guiding has settled, a paused run resumes on its own.
 - **Guider loss mid-sequence**: if the guider connection drops while a run is executing, the
   daemon applies **Settings → Safety → Policies → "When the guider is lost"** immediately —
   pause the run (default), skip the current target, or abort — while §63.3 process recovery

@@ -8724,6 +8724,168 @@
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
   },
+  "paResidualChipMeasuring": "PA residual · measuring {elapsed} / {target}",
+  "@paResidualChipMeasuring": {
+    "description": "Guiding strip chip: the polar-alignment residual is being measured (elapsed / target, m:ss)",
+    "placeholders": {
+      "elapsed": {"type": "String"},
+      "target": {"type": "String"}
+    }
+  },
+  "paResidualTipMeasuring": "Guiding's figure for polar alignment: measuring the error left after Align from the Dec corrections over the first {target} of clean guiding (dithers and settling are left out).",
+  "@paResidualTipMeasuring": {
+    "description": "Guiding strip chip tooltip while the polar-alignment residual is measured",
+    "placeholders": {
+      "target": {"type": "String"}
+    }
+  },
+  "paResidualChipUnavailable": "PA residual n/a",
+  "@paResidualChipUnavailable": {
+    "description": "Guiding strip chip: no polar-alignment residual for this guiding run"
+  },
+  "paResidualTipUnavailable": "No polar alignment residual for this guiding run. {reason}",
+  "@paResidualTipUnavailable": {
+    "description": "Guiding strip chip tooltip: no residual, with the reason sentence",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
+  "paResidualChipRated": "PA ≥ {value} · {rating}",
+  "@paResidualChipRated": {
+    "description": "Guiding strip chip: the residual (a lower bound) and its rating word",
+    "placeholders": {
+      "value": {"type": "String"},
+      "rating": {"type": "String"}
+    }
+  },
+  "paResidualChipDisagrees": "PA ≥ {value} · disagrees with Polar Align",
+  "@paResidualChipDisagrees": {
+    "description": "Guiding strip chip: the residual is well above what Polar Align measured (#2072)",
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
+  "paResidualChipNoisy": "PA ≥ {value} · noisy",
+  "@paResidualChipNoisy": {
+    "description": "Guiding strip chip: the residual is too uncertain for a firm figure",
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
+  "paResidualReasonLockShift": "Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.",
+  "@paResidualReasonLockShift": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonAo": "An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.",
+  "@paResidualReasonAo": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonGuidingNotHolding": "Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.",
+  "@paResidualReasonGuidingNotHolding": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonSettleFailed": "A settle failed during this run, so guiding was not holding the star.",
+  "@paResidualReasonSettleFailed": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonMountNotTracking": "The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.",
+  "@paResidualReasonMountNotTracking": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonNoCalibration": "The guider's calibration data could not be read.",
+  "@paResidualReasonNoCalibration": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonNoPixelScale": "The guider has not reported its pixel scale.",
+  "@paResidualReasonNoPixelScale": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualReasonNoFit": "Not enough clean guiding to fit the drift.",
+  "@paResidualReasonNoFit": {
+    "description": "Why a guiding run has no polar-alignment residual"
+  },
+  "paResidualDetailFigure": "Guiding's figure: the polar alignment left after Align, read from the guider's Dec corrections over {duration} of guiding: at least {value}.",
+  "@paResidualDetailFigure": {
+    "description": "Guiding residual tooltip, first line: what the figure measures and its value (a lower bound)",
+    "placeholders": {
+      "duration": {"type": "String"},
+      "value": {"type": "String"}
+    }
+  },
+  "paResidualDetailFigureSigma": "Guiding's figure: the polar alignment left after Align, read from the guider's Dec corrections over {duration} of guiding: at least {value} (± {sigma}).",
+  "@paResidualDetailFigureSigma": {
+    "description": "Guiding residual tooltip, first line with the 1-sigma uncertainty",
+    "placeholders": {
+      "duration": {"type": "String"},
+      "value": {"type": "String"},
+      "sigma": {"type": "String"}
+    }
+  },
+  "paResidualDetailDrift": "Dec drift {drift}″/min",
+  "@paResidualDetailDrift": {
+    "description": "Guiding residual tooltip: the Dec drift the figure came from",
+    "placeholders": {
+      "drift": {"type": "String"}
+    }
+  },
+  "paResidualDetailHourAngle": "hour angle {hours} h",
+  "@paResidualDetailHourAngle": {
+    "description": "Guiding residual tooltip: the hour angle the figure came from",
+    "placeholders": {
+      "hours": {"type": "String"}
+    }
+  },
+  "paResidualDetailDriftAtHourAngle": "Dec drift {drift}″/min at hour angle {hours} h",
+  "@paResidualDetailDriftAtHourAngle": {
+    "description": "Guiding residual tooltip: the Dec drift and the hour angle the figure came from",
+    "placeholders": {
+      "drift": {"type": "String"},
+      "hours": {"type": "String"}
+    }
+  },
+  "paResidualDetailLowerBound": "Guiding at one hour angle sees only part of the error, so the total can be larger.",
+  "@paResidualDetailLowerBound": {
+    "description": "Guiding residual tooltip: why the figure is a lower bound"
+  },
+  "paResidualDetailDisagree": "Polar Align and guiding disagree ({align} vs at least {guiding}). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.",
+  "@paResidualDetailDisagree": {
+    "description": "Guiding residual tooltip: the residual is well above Polar Align's figure; names both causes and how to tell them apart (#2072)",
+    "placeholders": {
+      "align": {"type": "String"},
+      "guiding": {"type": "String"}
+    }
+  },
+  "paResidualDetailNoisy": "Guiding was too noisy for a firm figure.",
+  "@paResidualDetailNoisy": {
+    "description": "Guiding residual tooltip: the figure is too uncertain"
+  },
+  "paResidualDetailAlign": "Polar Align's figure: {value}, from plate solves at the time of the run.",
+  "@paResidualDetailAlign": {
+    "description": "Guiding residual tooltip: tonight's last Polar Align result for comparison",
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
+  "paResidualDetailAlignAt": "Polar Align's figure: {value}, from plate solves at {time}.",
+  "@paResidualDetailAlignAt": {
+    "description": "Guiding residual tooltip: tonight's last Polar Align result and when it was measured",
+    "placeholders": {
+      "value": {"type": "String"},
+      "time": {"type": "String"}
+    }
+  },
+  "polarReadoutMeasures": "Polar Align's figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).",
+  "@polarReadoutMeasures": {
+    "description": "Polar align full UI: what the live readout measures, and the azimuth convention (#2072)"
+  },
+  "polarCheckMeasures": "Verify's figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).",
+  "@polarCheckMeasures": {
+    "description": "Polar align full UI checked card: what the check's figure measures, and the azimuth convention (#2072)"
+  },
+  "polarReadoutCautionAltitudeWeak": "The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.",
+  "@polarReadoutCautionAltitudeWeak": {
+    "description": "Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)"
+  },
   "versionMismatchWarning": "Server {server} and app {app} differ; update both from the same release.",
   "@versionMismatchWarning": {
     "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",

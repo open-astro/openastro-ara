@@ -423,6 +423,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
+            // #2072 the camera sits where the readout reads the altitude bolt poorly.
+            if (active &&
+                !verifying &&
+                live.readoutCaution == PolarAlignReadoutCautions.altitudeWeak)
+              Text(
+                l10n.polarReadoutCautionAltitudeWeak,
+                key: const Key('simple-polar-readout-caution'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
             // The check's verdict beside the last run's readout (#2082).
             if (live.phase == PolarAlignStates.checked && live.checkResult != null)
               Text(

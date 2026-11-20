@@ -623,6 +623,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     "${r.turnMismatchDeg.toStringAsFixed(2)}° of the mount's own",
                     style: const TextStyle(fontSize: 13, color: AraColors.textSecondary),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    context.l10n.polarCheckMeasures,
+                    key: const Key('polar-align-check-measures'),
+                    style: const TextStyle(fontSize: 13, color: AraColors.textSecondary),
+                  ),
                 ],
               ],
             ),
@@ -1044,6 +1050,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 const SizedBox(height: 12),
                 _nudgeLine(nudge),
               ],
+              ..._readoutCaution(live),
+              const SizedBox(height: 12),
+              // #2072 what this number measures, so it can be set beside the guiding residual.
+              Text(
+                context.l10n.polarReadoutMeasures,
+                key: const Key('polar-align-readout-measures'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, height: 1.3),
+              ),
             ],
           ),
           ],
@@ -1108,10 +1123,22 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             const SizedBox(height: 8),
             _nudgeLine(nudge),
           ],
+          ..._readoutCaution(live),
         ],
       ),
     );
   }
+
+  /// #2072 the readout's caution, amber, while the live readout runs: the
+  /// camera sits where it reads the altitude bolt poorly.
+  List<Widget> _readoutCaution(PolarAlignLive live) => [
+        if (live.readoutCaution == PolarAlignReadoutCautions.altitudeWeak &&
+            (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
+          const SizedBox(height: 12),
+          _callout(context.l10n.polarReadoutCautionAltitudeWeak, AraColors.accentBusy, Icons.warning_amber_outlined,
+              key: const Key('polar-align-readout-caution')),
+        ],
+      ];
 
   /// §45.16 the bolt-direction nudge, amber, under the knob directions.
   Widget _nudgeLine(bool altitude) => Row(

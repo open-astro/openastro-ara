@@ -222,7 +222,9 @@ namespace OpenAstroAra.Server.Services {
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
                     LastResult: _lastResult,
-                    Correction: _aligner));
+                    Correction: _aligner,
+                    // #2072 — the caution describes a live readout: shown only while one runs.
+                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null));
             }
         }
 
@@ -505,6 +507,7 @@ namespace OpenAstroAra.Server.Services {
                         _stage = stage;
                         _checkSolvesDone = 0;
                         _checkResult = null;
+                        _readoutCaution = null;
                         _framesCaptured = 0;
                         _lastFrameId = null;
                         _altErrorArcmin = null;
@@ -944,19 +947,6 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>Every tracking write of a run goes through here so the exit knows to hand it back. A
-        /// superseded run writes nothing (see <see cref="TryMarkTrackingTouched"/>).</summary>
-        private void SetTracking(int gen, bool enabled) {
-            if (!TryMarkTrackingTouched(gen)) {
-                return;
-            }
-            try {
-                _mount.SetTrackingEnabled(enabled);
-            } finally {
-                _ownTrackingWrites = _mount.TrackingWriteCount;
-            }
-        }
-
         /// <summary>Record that the CURRENT run is about to write tracking; false for a superseded
         /// run (a Stop or a newer Start bumped the generation), whose late write would land on a mount
         /// the successor now owns — and whose flag would make the successor hand back tracking it
@@ -1037,6 +1027,9 @@ namespace OpenAstroAra.Server.Services {
                 var frameId = "live-" + iteration.ToString(CultureInfo.InvariantCulture);
                 var timing = new FrameTiming();
                 var s = await capture(frameId, hint, settings, timing, ct).ConfigureAwait(false);
+                // #2072 — the readout below assumes a camera fixed in alt/az: every frame, solved or not, ends the run
+                // when the mount reads tracking on.
+                var tracking = RequireTrackingOff(frameId);
                 if (!s.Success) {
                     consecutiveFailures++;
                     await CompleteFrameAsync(gen, frameId, s, timing, consecutiveFailures).ConfigureAwait(false);
@@ -1063,7 +1056,7 @@ namespace OpenAstroAra.Server.Services {
                 var (altErr, azErr) = toError(s, DateTimeOffset.UtcNow);
 
                 SetErrors(gen, altErr, azErr, "adjusting", frameId);
-                LogLiveReadout(frameId, altErr, azErr);
+                LogLiveReadout(frameId, altErr, azErr, s.RaDegJnow, s.DecDegJnow, tracking);
                 lock (_gate) {
                     if (_generation == gen) {
                         _liveIterations = iteration;
@@ -1609,11 +1602,14 @@ namespace OpenAstroAra.Server.Services {
             }
             var total = Math.Sqrt(altErrArcmin * altErrArcmin + azErrArcmin * azErrArcmin);
             string? stage;
+            string? caution;
             lock (_gate) {
                 stage = _stage;
+                caution = _readoutCaution;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
+                ["readout_caution"] = caution,
                 ["iteration"] = iteration,
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),
                 ["azimuth_error_arcmin"] = Math.Round(azErrArcmin, 2),
@@ -1698,8 +1694,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
         private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);
 
-        [LoggerMessage(EventId = 4529, Level = LogLevel.Information, Message = "§45 polar-align live readout {FrameId}: alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
-        private partial void LogLiveReadout(string? frameId, double altArcmin, double azArcmin);
+        [LoggerMessage(EventId = 4529, Level = LogLevel.Information, Message = "§45 polar-align live readout {FrameId}: alt {AltArcmin:F2}′ az {AzArcmin:F2}′ (solve JNOW RA {RaDeg:F5}° Dec {DecDeg:F5}°, tracking {Tracking})")]
+        private partial void LogLiveReadout(string? frameId, double altArcmin, double azArcmin, double raDeg, double decDeg, bool tracking);
 
         [LoggerMessage(EventId = 4530, Level = LogLevel.Information, Message = "§45 polar-align finished ({Outcome}): final error {TotalArcmin}′ (alt {AltArcmin}′ az {AzArcmin}′) after {Iterations} live iterations")]
         private partial void LogFinalError(string outcome, double? totalArcmin, double? altArcmin, double? azArcmin, int iterations);
