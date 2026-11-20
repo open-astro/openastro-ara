@@ -35,8 +35,9 @@ namespace OpenAstroAra.Test.PolarAlign {
     /// REPORTS, and records every motion against that truth in a ledger. A test can then say "the counterweight never
     /// went past L" or "nothing moved after the run ended" about the real mount, not about its readings.
     /// <para>It is the daemon's mount as Polar Align sees it: <see cref="ITelescopeMediator"/>, the
-    /// <see cref="ITelescopeService"/> members PA uses (fresh reads, the leased MoveAxis, the abort and session
-    /// epochs, the pose-trust check) and the planned <see cref="IMountMotionControl"/> seam. The <c>TelescopeService</c>
+    /// <see cref="ITelescopeService"/>, and through it the <see cref="IMountMotionControl"/> seam PA moves it by (fresh
+    /// timestamped reads, the leased MoveAxis, the abort and session epochs, the pose-trust check), plus the motion owner
+    /// the seam will gain (<see cref="AcquireMotion"/>, #2048 ARA-2). The <c>TelescopeService</c>
     /// behaviour PA relies on is modelled here: a lease in 250–5000 ms that stops the axis when it lapses, a renewal
     /// refused after an abort, a routine's move refused while the pose is unverified.</para>
     /// <para>Physics is integrated from the clock (<see cref="TimeProvider"/>: a <see cref="ManualMountClock"/> moved by
@@ -50,7 +51,7 @@ namespace OpenAstroAra.Test.PolarAlign {
     /// one is the meridian flip, which throws. Members PA does not use and the fake does not model throw
     /// <see cref="NotSupportedException"/>.</para>
     /// </summary>
-    internal sealed partial class FakeGemMount : ITelescopeMediator, ITelescopeService, IMountMotionControl {
+    internal sealed partial class FakeGemMount : ITelescopeMediator, ITelescopeService {
 
         private static readonly TimeSpan MaxStep = TimeSpan.FromMilliseconds(10);
         private static readonly TimeSpan WaitPoll = TimeSpan.FromMilliseconds(2);
@@ -99,6 +100,11 @@ namespace OpenAstroAra.Test.PolarAlign {
         private int _abortCount;
         private string? _motionOwner;
         private bool _inhibited;
+        private int _cachedReadsWhileMoving;
+        private int _sentinelReads;
+        private int _staleReads;
+        private int _reconnectAtMovingRead;
+        private int? _commandsAtReconnect;
         private readonly List<(long Epoch, string Reason)> _abortReasons = new();
 
         /// <param name="truePose">Where the mount really is.</param>
@@ -217,7 +223,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// when the first read hangs on it.</summary>
         public TaskCompletionSource? HangReads { get; set; }
 
-        /// <summary>Called with the read's kind (<c>pointing</c>, <c>slewing</c>, <c>now</c>) as each fresh read starts,
+        /// <summary>Called with the read's kind (<c>pointing</c>, <c>slewing</c>, <c>now</c>, <c>position</c>) as each fresh read starts,
         /// before <see cref="HangReads"/> is checked: a test can set the hang for a chosen read.</summary>
         public Action<string>? OnFreshRead { get; set; }
 
@@ -279,6 +285,81 @@ namespace OpenAstroAra.Test.PolarAlign {
                 }
             }
         }
+
+        /// <summary>#2066 — the next this many fresh readings answer the (0, 0) placeholder (a path that lost the
+        /// position), stamped now.</summary>
+        public int FreshReadsSentinel {
+            get {
+                lock (_lock) {
+                    return _sentinelReads;
+                }
+            }
+            set {
+                lock (_lock) {
+                    _sentinelReads = value;
+                }
+            }
+        }
+
+        /// <summary>#2066 — the next this many fresh readings are stamped <see cref="StaleReadAge"/> before the read (a
+        /// driver answering from a cache that stopped refreshing).</summary>
+        public int FreshReadsStale {
+            get {
+                lock (_lock) {
+                    return _staleReads;
+                }
+            }
+            set {
+                lock (_lock) {
+                    _staleReads = value;
+                }
+            }
+        }
+
+        /// <summary>How old a <see cref="FreshReadsStale"/> reading is.</summary>
+        public static readonly TimeSpan StaleReadAge = TimeSpan.FromSeconds(3);
+
+        /// <summary>#2066 — while a motor or a GoTo moves the mount, the this-many-th fresh reading (from when it is set)
+        /// comes after a reconnect (<see cref="Reconnect"/>): a new mount session between a routine's checks and its
+        /// read. <see cref="CommandsAtReconnect"/> then says how many commands had reached the mount. Zero: never.</summary>
+        public int ReconnectAtMovingRead {
+            get {
+                lock (_lock) {
+                    return _reconnectAtMovingRead;
+                }
+            }
+            set {
+                lock (_lock) {
+                    _reconnectAtMovingRead = value;
+                }
+            }
+        }
+
+        /// <summary>The ledger's command count when <see cref="ReconnectAtMovingRead"/> reconnected; null before.</summary>
+        public int? CommandsAtReconnect {
+            get {
+                lock (_lock) {
+                    return _commandsAtReconnect;
+                }
+            }
+        }
+
+        /// <summary>#2066 — the reported Dec is off by this much and never folded over the pole: a synced mount whose Dec
+        /// axis zero is off reads past ±90° near the pole (an iOptron HAE29C read 90.9°, #2075).</summary>
+        public double ReportedDecOffsetDeg { get; set; }
+
+        /// <summary>#2066 — how often the daemon's refresh cache (<see cref="GetCurrentPosition"/>, <see cref="GetInfo"/>) was
+        /// read while a motor or a GoTo truly moved the mount.</summary>
+        public int CachedReadsWhileMoving {
+            get {
+                lock (_lock) {
+                    return _cachedReadsWhileMoving;
+                }
+            }
+        }
+
+        /// <summary>The clock the fake runs on: a routine that ages its readings must read the same one.</summary>
+        public TimeProvider Clock => _clock;
 
         /// <summary>The reported position stops changing at what it reads now (<c>ra_freeze</c>); false lets it follow again.</summary>
         public bool ReadingFrozen {
@@ -558,13 +639,11 @@ namespace OpenAstroAra.Test.PolarAlign {
             await SlowReadAsync("now").ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
-                if (FreshReadFailsLocked()) {
-                    return null;
+                IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _fullReadsWhileMoving++;
                 }
-                var s = SampleLocked();
-                bool? slewing = SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
-                return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing,
-                    PierSource == PierSideSource.Error ? PierSide.pierUnknown : s.Side, _t0 + s.At, _sessionEpoch);
+                return ReadLocked(positionOnly: false);
             }
         }
 
@@ -578,6 +657,55 @@ namespace OpenAstroAra.Test.PolarAlign {
             if (SlowReads > TimeSpan.Zero) {
                 await Task.Delay(SlowReads, CancellationToken.None).ConfigureAwait(false);
             }
+        }
+
+        public async Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) {
+            await SlowReadAsync("position").ConfigureAwait(false);
+            TakeFreshReadTime();
+            lock (_lock) {
+                IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _positionReadsWhileMoving++;
+                }
+                return ReadLocked(positionOnly: true);
+            }
+        }
+
+        /// <summary>#2066 — how often <see cref="ReadNowAsync"/> (position, Slewing and pier side) and
+        /// <see cref="ReadPositionNowAsync"/> were called while a motor or a GoTo truly moved the mount.</summary>
+        public (int Full, int PositionOnly) FreshReadsWhileMoving {
+            get {
+                lock (_lock) {
+                    return (_fullReadsWhileMoving, _positionReadsWhileMoving);
+                }
+            }
+        }
+
+        private int _fullReadsWhileMoving;
+        private int _positionReadsWhileMoving;
+
+        private MountReading? ReadLocked(bool positionOnly) {
+            if (FreshReadFailsLocked()) {
+                return null;
+            }
+            if (_reconnectAtMovingRead > 0 && TrulyMovingLocked() && --_reconnectAtMovingRead == 0) {
+                _sessionEpoch++;
+                _sample = null;
+                _commandsAtReconnect = _commands.Count;
+            }
+            var s = SampleLocked();
+            bool? slewing = positionOnly || SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
+            var side = positionOnly || PierSource is PierSideSource.Unknown or PierSideSource.Error ? PierSide.pierUnknown : s.Side;
+            if (_sentinelReads > 0) {
+                _sentinelReads--;
+                return new MountReading(0.0, 0.0, slewing, side, _t0 + _t, _sessionEpoch);
+            }
+            var age = TimeSpan.Zero;
+            if (_staleReads > 0) {
+                _staleReads--;
+                age = StaleReadAge;
+            }
+            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, Epoch.JNOW);
         }
 
         private void TakeFreshReadTime() {
@@ -644,6 +772,9 @@ namespace OpenAstroAra.Test.PolarAlign {
         public TelescopeInfo GetInfo() {
             lock (_lock) {
                 IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _cachedReadsWhileMoving++;
+                }
                 if (!_connected) {
                     return new TelescopeInfo { Connected = false };
                 }
@@ -675,11 +806,14 @@ namespace OpenAstroAra.Test.PolarAlign {
         public Coordinates GetCurrentPosition() {
             lock (_lock) {
                 IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _cachedReadsWhileMoving++;
+                }
                 if (!_connected || _daemonCacheLost) {
                     return new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000);
                 }
                 var s = SampleLocked();
-                return new Coordinates(s.RaDeg, s.DecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
+                return new Coordinates(s.RaDeg, s.DecDeg, Epoch.JNOW, Coordinates.RAType.Degrees).FoldedOverPole(); // as TelescopeService
             }
         }
 
@@ -1303,7 +1437,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 return frozen;
             }
             var (ha, dec) = GemGeometry.Pointing(BelievedLocked(), South);
-            return (GemGeometry.Wrap360(MountLstDeg - ha + (RaJumpHours * 15.0)), dec);
+            return (GemGeometry.Wrap360(MountLstDeg - ha + (RaJumpHours * 15.0)), dec + ReportedDecOffsetDeg);
         }
 
         private PierSide ReportedSideLocked(double reportedRaDeg) => PierSource switch {

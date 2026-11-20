@@ -70,6 +70,9 @@ namespace OpenAstroAra.Server.Services {
         private readonly IWsBroadcaster? _ws;
         private readonly IPolarAlignFrameSolver _solver;
         private readonly ITelescopeMediator _mount;
+        // #2066 (ARA-5) — the seam every motor move, abort, stop count and fresh reading goes through (the daemon's
+        // telescope service): the routine never casts its mount to the service, and never plans or moves from the cache.
+        private readonly IMountMotionControl _motionControl;
         private readonly IProfileStore _profileStore;
         private readonly object _gate = new();
 
@@ -186,6 +189,7 @@ namespace OpenAstroAra.Server.Services {
                 ILogger<PolarAlignService> logger,
                 IPolarAlignFrameSolver solver,
                 ITelescopeMediator mount,
+                IMountMotionControl motion,
                 IProfileStore profileStore,
                 IWsBroadcaster? ws = null,
                 IPolarAlignmentLog? log = null,
@@ -200,6 +204,7 @@ namespace OpenAstroAra.Server.Services {
             _logger = logger;
             _solver = solver;
             _mount = mount;
+            _motionControl = motion;
             _profileStore = profileStore;
             _ws = ws;
             _log = log;
@@ -330,7 +335,7 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>#2070 — refuses (<c>mount-position-unverified</c>) while the mount's position is not trusted: a false zero
         /// after a power loss, or a stop a run could not confirm (#2066, cleared only by a confirmed Home).</summary>
         private async Task ThrowIfPoseUnverifiedAsync(CancellationToken ct) {
-            if (_mount is ITelescopeService pose && await pose.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+            if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
                 throw TelescopeService.PositionUnverifiedRefusal(unverified);
             }
         }
@@ -347,16 +352,16 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)> PlanStartAsync(
                 string? stage, PolarAlignSettingsDto settings, CancellationToken ct) {
             // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
-            // are both read here.
-            var (raDeg, decDeg) = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
-                ?? throw new InvalidOperationException("the mount did not report where it points — check its connection, then start again");
+            // are both read here. #2066 — a reading that cannot be trusted (none, the placeholder, too old) or one past the
+            // pole is refused before anything moves.
+            var (raDeg, decDeg, session, side) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
             if (Math.Abs(decDeg) > OnAxisDecDeg) {
                 throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage);
             }
             // #2082 — one measurement per Start: its own two turns, nothing after them.
             var stepDeg = stage == PolarAlignStages.Check ? settings.CheckStepDeg : settings.SeedRotationDeg;
             var maxSweepDeg = 2.0 * stepDeg;
-            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg);
+            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session, side);
             var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
                 stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg);
@@ -431,7 +436,7 @@ namespace OpenAstroAra.Server.Services {
                 string stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, bool handOver, CancellationToken ct) {
             // #2066 — the run's one reading of the mount's stop count, taken at the call like a REST GoTo's: a Stop Mount,
             // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
-            var abortEpochAtCall = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
+            var abortEpochAtCall = _motionControl.AbortEpoch;
             var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
             // #2048 — an end request from here on (a Stop while this Start waits for the lock or takes the camera, or
             // while a Check ends the adjust loop) means no run is launched. Read at the call, before that end.
@@ -459,7 +464,7 @@ namespace OpenAstroAra.Server.Services {
             // count since the call: a Start pressed right after a failed turn must not inherit the old run's resent
             // AbortSlew, or the telescope service would refuse the new run's first motor command.
             (long Epoch, long OwnAborts) RunAbortBaseline() {
-                var epochNow = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
+                var epochNow = _motionControl.AbortEpoch;
                 var ownNow = Interlocked.Read(ref _ownAborts);
                 return epochNow - abortEpochAtCall <= ownNow - ownAbortsAtCall
                     ? (epochNow, ownNow)
@@ -574,8 +579,9 @@ namespace OpenAstroAra.Server.Services {
                         runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
                         _runFence = (gen, runEnd.Fence);
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
-                        runEnd.MountSession = MountSessionEpoch; // #2066 — a change while the run runs leaves the pose unverified
+                        runEnd.MountSession = _motionControl.SessionEpoch; // #2066 — a change while the run runs leaves the pose unverified
                         _abortWatch = (gen, baselineEpoch, baselineOwn, runEnd);
+                        _runSession = (gen, sweep.SessionEpoch); // #2066 — a reading of another mount session fails the run
                         // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
                         // no stop; a stop that was never confirmed) is not this run's, which has moved nothing yet, and must
                         // not keep the telescope endpoints refusing Park and GoTo (IsMovingMount) while it only solves.
@@ -1523,38 +1529,6 @@ namespace OpenAstroAra.Server.Services {
                     _lastCaptureFault = message;
                 }
             }
-        }
-
-        /// <summary>#2048 — the mount's pointing from the driver now, never the daemon's cache: null when the driver gives
-        /// no answer. The cache falls back to the (0, 0) placeholder after one failed status poll (an AlpacaBridge hiccup
-        /// fails the poll and the fresh read together), and a band anchored there, or a stage's offset read from it, turns
-        /// the mount a way the user never confirmed. The mediator's own reading in tests (no telescope service).</summary>
-        private async Task<(double RaDeg, double DecDeg)?> DriverPointingJnowAsync(CancellationToken ct) {
-            if (_mount is not ITelescopeService service) {
-                return CurrentMountPointingJnow();
-            }
-            if (await service.ReadPointingNowAsync(ct).ConfigureAwait(false) is not { } now) {
-                return null;
-            }
-            var frame = _mount.GetCurrentPosition()?.Epoch ?? Epoch.JNOW;
-            return Folded(new Coordinates(Angle.ByHours(now.RaHours), Angle.ByDegree(now.DecDegrees), frame).Transform(Epoch.JNOW));
-        }
-
-        private (double RaDeg, double DecDeg)? CurrentMountPointingJnow() {
-            var pos = _mount.GetCurrentPosition()?.Transform(Epoch.JNOW);
-            if (pos is null) {
-                return null;
-            }
-            return Folded(pos);
-        }
-
-        private static (double RaDeg, double DecDeg) Folded(Coordinates pos) {
-            // #1536 — a synced mount can report Dec past ±90° (the Dec axis is over the pole). The same sky
-            // point is (RA+180°, 180°−Dec); folding gives one reading per direction, so the seed's turns and
-            // the mount-turn cross-check compare like with like.
-            return Math.Abs(pos.Dec) > 90.0
-                ? ((pos.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, pos.Dec) - pos.Dec)
-                : (pos.RADegrees, pos.Dec);
         }
 
         /// <param name="frameId">The frame these errors came from; null keeps the last captured frame's id.</param>

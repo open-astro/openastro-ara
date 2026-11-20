@@ -85,7 +85,7 @@ namespace OpenAstroAra.Server.Services {
         /// Mount from the run-wide watch, and a Start's baseline would skip past it. Each count is read once, whichever of
         /// two sends that overlap reads it first.
         /// </summary>
-        private void CountOwnAborts(ITelescopeService service, long before) {
+        private void CountOwnAborts(IMountMotionControl service, long before) {
             lock (_ownAbortsGate) {
                 var after = service.AbortEpoch;
                 var from = Math.Max(before, _ownAbortsCountedThrough);
@@ -136,10 +136,8 @@ namespace OpenAstroAra.Server.Services {
         /// and turns tracking on no more. Checked before every motor move, before every tracking switch-on, after every seed
         /// frame and each live frame, between the stages, and on every poll of a move.
         /// </summary>
-        private void ThrowIfStoppedFromOutside(int gen) {
-            if (_mount is not ITelescopeService service) {
-                return;
-            }
+        private void ThrowIfAbortedFromOutside(int gen) {
+            var service = _motionControl;
             (long Epoch, long OwnAborts, RunEnd End) watch;
             lock (_gate) {
                 if (_abortWatch is not { } w || w.Gen != gen) {
@@ -172,7 +170,7 @@ namespace OpenAstroAra.Server.Services {
                 return;
             }
             var notStopped = mountStopped == false;
-            if (!notStopped && service.SessionEpoch == end.MountSession) {
+            if (!notStopped && _motionControl.SessionEpoch == end.MountSession) {
                 return;
             }
             if (!end.TryFlagPose()) {
@@ -504,13 +502,10 @@ namespace OpenAstroAra.Server.Services {
                 // during this send as one of them (CountOwnAborts). A watch that reads between the count and the tally sees
                 // one stop more than Polar Align's own; only a run that is already stopping (its generation moved) or a
                 // Start's baseline (re-read at the launch, RunAbortBaseline) can read then.
-                var countBefore = (_mount as ITelescopeService)?.AbortEpoch;
-                reached &= await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
-                    ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
-                    : Task.Run(_mount.StopSlew, CancellationToken.None), fence).ConfigureAwait(false);
-                if (countBefore is long before && _mount is ITelescopeService counted) {
-                    CountOwnAborts(counted, before);
-                }
+                var countBefore = _motionControl.AbortEpoch;
+                reached &= await StopCommandAsync("AbortSlew",
+                    () => _motionControl.AbortSlewAsync(AbortReason, CancellationToken.None), fence).ConfigureAwait(false);
+                CountOwnAborts(_motionControl, countBefore);
             }
             reached &= await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0), fence).ConfigureAwait(false);
             reached &= await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0), fence).ConfigureAwait(false);
@@ -557,24 +552,18 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>A fresh reading for the stop's confirmation: on the daemon the driver's position now (never the
-        /// cached one) and its Slewing now (the cache when the driver gives no answer); the mediator's own reading in tests.
-        /// Null when there is no reading.</summary>
+        /// <summary>A fresh reading for the stop's confirmation: the driver's position now (never the cached one) and its
+        /// Slewing now (the cache when the driver gives no answer). Null when there is no reading, or one that cannot be
+        /// trusted (#2066, <see cref="UntrustedForStillness"/>: "not confirmed").</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A failed read is 'not confirmed' by contract: the confirmation loop reads again or gives up.")]
         private async Task<(double RaDeg, double DecDeg, bool Slewing)?> ReadStillnessAsync() {
             try {
-                if (_mount is ITelescopeService service) {
-                    var pointing = await service.ReadPointingNowAsync(CancellationToken.None).WaitAsync(StopCommandTimeout).ConfigureAwait(false);
-                    if (pointing is not { } p) {
-                        return null;
-                    }
-                    var slewing = await service.ReadSlewingNowAsync(CancellationToken.None).WaitAsync(StopCommandTimeout).ConfigureAwait(false)
-                        ?? SlewingByTheCache();
-                    return (p.RaHours * 15.0, p.DecDegrees, slewing);
+                var r = await _motionControl.ReadNowAsync(CancellationToken.None).WaitAsync(StopCommandTimeout).ConfigureAwait(false);
+                if (UntrustedForStillness(r)) {
+                    return null;
                 }
-                var pos = _mount.GetCurrentPosition();
-                return pos is null ? null : (pos.RADegrees, pos.Dec, SlewingByTheCache());
+                return (r.RaHours * 15.0, r.DecDegrees, r.Slewing ?? SlewingByTheCache());
             } catch (Exception) {
                 return null;
             }

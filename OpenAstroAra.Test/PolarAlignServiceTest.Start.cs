@@ -221,12 +221,13 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewStopService(mount, ws, guider: fake);
 
-            var planError = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None));
-            var startError = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(
+            var planError = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None));
+            var startError = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
                 PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None));
 
-            Assert.That(planError!.Message, Does.Contain("did not report where it points"));
-            Assert.That(startError!.Message, Does.Contain("did not report where it points"));
+            // #2066 — a declared cause the app words in its own language (ADR 0022).
+            Assert.That(planError!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignPointingUnknown));
+            Assert.That(startError!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignPointingUnknown));
             Assert.That(mount.Log.Where(IsMotion), Is.Empty, string.Join(", ", mount.Log));
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
@@ -251,8 +252,8 @@ namespace OpenAstroAra.Test {
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("did not report where it points"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PointingUnknown));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("no fresh reading of where the mount points"));
             AssertNoMotionAfter(mount, at);
             Assert.That(mount.AtRest, Is.True);
             Assert.That(mount.Tracking, Is.False);

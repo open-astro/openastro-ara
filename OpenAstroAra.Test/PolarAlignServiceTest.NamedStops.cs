@@ -271,9 +271,10 @@ namespace OpenAstroAra.Test {
                     endReporting.Task.Wait(SignalTimeout);
                 }
             };
-            // The exit's next driver read after its finding is recorded (where it notes where it left the mount).
+            // The exit's next driver read after its finding is recorded (where it notes where it left the mount): a fresh
+            // ReadNowAsync through the seam since #2066's fresh reads, so its kind is "now".
             mount.OnFreshRead = kind => {
-                if (kind == "pointing" && endReporting.Task.IsCompleted) {
+                if (kind == "now" && endReporting.Task.IsCompleted) {
                     exitRecorded.TrySetResult();
                 }
             };
