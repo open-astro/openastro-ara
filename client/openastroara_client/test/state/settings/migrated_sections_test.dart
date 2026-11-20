@@ -464,10 +464,11 @@ void main() {
     final rig = _rig();
     final c = _container(rig);
     await settle(() => c.read(safetyPoliciesProvider).canSave);
-    // The flip executor confirms the first flip on the rig and announces it.
+    // The flip executor records a completed flip on the rig and announces it.
     rig.daemonWrote('safety', {
       ...rigDefaults['safety']!,
-      'first_flip_confirmed': true,
+      'first_flip_completed_utc': '2026-11-20T02:00:00Z',
+      'first_flip_pier_side_changed': true,
     });
     await applyProfileUpdated(c, 'safety');
     c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12);
@@ -475,7 +476,8 @@ void main() {
     final put = rig.puts.single;
     expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
     expect((put.body as Map)['meridian_pause_min'], 12);
-    expect(c.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isTrue);
+    expect(c.read(safetyPoliciesProvider).value!.firstFlipCompletedUtc,
+        DateTime.utc(2026, 11, 20, 2));
   });
 
   test('phd2: a guide camera fill announced by profile.updated reloads the '

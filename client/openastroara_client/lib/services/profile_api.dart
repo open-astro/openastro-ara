@@ -601,13 +601,26 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
 
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Answers the rig's policies with their new
-  /// tag (#1807): this device's own write, so no `profile.updated` reloads it.
-  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() async {
+  /// §58.8 — re-arm the unconfirmed-flip announce (the daemon clears
+  /// `first_flip_confirmed` and the completed-flip record, so the next flip
+  /// alerts and waits again). Answers the rig's policies with their new tag
+  /// (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() =>
+      _postSafetyAction('first-flip/rearm');
+
+  /// #1589 — confirm the profile's completed meridian flip: the user watched
+  /// it and the scope cleared the mount. The daemon sets
+  /// `first_flip_confirmed` and keeps the record; with no completed flip on
+  /// record it refuses (409 `first-flip-not-completed`). Answers the rig's
+  /// policies with their new tag, as [rearmFirstFlip] does.
+  Future<({SafetyPolicies value, String? etag})> confirmFirstFlip() =>
+      _postSafetyAction('first-flip/confirm');
+
+  Future<({SafetyPolicies value, String? etag})> _postSafetyAction(
+    String route,
+  ) async {
     final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
+      '/api/v1/profile/safety/$route',
     );
     return (
       value: _safetyFromRig(res.data ?? const {}),
@@ -912,6 +925,17 @@ class ProfileApi {
       flipSafetyEnabled: j['flip_safety_enabled'] as bool,
       expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
       firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      // #1589 — the daemon's completed-flip record (null: no flip on record;
+      // the key is still there).
+      firstFlipCompletedUtc: switch (nullable('first_flip_completed_utc')) {
+        null => null,
+        final String at => DateTime.parse(at).toUtc(),
+        final other => throw FormatException(
+          'bad first_flip_completed_utc',
+          other,
+        ),
+      },
+      firstFlipPierSideChanged: j['first_flip_pier_side_changed'] as bool,
       unattendedEscalation: j['unattended_escalation'] as bool,
       unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
       unattendedShutdownWaitMinutes:
@@ -984,11 +1008,11 @@ class ProfileApi {
     return safetyPoliciesFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's safety policies. `first_flip_confirmed` is
-  /// daemon-owned and ignored server-side on PUT (the stored value is
-  /// preserved and echoed back) — a stale panel Save can never clobber a
-  /// confirmation an overnight flip set; re-arming goes through
-  /// [rearmFirstFlip].
+  /// PUT the active profile's safety policies. `first_flip_confirmed` and
+  /// the completed-flip record are daemon-owned and ignored server-side on
+  /// PUT (the stored values are preserved and echoed back) — a stale panel
+  /// Save can never clobber them; confirming and re-arming go through
+  /// [confirmFirstFlip] and [rearmFirstFlip].
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
@@ -1651,6 +1675,11 @@ class ProfileApi {
     expectedFlipSlewSeconds:
         (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
     firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+    firstFlipCompletedUtc: j['first_flip_completed_utc'] is String
+        ? DateTime.tryParse(j['first_flip_completed_utc'] as String)?.toUtc()
+        : null,
+    firstFlipPierSideChanged:
+        (j['first_flip_pier_side_changed'] as bool?) ?? false,
     unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
     unattendedShutdownEnabled:
         (j['unattended_shutdown_enabled'] as bool?) ?? true,
@@ -1715,6 +1744,10 @@ class ProfileApi {
     'flip_safety_enabled': v.flipSafetyEnabled,
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
     'first_flip_confirmed': v.firstFlipConfirmed,
+    'first_flip_completed_utc': v.firstFlipCompletedUtc
+        ?.toUtc()
+        .toIso8601String(),
+    'first_flip_pier_side_changed': v.firstFlipPierSideChanged,
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,

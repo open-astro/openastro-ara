@@ -6668,6 +6668,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
+  String get actionConfirmFlip => 'confirm the meridian flip';
+
+  @override
+  String get safetyFirstFlipConfirmedStatus =>
+      'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.';
+
+  @override
+  String get safetyFirstFlipUnconfirmedStatus =>
+      'Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.';
+
+  @override
+  String safetyFirstFlipCompletedPierChanged(String when) {
+    return 'A flip completed at $when: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.';
+  }
+
+  @override
+  String safetyFirstFlipCompletedCheckByEye(String when) {
+    return 'A flip completed at $when: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.';
+  }
+
+  @override
+  String get safetyFirstFlipConfirmButton => 'Confirm';
+
+  @override
+  String get safetyFirstFlipConfirmedSnack =>
+      'Meridian flip confirmed. Later flips run without the alert.';
+
+  @override
+  String get safetyFirstFlipRearmedSnack =>
+      'Re-armed. Every flip alerts and waits 60 s again until you confirm one.';
+
+  @override
+  String get refusalFirstFlipNotCompleted =>
+      'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
