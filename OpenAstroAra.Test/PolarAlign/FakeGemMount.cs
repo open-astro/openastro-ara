@@ -39,8 +39,9 @@ namespace OpenAstroAra.Test.PolarAlign {
     /// epochs, the pose-trust check) and the planned <see cref="IMountMotionControl"/> seam. The <c>TelescopeService</c>
     /// behaviour PA relies on is modelled here: a lease in 250–5000 ms that stops the axis when it lapses, a renewal
     /// refused after an abort, a routine's move refused while the pose is unverified.</para>
-    /// <para>Physics is integrated from the clock (<see cref="TimeProvider"/>: the system clock for a service test, a
-    /// <see cref="ManualMountClock"/> for the fake's own tests) in steps of at most 10 ms, lazily on every call: motor
+    /// <para>Physics is integrated from the clock (<see cref="TimeProvider"/>: a <see cref="ManualMountClock"/> moved by
+    /// hand in the fake's own tests, or by the routine's own reads through <see cref="FreshReadTakes"/> in a service test
+    /// that measures where a turn lands; the system clock otherwise) in steps of at most 10 ms, lazily on every call: motor
     /// rates, tracking at the sidereal rate, a firmware GoTo that takes the counterweight-down side, soft limits. The
     /// mount reports from the pose it BELIEVES it has (the true pose plus a zero error), through its own clock
     /// (<see cref="MountClockOffsetHours"/>), its driver cache (<see cref="DriverCache"/>) and the lies a test sets.</para>
@@ -200,13 +201,20 @@ namespace OpenAstroAra.Test.PolarAlign {
         public bool CanFindHome { get; set; } = true;
         /// <summary>Where a park takes the mount, as the mount believes it (Home by default).</summary>
         public GemPose? ParkPose { get; set; }
+        /// <summary>How long one fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) takes on a
+        /// <see cref="ManualMountClock"/>, an Alpaca round trip: the read moves the clock on by it before it answers. A
+        /// routine that polls the mount then sees it move a fixed amount per poll, whatever the scheduler does, so where a
+        /// turn lands does not depend on the test machine's load. Zero (the default) leaves the clock alone.</summary>
+        public TimeSpan FreshReadTakes { get; set; }
+
         /// <summary>How many WS events were published when a command arrived: orders the ledger against a run's events.</summary>
         public Func<int>? EventCount { get; set; }
 
         /// <summary>Completes at the first motor move or GoTo the mount takes.</summary>
         public TaskCompletionSource FirstMove { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>The next this many aborts are ignored (<c>abort_ignored=n</c>; <see cref="int.MaxValue"/>: always).</summary>
+        /// <summary>The next this many aborts sent while something moves are ignored (<c>abort_ignored=n</c>;
+        /// <see cref="int.MaxValue"/>: always). An abort to a still mount does not count.</summary>
         public int AbortIgnored {
             get {
                 lock (_lock) {
@@ -466,6 +474,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
+            TakeFreshReadTime();
             lock (_lock) {
                 if (!_connected || SlewingReadFails || _slewReadsThrow) {
                     return Task.FromResult<bool?>(null);
@@ -475,6 +484,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+            TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
                     return Task.FromResult<(double RaHours, double DecDegrees)?>(null);
@@ -485,6 +495,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+            TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
                     return Task.FromResult<MountReading?>(null);
@@ -494,6 +505,15 @@ namespace OpenAstroAra.Test.PolarAlign {
                 return Task.FromResult<MountReading?>(new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing,
                     PierSource == PierSideSource.Error ? PierSide.pierUnknown : s.Side, _t0 + s.At, _sessionEpoch));
             }
+        }
+
+        private void TakeFreshReadTime() {
+            if (FreshReadTakes <= TimeSpan.Zero) {
+                return;
+            }
+            var clock = _clock as ManualMountClock
+                ?? throw new InvalidOperationException("FreshReadTakes moves a ManualMountClock; this fake runs on another clock");
+            clock.Advance(FreshReadTakes);
         }
 
         public Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult(PositionUnverifiedReason);
@@ -848,7 +868,9 @@ namespace OpenAstroAra.Test.PolarAlign {
                 _leaseUntil[0] = null; // TelescopeService cancels every lease on an abort
                 _leaseUntil[1] = null;
                 var honoured = true;
-                if (_abortsToIgnore > 0) {
+                // Only an abort with something to stop is ignored: one sent to a still mount would use up the count
+                // and leave the abort the scenario is about honoured (as MoveAxisStopIgnored counts moving axes only).
+                if (_abortsToIgnore > 0 && TrulyMovingLocked()) {
                     _abortsToIgnore--;
                     honoured = false;
                     for (var axis = 0; axis < 2; axis++) {
