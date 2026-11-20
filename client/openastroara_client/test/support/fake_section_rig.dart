@@ -121,6 +121,24 @@ class FakeSectionRig implements HttpClientAdapter {
 /// defaults), for the sections whose reader takes no client default: every
 /// key is there, so the load succeeds (ADR 0015 rule 3).
 const rigDefaults = <String, Map<String, Object?>>{
+  'autofocus': {
+    'method': 'hfr_v_curve',
+    'steps': 7,
+    'step_size': 50,
+    'exposure_seconds': 5,
+    'binning': 1,
+    'af_filter': 'L',
+    'run_after_filter_change': true,
+    'trigger_temp_delta_c': 2.0,
+    'trigger_hfr_drift_pct': 15.0,
+    'every_n_hours': 2,
+    'abort_sequence_on_af_failure': true,
+    'restore_position_on_failure': true,
+    'telescope_type': 'other',
+    'step_size_auto': true,
+    'backlash_in_steps': 0,
+    'backlash_out_steps': 0,
+  },
   'camera-electronics': {
     'sensor_name': '',
     'read_noise_e': 0,
@@ -165,6 +183,16 @@ const rigDefaults = <String, Map<String, Object?>>{
   'filter-wheel/policy': {
     'home_on_first_connect': true,
     'use_filter_wheel_offsets': false,
+  },
+  'imaging-defaults': {
+    'exposure_seconds': 5,
+    'gain': 100,
+    'offset': 50,
+    'bin': 1,
+    'frame_kind': 'light',
+    'cooler_target_c': -10.0,
+    'cooler_ramp_c_per_min': 1.0,
+    'warmup_at_session_end': false,
   },
   'plate-solve': {
     'engine': 'astap',

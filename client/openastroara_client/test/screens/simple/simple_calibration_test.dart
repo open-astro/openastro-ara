@@ -33,6 +33,10 @@ import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
 
 /// The rig's calibration routes: its sessions, and the matching-flats
 /// requests sent.
@@ -309,9 +313,12 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
     flatPanelProvider.overrideWith(() => _Panel(panel, cover: cover)),
     cameraStatusProvider.overrideWith(() => _Camera(camera)),
     if (plan != null) simpleRunProvider.overrideWith(() => _Plan(plan)),
+    imagingDefaultsProvider.overrideWith(FakeImagingDefaultsSection.new),
     ...overrides,
   ]);
   addTearDown(c.dispose);
+  // The profile's cooler target, as the rig served it (the fake reads no API).
+  await c.read(imagingDefaultsProvider.notifier).load(FakeSectionRig({}).api());
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
