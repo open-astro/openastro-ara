@@ -153,6 +153,36 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Since(at + 1), Is.Empty, $"nothing after the park: {string.Join(", ", mount.Since(at))}");
         }
 
+        // A takeover ends a turn without the routine's own confirmed stop. The motion it was making is the sender's now: a
+        // new run must not inherit it, or the telescope endpoints would refuse Park and GoTo while that run only solves.
+        [Test]
+        public async Task IsMovingMount_reads_false_in_a_new_run_after_a_takeover_ended_a_turn() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var secondRun = 0;
+            var movingDuringSolve = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            PolarAlignService? service = null;
+            var solver = new HookedSolver {
+                BeforeSolve = _ => {
+                    if (Volatile.Read(ref secondRun) == 1 && service is { } s) {
+                        movingDuringSolve.TrySetResult(s.IsMovingMount);
+                    }
+                },
+            };
+            using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore());
+            service = svc;
+            await InFirstTurnAsync(svc, mount).ConfigureAwait(false);
+            await svc.StopForTakeoverAsync("emergency_stop", CancellationToken.None).ConfigureAwait(false);
+            Assert.That(svc.IsMovingMount, Is.False, "no run");
+
+            Volatile.Write(ref secondRun, 1);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await movingDuringSolve.Task.WaitAsync(SignalTimeout).ConfigureAwait(false), Is.False,
+                "the new run's first solve: nothing turns");
+        }
+
         // Each stop from outside is named, and only the senders that own the mount afterwards take it over: Emergency Stop
         // checks it itself, a park and a Find Home move it on purpose (an AbortSlew from the exit would abort them).
         [TestCase("user_request", "Stop Mount", false)]

@@ -545,6 +545,10 @@ namespace OpenAstroAra.Server.Services {
                         gen = ++_generation;
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
                         _abortWatch = (gen, baselineEpoch, baselineOwn);
+                        // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
+                        // no stop; a stop that was never confirmed) is not this run's, which has moved nothing yet, and must
+                        // not keep the telescope endpoints refusing Park and GoTo (IsMovingMount) while it only solves.
+                        EndMotion();
                         _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
                         // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
                         // abandoned by the just-stopped run has delivered its event by now.
