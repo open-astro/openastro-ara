@@ -952,6 +952,17 @@ class _OpticsApi extends ProfileApi {
   }
 }
 
+/// #2041 — a main camera that connects when the test says, with its sensor.
+class _SensorCamera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async =>
+      CameraStatus.fromJson(_wire('ASI2600MM', EquipmentConnectionState.disconnected));
+  void plugIn() => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('ASI2600MM', EquipmentConnectionState.connected),
+        'capabilities': {'sensor_width': 6248, 'sensor_height': 4176, 'pixel_size_um': 3.76},
+      }));
+}
+
 /// #2041 — each optics read waits until the test answers it, so reads overlap.
 class _GatedOpticsApi extends _OpticsApi {
   _GatedOpticsApi(super.optics);
@@ -3845,18 +3856,26 @@ void main() {
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
   });
 
-  testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
-      (tester) async {
-    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
+  testWidgets('#2041 a mount or camera connect reads the optics the rig filled; the app writes none', (tester) async {
+    // The rig filled the aperture from the mount (#1994); the focal length was the profile's.
+    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600, apertureMm: 80));
+    final camera = _SensorCamera();
     final c = await _pump(tester, const Size(1024, 768), gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
+      cameraStatusProvider.overrideWith(() => camera),
     ]);
     await tester.pump();
     await tester.pump();
-    expect(api.puts.single.apertureMm, 80, reason: 'unknown: the mount\'s, saved to the profile');
-    expect(api.puts.single.focalLengthMm, 600, reason: 'the profile\'s own value wins');
     expect(c.read(opticsSettingsProvider).apertureMm, 80);
+    expect(c.read(opticsSettingsProvider).focalLengthMm, 600);
+    // The camera connects: the rig takes its sensor, and the shell reads it.
+    api.optics = api.optics.copyWith(sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76);
+    camera.plugIn();
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(opticsSettingsProvider).isConfigured, isTrue);
+    expect(api.puts, isEmpty);
   });
 
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
