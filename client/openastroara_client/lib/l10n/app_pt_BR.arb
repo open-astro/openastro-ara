@@ -1866,6 +1866,7 @@
   "polarConfirmCancel": "Cancelar",
   "polarDirectionEast": "leste",
   "polarDirectionWest": "oeste",
+  "refusalMountClockNotVerified": "O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do setup: espere um momento e tente de novo, ou sincronize a hora em Configurações.",
   "bridgeSetupFoundTitle": "Encontrado neste setup",
   "bridgeSetupAddSelected": "Adicionar selecionados ({count})",
   "bridgeSetupAdding": "Adicionando…",

@@ -115,6 +115,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignMovingMount => l.refusalPolarAlignMovingMount,
     RefusalCause.polarAlignOnAxis => l.refusalPolarAlignOnAxis,
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
+    RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     null => _firstLine(r.detail),
   };
 }

@@ -30,6 +30,19 @@ public interface ITimeSyncService {
     /// <see cref="TimeSyncInvalidSourceException"/> for a source outside
     /// <c>client|gps-client|gps-mobile|manual</c> (→ 422 at the endpoint).</summary>
     Task<TimeSyncPushResultDto> PushAsync(TimeSyncPushRequestDto request, CancellationToken ct);
+
+    /// <summary>#2071 — a time the rig can trust. The OS clock while the kernel reports it NTP-synchronised
+    /// (<see cref="IKernelClockSyncProbe"/>, AlpacaBridge #2426's rule); otherwise the time from the last
+    /// applied sync of medium or high trust, carried forward on the monotonic clock: right even when the
+    /// OS clock set failed or the clock has stepped since. False when the kernel is not synchronised and
+    /// no such sync came (a manual, low-trust entry never counts). A client sync does not expire after the
+    /// §31.1 hour: the mount clock written from it is checked again on every connect and host clock step.
+    /// A client sync over a day old, with no NTP, is logged as a warning once a day (it drifts with the Pi's clock).</summary>
+    bool TryGetTrustedUtc(out DateTimeOffset utc);
+
+    /// <summary>#2071 — raised after a sync of medium or high trust is applied, so the mount's clock can
+    /// follow it. Never raised for a manual (low-trust) sync.</summary>
+    event EventHandler? TrustedTimeApplied;
 }
 
 /// <summary>Sets the OS clock. The real implementation needs CAP_SYS_TIME and, under the packaged
@@ -56,10 +69,16 @@ public interface ISystemClockSetter {
 public sealed partial class TimeSyncService : ITimeSyncService {
 
     private static readonly TimeSpan Freshness = TimeSpan.FromHours(1);
+    // #2087 review — a trusted time carried from a client push this old (no NTP) is logged, once a day.
+    private static readonly TimeSpan StaleClientSyncAge = TimeSpan.FromDays(1);
 
     private readonly ILogger<TimeSyncService> _logger;
     private readonly ISystemClockSetter _clockSetter;
     private readonly IProfileStore? _profiles;
+    // #2071 — null: only client and GPS pushes are trusted (tests, and platforms without the probe).
+    private readonly IKernelClockSyncProbe? _kernelClock;
+    // 0 = not read yet, 1 = synchronised, 2 = not: a change is logged once.
+    private int _kernelClockState;
     private readonly object _gate = new();
 
     private string _source = "none";
@@ -70,6 +89,8 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     // booting near epoch would read as "fresh forever", one ahead by an hour as instantly stale.
     private long? _syncedAtTickMs;
     private TimeSyncLocationDto? _location;
+    // Monotonic time of the last day-old-sync warning; cleared by every applied sync.
+    private long? _staleSyncWarnedAtTickMs;
     // Non-zero only when a push couldn't set the OS clock: pushed-time minus system-time at push,
     // re-reported on GET so a consumer that cares can correct. Zeroed by a successful set.
     private double _trackedOffsetSeconds;
@@ -83,11 +104,71 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     internal Func<bool> InternetProbe { get; set; } = () => false;
 
     public TimeSyncService(ILogger<TimeSyncService> logger, ISystemClockSetter? clockSetter = null,
-            IProfileStore? profiles = null) {
+            IProfileStore? profiles = null, IKernelClockSyncProbe? kernelClock = null) {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
         _clockSetter = clockSetter ?? new LinuxSystemClockSetter();
         _profiles = profiles;
+        _kernelClock = kernelClock;
+    }
+
+    public event EventHandler? TrustedTimeApplied;
+
+    public bool TryGetTrustedUtc(out DateTimeOffset utc) {
+        // Read fresh every time (one syscall): the trust ends the moment the kernel loses the sync, and a
+        // client push that steps the clock clears it until NTP disciplines the clock again.
+        if (KernelClockSynchronized()) {
+            utc = Now();
+            return true;
+        }
+        double? staleHours = null;
+        bool trusted;
+        lock (_gate) {
+            if (_syncedAtUtc is { } at && _syncedAtTickMs is { } tick && IsTrusted(_trust)) {
+                // Never Now() + the tracked offset: that offset goes stale as soon as anything else
+                // (NTP, or AlpacaBridge's own UTCDate handling) steps the OS clock after the push.
+                var tickNow = TickMs();
+                var age = TimeSpan.FromMilliseconds(tickNow - tick);
+                utc = at + age;
+                trusted = true;
+                // #2087 review — with no NTP the push is carried on the Pi's crystal (tens of ppm), so a push
+                // days old has drifted. It stays trusted (no expiry); a warning once a day says so.
+                if (age >= StaleClientSyncAge
+                        && (_staleSyncWarnedAtTickMs is not { } warned || tickNow - warned >= StaleClientSyncAge.TotalMilliseconds)) {
+                    _staleSyncWarnedAtTickMs = tickNow;
+                    staleHours = age.TotalHours;
+                }
+            } else {
+                utc = default;
+                trusted = false;
+            }
+        }
+        if (staleHours is { } hours) {
+            LogClientSyncStale((int)hours);
+        }
+        return trusted;
+    }
+
+    private static bool IsTrusted(string trust) => trust is "high" or "medium";
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A probe fault is 'not synchronised': the rig clock is then trusted only from a client push.")]
+    private bool KernelClockSynchronized() {
+        if (_kernelClock is null) {
+            return false;
+        }
+        bool synced;
+        try {
+            synced = _kernelClock.IsSynchronized();
+        } catch (Exception) {
+            synced = false;
+        }
+        var state = synced ? 1 : 2;
+        var was = Interlocked.Exchange(ref _kernelClockState, state);
+        if (was != state && (synced || was != 0)) {
+            LogKernelClockTrust(synced);
+        }
+        return synced;
     }
 
     public Task<TimeSyncStateDto> GetStateAsync(CancellationToken ct) {
@@ -110,7 +191,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         // uncorrected) system clock from the (corrected) pushed instant.
         var synced = syncedAtTick is { } tick
             && TimeSpan.FromMilliseconds(TickMs() - tick) < Freshness
-            && trust is "high" or "medium";
+            && IsTrusted(trust);
         return Task.FromResult(new TimeSyncStateDto(
             Synced: synced,
             Source: source,
@@ -181,12 +262,17 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             _trust = trust;
             _syncedAtUtc = timeUtc;
             _syncedAtTickMs = TickMs();
+            _staleSyncWarnedAtTickMs = null;
             if (location is not null) {
                 _location = location;
             }
             _trackedOffsetSeconds = afterOffset;
         }
         LogSyncApplied(stateSource, trust, beforeOffset, clockSet);
+        if (IsTrusted(trust)) {
+            // Outside the gate: the mount-clock push the handler starts reads TryGetTrustedUtc.
+            TrustedTimeApplied?.Invoke(this, EventArgs.Empty);
+        }
         return new TimeSyncPushResultDto(
             Before: new TimeSyncBeforeAfterDto(before, beforeOffset),
             After: new TimeSyncBeforeAfterDto(clockSet ? timeUtc : Now(), afterOffset),
@@ -255,6 +341,14 @@ public sealed partial class TimeSyncService : ITimeSyncService {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pushed location could not be written into the profile site settings")]
     partial void LogLocationWriteFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Rig clock NTP-synchronised per the kernel: {Synchronized} (#2071; while true the rig clock is trusted without a time sync from the app or a GPS)")]
+    partial void LogKernelClockTrust(bool synchronized);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "The rig clock was last synced from the app {Hours} h ago and NTP is not running; open the app to sync it again (#2071; the mount's clock is set from that sync, which drifts with the Pi's clock)")]
+    partial void LogClientSyncStale(int hours);
 }
 
 /// <summary>Thrown by <see cref="TimeSyncService.PushAsync"/> for a malformed push — an

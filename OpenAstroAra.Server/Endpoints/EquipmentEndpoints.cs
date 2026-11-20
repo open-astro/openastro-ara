@@ -1281,7 +1281,7 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
-            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position) keeps its own answer (RefusalHandler, ADR 0022).
+            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
@@ -1464,6 +1464,11 @@ public static partial class EquipmentEndpoints {
         // #2066 — outside the try below, whose 409 would drop the Refusal's reason. A stop (rate 0) always goes through.
         if (request.Rate != 0) {
             ThrowIfPolarAlignMovesTheMount(polarAlign, "move");
+        } else if (polarAlign is { IsMovingMount: true }) {
+            // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
+            // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
+            // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
+            svc.FenceMotion(PolarAlignService.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);
