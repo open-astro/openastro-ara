@@ -549,8 +549,18 @@ paths:
                 - type: 'null'
                 - $ref: '#/components/schemas/ParkRequestDto'
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/unpark:
     post:
       tags:
@@ -573,8 +583,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/confirm-home:
     post:
       tags:
@@ -608,8 +628,20 @@ paths:
               $ref: '#/components/schemas/MoveAxisRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/tracking:
     post:
       tags:
@@ -15120,6 +15152,7 @@ components:
         - polar-align-mount-parked
         - polar-align-unconfirmed
         - polar-align-sweep-limit
+        - polar-align-moving-mount
         - first-flip-not-completed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'

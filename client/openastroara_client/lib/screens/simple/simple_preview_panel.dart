@@ -194,7 +194,7 @@ class _PreviewShot extends Notifier<PreviewShot> {
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
     // The guider's own exposure: the one Preview › Guide's loop runs at.
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
     return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
@@ -384,10 +384,14 @@ class _GuideInfoTiles extends ConsumerWidget {
     // A focus loop found running reports its own exposure; otherwise the
     // frames are the guider's loop, at the guider's exposure.
     final guiderMs = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideExposureMs),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideExposureMs,
+      ),
     );
     final gain = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideCameraGain),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideCameraGain,
+      ),
     );
     return SimpleFactTiles(
       facts: [
@@ -737,7 +741,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         guide &&
         !guideActive &&
         ref.watch(
-          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
         ) &&
         !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return [

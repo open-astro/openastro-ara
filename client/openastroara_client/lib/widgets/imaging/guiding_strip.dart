@@ -83,7 +83,7 @@ class GuidingStrip extends ConsumerWidget {
     // Watched collapsed too: the settle windows keep a dither's own frames
     // out of the header RMS, the one figure the collapsed strip shows.
     final markers = ref.watch(guideMarkersProvider);
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     // Client-side arcsec/px from the §63.5 guide train — the fallback when
     // the daemon has not reported the guider's own pixel scale yet.
     final fallbackScale =

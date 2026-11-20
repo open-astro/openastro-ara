@@ -112,6 +112,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
       _unsignedWholeDegrees(r.parameters['offset_deg']),
     ),
+    RefusalCause.polarAlignMovingMount => l.refusalPolarAlignMovingMount,
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
     null => _firstLine(r.detail),
   };

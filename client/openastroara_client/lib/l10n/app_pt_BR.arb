@@ -1845,6 +1845,7 @@
   "refusalPolarAlignMountParked": "A montagem está estacionada. Tire-a do estacionamento e aponte-a perto do polo primeiro.",
   "refusalPolarAlignUnconfirmed": "O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.",
   "refusalPolarAlignSweepLimit": "A montagem girou {offset}° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.",
+  "refusalPolarAlignMovingMount": "O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.",
   "actionConfirmFlip": "confirmar a virada de meridiano",
   "safetyFirstFlipConfirmedStatus": "Virada de meridiano confirmada: as próximas viradas rodam sem o alerta. Rearme depois de rebalancear ou mudar o setup.",
   "safetyFirstFlipUnconfirmedStatus": "Virada de meridiano ainda não confirmada: toda virada alerta e espera 60 s. Acompanhe uma virada do início ao fim e depois confirme aqui.",

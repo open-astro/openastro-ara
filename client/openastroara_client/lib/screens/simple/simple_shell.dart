@@ -88,7 +88,6 @@ import '../../widgets/settings/section_load_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../util/gps_site_fill.dart';
 import '../../util/friendly_error.dart';
-import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
@@ -119,7 +118,7 @@ import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
-    show phd2SettingsProvider;
+    show Phd2Settings, phd2SettingsProvider;
 import 'simple_message_pills.dart' show kSimpleMessageHeight;
 import 'simple_status_card.dart';
 import '../album/sky_album_screen.dart';
@@ -4731,37 +4730,6 @@ class _ThisRig extends ConsumerWidget {
     );
   }
 
-  /// Apply a value and keep it in the profile; a failed save says so.
-  static Future<void> _save(
-    BuildContext context,
-    WidgetRef ref,
-    void Function() apply,
-    Future<Object?> Function(ProfileApi api) persist,
-  ) async {
-    apply();
-    final notify = userNotifier(context);
-    final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
-      // Shown, not kept: the next read from the rig puts the old value back.
-      notify(
-        l10n.shellCouldntSave,
-        detail: l10n.shellRigNotConnected,
-        error: true,
-      );
-      return;
-    }
-    try {
-      await persist(api);
-    } catch (e) {
-      notify(
-        l10n.shellCouldntSave,
-        detail: friendlyError(l10n, e),
-        error: true,
-      );
-    }
-  }
-
   /// Keep [change] in the profile's optics: applied to the rig's copy (loaded
   /// once more first when it isn't in) and saved whole. Not loaded, refused
   /// or stale: nothing is sent and it says why (ADR 0015).
@@ -4866,28 +4834,35 @@ class _ThisRig extends ConsumerWidget {
     if (saved) notify(l10n.shellSiteFrom(r.sourceLabel));
   }
 
-  /// The profile's guide optics. With [retry] (the guider connected): the
-  /// rig fills unset ones a few guider round trips later, so one read then
-  /// usually beats it: read again each second, up to ten times, until both
-  /// are set.
-  static Future<void> _readGuideOptics(
+  /// Keep [change] in the profile's guider settings: applied to the rig's
+  /// copy (loaded once more first when it isn't in) and saved whole, so a
+  /// pixel size the rig filled is sent back as the rig holds it (ALP-4982).
+  /// Not loaded, refused or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveGuider(
     BuildContext context,
-    WidgetRef ref, {
-    bool retry = true,
-  }) async {
-    for (var i = 0; i < (retry ? 10 : 1); i++) {
-      if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
-      if (!context.mounted) return;
-      final api = ref.read(profileApiProvider);
-      if (api == null) return;
-      try {
-        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      } catch (_) {
-        // Unreachable for a moment: the next try reads again.
-      }
-      if (!context.mounted) return;
-      final s = ref.read(phd2SettingsProvider);
-      if (s.guideFocalLength > 0 && s.guidePixelSize > 0) return;
+    WidgetRef ref,
+    Phd2Settings Function(Phd2Settings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
+      notify(
+        l10n.shellCouldntSave,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return;
+    }
+    try {
+      await ref.read(phd2SettingsProvider.notifier).changeAndSave(change);
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSave,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
+        error: true,
+      );
     }
   }
 
@@ -5035,31 +5010,23 @@ class _ThisRig extends ConsumerWidget {
               value: value,
               onSet: (v) => _saveOptics(context, ref, (c) => change(c, v)),
             ),
-        // The guide scope: read from the guider when the profile left it
-        // unset, kept in the profile (polar alignment solves with it).
-        _GuideOpticsReader(
+        // The guide scope: the rig fills it from the guider when the
+        // profile left it unset (its profile.updated reloads it here), kept
+        // in the profile (polar alignment solves with it).
+        KeyedSubtree(
           key: _guideKey,
           child: _RigWheelRow.millimetres(
             l10n,
             id: 'guidefocal',
             label: l10n.shellGuideFocalLength,
             digits: 4,
-            value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
-            onSet: (v) => _save(
+            value: (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guideFocalLength
+                .toDouble(),
+            onSet: (v) => _saveGuider(
               context,
               ref,
-              () => ref
-                  .read(phd2SettingsProvider.notifier)
-                  .setGuideFocalLength(v.round()),
-              // The save sends the whole section: re-read it first so a
-              // pixel size the rig filled since Rig's read isn't sent back
-              // as 0 (ALP-4982).
-              (api) async {
-                final guider = ref.read(phd2SettingsProvider.notifier);
-                await guider.hydrateFromServer(api);
-                guider.setGuideFocalLength(v.round());
-                return guider.persistToServer(api);
-              },
+              (c) => c.copyWith(guideFocalLength: math.max(0, v.round())),
             ),
           ),
         ),
@@ -5074,8 +5041,10 @@ class _ThisRig extends ConsumerWidget {
               // the value above it: its button, never enabled, read as text.
               Builder(
                 builder: (context) {
-                  final pixel = switch (ref
-                      .watch(phd2SettingsProvider)
+                  final pixel = switch ((ref
+                              .watch(phd2SettingsProvider)
+                              .value ??
+                          const Phd2Settings())
                       .guidePixelSize) {
                     final p when p > 0 => '${p.toStringAsFixed(2)} µm',
                     _ => l10n.shellNotSet,
@@ -5287,37 +5256,6 @@ class _SettingsPage extends ConsumerWidget {
       body: const SettingsShell(),
     );
   }
-}
-
-/// Reads the profile's guide optics when Rig opens, and again each time the
-/// guider connects (the rig fills unset ones then); draws [child].
-class _GuideOpticsReader extends ConsumerStatefulWidget {
-  const _GuideOpticsReader({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  ConsumerState<_GuideOpticsReader> createState() => _GuideOpticsReaderState();
-}
-
-class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
-  @override
-  void initState() {
-    super.initState();
-    ref.listenManual(
-      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
-      (was, now) {
-        // Open (was null), or the guider just connected.
-        if (was == null || (now && !was)) {
-          unawaited(_ThisRig._readGuideOptics(context, ref, retry: now));
-        }
-      },
-      fireImmediately: true,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }
 
 /// A value the rig keeps, set by wheels: tap it and one wheel per digit

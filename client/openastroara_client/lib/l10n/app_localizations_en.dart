@@ -6664,6 +6664,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignMovingMount =>
+      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
   String get actionConfirmFlip => 'confirm the meridian flip';
 
   @override

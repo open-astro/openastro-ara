@@ -628,6 +628,13 @@ class ProfileApi {
     );
   }
 
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
+      _getTagged('phd2', _phd2FromRig);
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) => _putTagged('phd2', phd2SettingsToJson(v), _phd2FromRig, ifMatch);
+
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
@@ -1387,6 +1394,53 @@ class ProfileApi {
     guideCameraGain: (j['guide_camera_gain'] as num?)?.toInt() ?? 50,
     guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
   );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as the client's own default (localhost, dither every frame, no
+  // guide camera), which a Save would then write over the rig's guider
+  // settings. The Dec minimum move of a profile from before the split and an
+  // Automatic guider profile come as null, but their keys are there.
+  static Phd2Settings _phd2FromRig(Map<String, dynamic> j) {
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final decMinimumMove = nullable('dec_minimum_move') as num?;
+    final profileId = nullable('phd2_profile_id') as num?;
+    return Phd2Settings(
+      host: j['host'] as String,
+      port: (j['port'] as num).toInt(),
+      phd2Profile: j['phd2_profile'] as String,
+      ditherEnabled: j['dither_enabled'] as bool,
+      ditherEveryNFrames: (j['dither_every_n_frames'] as num).toInt(),
+      ditherPixels: (j['dither_pixels'] as num).toDouble(),
+      settlePixels: (j['settle_pixels'] as num).toDouble(),
+      settleTimeSec: (j['settle_time_sec'] as num).toInt(),
+      settleTimeoutSec: (j['settle_timeout_sec'] as num).toInt(),
+      forceCalibrationEachSession: j['force_calibration_each_session'] as bool,
+      guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
+        j['guider_setup_type'] as String,
+      ),
+      guideFocalLength: (j['guide_focal_length'] as num).toInt(),
+      guidePixelSize: (j['guide_pixel_size'] as num).toDouble(),
+      raAggressiveness: (j['ra_aggressiveness'] as num).toDouble(),
+      decAggressiveness: (j['dec_aggressiveness'] as num).toDouble(),
+      minimumMove: (j['minimum_move'] as num).toDouble(),
+      decMinimumMove: (decMinimumMove ?? j['minimum_move'] as num).toDouble(),
+      decGuideMode: j['dec_guide_mode'] as String,
+      guiderCamera: j['guider_camera'] as String,
+      guiderCameraId: j['guider_camera_id'] as String,
+      guiderCameraAlpacaUniqueId: j['guider_camera_alpaca_unique_id'] as String,
+      guiderMount: j['guider_mount'] as String,
+      guiderAuxMount: j['guider_aux_mount'] as String,
+      guiderRotator: j['guider_rotator'] as String,
+      guiderAlpacaHost: j['guider_alpaca_host'] as String,
+      guiderAlpacaPort: (j['guider_alpaca_port'] as num).toInt(),
+      guideExposureMinMs: (j['guide_exposure_min_ms'] as num).toInt(),
+      guideExposureMaxMs: (j['guide_exposure_max_ms'] as num).toInt(),
+      guideExposureMs: (j['guide_exposure_ms'] as num).toInt(),
+      guideCameraGain: (j['guide_camera_gain'] as num).toInt(),
+      guiderProfileId: profileId?.toInt() ?? 0,
+    );
+  }
 
   /// The guider settings as sent on PUT (also how the guider panel tells a
   /// real edit from a write that changes nothing).

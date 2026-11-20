@@ -8583,6 +8583,8 @@
     "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
     "placeholders": {"offset": {"type": "String"}}
   },
+  "refusalPolarAlignMovingMount": "Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.",
+  "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
