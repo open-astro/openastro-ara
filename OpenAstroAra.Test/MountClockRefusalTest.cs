@@ -181,6 +181,41 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => device.UTCDate == wall.UtcDateTime, "the reconnect did not set the mount's clock from the trusted time");
         }
 
+        [Test]
+        public async Task The_status_refresh_sets_the_mount_clock_once_NTP_synchronises_the_rig_clock() {
+            // Nothing calls WatchMountClock here: only the connected mount's status refresh can notice that
+            // the kernel clock became trusted (NTP raises no event) and set the mount's clock.
+            var now = new DateTimeOffset(2026, 11, 19, 15, 54, 55, TimeSpan.Zero);
+            var wall = now;
+            long tick = 1_000;
+            var kernelSynced = false;
+            var kernel = new Mock<IKernelClockSyncProbe>();
+            kernel.Setup(k => k.IsSynchronized()).Returns(() => Volatile.Read(ref kernelSynced));
+            var time = new TimeSyncService(NullLogger<TimeSyncService>.Instance, Mock.Of<ISystemClockSetter>(), kernelClock: kernel.Object) {
+                Now = () => wall,
+                TickMs = () => Interlocked.Read(ref tick),
+            };
+            var stale = now.UtcDateTime.AddHours(-7);
+            using var device = new FakeTelescopeDevice { UTCDate = stale };
+            using var svc = new TelescopeService(timeSyncResolver: () => time) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => device,
+                RunSitePush = push => push(),
+                UtcNow = () => wall,
+                TickMs = () => Interlocked.Read(ref tick),
+            };
+            await svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
+            await WaitForAsync(() => svc.MountClockMotionRefusal()?.Contains("not been synced", StringComparison.Ordinal) == true,
+                "the connect's clock check never ran");
+            Assert.That(device.UTCDate, Is.EqualTo(stale), "no trusted time yet: nothing is written");
+
+            // NTP disciplines the rig clock; 31 s later (wall and monotonic together, so no clock step).
+            wall = now + TimeSpan.FromSeconds(31);
+            Volatile.Write(ref kernelSynced, true);
+            Interlocked.Add(ref tick, 31_000);
+            await WaitForAsync(() => device.UTCDate == wall.UtcDateTime, "the status refresh never set the mount's clock");
+        }
+
         // ─── Center and polar alignment ───
 
         private static Mock<IMountClockGate> ClosedGate() {
