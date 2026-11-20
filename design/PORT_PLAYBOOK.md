@@ -1213,7 +1213,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 
 A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 
-Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
+Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. `release.yml` runs on a `vX.Y.Z` or `vX.Y.Z-beta.N` tag and publishes the source-only GitHub Release; `issue-labels.yml` keeps the type/priority/size reminder on issues; `close-linked-issues.yml` closes the issues a PR merged into `stable/**` names (`docs/RELEASES.md`, #2093).
 
 The matrix reached this shape progressively through the `prep-ci` placeholder (§19.1's pre-Phase-14 exception) rather than in one `port(ci)` commit.
 

@@ -272,7 +272,7 @@ from `scripts/nightly-version.py`: `<next>~~nightly<YYYYMMDDHHMM>.g<sha7>`, wher
 `<next>` is the release that code will ship in. The double `~` makes it sort
 below that release's first beta too. On `stable/X.Y` between betas (VERSION
 `X.Y.Z~betaN`) it is `X.Y.Z~betaN+nightly<YYYYMMDDHHMM>.g<sha7>`, which sorts
-after beta N and before beta N+1. It is never below `X.(Y+1).0`
+after beta N and before beta N+1. On `master` it is never below `X.(Y+1).0`
 once `stable/X.Y` or a `vX.Y.*` tag exists, because `master` is already past
 that line. These packages stay as CI artifacts. They are **never published** as
 a release, to apt or anywhere else.

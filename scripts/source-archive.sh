@@ -117,7 +117,7 @@ archive() {
     fi
     if ! git -C "${sub}" cat-file -e "${sha}^{commit}" 2>/dev/null; then
       echo "Fetching ${path} ${sha} (not in the local submodule)" >&2
-      git -C "${sub}" fetch --quiet --depth 1 origin "${sha}" || {
+      git -C "${sub}" fetch --quiet --depth 1 origin "${sha}" </dev/null || {
         echo "ERROR: submodule ${path} has no commit ${sha}; update it and retry" >&2
         exit 1
       }
