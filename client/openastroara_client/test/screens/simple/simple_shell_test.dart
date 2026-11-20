@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:dio/dio.dart' show DioException, RequestOptions, Response;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:openastroara/models/discovered_device.dart';
@@ -61,6 +63,7 @@ import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
+import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
@@ -801,17 +804,18 @@ class _GuiderConnecting extends _GuiderCalls {
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connecting'});
 }
 
-/// A guider mid-connect that [up] brings to connected.
-class _GuiderComingUp extends _GuiderConnecting {
-  void up() => state = AsyncData(GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected'}));
-}
 
-/// The rig's guide optics: unset for the first [unsetReads] reads, then filled (the rig fills them a
-/// few round trips after the guider connects).
+/// The rig's guider section, tagged (ADR 0015): [fill] is the rig filling the
+/// guide optics from the guider once it connects, which moves the tag on.
 class _GuideOpticsApi extends ProfileApi {
-  _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
-  int unsetReads;
+  _GuideOpticsApi([this.phd2 = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  Phd2Settings phd2;
+  int version = 1;
   int reads = 0;
+  void fill() {
+    phd2 = phd2.copyWith(guideFocalLength: 128, guidePixelSize: 3.75);
+    version++;
+  }
   // The Storage block loads its section when Rig opens; no network here.
   @override
   Future<({StorageSettings value, String? etag})> getStorageSection() async =>
@@ -819,10 +823,14 @@ class _GuideOpticsApi extends ProfileApi {
   // The status pill loads the safety policies; no network here.
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
+  // Live sync refreshes the offline cache after a reload; no network here.
   @override
-  Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
-      ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
-      : const Phd2Settings();
+  Future<ProfileList> listProfiles() async => throw StateError('unreachable');
+  @override
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async {
+    reads++;
+    return (value: phd2, etag: '"v$version"');
+  }
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
       (value: const OpticsSettings(), etag: '"v1"');
@@ -840,20 +848,39 @@ class _PierRefusedApi extends ProfileApi {
   Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
       throw StateError('unreachable');
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const Phd2Settings(), etag: '"v1"');
 }
 
-/// The rig's guider section as a store: reads return it, saves replace it.
+/// The rig's guider section as a tagged store: reads return it, a save with
+/// the tag it holds replaces it, one with an older tag is refused (412).
 class _Phd2StoreApi extends ProfileApi {
-  _Phd2StoreApi() : super(const AraServer(hostname: 'test', port: 1));
-  Phd2Settings stored = const Phd2Settings();
+  _Phd2StoreApi([this.stored = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  Phd2Settings stored;
+  int version = 1;
   final saved = <Phd2Settings>[];
+  /// The rig wrote its copy itself (a fill from the guider): the tag moves on.
+  void daemonWrote(Phd2Settings s) {
+    stored = s;
+    version++;
+  }
+  // The Storage block and the status pill load their sections; no network here.
   @override
-  Future<Phd2Settings> getPhd2Settings() async => stored;
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      throw StateError('unreachable');
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async {
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
+  @override
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async => (value: stored, etag: '"v$version"');
+  @override
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(Phd2Settings s, {String? ifMatch}) async {
+    if (ifMatch != null && ifMatch != '"v$version"') {
+      final req = RequestOptions(path: '/api/v1/profile/phd2');
+      throw DioException(requestOptions: req, response: Response<void>(requestOptions: req, statusCode: 412));
+    }
     saved.add(s);
-    return stored = s;
+    version++;
+    return (value: stored = s, etag: '"v$version"');
   }
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
@@ -1016,9 +1043,10 @@ class _OpticsApi extends ProfileApi {
   @override
   Future<({StorageSettings value, String? etag})> getStorageSection() async =>
       throw StateError('unreachable');
-  // Rig reads the guide optics when it opens; no network here.
+  // The guider settings load themselves when Rig opens; no network here.
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const Phd2Settings(), etag: '"v1"');
   /// The optics read fails, as against a rig that does not answer.
   bool fail = false;
   @override
@@ -4420,10 +4448,12 @@ void main() {
   });
 
   testWidgets("Rig names the main scope's optics and shows the guide scope's, kept in the profile", (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
-    c.read(phd2SettingsProvider.notifier)
-      ..setGuideFocalLength(128)
-      ..setGuidePixelSize(3.75);
+    final api = _Phd2StoreApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(_GuiderGone.new),
+      profileApiProvider.overrideWithValue(api),
+    ]);
     await _openSection(tester, 'Rig');
     for (final t in ['Main scope aperture', 'Main scope focal length', 'Guide scope focal length', 'Guide camera pixel size']) {
       await tester.ensureVisible(find.text(t));
@@ -4439,35 +4469,36 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
     await tester.pumpAndSettle();
-    expect(c.read(phd2SettingsProvider).guideFocalLength, 228, reason: 'per digit, like the main scope');
+    expect(c.read(phd2SettingsProvider).value!.guideFocalLength, 228, reason: 'per digit, like the main scope');
+    expect(api.saved.single.guideFocalLength, 228);
   });
 
-  testWidgets("Rig shows the guide optics the rig fills a few seconds after the guider connects", (tester) async {
-    // PR #1486 review: one read on Connected usually lands before the rig's fill, leaving 0 / Not set.
-    final guider = _GuiderComingUp();
-    final api = _GuideOpticsApi(2);
-    await _pump(tester, const Size(1024, 768), linkUp: true,
+  testWidgets("Guider: Rig shows the guide optics the rig fills once the guider connects, through its profile.updated (ADR 0015)",
+      (tester) async {
+    // PR #1486 review: the rig fills them a few round trips after the guider connects; the daemon
+    // announces the write and live sync reloads the section.
+    ProfileApi.forgetOwnWrites();
+    final api = _GuideOpticsApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
-      guiderStatusProvider.overrideWith(() => guider),
+      guiderStatusProvider.overrideWith(_GuiderUp.new),
       profileApiProvider.overrideWithValue(api),
     ]);
     await _openSection(tester, 'Rig');
-    guider.up();
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(seconds: 1));
-    }
+    await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('Not set')), findsOneWidget);
+    api.fill();
+    await applyProfileUpdated(c, 'phd2');
+    await tester.pump();
     expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
     expect(find.text('3.75 µm'), findsOneWidget);
-    final settled = api.reads;
-    await tester.pump(const Duration(seconds: 5));
-    expect(api.reads, settled, reason: 'it stops reading once both are filled');
   });
 
   testWidgets("Rig reads the guide optics from the rig when it opens, the guider already connected", (tester) async {
     // On the iPad (2026-11-03): the rig held 128 mm / 3.75 µm but Rig showed Not set — nothing read the
     // profile's guider section unless the guider connected while Rig was open.
-    final api = _GuideOpticsApi(0);
+    final api = _GuideOpticsApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
     await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderUp.new),
@@ -4573,9 +4604,10 @@ void main() {
   testWidgets("saving the guide focal length keeps the pixel size the rig filled since Rig's read (ALP-4982)",
       (tester) async {
     // #1486 review: the save sent the whole client-side section, so a pixel size of 0 read before the
-    // rig's fill went back over the filled 3.75 µm.
+    // rig's fill went back over the filled 3.75 µm. Now the save carries the tag of the copy it was made
+    // from: the rig refuses it, nothing is written, and Rig shows the rig's copy (ADR 0015).
     final api = _Phd2StoreApi();
-    await _pump(tester, const Size(1024, 768), linkUp: true,
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderGone.new),
       profileApiProvider.overrideWithValue(api),
@@ -4583,7 +4615,7 @@ void main() {
     await _openSection(tester, 'Rig');
     await tester.pump();
     expect(find.text('Not set'), findsWidgets, reason: 'precondition: Rig read the section unset');
-    api.stored = const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75); // the rig's fill
+    api.daemonWrote(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)); // the rig's fill, unheard
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
@@ -4592,9 +4624,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
     await tester.pumpAndSettle();
-    expect(api.saved, isNotEmpty);
-    expect(api.saved.last.guidePixelSize, 3.75, reason: 'the filled pixel size stays');
-    expect(api.stored.guideFocalLength, isNot(128), reason: "the user's focal length is saved");
+    expect(api.saved, isEmpty, reason: 'nothing written over the fill');
+    expect(api.stored.guidePixelSize, 3.75, reason: 'the filled pixel size stays');
+    expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75, reason: "Rig shows the rig's copy");
+    expect(c.read(simpleMessagesProvider).last.detail, contains('changed on the rig'));
   });
 
   testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {

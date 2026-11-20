@@ -8,7 +8,6 @@ import 'polar_align/polar_align_routine_state.dart';
 import 'profile_cache_state.dart';
 import 'profile_management_state.dart';
 import 'settings/migrated_sections.dart';
-import 'settings/phd2_settings_state.dart';
 
 /// #1644 — another device (or the daemon) wrote profile [section]
 /// (`profile.updated`): read that section again so an open screen never shows
@@ -48,8 +47,6 @@ final Map<String, _Hydrate> _hydrators = {
   for (final route in {for (final s in migratedSections) s.route})
     route: (c, api) => _hydrateMigrated(c, api, route),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
-  'phd2': (c, api) =>
-      c.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
 };
 
 Future<void> _hydrateMigrated(

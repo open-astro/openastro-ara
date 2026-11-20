@@ -323,7 +323,7 @@ class SimpleGuideLiveShutter extends ConsumerWidget {
         null;
     final gated =
         ref.watch(
-          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
         ) &&
         !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return SimpleShutterButton(
@@ -1213,7 +1213,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final status = live.status;
     final guider = ref.watch(guiderStatusProvider).asData?.value;
     final oag = ref.watch(
-      phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+      phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
     );
     final gated =
         oag &&

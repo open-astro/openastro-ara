@@ -254,7 +254,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
     // No daemon to ask what the rig has — settings are the best we know.
-    final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider))
+    final rig = rigCapabilitiesFromSettings(
+      container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
+    )
         .copyWith(pauseForFilterSwap: pauseForFilterSwap);
     final choice = filterPlan != null
         ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
@@ -663,7 +665,8 @@ Future<TargetPlanChoice?> _choosePlan(
 /// nudges nothing).
 int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
   if (!choice.guide) return null;
-  final phd2 = container.read(phd2SettingsProvider);
+  final phd2 =
+      container.read(phd2SettingsProvider).value ?? const Phd2Settings();
   return phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : null;
 }
 
