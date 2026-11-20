@@ -196,6 +196,27 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // A sync moves no motor, but it shifts the RA reading Polar Align steers its turns by (a jump of 0.5° reverses the
+        // motor) and measures the sweep from. While the run holds the mount, Center's mediator sync and a REST sync are not
+        // sent; Center falls back to its offset, as for a mount that cannot sync.
+        [Test]
+        public async Task A_sync_is_not_sent_while_Polar_Align_holds_the_mount() {
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount());
+            using var svc = await ConnectAsync(box, log);
+            var here = new Coordinates(6.0, 45.0, Epoch.J2000, Coordinates.RAType.Hours);
+
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.False, "Center's sync is not sent");
+                await svc.SlewAsync(new SlewRequestDto(6.0, 45.0, Sync: true), idempotencyKey: null, CancellationToken.None);
+                await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the REST sync was not dropped");
+                Assert.That(Put(box, "synctocoordinates"), Is.False, "no sync reached the mount");
+            }
+
+            Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.True, "sent once the run gave the mount back");
+            Assert.That(Put(box, "synctocoordinates"), Is.True);
+        }
+
         // #2048 ARA-2 — the owner never blocks a stop: Emergency Stop's and Stop Mount's AbortSlew, a pad stop (rate 0),
         // tracking off, and the safety and fault parks (they call the service's ParkAsync, not the REST endpoint).
         [Test]

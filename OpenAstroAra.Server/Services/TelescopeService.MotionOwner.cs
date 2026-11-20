@@ -21,9 +21,10 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #2066 (ARA-2), #2065 (ARA-7) — the mount's single motion owner. A routine that drives the motors itself (Polar Align)
 /// holds it for its whole run; meanwhile every GoTo that goes through the mediator (the sequencer's, Center's, the
-/// meridian flip's) fails here, and the REST GoTo, Center, Park and Home endpoints refuse with
-/// <c>polar-align-moving-mount</c> (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
-/// send are one step: a GoTo is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so one the REST
+/// meridian flip's) fails here, a sync is not sent (it shifts the readings the routine steers and measures by), and the
+/// REST GoTo, sync, Center, Park and Home endpoints refuse with <c>polar-align-moving-mount</c>
+/// (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the send are one step: a GoTo or sync
+/// is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so one the REST
 /// endpoint accepted just before the routine took the owner is dropped when it would go out, and the routine cannot take
 /// the owner while one is on its way. Nothing that stops the mount is refused: AbortSlew (Stop Mount, Emergency Stop), a
 /// pad stop, tracking off, and the safety and fault parks (they call <see cref="ParkAsync"/> and end the routine through
@@ -35,7 +36,7 @@ public sealed partial class TelescopeService {
     // The live hold (its identity: an older hold of the same owner gives nothing back) and its owner. Guarded by _ownerGate.
     private object? _holdToken;
     private string? _holdOwner;
-    // GoTos being sent now (TryBeginMotionDispatch). Guarded by _ownerGate.
+    // GoTos and syncs being sent now (TryBeginMotionDispatch). Guarded by _ownerGate.
     private int _dispatching;
 
     /// <inheritdoc />
@@ -55,7 +56,7 @@ public sealed partial class TelescopeService {
                 throw new InvalidOperationException($"{held} holds the mount's motion");
             }
             if (_dispatching > 0) {
-                throw new InvalidOperationException("a GoTo is being sent to the mount");
+                throw new InvalidOperationException("a GoTo or sync is being sent to the mount");
             }
             var hold = new Hold(this, owner);
             _holdToken = hold;
@@ -82,7 +83,7 @@ public sealed partial class TelescopeService {
         ? $"Polar alignment is running and holds the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it)."
         : $"{owner} holds the mount, so the {what} was not sent.";
 
-    /// <summary>Begin sending a GoTo, unless a routine holds the mount (then null, and <paramref name="owner"/> names
+    /// <summary>Begin sending a GoTo or sync, unless a routine holds the mount (then null, and <paramref name="owner"/> names
     /// it). Checked and counted in one step with <see cref="AcquireMotion"/>: while the returned scope is open, no routine
     /// can take the owner, and once one has it, nothing more is sent.</summary>
     private Dispatch? TryBeginMotionDispatch(out string? owner) {
@@ -138,6 +139,6 @@ public sealed partial class TelescopeService {
     [LoggerMessage(Level = LogLevel.Warning, Message = "{Op}: refused — {Owner} holds the mount's motion")]
     private partial void LogMountOpRejectedOwned(string op, string owner);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "slew to RA {RaHours} h, Dec {DecDeg}° dropped: {Owner} took the mount's motion after the GoTo was accepted")]
-    private partial void LogSlewDroppedOwned(double raHours, double decDeg, string owner);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Op} to RA {RaHours} h, Dec {DecDeg}° dropped: {Owner} took the mount's motion after it was accepted")]
+    private partial void LogSlewDroppedOwned(string op, double raHours, double decDeg, string owner);
 }

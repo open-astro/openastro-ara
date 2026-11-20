@@ -847,6 +847,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private void SlewInBackground(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch) {
         try {
+            // #2066 (ARA-2) — the owner was checked when the GoTo or sync was accepted; Polar Align may have taken the
+            // mount since (a GoTo waits up to 3 s for the guider to stop). Checked again and counted in one step with the
+            // owner, so Polar Align cannot take the mount while this goes out, and it is dropped once Polar Align has it.
+            using var dispatch = TryBeginMotionDispatch(out var owner);
+            if (dispatch is null) {
+                LogSlewDroppedOwned(sync ? "sync" : "slew", raHours, decDeg, owner!);
+                ClearPendingSlewTarget();
+                return;
+            }
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
@@ -858,15 +867,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
                 // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
                 // a refused write is logged at Debug and the slew attempt stays authoritative.
-                // #2066 (ARA-2) — the owner was checked when the GoTo was accepted; Polar Align may have taken the mount
-                // since (the guider stop above waits up to 3 s). Checked again and counted in one step with the owner, so
-                // Polar Align cannot take the mount while this GoTo goes out, and it is dropped once Polar Align has it.
-                using var dispatch = TryBeginMotionDispatch(out var owner);
-                if (dispatch is null) {
-                    LogSlewDroppedOwned(raHours, decDeg, owner!);
-                    ClearPendingSlewTarget();
-                    return;
-                }
                 if (!TryEnableTrackingUnlessAborted(client, abortEpoch)) {
                     LogSlewDroppedAfterAbort(raHours, decDeg);
                     ClearPendingSlewTarget();

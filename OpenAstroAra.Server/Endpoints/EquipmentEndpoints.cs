@@ -58,10 +58,9 @@ public static partial class EquipmentEndpoints {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
         ArgumentNullException.ThrowIfNull(request);
-        // #2066 — a sync moves nothing and stays allowed; force does not bypass it.
-        if (request.Sync != true) {
-            ThrowIfPolarAlignMovesTheMount(polarAlign, "slew", telescope);
-        }
+        // #2066 — force does not bypass it. A sync is refused too: it moves no motor, but it shifts the RA reading Polar
+        // Align steers its turns by (a jump of 0.5° reverses the motor) and measures its sweep from.
+        ThrowIfPolarAlignMovesTheMount(polarAlign, request.Sync == true ? "sync" : "slew", telescope);
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
         }
@@ -85,9 +84,9 @@ public static partial class EquipmentEndpoints {
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
     }
 
-    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a pad move, Home or Park while Polar Align
+    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a sync, a pad move, Home or Park while Polar Align
     /// turns the mount, or its stop is not confirmed yet: two commands would drive the motors at once. With
-    /// <paramref name="mount"/> (a GoTo, Center, Home or Park; not a pad move) it is refused for Polar Align's whole run
+    /// <paramref name="mount"/> (a GoTo, a sync, Center, Home or Park; not a pad move) it is refused for Polar Align's whole run
     /// too, the adjust loop included, while it holds the mount's motion owner (#2066 ARA-2, Joey 2026-11-20 on #2048).
     /// Stop Polar Align (or Stop Mount, which ends it) first. A pad stop (rate 0) and Stop Mount are never refused.</summary>
     internal static void ThrowIfPolarAlignMovesTheMount(IPolarAlignService? polarAlign, string what, IMountMotionControl? mount = null) {

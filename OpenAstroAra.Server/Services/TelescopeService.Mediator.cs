@@ -847,6 +847,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogSlewTargetRefused("telescope.sync", refusal);
             return false;
         }
+        // #2066 (ARA-2) — while Polar Align holds the mount, a sync (Center's, after its solve) would shift the RA reading
+        // its turn steers by and reverse the motor: a clean "not synced", and Center falls back to its offset. Counted with
+        // the owner in one step until the sync returns, so Polar Align cannot take the mount while it goes out.
+        using var dispatch = TryBeginMotionDispatch(out var owner);
+        if (dispatch is null) {
+            LogMountOpRejectedOwned("telescope.sync", owner!);
+            return false;
+        }
         NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
         try {
             var opTask = Task.Run(() => {
