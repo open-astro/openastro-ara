@@ -382,7 +382,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
         // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
         // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
-        _ = BumpAbortEpochUnlessAbortedSince(abortEpoch, "findhome");
+        var fence = BumpAbortEpochUnlessAbortedSince(abortEpoch, "findhome");
         Lease.CancelAll();
         await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
@@ -396,7 +396,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // idle-not-parked with tracking off, so a motion note would leave the old expectation
         // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
         NoteMountCommand(w => w.NoteParkCommanded());
-        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
+        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => {
+            // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the watchdog)
+            // wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount after the stop.
+            if (AbortedSince(fence)) {
+                LogFindHomeDroppedAfterAbort();
+                return;
+            }
+            c.FindHome();
+        }), CancellationToken.None);
         return Accepted("telescope.findhome", idempotencyKey);
     }
 
@@ -1737,6 +1745,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope Find Home dropped: the mount was stopped after the Find Home was accepted")]
+    private partial void LogFindHomeDroppedAfterAbort();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "telescope: motion fenced ({Reason}) — every routine that drives the motors stops, and no queued GoTo or Park goes out")]
     private partial void LogMotionFenced(string reason);

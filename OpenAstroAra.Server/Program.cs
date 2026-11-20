@@ -1092,7 +1092,10 @@ public partial class Program {
                 // §42.5 — the reaction outcome lands on the fault-log row.
                 sp.GetService<IFaultLogService>(),
                 // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
-                () => sp.GetService<GuiderService>()));
+                () => sp.GetService<GuiderService>(),
+                // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());

@@ -242,5 +242,41 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(svc.IsMovingMount, Is.False, "stopped and confirmed");
         }
+
+        /// <summary>A solver that runs <paramref name="stop"/> on the first live frame (the fourth solve, after seeds A, B
+        /// and C), before it answers.</summary>
+        private sealed class StopOnFirstLiveSolve(IPolarAlignFrameSolver inner, Action stop) : IPolarAlignFrameSolver {
+            private int _solves;
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                if (Interlocked.Increment(ref _solves) == 4) {
+                    stop();
+                }
+                return inner.SolveAsync(fitsPath, binning, hintRa, hintDec, ct);
+            }
+        }
+
+        // The Polar Aligner moves the mount's polar axis. A Stop Mount tapped while a live frame exposes or solves lands after
+        // the loop's check at the top of the frame: the measurement must not be answered with a Polar Aligner move.
+        [Test]
+        public async Task Stop_Mount_during_a_live_frame_sends_the_Polar_Aligner_no_move() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10);
+            var stopped = 0;
+            var solver = new StopOnFirstLiveSolve(new CorrectedSky(aligner), () => {
+                Interlocked.Exchange(ref stopped, 1);
+                mount.StopMount();
+            });
+            using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore(), aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(Volatile.Read(ref stopped), Is.EqualTo(1), "the run reached its first live frame");
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(aligner.Moves, Is.Empty, "no Polar Aligner move after the stop");
+        }
     }
 }

@@ -259,7 +259,8 @@ framing/focus loop when you need to point or focus by eye.
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
   While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
   ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
-  turns unsafe, the safety park stops Polar Align and the Polar Aligner before it parks.
+  turns unsafe, or a device fault ends in a park, the park stops Polar Align and the Polar Aligner
+  first. A Home you tap just before Stop Mount or Emergency Stop does not start after the stop.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
