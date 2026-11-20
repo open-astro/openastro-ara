@@ -1996,7 +1996,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['site', 'name', 'location', 'place', 'observatory'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'Backyard',
+    defaultValue: null,
     profilePath: 'site.name',
   ),
   Setting(
@@ -2014,7 +2014,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -90, max: 90, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.latitude_deg',
   ),
   Setting(
@@ -2033,7 +2033,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -180, max: 180, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.longitude_deg',
   ),
   Setting(
@@ -2044,7 +2044,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['elevation', 'altitude', 'height', 'meters', 'sea level', 'asl'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -500, max: 9000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.elevation_m',
   ),
   Setting(
@@ -2055,7 +2055,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['time zone', 'timezone', 'iana', 'tz', 'utc', 'dst'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'UTC',
+    defaultValue: null,
     profilePath: 'site.time_zone',
   ),
   Setting(
@@ -2072,7 +2072,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.permanent_pier',
   ),
   Setting(
@@ -2091,7 +2091,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.use_custom_horizon',
   ),
   // §36 custom skyline — one composite list setting (the panel embeds a
@@ -2126,7 +2126,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['horizon', 'altitude', 'floor', 'minimum', 'limit', 'degrees'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 20.0,
+    defaultValue: null,
     profilePath: 'site.default_horizon_altitude_deg',
   ),
   Setting(
@@ -2146,7 +2146,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 1, max: 9),
-    defaultValue: 6,
+    defaultValue: null,
     profilePath: 'site.bortle_class',
   ),
   Setting(
@@ -2164,7 +2164,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
-    defaultValue: 2.5,
+    defaultValue: null,
     profilePath: 'site.typical_seeing_arcsec',
   ),
   Setting(
@@ -2188,7 +2188,7 @@ const List<Setting> settingsRegistry = [
       'Nautical (−12°)',
       'Astronomical (−18°)',
     ]),
-    defaultValue: 'Astronomical (−18°)',
+    defaultValue: null,
     profilePath: 'site.twilight_definition',
   ),
   Setting(
@@ -2208,7 +2208,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 30.0,
+    defaultValue: null,
     profilePath: 'site.soft_warning_altitude_deg',
   ),
   Setting(
@@ -2229,7 +2229,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 0, max: 10080),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'site.max_sequence_runtime_min',
   ),
 

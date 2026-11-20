@@ -552,7 +552,8 @@ class _SeededSite extends SiteSettingsNotifier {
   _SeededSite(this._v);
   final SiteSettings _v;
   @override
-  SiteSettings build() => _v;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededGuider extends GuiderStatusNotifier {

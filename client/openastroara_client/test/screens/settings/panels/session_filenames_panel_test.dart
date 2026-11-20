@@ -32,14 +32,23 @@ class _FakeRig extends FakeStorageApi {
     String? ifMatch,
   }) async => (value: value, etag: '"f1"');
 
+  /// Every site save that reached the rig.
+  final sitePuts = <SiteSettings>[];
+
   @override
-  Future<SiteSettings> getSiteSettings() async {
+  Future<({SiteSettings value, String? etag})> getSiteSection() async {
     if (failSite != null) throw failSite!;
-    return const SiteSettings();
+    return (value: const SiteSettings(latitudeDeg: 51.477833), etag: '"s1"');
   }
 
   @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async => value;
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings value, {
+    String? ifMatch,
+  }) async {
+    sitePuts.add(value);
+    return (value: value, etag: '"s2"');
+  }
 
   /// Every optics save that reached the rig.
   final opticsPuts = <OpticsSettings>[];
@@ -137,7 +146,7 @@ void main() {
     final api = _FakeRig()..failSite = StateError('Site did not answer.');
     await _pump(tester, api);
     expect(
-      tester.getSemantics(find.text('Site did not answer.')),
+      tester.getSemantics(find.textContaining('Site did not answer.')),
       isSemantics(isLiveRegion: true),
     );
   });
@@ -158,6 +167,40 @@ void main() {
         api.opticsPuts.single.focalLengthMm,
         382,
         reason: 'the rest of the rig\'s copy goes back unchanged',
+      );
+    },
+  );
+
+  testWidgets(
+    'File naming: the observer name is saved with the site copy from the rig (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig();
+      final container = await _pump(tester, api);
+      expect(find.widgetWithText(EditableTextRow, 'Observer'), findsOneWidget);
+      container.read(siteSettingsProvider.notifier).setObserverName('J. Troy');
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.sitePuts.single.observerName, 'J. Troy');
+      expect(
+        api.sitePuts.single.latitudeDeg,
+        51.477833,
+        reason: 'the rest of the rig\'s copy goes back unchanged',
+      );
+    },
+  );
+
+  testWidgets(
+    'File naming: Save with the site not loaded from the rig writes no site (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig()..failSite = StateError('Site did not answer.');
+      final container = await _pump(tester, api);
+      expect(find.textContaining('Not loaded'), findsOneWidget);
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.sitePuts, isEmpty);
+      expect(
+        find.textContaining('Settings not loaded from the rig'),
+        findsWidgets,
       );
     },
   );

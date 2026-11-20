@@ -57,7 +57,8 @@ class _SeededSite extends SiteSettingsNotifier {
   _SeededSite(this._site);
   final SiteSettings _site;
   @override
-  SiteSettings build() => _site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _site, source: SectionSource.rig);
 }
 
 class _SeededCalibration extends SkyModelCalibrationNotifier {

@@ -14,6 +14,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/slew_rates.dart';
 
@@ -32,14 +33,17 @@ class _FixedSite extends SiteSettingsNotifier {
   _FixedSite(this._site);
   final SiteSettings _site;
   @override
-  SiteSettings build() => _site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _site, source: SectionSource.rig);
 }
 
 class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi() : super(const AraServer(hostname: 'h', port: 5555));
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408);
+  Future<({SiteSettings value, String? etag})> getSiteSection() async => (
+    value: const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
+    etag: '"v1"',
+  );
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
@@ -238,7 +242,7 @@ void main() {
     expect(find.text('Longitude'), findsNothing);
   });
 
-  testWidgets('hydrates the site on mount and shows lat/long', (tester) async {
+  testWidgets('the site loads itself from the rig and shows lat/long', (tester) async {
     await _wideSurface(tester);
     final api = _FakeMountApi(_status());
     await tester.pumpWidget(
@@ -257,7 +261,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // The panel hydrated the profile's site from the daemon (not overridden).
+    // The site loaded itself from the rig (ADR 0015; not overridden).
     expect(find.text('Latitude'), findsOneWidget);
     expect(find.text('12.60° N'), findsOneWidget);
     expect(find.text('Longitude'), findsOneWidget);

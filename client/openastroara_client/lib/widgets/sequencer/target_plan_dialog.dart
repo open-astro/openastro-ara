@@ -128,7 +128,7 @@ double suggestedSubSeconds(
     optics: ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
     electronics:
         ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
-    site: ref.read(siteSettingsProvider),
+    site: ref.read(siteSettingsProvider).value ?? const SiteSettings(),
     filterSet: ref.read(filterSetProvider).value ?? const FilterSetSettings(),
     filterName: filterName,
     raDeg: raDeg,

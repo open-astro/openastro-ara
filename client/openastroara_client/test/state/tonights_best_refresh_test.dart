@@ -4,14 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 
 class _Site extends SiteSettingsNotifier {
   @override
-  SiteSettings build() =>
-      const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015), source: SectionSource.rig);
 }
 
 void main() {

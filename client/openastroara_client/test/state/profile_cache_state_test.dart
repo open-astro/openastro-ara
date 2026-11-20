@@ -209,7 +209,7 @@ void main() {
     expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 382);
     expect(c.read(imagingDefaultsProvider).value!.defaultGain, 101);
     expect(c.read(autofocusSettingsProvider).value!.steps, 9);
-    expect(c.read(siteSettingsProvider).siteName, 'South GA');
+    expect(c.read(siteSettingsProvider).value!.siteName, 'South GA');
     expect(c.read(filterSetProvider).value!.filters.single.name, 'Ha');
     expect(c.read(cameraElectronicsProvider).value!.readNoiseE, 1.5);
   });
@@ -356,6 +356,41 @@ void main() {
     addTearDown(c.dispose);
     expect(await seedPlanningFromCache(c, 'p1'), isTrue);
     expect(c.read(opticsSettingsProvider).value, isNull);
+  });
+
+  test('the site from the snapshot is a cache copy: readable, never saved '
+      '(ADR 0015)', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final rig = FakeSectionRig({'site': rigDefaults['site']})
+      ..failGet.add('site');
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(siteSettingsProvider).source, SectionSource.cache);
+    c.read(siteSettingsProvider.notifier).setSkyBortle(9);
+    expect(c.read(siteSettingsProvider).value!.bortleClass, 4);
+    await expectLater(
+      c.read(siteSettingsProvider.notifier).save(rig.api()),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a snapshot without the site leaves it not loaded (ADR 0015)',
+      () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+    });
+    final c = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(siteSettingsProvider).source, SectionSource.notLoaded);
+    expect(c.read(siteSettingsProvider).value, isNull);
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',

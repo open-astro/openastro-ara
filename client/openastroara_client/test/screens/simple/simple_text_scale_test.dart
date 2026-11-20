@@ -55,6 +55,8 @@ import 'package:openastroara/state/ws/ws_providers.dart' show serverLinkUpProvid
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 
+import '../../support/site_section.dart';
+
 /// The profile's optics, in from the rig from the start (no load, no network).
 class _RigOptics extends OpticsSettingsNotifier {
   @override
@@ -212,6 +214,8 @@ void main() {
           discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
           // The profile's optics in from the rig (ADR 0015): Rig shows its telescope wheels.
           opticsSettingsProvider.overrideWith(_RigOptics.new),
+          // The profile's site, in from the rig from the start (ADR 0015).
+          siteFromRig(),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),

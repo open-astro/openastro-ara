@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../state/profile_management_state.dart';
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -9,8 +8,6 @@ import '../../../state/settings/site_settings_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/frame_naming.dart';
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -36,70 +33,21 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
-  /// Save also persists the site, which still loads the old way; until it has
-  /// been hydrated, saving would push defaults over server values a failed
-  /// hydrate never loaded. Storage, filenames and optics guard their own save
-  /// (ADR 0015).
-  bool _hydrated = false;
-
   // The template rides with storage settings; the separator + compression
-  // toggles ride with filenames; the telescope name rides with optics. All
-  // are one save.
+  // toggles ride with filenames; the telescope name rides with optics; the
+  // observer name rides with the site. All are one save.
   @override
   List<PanelSection> get sections => [
     storageSettingsProvider,
     filenamesSettingsProvider,
     opticsSettingsProvider,
+    siteSettingsProvider,
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-      _hydrated = true;
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () => _lastError = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionLoadSettings,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Future<void> panelSave() async {
     setState(() => _lastError = null);
-    if (!_hydrated) {
-      // Retry the load rather than save blind: persisting unhydrated
-      // providers would overwrite real profile values with defaults.
-      await _hydrate();
-      if (!_hydrated) {
-        if (!mounted) return;
-        setState(
-          () => _lastError =
-              'Couldn\'t load your saved settings — not saving over them. '
-              'Check the connection and try again.',
-        );
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_lastError!)));
-        return;
-      }
-    }
-    final error = await saveSections(
-      andThen: (api) =>
-          ref.read(siteSettingsProvider.notifier).persistToServer(api),
-    );
+    final error = await saveSections();
     if (mounted) setState(() => _lastError = error);
   }
 
@@ -111,7 +59,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final fn = ref.read(filenamesSettingsProvider.notifier);
     final sn = ref.read(storageSettingsProvider.notifier);
     final ss = ref.watch(storageSettingsProvider).value!;
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value!;
     final optics = ref.watch(opticsSettingsProvider).value!;
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
 
@@ -210,7 +158,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           label: 'Observer',
           helpKey: 'session.filenames.observer',
           currentValue: site.observerName,
-          getCanonical: () => ref.read(siteSettingsProvider).observerName,
+          getCanonical: () =>
+              ref.read(siteSettingsProvider).value?.observerName ?? '',
           parse: (v) =>
               ref.read(siteSettingsProvider.notifier).setObserverName(v),
         ),

@@ -236,7 +236,8 @@ final _en = lookupAppLocalizations(const Locale('en'));
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true, bool rigOptics = true}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true, bool rigOptics = true,
+    SiteSettings? rigSite = const SiteSettings(), Object? siteRefuse}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -254,6 +255,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     rigSetupHydratedProvider.overrideWith((ref) async => false),
     // The profile's optics as the rig's copy (ADR 0015): Rig shows its telescope rows.
     if (rigOptics) opticsSettingsProvider.overrideWith(_RigOptics.new),
+    // The profile's site as the rig's copy (ADR 0015), saved with no HTTP.
+    if (rigSite != null) siteSettingsProvider.overrideWith(() => _RigSite(rigSite, refuse: siteRefuse)),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -815,12 +818,6 @@ class _PierRefusedApi extends ProfileApi {
   Future<SafetyPolicies> getSafetyPolicies() async =>
       throw StateError('unreachable');
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(permanentPier: true);
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async =>
-      throw StateError('The rig refused the change.');
-  @override
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
 }
 
@@ -941,6 +938,41 @@ class _RigOptics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() =>
       const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+}
+
+/// The rig's site: loaded from the start, every save that reached it in
+/// [puts]; [refuse] fails each save instead (nothing written).
+class _RigSite extends SiteSettingsNotifier {
+  _RigSite(this.site, {this.refuse});
+  SiteSettings site;
+  final Object? refuse;
+  final puts = <SiteSettings>[];
+  @override
+  LoadedSection<SiteSettings> build() => LoadedSection(value: site, source: SectionSource.rig, etag: '"v1"');
+  @override
+  Future<Tagged<SiteSettings>> fetch(ProfileApi api) async => (value: site, etag: '"v${puts.length + 1}"');
+  @override
+  Future<Tagged<SiteSettings>> send(ProfileApi api, SiteSettings value, String? etag) async {
+    if (refuse case final e?) throw e;
+    puts.add(value);
+    return (value: site = value, etag: '"v${puts.length + 1}"');
+  }
+}
+
+/// A rig whose site read fails ([fail]) or answers [site] (ADR 0015).
+class _SiteSection extends SiteSettingsNotifier {
+  _SiteSection(this.site);
+  SiteSettings site;
+  bool fail = true;
+  final puts = <SiteSettings>[];
+  @override
+  Future<Tagged<SiteSettings>> fetch(ProfileApi api) async =>
+      fail ? throw StateError('rig unreachable') : (value: site, etag: '"v1"');
+  @override
+  Future<Tagged<SiteSettings>> send(ProfileApi api, SiteSettings value, String? etag) async {
+    puts.add(value);
+    return (value: site = value, etag: '"v${puts.length + 1}"');
+  }
 }
 
 class _OpticsMount extends MountNotifier {
@@ -3557,16 +3589,16 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-rig-lat')));
     await tester.pumpAndSettle();
     await roll('simple-rig-lat-wheel-0', -1);
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2037, 1e-9), reason: 'S to N');
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(37.2037, 1e-9), reason: 'S to N');
     await roll('simple-rig-lat-wheel-6', 1);
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2038, 1e-9));
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(37.2038, 1e-9));
 
     // Elevation: a tap is a metre; a hold runs.
     await tester.ensureVisible(find.byKey(const Key('simple-rig-elevation-up')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-elevation-up')));
     await tester.pump();
-    expect(c.read(siteSettingsProvider).elevationM, 72);
+    expect(c.read(siteSettingsProvider).value!.elevationM, 72);
     final hold = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-rig-elevation-up'))));
     await tester.pump(const Duration(milliseconds: 600));
     for (var i = 0; i < 20; i++) {
@@ -3574,7 +3606,7 @@ void main() {
     }
     await hold.up();
     await tester.pump();
-    expect(c.read(siteSettingsProvider).elevationM, greaterThan(90), reason: 'held: it runs, set on release');
+    expect(c.read(siteSettingsProvider).value!.elevationM, greaterThan(90), reason: 'held: it runs, set on release');
 
     expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
   });
@@ -3584,6 +3616,8 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768), gear: [
       timeSyncApiProvider.overrideWithValue(clock),
       clientGpsPrefsServiceProvider.overrideWithValue(_GpsPrefs()),
+      // A rig to save the site to (the site itself is the rig's copy, no HTTP).
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
     ]);
     c.read(siteSettingsProvider.notifier).setTimeZone('Europe/London');
     await _openSection(tester, 'Rig');
@@ -3594,10 +3628,14 @@ void main() {
     await tester.tap(button);
     await tester.pump(const Duration(seconds: 4)); // the fill waits up to 3 s on this computer's GPS setting
     await tester.pumpAndSettle();
-    final site = c.read(siteSettingsProvider);
+    final site = c.read(siteSettingsProvider).value!;
     expect((site.latitudeDeg, site.longitudeDeg, site.elevationM), (-37.2, 174.88, 71.0));
     expect(site.timeZone, 'Pacific/Auckland', reason: 'from the coordinates, like the full UI\'s GPS fill');
     expect(clock.pushed, hasLength(1), reason: "this device's clock goes to the rig");
+    // The rig's other reads fail here and retry: end them with the container.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Search finds Simple Mode\'s settings, modes and sky objects and opens each inside Simple Mode',
@@ -3966,6 +4004,51 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('the site rows wait for the profile from the rig: no wheel, and nothing is sent (ADR 0015)',
+      (tester) async {
+    final site = _SiteSection(const SiteSettings(latitudeDeg: -37.2037));
+    await _pump(tester, const Size(1024, 768), rigSite: null,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      siteSettingsProvider.overrideWith(() => site),
+    ]);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    expect(find.byKey(const Key('simple-rig-lat')), findsNothing, reason: 'no client default shows');
+    expect(find.byKey(const Key('simple-rig-elevation-up')), findsNothing);
+    expect(find.textContaining('Not loaded'), findsWidgets);
+    site.fail = false;
+    await tester.tap(find.byKey(const Key('section-retry')).first);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-lat')), matching: find.text('37.2037° S')), findsOneWidget,
+        reason: 'Retry loads the rig\'s copy');
+    expect(site.puts, isEmpty);
+  });
+
+  testWidgets('a site change on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
+      (tester) async {
+    final site = _SiteSection(const SiteSettings());
+    final c = await _pump(tester, const Size(1024, 768), rigSite: null,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      siteSettingsProvider.overrideWith(() => site),
+    ]);
+    await tester.pump();
+    c.read(siteSettingsProvider.notifier).seed(const SiteSettings(elevationM: 71));
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    final up = find.byKey(const Key('simple-rig-elevation-up'));
+    await tester.ensureVisible(up);
+    await tester.pumpAndSettle();
+    await tester.tap(up);
+    await tester.pumpAndSettle();
+    expect(site.puts, isEmpty);
+    expect(c.read(siteSettingsProvider).value!.elevationM, 71, reason: 'the cache copy is never edited');
+    expect(find.textContaining('Settings not loaded from the rig'), findsWidgets);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
     final api = _OpticsApi(const OpticsSettings());
     await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
@@ -4276,6 +4359,8 @@ void main() {
           activeId: 'p1',
           profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')],
         ),
+        rigSite: const SiteSettings(permanentPier: true),
+        siteRefuse: StateError('The rig refused the change.'),
         gear: [profileApiProvider.overrideWithValue(_PierRefusedApi())],
       );
       await _openSection(tester, 'Rig');
@@ -7962,7 +8047,7 @@ void main() {
   testWidgets('an interrupted hold on the elevation stepper stops, and sets nothing', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
-    final before = c.read(siteSettingsProvider).elevationM;
+    final before = c.read(siteSettingsProvider).value!.elevationM;
     final up = find.byKey(const Key('simple-rig-elevation-up'));
     await tester.ensureVisible(up);
     await tester.pump();
@@ -7973,7 +8058,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('${before.round()} m'), findsOneWidget, reason: 'the run stopped and the held value was dropped');
-    expect(c.read(siteSettingsProvider).elevationM, before);
+    expect(c.read(siteSettingsProvider).value!.elevationM, before);
   });
 
   testWidgets('Search tells screen readers what it found', (tester) async {
@@ -8024,9 +8109,12 @@ void main() {
   });
 
   testWidgets('a Rig wheel turns with the arrow keys and sets the value', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      // A rig to save the site to (the site itself is the rig's copy, no HTTP).
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+    ]);
     await _openSection(tester, 'Rig');
-    final before = c.read(siteSettingsProvider).latitudeDeg;
+    final before = c.read(siteSettingsProvider).value!.latitudeDeg;
     final lat = find.byKey(const Key('simple-rig-lat'));
     await tester.ensureVisible(lat);
     await tester.pump();
@@ -8036,7 +8124,11 @@ void main() {
     expect(await _tabToLabel(tester, 'simple-rig-lat-wheel-1'), isTrue, reason: 'Tab reaches each wheel');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(before.abs() + 10, 0.001));
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(before.abs() + 10, 0.001));
+    // The rig's other reads fail here and retry: end them with the container.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('#1700: a pill asks once for the cooling fan; Choose opens the Camera window', (tester) async {

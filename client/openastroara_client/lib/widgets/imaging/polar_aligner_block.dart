@@ -106,7 +106,7 @@ class PolarAlignerBlock extends ConsumerWidget {
     // The run belongs to a running routine; its end sends no aligner event.
     final run = live.isActive ? live.correction : null;
     final settings = ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-    final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
+    final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
     final busy = ref.watch(polarAlignActionProvider).busy;
     final aligner = ref.read(polarAlignerProvider.notifier);
 
