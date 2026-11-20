@@ -136,6 +136,25 @@ void main() {
       expect(folded.errorReason, 'axis_fit_failed');
       expect(folded.errorMessage, contains('fitted axis'));
     });
+
+    // #2107 the stop's name rides on the error, and never carries over to the
+    // next error that has none.
+    test('a stop from outside keeps stopped_by, and the next error drops it', () {
+      final stopped = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'the mount was stopped from the direction pad',
+          'stopped_by': 'pad_stop',
+        }),
+      )!;
+      expect(stopped.errorStoppedBy, 'pad_stop');
+      final next = foldPolarAlignEvent(
+        stopped,
+        _event(PolarAlignWsEvents.error, {'reason': 'mount_did_not_stop', 'message': 'cut power'}),
+      )!;
+      expect(next.errorStoppedBy, isNull);
+    });
   });
 
   group('liveFromStatus', () {

@@ -749,6 +749,22 @@ void main() {
     expect(find.text('The mount would not rotate.'), findsOneWidget);
   });
 
+  // #2107 a stop from outside is worded by what stopped the mount, in the app's
+  // language, not the daemon's English (which always said "Stop Mount" before).
+  testWidgets('Simple: a run a pad stop ended names the direction pad, not the daemon English', (tester) async {
+    await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.failed,
+          errorReason: 'slew_aborted_externally',
+          errorMessage: 'the mount was stopped from the direction pad — polar alignment ended. Start again when ready',
+          errorStoppedBy: 'pad_stop',
+        ));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.polarAlignStoppedFromOutside('pad_stop')), findsOneWidget);
+    expect(find.textContaining('the mount was stopped from the direction pad —'), findsNothing);
+  });
+
   group('the shutter runs the routine', () {
     Future<_Api?> shutter(WidgetTester tester, PolarAlignLive live, {String loopMode = PolarAlignLoopModes.loop, bool server = true}) =>
         _pump(tester, live, loopMode: loopMode, server: server, child: const SimplePolarShutter());

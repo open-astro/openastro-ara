@@ -45,6 +45,12 @@ class PolarAlignLive {
   final String? errorReason;
   final String? errorMessage;
 
+  /// #2107 what stopped the mount when [errorReason] is
+  /// `slew_aborted_externally` (the event's `stopped_by`: `user_request`,
+  /// `emergency_stop`, `pad_stop`, `fault_reaction`, …); null when the daemon
+  /// did not say. The card words the end from it in the app's language.
+  final String? errorStoppedBy;
+
   /// The frame being captured/solved right now: when this client saw its
   /// `frame_started` and its exposure. Null between frames.
   final DateTime? frameStartedAt;
@@ -84,6 +90,7 @@ class PolarAlignLive {
     this.consecutiveSolveFailures = 0,
     this.errorReason,
     this.errorMessage,
+    this.errorStoppedBy,
     this.frameStartedAt,
     this.frameExposureSeconds,
     this.lastFrame,
@@ -112,6 +119,8 @@ class PolarAlignLive {
     int? consecutiveSolveFailures,
     String? errorReason,
     String? errorMessage,
+    String? errorStoppedBy,
+    bool clearErrorStoppedBy = false,
     DateTime? frameStartedAt,
     double? frameExposureSeconds,
     PolarAlignFrameInfo? lastFrame,
@@ -138,6 +147,9 @@ class PolarAlignLive {
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
         errorReason: errorReason ?? this.errorReason,
         errorMessage: errorMessage ?? this.errorMessage,
+        errorStoppedBy: clearErrorStoppedBy
+            ? null
+            : errorStoppedBy ?? this.errorStoppedBy,
         frameStartedAt: clearFrameInProgress
             ? null
             : frameStartedAt ?? this.frameStartedAt,
@@ -261,6 +273,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         errorMessage: event.payload['message'] is String
             ? event.payload['message'] as String
             : null,
+        // Each error says its own: a stop's name never carries over to the next.
+        errorStoppedBy: _str(event.payload, 'stopped_by'),
+        clearErrorStoppedBy: _str(event.payload, 'stopped_by') == null,
       );
     case PolarAlignWsEvents.correction:
       final run = PolarAlignerRun.tryParse(event.payload);

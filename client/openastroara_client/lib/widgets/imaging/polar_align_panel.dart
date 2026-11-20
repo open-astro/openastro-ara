@@ -15,6 +15,7 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../util/polar_align_error_text.dart';
 import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
@@ -676,7 +677,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         if (live.phase == PolarAlignStates.failed && live.errorReason != null) ...[
           const SizedBox(height: 12),
           _callout(
-            'Failed (${live.errorReason}): ${live.errorMessage ?? 'see the server log'}',
+            'Failed (${live.errorReason}): ${polarAlignErrorText(context.l10n, live) ?? 'see the server log'}',
             AraColors.accentError,
             Icons.error_outline,
             key: const Key('polar-align-error-banner'),
