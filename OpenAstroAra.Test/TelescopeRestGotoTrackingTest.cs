@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
@@ -465,6 +466,86 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would stop the sequencer slew");
                 Assert.That(log.Messages, Has.None.Contains("the mount was aborted again"));
+            });
+        }
+
+        // #2066 — the same race with a sequencer (mediator) Park or Find Home sent after the stop: it is the user's newer move
+        // too, and A's second abort would stop it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public async Task A_sequencer_park_or_find_home_after_the_stop_is_not_aborted_by_the_raced_GoTo(string move) {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<bool>? moveB = null;
+            var gotos = 0;
+            var arrived = 0; // the park or Find Home reached the mount: it reports AtPark / AtHome from then on
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/at" + (move == "park" ? "park" : "home"), StringComparison.Ordinal)
+                    ? (Volatile.Read(ref arrived) == 1 ? "true" : "false")
+                    : mount(path),
+                putResponder: path => {
+                    if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                        Thread.Sleep(200); // A's PUT on the wire
+                        svc!.FenceMotion("user_request"); // a Stop Mount
+                        // The pose check is cached, so the move reaches its send synchronously; its PUT follows A's.
+                        moveB = move == "park"
+                            ? svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None)
+                            : svc.FindHome(new Progress<ApplicationStatus>(), CancellationToken.None);
+                    } else if (path.EndsWith("/" + move, StringComparison.Ordinal)) {
+                        Volatile.Write(ref arrived, 1);
+                    }
+                    return null;
+                });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => moveB is not null, "the sequencer " + move + " was never sent");
+            Assert.That(await moveB!.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the sequencer " + move + " arrives");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would stop the sequencer " + move);
+                Assert.That(log.Messages, Has.None.Contains("the mount was aborted again"));
+            });
+        }
+
+        // #2066 — the sequencer park sent after the stop is refused by the pose check (#2070): it moves nothing, so it cannot
+        // stand in for A's second abort. The abort A kept back for it goes out, or the mount slews to A after the user's stop.
+        [Test]
+        public async Task A_sequencer_park_the_pose_check_refuses_still_leaves_the_raced_GoTo_aborted() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<bool>? parkB = null;
+            var gotos = 0;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                    Thread.Sleep(200); // A's PUT on the wire
+                    svc!.FenceMotion("user_request"); // a Stop Mount
+                    // A power blip flags the position as unverified after A's own check passed: a quiet 30 s, then the
+                    // declination jumps with no move commanded.
+                    var now = svc.PoseClock.GetUtcNow() + MountPoseTrust.QuietWindow;
+                    svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 6.0, now);
+                    svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 20.0, now + MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(1));
+                    // The refused park stops tracking first; that PUT queues behind A's, so the refusal settles the park
+                    // after A's PUT returned and kept its second abort back for it.
+                    parkB = svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                } else if (path.EndsWith("/tracking", StringComparison.Ordinal)) {
+                    Thread.Sleep(300); // the tracking-off write on the wire while A's return is handled
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => parkB is not null, "the sequencer park was never sent");
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => parkB!.WaitAsync(TimeSpan.FromSeconds(15)), "the pose check refuses the park");
+            await WaitForAsync(() => PutIndex(box, "abortslew") >= 0, "the raced GoTo was left slewing after the sequencer park was refused");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "park"), Is.LessThan(0), "the refused park never reached the mount");
+                Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(PutIndex(box, GotoVerb)), "the abort follows the GoTo");
             });
         }
 
