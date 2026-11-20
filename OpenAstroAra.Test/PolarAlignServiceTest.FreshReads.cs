@@ -190,6 +190,33 @@ namespace OpenAstroAra.Test {
             Assert.That(log.Skip(park + 1), Is.Empty, $"nothing after the park: {string.Join(", ", log)}");
         }
 
+        // #2048's abort contract, step 2: a stale or placeholder reading never counts as "stopped". Two of them 1.5 s apart
+        // read the same, and the mount really did stop here, but Ara cannot confirm it: the run ends with the cut-power alarm.
+        [Test]
+        public Task A_stale_reading_never_confirms_the_stop() =>
+            StopNotConfirmedOnAsync(m => m.FreshReadsStale = int.MaxValue);
+
+        [Test]
+        public Task A_placeholder_reading_never_confirms_the_stop() =>
+            StopNotConfirmedOnAsync(m => m.FreshReadsSentinel = int.MaxValue);
+
+        /// <summary>A run in its first turn whose readings from now on are all <paramref name="untrusted"/>: the turn's poll
+        /// fails it, and its exit cannot confirm the stop.</summary>
+        private static async Task StopNotConfirmedOnAsync(Action<FakeGemMount> untrusted) {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            untrusted(mount);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PointingUnknown), "the turn's poll");
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain(PolarAlignService.CutPowerSentence), "the stop not confirmed");
+            Assert.That(mount.IsMoving, Is.False, "the mount did stop; only its readings could not show it. " + mount.Describe());
+        }
+
         // ── a Dec past the pole ──────────────────────────────────────────────────────────────
 
         [Test]
