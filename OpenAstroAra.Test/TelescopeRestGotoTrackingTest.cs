@@ -448,15 +448,15 @@ namespace OpenAstroAra.Test {
                     if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
                         Thread.Sleep(200); // A's PUT on the wire
                         svc!.FenceMotion("user_request"); // a Stop Mount
-                        // The sequencer's slew goes out before A's PUT returns: everything it reads first is cached, so it
-                        // reaches its send synchronously; its PUT follows A's.
+                        // The sequencer's slew starts before A's PUT returns and is noted as a move at once; it may still be
+                        // reading the mount (its coordinate system, when the first refresh has not read it yet) when A's PUT
+                        // returns. Its own PUT follows A's.
                         slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW), CancellationToken.None);
                     }
                     return null;
                 });
             svc = await ConnectedAsync(box, log);
             using var _ = svc;
-            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.JNOW, "the mount's coordinate system was never read");
 
             await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
 
@@ -466,6 +466,113 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would stop the sequencer slew");
                 Assert.That(log.Messages, Has.None.Contains("the mount was aborted again"));
+            });
+        }
+
+        // #2066 — the race with B held in its checks: the stop lands while A's PUT is on the wire, B starts after it, and the
+        // mount's position must be read again before B moves (as after a reconnect). B's position read is held until A's PUT
+        // has returned and A has decided whether to abort again (its log line); B then goes on.
+        private sealed class HeldChecksRace : IAsyncDisposable {
+            public readonly WarningLog Log = new();
+            public readonly ManualResetEventSlim Gate = new(false);
+            public ScriptedAlpacaDevice Box = null!;
+            public TelescopeService Svc = null!;
+            public Task<bool>? MoveB;
+            private int _gotos;
+            private int _holding;
+
+            public static async Task<HeldChecksRace> StartAsync(Func<TelescopeService, Task<bool>> startB, bool systemReads = true) {
+                var race = new HeldChecksRace();
+                var mount = Mount(tracking: true);
+                race.Box = ScriptedAlpacaDevice.Start(
+                    path => {
+                        if (path.EndsWith("/equatorialsystem", StringComparison.Ordinal)) {
+                            return systemReads ? "1" : ScriptedAlpacaDevice.Error("EquatorialSystem unreadable"); // "1" = JNOW
+                        }
+                        if (path.EndsWith("/declination", StringComparison.Ordinal) && Volatile.Read(ref race._holding) == 1) {
+                            race.Gate.Wait(TimeSpan.FromSeconds(15)); // B's position read, held until A has decided
+                        }
+                        return mount(path);
+                    },
+                    putResponder: path => {
+                        if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref race._gotos) == 1) {
+                            Thread.Sleep(200); // A's PUT on the wire
+                            race.Svc.FenceMotion("user_request"); // a Stop Mount
+                            race.Svc.PoseTrust.BeginSession(race.Svc.PoseTrust.DeviceId, restoredReason: null); // read again first
+                            Volatile.Write(ref race._holding, 1);
+                            race.MoveB = startB(race.Svc); // returns at its held read; this device answers it after A's PUT
+                        }
+                        return null;
+                    });
+                race.Svc = await ConnectedAsync(race.Box, race.Log);
+                return race;
+            }
+
+            /// <summary>Sends GoTo A, waits for A's decision, then lets B's position read answer.</summary>
+            public async Task<Task<bool>> RunAsync() {
+                await Svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+                await WaitForAsync(() => Log.Messages.Any(m => m.Contains("aborted again", StringComparison.Ordinal)), "the raced GoTo never finished");
+                Assert.That(MoveB, Is.Not.Null, "B started while A's PUT was on the wire");
+                Gate.Set();
+                return MoveB!;
+            }
+
+            public async ValueTask DisposeAsync() {
+                Gate.Set();
+                Svc?.Dispose();
+                if (Box is not null) {
+                    await Box.DisposeAsync();
+                }
+                Gate.Dispose();
+            }
+        }
+
+        private static readonly Coordinates SlewBTarget = new(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW);
+
+        // #2066 — a sequencer slew sent after the stop is the user's newer move from its request on: while it is still reading
+        // the mount, A's PUT returns, and A's second abort is kept back instead of racing (and maybe stopping) B's PUT.
+        [Test]
+        public async Task A_sequencer_slew_still_in_its_checks_is_not_aborted_by_the_raced_GoTo() {
+            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None));
+
+            var slewB = await race.RunAsync();
+
+            Assert.That(await slewB.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the sequencer slew arrives");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(race.Box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race the sequencer slew's PUT");
+                Assert.That(race.Log.Messages, Has.None.Contains("the mount was aborted again"));
+                Assert.That(race.Box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)), Is.EqualTo(2), "the sequencer slew reached the mount");
+            });
+        }
+
+        // #2066 — the same with a meridian flip: it is noted before its own clock wait, position check and pier-side write.
+        [Test]
+        public async Task A_meridian_flip_still_in_its_checks_is_not_aborted_by_the_raced_GoTo() {
+            await using var race = await HeldChecksRace.StartAsync(svc => svc.MeridianFlip(SlewBTarget, CancellationToken.None));
+
+            var flip = await race.RunAsync();
+
+            Assert.That(await flip.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the flip goto arrives");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(race.Box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race the flip goto's PUT");
+                Assert.That(race.Log.Messages, Has.None.Contains("the mount was aborted again"));
+            });
+        }
+
+        // #2066 — the sequencer slew A's second abort was kept back for is then refused by its own checks (the mount's
+        // coordinate system cannot be read): it moves nothing, so the abort A kept back goes out, or the mount slews to A after
+        // the user's stop.
+        [Test]
+        public async Task A_sequencer_slew_its_checks_refuse_still_leaves_the_raced_GoTo_aborted() {
+            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None), systemReads: false);
+
+            var slewB = await race.RunAsync();
+
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => slewB.WaitAsync(TimeSpan.FromSeconds(15)), "the unknown system refuses the slew");
+            await WaitForAsync(() => PutIndex(race.Box, "abortslew") >= 0, "the raced GoTo was left slewing after the sequencer slew was refused");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(race.Box, "abortslew"), Is.GreaterThan(PutIndex(race.Box, GotoVerb)), "the abort follows the GoTo");
+                Assert.That(race.Box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)), Is.EqualTo(1), "the refused slew never reached the mount");
             });
         }
 

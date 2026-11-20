@@ -298,79 +298,100 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // epoch transform: RA is wrapped into [0, 24) and a Dec outside ±90° or a non-finite coordinate is
     // refused before anything reaches the mount. There is no horizon check here; the callers that need
     // one (the REST GoTo, TargetRecenter, the resume refinement) apply HorizonGuard themselves.
-    private Task<bool> GotoAsync(Coordinates coords, CancellationToken token) {
-        ITelescopeDevice client;
+    // #2066 — the slew is the user's newer move from its request on, as a REST GoTo is: it is noted here, before the
+    // clock wait, the pose check, the system read and the transform, so a raced GoTo whose PUT returns while this slew is
+    // still in its checks keeps its second abort back instead of racing this slew's PUT. A refusal or a throw before the
+    // send settles the note as failed (a kept-back abort then goes out); from RunMountOpAsync on, the send settles it. A
+    // caller that noted the move before its own checks (the flip) passes its note in.
+    private Task<bool> GotoAsync(Coordinates coords, CancellationToken token, (long Token, ITelescopeDevice Client)? noted = null) {
+        ITelescopeDevice? live;
         bool parked;
         lock (_gate) {
             // Connected check BEFORE the transform: Transform P/Invokes NOVAS, which must not run
             // (and on a dev box without the native lib, cannot run) for a slew that is going to be
             // reported as failed anyway.
-            var live = _lifecycle.Live;
-            if (live is null) {
-                return Task.FromResult(false);
-            }
-            client = live;
-            parked = _runtime.Parked;
+            live = _lifecycle.Live;
+            parked = live is not null && _runtime.Parked;
         }
-        if (parked) {
-            // ASCOM mounts throw on slew-while-parked; pre-empt with a clean failure (the instruction
-            // has already surfaced the parked warning to the user).
-            LogMountOpRejectedParked("telescope.slew");
+        if (live is null || parked) {
+            if (parked) {
+                // ASCOM mounts throw on slew-while-parked; pre-empt with a clean failure (the instruction
+                // has already surfaced the parked warning to the user).
+                LogMountOpRejectedParked("telescope.slew");
+            }
+            if (noted is { } refused) {
+                NoteMotionFailed(refused.Token, live ?? refused.Client);
+            }
             return Task.FromResult(false);
         }
-        return SlewCoreAsync();
+        return SlewCoreAsync(live, noted?.Token ?? NoteMotionDispatched(abortEpoch: null));
 
-        async Task<bool> SlewCoreAsync() {
-            // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
-            // here: refuse before anything is sent while the mount's clock is not verified.
-            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
-                LogMountOpRejectedClock("telescope.slew", clockRefusal);
-                throw new SequenceEntityFailedException(clockRefusal);
-            }
-            // The wait above can span a reconnect: go on with the device connected now, never the one
-            // read before it (disposed by then), and check it again as GotoAsync did.
-            lock (_gate) {
-                var live = _lifecycle.Live;
-                if (live is null) {
+        async Task<bool> SlewCoreAsync(ITelescopeDevice client, long motion) {
+            var handedOff = false;
+            try {
+                // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
+                // here: refuse before anything is sent while the mount's clock is not verified.
+                if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+                    LogMountOpRejectedClock("telescope.slew", clockRefusal);
+                    throw new SequenceEntityFailedException(clockRefusal);
+                }
+                // The wait above can span a reconnect: go on with the device connected now, never the one
+                // read before it (disposed by then), and check it again as GotoAsync did.
+                ITelescopeDevice? current;
+                bool parkedNow;
+                lock (_gate) {
+                    current = _lifecycle.Live;
+                    parkedNow = current is not null && _runtime.Parked;
+                }
+                if (current is null || parkedNow) {
+                    if (parkedNow) {
+                        LogMountOpRejectedParked("telescope.slew");
+                    }
+                    NoteMotionFailed(motion, current ?? client);
                     return false;
                 }
-                client = live;
-                parked = _runtime.Parked;
+                client = current;
+                // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
+                // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
+                // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
+                await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
+                // #1124 — a slew right after connect can beat the first refresh: read the system now
+                // rather than guess. Still unknown → fail the instruction without sending anything
+                // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
+                // its centring path turns a false return into a failed step).
+                var equatorialSystem = await ResolveEquatorialSystemAsync(client, token).ConfigureAwait(false);
+                if (equatorialSystem is null) {
+                    LogMountOpRejectedUnknownSystem("telescope.slew");
+                    throw new SequenceEntityFailedException(UnknownSystemMessage("telescope.slew"));
+                }
+                // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to
+                // a JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the
+                // cross-epoch path P/Invokes SOFA/NOVAS (shipped with the Pi package since #1092, but
+                // absent on an unstaged dev box) — a missing native falls back to the untransformed
+                // target rather than failing the run (same-epoch transforms are pure managed).
+                var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem.Value));
+                // #2075 — validate before the target latch, the slew watch and the mount op: a refused
+                // target sends nothing to the mount and publishes no op fault (the mount did nothing
+                // wrong, so it must not count toward abort_and_park). Throw rather than return false:
+                // SlewScopeToRaDec's blind slew ignores a false return, and the mount's own refusal
+                // already reaches the caller as this exception type through RunMountOpAsync.
+                var targetRa = WrapRaHours(target.RA);
+                var targetDec = target.Dec;
+                if (SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
+                    LogSlewTargetRefused("telescope.slew", refusal);
+                    throw new SequenceEntityFailedException(refusal);
+                }
+                handedOff = true; // RunMountOpAsync settles the note from here: its send, or its own refusal
+                return await SendGotoAsync(client, motion, targetRa, targetDec).ConfigureAwait(false);
+            } catch {
+                if (!handedOff) {
+                    NoteMotionFailed(motion, client);
+                }
+                throw;
             }
-            if (parked) {
-                LogMountOpRejectedParked("telescope.slew");
-                return false;
-            }
-            // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
-            // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
-            // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
-            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
-            // #1124 — a slew right after connect can beat the first refresh: read the system now
-            // rather than guess. Still unknown → fail the instruction without sending anything
-            // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
-            // its centring path turns a false return into a failed step).
-            var equatorialSystem = await ResolveEquatorialSystemAsync(client, token).ConfigureAwait(false);
-            if (equatorialSystem is null) {
-                LogMountOpRejectedUnknownSystem("telescope.slew");
-                throw new SequenceEntityFailedException(UnknownSystemMessage("telescope.slew"));
-            }
-            // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to
-            // a JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the
-            // cross-epoch path P/Invokes SOFA/NOVAS (shipped with the Pi package since #1092, but
-            // absent on an unstaged dev box) — a missing native falls back to the untransformed
-            // target rather than failing the run (same-epoch transforms are pure managed).
-            var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem.Value));
-            // #2075 — validate before the target latch, the slew watch and the mount op: a refused
-            // target sends nothing to the mount and publishes no op fault (the mount did nothing
-            // wrong, so it must not count toward abort_and_park). Throw rather than return false:
-            // SlewScopeToRaDec's blind slew ignores a false return, and the mount's own refusal
-            // already reaches the caller as this exception type through RunMountOpAsync.
-            var targetRa = WrapRaHours(target.RA);
-            var targetDec = target.Dec;
-            if (SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
-                LogSlewTargetRefused("telescope.slew", refusal);
-                throw new SequenceEntityFailedException(refusal);
-            }
+        }
+
+        async Task<bool> SendGotoAsync(ITelescopeDevice client, long motion, double targetRa, double targetDec) {
             lock (_gate) {
                 TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
@@ -385,7 +406,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                     },
                     c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
                     token,
-                    SlewSettleMaxPolls).ConfigureAwait(false);
+                    SlewSettleMaxPolls,
+                    noted: (motion, client)).ConfigureAwait(false);
             } finally {
                 // Consume-or-clear (#836 r2/r5): when the op returns — success, failure, or throw —
                 // this command's episode is over. Either the poll consumed the target (clear is a
@@ -534,14 +556,20 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
+    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls,
+            (long Token, ITelescopeDevice Client)? noted = null) {
         var client = ConnectedClientOrNull();
         if (client is null) {
+            if (noted is { } gone) {
+                NoteMotionFailed(gone.Token, gone.Client); // #2066 — the slew noted at its request moved nothing
+            }
             return false; // not connected: the instruction's Validate has already blocked this
         }
-        // #2066 — a raced REST GoTo's second abort must not stop this move: noted from here (not from its send, after the
-        // pose check below) and settled when its call returns or throws.
-        long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
+        // #2066 — a raced REST GoTo's second abort must not stop this move: a park or Find Home is noted from here (not
+        // from its send, after the pose check below), a slew from its request (GotoAsync, which passes its note in), and
+        // the note is settled when the call returns or throws.
+        long? motion = noted?.Token
+            ?? (op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null);
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
@@ -933,24 +961,33 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
         }
-        // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
-        // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
-        if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
-            LogMountOpRejectedClock("telescope.flip", clockRefusal);
-            throw new SequenceEntityFailedException(clockRefusal);
+        // #2066 — the flip is the user's newer move from its request on, as GotoAsync's slew is: noted before its own
+        // checks and the pier-side write, and handed to the goto, which settles it from there.
+        var motion = NoteMotionDispatched(abortEpoch: null);
+        try {
+            // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
+            // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
+            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+                LogMountOpRejectedClock("telescope.flip", clockRefusal);
+                throw new SequenceEntityFailedException(clockRefusal);
+            }
+            // The wait can span a reconnect: the pose check and the pier-side hint go to the device connected
+            // now, never the one read before it (disposed by then).
+            if (ConnectedClientOrNull() is not { } live) {
+                NoteMotionFailed(motion, client);
+                return false;
+            }
+            client = live;
+            // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
+            if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
+                await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
+            }
+        } catch {
+            NoteMotionFailed(motion, client);
+            throw;
         }
-        // The wait can span a reconnect: the pose check and the pier-side hint go to the device connected
-        // now, never the one read before it (disposed by then).
-        client = ConnectedClientOrNull();
-        if (client is null) {
-            return false;
-        }
-        // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
-        await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
-        if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
-            await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
-        }
-        var slewed = await GotoAsync(targetCoordinates, token).ConfigureAwait(false);
+        var slewed = await GotoAsync(targetCoordinates, token, (motion, client)).ConfigureAwait(false);
         RefreshCacheOnce();
         return slewed;
     }
