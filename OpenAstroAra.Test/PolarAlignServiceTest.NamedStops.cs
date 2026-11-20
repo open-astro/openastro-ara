@@ -166,27 +166,40 @@ namespace OpenAstroAra.Test {
 
         // ── the late mount_did_not_stop is told once ─────────────────────────────────────────
 
+        /// <summary>Stop timings for the late-report tests: each stop check gives up after 2 s. The stop path waits 3 s for
+        /// the run to unwind before it confirms the stop itself, so the run's exit has given up (at about 2 s) and the mount
+        /// obeys before the stop path's own check begins: its 2 s window has well over a second of slack.</summary>
+        private static void LateReportTimings(PolarAlignService s) {
+            s.StopVerifyWindow = TimeSpan.FromSeconds(2.0);
+            s.StopResendAfter = TimeSpan.FromSeconds(0.6);
+            s.StopVerifyNotBefore = TimeSpan.FromSeconds(0.2);
+            s.StopVerifyStillFor = TimeSpan.FromSeconds(0.2);
+            s.StopVerifyPoll = TimeSpan.FromMilliseconds(50);
+            s.RunUnwindGrace = TimeSpan.FromSeconds(3.0);
+        }
+
+        private static async Task<string?[]> ErrorsAfterAsync(WsRecorder ws) {
+            var watch = Stopwatch.StartNew();
+            while (ws.Count(WsEventCatalog.PolarAlignError) == 0 && watch.Elapsed < TimeSpan.FromSeconds(5)) {
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+            await Task.Delay(300).ConfigureAwait(false);
+            return ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetProperty("reason").GetString()).ToArray();
+        }
+
         // The run's exit cannot confirm its stop, but is held (here: at its pose flag) until the stop path has given up waiting
-        // for it, confirmed the stop itself, read the finding (none yet) and told the client "stopped". The exit's "not
-        // confirmed" then lands after that read. It used to be dropped (the end had fenced the run); it is told once.
+        // for it, confirmed the stop itself, read the finding (none yet), told the client "stopped" and marked the run
+        // reported. The exit's "not confirmed" then lands after all that: the exit tells it, once.
         [Test]
         public async Task A_late_exit_that_cannot_confirm_its_stop_after_the_stop_path_read_it_is_reported_once() {
             var mount = IgnoresEveryStop();
             var ws = new WsRecorder();
             var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var svc = await InFirstGemTurnAsync(mount, ws, s => {
-                s.StopVerifyWindow = TimeSpan.FromSeconds(2.0);
-                s.StopResendAfter = TimeSpan.FromSeconds(0.6);
-                s.StopVerifyNotBefore = TimeSpan.FromSeconds(0.2);
-                s.StopVerifyStillFor = TimeSpan.FromSeconds(0.2);
-                s.StopVerifyPoll = TimeSpan.FromMilliseconds(50);
-                s.RunUnwindGrace = TimeSpan.FromSeconds(1.0); // the stop path confirms the stop itself after 1 s
-            }).ConfigureAwait(false);
+            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings).ConfigureAwait(false);
             mount.OnMarkPositionUnverified = _ => {
                 // The run's exit gave up on its stop. The mount stops now (the user's Stop Mount), so the stop path's own
-                // confirmation, still inside its window, succeeds; the exit waits here until the stop path has read the
-                // finding and reported the end.
+                // confirmation succeeds; the exit waits here until the stop path has read the finding and reported the end.
                 if (held.TrySetResult()) {
                     mount.AbortIgnored = 0;
                     mount.MoveAxisStopIgnored = 0;
@@ -200,13 +213,52 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1), "the stop path confirmed the stop itself");
             release.SetResult();
 
-            var watch = Stopwatch.StartNew();
-            while (ws.Count(WsEventCatalog.PolarAlignError) == 0 && watch.Elapsed < TimeSpan.FromSeconds(5)) {
-                await Task.Delay(20).ConfigureAwait(false);
-            }
-            await Task.Delay(300).ConfigureAwait(false);
-            var errors = ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetProperty("reason").GetString()).ToArray();
+            var errors = await ErrorsAfterAsync(ws).ConfigureAwait(false);
             Assert.That(errors, Is.EqualTo(new[] { PolarAlignService.MountDidNotStop }), "told once, after the end");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"),
+                "never left 'stopped' for a stop that was not confirmed");
+            Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+        }
+
+        // The plan's race (7c): the stop path has read the finding (none yet) and is telling the client "stopped" when the
+        // exit records its "not confirmed". The run is not marked reported yet, so the exit leaves the telling to the stop
+        // path, which must tell it when it marks the run reported: told once, by the stop path, never by neither.
+        [Test]
+        public async Task An_exit_finding_that_lands_while_the_stop_path_reports_the_end_is_told_once_by_the_stop_path() {
+            var mount = IgnoresEveryStop();
+            var ws = new WsRecorder();
+            var endReporting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var exitRecorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var exitHeld = 0;
+            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings).ConfigureAwait(false);
+            mount.OnMarkPositionUnverified = _ => {
+                // The run's exit gave up on its stop; the mount obeys from now on. The exit is held until the stop path is in
+                // the middle of reporting the end (its "stopped" event), and records its finding then.
+                if (Interlocked.Exchange(ref exitHeld, 1) == 0) {
+                    mount.AbortIgnored = 0;
+                    mount.MoveAxisStopIgnored = 0;
+                    mount.AbortSlewAsync(CancellationToken.None).Wait(SignalTimeout);
+                    endReporting.Task.Wait(SignalTimeout);
+                }
+            };
+            // The exit's next driver read after its finding is recorded (where it notes where it left the mount).
+            mount.OnFreshRead = kind => {
+                if (kind == "pointing" && endReporting.Task.IsCompleted) {
+                    exitRecorded.TrySetResult();
+                }
+            };
+            ws.OnPublish = type => {
+                if (type == WsEventCatalog.PolarAlignStopped) {
+                    endReporting.TrySetResult();
+                    exitRecorded.Task.Wait(SignalTimeout);
+                }
+            };
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(exitRecorded.Task.IsCompleted, Is.True, "the exit recorded its finding while the stop path reported the end");
+
+            var errors = await ErrorsAfterAsync(ws).ConfigureAwait(false);
+            Assert.That(errors, Is.EqualTo(new[] { PolarAlignService.MountDidNotStop }), "told once, by the stop path");
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"),
                 "never left 'stopped' for a stop that was not confirmed");
             Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
