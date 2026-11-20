@@ -568,6 +568,44 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
+      _getTagged('imaging-defaults', _imagingDefaultsFromRig);
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'imaging-defaults',
+    imagingDefaultsToJson(v),
+    _imagingDefaultsFromRig,
+    ifMatch,
+  );
+
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _getTagged('optics', _opticsFromRig);
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
+
+  Future<({SiteSettings value, String? etag})> getSiteSection() =>
+      _getTagged('site', _siteFromRig);
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) => _putTagged('site', siteSettingsToJson(v), _siteFromRig, ifMatch);
+
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
+      _getTagged('autofocus', _autofocusSettingsFromRig);
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'autofocus',
+    autofocusSettingsToJson(v),
+    _autofocusSettingsFromRig,
+    ifMatch,
+  );
+
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() =>
       _getTagged('equipment-connection', _equipmentConnectionFromRig);
@@ -691,6 +729,92 @@ class ProfileApi {
     maxIterations: (j['max_iterations'] as num).toInt(),
     convergenceToleranceArcsec: (j['convergence_tolerance_arcsec'] as num)
         .toDouble(),
+  );
+
+  // Strict like the readers above: an unknown frame type, autofocus method or
+  // telescope type fails the load instead of reading as light, the V-curve or
+  // `other` (the lenient readers stay for the offline cache and the wizard).
+  static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
+      ImagingDefaults(
+        defaultExposure: Duration(
+          seconds: (j['exposure_seconds'] as num).toInt(),
+        ),
+        defaultGain: (j['gain'] as num).toInt(),
+        defaultOffset: (j['offset'] as num).toInt(),
+        defaultBin: (j['bin'] as num).toInt(),
+        defaultFrameKind: FrameKind.values.firstWhere(
+          (k) => k.name == j['frame_kind'],
+          orElse: () => throw FormatException('unknown frame kind', j['frame_kind']),
+        ),
+        coolerTargetC: (j['cooler_target_c'] as num).toDouble(),
+        coolerRampRatePerMin: (j['cooler_ramp_c_per_min'] as num).toDouble(),
+        warmupAtSessionEnd: j['warmup_at_session_end'] as bool,
+      );
+
+  static AutofocusSettings _autofocusSettingsFromRig(Map<String, dynamic> j) =>
+      AutofocusSettings(
+        method: AutofocusMethod.values.firstWhere(
+          (m) => _autofocusMethodToString(m) == j['method'],
+          orElse: () => throw FormatException('unknown method', j['method']),
+        ),
+        steps: (j['steps'] as num).toInt(),
+        stepSize: (j['step_size'] as num).toInt(),
+        stepSizeAuto: j['step_size_auto'] as bool,
+        exposureSeconds: (j['exposure_seconds'] as num).toInt(),
+        binning: (j['binning'] as num).toInt(),
+        afFilter: j['af_filter'] as String,
+        runAfterFilterChange: j['run_after_filter_change'] as bool,
+        triggerTempDeltaC: (j['trigger_temp_delta_c'] as num).toDouble(),
+        triggerHfrDriftPct: (j['trigger_hfr_drift_pct'] as num).toDouble(),
+        everyNHours: (j['every_n_hours'] as num).toInt(),
+        abortSequenceOnAfFailure: j['abort_sequence_on_af_failure'] as bool,
+        restorePositionOnFailure: j['restore_position_on_failure'] as bool,
+        telescopeType: TelescopeType.values.firstWhere(
+          (t) => telescopeTypeToWire(t) == j['telescope_type'],
+          orElse: () =>
+              throw FormatException('unknown telescope type', j['telescope_type']),
+        ),
+        backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
+        backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
+      );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as 0 ("unset") or a 1.0 reducer, which a Save would then write
+  // over the rig's sensor or focal length (#2041). The reducer is read as the
+  // rig holds it; the daemon refuses a Save of one at or below 0.
+  static OpticsSettings _opticsFromRig(Map<String, dynamic> j) =>
+      OpticsSettings(
+        focalLengthMm: (j['focal_length_mm'] as num).toDouble(),
+        reducerFactor: (j['reducer_factor'] as num).toDouble(),
+        sensorWidthPx: (j['sensor_width_px'] as num).toInt(),
+        sensorHeightPx: (j['sensor_height_px'] as num).toInt(),
+        pixelSizeUm: (j['pixel_size_um'] as num).toDouble(),
+        apertureMm: (j['aperture_mm'] as num).toDouble(),
+        telescopeName: j['telescope_name'] as String,
+      );
+
+  // Strict like the readers above: a missing key, or a twilight line the
+  // client does not know, fails the load instead of reading as "Backyard" at
+  // 0/0, which a Save would then write over the rig's site.
+  static SiteSettings _siteFromRig(Map<String, dynamic> j) => SiteSettings(
+    siteName: j['site_name'] as String,
+    latitudeDeg: (j['latitude_deg'] as num).toDouble(),
+    longitudeDeg: (j['longitude_deg'] as num).toDouble(),
+    elevationM: (j['elevation_m'] as num).roundToDouble(),
+    timeZone: j['time_zone'] as String,
+    useCustomHorizon: j['use_custom_horizon'] as bool,
+    defaultHorizonAltitudeDeg: (j['default_horizon_altitude_deg'] as num)
+        .toDouble(),
+    bortleClass: (j['bortle_class'] as num).toInt(),
+    sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num).toDouble(),
+    typicalSeeingArcsec: (j['typical_seeing_arcsec'] as num).toDouble(),
+    twilightDefinition: TwilightDefinition.values.byName(
+      j['twilight_definition'] as String,
+    ),
+    maxSequenceRuntimeMin: (j['max_sequence_runtime_min'] as num).toInt(),
+    softWarningAltitudeDeg: (j['soft_warning_altitude_deg'] as num).toDouble(),
+    observerName: j['observer_name'] as String,
+    permanentPier: j['permanent_pier'] as bool,
   );
 
   /// PUT the active profile's storage-settings section.

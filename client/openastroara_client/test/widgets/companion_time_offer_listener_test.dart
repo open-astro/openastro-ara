@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
@@ -13,6 +14,9 @@ import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/companion_time_offer_listener.dart';
 import 'package:openastroara/widgets/time_sync_on_connect.dart';
+
+import '../support/fake_section_rig.dart';
+import '../support/site_section.dart';
 
 class _Rig implements TimeSyncClient {
   _Rig({required this.synced});
@@ -47,12 +51,16 @@ void main() {
     bool companion = true,
     bool synced = false,
     Locale? locale,
+    FakeSiteSection? site,
   }) async {
     final link = StreamController<WsConnectionState>();
     addTearDown(link.close);
     final rig = _Rig(synced: synced);
     final container = ProviderContainer(
       overrides: [
+        // The profile's site as the rig serves it (ADR 0015), with no HTTP.
+        profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+        siteSettingsProvider.overrideWith(() => site ?? FakeSiteSection()),
         companionModeProvider.overrideWithValue(companion),
         simpleModeActiveProvider.overrideWithValue(true),
         wsConnectionStateProvider.overrideWith((ref) => link.stream),
@@ -129,7 +137,10 @@ void main() {
   testWidgets('Send pushes the clock and fills the site from the lookup', (
     tester,
   ) async {
-    final (c, link, rig) = await pump(tester);
+    final section = FakeSiteSection(
+      initial: const SiteSettings(siteName: 'Dark site', bortleClass: 2),
+    );
+    final (c, link, rig) = await pump(tester, site: section);
     await connect(tester, link);
     c.read(simpleMessagesProvider).single.actions.last.onPressed();
     await tester.pump(const Duration(seconds: 4));
@@ -137,13 +148,40 @@ void main() {
 
     // The on-connect push, then Send's own.
     expect(rig.pushed, hasLength(2));
-    final site = c.read(siteSettingsProvider);
+    final site = c.read(siteSettingsProvider).value!;
     expect(site.latitudeDeg, closeTo(51.477833, 1e-6));
     expect(site.longitudeDeg, closeTo(-0.0015, 1e-6));
+    // Saved onto the rig's copy: the rest of it goes back unchanged.
+    expect(section.puts.single.latitudeDeg, closeTo(51.477833, 1e-6));
+    expect(section.puts.single.siteName, 'Dark site');
+    expect(section.puts.single.bortleClass, 2);
     // The question is answered: its pill is replaced by the result pill.
     expect(titles(c), isNot(contains(question)));
     expect(titles(c), isNotEmpty);
+    await tester.pump(const Duration(seconds: 11)); // the result pill leaves
   });
+
+  testWidgets(
+    'Send with the site only from the offline cache saves nothing and says why (ADR 0015)',
+    (tester) async {
+      // The rig does not answer for the site; the cache copy is all there is.
+      final section = FakeSiteSection(initial: null);
+      final (c, link, _) = await pump(tester, site: section);
+      c
+          .read(siteSettingsProvider.notifier)
+          .seed(const SiteSettings(siteName: 'Cached', latitudeDeg: 10));
+      await connect(tester, link);
+      c.read(simpleMessagesProvider).single.actions.last.onPressed();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      expect(section.puts, isEmpty);
+      expect(c.read(siteSettingsProvider).value!.latitudeDeg, 10);
+      final pill = c.read(simpleMessagesProvider).last;
+      expect(pill.title, "Couldn't save the site");
+      expect(pill.detail, contains('Settings not loaded from the rig'));
+    },
+  );
 
   testWidgets('Not now holds the offer for the session', (tester) async {
     final (c, link, _) = await pump(tester);

@@ -6807,6 +6807,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13667,4 +13672,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clockWrongStartAnyway => 'Iniciar mesmo assim';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'O servidor $server e o app $app são de versões diferentes; atualize os dois a partir da mesma versão.';
+  }
 }

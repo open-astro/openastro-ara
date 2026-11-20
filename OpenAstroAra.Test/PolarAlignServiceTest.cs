@@ -18,6 +18,7 @@ using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
@@ -164,7 +165,9 @@ namespace OpenAstroAra.Test {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
                 // LST 20 h puts RA 0 east of the meridian, so the seed slew turns RA up like the SolveA→SolveB pair.
-                Connected = connected, SiderealTime = 20.0, TrackingEnabled = tracking,
+                // #2064 — a physical pose: HA −4 h, Dec 85°, counterweight down (φ 30°), which is the west side of the
+                // pier (default(PierSide) would say east).
+                Connected = connected, SiderealTime = 20.0, TrackingEnabled = tracking, SideOfPier = PierSide.pierWest,
             });
             // The reported pointing follows slews, so the routine reads the mount's own RA turn.
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
@@ -179,6 +182,11 @@ namespace OpenAstroAra.Test {
         }
 
         private static double Wrap180Test(double deg) => ((deg + 540.0) % 360.0) - 180.0;
+
+        /// <summary>#2064 — the pier side of a counterweight-down pose at RA <paramref name="raDeg"/> and LST
+        /// <paramref name="lstHours"/>: east for an hour angle in [0, 12 h), west otherwise.</summary>
+        private static PierSide CounterweightDownSide(double lstHours, double raDeg) =>
+            Wrap180Test((lstHours * 15.0) - raDeg) >= 0.0 ? PierSide.pierEast : PierSide.pierWest;
 
         /// <summary>A raw reading past the pole (|Dec| > 90°) as the same sky point: (RA+180°, ±180° − Dec).</summary>
         private static Coordinates Folded(Coordinates c) => Math.Abs(c.Dec) > 90.0
@@ -278,9 +286,18 @@ namespace OpenAstroAra.Test {
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
                 IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
+            return NewServiceOn(guider, solver, (mount ?? NewMount()).Object, ws, store, log, fetcher, logger, mainCamera, aligner);
+        }
+
+        /// <summary><see cref="NewService"/> on any mount: a mock's object, or the fake GEM mount (#2064).</summary>
+        private static PolarAlignService NewServiceOn(IGuideCapture guider, IPolarAlignFrameSolver solver,
+                ITelescopeMediator mount, WsRecorder? ws = null, IProfileStore? store = null,
+                IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
+                Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
             ws ??= new WsRecorder();
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
-                (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
+                mount, store ?? NewStore(), ws, log,
                 fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
@@ -1170,7 +1187,9 @@ namespace OpenAstroAra.Test {
             var seedC = Solved(Turn(camera, axis, 2.0 * turnDeg));
 
             var mount = NewMount();
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = lstHours, TrackingEnabled = true });
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true, SiderealTime = lstHours, TrackingEnabled = true, SideOfPier = CounterweightDownSide(lstHours, 0.0),
+            });
             var position = new Coordinates(0.0, 89.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
@@ -1263,8 +1282,9 @@ namespace OpenAstroAra.Test {
             var mount = NewMount();
             var position = new Coordinates(0.0, reportedDec, Epoch.JNOW, Coordinates.RAType.Degrees);
             var targets = new ConcurrentQueue<Coordinates>();
-            // LST 2 h puts the folded RA 180° east of the meridian, so the turn is RA up like SolveA→SolveB.
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = 2.0, TrackingEnabled = true });
+            // LST 2 h puts the folded RA 180° east of the meridian, so the turn is RA up like SolveA→SolveB. A Dec past the
+            // pole is the Dec axis through it: counterweight down at HA −10 h is the west side of the pier.
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = 2.0, TrackingEnabled = true, SideOfPier = PierSide.pierWest });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
@@ -1572,7 +1592,8 @@ namespace OpenAstroAra.Test {
             var parked = true;
             var calls = new List<string>();
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = true, SiderealTime = 0.0, TrackingEnabled = !parked, AtPark = parked,
+                // RA 0 at LST 0 h: on the meridian, the east side of the pier counterweight down.
+                Connected = true, SiderealTime = 0.0, TrackingEnabled = !parked, AtPark = parked, SideOfPier = PierSide.pierEast,
             });
             mount.Setup(m => m.UnparkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Returns(() => {
@@ -1651,7 +1672,7 @@ namespace OpenAstroAra.Test {
             var reads = 0;
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = true, SiderealTime = 20.0, TrackingEnabled = state,
+                Connected = true, SiderealTime = 20.0, TrackingEnabled = state, SideOfPier = PierSide.pierWest, // NewMount's pose
             });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => {
                 if (++reads == dropAtPointingRead) {
@@ -2205,7 +2226,8 @@ namespace OpenAstroAra.Test {
         private static Mock<ITelescopeMediator> NewPoleMount(ConcurrentQueue<Coordinates>? motorStops = null) {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = true, SiderealTime = 20.0, TrackingEnabled = true, CanFindHome = true, CanSlew = true,
+                // On the pole the hour angle is the reading's: RA 0 at LST 20 h is HA −4 h, the west side by the hour-angle model.
+                Connected = true, SiderealTime = 20.0, TrackingEnabled = true, CanFindHome = true, CanSlew = true, SideOfPier = PierSide.pierWest,
             });
             var position = new Coordinates(0.0, 90.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);

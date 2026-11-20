@@ -713,7 +713,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['exposure', 'time', 'seconds', 'default', 'shutter'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 1, max: 3600),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'imaging.default_exposure_s',
   ),
   Setting(
@@ -724,7 +724,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['gain', 'sensitivity', 'iso', 'amplification', 'cmos'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 0, max: 1000),
-    defaultValue: 100,
+    defaultValue: null,
     profilePath: 'imaging.default_gain',
   ),
   Setting(
@@ -735,7 +735,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['offset', 'pedestal', 'bias', 'black level', 'cmos'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 0, max: 500),
-    defaultValue: 50,
+    defaultValue: null,
     profilePath: 'imaging.default_offset',
   ),
   Setting(
@@ -746,7 +746,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['bin', 'binning', 'resolution', 'pixel', 'downsample'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 1, max: 4),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'imaging.default_bin',
   ),
   Setting(
@@ -757,7 +757,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['frame', 'type', 'light', 'dark', 'bias', 'flat', 'calibration'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.enumValue(['Light', 'Dark', 'Bias', 'Flat']),
-    defaultValue: 'Light',
+    defaultValue: null,
     profilePath: 'imaging.default_frame_kind',
   ),
   Setting(
@@ -768,7 +768,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['cooler', 'temperature', 'target', 'celsius', 'cooling', 'tec'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.doubleRange(min: -60, max: 30, step: 1),
-    defaultValue: -10.0,
+    defaultValue: null,
     profilePath: 'imaging.cooler_target_c',
   ),
   Setting(
@@ -779,7 +779,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['ramp', 'cooler', 'thermal shock', 'condensation', 'cooldown'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.5),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'imaging.cooler_ramp_c_per_min',
   ),
   Setting(
@@ -798,7 +798,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'imaging.warmup_at_session_end',
   ),
 
@@ -820,7 +820,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 10000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.focal_length_mm',
   ),
   Setting(
@@ -838,7 +838,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0.1, max: 5, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'optics.reducer_factor',
   ),
   Setting(
@@ -857,7 +857,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_width_px',
   ),
   Setting(
@@ -876,7 +876,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_height_px',
   ),
   Setting(
@@ -895,7 +895,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 50, step: 0.1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.pixel_size_um',
   ),
   Setting(
@@ -915,7 +915,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 2000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.aperture_mm',
     relatedSettings: [
       'img.optics.focal_length_mm',
@@ -1996,7 +1996,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['site', 'name', 'location', 'place', 'observatory'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'Backyard',
+    defaultValue: null,
     profilePath: 'site.name',
   ),
   Setting(
@@ -2014,7 +2014,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -90, max: 90, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.latitude_deg',
   ),
   Setting(
@@ -2033,7 +2033,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -180, max: 180, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.longitude_deg',
   ),
   Setting(
@@ -2044,7 +2044,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['elevation', 'altitude', 'height', 'meters', 'sea level', 'asl'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -500, max: 9000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.elevation_m',
   ),
   Setting(
@@ -2055,7 +2055,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['time zone', 'timezone', 'iana', 'tz', 'utc', 'dst'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'UTC',
+    defaultValue: null,
     profilePath: 'site.time_zone',
   ),
   Setting(
@@ -2072,7 +2072,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.permanent_pier',
   ),
   Setting(
@@ -2091,7 +2091,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.use_custom_horizon',
   ),
   // §36 custom skyline — one composite list setting (the panel embeds a
@@ -2126,7 +2126,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['horizon', 'altitude', 'floor', 'minimum', 'limit', 'degrees'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 20.0,
+    defaultValue: null,
     profilePath: 'site.default_horizon_altitude_deg',
   ),
   Setting(
@@ -2146,7 +2146,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 1, max: 9),
-    defaultValue: 6,
+    defaultValue: null,
     profilePath: 'site.bortle_class',
   ),
   Setting(
@@ -2164,7 +2164,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
-    defaultValue: 2.5,
+    defaultValue: null,
     profilePath: 'site.typical_seeing_arcsec',
   ),
   Setting(
@@ -2188,7 +2188,7 @@ const List<Setting> settingsRegistry = [
       'Nautical (−12°)',
       'Astronomical (−18°)',
     ]),
-    defaultValue: 'Astronomical (−18°)',
+    defaultValue: null,
     profilePath: 'site.twilight_definition',
   ),
   Setting(
@@ -2208,7 +2208,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 30.0,
+    defaultValue: null,
     profilePath: 'site.soft_warning_altitude_deg',
   ),
   Setting(
@@ -2229,7 +2229,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 0, max: 10080),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'site.max_sequence_runtime_min',
   ),
 
@@ -2640,7 +2640,7 @@ const List<Setting> settingsRegistry = [
       'Brightest-star HFR',
       'FWHM (Gaussian fit)',
     ]),
-    defaultValue: 'HFR V-curve',
+    defaultValue: null,
     profilePath: 'autofocus.method',
   ),
   Setting(
@@ -2667,7 +2667,7 @@ const List<Setting> settingsRegistry = [
       'Newtonian',
       'Other / unknown',
     ]),
-    defaultValue: 'Other / unknown',
+    defaultValue: null,
     profilePath: 'autofocus.telescope_type',
   ),
   Setting(
@@ -2678,7 +2678,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['steps', 'samples', 'positions', 'count', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 3, max: 31),
-    defaultValue: 7,
+    defaultValue: null,
     profilePath: 'autofocus.steps',
   ),
   Setting(
@@ -2697,7 +2697,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.step_size_auto',
   ),
   Setting(
@@ -2709,7 +2709,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['step size', 'distance', 'increment', 'focuser', 'cfz'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 1000),
-    defaultValue: 50,
+    defaultValue: null,
     profilePath: 'autofocus.step_size',
   ),
   Setting(
@@ -2720,7 +2720,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['exposure', 'time', 'seconds', 'duration', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 60),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'autofocus.exposure_seconds',
   ),
   Setting(
@@ -2731,7 +2731,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['binning', 'bin', 'resolution', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 4),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'autofocus.binning',
   ),
   // #1544 — the Simple tier's two views over the four triggers below; no
@@ -2744,7 +2744,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['autofocus', 'refocus', 'plan', 'automatic', 'off', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
   ),
   Setting(
     id: 'img.autofocus.keep_focus_sharp',
@@ -2762,7 +2762,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.enumValue(['Relaxed', 'Normal', 'Tight']),
-    defaultValue: 'Normal',
+    defaultValue: null,
   ),
   Setting(
     id: 'img.autofocus.af_filter',
@@ -2772,7 +2772,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['filter', 'af', 'luminance', 'l', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.string(),
-    defaultValue: 'L',
+    defaultValue: null,
     profilePath: 'autofocus.af_filter',
   ),
   Setting(
@@ -2784,7 +2784,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['filter change', 'trigger', 'auto', 'offset', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.run_after_filter_change',
   ),
   Setting(
@@ -2796,7 +2796,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['temperature', 'delta', 'trigger', 'thermal', 'drift', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'autofocus.trigger_temp_delta_c',
   ),
   Setting(
@@ -2808,7 +2808,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['hfr', 'drift', 'trigger', 'percent', 'focus', 'quality'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 1),
-    defaultValue: 15.0,
+    defaultValue: null,
     profilePath: 'autofocus.trigger_hfr_drift_pct',
   ),
   Setting(
@@ -2820,7 +2820,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['hours', 'interval', 'periodic', 'time', 'trigger', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 0, max: 12),
-    defaultValue: 2,
+    defaultValue: null,
     profilePath: 'autofocus.every_n_hours',
   ),
   Setting(
@@ -2831,7 +2831,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['abort', 'sequence', 'failure', 'fail', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.abort_sequence_on_af_failure',
   ),
   Setting(
@@ -2842,7 +2842,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['restore', 'position', 'failure', 'rollback', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.restore_position_on_failure',
   ),
 

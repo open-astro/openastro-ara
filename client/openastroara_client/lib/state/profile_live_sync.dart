@@ -7,13 +7,9 @@ import '../services/profile_api.dart';
 import 'polar_align/polar_align_routine_state.dart';
 import 'profile_cache_state.dart';
 import 'profile_management_state.dart';
-import 'settings/autofocus_settings_state.dart';
-import 'settings/imaging_defaults_state.dart';
 import 'settings/migrated_sections.dart';
-import 'settings/optics_settings_state.dart';
 import 'settings/phd2_settings_state.dart';
 import 'settings/safety_policies_state.dart';
-import 'settings/site_settings_state.dart';
 
 /// #1644 — another device (or the daemon) wrote profile [section]
 /// (`profile.updated`): read that section again so an open screen never shows
@@ -52,15 +48,7 @@ typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
 final Map<String, _Hydrate> _hydrators = {
   for (final route in {for (final s in migratedSections) s.route})
     route: (c, api) => _hydrateMigrated(c, api, route),
-  'imaging-defaults': (c, api) =>
-      c.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
-  'autofocus': (c, api) =>
-      c.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
-  'optics': (c, api) =>
-      c.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
-  'site': (c, api) =>
-      c.read(siteSettingsProvider.notifier).hydrateFromServer(api),
   'safety': (c, api) =>
       c.read(safetyPoliciesProvider.notifier).hydrateFromServer(api),
   'phd2': (c, api) =>

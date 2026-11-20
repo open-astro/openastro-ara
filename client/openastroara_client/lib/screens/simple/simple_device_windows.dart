@@ -18,6 +18,7 @@ import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
 import '../../models/weather_status.dart';
 import '../../widgets/equipment/cooling_fan_picker.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/simple/filter_wheel.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
@@ -48,6 +49,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
@@ -149,8 +151,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(cameraStatusProvider).value;
-    final target =
-        _dragTarget ?? ref.watch(imagingDefaultsProvider).coolerTargetC;
+    // Null until the profile's copy is in from the rig (ADR 0015): On then
+    // sends no target and the target row says the setting is not loaded.
+    final defaults = ref.watch(imagingDefaultsProvider);
+    final target = _dragTarget ?? defaults.value?.coolerTargetC;
     final children = <Widget>[
       SimpleDeviceHeader(type: context.l10n.deviceCamera, status: s),
     ];
@@ -215,7 +219,15 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
           );
         }
         // The target only while the cooler is on (On cools to the profile's).
-        if (caps.canSetTemperature && s.coolerOn) {
+        if (caps.canSetTemperature && s.coolerOn && target == null) {
+          children.add(
+            SectionNotLoaded(
+              section: defaults,
+              padding: EdgeInsets.zero,
+              onRetry: _reloadDefaults,
+            ),
+          );
+        } else if (caps.canSetTemperature && s.coolerOn && target != null) {
           const lo = SimpleCameraWindow.targetMin,
               hi = SimpleCameraWindow.targetMax;
           children.add(
@@ -279,24 +291,33 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   /// Set once: the profile keeps it (plans cool to it), and a running cooler
   /// follows it at once.
+  /// A target the rig did not save (not loaded, changed elsewhere, refused)
+  /// says why and leaves the cooler where it is.
   Future<void> _setTarget(double celsius, bool coolerOn) async {
-    final defaults = ref.read(imagingDefaultsProvider.notifier);
-    final before = ref.read(imagingDefaultsProvider).coolerTargetC;
-    defaults.setCoolerTargetC(celsius);
-    if (ref.read(imagingDefaultsProvider).coolerTargetC == before) return;
+    // The slider shows only over a loaded copy (see build).
+    final current = ref.read(imagingDefaultsProvider).value;
+    if (current == null ||
+        !ImagingDefaultsNotifier.validCoolerTargetC(celsius) ||
+        celsius == current.coolerTargetC) {
+      return;
+    }
     final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api != null) {
-      try {
-        await defaults.persistToServer(api);
-      } catch (e) {
-        notify(
-          l10n.deviceCouldntSaveTarget,
-          detail: failureReason(l10n, e),
-          error: true,
-        );
-      }
+    try {
+      // Not loaded: one more load first, else refused with nothing sent. A
+      // failed save puts the rig's copy back; a 412 reloads it.
+      await ref
+          .read(imagingDefaultsProvider.notifier)
+          .changeAndSave((c) => c.copyWith(coolerTargetC: celsius));
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSaveTarget,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
+        error: true,
+      );
+      return;
     }
     if (coolerOn && mounted) {
       await _run(
@@ -305,6 +326,12 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             .setCooler(true, targetTemperatureC: celsius),
       );
     }
+  }
+
+  /// Retry for the not-loaded target row.
+  void _reloadDefaults() {
+    final api = ref.read(profileApiProvider);
+    if (api != null) ref.read(imagingDefaultsProvider.notifier).load(api);
   }
 
   /// The camera's gain, the same one Preview's chip sets (a plan starts from
@@ -1722,7 +1749,22 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   /// Advanced Mode's Settings.
   List<Widget> _autofocusSettings() {
     final l10n = context.l10n;
-    final af = ref.watch(autofocusSettingsProvider);
+    final section = ref.watch(autofocusSettingsProvider);
+    final af = section.value;
+    if (af == null) {
+      return [
+        SectionNotLoaded(
+          section: section,
+          padding: EdgeInsets.zero,
+          onRetry: () {
+            final api = ref.read(profileApiProvider);
+            if (api != null) {
+              ref.read(autofocusSettingsProvider.notifier).load(api);
+            }
+          },
+        ),
+      ];
+    }
     final on = autofocusDuringPlans(af);
     final sharp = keepFocusSharpOf(af);
     final slots = ref.watch(filterWheelProvider).value?.slots ?? const [];
@@ -1734,11 +1776,8 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           id: 'simple-focuser-plans',
           on: on,
           group: l10n.deviceAutofocusDuringPlans,
-          onChanged: (v) => _saveAutofocus(
-            () => ref
-                .read(autofocusSettingsProvider.notifier)
-                .setAutofocusDuringPlans(v),
-          ),
+          onChanged: (v) =>
+              _saveAutofocus((s) => withAutofocusDuringPlans(s, v)),
         ),
       ),
       Text(
@@ -1760,11 +1799,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
               (KeepFocusSharp.custom, l10n.deviceKeepSharpCustom, 'custom'),
           ],
           selected: sharp,
-          onPick: (p) => _saveAutofocus(
-            () => ref
-                .read(autofocusSettingsProvider.notifier)
-                .applyKeepFocusSharp(p),
-          ),
+          onPick: (p) => _saveAutofocus((s) => withKeepFocusSharp(s, p)),
         ),
         Text(
           sharp == KeepFocusSharp.custom
@@ -1787,9 +1822,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 if (f.name.isNotEmpty) (f.name, f.name, f.name),
             ],
             selected: af.afFilter,
-            onPick: (f) => _saveAutofocus(
-              () => ref.read(autofocusSettingsProvider.notifier).setAfFilter(f),
-            ),
+            onPick: (f) => _saveAutofocus((s) => s.copyWith(afFilter: f)),
           ),
           Text(l10n.deviceAfFilterHint, style: kSimpleCaption),
         ],
@@ -1798,19 +1831,21 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   }
 
   /// Applies [change] to the autofocus settings and keeps it in the profile.
-  Future<void> _saveAutofocus(void Function() change) async {
-    final af = ref.read(autofocusSettingsProvider.notifier);
-    change();
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
+  /// Not loaded from the rig: refused with nothing sent, and says why; a
+  /// failed save puts the rig's copy back (ADR 0015).
+  Future<void> _saveAutofocus(
+    AutofocusSettings Function(AutofocusSettings) change,
+  ) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
     final l10n = context.l10n;
     try {
-      await af.persistToServer(api);
+      await ref.read(autofocusSettingsProvider.notifier).changeAndSave(change);
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveThat,
-        detail: failureReason(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
         error: true,
       );
     }

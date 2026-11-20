@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 import '../../util/optimal_sub.dart';
 
 /// §37.12 Site preferences — location + horizon + observing conditions.
-/// Phase 12h.6e wires the daemon round-trip via [ProfileApi]; local state
-/// is still the source of truth between syncs.
+/// Backed by the daemon's `GET`/`PUT /api/v1/profile/site` section through the
+/// section module (loaded_section.dart): the rig's copy, loaded before it is
+/// saved.
 
 enum TwilightDefinition { civil, nautical, astronomical }
 
@@ -107,54 +108,71 @@ class SiteSettings {
   );
 }
 
-class SiteSettingsNotifier extends Notifier<SiteSettings>
-    with SettingsSyncMixin<SiteSettings> {
-  @override
-  SiteSettings build() => const SiteSettings();
-
+/// ADR 0015 — a value only once the rig has answered. Loads itself: planning,
+/// Tonight's Sky, Simple Mode's Rig page and the polar alignment hemisphere
+/// read it with no Settings panel open first. The daemon's own writes (a time
+/// sync that fills the site from GPS) reach it as `profile.updated`.
+class SiteSettingsNotifier extends SelfLoadingSection<SiteSettings> {
   void setSiteName(String s) {
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(siteName: v);
+    edit((c) => c.copyWith(siteName: v));
   }
 
   /// Empty is allowed — it means "omit the OBSERVER header".
-  void setObserverName(String s) {
-    state = state.copyWith(observerName: s.trim());
-  }
+  void setObserverName(String s) =>
+      edit((c) => c.copyWith(observerName: s.trim()));
 
-  void setPermanentPier(bool v) => state = state.copyWith(permanentPier: v);
+  void setPermanentPier(bool v) => edit((c) => c.copyWith(permanentPier: v));
 
-  void setLatitudeDeg(double v) {
-    if (v < -90 || v > 90) return;
-    state = state.copyWith(latitudeDeg: v);
-  }
+  void setLatitudeDeg(double v) => edit((c) => withLatitude(c, v));
 
-  void setLongitudeDeg(double v) {
-    if (v < -180 || v > 180) return;
-    state = state.copyWith(longitudeDeg: v);
-  }
+  void setLongitudeDeg(double v) => edit((c) => withLongitude(c, v));
 
-  void setElevationM(double v) {
-    // Below sea level → Dead Sea (-430m) is the practical floor. Above
-    // 9000m is no longer reachable by a tripod-mounted scope.
-    if (v < -500 || v > 9000) return;
-    // Whole metres: a GPS fix's centimetres are noise.
-    state = state.copyWith(elevationM: v.roundToDouble());
-  }
+  void setElevationM(double v) => edit((c) => withElevation(c, v));
 
-  void setTimeZone(String s) {
+  void setTimeZone(String s) => edit((c) => withTimeZone(c, s));
+
+  /// [c] with latitude [v]; [c] itself when [v] is out of range.
+  static SiteSettings withLatitude(SiteSettings c, double v) =>
+      v < -90 || v > 90 ? c : c.copyWith(latitudeDeg: v);
+
+  /// [c] with longitude [v]; [c] itself when [v] is out of range.
+  static SiteSettings withLongitude(SiteSettings c, double v) =>
+      v < -180 || v > 180 ? c : c.copyWith(longitudeDeg: v);
+
+  /// [c] with elevation [v] in whole metres (a GPS fix's centimetres are
+  /// noise); [c] itself below the Dead Sea (-500 m) or above 9000 m, which no
+  /// tripod-mounted scope reaches.
+  static SiteSettings withElevation(SiteSettings c, double v) =>
+      v < -500 || v > 9000 ? c : c.copyWith(elevationM: v.roundToDouble());
+
+  /// [c] with time zone [s] trimmed; [c] itself when that is empty.
+  static SiteSettings withTimeZone(SiteSettings c, String s) {
     final v = s.trim();
-    if (v.isEmpty) return;
-    state = state.copyWith(timeZone: v);
+    return v.isEmpty ? c : c.copyWith(timeZone: v);
+  }
+
+  /// [c] with a location fix: the coordinates, the elevation when there is
+  /// one, and [timeZone] (the zone those coordinates fall in).
+  static SiteSettings withFix(
+    SiteSettings c, {
+    required double lat,
+    required double lng,
+    double? alt,
+    required String timeZone,
+  }) {
+    var next = withLongitude(withLatitude(c, lat), lng);
+    if (alt != null) next = withElevation(next, alt);
+    return withTimeZone(next, timeZone);
   }
 
   void setUseCustomHorizon(bool v) =>
-      state = state.copyWith(useCustomHorizon: v);
+      edit((c) => c.copyWith(useCustomHorizon: v));
 
   void setDefaultHorizonAltitudeDeg(double v) {
     if (v < 0 || v > 90) return;
-    state = state.copyWith(defaultHorizonAltitudeDeg: v);
+    edit((c) => c.copyWith(defaultHorizonAltitudeDeg: v));
   }
 
   static bool isValidBortle(int v) => v >= 1 && v <= 9;
@@ -163,7 +181,7 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
   /// (no hidden value may still affect planning, #1529).
   void setSkyBortle(int v) {
     if (!isValidBortle(v)) return;
-    state = state.copyWith(bortleClass: v, sqmMagPerArcsec2: 0);
+    edit((c) => c.copyWith(bortleClass: v, sqmMagPerArcsec2: 0));
   }
 
   /// SQM mode: [v] (16..22.5) is the one input and the Bortle class becomes
@@ -171,40 +189,43 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
   /// Bortle mode with [setSkyBortle] instead.
   void setSkySqm(double v) {
     if (!isSqmReading(v)) return;
-    state = state.copyWith(
-      sqmMagPerArcsec2: v,
-      bortleClass: bortleFromSkyMag(v),
+    edit(
+      (c) => c.copyWith(sqmMagPerArcsec2: v, bortleClass: bortleFromSkyMag(v)),
     );
   }
 
   void setTypicalSeeingArcsec(double v) {
     if (v <= 0 || v > 20) return;
-    state = state.copyWith(typicalSeeingArcsec: v);
+    edit((c) => c.copyWith(typicalSeeingArcsec: v));
   }
 
   void setTwilightDefinition(TwilightDefinition d) =>
-      state = state.copyWith(twilightDefinition: d);
+      edit((c) => c.copyWith(twilightDefinition: d));
 
   void setMaxSequenceRuntimeMin(int v) {
     // 0 = no limit; a week (10080 min) is a generous ceiling for one run.
     if (v < 0 || v > 10080) return;
-    state = state.copyWith(maxSequenceRuntimeMin: v);
+    edit((c) => c.copyWith(maxSequenceRuntimeMin: v));
   }
 
   void setSoftWarningAltitudeDeg(double v) {
     // 0 disables the advisory.
     if (v < 0 || v > 90) return;
-    state = state.copyWith(softWarningAltitudeDeg: v);
+    edit((c) => c.copyWith(softWarningAltitudeDeg: v));
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getSiteSettings());
+  @override
+  Future<Tagged<SiteSettings>> fetch(ProfileApi api) => api.getSiteSection();
 
-  Future<SiteSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putSiteSettings(sent));
+  @override
+  Future<Tagged<SiteSettings>> send(
+    ProfileApi api,
+    SiteSettings value,
+    String? etag,
+  ) => api.putSiteSection(value, ifMatch: etag);
 }
 
 final siteSettingsProvider =
-    NotifierProvider<SiteSettingsNotifier, SiteSettings>(
+    NotifierProvider<SiteSettingsNotifier, LoadedSection<SiteSettings>>(
       SiteSettingsNotifier.new,
     );

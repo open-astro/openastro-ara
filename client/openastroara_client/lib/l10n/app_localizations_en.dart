@@ -6807,4 +6807,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }

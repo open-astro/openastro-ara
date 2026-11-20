@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Library</OutputType>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AraVersionAttributesOnly>true</AraVersionAttributesOnly>
     <Configurations>Debug;Release;SignedRelease</Configurations>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -45,7 +45,6 @@
   <PropertyGroup>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>$(AssemblyName)</Title>
-    <Version>3.2.0.9001</Version>
     <Company>$(Authors)</Company>
     <Product>OpenAstro Ara</Product>
     <Description>Astronomy components of OpenAstro Ara (forked from N.I.N.A.).</Description>
