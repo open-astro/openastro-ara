@@ -195,6 +195,8 @@ namespace OpenAstroAra.Server.Services {
             } catch (TimeoutException) {
                 FenceStops();
                 LogTakeoverFenced(by, TakeoverStopBound.TotalSeconds);
+                // The abandoned end still holds _opLock until the stuck call returns (it is fenced, so it sends nothing): a
+                // Start after the park waits on it, within its own bounds, as it would behind any end still running.
                 _ = ending.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                 return Accepted("polar-align.stop", null);
             }

@@ -933,6 +933,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         LogSlewNotAbortedAgainNewerCommand(raHours, decDeg);
                         return;
                     }
+                    if (stop is null) {
+                        // The counts since the reading are no longer kept (more than AbortReasonsKept came while the PUT
+                        // was on the wire): the stop's reason is lost. Abort anyway, under a stand-in reason, and say so.
+                        LogSlewAbortReasonUnknown(raHours, decDeg);
+                    }
                     var by = stop ?? "user_request";
                     LogSlewAbortedAgain(raHours, decDeg, by);
                     await AbortSlewCoreAsync(client, by, rethrow: false, counted: true).ConfigureAwait(false);
@@ -1823,6 +1828,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a newer move was sent after the stop that landed while the GoTo was being sent; the GoTo is not aborted again, so that move is not stopped")]
     private partial void LogSlewNotAbortedAgainNewerCommand(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: no stop reason was kept for the count that raced the GoTo; aborting it again as user_request")]
+    private partial void LogSlewAbortReasonUnknown(double ra, double dec);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();
