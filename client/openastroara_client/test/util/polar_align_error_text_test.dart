@@ -9,11 +9,16 @@ void main() {
   final en = lookupAppLocalizations(const Locale('en'));
   final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
 
-  PolarAlignLive stopped(String? by, {String? message}) => PolarAlignLive(
+  PolarAlignLive stopped(
+    String? by, {
+    String? message,
+    bool stopUnconfirmed = false,
+  }) => PolarAlignLive(
     phase: PolarAlignStates.failed,
     errorReason: polarAlignSlewAbortedExternally,
     errorMessage: message ?? 'the daemon sentence',
     errorStoppedBy: by,
+    errorStopUnconfirmed: stopUnconfirmed,
   );
 
   // #2107 the pad stop's end had only the daemon's English; it reads in pt-BR now.
@@ -51,6 +56,26 @@ void main() {
     expect(
       polarAlignErrorText(en, stopped('fault_reaction')),
       isNot(contains('Stop Mount')),
+    );
+  });
+
+  // #2066 the daemon's sentence for a named stop whose run could not confirm
+  // its stop ends in "cut the mount's power", and no mount_did_not_stop
+  // follows: the app's own wording keeps that warning.
+  test('a named stop the run could not confirm keeps the cut-power warning, in both languages', () {
+    for (final l in [en, pt]) {
+      final words = polarAlignErrorText(
+        l,
+        stopped('pad_stop', stopUnconfirmed: true),
+      )!;
+      expect(words, startsWith(l.polarAlignStoppedFromOutside('pad_stop')));
+      expect(words, endsWith(l.polarAlignStopNotConfirmed));
+    }
+    expect(en.polarAlignStopNotConfirmed, contains("Cut the mount's power"));
+    expect(
+      polarAlignErrorText(en, stopped('pad_stop')),
+      isNot(contains(en.polarAlignStopNotConfirmed)),
+      reason: 'a confirmed stop has no warning',
     );
   });
 

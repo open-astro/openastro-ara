@@ -51,6 +51,11 @@ class PolarAlignLive {
   /// did not say. The card words the end from it in the app's language.
   final String? errorStoppedBy;
 
+  /// #2066 the run could not confirm its stop after the error (the event's
+  /// `stop_unconfirmed`): the mount may still move. The card that words the
+  /// end itself adds the cut-power warning the daemon's message carries.
+  final bool errorStopUnconfirmed;
+
   /// The frame being captured/solved right now: when this client saw its
   /// `frame_started` and its exposure. Null between frames.
   final DateTime? frameStartedAt;
@@ -91,6 +96,7 @@ class PolarAlignLive {
     this.errorReason,
     this.errorMessage,
     this.errorStoppedBy,
+    this.errorStopUnconfirmed = false,
     this.frameStartedAt,
     this.frameExposureSeconds,
     this.lastFrame,
@@ -121,6 +127,7 @@ class PolarAlignLive {
     String? errorMessage,
     String? errorStoppedBy,
     bool clearErrorStoppedBy = false,
+    bool? errorStopUnconfirmed,
     DateTime? frameStartedAt,
     double? frameExposureSeconds,
     PolarAlignFrameInfo? lastFrame,
@@ -150,6 +157,7 @@ class PolarAlignLive {
         errorStoppedBy: clearErrorStoppedBy
             ? null
             : errorStoppedBy ?? this.errorStoppedBy,
+        errorStopUnconfirmed: errorStopUnconfirmed ?? this.errorStopUnconfirmed,
         frameStartedAt: clearFrameInProgress
             ? null
             : frameStartedAt ?? this.frameStartedAt,
@@ -276,6 +284,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         // Each error says its own: a stop's name never carries over to the next.
         errorStoppedBy: _str(event.payload, 'stopped_by'),
         clearErrorStoppedBy: _str(event.payload, 'stopped_by') == null,
+        errorStopUnconfirmed: event.payload['stop_unconfirmed'] == true,
       );
     case PolarAlignWsEvents.correction:
       final run = PolarAlignerRun.tryParse(event.payload);

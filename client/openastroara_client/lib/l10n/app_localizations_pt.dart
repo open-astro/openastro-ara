@@ -6692,6 +6692,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get polarAlignStopNotConfirmed =>
+      'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
+
+  @override
   String get actionConfirmFlip => 'confirm the meridian flip';
 
   @override
@@ -13743,6 +13747,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     });
     return '$_temp0';
   }
+
+  @override
+  String get polarAlignStopNotConfirmed =>
+      'O Ara não conseguiu confirmar que a montagem parou. Corte a energia da montagem agora e confira a montagem antes de começar de novo.';
 
   @override
   String get actionConfirmFlip => 'confirmar a virada de meridiano';

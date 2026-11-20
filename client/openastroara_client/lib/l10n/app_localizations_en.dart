@@ -6692,6 +6692,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get polarAlignStopNotConfirmed =>
+      'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
+
+  @override
   String get actionConfirmFlip => 'confirm the meridian flip';
 
   @override

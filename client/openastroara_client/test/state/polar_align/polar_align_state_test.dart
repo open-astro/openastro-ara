@@ -155,6 +155,30 @@ void main() {
       )!;
       expect(next.errorStoppedBy, isNull);
     });
+
+    // #2066 an error whose run could not confirm its stop says so, and the
+    // next error that does not say so drops it.
+    test('stop_unconfirmed rides on the error, and the next error drops it', () {
+      final unconfirmed = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped from the direction pad. Cut the mount\'s power now',
+          'stopped_by': 'pad_stop',
+          'stop_unconfirmed': true,
+        }),
+      )!;
+      expect(unconfirmed.errorStopUnconfirmed, isTrue);
+      final next = foldPolarAlignEvent(
+        unconfirmed,
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped (Stop Mount)',
+          'stopped_by': 'user_request',
+        }),
+      )!;
+      expect(next.errorStopUnconfirmed, isFalse);
+    });
   });
 
   group('liveFromStatus', () {

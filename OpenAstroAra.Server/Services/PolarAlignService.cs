@@ -1562,8 +1562,9 @@ namespace OpenAstroAra.Server.Services {
             if (!claimed) {
                 return;
             }
-            var message = mountStopped == false && reason != MountDidNotStop ? ex.Message + " " + CutPowerSentence : ex.Message;
-            await PublishErrorAsync(reason, message, stoppedBy).ConfigureAwait(false);
+            var notStopped = mountStopped == false && reason != MountDidNotStop;
+            var message = notStopped ? ex.Message + " " + CutPowerSentence : ex.Message;
+            await PublishErrorAsync(reason, message, stoppedBy, stopUnconfirmed: notStopped).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("failed", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
@@ -1749,13 +1750,19 @@ namespace OpenAstroAra.Server.Services {
 
         /// <param name="stoppedBy">#2107 — for <see cref="SlewAbortedExternally"/>: what stopped the mount
         /// (<see cref="MountStopReasons"/>), so the app words the end in its own language; left out when not known.</param>
-        private Task PublishErrorAsync(string reason, string message, string? stoppedBy = null) {
+        /// <param name="stopUnconfirmed">#2066 — the run's exit could not confirm its stop, and this error carries the
+        /// cut-power sentence itself (no <c>mount_did_not_stop</c> follows): an app that words the end from
+        /// <paramref name="stoppedBy"/> keeps the warning. Sent only when true.</param>
+        private Task PublishErrorAsync(string reason, string message, string? stoppedBy = null, bool stopUnconfirmed = false) {
             var payload = new JsonObject {
                 ["reason"] = reason,
                 ["message"] = message,
             };
             if (stoppedBy is not null) {
                 payload["stopped_by"] = stoppedBy;
+            }
+            if (stopUnconfirmed) {
+                payload["stop_unconfirmed"] = true;
             }
             return PublishAsync(WsEventCatalog.PolarAlignError, payload);
         }

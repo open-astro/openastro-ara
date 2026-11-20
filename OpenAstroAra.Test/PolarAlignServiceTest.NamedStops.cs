@@ -84,6 +84,27 @@ namespace OpenAstroAra.Test {
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
             Assert.That(error.GetProperty("stopped_by").GetString(), Is.EqualTo(by), "the app words the end from it");
             Assert.That(error.GetProperty("message").GetString(), Does.Contain(named).And.Not.Contain("Stop Mount"));
+            Assert.That(error.TryGetProperty("stop_unconfirmed", out _), Is.False, "the exit confirmed its stop");
+        }
+
+        // The app words a named stop in its own language instead of the daemon's message. When the run's exit then could not
+        // confirm its stop, that message also carried "cut the mount's power", and no mount_did_not_stop follows (the error
+        // reports it itself): the event says so on its own (stop_unconfirmed), so the app keeps the warning.
+        [Test]
+        public async Task A_named_stop_whose_exit_could_not_confirm_the_stop_says_so_in_the_error() {
+            var mount = IgnoresEveryStop();
+            var ws = new WsRecorder();
+            using var svc = await InFirstGemTurnAsync(mount, ws, s => s.StopVerifyWindow = TimeSpan.FromSeconds(1.5)).ConfigureAwait(false);
+
+            await mount.AbortSlewAsync(MountStopReasons.PadStop, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("stopped_by").GetString(), Is.EqualTo(MountStopReasons.PadStop));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain(PolarAlignService.CutPowerSentence));
+            Assert.That(error.TryGetProperty("stop_unconfirmed", out var flag) && flag.GetBoolean(), Is.True,
+                "the app keeps the cut-power warning when it words the stop itself");
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.EqualTo(1), "no separate mount_did_not_stop");
         }
 
         // ── an unconfirmed stop leaves the pose unverified (ARA-10) ──────────────────────────

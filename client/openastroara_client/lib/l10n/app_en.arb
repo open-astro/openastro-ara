@@ -8594,6 +8594,10 @@
     "description": "Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token",
     "placeholders": {"by": {"type": "String"}}
   },
+  "polarAlignStopNotConfirmed": "Ara could not confirm that the mount stopped. Cut the mount's power now, and check the mount before you start again.",
+  "@polarAlignStopNotConfirmed": {
+    "description": "Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving"
+  },
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"

@@ -11197,6 +11197,12 @@ abstract class AppLocalizations {
   /// **'{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}'**
   String polarAlignStoppedFromOutside(String by);
 
+  /// Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.'**
+  String get polarAlignStopNotConfirmed;
+
   /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
