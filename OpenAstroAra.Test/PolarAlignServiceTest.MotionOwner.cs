@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
@@ -164,6 +165,102 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.MotionOwner, Is.Null, "no Stop came: the run's own exit gave the mount back");
         }
 
+        [Test]
+        public async Task A_Stop_of_a_stuck_run_gives_the_motion_owner_back_when_it_answers() {
+            // A run stuck in a call that ignores cancellation never reaches its own exit, which gives the owner back: the
+            // Stop does, once it has stopped the mount, or GoTo, Center, Park and Home stay refused for as long as it hangs.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var solver = new StuckSolver();
+            using var svc = NewGemServiceWith(mount, ws, solver);
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(200);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                Assert.That(mount.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign));
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+                Assert.That(mount.MotionOwner, Is.Null, "given back while the run is still stuck");
+            } finally {
+                solver.Release();
+            }
+        }
+
+        [Test]
+        public async Task A_Start_that_drains_a_run_that_never_unwound_gives_that_runs_motion_owner_back() {
+            // A run failed by itself, stopped the mount and reported it, but its task never unwound (here its session row
+            // hangs). A new Start waits for it only so long; a Start that is then refused before it takes the mount must
+            // not leave the old run's hold behind, or GoTo, Center, Park and Home stay refused until that task ends.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var log = new HangingSessionLog();
+            using var svc = NewServiceOn(NewFake(), new NeverSolves(), mount, ws, TenDegreeStore(), log: log);
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(50);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await RunErrorAsync(ws).ConfigureAwait(false);
+            await log.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            Assert.That(error.Reason, Is.EqualTo("seed_solve_failed"));
+            Assert.That(mount.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "the stuck run still holds the mount");
+
+            mount.PositionUnverifiedReason = MountPoseTrust.NotReadYet;
+            try {
+                await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine,
+                    new PolarAlignStartConfirmation(PolarAlignDirections.East, false), null, CancellationToken.None)).ConfigureAwait(false);
+
+                Assert.That(mount.MotionOwner, Is.Null, "the Start gave the old run's hold back");
+            } finally {
+                log.Release();
+            }
+        }
+
+        /// <summary>A session log whose write hangs until <see cref="Release"/>: the run's task cannot unwind.</summary>
+        private sealed class HangingSessionLog : IPolarAlignmentLog {
+            private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) {
+                Entered.TrySetResult();
+                return _gate.Task;
+            }
+            public Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) =>
+                Task.FromResult<PolarAlignmentRecord?>(null);
+            public void Release() => _gate.TrySetResult();
+        }
+
+        [Test]
+        public async Task The_two_readings_before_a_turn_are_MountSteadyFor_apart_one_second_on_the_daemon() {
+            // Read a few ms apart, a nudge or a slow move by other means between them would almost never show.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var armed = 0;
+            var readAt = new System.Collections.Concurrent.ConcurrentQueue<long>();
+            mount.OnFullRead = () => {
+                if (Volatile.Read(ref armed) > 0 && Interlocked.Decrement(ref armed) >= 0) {
+                    readAt.Enqueue(System.Diagnostics.Stopwatch.GetTimestamp());
+                }
+            };
+            var solver = new HookedTrueSkySolver(mount) {
+                BeforeSolve = n => {
+                    if (n == 2) {
+                        Volatile.Write(ref armed, 2); // the next two full readings are the second turn's pair
+                    }
+                },
+            };
+            using (var daemon = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, solver, mount, MediatorMotionControl.For(mount), NewStore())) {
+                Assert.That(daemon.MountSteadyFor, Is.EqualTo(TimeSpan.FromSeconds(1)), "the daemon's spacing");
+            }
+            using var svc = NewGemServiceWith(mount, ws, solver);
+            svc.MountSteadyFor = TimeSpan.FromMilliseconds(300);
+
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var pair = readAt.ToArray();
+            Assert.That(pair, Has.Length.EqualTo(2), "the second turn's two readings");
+            Assert.That(System.Diagnostics.Stopwatch.GetElapsedTime(pair[0], pair[1]), Is.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(290)));
+            mount.AssertEndedStopped(tracking: false);
+        }
+
         // ── mount_busy before each turn ──────────────────────────────────────────────────────
 
         [Test]
@@ -267,7 +364,8 @@ namespace OpenAstroAra.Test {
             var error = await RunErrorAsync(ws).ConfigureAwait(false);
 
             AssertFailedBusy(error, "the guider was " + state + " when the second turn was due");
-            Assert.That(error.Message, Does.Contain(state).IgnoreCase);
+            // The sentence's fixed part says "stop guiding" whatever the state: the reason must name the state itself.
+            Assert.That(error.Message, Does.Contain("the guider is " + state).IgnoreCase);
             Assert.That(RaTurns(mount), Has.Length.EqualTo(1), "no second turn. " + mount.Describe());
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }

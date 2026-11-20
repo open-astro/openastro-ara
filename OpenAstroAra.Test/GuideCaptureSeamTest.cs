@@ -166,7 +166,8 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(ex!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy));
-            Assert.That(ex.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"));
+            // The sentence's fixed part says "stop guiding" whatever the state: the reason must name the state itself.
+            Assert.That(ex.Message, Does.Contain("the guider is " + state).IgnoreCase.And.Contain("stop guiding"));
             Assert.That(guider.LeaseCalls, Is.Empty);
             Assert.That(guider.Captures, Is.Empty);
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("idle"));
