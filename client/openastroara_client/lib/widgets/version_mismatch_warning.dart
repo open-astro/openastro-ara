@@ -19,15 +19,15 @@ class VersionMismatchWarning extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Parse once and use the same values for the check and the text, so the
-    // two can never disagree (versionsMismatch is the same rule).
-    final app = AraVersion.tryParse(ref.watch(appVersionProvider));
-    final server = AraVersion.tryParse(serverVersion);
-    if (app == null || server == null || app.sameLine(server)) {
+    final pair = mismatchedVersions(ref.watch(appVersionProvider), serverVersion);
+    if (pair == null) {
       return const SizedBox.shrink();
     }
     return _Warning(
-      text: context.l10n.versionMismatchWarning(server.display, app.display),
+      text: context.l10n.versionMismatchWarning(
+        pair.server.display,
+        pair.app.display,
+      ),
     );
   }
 }

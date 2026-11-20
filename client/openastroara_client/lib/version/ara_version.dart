@@ -114,11 +114,20 @@ String displayVersion(String version) {
 /// and should be updated together. False when either version is missing or
 /// does not parse: an old daemon says `1.0.0.0`, and a guess is worse than
 /// saying nothing.
-bool versionsMismatch(String? appVersion, String? serverVersion) {
+bool versionsMismatch(String? appVersion, String? serverVersion) =>
+    mismatchedVersions(appVersion, serverVersion) != null;
+
+/// Both versions, parsed, when they come from different X.Y release lines;
+/// null otherwise (same line, missing, or does not parse). The one copy of the
+/// rule: [versionsMismatch] and the warning widget both use it.
+({AraVersion app, AraVersion server})? mismatchedVersions(
+  String? appVersion,
+  String? serverVersion,
+) {
   final app = AraVersion.tryParse(appVersion);
   final server = AraVersion.tryParse(serverVersion);
-  if (app == null || server == null) {
-    return false;
+  if (app == null || server == null || app.sameLine(server)) {
+    return null;
   }
-  return !app.sameLine(server);
+  return (app: app, server: server);
 }

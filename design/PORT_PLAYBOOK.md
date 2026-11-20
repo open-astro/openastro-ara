@@ -3837,6 +3837,8 @@ Compare:
 
 ### 33.2.1 Compatibility matrix + graceful degradation
 
+**Superseded (#2093):** the shipped rule is simpler. The app shows a warning when the daemon comes from a different X.Y release line (`lib/version/ara_version.dart` `mismatchedVersions`, `docs/RELEASES.md` "The app and the daemon must match"). The bands below were never built and are kept as history.
+
 The §33.2 table is the headline UX; this subsection is the full decision matrix when WILMA and server versions don't match exactly. The two main signals the server exposes:
 
 1. **`GET /api/v1/server/info`** → `{server_version, api_version, protocol_minor}` (per §33.2)

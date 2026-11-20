@@ -21,7 +21,7 @@ Git refs cannot hold `~`, and Debian needs `~` so a beta sorts below its final
 version. So the version has four spellings. `scripts/version.py` and
 `scripts/release-tag.py` map one to the other.
 
-| Stage       | `VERSION` file | Git tag         | Shown in the app and API | Client `pubspec.yaml`     | Dev `.deb` version |
+| Stage       | `VERSION` file | Git tag         | Shown in the app and API | Client `pubspec.yaml`     | `.deb` version (tagged build) |
 | ----------- | -------------- | --------------- | ------------------------ | ------------------------- | ------------------ |
 | First beta  | `1.0.0~beta1`  | `v1.0.0-beta.1` | `1.0.0-beta.1`           | `1.0.0-beta.1+<build>`    | `1.0.0~beta1`      |
 | Second beta | `1.0.0~beta2`  | `v1.0.0-beta.2` | `1.0.0-beta.2`           | `1.0.0-beta.2+<build>`    | `1.0.0~beta2`      |
