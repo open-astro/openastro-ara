@@ -222,6 +222,12 @@ class CameraStatus extends EquipmentDeviceStatus {
   /// #1663 — the heater the daemon paired with this camera by serial; null
   /// when none.
   final DewHeaterRef? dewHeater;
+
+  /// #2076 — a cooler the daemon switched on does not respond (its CoolerOn
+  /// reads off, or it sits at 0 % power far above its set-point, for a
+  /// minute): usually the camera's 12 V is not connected. False on an older
+  /// daemon.
+  final bool coolerNotResponding;
   CameraStatus({
     required this.deviceId,
     required this.name,
@@ -236,6 +242,7 @@ class CameraStatus extends EquipmentDeviceStatus {
     this.readoutMode,
     this.heatSinkTemperatureC,
     this.dewHeater,
+    this.coolerNotResponding = false,
   });
 
   bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
@@ -262,6 +269,7 @@ class CameraStatus extends EquipmentDeviceStatus {
       readoutMode: r['readout_mode'] as String?,
       heatSinkTemperatureC: (r['heat_sink_temperature_c'] as num?)?.toDouble(),
       dewHeater: DewHeaterRef.fromJson(json['dew_heater']),
+      coolerNotResponding: r['cooler_not_responding'] as bool? ?? false,
     );
   }
 
@@ -281,10 +289,12 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.coolerSetpointC == coolerSetpointC &&
           other.heatSinkTemperatureC == heatSinkTemperatureC &&
           other.readoutMode == readoutMode &&
-          other.dewHeater == dewHeater);
+          other.dewHeater == dewHeater &&
+          other.coolerNotResponding == coolerNotResponding);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
       runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
-      coolerSetpointC, readoutMode, heatSinkTemperatureC, dewHeater);
+      coolerSetpointC, readoutMode, heatSinkTemperatureC, dewHeater,
+      coolerNotResponding);
 }

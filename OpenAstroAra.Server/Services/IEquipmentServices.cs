@@ -141,12 +141,27 @@ public interface ITelescopeService {
     /// changes: a reconnected mount may have been moved, re-homed or swapped meanwhile.</summary>
     long SessionEpoch => 0;
 
+    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
+    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
+    /// German equatorial mount, and treats null as one (fail-safe).</summary>
+    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
+
     /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
     /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
     /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal
     /// must never restart a motor the user just stopped.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, ct);
+
+    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park, Home or
+    /// polar alignment; otherwise why not (a <c>position_unverified_reason</c> token, or
+    /// <c>not_read_yet</c> before the session's first position read). Reads the mount once when the
+    /// session has not read it yet.</summary>
+    Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult<string?>(null);
+
+    /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
+    /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
+    Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
 }
 
 public interface IFocuserService {

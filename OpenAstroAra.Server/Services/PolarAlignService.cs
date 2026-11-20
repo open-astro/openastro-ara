@@ -428,6 +428,12 @@ namespace OpenAstroAra.Server.Services {
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
+                // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
+                // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
+                // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
+                if (_mount is ITelescopeService pose && await pose.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+                    throw TelescopeService.PositionUnverifiedRefusal(unverified);
+                }
                 var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 // #2048 — nothing moves without the user's confirmation of this start and its RA turn direction, read from
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)

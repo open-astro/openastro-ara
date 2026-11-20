@@ -50,8 +50,14 @@ public static class RefusalCatalog {
     // Slice 2: a GoTo under the profile's horizon limit (#2044).
     public static readonly RefusalCause BelowHorizonLimit = new("below-horizon-limit", 409, "The target is below the horizon limit", "altitude_deg", "limit_deg");
 
+    // Slice 2: a GoTo below the pole that would turn the counterweight past its limit (#2073).
+    public static readonly RefusalCause CounterweightLimit = new("counterweight-limit", 409, "The target would turn the counterweight past its limit", "hour_angle_hours", "counterweight_angle_deg", "limit_deg");
+
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
+
+    // Slice 2: a mount whose reported position is not trusted after a power loss (#2070).
+    public static readonly RefusalCause MountPositionUnverified = new("mount-position-unverified", 409, "The mount's position is unverified", "position_unverified_reason");
 
     // #2048 — Polar Align starts like NINA's: from where the user pointed the mount, never from a parked mount, and only
     // after the user confirmed the start and its RA turn direction (direction = the way the run would turn now).
@@ -63,6 +69,7 @@ public static class RefusalCatalog {
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
-        EndNightInProgress, BelowHorizonLimit, PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit,
+        EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
+        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit,
     ];
 }

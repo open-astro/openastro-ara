@@ -97,11 +97,20 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['altitude_deg']),
       _degrees(r.parameters['limit_deg']),
     ),
+    RefusalCause.counterweightLimit => l.refusalCounterweightLimit(
+      _hours(r.parameters['hour_angle_hours']),
+      _wholeDegrees(r.parameters['counterweight_angle_deg']),
+      _wholeDegrees(r.parameters['limit_deg']),
+    ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
+    RefusalCause.mountPositionUnverified =>
+      r.parameters['position_unverified_reason'] == 'not_read_yet'
+          ? l.refusalMountPositionNotReadYet
+          : l.refusalMountPositionUnverified,
     RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
     RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
     RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
-      _wholeDegrees(r.parameters['offset_deg']),
+      _unsignedWholeDegrees(r.parameters['offset_deg']),
     ),
     null => _firstLine(r.detail),
   };
@@ -110,8 +119,16 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
 /// A refusal's altitude or limit in degrees, one decimal; "?" when absent.
 String _degrees(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
 
+/// A refusal's counterweight angle or limit in whole degrees; "?" when absent.
+String _wholeDegrees(Object? value) =>
+    value is num ? value.toStringAsFixed(0) : '?';
+
+/// A refusal's hour angle in hours, one decimal; "?" when absent.
+String _hours(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
+
 /// A refusal's angle in whole degrees, unsigned; "?" when absent.
-String _wholeDegrees(Object? value) => value is num ? value.abs().toStringAsFixed(0) : '?';
+String _unsignedWholeDegrees(Object? value) =>
+    value is num ? value.abs().toStringAsFixed(0) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

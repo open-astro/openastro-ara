@@ -15,6 +15,7 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -815,6 +816,24 @@ namespace OpenAstroAra.Test {
                     return postedNotifications.Exists(n => n.Message?.Contains("Verify the pointing", StringComparison.Ordinal) == true);
                 }
             });
+        }
+
+        // #2070 — a park from a false zero (a mount that lost power) drives the tube to the wrong place.
+        [Test]
+        public async Task Unsafe_park_refused_for_an_unverified_position_stops_tracking_and_alerts() {
+            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(TelescopeService.PositionUnverifiedRefusal(MountPoseTrust.AtHomeOnConnect));
+            SetMonitor(safe: false);
+
+            await service.TickAsync();
+
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once,
+                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends)");
+            telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once,
+                "the mount stops tracking instead of parking");
+            Assert.That(postedNotifications.Count(n => n.Severity == NotificationSeverity.Critical
+                    && n.Title.Contains("NOT parked", StringComparison.Ordinal)), Is.EqualTo(1),
+                "a Critical alert says the mount was not parked");
         }
     }
 }

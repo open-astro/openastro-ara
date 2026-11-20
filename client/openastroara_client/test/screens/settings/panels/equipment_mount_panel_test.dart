@@ -119,6 +119,8 @@ MountStatus _status({
   double? targetDecDegrees,
   List<String> trackingRates = const [],
   String? trackingRate,
+  bool atHome = false,
+  bool positionUnverified = false,
 }) => MountStatus(
   deviceId: 'mount-0',
   name: 'EQ6-R',
@@ -142,8 +144,10 @@ MountStatus _status({
   targetDeclinationDegrees: targetDecDegrees,
   tracking: tracking,
   parked: parked,
-  atHome: false,
+  atHome: atHome,
   trackingRate: trackingRate,
+  positionUnverified: positionUnverified,
+  positionUnverifiedReason: positionUnverified ? 'at_home_on_connect' : null,
 );
 
 Future<void> _wideSurface(WidgetTester tester) async {
@@ -307,6 +311,68 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Home'),
     );
     expect(home.onPressed, isNull); // must unpark before homing
+  });
+
+  testWidgets('an unverified position turns Park and Home off and says to run the zero search (#2070)', (
+    tester,
+  ) async {
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    expect(find.byKey(const Key('mount_position_unverified')), findsOneWidget);
+    expect(find.text('Mount position unverified'), findsOneWidget);
+    final park = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Park'),
+    );
+    expect(park.onPressed, isNull, reason: 'the rig refuses a park from an unverified position');
+    final home = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Home'),
+    );
+    expect(home.onPressed, isNull, reason: 'Home by the mount model is refused too');
+    expect(
+      find.textContaining('Run the mount\'s zero search'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('mount_confirm_home')),
+      findsNothing,
+      reason: 'the mount does not report Home yet',
+    );
+  });
+
+  testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (
+    tester,
+  ) async {
+    await _pump(tester, _status(canFindHome: true, atHome: true));
+    expect(find.byKey(const Key('mount_position_unverified')), findsNothing);
+    expect(
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Park')).onPressed,
+      isNotNull,
+    );
+    expect(
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Home')).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('confirming Home at an unverified Home asks first, and Cancel sends nothing (#2070)', (
+    tester,
+  ) async {
+    final api = await _pump(
+      tester,
+      _status(atHome: true, positionUnverified: true),
+    );
+    await tester.tap(find.byKey(const Key('mount_confirm_home')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty, reason: 'the panel asks first');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty);
+
+    await tester.tap(find.byKey(const Key('mount_confirm_home')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mount_confirm_home_yes')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:confirm-home:enabled=null'));
   });
 
   testWidgets('parked mount shows Unpark and hides Park; tracking disabled', (

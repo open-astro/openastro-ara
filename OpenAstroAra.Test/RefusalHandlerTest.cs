@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class RefusalHandlerTest {
 
-        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then Polar Align's start, #2048, and its sweep bound, #2089): token, status, parameter names. A row changed here is a wire change.
+        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then the unverified mount, then Polar Align's start, #2048, and its sweep bound, #2089): token, status, parameter names. A row changed here is a wire change.
         private static readonly object[] Causes = {
             new object[] { "no-camera", 409, Array.Empty<string>() },
             new object[] { "camera-busy", 409, Array.Empty<string>() },
@@ -46,7 +46,9 @@ namespace OpenAstroAra.Test {
             new object[] { "capture-settings-unsupported", 422, Array.Empty<string>() },
             new object[] { "storage-unavailable", 409, Array.Empty<string>() },
             new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
+            new object[] { "counterweight-limit", 409, new[] { "hour_angle_hours", "counterweight_angle_deg", "limit_deg" } },
             new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
+            new object[] { "mount-position-unverified", 409, new[] { "position_unverified_reason" } },
             new object[] { "polar-align-mount-parked", 409, Array.Empty<string>() },
             new object[] { "polar-align-unconfirmed", 409, new[] { "direction" } },
             new object[] { "polar-align-sweep-limit", 409, new[] { "offset_deg", "limit_deg" } },
