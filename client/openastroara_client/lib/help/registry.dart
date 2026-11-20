@@ -502,19 +502,6 @@ const Map<String, Help> helpRegistry = {
         'On a mount where the scope or camera can touch the pier, set this to the time the target takes to get from a safe angle to the meridian, and leave a little extra. 0 turns the early stop off: the flip then runs inside the after-meridian window.',
     relatedSettings: ['safety.policies.meridian_flip_auto'],
   ),
-  'safety.policies.on_altitude_limit': Help(
-    key: 'safety.policies.on_altitude_limit',
-    title: 'On altitude limit',
-    body:
-        'What happens when a target drops below the minimum-altitude floor (set in Site Preferences, default 20°).\n\n'
-        '* **Skip target**: move to the next target in the sequence and continue. Recommended for multi-target sessions.\n'
-        '* **Pause sequence**: pause and wait for the target to rise again (only useful for circumpolar targets).\n'
-        '* **Abort sequence**: stop the whole session. Strict but predictable.',
-    relatedSettings: [
-      'safety.site.default_horizon_altitude_deg',
-      'safety.policies.park_if_no_more_targets',
-    ],
-  ),
   'safety.policies.on_guider_lost': Help(
     key: 'safety.policies.on_guider_lost',
     title: 'On guider lost',

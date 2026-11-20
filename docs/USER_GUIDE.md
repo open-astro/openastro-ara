@@ -375,11 +375,29 @@ Ara assumes you're asleep while it works:
   connection for the same retry window, and reconnects when that machine's guider is back. The
   same rule gates the guider restart action (`POST /api/v1/equipment/guider/restart`), which
   only restarts the SBC's own guider daemon.
-- **Meridian flips** run a guarded pipeline: a pre-flight check (predicted altitude, mount health,
-  required equipment), an in-slew watchdog (stall/timeout/pier-side verification), a hard
-  post-flip plate-solve gate (imaging does not resume on an unverified pointing), and a safe-rest
-  fallback (park or stop tracking, guider stopped) if anything fails. Your profile's **first**
-  flip announces itself and waits briefly for a confirmation.
+- **Meridian flips** run a guarded pipeline when flip safety (**Extra care on flips when you are
+  away**) is on, the default: a pre-flight check (predicted altitude, mount health, required
+  equipment), an in-slew watchdog (stall and timeout), a pier-side check as soon as the flip slew
+  ends, a post-flip plate-solve gate when **Re-center after flip** is on (imaging does not resume on an unverified pointing), and a
+  safe-rest fallback (park or stop tracking, guider stopped) if anything fails. If the mount
+  reports the same pier side after the slew, the flip fails before Ara re-centers or restarts
+  guiding. With flip safety off, Ara warns you at once and continues (some drivers misreport
+  pier side).
+- **Confirm a flip on each profile.** Until you confirm one, every flip sends a critical alert and
+  waits 60 s; stop the run in that window if the scope could hit the mount. Watch one flip from
+  start to end. When it completes, Ara asks you to confirm it under **Settings → Unattended
+  running → When to stop**: press **Confirm** if the scope cleared the mount and tripod and
+  frames and guiding came back on target. If the mount reported no pier side change (unknown, or
+  the same side with flip safety off), check the flip by eye before you confirm. Ara never
+  confirms on its own; an optics change, **Re-arm** or a new profile (also a duplicate) asks
+  again. **Re-arm** also drops a completed flip you have not confirmed, for example after you
+  re-balanced the rig.
+- **Set the meridian pause per rig.** **Stop before meridian** is when imaging stops before the
+  meridian. Where the camera or rotator can reach the tripod or pier, measure how long the target
+  takes from a safe angle to the meridian and add a margin. Ara has no clearance limit yet (#1589).
+- **Guiding after a flip:** the guider flips its calibration from the mount's pier side. If Dec
+  runs away after a flip, change the guider's **Meridian flip reverses Dec** for this mount and
+  watch the next flip.
 - A failed flip **pauses the run resumably** ("needs your attention") instead of killing it —
   Resume re-attempts the flip after you sort the rig out.
 - **Unattended shutdown**: if a failure pauses a run and nobody responds within the
