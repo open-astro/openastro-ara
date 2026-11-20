@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -156,6 +157,77 @@ namespace OpenAstroAra.Test {
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
             Assert.That(error.GetProperty("message").GetString(), Does.Contain("Stop Mount"));
             Assert.That(RaTurns(mount), Is.Empty, "no turn after the Stop Mount. " + mount.Describe());
+        }
+
+        // ── a takeover that gives up waiting fences the run ──────────────────────────────────
+
+        // The user's Stop waits for a run stuck in a call that ignores cancellation; the safety park's first step (bounded at
+        // 10 s) waits behind it. Past the takeover's bound the park goes out, and then the Stop gave up on the run and sent its
+        // own stop round (an AbortSlew, since the parking mount slews): the park was aborted. Fenced, nothing lands on it.
+        [Test]
+        public async Task A_takeover_that_outwaits_its_bound_fences_the_stuck_run_so_no_stop_lands_on_the_park() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.GoToRateDegPerSec = 15.0; // a park of about 4 s
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var solver = new StuckSolver();
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5); // the Stop gives up on the stuck run, inside the park
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                var stop = svc.StopAsync(null, CancellationToken.None);
+                var watch = Stopwatch.StartNew();
+                // The safety park's first step, bounded as SafetyReactionService bounds it.
+                await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var answeredIn = watch.Elapsed;
+                var parkAt = mount.Now;
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                solver.Release(); // the stuck run unwinds now, in the middle of the park
+                var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+                Assert.That(answeredIn, Is.LessThan(TimeSpan.FromSeconds(1)), "the takeover answered at its bound, not after the stuck run");
+                Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
+                Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
+                    "no stop after the park went out. " + mount.Describe());
+            } finally {
+                solver.Release();
+            }
+        }
+
+        // The Stop gave up on a run stuck past its grace and stopped the mount itself. The run unwinds whenever its call
+        // returns: its exit then stopped the mount again and turned tracking off in the middle of whatever came next (here
+        // the user's park). The end that abandoned it fences its stops.
+        [Test]
+        public async Task A_stuck_run_a_Stop_abandoned_sends_no_stop_when_it_unwinds_later() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.GoToRateDegPerSec = 15.0;
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var solver = new StuckSolver();
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+                var parkAt = mount.Now;
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                solver.Release(); // the stuck run unwinds now, in the middle of the park
+                var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+                Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
+                Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
+                    "no stop from the abandoned run. " + mount.Describe());
+                Assert.That(mount.Commands.Where(c => c.At >= parkAt).Select(c => c.Text), Has.None.StartsWith("tracking"),
+                    "no tracking write from the abandoned run");
+            } finally {
+                solver.Release();
+            }
         }
     }
 }

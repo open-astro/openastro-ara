@@ -543,6 +543,7 @@ namespace OpenAstroAra.Server.Services {
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                         gen = ++_generation;
+                        runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
                         _abortWatch = (gen, baselineEpoch, baselineOwn);
                         // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
@@ -648,12 +649,21 @@ namespace OpenAstroAra.Server.Services {
                 if (!unwound && end is { MountStopped: null } && endRequest != TakenOver) {
                     // The run is stuck in a call that ignores cancellation and never reached its exit: confirm the stop here,
                     // and turn tracking off now (it may never unwind; a mount left tracking runs on toward the pier). An end
-                    // that hands tracking back leaves it as it is: the run gives it back when it unwinds.
-                    var stopped = await StopMountMotionAsync(outcome).ConfigureAwait(false);
+                    // that hands tracking back leaves it as it is: the run gives it back when it unwinds. A takeover that
+                    // gave up waiting fenced the run's stops meanwhile (null): the mount is its own, nothing is written.
+                    var stopped = await StopMountMotionAsync(outcome, end.Fence).ConfigureAwait(false);
                     end.MountStopped = stopped;
-                    if (!stopped || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding)) {
+                    if (stopped is bool known
+                            && (!known || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding))) {
                         TrackingOffBestEffort(outcome);
                     }
+                }
+                if (!unwound && end is not null && !StopsFenced(end.Fence)) {
+                    // #2066 — the stuck run may unwind at any later time; its exit would then stop the mount and turn tracking
+                    // off in the middle of whatever the mount does by then (a park, a GoTo, the user's imaging). This end
+                    // answered for the mount: fence the run's stops.
+                    FenceStops();
+                    LogAbandonedRunFenced();
                 }
                 var mountNotStopped = end?.MountStopped == false;
                 bool becameStopped;
@@ -816,10 +826,11 @@ namespace OpenAstroAra.Server.Services {
                     LogExitLeftToSuccessor();
                     return null;
                 }
-                if (takenOver || end.Requested == TakenOver) {
+                if (takenOver || end.Requested == TakenOver || StopsFenced(end.Fence)) {
                     // #2066 — Emergency Stop, the safety park, a park or a Find Home owns the mount now: it stops and checks
                     // the mount itself (Emergency Stop's second pass), or moves it on purpose. A stop round from here would
-                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound.
+                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound. A
+                    // fenced run (a takeover gave up waiting for it, or an end abandoned it) is in the same place.
                     LogExitLeftToTakeover(why);
                     return null;
                 }
@@ -827,7 +838,12 @@ namespace OpenAstroAra.Server.Services {
                     _exitsInFlight++;
                 }
                 try {
-                    exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
+                    exitStopped = await StopMountMotionAsync(why, end.Fence).ConfigureAwait(false);
+                    if (exitStopped is null) {
+                        // Fenced while it stopped the mount: the mount is a takeover's now, no tracking write.
+                        LogExitLeftToTakeover(why);
+                        return null;
+                    }
                     end.MountStopped = exitStopped;
                     // #2089 — where this run left the mount: the next start tells a continued pose from a moved one by it.
                     await NoteMountLeftAfterStopAsync().ConfigureAwait(false);
