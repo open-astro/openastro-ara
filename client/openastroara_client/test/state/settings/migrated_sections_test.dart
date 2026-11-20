@@ -421,6 +421,20 @@ void main() {
     expect(shown.etag, rig.etagOf('site'), reason: 'the next Save is not refused');
   });
 
+  // A self-loading section starts its own first read as it is built. A change
+  // made at once loads too; that load is superseded by the first read and
+  // lands nothing, so _loadOnce loads once more instead of refusing.
+  test('site: a change made before its first read lands is saved, not '
+      'refused', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await c
+        .read(siteSettingsProvider.notifier)
+        .editAndSave((s) => s.copyWith(siteName: 'Ridge'));
+    expect(rig.puts, hasLength(1));
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Ridge');
+  });
+
   // The diagnostics radios save on each tap (replaceAndSave).
   const mode = 'diagnostics-mode', tapped = DiagnosticsMode.abortOnCritical;
 

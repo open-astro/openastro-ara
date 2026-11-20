@@ -165,7 +165,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     final section = ref.watch(siteSettingsProvider);
     final s = section.canSave ? section.value : null;
     final n = ref.read(siteSettingsProvider.notifier);
-    SiteSettings now() => ref.read(siteSettingsProvider).value!;
+    // A field's canonical text only; a reset mid-edit reads the plain
+    // values, and no save can send them (the section is not loaded).
+    SiteSettings now() =>
+        ref.read(siteSettingsProvider).value ?? const SiteSettings();
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -535,7 +538,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.sqm_mag_per_arcsec2',
             currentValue: sqmText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).value!.sqmMagPerArcsec2.toString(),
+                ref.read(siteSettingsProvider).value?.sqmMagPerArcsec2.toString() ?? '',
             parse: (str) {
               final v = double.tryParse(str);
               if (v != null) n.setSkySqm(v);
@@ -558,7 +561,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.bortle_class',
             currentValue: bortleText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).value!.bortleClass.toString(),
+                ref.read(siteSettingsProvider).value?.bortleClass.toString() ?? '',
             parse: (str) {
               final v = int.tryParse(str);
               if (v != null) n.setSkyBortle(v);
