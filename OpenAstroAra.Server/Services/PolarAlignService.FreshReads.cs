@@ -54,8 +54,8 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A reading of the mount checked as above: the pointing in JNOW (degrees) and its mount session, or why it
         /// cannot be trusted. <paramref name="runSession"/>: the session the reading must come from; null takes any.</summary>
-        private async Task<FreshPointing> ReadFreshPointingAsync(long? runSession, CancellationToken ct) {
-            var reading = await _motionControl.ReadNowAsync(ct).ConfigureAwait(false);
+        private async Task<FreshPointing> ReadFreshPointingAsync(long? runSession, CancellationToken ct, bool positionOnly = false) {
+            var reading = await (positionOnly ? _motionControl.ReadPositionNowAsync(ct) : _motionControl.ReadNowAsync(ct)).ConfigureAwait(false);
             if (reading is null) {
                 return FreshPointing.Unknown("the mount gave no reading");
             }
@@ -92,9 +92,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>A run's reading: one it cannot trust fails the run (<see cref="PointingUnknown"/>,
-        /// <see cref="PoseAmbiguous"/>), so a turn neither starts nor goes on from it.</summary>
-        private async Task<(double RaDeg, double DecDeg)> RunPointingJnowAsync(int gen, CancellationToken ct) {
-            var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct).ConfigureAwait(false);
+        /// <see cref="PoseAmbiguous"/>), so a turn neither starts nor goes on from it. <paramref name="positionOnly"/>: RA and
+        /// Dec only (<see cref="IMountMotionControl.ReadPositionNowAsync"/>), for the polls of a turn.</summary>
+        private async Task<(double RaDeg, double DecDeg)> RunPointingJnowAsync(int gen, CancellationToken ct, bool positionOnly = false) {
+            var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct, positionOnly).ConfigureAwait(false);
             if (p.Why is not null || p.DecPastPoleDeg is not null) {
                 ThrowIfAbortedFromOutside(gen); // a park or Emergency Stop meanwhile owns the mount: its failure wins
             }

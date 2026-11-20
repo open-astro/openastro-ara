@@ -168,7 +168,9 @@ namespace OpenAstroAra.Test {
                 var service = Mock.As<ITelescopeService>();
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
                 service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
-                service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
+                service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
+                service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
+                Task<MountReading?> Read() {
                     lock (_lock) {
                         if (FailReadPastRaDeg is double past && _rates[0] != 0 && _raDeg >= past) {
                             FailReadPastRaDeg = null;
@@ -194,7 +196,7 @@ namespace OpenAstroAra.Test {
                         return Task.FromResult<MountReading?>(new MountReading(_raDeg / 15.0, _decDeg, SlewingLocked(),
                             PierSide.pierWest, DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
                     }
-                });
+                }
                 service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                     .Returns((int axis, double rate, int? _, long? since, CancellationToken _) => {
                         lock (_lock) {

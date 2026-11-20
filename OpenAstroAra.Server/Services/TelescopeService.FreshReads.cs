@@ -30,9 +30,14 @@ public sealed partial class TelescopeService {
     /// read leaves the old session's number on a reading the old client answered. The frame is the session's equatorial
     /// system once the refresh read it; until then the driver is asked with the position (its answer is not kept: the
     /// refresh owns that state). Pier side is not asked of a mount that does not implement it (<c>pierUnknown</c>).</remarks>
+    public Task<MountReading?> ReadNowAsync(CancellationToken ct) => ReadAsync(positionOnly: false, ct);
+
+    /// <inheritdoc />
+    public Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadAsync(positionOnly: true, ct);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A failed read is 'no fresh reading' (null) by contract; the routine fails or reads again its own way.")]
-    public async Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+    private async Task<MountReading?> ReadAsync(bool positionOnly, CancellationToken ct) {
         ITelescopeDevice? client;
         long session;
         EquatorialCoordinateType? knownSystem;
@@ -41,7 +46,7 @@ public sealed partial class TelescopeService {
             client = _lifecycle.Live;
             session = SessionEpoch;
             knownSystem = _equatorialSystemKnown ? _equatorialSystemRaw : null;
-            readPierSide = !_sideOfPierUnsupported;
+            readPierSide = !positionOnly && !_sideOfPierUnsupported;
         }
         if (client is null) {
             return null;
@@ -51,7 +56,7 @@ public sealed partial class TelescopeService {
             var (ra, dec, slewing, side, system) = await Task.Run(() => (
                 client.RightAscension,
                 client.Declination,
-                ReadOrNull(() => client.Slewing),
+                positionOnly ? null : ReadOrNull(() => client.Slewing),
                 readPierSide ? ReadSideOfPier(client).SideOfPier : PierSide.pierUnknown,
                 knownSystem ?? ReadEquatorialSystem(client) ?? EquatorialCoordinateType.Other), ct).ConfigureAwait(false);
             if (!double.IsFinite(ra) || !double.IsFinite(dec)) {

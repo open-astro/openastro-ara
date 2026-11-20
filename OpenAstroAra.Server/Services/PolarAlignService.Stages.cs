@@ -514,7 +514,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                     ThrowIfStoppedFromOutside(gen);
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
-                    var now = await RunPointingJnowAsync(gen, ct).ConfigureAwait(false);
+                    var now = await RunPointingJnowAsync(gen, ct, positionOnly: true).ConfigureAwait(false);
                     NoteMountLeft(now);
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {

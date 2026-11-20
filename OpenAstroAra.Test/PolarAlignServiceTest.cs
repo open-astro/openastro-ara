@@ -1357,6 +1357,8 @@ namespace OpenAstroAra.Test {
             var service = mount.As<ITelescopeService>();
             service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
+            service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var calls = new ConcurrentQueue<(int Axis, double Rate, int? LeaseMs)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((axis, rate, lease, _, _) => {
@@ -1412,6 +1414,8 @@ namespace OpenAstroAra.Test {
             service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref abortEpoch));
             service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
+            service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var moves = 0;
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
@@ -1454,6 +1458,8 @@ namespace OpenAstroAra.Test {
             service.SetupGet(s => s.AbortEpoch).Returns(42L);
             service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
+            service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var guards = new ConcurrentQueue<(double Rate, long? Since)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
@@ -1484,6 +1490,8 @@ namespace OpenAstroAra.Test {
             var freshRaDeg = 0.0;
             var service = mount.As<ITelescopeService>();
             service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaDeg / 15.0, 85.0));
+            service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => FreshReading(freshRaDeg / 15.0, 85.0));
             var commands = new ConcurrentQueue<(double Rate, double AtDeg)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))

@@ -578,29 +578,60 @@ namespace OpenAstroAra.Test.PolarAlign {
         public Task<MountReading?> ReadNowAsync(CancellationToken ct) {
             TakeFreshReadTime();
             lock (_lock) {
-                if (FreshReadFailsLocked()) {
-                    return Task.FromResult<MountReading?>(null);
+                IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _fullReadsWhileMoving++;
                 }
-                if (_reconnectAtMovingRead > 0 && TrulyMovingLocked() && --_reconnectAtMovingRead == 0) {
-                    _sessionEpoch++;
-                    _sample = null;
-                    _commandsAtReconnect = _commands.Count;
-                }
-                var s = SampleLocked();
-                bool? slewing = SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
-                var side = PierSource == PierSideSource.Error ? PierSide.pierUnknown : s.Side;
-                if (_sentinelReads > 0) {
-                    _sentinelReads--;
-                    return Task.FromResult<MountReading?>(new MountReading(0.0, 0.0, slewing, side, _t0 + _t, _sessionEpoch));
-                }
-                var age = TimeSpan.Zero;
-                if (_staleReads > 0) {
-                    _staleReads--;
-                    age = StaleReadAge;
-                }
-                return Task.FromResult<MountReading?>(new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing,
-                    side, _t0 + s.At - age, _sessionEpoch, Epoch.JNOW));
+                return Task.FromResult(ReadLocked(positionOnly: false));
             }
+        }
+
+        public Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) {
+            TakeFreshReadTime();
+            lock (_lock) {
+                IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _positionReadsWhileMoving++;
+                }
+                return Task.FromResult(ReadLocked(positionOnly: true));
+            }
+        }
+
+        /// <summary>#2066 — how often <see cref="ReadNowAsync"/> (position, Slewing and pier side) and
+        /// <see cref="ReadPositionNowAsync"/> were called while a motor or a GoTo truly moved the mount.</summary>
+        public (int Full, int PositionOnly) FreshReadsWhileMoving {
+            get {
+                lock (_lock) {
+                    return (_fullReadsWhileMoving, _positionReadsWhileMoving);
+                }
+            }
+        }
+
+        private int _fullReadsWhileMoving;
+        private int _positionReadsWhileMoving;
+
+        private MountReading? ReadLocked(bool positionOnly) {
+            if (FreshReadFailsLocked()) {
+                return null;
+            }
+            if (_reconnectAtMovingRead > 0 && TrulyMovingLocked() && --_reconnectAtMovingRead == 0) {
+                _sessionEpoch++;
+                _sample = null;
+                _commandsAtReconnect = _commands.Count;
+            }
+            var s = SampleLocked();
+            bool? slewing = positionOnly || SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
+            var side = positionOnly || PierSource is PierSideSource.Unknown or PierSideSource.Error ? PierSide.pierUnknown : s.Side;
+            if (_sentinelReads > 0) {
+                _sentinelReads--;
+                return new MountReading(0.0, 0.0, slewing, side, _t0 + _t, _sessionEpoch);
+            }
+            var age = TimeSpan.Zero;
+            if (_staleReads > 0) {
+                _staleReads--;
+                age = StaleReadAge;
+            }
+            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, Epoch.JNOW);
         }
 
         private void TakeFreshReadTime() {

@@ -64,6 +64,12 @@ public interface IMountMotionControl {
     /// came from. Null when not connected or the position read fails; a failed Slewing read is a null
     /// <see cref="MountReading.Slewing"/>, a failed pier-side read <c>pierUnknown</c>.</summary>
     Task<MountReading?> ReadNowAsync(CancellationToken ct) => Task.FromResult<MountReading?>(null);
+
+    /// <summary>#2066 — <see cref="ReadNowAsync"/> with the position only: RA and Dec read from the driver now, stamped and
+    /// tagged the same way, with <see cref="MountReading.Slewing"/> null and the pier side <c>pierUnknown</c> (not asked).
+    /// For a routine that polls its own motor move several times a second: two driver round trips more per poll would
+    /// stretch the poll, and the stop on the reading would land further past its target.</summary>
+    Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadNowAsync(ct);
 }
 
 /// <summary>One fresh reading of the mount (#2066 ARA-5): RA (hours) and Dec (degrees) as the driver reports them in its

@@ -223,6 +223,25 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
         }
 
+        // ── the turn's poll ──────────────────────────────────────────────────────────────────
+
+        [Test]
+        public async Task A_turn_polls_the_mount_with_the_position_only_read() {
+            // Slewing and the pier side are two driver round trips more per poll that the turn never uses: a longer poll
+            // can skip the last 3° slow zone and stop the motor further past the target.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(2), mount.Describe());
+            var reads = mount.FreshReadsWhileMoving;
+            Assert.That(reads.PositionOnly, Is.GreaterThan(0), "the turns' polls");
+            Assert.That(reads.Full, Is.Zero, "no Slewing or pier-side read while a turn runs");
+        }
+
         // ── the cache ────────────────────────────────────────────────────────────────────────
 
         [Test]
