@@ -151,12 +151,15 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignError = new("polar_align.error");
     // Stages: stage when the routine moves to a new stage ({stage, state}); checked when the three-point check has its
     // result (the PolarAlignCheckResultDto fields). needs_home was retired by #2048: the routine never sends the mount Home.
-    // started and progress also carry {stage}.
+    // started and progress also carry {stage}; started also carries {hand_turn} (#2083).
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
     // #1971 — the Polar Aligner's state in a running routine, on every change: {state, moves,
     // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectionDto).
     public static readonly WsEvent PolarAlignCorrection = new("polar_align.correction");
+    // #2083 — a hand-turn run waiting for the user to turn the RA axis, after each solve while it waits and once more
+    // when it takes the turn: {point, direction, target_deg, turned_deg?, waiting} (PolarAlignHandTurnDto).
+    public static readonly WsEvent PolarAlignHandTurn = new("polar_align.hand_turn");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
@@ -358,6 +361,7 @@ public static class WsEventCatalog {
         PolarAlignStage,
         PolarAlignChecked,
         PolarAlignCorrection,
+        PolarAlignHandTurn,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

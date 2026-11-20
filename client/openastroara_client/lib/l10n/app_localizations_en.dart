@@ -6743,6 +6743,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
   @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
+
+  @override
+  String get refusalPolarAlignClutchTurned =>
+      'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6782,6 +6790,56 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalMountClockNotVerified =>
       'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
+
+  @override
+  String get polarConfirmGuideField =>
+      'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.';
+
+  @override
+  String get polarConfirmGuideMeridian =>
+      'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.';
+
+  @override
+  String get polarConfirmHandTurnHint =>
+      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.';
+
+  @override
+  String get polarConfirmHandTurn => 'Turn RA by hand';
+
+  @override
+  String polarHandTurnAsk(String step, String direction) {
+    return 'Turn RA by hand about $step° toward the $direction, then let go.';
+  }
+
+  @override
+  String polarHandTurnTurned(String turned) {
+    return 'Turned $turned° so far.';
+  }
+
+  @override
+  String polarHandTurnWrongWay(String direction) {
+    return 'That went the other way: turn toward the $direction.';
+  }
+
+  @override
+  String get polarHandTurnRunNote =>
+      'You turn RA by hand: Ara does not move the mount.';
+
+  @override
+  String get polarAzimuthArc => 'true arc (cos alt)';
+
+  @override
+  String polarAzimuthNina(String value) {
+    return 'NINA $value';
+  }
+
+  @override
+  String get polarInitialErrorLarge =>
+      'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.';
+
+  @override
+  String get polarInitialErrorHuge =>
+      'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';

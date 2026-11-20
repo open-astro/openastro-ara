@@ -211,6 +211,29 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// Facing the south celestial pole: east and west swap sides on screen.
   bool get _southern => (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
 
+  /// #2083 the azimuth readout's convention, and NINA's figure for it.
+  String _azimuthNote(double? az) {
+    final l10n = context.l10n;
+    final nina = ninaAzimuthArcmin(az, ref.watch(siteSettingsProvider).value?.latitudeDeg);
+    return nina == null ? l10n.polarAzimuthArc : '${l10n.polarAzimuthArc} · ${l10n.polarAzimuthNina(formatArcmin(nina))}';
+  }
+
+  /// #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
+  Widget _handTurnLine(PolarAlignLive live) {
+    final ask = polarHandTurnText(context.l10n, live.handTurnWait);
+    return Text(
+      ask ?? context.l10n.polarHandTurnRunNote,
+      key: Key(ask == null ? 'polar-align-hand-note' : 'polar-align-hand-ask'),
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: ask == null ? _textFont : 16,
+        fontWeight: ask == null ? FontWeight.normal : FontWeight.w600,
+        color: ask == null ? AraColors.textSecondary : AraColors.accentBusy,
+        height: 1.4,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final live = ref.watch(polarAlignLiveProvider);
@@ -490,12 +513,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Three solved frames around two RA turns measure the axis exactly. '
-            'Leave the mount alone — this only measures.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-          ),
+          if (live.handTurn)
+            _handTurnLine(live)
+          else
+            const Text(
+              'Three solved frames around two RA turns measure the axis exactly. '
+              'Leave the mount alone — this only measures.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+            ),
           const SizedBox(height: 20),
           TextButton(
             key: const Key('polar-align-abort-checking'),
@@ -613,7 +639,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     children: [
                       Expanded(child: _axisStat('Altitude', alt, polarAltHint(context.l10n, alt), color)),
                       const VerticalDivider(width: 1, color: AraColors.frameDivider),
-                      Expanded(child: _axisStat('Azimuth', az, polarAzHint(context.l10n, az, southern: _southern), color)),
+                      Expanded(child: _axisStat('Azimuth', az, polarAzHint(context.l10n, az, southern: _southern), color, note: _azimuthNote(az))),
                     ],
                   ),
                 ),
@@ -643,7 +669,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     key: const Key('polar-align-check-disagree'),
                   ),
                 ],
-                if (r != null) ...[
+                // A hand-turn check has no mount turn to compare with (#2083).
+                if (r != null && !live.handTurn) ...[
                   const SizedBox(height: 14),
                   Text(
                     'Pointings ${r.coneHalfAngleDeg.toStringAsFixed(1)}° off the axis · solved turns within '
@@ -781,12 +808,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Three solved frames around two small RA turns. Leave the mount alone '
-            'until the bullseye appears.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-          ),
+          if (live.handTurn)
+            _handTurnLine(live)
+          else
+            const Text(
+              'Three solved frames around two small RA turns. Leave the mount alone '
+              'until the bullseye appears.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+            ),
           const SizedBox(height: 20),
           TextButton(
             key: const Key('polar-align-abort-seeding'),
@@ -834,6 +864,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             AraColors.accentInfo,
             Icons.explore_outlined,
             key: const Key('polar-align-coarse-banner'),
+          ),
+          SizedBox(height: _short ? 8 : 12),
+        ],
+        if (polarInitialErrorText(context.l10n, live.initialErrorArcmin) case final warning?) ...[
+          _callout(
+            warning,
+            AraColors.accentBusy,
+            Icons.warning_amber_outlined,
+            key: const Key('polar-align-initial-error'),
           ),
           SizedBox(height: _short ? 8 : 12),
         ],
@@ -1075,7 +1114,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   children: [
                     Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(context.l10n, live.altErrorArcmin), color)),
                     const VerticalDivider(width: 1, color: AraColors.frameDivider),
-                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color)),
+                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color, note: _azimuthNote(live.azErrorArcmin))),
                   ],
                 ),
               ),
@@ -1144,7 +1183,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ),
           Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(context.l10n, live.altErrorArcmin), color)),
-          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color)),
+          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color, note: _azimuthNote(live.azErrorArcmin))),
         ],
       );
     return _card(
@@ -1298,10 +1337,20 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  Widget _axisStat(String label, double? value, (IconData, String) hint, Color color) {
+  /// [note]: after the label, on its line (#2083: the azimuth's convention).
+  Widget _axisStat(String label, double? value, (IconData, String) hint, Color color, {String? note}) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 16, color: AraColors.textSecondary)),
+        if (note == null)
+          Text(label, style: const TextStyle(fontSize: 16, color: AraColors.textSecondary))
+        else
+          // One line, scaled down in a narrow column: no room is taken from the readout.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('$label · $note',
+                key: const Key('polar-align-azimuth-note'),
+                style: const TextStyle(fontSize: 16, color: AraColors.textSecondary)),
+          ),
         const SizedBox(height: 2),
         // Scale down rather than overflow in a narrow (phone/tablet) column.
         FittedBox(
