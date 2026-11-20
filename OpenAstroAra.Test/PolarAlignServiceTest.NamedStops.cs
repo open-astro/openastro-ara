@@ -1,0 +1,194 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
+using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// #2107, #2066, #2065 (ARA-10) — on <see cref="FakeGemMount"/>: a stop from outside is named by the reason it was counted
+    /// with (the error event's <c>stopped_by</c>), not always "Stop Mount"; a run whose stop was not confirmed, or whose mount
+    /// reconnected while it ran, leaves the pose unverified (<c>stop_unconfirmed</c>), and the next Start moves nothing; and
+    /// a <c>mount_did_not_stop</c> the run's exit finds after the stop path read its finding is reported exactly once.
+    /// </summary>
+    public partial class PolarAlignServiceTest {
+
+        /// <summary>A mount that ignores every stop: AbortSlew and MoveAxis 0 both (the RA axis runs on).</summary>
+        private static FakeGemMount IgnoresEveryStop() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.AbortIgnored = int.MaxValue;
+            mount.MoveAxisStopIgnored = int.MaxValue;
+            return mount;
+        }
+
+        /// <summary>A run that ends <c>mount_did_not_stop</c> on <paramref name="mount"/> (which ignores every stop), then
+        /// the mount really stops: the user cut its power, or it obeyed at last.</summary>
+        private static async Task<PolarAlignService> RunEndedNotStoppedAsync(FakeGemMount mount, WsRecorder ws) {
+            var svc = await InFirstGemTurnAsync(mount, ws, s => s.StopVerifyWindow = TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+            mount.AbortIgnored = 0;
+            mount.MoveAxisStopIgnored = 0;
+            await mount.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(mount.IsMoving, Is.False, mount.Describe());
+            return svc;
+        }
+
+        private static async Task<RefusalException> StartRefusedAsync(PolarAlignService svc) {
+            try {
+                await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            } catch (RefusalException refusal) {
+                return refusal;
+            }
+            Assert.Fail("the Start was not refused");
+            return null!;
+        }
+
+        // ── a stop from outside is named ─────────────────────────────────────────────────────
+
+        // The reactions' refused-park stops used to count as Stop Mount, so a run they ended said "Stop Mount" although the
+        // user pressed nothing. The error event now names the stop (stopped_by), and the message says which reaction it was.
+        [TestCase(MountStopReasons.FaultReaction, "equipment-fault reaction")]
+        [TestCase(MountStopReasons.PoseUnverified, "safety reaction")]
+        [TestCase(MountStopReasons.PadStop, "direction pad")]
+        public async Task A_stop_from_outside_is_named_in_the_error_by_the_reason_it_was_counted_with(string by, string named) {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            using var svc = await InFirstGemTurnAsync(mount, ws).ConfigureAwait(false);
+
+            await mount.AbortSlewAsync(by, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("stopped_by").GetString(), Is.EqualTo(by), "the app words the end from it");
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain(named).And.Not.Contain("Stop Mount"));
+        }
+
+        // ── an unconfirmed stop leaves the pose unverified (ARA-10) ──────────────────────────
+
+        [Test]
+        public async Task Pose_unverified_after_mount_did_not_stop_blocks_motion() {
+            var mount = IgnoresEveryStop();
+            var ws = new WsRecorder();
+            using var svc = await RunEndedNotStoppedAsync(mount, ws).ConfigureAwait(false);
+            Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed), "the run flagged the pose");
+            var turns = RaTurns(mount).Length;
+            var at = mount.Now;
+
+            var refusal = await StartRefusedAsync(svc).ConfigureAwait(false);
+
+            Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(turns), "no turn after the refusal. " + mount.Describe());
+            mount.AssertNoMotionSince(at);
+        }
+
+        // M28 — the power cycle the user makes after "cut the mount's power": the mount wakes up reporting Home wherever it
+        // points (power_cycle_reports_home). The flag from the unconfirmed stop stands: the false Home is not trusted.
+        [Test]
+        public async Task M28_power_cycle_reports_home_after_mount_did_not_stop_refuses_the_next_Start_with_zero_turns() {
+            var mount = IgnoresEveryStop();
+            var ws = new WsRecorder();
+            using var svc = await RunEndedNotStoppedAsync(mount, ws).ConfigureAwait(false);
+            mount.PowerCycle(reportsHome: true);
+            var turns = RaTurns(mount).Length;
+            var at = mount.Now;
+
+            var refusal = await StartRefusedAsync(svc).ConfigureAwait(false);
+
+            Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(turns), mount.Describe());
+            mount.AssertNoMotionSince(at);
+        }
+
+        // M28 — the reconnect case: the mount's session changes while the run is open (a Wi-Fi drop and back, or a power
+        // cycle Ara sees as one). The run's stop is confirmed, but the mount may have moved while Ara could not see it.
+        [Test]
+        public async Task M28_a_reconnect_while_the_run_is_open_leaves_the_pose_unverified_and_the_next_Start_moves_nothing() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+
+            mount.Reconnect();
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1), "the stop itself was confirmed");
+            Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            var turns = RaTurns(mount).Length;
+            var refusal = await StartRefusedAsync(svc).ConfigureAwait(false);
+            Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(turns), mount.Describe());
+        }
+
+        // ── the late mount_did_not_stop is told once ─────────────────────────────────────────
+
+        // The run's exit cannot confirm its stop, but is held (here: at its pose flag) until the stop path has given up waiting
+        // for it, confirmed the stop itself, read the finding (none yet) and told the client "stopped". The exit's "not
+        // confirmed" then lands after that read. It used to be dropped (the end had fenced the run); it is told once.
+        [Test]
+        public async Task A_late_exit_that_cannot_confirm_its_stop_after_the_stop_path_read_it_is_reported_once() {
+            var mount = IgnoresEveryStop();
+            var ws = new WsRecorder();
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var svc = await InFirstGemTurnAsync(mount, ws, s => {
+                s.StopVerifyWindow = TimeSpan.FromSeconds(2.0);
+                s.StopResendAfter = TimeSpan.FromSeconds(0.6);
+                s.StopVerifyNotBefore = TimeSpan.FromSeconds(0.2);
+                s.StopVerifyStillFor = TimeSpan.FromSeconds(0.2);
+                s.StopVerifyPoll = TimeSpan.FromMilliseconds(50);
+                s.RunUnwindGrace = TimeSpan.FromSeconds(1.0); // the stop path confirms the stop itself after 1 s
+            }).ConfigureAwait(false);
+            mount.OnMarkPositionUnverified = _ => {
+                // The run's exit gave up on its stop. The mount stops now (the user's Stop Mount), so the stop path's own
+                // confirmation, still inside its window, succeeds; the exit waits here until the stop path has read the
+                // finding and reported the end.
+                if (held.TrySetResult()) {
+                    mount.AbortIgnored = 0;
+                    mount.MoveAxisStopIgnored = 0;
+                    mount.AbortSlewAsync(CancellationToken.None).Wait(SignalTimeout);
+                    release.Task.Wait(SignalTimeout);
+                }
+            };
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(held.Task.IsCompleted, Is.True, "the exit gave up on its stop before the stop path answered");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1), "the stop path confirmed the stop itself");
+            release.SetResult();
+
+            var watch = Stopwatch.StartNew();
+            while (ws.Count(WsEventCatalog.PolarAlignError) == 0 && watch.Elapsed < TimeSpan.FromSeconds(5)) {
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+            await Task.Delay(300).ConfigureAwait(false);
+            var errors = ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetProperty("reason").GetString()).ToArray();
+            Assert.That(errors, Is.EqualTo(new[] { PolarAlignService.MountDidNotStop }), "told once, after the end");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"),
+                "never left 'stopped' for a stop that was not confirmed");
+            Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+        }
+    }
+}

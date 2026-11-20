@@ -303,6 +303,38 @@ namespace OpenAstroAra.Test {
             Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.Null, "the confirm is persisted too");
         }
 
+        // #2066, #2065 (ARA-10) — a routine that could not confirm its stop (Polar Align's mount_did_not_stop) marks the pose
+        // unverified: the mount may have run on. GoTo is refused as after a power loss, the flag is kept across a reconnect
+        // and in the store, and only a confirmed Home clears it.
+        [Test]
+        public async Task A_routine_that_could_not_confirm_its_stop_leaves_the_position_unverified_until_Home_is_confirmed() {
+            var store = new MemoryPoseStore();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30; };
+            using var svc = Build(store);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is not null, "a position");
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "a trusted mount to begin with");
+
+            svc.MarkPositionUnverified(MountPoseTrust.StopUnconfirmed);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.EqualTo(MountPoseTrust.StopUnconfirmed), "persisted");
+            var refusal = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+            Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            Assert.That(refusal.Message, Does.Contain("could not confirm that the mount stopped"), "worded for the stop, not a power loss");
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            await ConnectAsync(svc);
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed), "a reconnect keeps it");
+            await Task.Delay(100);
+            Assert.That(Current.Slews, Is.Zero);
+
+            Current.ReportsAtHome = true; // the hand controller's zero search
+            await svc.ConfirmHomeAsync(CancellationToken.None);
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False);
+            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.Null);
+        }
+
         [Test]
         public async Task Home_reported_in_session_with_nothing_commanded_makes_the_position_unverified() {
             using var svc = Build();

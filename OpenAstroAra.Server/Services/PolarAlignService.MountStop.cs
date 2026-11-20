@@ -101,8 +101,9 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // The telescope's AbortEpoch and _ownAborts when the run's Start was called, for the run of this generation. Guarded by _gate.
-        private (int Gen, long Epoch, long OwnAborts)? _abortWatch;
+        // The telescope's AbortEpoch and _ownAborts when the run's Start was called, and the run's end (its mount session),
+        // for the run of this generation. Guarded by _gate.
+        private (int Gen, long Epoch, long OwnAborts, RunEnd End)? _abortWatch;
 
         // #2066 — the stop fence a run was launched under (RunEnd.Fence), by generation, for its turns' own clean-up stops.
         // Guarded by _gate.
@@ -139,20 +140,50 @@ namespace OpenAstroAra.Server.Services {
             if (_mount is not ITelescopeService service) {
                 return;
             }
-            (long Epoch, long OwnAborts) watch;
+            (long Epoch, long OwnAborts, RunEnd End) watch;
             lock (_gate) {
                 if (_abortWatch is not { } w || w.Gen != gen) {
                     return;
                 }
-                watch = (w.Epoch, w.OwnAborts);
+                watch = (w.Epoch, w.OwnAborts, w.End);
             }
+            // #2066 — a mount that reconnected since the Start (a Wi-Fi drop, a power cycle) may have moved meanwhile: its
+            // position is flagged at once, so nothing moves it by the model until the user confirms Home.
+            NotePoseUnverifiedAfterRun(watch.End, mountStopped: null);
             var own = Interlocked.Read(ref _ownAborts) - watch.OwnAborts;
             if (service.AbortEpoch - watch.Epoch <= own) {
                 return;
             }
             var by = service.AbortReasonSince(watch.Epoch, except: AbortReason);
             LogStoppedFromOutside(by ?? "unknown");
-            throw new RoutineFailedException(SlewAbortedExternally, StoppedFromOutsideMessage(by), mountTakenOver: TakesTheMountOver(by));
+            throw new RoutineFailedException(SlewAbortedExternally, StoppedFromOutsideMessage(by), mountTakenOver: TakesTheMountOver(by), stoppedBy: by);
+        }
+
+        /// <summary>
+        /// #2066, #2065 (ARA-10) — the pose flag: a run whose stop was not confirmed (<paramref name="mountStopped"/> false),
+        /// or whose mount session changed since its launch (a reconnect or a power cycle while it ran), leaves the mount's
+        /// position unverified (<see cref="MountPoseTrust.StopUnconfirmed"/>). GoTo, Park, Home and the next polar alignment
+        /// are refused until the user confirms the mount is at Home. Once per run; never throws.
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The flag is set on the run's exit and its stop path, which must always finish: a fault is logged as Critical.")]
+        private void NotePoseUnverifiedAfterRun(RunEnd end, bool? mountStopped) {
+            if (_mount is not ITelescopeService service) {
+                return;
+            }
+            var notStopped = mountStopped == false;
+            if (!notStopped && service.SessionEpoch == end.MountSession) {
+                return;
+            }
+            if (!end.TryFlagPose()) {
+                return;
+            }
+            LogPoseLeftUnverified(notStopped ? "its stop was not confirmed" : "the mount reconnected while it ran");
+            try {
+                service.MarkPositionUnverified(MountPoseTrust.StopUnconfirmed);
+            } catch (Exception ex) {
+                LogPoseFlagFailed(ex);
+            }
         }
 
         /// <summary>The <c>polar_align.error</c> reason when a stop Polar Align did not raise ended the run.</summary>
@@ -160,18 +191,23 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A stop that hands the mount to its sender: Emergency Stop stops and checks it itself, a park or Find Home
         /// moves it on purpose. The run's exit then sends no stop of its own (it would abort the park) and confirms none.</summary>
-        internal static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
+        internal static bool TakesTheMountOver(string? by) => by is MountStopReasons.EmergencyStop or MountStopReasons.Park or MountStopReasons.FindHome;
 
         /// <summary>#2066 — the reason a pad stop counts with: a MoveAxis 0 from the app's direction pad (or any client of
         /// <c>/moveaxis</c>) that lands while Polar Align turns the mount. The run ends and does not restart the motor.</summary>
-        public const string PadStop = "pad_stop";
+        public const string PadStop = MountStopReasons.PadStop;
 
+        /// <summary>The <c>polar_align.error</c> message for <see cref="SlewAbortedExternally"/>, by what stopped the mount
+        /// (the event's <c>stopped_by</c>; the app words it in its own language, #2107). English, for the log and an app that
+        /// does not know the reason.</summary>
         internal static string StoppedFromOutsideMessage(string? by) => by switch {
-            "emergency_stop" => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
-            "watchdog" => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
-            "park" => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
-            "findhome" => "the mount was sent Home from outside polar alignment — polar alignment ended. Start again when ready",
-            PadStop => "the mount was stopped from the direction pad — polar alignment ended. Start again when ready",
+            MountStopReasons.EmergencyStop => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
+            MountStopReasons.Watchdog => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
+            MountStopReasons.Park => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
+            MountStopReasons.FindHome => "the mount was sent Home from outside polar alignment — polar alignment ended. Start again when ready",
+            MountStopReasons.PadStop => "the mount was stopped from the direction pad — polar alignment ended. Start again when ready",
+            MountStopReasons.FaultReaction => "the equipment-fault reaction stopped the mount (its park was refused: the mount's position is unverified) — polar alignment ended. Check the rig before you start again",
+            MountStopReasons.PoseUnverified => "the safety reaction stopped the mount (conditions turned unsafe, and the park was refused: the mount's position is unverified) — polar alignment ended. Check the rig before you start again",
             _ => "the mount was stopped from outside polar alignment (Stop Mount) — polar alignment ended. Start again when ready",
         };
 
@@ -255,7 +291,7 @@ namespace OpenAstroAra.Server.Services {
         internal const double StopStillDeg = 0.05;
 
         /// <summary>The reason PA's AbortSlew carries in the telescope service's log and <c>slew_aborted</c> event.</summary>
-        internal const string AbortReason = "polar_align";
+        internal const string AbortReason = MountStopReasons.PolarAlign;
 
         /// <summary>The <c>polar_align.error</c> reason when a stop could not be confirmed.</summary>
         internal const string MountDidNotStop = "mount_did_not_stop";
@@ -274,6 +310,22 @@ namespace OpenAstroAra.Server.Services {
             private string? _requested;
             private int _mountStopped = -1; // -1 not known yet, 0 not confirmed, 1 confirmed
             private int _reported;
+            private int _poseFlagged;
+
+            /// <summary>#2066 — the mount's session (<see cref="ITelescopeService.SessionEpoch"/>) when the run was launched: a
+            /// change while it runs leaves the pose unverified (<see cref="NotePoseUnverifiedAfterRun"/>).</summary>
+            public long MountSession { get; set; }
+
+            /// <summary>True the first time only: the run's pose flag is sent once.</summary>
+            public bool TryFlagPose() => Interlocked.Exchange(ref _poseFlagged, 1) == 0;
+
+            /// <summary>#2066 — the run's own failure report (<see cref="FailRoutineAsync"/>) claimed the run's last event, and
+            /// tells an unconfirmed stop itself (with the cut-power sentence). Guarded by _gate.</summary>
+            public bool ReportsItself { get; set; }
+
+            /// <summary>#2066 — <c>mount_did_not_stop</c> was told for this run (by the stop path or by the run's exit), so it
+            /// is told once. Guarded by _gate.</summary>
+            public bool NotStoppedTold { get; set; }
 
             /// <summary><c>aborted</c>, <c>complete</c>, <c>ended_by_sequence</c> or <c>shutdown</c>; null until one asks.</summary>
             public string? Requested => Volatile.Read(ref _requested);
@@ -666,5 +718,11 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align ({Why}): the mount was taken over — no stop of the routine's own, no tracking write")]
         private partial void LogExitLeftToTakeover(string why);
+
+        [LoggerMessage(Level = LogLevel.Critical, Message = "§45 polar-align: the mount's position is now unverified ({Why}) — GoTo, Park, Home and polar alignment are refused until Home is confirmed (#2066)")]
+        private partial void LogPoseLeftUnverified(string why);
+
+        [LoggerMessage(Level = LogLevel.Critical, Message = "§45 polar-align: could not mark the mount's position unverified")]
+        private partial void LogPoseFlagFailed(Exception exception);
     }
 }

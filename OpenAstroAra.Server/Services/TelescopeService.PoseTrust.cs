@@ -156,6 +156,7 @@ public sealed partial class TelescopeService {
             MountPoseTrust.PoseJumpOnReconnect => string.Create(CultureInfo.InvariantCulture,
                 $"Mount position unverified: its declination moved more than {MountPoseTrust.PoseJumpDeg:0}° while it was disconnected, as after a power loss.") + Fix,
             MountPoseTrust.AtHomeWithoutCommand => "Mount position unverified: it started reporting Home with no move commanded, as after a power blip." + Fix,
+            MountPoseTrust.StopUnconfirmed => "Mount position unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on." + Fix,
             _ => string.Create(CultureInfo.InvariantCulture,
                 $"Mount position unverified: its declination jumped more than {MountPoseTrust.PoseJumpDeg:0}° with no move commanded, as after a power blip.") + Fix,
         };
@@ -189,6 +190,16 @@ public sealed partial class TelescopeService {
                 detail = (stopped ? "The mount was NOT parked; tracking was stopped instead. " : "The mount was NOT parked, and stopping tracking failed. ") + detail;
             }
             throw new SequenceEntityFailedException(detail);
+        }
+    }
+
+    public void MarkPositionUnverified(string reason) {
+        bool flagged;
+        lock (_gate) {
+            flagged = PoseTrust.Flag(reason);
+        }
+        if (flagged) {
+            AfterPoseFlagged(reason); // logged and kept per device, as a flag the mount's own readings raise
         }
     }
 
