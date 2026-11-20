@@ -122,12 +122,16 @@ const _adjusting = PolarAlignLive(
 );
 
 Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
-    {bool server = true, String loopMode = PolarAlignLoopModes.loop, double? tolerance, Widget child = const SimplePolarPanel()}) async {
+    {bool server = true,
+    String loopMode = PolarAlignLoopModes.loop,
+    double? tolerance,
+    PolarAlignSettings rig = rigPolarAlign,
+    Widget child = const SimplePolarPanel()}) async {
   final api = server
       ? (_Api()
         ..settings = tolerance == null
-            ? rigPolarAlign.copyWith(loopMode: loopMode)
-            : rigPolarAlign.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
+            ? rig.copyWith(loopMode: loopMode)
+            : rig.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
       : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -696,10 +700,14 @@ void main() {
     tester.view.physicalSize = const Size(1024, 768);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final api = await _pump(tester, const PolarAlignLive(
-        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'seed_solve_failed',
-        errorMessage: 'the seed-a seed frame failed to solve'));
-    expect(find.text('Rough first turns the mount 2 × 10° and measures with the main camera.'), findsOneWidget);
+    // A seed turn unlike the check step (10°): the caption is the rig's seed turn, not the check's.
+    final api = await _pump(
+        tester,
+        const PolarAlignLive(
+            phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'seed_solve_failed',
+            errorMessage: 'the seed-a seed frame failed to solve'),
+        rig: rigPolarAlign.copyWith(seedRotationDeg: 15));
+    expect(find.text('Rough first turns the mount 2 × 15° and measures with the main camera.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-rough-first')));
     await tester.pumpAndSettle();
     expect(api!.stages, isEmpty, reason: 'nothing moves before the confirm step');
