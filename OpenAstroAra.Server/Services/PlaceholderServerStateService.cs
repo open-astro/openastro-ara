@@ -170,18 +170,16 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     }
 
     public Task<ReleaseNotesDto?> GetReleaseNotesAsync(string? version, CancellationToken ct) =>
-        // Single placeholder release-notes record for v0.0.1-ara.1 — the
-        // §54 About-tab shows them by default; future versions append.
+        // Placeholder release-notes record for the running version — the §54
+        // About tab shows it by default. The real notes are written per release
+        // in docs/releases/<version>.md and published with the source release (#2093).
         Task.FromResult<ReleaseNotesDto?>(new ReleaseNotesDto(
             Version: ServerIdentity.Version,
             ReleasedUtc: new DateTimeOffset(2026, 5, 30, 0, 0, 0, TimeSpan.Zero),
             MarkdownBody:
-                "## v0.0.1-ara.1 (pre-release placeholder)\n\n" +
-                "First port milestone. §37 settings round-trip end-to-end, " +
-                "§40 Library browseable (placeholder data), §51 diagnostics + " +
-                "§50 stats render fixture views, §46 notifications functional " +
-                "with sample data. Full FITS-to-JPEG pipeline + real frame " +
-                "catalog DB land in the real-infra phase that follows §60.9.",
+                $"## {ServerIdentity.Version}\n\n" +
+                "Release notes for each version are published with its source " +
+                "release on GitHub (open-astro/openastro-ara, Releases).",
             BreakingChanges: Array.Empty<string>(),
             UpgradeGuideUrl: null));
 

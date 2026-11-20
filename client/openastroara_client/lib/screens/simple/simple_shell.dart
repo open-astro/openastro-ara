@@ -109,6 +109,7 @@ import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
+import '../../widgets/version_mismatch_warning.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../stats/stats_dashboard_screen.dart';
@@ -5189,38 +5190,45 @@ class _ThisRig extends ConsumerWidget {
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out. Last, as in each device's
-        // window in Settings.
-        SimpleVersions(
-          key: const Key('simple-versions'),
-          rows: [
-            for (final (name, v) in <(String, String?)>[
-              (l10n.shellThisApp, version),
-              (l10n.shellAraServer, rig?.daemonVersion),
-              if (rig?.guiderVersion != null)
-                (l10n.deviceGuider, rig!.guiderVersion),
-              for (final a in servers)
-                (
-                  servers.length > 1
-                      ? '${a.label} (${a.host}:${a.port})'
-                      : a.label,
-                  a.version,
-                ),
-              if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
-              if (stars != null && stars.isNotEmpty)
-                (
-                  l10n.shellStarDatabase,
-                  stars.map((d) => d.toUpperCase()).join(', '),
-                ),
-              if (rig != null && rig.osRelease.isNotEmpty)
-                (
-                  l10n.shellSystem,
-                  [
-                    rig.osRelease,
-                    if (rig.boardModel != null) rig.boardModel!,
-                  ].join(' · '),
-                ),
-            ])
-              (name, v ?? '—'),
+        // window in Settings. Under it, #2093's warning when the server is
+        // from another release line (no gap when there is none).
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SimpleVersions(
+              key: const Key('simple-versions'),
+              rows: [
+                for (final (name, v) in <(String, String?)>[
+                  (l10n.shellThisApp, version),
+                  (l10n.shellAraServer, rig?.daemonVersion),
+                  if (rig?.guiderVersion != null)
+                    (l10n.deviceGuider, rig!.guiderVersion),
+                  for (final a in servers)
+                    (
+                      servers.length > 1
+                          ? '${a.label} (${a.host}:${a.port})'
+                          : a.label,
+                      a.version,
+                    ),
+                  if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+                  if (stars != null && stars.isNotEmpty)
+                    (
+                      l10n.shellStarDatabase,
+                      stars.map((d) => d.toUpperCase()).join(', '),
+                    ),
+                  if (rig != null && rig.osRelease.isNotEmpty)
+                    (
+                      l10n.shellSystem,
+                      [
+                        rig.osRelease,
+                        if (rig.boardModel != null) rig.boardModel!,
+                      ].join(' · '),
+                    ),
+                ])
+                  (name, v ?? '—'),
+              ],
+            ),
+            VersionMismatchWarning(serverVersion: rig?.daemonVersion),
           ],
         ),
       ],
@@ -5862,6 +5870,11 @@ class _AraSheet extends ConsumerWidget {
                 if (rig?.guiderVersion != null)
                   (l10n.deviceGuider, rig!.guiderVersion!),
               ],
+            ),
+            // #2093: a server from another release line. Wraps to the sheet's
+            // width rather than widening it.
+            _NoIntrinsicWidth(
+              child: VersionMismatchWarning(serverVersion: rig?.daemonVersion),
             ),
             // Half of the version table's 4 px line gap on each side.
             Padding(

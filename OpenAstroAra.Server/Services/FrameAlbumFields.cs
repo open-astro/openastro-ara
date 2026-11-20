@@ -19,7 +19,7 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>Sky Album (#1517): what a frame contributes to the album, read from its header the same
 /// way by the drive rescan and the startup backfill.</summary>
 internal readonly record struct FrameAlbumFields(double? RaDeg, double? DecDeg, double? PixelScaleArcsec, bool CapturedByAra) {
-    /// <summary>The SWCREATE value Ara writes; the XISF writer appends a version, so match the prefix.</summary>
+    /// <summary>The name in the SWCREATE value Ara writes; a version follows it, so match the prefix.</summary>
     internal const string AraSoftware = "OpenAstro Ara";
 
     /// <summary>Arcsec per stored pixel from a pixel size that already includes binning.</summary>

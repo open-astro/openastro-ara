@@ -381,7 +381,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             AddHeader("ROWORDER", "TOP-DOWN", "FITS Image Orientation");
 
             AddHeader("EQUINOX", 2000.0d, "Equinox of celestial coordinate system");
-            AddHeader("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            AddHeader("SWCREATE", string.Format(CultureInfo.InvariantCulture, "OpenAstro Ara {0}", CoreUtil.Version), "Software that created this file");
 
             var reserved = new string[] { "SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "BZERO", "EXTEND" };
             foreach (var elem in metaData.GenericHeaders) {

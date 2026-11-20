@@ -201,6 +201,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_section_mapped_under_two_route_names_is_refused_at_startup() {
+            var section = ProfileSections.All[0];
+            static RouteEndpoint At(string path, object meta) => new(_ => System.Threading.Tasks.Task.CompletedTask,
+                Microsoft.AspNetCore.Routing.Patterns.RoutePatternFactory.Parse(path), 0, new EndpointMetadataCollection(meta), path);
+            var source = new DefaultEndpointDataSource(At("/api/v1/profile/alpha", section), At("/api/v1/profile/beta", section));
+            Assert.Throws<InvalidOperationException>(() => ProfileEndpoints.SectionRoutes([source]));
+            var same = new DefaultEndpointDataSource(At("/api/v1/profile/alpha", section), At("/api/v1/profile/alpha/rearm", section));
+            Assert.That(ProfileEndpoints.SectionRoutes([same])[section], Is.EqualTo("alpha"));
+        }
+
+        [Test]
         public async Task Every_client_section_written_by_the_daemon_publishes_its_route_once() {
             // The table walk: any section a client can load (WithSection), whoever writes it outside the routes
             // (the filter-wheel label mirror, the dome follower, storage configure, ...).

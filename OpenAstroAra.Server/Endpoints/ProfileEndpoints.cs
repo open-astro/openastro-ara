@@ -73,13 +73,17 @@ public static partial class ProfileEndpoints {
 
     /// <summary>Publishes <c>profile.updated { section }</c>. Best-effort: the profile write already landed, so a
     /// dead broadcaster must not turn it into a failure.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort broadcast after the write landed; the daemon-write path does not await it, so any exception, cancellation included, must stop here.")]
     internal static async Task PublishSectionUpdatedAsync(IWsBroadcaster ws, string section) {
         try {
             using var doc = System.Text.Json.JsonDocument.Parse(
                 new System.Text.Json.Nodes.JsonObject { ["section"] = section }.ToJsonString());
             await ws.PublishAsync(Contracts.WsEvents.WsEventCatalog.ProfileUpdated, doc.RootElement.Clone(),
                 CancellationToken.None);
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
+        } catch (Exception) {
+            // Includes OperationCanceledException: the daemon-write path fires this without awaiting it,
+            // so nothing would observe a canceled task.
         }
     }
 
@@ -99,8 +103,11 @@ public static partial class ProfileEndpoints {
         var routes = new Dictionary<ProfileSection, string>();
         foreach (var endpoint in sources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>()) {
             if (endpoint.Metadata.GetMetadata<ProfileSection>() is { } section
-                    && SectionOf(endpoint.RoutePattern.RawText ?? string.Empty) is { } route) {
-                routes.TryAdd(section, route);
+                    && SectionOf(endpoint.RoutePattern.RawText ?? string.Empty) is { } route
+                    && !routes.TryAdd(section, route) && routes[section] != route) {
+                // One section, one profile.updated name: a client reloads the section by that name.
+                throw new InvalidOperationException(
+                    $"Profile section {section.Name} is mapped under both '{routes[section]}' and '{route}'.");
             }
         }
         return routes;
