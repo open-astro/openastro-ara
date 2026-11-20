@@ -649,14 +649,15 @@ namespace OpenAstroAra.Server.Services {
                 cts?.Dispose();
                 if (!unwound && end is { MountStopped: null } && endRequest != TakenOver) {
                     // The run is stuck in a call that ignores cancellation and never reached its exit: confirm the stop here,
-                    // and turn tracking off now (it may never unwind; a mount left tracking runs on toward the pier). An end
-                    // that hands tracking back leaves it as it is: the run gives it back when it unwinds. A takeover that
-                    // gave up waiting fenced the run's stops meanwhile (null): the mount is its own, nothing is written.
+                    // and set tracking now as the exit would (it may never unwind; a mount left tracking runs on toward the
+                    // pier). #2066 — an end that hands tracking back does the hand-back here too: this end fences the run
+                    // below, so its exit writes nothing when it unwinds. A takeover that gave up waiting fenced the run's
+                    // stops meanwhile (null): the mount is its own, nothing is written.
                     var stopped = await StopMountMotionAsync(outcome, end.Fence).ConfigureAwait(false);
                     end.MountStopped = stopped;
-                    if (stopped is bool known && !StopsFenced(end.Fence)
-                            && (!known || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding))) {
-                        TrackingOffBestEffort(outcome);
+                    if (stopped is not null && !StopsFenced(end.Fence)) {
+                        ApplyExitTracking(end.PriorTracking, finished: outcome == "complete",
+                            handedToGuiding: endRequest == HandedToGuiding, stopped, outcome);
                     }
                 }
                 if (!unwound && end is not null && !StopsFenced(end.Fence)) {
@@ -887,6 +888,7 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("mount_parked", MountParkedMessage);
                 }
                 priorTracking = mountInfo.TrackingEnabled;
+                end.PriorTracking = priorTracking;
                 // One PA-session lease renewer for the whole run: the stages share its clock, so a
                 // hand-off never renews twice back to back.
                 Func<Task> renew = () => RenewLeaseAsync(ct);

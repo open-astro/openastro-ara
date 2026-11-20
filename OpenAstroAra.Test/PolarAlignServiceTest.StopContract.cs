@@ -277,6 +277,38 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // stop_tracking_when_done off: Done hands back the tracking the run found (off here). A Done that abandons a run stuck
+        // past its grace left the hand-back to the run's own exit, and then fenced that exit: nobody handed tracking back, and
+        // the mount tracked on toward the pier. The end that fences the run does the hand-back itself.
+        [Test]
+        public async Task A_Done_that_abandons_a_stuck_run_hands_back_the_tracking_the_run_found() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0, tracking: false);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var solver = new StuckSolver();
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, HandBackStoreTenDegrees());
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                Assert.That(mount.Tracking, Is.True, "Polar Align turned tracking on for its frames");
+                await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(mount.Tracking, Is.False, "the Done handed back the tracking the run found. " + mount.Describe());
+                solver.Release(); // the stuck run unwinds now; its fenced exit writes nothing
+                await Task.Delay(TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
+                Assert.That(mount.Tracking, Is.False, "still handed back after the run unwound");
+            } finally {
+                solver.Release();
+            }
+        }
+
+        private static InMemoryProfileStore HandBackStoreTenDegrees() {
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = false });
+            return store;
+        }
+
         // The Stop gave up on a run stuck past its grace and stopped the mount itself. The run unwinds whenever its call
         // returns: its exit then stopped the mount again and turned tracking off in the middle of whatever came next (here
         // the user's park). The end that abandoned it fences its stops.

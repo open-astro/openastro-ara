@@ -292,6 +292,14 @@ namespace OpenAstroAra.Server.Services {
             /// <summary>#2066 — the stop fence when the run was launched (set before the run is published): once the fence
             /// moves, no stop of this run goes out (<see cref="StopsFenced"/>).</summary>
             public long Fence { get; set; }
+
+            private int _priorTracking = -1; // -1 not read yet, 0 off, 1 on
+
+            /// <summary>#2066 — the tracking the run found, for an end that abandons the run and hands it back itself.</summary>
+            public bool? PriorTracking {
+                get => Volatile.Read(ref _priorTracking) switch { 1 => true, 0 => false, _ => null };
+                set => Volatile.Write(ref _priorTracking, value switch { true => 1, false => 0, null => -1 });
+            }
         }
 
         // The current run's cancellation and end request, for the stop path, which must not wait on _opLock. Guarded by _gate.
