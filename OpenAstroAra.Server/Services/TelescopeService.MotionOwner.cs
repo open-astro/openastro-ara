@@ -83,6 +83,15 @@ public sealed partial class TelescopeService {
         ? $"Polar alignment is running and holds the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it)."
         : $"{owner} holds the mount, so the {what} was not sent.";
 
+    /// <summary>A mediator move whose first command is not a GoTo (the meridian flip's pier-side write) while a routine
+    /// holds the mount: refused before anything reaches the mount. <paramref name="what"/> names the refused command.</summary>
+    private void ThrowIfMotionOwned(string op, string what) {
+        if (MotionOwner is { } owner) {
+            LogMountOpRejectedOwned(op, owner);
+            throw new OpenAstroAra.Core.Model.SequenceEntityFailedException(MotionOwnedMessage(owner, what));
+        }
+    }
+
     /// <summary>Begin sending a GoTo or sync, unless a routine holds the mount (then null, and <paramref name="owner"/> names
     /// it). Checked and counted in one step with <see cref="AcquireMotion"/>: while the returned scope is open, no routine
     /// can take the owner, and once one has it, nothing more is sent.</summary>

@@ -900,6 +900,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
+        // #2066 (ARA-2) — before the pier-side write, which starts the flip slew on some mounts: while Polar Align holds
+        // the mount the flip is refused here, not at its GoTo after the write (which checks again before it is sent).
+        ThrowIfMotionOwned("telescope.flip", "meridian flip");
         // #2075 — refuse an out-of-range flip target BEFORE the pier-side write: some mounts start
         // moving on that write, and the goto's own guard runs only after it.
         if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
