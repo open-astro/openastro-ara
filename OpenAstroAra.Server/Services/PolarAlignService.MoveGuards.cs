@@ -161,8 +161,8 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> SettleAfterTurnAsync(
                 (double RaDeg, double DecDeg) start, PierSide startSide, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct) {
-            var began = Clock.GetUtcNow();
-            (double RaDeg, double DecDeg, DateTimeOffset At)? anchor = null;
+            var began = Clock.GetTimestamp(); // monotonic: a wall clock that steps must not stretch or cut the settle
+            (double RaDeg, double DecDeg, long At)? anchor = null;
             while (true) {
                 await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
                 if (!IsCurrent(gen)) {
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 ThrowIfStoppedFromOutside(gen);
                 var r = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
-                var at = Clock.GetUtcNow();
+                var at = Clock.GetTimestamp();
                 var side = r.Side is PierSide.pierUnknown ? startSide : r.Side;
                 NoteMountLeft((r.RaDeg, r.DecDeg), side);
                 ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
@@ -181,7 +181,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 if (r.Slewing == false) {
                     if (anchor is { } a && Math.Abs(Wrap180(r.RaDeg - a.RaDeg)) < StopStillDeg && Math.Abs(r.DecDeg - a.DecDeg) < StopStillDeg) {
-                        if (at - a.At >= AxisSettle) {
+                        if (Clock.GetElapsedTime(a.At, at) >= AxisSettle) {
                             return (r.RaDeg, r.DecDeg, side);
                         }
                     } else {
@@ -190,7 +190,7 @@ namespace OpenAstroAra.Server.Services {
                 } else {
                     anchor = null; // slewing, or no Slewing answer: never still
                 }
-                if (at - began > AxisSteadyWindow) {
+                if (Clock.GetElapsedTime(began, at) > AxisSteadyWindow) {
                     await FailTurnNotStoppedAsync(string.Create(CultureInfo.InvariantCulture,
                         $"the mount did not stand still within {AxisSteadyWindow.TotalSeconds:F0} s of the turn's stop"), gen).ConfigureAwait(false);
                 }

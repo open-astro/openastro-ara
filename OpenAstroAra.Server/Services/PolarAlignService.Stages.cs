@@ -531,8 +531,9 @@ namespace OpenAstroAra.Server.Services {
             BeginMotion(MountMotion.AxisMove, gen, ct);
             try {
                 await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
-                // Timed from when the mount took the motor command: a slow round trip is not a stall.
-                var began = Clock.GetUtcNow();
+                // Timed from when the mount took the motor command: a slow round trip is not a stall. On the monotonic
+                // clock: a wall clock that steps back (chrony, a UTCDate write) must not hold the stall and the bound off.
+                var began = Clock.GetTimestamp();
                 var bestAt = began;
                 var last = (Ra: startRa, At: began);
                 while (true) {
@@ -545,13 +546,13 @@ namespace OpenAstroAra.Server.Services {
                     // #2067 — the poll reads the position and the pier side (no Slewing round trip): a turn that changes
                     // the pier side, or moves the Dec reading, stops at that reading.
                     var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
-                    var at = Clock.GetUtcNow();
+                    var at = Clock.GetTimestamp();
                     var now = (nowRa, nowDec);
                     NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
                     // A reading that jumped is checked first: its Dec and pier side are no more to be trusted than its RA.
                     var change = Wrap180(nowRa - last.Ra);
                     if (change != 0) {
-                        ThrowIfReadingJumped(change, fastRate, at - last.At);
+                        ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at));
                         last = (nowRa, at);
                     }
                     ThrowIfTurnLeftItsAxis(startDec, startSide, nowDec, nowSide);
@@ -578,18 +579,18 @@ namespace OpenAstroAra.Server.Services {
                         }
                         await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                         best = p;
-                        bestAt = Clock.GetUtcNow();
+                        bestAt = Clock.GetTimestamp();
                         continue;
                     }
                     if (p > best + 0.05) {
                         best = p;
                         bestAt = at;
-                    } else if (at - bestAt > AxisMoveStall) {
+                    } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
                         LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
                         throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
                             $"the mount's reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F0}° turn (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can turn freely and its connection, then start again"));
                     }
-                    if (at - began > bound) {
+                    if (Clock.GetElapsedTime(began, at) > bound) {
                         LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
                         throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
                             $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));

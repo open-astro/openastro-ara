@@ -47,7 +47,8 @@ namespace OpenAstroAra.Server.Services {
         internal static readonly TimeSpan FreshReadMaxAge = TimeSpan.FromSeconds(2);
 
         /// <summary>The clock a reading's age is measured on: the telescope service stamps its readings on the system clock;
-        /// a test on a fake mount's own clock sets it to that.</summary>
+        /// a test on a fake mount's own clock sets it to that. A turn's stall, time bound and settle are timed on its
+        /// monotonic timestamp (<see cref="TimeProvider.GetTimestamp"/>), never its wall clock, which can step.</summary>
         internal TimeProvider Clock { get; set; } = TimeProvider.System;
 
         // The mount session the run of this generation started in (its confirmed plan's reading). Guarded by _gate.

@@ -120,6 +120,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_wall_clock_that_steps_back_mid_turn_still_stops_a_frozen_reading_within_the_2_s_stall() {
+            // The Pi's clock steps back an hour mid-turn (chrony's makestep, a client's UTCDate write through AlpacaBridge):
+            // the stall and the time bound are timed on the monotonic clock, so the frozen turn still stops within 2 s.
+            var mount = PolledGemAt(-4.0);
+            mount.ReadingFrozen = true;
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws, benchMotors: false);
+            var wall = new SteppedWallClock(mount.Clock);
+            svc.Clock = wall;
+            var polls = 0;
+            mount.OnPoseRead = () => {
+                if (Interlocked.Increment(ref polls) == 3) {
+                    wall.Step(TimeSpan.FromHours(-1));
+                }
+            };
+
+            var (reason, message) = await GuardedRunFailureAsync(mount, ws, svc).ConfigureAwait(false);
+
+            Assert.That(reason, Is.EqualTo(PolarAlignService.SlewStalled), message);
+            var turn = RaTurns(mount).Single();
+            Assert.That(Math.Abs(turn.TrueDeltaHaDeg), Is.LessThanOrEqualTo(3.0 * (2.0 + 0.05)), mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
         public async Task A_mount_slower_than_its_rate_fails_at_twice_the_planned_time_as_slew_timeout() {
             // The routine asks 30°/s and 10°/s (the bench) and the mount takes them, but turns at 1°/s: never a stall (it
             // progresses on every few reads), but the 10° turn would take 10 s against a bound of 2 × 0.53 s + 2 s.
