@@ -666,11 +666,11 @@ namespace OpenAstroAra.Server.Services {
         /// Not confirmed: the Stop is owed (sent again at each measurement and at the end of the run) and recorded with
         /// the source, so the Stop route and the next run know it too. True when confirmed.</summary>
         private async Task<bool> StopDeviceVerifiedAsync(AlignerRun run, IPolarAligner device) {
-            var outcome = await PolarAlignerVerifiedStop.StopAsync(device, AlignerStopWindow, AlignerPoll).ConfigureAwait(false);
+            var outcome = await PolarAlignerVerifiedStop.StopAsync(device, AlignerStopWindow, AlignerPoll, _logger).ConfigureAwait(false);
             lock (_gate) {
                 run.StopOwed = !outcome.Confirmed;
             }
-            _alignerSource?.NoteStopOutcome(outcome.Confirmed);
+            _alignerSource?.NoteStopOutcome(device, outcome.Confirmed);
             if (outcome.Confirmed) {
                 LogAlignerStopConfirmed(outcome.Sends);
             } else {

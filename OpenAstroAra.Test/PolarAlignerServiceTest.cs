@@ -388,6 +388,71 @@ namespace OpenAstroAra.Test {
             Assert.That(service.StopOwed, Is.True, "a read that did not answer in time confirms nothing");
         }
 
+        /// <summary>Records each log entry's event id, level and text.</summary>
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<PolarAlignerService> {
+            public ConcurrentQueue<(int Id, Microsoft.Extensions.Logging.LogLevel Level, string Text)> Entries { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                Entries.Enqueue((eventId.Id, logLevel, formatter(state, exception)));
+        }
+
+        [Test]
+        public async Task A_verified_stop_that_leaves_a_device_call_running_logs_a_warning_with_the_count() {
+            // #2069 — a call still waiting at the window's end keeps its own thread until it returns (a dead link: the HTTP
+            // timeout). Each one the stop abandons is counted and logged, so a dead link holding threads shows in the log.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => {
+                release.Task.Wait(TimeSpan.FromSeconds(10));
+                return StillStatus;
+            };
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var logger = new RecordingLogger();
+            var service = new PolarAlignerService(_switches, _mount, logger: logger) {
+                StopWindow = TimeSpan.FromMilliseconds(150), StopPoll = TimeSpan.FromMilliseconds(5),
+            };
+
+            try {
+                await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                    Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+                Assert.That(PolarAlignerVerifiedStop.StillRunning, Is.GreaterThanOrEqualTo(1), "the Status read still holds its thread");
+            } finally {
+                release.TrySetResult();
+            }
+
+            var warnings = logger.Entries.Where(e => e.Id == 4644).ToList();
+            Assert.That(warnings, Has.Count.EqualTo(1));
+            Assert.Multiple(() => {
+                Assert.That(warnings[0].Level, Is.EqualTo(Microsoft.Extensions.Logging.LogLevel.Warning));
+                Assert.That(warnings[0].Text, Does.Contain("1 device call(s) still waiting"));
+            });
+        }
+
+        [Test]
+        public async Task A_stop_outcome_is_filed_under_the_device_it_went_to_not_the_newest_one_handed_out() {
+            // #2069 — the routine's stop may go to the device object it read at the start of its run, older than the latest
+            // one Current() handed out (another Polar Aligner connected in between): the outcome belongs to the older one.
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            var service = Build();
+            var older = service.Current()!;
+
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-new", "New base", Healthy()));
+            Assert.That(service.Current(), Is.Not.Null);
+
+            // Healthy reads an axis moving whatever is sent: the older device's stop is not confirmed.
+            var outcome = await PolarAlignerVerifiedStop.StopAsync(older, service.StopWindow, service.StopPoll);
+            Assert.That(outcome.Confirmed, Is.False);
+            service.NoteStopOutcome(older, outcome.Confirmed);
+
+            Assert.That(service.StopOwed, Is.False, "the newer device owes nothing");
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            Assert.That(service.StopOwed, Is.True, "the older device, which the Stop went to, owes it");
+        }
+
         /// <summary>A device that never confirms a Stop (an axis reads moving) leaves one owed on <paramref name="service"/>.</summary>
         private static async Task OweAStopAsync(PolarAlignerService service) {
             await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),

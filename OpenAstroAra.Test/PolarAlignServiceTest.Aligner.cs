@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
             /// <summary>#2069 — the source's record that a Stop is owed, as the daemon's Polar Aligner service keeps it.</summary>
             public bool SourceStopOwed { get; set; }
             bool IPolarAlignerSource.StopOwed => SourceStopOwed;
-            void IPolarAlignerSource.NoteStopOutcome(bool confirmed) => SourceStopOwed = !confirmed;
+            void IPolarAlignerSource.NoteStopOutcome(IPolarAligner device, bool confirmed) => SourceStopOwed = !confirmed;
             /// <summary>Status throws as on a lost link.</summary>
             public bool StatusFails { get; set; }
             /// <summary>#2069 — Status reports each axis's position (its offset, as the axis really moved).</summary>

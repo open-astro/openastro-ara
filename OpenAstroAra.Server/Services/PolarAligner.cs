@@ -8,6 +8,7 @@
 */
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -119,13 +120,16 @@ internal interface IPolarAlignerSource {
     /// be stopped or moved then, and the Stop stays owed by its device if it comes back.</summary>
     bool StopOwed => false;
 
-    /// <summary>Records the outcome of a verified Stop (<see cref="PolarAlignerVerifiedStop"/>).</summary>
-    void NoteStopOutcome(bool confirmed) { }
+    /// <summary>Records the outcome of a verified Stop (<see cref="PolarAlignerVerifiedStop"/>) under the device it was
+    /// sent to: <paramref name="device"/> is the object <see cref="Current"/> handed out for it, which may be older than
+    /// the latest one handed out.</summary>
+    void NoteStopOutcome(IPolarAligner device, bool confirmed) { }
 }
 
 /// <summary>What one verified Stop found: whether the device reported both axes still, how many Stops went out,
-/// and why not, from the latest call: a failed call's text, or <see cref="PolarAlignerVerifiedStop.StillMoving"/>.</summary>
-internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Sends, string? Error);
+/// and why not, from the latest call: a failed call's text, or <see cref="PolarAlignerVerifiedStop.StillMoving"/>.
+/// <see cref="Abandoned"/> counts the device calls still waiting at the window's end that the stop left running.</summary>
+internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Sends, string? Error, int Abandoned = 0);
 
 /// <summary>
 /// #2069 (ARA-19) — every Stop of the Polar Aligner is a verified stop, as the mount's is (#2048). Stop goes out,
@@ -140,7 +144,7 @@ internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Send
 /// is left to finish on its own (a Stop that lands late is harmless) and counts as no answer, so Emergency Stop's aligner
 /// step (the routine's stop, then the route's: two windows) stays well inside its 10 s bound.
 /// </summary>
-internal static class PolarAlignerVerifiedStop {
+internal static partial class PolarAlignerVerifiedStop {
     internal static readonly TimeSpan DefaultWindow = TimeSpan.FromSeconds(3);
     internal static readonly TimeSpan DefaultPoll = TimeSpan.FromMilliseconds(250);
     internal const int Sends = 3;
@@ -153,18 +157,27 @@ internal static class PolarAlignerVerifiedStop {
     /// of one is no answer, and a stop without a confirming read is not confirmed (owed).</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A driver may throw anything (a socket error, a disposed client, a bug); an exception out of a Stop would skip the caller's own clean-up (the run's end, Emergency Stop's rung). Any failure is no answer: the stop is not confirmed and stays owed.")]
-    public static async Task<PolarAlignerStopOutcome> StopAsync(IPolarAligner device, TimeSpan window, TimeSpan poll) {
+    public static async Task<PolarAlignerStopOutcome> StopAsync(IPolarAligner device, TimeSpan window, TimeSpan poll,
+            ILogger? logger = null) {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var resendEvery = window / Sends;
         var sends = 0;
         var delivered = false;
+        var abandoned = 0;
         string? error = null;
+        void Abandon() => abandoned++;
+        PolarAlignerStopOutcome Done(bool confirmed) {
+            if (abandoned > 0 && logger is not null) {
+                LogCallsAbandoned(logger, abandoned, window.TotalSeconds, StillRunning);
+            }
+            return new PolarAlignerStopOutcome(confirmed, sends, confirmed ? null : error, abandoned);
+        }
         while (true) {
             // The first Stop always goes out; a resend only inside the window.
             if (sends == 0 || (sends < Sends && clock.Elapsed >= resendEvery * sends && clock.Elapsed < window)) {
                 sends++;
                 try {
-                    await WithinAsync(() => { device.Stop(); return true; }, window - clock.Elapsed).ConfigureAwait(false);
+                    await WithinAsync(() => { device.Stop(); return true; }, window - clock.Elapsed, Abandon).ConfigureAwait(false);
                     delivered = true;
                     error = null; // an earlier send's failure is not this outcome's
                 } catch (PolarAlignerException ex) {
@@ -180,12 +193,12 @@ internal static class PolarAlignerVerifiedStop {
                 }
             }
             if (clock.Elapsed >= window) {
-                return new PolarAlignerStopOutcome(false, sends, error);
+                return Done(false);
             }
             try {
                 if (delivered) {
-                    if (!(await WithinAsync(device.Status, window - clock.Elapsed).ConfigureAwait(false)).Moving) {
-                        return new PolarAlignerStopOutcome(true, sends, null);
+                    if (!(await WithinAsync(device.Status, window - clock.Elapsed, Abandon).ConfigureAwait(false)).Moving) {
+                        return Done(true);
                     }
                     error = StillMoving; // the latest outcome: the device answered, and an axis still moves
                 }
@@ -199,21 +212,39 @@ internal static class PolarAlignerVerifiedStop {
             }
             var left = window - clock.Elapsed;
             if (left <= TimeSpan.Zero) {
-                return new PolarAlignerStopOutcome(false, sends, error);
+                return Done(false);
             }
             await Task.Delay(poll < left ? poll : left).ConfigureAwait(false);
         }
     }
 
+    private static int _stillRunning;
+
+    /// <summary>Device calls that a verified stop left running at its window's end and that have not finished yet, across
+    /// every stop: each holds a thread of its own until the call returns (a dead link: its HTTP timeout).</summary>
+    internal static int StillRunning => Volatile.Read(ref _stillRunning);
+
     // One blocking device call, waited on for at most what is left of the window (TimeoutException past it). The call
     // itself cannot be cut short: it finishes on its own thread, and its failure is observed there. A thread of its own,
     // not the pool's: on a starved pool (Emergency Stop's ladder, #1985) a queued call would not even start in the window.
-    private static Task<T> WithinAsync<T>(Func<T> call, TimeSpan left) {
+    // A call still running when the wait ends is abandoned: counted (onAbandoned, StillRunning) until it finishes.
+    private static async Task<T> WithinAsync<T>(Func<T> call, TimeSpan left, Action onAbandoned) {
         var running = Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         _ = running.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        return running.WaitAsync(left > TimeSpan.Zero ? left : TimeSpan.Zero);
+        try {
+            return await running.WaitAsync(left > TimeSpan.Zero ? left : TimeSpan.Zero).ConfigureAwait(false);
+        } catch (TimeoutException) when (!running.IsCompleted) {
+            onAbandoned();
+            Interlocked.Increment(ref _stillRunning);
+            _ = running.ContinueWith(static _ => Interlocked.Decrement(ref _stillRunning), CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
     }
+
+    [LoggerMessage(EventId = 4644, Level = LogLevel.Warning, Message = "§45 Polar Aligner verified stop: {Abandoned} device call(s) still waiting at the end of its {WindowSeconds:F1} s window left running; {StillRunning} such call(s) in all hold a thread until they return (a dead link: its HTTP timeout)")]
+    private static partial void LogCallsAbandoned(ILogger logger, int abandoned, double windowSeconds, int stillRunning);
 }
 
 /// <summary>
