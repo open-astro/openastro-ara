@@ -60,7 +60,7 @@ void main() {
     expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false});
   });
 
-  test('the start plan names the camera the run measures with; an older daemon\'s is the guide camera (#2082)', () async {
+  test('the start plan names the camera the run measures with; a plan without one is the guide camera (#2082)', () async {
     final main = PolarAlignApi(const AraServer(hostname: 'x', port: 80),
         dio: Dio()..httpClientAdapter = _PlanDaemon(camera: PolarAlignCameras.main));
     final older = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = _PlanDaemon());
