@@ -369,6 +369,36 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        // #2066 — the same race, but the mount refuses GoTo B: B moves nothing, so it cannot stand in for A's second abort. A
+        // must still be aborted, or the mount slews to A after the user's stop.
+        [Test]
+        public async Task A_newer_GoTo_the_mount_refuses_still_leaves_the_raced_GoTo_aborted() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            var gotos = 0;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (!path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) {
+                    return null;
+                }
+                if (Interlocked.Increment(ref gotos) == 1) {
+                    Thread.Sleep(200); // A's PUT on the wire
+                    svc!.FenceMotion("user_request"); // a Stop Mount
+                    svc.SlewAsync(new SlewRequestDto(7.0, 7.0), idempotencyKey: null, CancellationToken.None).GetAwaiter().GetResult();
+                    return null;
+                }
+                return ScriptedAlpacaDevice.ErrorPrefix + "target is below the mount's horizon limit"; // B refused
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("failed", StringComparison.Ordinal)), "GoTo B was never refused");
+            await WaitForAsync(() => PutIndex(box, "abortslew") >= 0, "the raced GoTo was left slewing after GoTo B failed");
+            var gotoB = box.Puts.ToArray().Select((p, i) => (p, i)).Last(x => x.p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)).i;
+            Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(gotoB), "the abort follows GoTo B's refusal");
+        }
+
         // #2066 — the same race with a sequencer (mediator) slew sent after the stop: it is not stopped by A's second abort.
         [Test]
         public async Task A_sequencer_slew_after_the_stop_is_not_aborted_by_the_raced_GoTo() {

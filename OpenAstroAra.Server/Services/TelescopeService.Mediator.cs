@@ -534,12 +534,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             NoteMountCommand(op is "telescope.park" or "telescope.findhome"
                 ? w => w.NoteParkCommanded()
                 : w => w.NoteMotionCommanded());
-            if (op is "telescope.slew" or "telescope.park" or "telescope.findhome") {
-                NoteMotionDispatched(abortEpoch: null); // #2066 — a raced REST GoTo's second abort must not stop it
-            }
+            // #2066 — a raced REST GoTo's second abort must not stop it; it is settled when the call returns or throws.
+            long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
-            var opTask = Task.Run(() => action(client), CancellationToken.None);
+            var opTask = Task.Run(() => {
+                if (motion is long token) {
+                    SendMotion(token, client, () => action(client));
+                } else {
+                    action(client);
+                }
+            }, CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 linked.CancelAfter(MountOpHardTimeout);
                 var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
