@@ -383,6 +383,11 @@ class PolarAlignSettings {
   /// #1971 the routine turns the Polar Aligner's motors (off: by hand).
   final bool polarAlignerAuto;
 
+  /// #2048 every end of a run turns tracking off (NINA's StopTrackingWhenDone,
+  /// on by default). Off: a run that finishes gives back the tracking it
+  /// found; a Stop or a failure still leaves tracking off.
+  final bool stopTrackingWhenDone;
+
   const PolarAlignSettings({
     this.exposureSeconds = 1.0,
     this.binning = 0,
@@ -395,6 +400,7 @@ class PolarAlignSettings {
     this.coarseExposureSeconds = 3.0,
     this.useHome = true,
     this.polarAlignerAuto = true,
+    this.stopTrackingWhenDone = true,
   });
 
   factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
@@ -414,6 +420,7 @@ class PolarAlignSettings {
             (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
         useHome: json['use_home'] != false,
         polarAlignerAuto: json['polar_aligner_auto'] != false,
+        stopTrackingWhenDone: json['stop_tracking_when_done'] != false,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -428,6 +435,7 @@ class PolarAlignSettings {
         'coarse_exposure_seconds': coarseExposureSeconds,
         'use_home': useHome,
         'polar_aligner_auto': polarAlignerAuto,
+        'stop_tracking_when_done': stopTrackingWhenDone,
       };
 
   PolarAlignSettings copyWith({
@@ -442,6 +450,7 @@ class PolarAlignSettings {
     double? coarseExposureSeconds,
     bool? useHome,
     bool? polarAlignerAuto,
+    bool? stopTrackingWhenDone,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -457,5 +466,6 @@ class PolarAlignSettings {
             coarseExposureSeconds ?? this.coarseExposureSeconds,
         useHome: useHome ?? this.useHome,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
+        stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
       );
 }

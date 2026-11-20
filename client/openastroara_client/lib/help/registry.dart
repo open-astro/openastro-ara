@@ -1126,9 +1126,11 @@ const Map<String, Help> helpRegistry = {
         '* **Fine** — the mount goes Home again and the *guide camera* measures the axis the same way (the 5° tilt, three solves, two RA turns), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
         '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (10° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
-        '* With *Send the mount Home first* on (the default), every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. With it off, each later step first returns to where the run started with a GoTo. The mount\'s own limits still apply.',
+        '* With *Send the mount Home first* on (the default), every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. With it off, each later step first returns to where the run started with a GoTo. The mount\'s own limits still apply.\n'
+        '* **Stop** stops the mount where it is: it aborts a GoTo or Find Home, stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.',
     relatedHelpKeys: [
       'img.polar.use_home',
+      'img.polar.stop_tracking_when_done',
       'img.polar.seed_rotation_deg',
       'img.polar.check_step_deg',
       'img.polar.coarse_exposure_seconds',
@@ -2423,6 +2425,14 @@ const Map<String, Help> helpRegistry = {
     body:
         'On, every stage starts by sending the mount Home. Off, the mount\'s current pointing is taken as Home: put the mount where you want Home to be right before each stage. Use it for a mount whose Home is not on the pole, or whose Find Home is unreliable.',
     relatedSettings: ['img.polar.use_home'],
+  ),
+  'img.polar.stop_tracking_when_done': Help(
+    key: 'img.polar.stop_tracking_when_done',
+    title: 'Stop tracking when polar align ends',
+    body:
+        'On (the default, as NINA): every end of a run turns tracking off, so the mount cannot track into the pier while nobody watches. Off: a run that finishes (Done, or the Verify result) gives back the tracking it found. A Stop or a failure always leaves tracking off. Starting guiding while a run is open gives back the tracking it found, because guiding needs it.\n\n'
+        'Every end of a run also stops the mount first: Ara aborts a GoTo or Find Home, stops both motors, and checks that the mount stands still. If it cannot confirm that, it tells you to cut the mount\'s power.',
+    relatedSettings: ['img.polar.stop_tracking_when_done'],
   ),
   'img.polar.polar_aligner_auto': Help(
     key: 'img.polar.polar_aligner_auto',

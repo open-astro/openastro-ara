@@ -6278,8 +6278,12 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 9. When error is within user's target tolerance (default 1 arcmin),
    user taps [Done] — server logs the achieved error to session DB
    and the polar-alignment workflow ends
-10. If user aborts or backs out: server kills the loop, mount stays
-    where it was (no slewing back to "home" or anything)
+10. If user aborts or backs out: server kills the loop, mount stops
+    where it is (no slewing back to "home" or anything). Every end of a
+    run (Stop, Done, failure, the check's verdict, shutdown) sends
+    AbortSlew when a GoTo, Find Home or motor move may run, then MoveAxis 0
+    on both axes, confirms the stop on fresh reads, and leaves tracking off
+    (`stop_tracking_when_done`, #2048)
 ```
 
 ### 45.4 Binning per camera
@@ -6432,6 +6436,7 @@ Failure events:
 |---|---|
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
 | Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
+| Mount does not confirm it stopped (any end of a run, #2048) | The stop (AbortSlew, MoveAxis 0 on both axes) is sent three times, 2 s apart; after 8 s without two still, not-slewing fresh reads 1.5 s apart, the daemon logs a Critical line and the run ends `failed` with `mount_did_not_stop` (or its own failure reason with the same sentence): "cut the mount's power" |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
 | Southern hemisphere | Same workflow, just plate-solving against SCP region instead of NCP — no code difference; the math uses lat/long from profile |
@@ -6447,6 +6452,7 @@ Polar Alignment section of profile (default values shown):
 - Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
 - Use Home: on (`use_home`; every stage sends the mount Home first, a mount without Find Home is asked; off starts from the current pointing)
+- Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
 

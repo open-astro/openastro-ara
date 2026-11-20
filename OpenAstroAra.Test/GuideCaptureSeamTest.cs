@@ -121,6 +121,10 @@ namespace OpenAstroAra.Test {
                 TrackingConfirmPoll = TimeSpan.Zero,
                 AxisMovePoll = TimeSpan.FromMilliseconds(1),
                 AxisSettle = TimeSpan.Zero,
+                StopVerifyPoll = TimeSpan.FromMilliseconds(1),
+                StopVerifyStillFor = TimeSpan.Zero,
+                StopVerifyNotBefore = TimeSpan.Zero,
+                StopVerifyWindow = TimeSpan.FromMilliseconds(500),
             };
         }
 

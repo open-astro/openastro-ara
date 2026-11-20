@@ -10659,6 +10659,24 @@ abstract class AppLocalizations {
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
 
+  /// Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop tracking when polar align ends'**
+  String get polarKnobStopTracking;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is on
+  ///
+  /// In en, this message translates to:
+  /// **'Every end of a run turns tracking off'**
+  String get polarKnobStopTrackingOn;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is off
+  ///
+  /// In en, this message translates to:
+  /// **'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'**
+  String get polarKnobStopTrackingOff;
+
   /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
   ///
   /// In en, this message translates to:

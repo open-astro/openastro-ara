@@ -6345,6 +6345,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
+  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
+
+  @override
+  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
+
+  @override
   String get polarAdvancedTitle => 'Advanced';
 
   @override
@@ -13139,6 +13149,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobAlignerAutoOff =>
       'Desligado: o alinhamento polar mostra os giros e você os faz';
+
+  @override
+  String get polarKnobStopTracking =>
+      'Parar o rastreamento quando o alinhamento polar terminar';
+
+  @override
+  String get polarKnobStopTrackingOn =>
+      'Todo fim de uma execução desliga o rastreamento';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Desligado: uma execução que termina devolve o rastreamento que encontrou. Parar sempre deixa o rastreamento desligado';
 
   @override
   String get polarAdvancedTitle => 'Avançado';

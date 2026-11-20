@@ -14482,6 +14482,9 @@ components:
         polar_aligner_auto:
           type: boolean
           default: true
+        stop_tracking_when_done:
+          type: boolean
+          default: true
     PolarAlignStartRequestDto:
       type: object
       properties:
