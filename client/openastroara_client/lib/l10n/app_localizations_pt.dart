@@ -6168,7 +6168,7 @@ class AppLocalizationsPt extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Finish with Verify or Done. If the error drifts out, the motors correct again.';
+    return '$_temp0 Verify and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -13038,7 +13038,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       other: 'Dentro da sua tolerância após $moves movimentos.',
       one: 'Dentro da sua tolerância após 1 movimento.',
     );
-    return '$_temp0 Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
+    return '$_temp0 Verificar e Concluir aguardam o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override

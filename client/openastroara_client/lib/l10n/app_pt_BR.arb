@@ -1709,7 +1709,7 @@
   "polarAlignerMeasuring": "Medindo o novo erro…",
   "polarAlignerHoming": "Voltando ao zero…",
   "polarAlignerConverged": "{moves, plural, =1{Dentro da sua tolerância de {tolerance}′ após 1 movimento.} other{Dentro da sua tolerância de {tolerance}′ após {moves} movimentos.}} Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.",
-  "polarAlignerConvergedPlain": "{moves, plural, =1{Dentro da sua tolerância após 1 movimento.} other{Dentro da sua tolerância após {moves} movimentos.}} Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.",
+  "polarAlignerConvergedPlain": "{moves, plural, =1{Dentro da sua tolerância após 1 movimento.} other{Dentro da sua tolerância após {moves} movimentos.}} Verificar e Concluir aguardam o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.",
   "polarAlignerAxisAzimuth": "azimute",
   "polarAlignerAxisAltitude": "altitude",
   "polarAlignerEast": "para leste",

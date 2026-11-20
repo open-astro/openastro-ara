@@ -16,7 +16,9 @@ class PolarAlignSettingsNotifier
   /// A knob that saves on change: [change] applied to the rig's copy and
   /// saved whole. Not loaded from the rig: loaded once more first, and refused
   /// with nothing sent when that fails. A failed save puts the rig's copy
-  /// back; a 412 keeps the change and flags the conflict (rule 6).
+  /// back; a 412 keeps the change and flags the conflict (rule 6). Only for
+  /// the Settings panel, whose conflict banner offers Reload: the Imaging tab
+  /// and Simple Mode save through [changeAndSave], which reloads on a 412.
   Future<void> saveKnob(
     PolarAlignSettings Function(PolarAlignSettings) change,
   ) {

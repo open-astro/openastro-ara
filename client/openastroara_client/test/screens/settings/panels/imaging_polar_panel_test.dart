@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
+import 'package:openastroara/state/settings/loaded_section.dart'
+    show SectionNotLoadedException;
 import 'package:openastroara/state/settings/migrated_sections.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 
 import '../../../support/polar_align_section.dart';
 
@@ -173,7 +176,16 @@ void main() {
       expect(find.byKey(const Key('section-retry')), findsOneWidget);
       expect(find.byType(Switch), findsNothing, reason: 'no default shows');
       expect(find.byType(TextField), findsNothing);
-      expect(rig.puts, isEmpty);
+      // A save from here on (the Imaging tab, Simple Mode) loads once more,
+      // fails, and is refused with nothing sent.
+      await expectLater(
+        container
+            .read(polarAlignSettingsProvider.notifier)
+            .saveKnob((s) => s.copyWith(exposureSeconds: 5)),
+        throwsA(isA<SectionNotLoadedException>()),
+      );
+      expect(rig.sent, isEmpty);
+      expect(container.read(polarAlignSettingsProvider).value, isNull);
     },
   );
 

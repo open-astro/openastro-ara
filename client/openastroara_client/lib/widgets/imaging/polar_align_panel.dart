@@ -168,11 +168,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   /// Persist [change] on the rig's copy of the profile section; the module
-  /// rolls a failed save back, and refuses one that was never loaded.
+  /// rolls a failed save back, refuses one that was never loaded, and reloads
+  /// the rig's copy on a 412 (this panel has no Reload of its own).
   void _saveSettings(PolarAlignSettings Function(PolarAlignSettings) change) {
     final l10n = context.l10n;
     ref.read(polarAlignActionProvider.notifier).run(
-          (_) => ref.read(polarAlignSettingsProvider.notifier).saveKnob(change),
+          (_) => ref.read(polarAlignSettingsProvider.notifier).changeAndSave(change),
           describe: (e) => e is SectionNotLoadedException || e is SectionConflictException
               ? e.toString()
               : friendlyError(l10n, e, action: l10n.polarActionSave),

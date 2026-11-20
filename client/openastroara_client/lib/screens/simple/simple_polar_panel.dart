@@ -179,13 +179,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   }
 
   /// [change] on the rig's copy of the profile section (ADR 0015): refused,
-  /// nothing sent, when it is not loaded; the module rolls a failed save back.
+  /// nothing sent, when it is not loaded; a failed save rolls back, and a 412
+  /// reloads the rig's copy (this screen has no Reload of its own).
   void _save(PolarAlignSettings Function(PolarAlignSettings) change) {
     final l10n = context.l10n;
     ref
         .read(polarAlignActionProvider.notifier)
         .run(
-          (_) => ref.read(polarAlignSettingsProvider.notifier).saveKnob(change),
+          (_) => ref
+              .read(polarAlignSettingsProvider.notifier)
+              .changeAndSave(change),
           describe: (e) =>
               e is SectionNotLoadedException || e is SectionConflictException
               ? e.toString()

@@ -23,6 +23,9 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart' show Tagged;
 
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
+
+import '../../support/imaging_sections.dart' show staleSave;
 import '../../support/polar_align_section.dart';
 
 /// The profile's polar-align section (ADR 0015), each save sent also in [calls].
@@ -451,7 +454,7 @@ void main() {
     },
   );
 
-  testWidgets('the setup rows wait for the profile from the rig: Not loaded with Retry, nothing is sent (ADR 0015)',
+  testWidgets("the setup rows wait for the profile from the rig: Not loaded with Retry, then save over the rig's copy (ADR 0015)",
       (tester) async {
     final api = _Api();
     api.section.initial = null; // the rig does not answer
@@ -475,6 +478,25 @@ void main() {
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
     expect(api.calls, ['save 1.0 single'], reason: "saved over the rig's copy once it is in");
+  });
+
+  testWidgets("a Setup row refused as stale shows the rig's copy again, and the next change saves (ADR 0015)",
+      (tester) async {
+    final api = (await _pump(tester, const PolarAlignLive()))!;
+    api.section.refuse = staleSave();
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts, isEmpty);
+    expect(api.section.loads, 1, reason: "the rig's copy is loaded again");
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    expect(container.read(polarAlignSettingsProvider).value!.loopMode, PolarAlignLoopModes.loop,
+        reason: 'the rig still loops: Single must not stay on screen');
+    expect(container.read(polarAlignSettingsProvider).conflict, isFalse, reason: 'no Reload here to clear it');
+
+    api.section.refuse = null;
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts.single.loopMode, PolarAlignLoopModes.single);
   });
 
   testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {

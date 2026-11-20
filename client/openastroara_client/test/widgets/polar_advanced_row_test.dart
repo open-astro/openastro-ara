@@ -14,6 +14,7 @@ import 'package:openastroara/state/saved_server_state.dart'
     show activeServerProvider;
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
+import '../support/imaging_sections.dart' show staleSave;
 import '../support/polar_align_section.dart';
 
 /// The routine's fake Polar Align client: no routine runs.
@@ -210,6 +211,23 @@ void main() {
         find.byKey(const Key('polar-advanced-save-error')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    "a knob refused as stale shows the rig's copy again, and the next edit saves (ADR 0015)",
+    (tester) async {
+      final rig = await _pump(tester);
+      final loads = rig.loads;
+      rig.refuse = staleSave();
+      await _enter(tester, _coarse, '9');
+      expect(rig.puts, isEmpty);
+      expect(rig.loads, loads + 1, reason: "the rig's copy is loaded again");
+      expect(_text(tester, _coarse), '3', reason: 'the rig still uses 3 s');
+
+      rig.refuse = null;
+      await _enter(tester, _coarse, '9');
+      expect(rig.puts.single.coarseExposureSeconds, 9.0);
     },
   );
 

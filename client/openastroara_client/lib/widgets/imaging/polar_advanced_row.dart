@@ -35,7 +35,8 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
     if (api != null) ref.read(polarAlignSettingsProvider.notifier).load(api);
   }
 
-  /// [change] on the rig's copy as it is when the edit lands (ADR 0015).
+  /// [change] on the rig's copy as it is when the edit lands (ADR 0015); a
+  /// 412 reloads the rig's copy (this row has no Reload of its own).
   Future<void> _save(
     PolarAlignSettings Function(PolarAlignSettings) change,
   ) async {
@@ -47,7 +48,9 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
     await ref
         .read(polarAlignActionProvider.notifier)
         .run(
-          (_) => ref.read(polarAlignSettingsProvider.notifier).saveKnob(change),
+          (_) => ref
+              .read(polarAlignSettingsProvider.notifier)
+              .changeAndSave(change),
           describe: (e) {
             if (mounted) {
               setState(

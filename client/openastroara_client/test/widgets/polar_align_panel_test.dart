@@ -13,6 +13,7 @@ import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
 
+import '../support/imaging_sections.dart' show staleSave;
 import '../support/polar_align_section.dart';
 
 /// Pure fake — records calls; scripted status. The profile's polar-align
@@ -566,6 +567,31 @@ void main() {
           reason: 'the server still loops, so the panel must not offer Take Frame');
     });
 
+    testWidgets("an exposure refused as stale shows the rig's copy again, and the next one saves (ADR 0015)",
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive()));
+      await tester.pumpAndSettle();
+      final loads = api.section.loads;
+      api.section.refuse = staleSave();
+
+      await tester.enterText(find.byKey(const Key('polar-align-exposure')), '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.section.puts, isEmpty);
+      expect(api.section.loads, loads + 1, reason: "the rig's copy is loaded again");
+      final field = find.byKey(const Key('polar-align-exposure'));
+      expect(tester.widget<TextField>(field).controller!.text, isNot('5'),
+          reason: 'the rig still takes 1 s frames: 5 s must not stay on screen');
+      expect(tester.widget<TextField>(field).controller!.text, '1.0');
+
+      api.section.refuse = null;
+      await tester.enterText(find.byKey(const Key('polar-align-exposure')), '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.section.puts.single.exposureSeconds, 5.0);
+    });
+
     testWidgets('a new exposure is saved; an invalid one is refused', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
@@ -584,7 +610,7 @@ void main() {
     });
 
     testWidgets(
-        'the capture settings wait for the profile from the rig: Not loaded with Retry, and nothing is sent (ADR 0015)',
+        'the capture settings wait for the profile from the rig: Not loaded with Retry, and Done waits too (ADR 0015)',
         (tester) async {
       final api = _FakePolarAlignClient();
       api.section.initial = null; // the rig does not answer
