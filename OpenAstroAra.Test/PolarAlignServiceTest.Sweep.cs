@@ -200,10 +200,11 @@ namespace OpenAstroAra.Test {
 
             // After the loop ends (Stop, or Done), a Check is refused the same way.
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var afterStop = mount.Count;
             var after = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
                 PolarAlignStages.Check, new PolarAlignStartConfirmation(PolarAlignDirections.West), null, CancellationToken.None));
             Assert.That(after!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSweepLimit));
-            AssertNoMotionAfter(mount, mount.Count);
+            AssertNoMotionAfter(mount, afterStop);
         }
 
         [Test]
