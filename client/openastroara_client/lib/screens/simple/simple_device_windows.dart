@@ -1241,19 +1241,37 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
         );
       }
-      children.add(
-        simpleWindowRow(
-          context.l10n.deviceMeridianFlip,
-          id: 'Meridian flip',
-          _OnOff(
-            id: 'simple-mount-flip',
-            ids: const ('auto', 'off'),
-            labels: (context.l10n.deviceAuto, context.l10n.deviceOff),
-            on: ref.watch(safetyPoliciesProvider).meridianFlipAuto,
-            onChanged: (on) => _setFlip(context, on),
+      // Null until the profile's copy is in from the rig (ADR 0015): the row
+      // says so, with Retry, and nothing can be sent.
+      final policies = ref.watch(safetyPoliciesProvider);
+      if (policies.value case final p?) {
+        children.add(
+          simpleWindowRow(
+            context.l10n.deviceMeridianFlip,
+            id: 'Meridian flip',
+            _OnOff(
+              id: 'simple-mount-flip',
+              ids: const ('auto', 'off'),
+              labels: (context.l10n.deviceAuto, context.l10n.deviceOff),
+              on: p.meridianFlipAuto,
+              onChanged: (on) => _setFlip(context, on),
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        children.add(
+          SectionNotLoaded(
+            section: policies,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(safetyPoliciesProvider.notifier).load(api);
+              }
+            },
+          ),
+        );
+      }
       _addPadAndPointing(context, children, m, planRunning: planRunning);
     }
     if (widget.inSettings) {
@@ -1384,20 +1402,23 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   void _home(BuildContext context) =>
       _run(context, () => ref.read(simpleMountHomeProvider.notifier).home());
 
-  /// Set once: the profile keeps it.
+  /// Set once: the profile keeps it. Applied to the rig's copy (loaded once
+  /// more first when it isn't in) and saved whole; not loaded, refused or
+  /// stale: nothing is sent, the rig's setting shows again and it says why
+  /// (ADR 0015).
   Future<void> _setFlip(BuildContext context, bool on) async {
-    final policies = ref.read(safetyPoliciesProvider.notifier);
-    policies.setMeridianFlipAuto(on);
     final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
     try {
-      await policies.persistToServer(api);
+      await ref
+          .read(safetyPoliciesProvider.notifier)
+          .changeAndSave((p) => p.copyWith(meridianFlipAuto: on));
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveMeridianFlip,
-        detail: failureReason(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : failureReason(l10n, e),
         error: true,
       );
     }
@@ -4437,8 +4458,8 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
   @override
   void initState() {
     super.initState();
-    // The safety limits the tiles are checked against: Simple Mode never
-    // opens the policies page that loads them otherwise.
+    // The safety limits the tiles are checked against: they load themselves
+    // (ADR 0015); one more load when they aren't in from the rig yet.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final api = ref.read(profileApiProvider);
@@ -4446,11 +4467,9 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         setState(() => _limitsUnknown = true);
         return;
       }
-      try {
-        await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-      } catch (_) {
-        if (mounted) setState(() => _limitsUnknown = true);
-      }
+      if (ref.read(safetyPoliciesProvider).canSave) return;
+      final ok = await ref.read(safetyPoliciesProvider.notifier).load(api);
+      if (!ok && mounted) setState(() => _limitsUnknown = true);
     });
   }
 
@@ -4537,7 +4556,8 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
 
   Widget _tiles(BuildContext context, WeatherStatus s) {
     final l10n = context.l10n;
-    final p = ref.watch(safetyPoliciesProvider);
+    // Not in from the rig: the defaults, which mark nothing.
+    final p = ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
     // Marked only when these limits act (the daemon's same checks, §35.1).
     final mark = p.weatherTriggersEnabled;
     final t = s.temperatureC, dew = s.dewPointC, hum = s.humidityPct;
@@ -5935,10 +5955,6 @@ class SimpleSafetyMonitorWindow extends ConsumerStatefulWidget {
 
 class _SimpleSafetyMonitorWindowState
     extends ConsumerState<SimpleSafetyMonitorWindow> {
-  /// The policies came from the rig: until then the defaults could say the
-  /// wrong thing, so the window says nothing about what happens next.
-  bool _policiesLoaded = false;
-
   /// "since 02:14 · 1 h 12 min" counts on.
   late final Timer _tick;
 
@@ -5948,18 +5964,14 @@ class _SimpleSafetyMonitorWindowState
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
-    // Read, never written here: Simple Mode never opens the policies page
-    // that loads them otherwise.
+    // Read, never written here: they load themselves (ADR 0015); one more
+    // load when they aren't in from the rig yet.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final api = ref.read(profileApiProvider);
-      if (api == null) return;
-      try {
-        await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-        if (mounted) setState(() => _policiesLoaded = true);
-      } catch (_) {
-        // Stays unloaded: nothing said beats a wrong promise.
-      }
+      if (api == null || ref.read(safetyPoliciesProvider).canSave) return;
+      // Stays unloaded on a failure: nothing said beats a wrong promise.
+      await ref.read(safetyPoliciesProvider.notifier).load(api);
     });
   }
 
@@ -6000,7 +6012,10 @@ class _SimpleSafetyMonitorWindowState
         ),
       );
     } else {
-      final p = _policiesLoaded ? ref.watch(safetyPoliciesProvider) : null;
+      // Only the rig's copy: the defaults could say the wrong thing, so until
+      // it is in the window says nothing about what happens next.
+      final section = ref.watch(safetyPoliciesProvider);
+      final p = section.canSave ? section.value : null;
       final w = ref.watch(weatherProvider).value;
       // Weather past its limits makes the rig unsafe too (the daemon's same
       // checks, §35.1), even while the monitor reads Safe.

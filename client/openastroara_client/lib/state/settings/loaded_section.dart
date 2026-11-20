@@ -216,6 +216,55 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     return run;
   }
 
+  /// A rig action that writes the section by a route of its own (the safety
+  /// first-flip re-arm) and answers the rig's new copy with its tag. Runs after
+  /// a save in flight; loaded once more first when not in, refused with
+  /// nothing sent when that fails. [apply] puts the action's change on the
+  /// shown copy, so edits not saved yet stay. The answered tag is kept only
+  /// when [onlyAction] finds the rig's new copy is the one loaded here with
+  /// that change; otherwise another device saved in between, so the old tag
+  /// stays and the conflict is flagged: the next Save is refused as stale
+  /// instead of writing over that copy.
+  Future<void> actOnRig(
+    Future<Tagged<T>> Function(ProfileApi api) action, {
+    required T Function(T shown, T rig) apply,
+    required bool Function(T loaded, T rig) onlyAction,
+  }) async {
+    if (!state.canSave) await _loadOnce();
+    if (!state.canSave) throw SectionNotLoadedException(state.lastFailure);
+    final api = _activeApi();
+    final previous = (_saveChain ?? Future<void>.value()).catchError(
+      (Object _) {},
+    );
+    final run = previous.then((_) async {
+      final held = _held ?? state.value;
+      if (held == null || !state.canSave) {
+        throw SectionNotLoadedException(state.lastFailure);
+      }
+      final gen = _generation;
+      final r = await action(api);
+      if (!ref.mounted || gen != _generation) return;
+      final shown = state.value as T;
+      if (onlyAction(held, r.value)) {
+        _held = r.value;
+        state = LoadedSection(
+          value: identical(shown, held) ? r.value : apply(shown, r.value),
+          source: SectionSource.rig,
+          etag: r.etag,
+        );
+      } else {
+        state = LoadedSection(
+          value: apply(shown, r.value),
+          source: SectionSource.rig,
+          etag: state.etag,
+          conflict: true,
+        );
+      }
+    });
+    _saveChain = run;
+    return run;
+  }
+
   // A 412 flags the conflict (the shown value stays) and throws
   // [SectionConflictException]; any other failure is rethrown as it is.
   Future<Tagged<T>> _send(ProfileApi api, T value, String? etag) async {

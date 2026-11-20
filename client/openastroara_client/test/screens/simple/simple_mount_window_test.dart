@@ -10,6 +10,10 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
+import 'package:openastroara/state/profile_management_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/safety_section.dart';
 
 /// A mount that records what it was asked to do.
 class _Mount extends MountNotifier {
@@ -72,7 +76,11 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
+    {bool inSettings = false,
+    DeviceDriver? driver,
+    bool planRunning = false,
+    double? width,
+    FakeSafetySection? safety}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final mount = _Mount(wire);
@@ -80,6 +88,10 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
     mountProvider.overrideWith(() => mount),
     deviceDriverProvider.overrideWith((ref, type) async => type == 'telescope' ? driver : null),
     if (planRunning) sequenceRunStateProvider.overrideWith(_Running.new),
+    if (safety != null) ...[
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      safetyPoliciesProvider.overrideWith(() => safety),
+    ],
   ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -146,19 +158,47 @@ void main() {
   });
 
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {
-    final (c, mount) = await _pump(tester, _wire());
+    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianPauseMin: 12));
+    final (c, mount) = await _pump(tester, _wire(), safety: safety);
     expect(find.text('Mount · EQM-35 Pro'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
     await tester.pump();
     expect(mount.calls, ['tracking false']);
-    c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(true);
-    await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mount-flip-off')));
     await tester.pump();
-    expect(c.read(safetyPoliciesProvider).meridianFlipAuto, isFalse, reason: 'kept in the profile');
+    expect(c.read(safetyPoliciesProvider).value!.meridianFlipAuto, isFalse, reason: 'kept in the profile');
+    expect(safety.puts.single.meridianPauseMin, 12, reason: 'over the rig\'s copy');
     double row(String label) => tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
     expect(row('Position'), row('Tracking'));
     expect(row('Meridian flip'), row('Tracking'));
+  });
+
+  testWidgets('the meridian flip waits for the profile from the rig: no switch shows, and nothing is sent (ADR 0015)',
+      (tester) async {
+    final safety = FakeSafetySection(initial: null);
+    await _pump(tester, _wire(), safety: safety);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-mount-flip-off')), findsNothing, reason: 'no default shows');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    safety.initial = const SafetyPolicies(meridianFlipAuto: true);
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('simple-mount-flip-off')), findsOneWidget, reason: 'Retry loads it');
+    expect(safety.puts, isEmpty);
+  });
+
+  testWidgets("a meridian flip change the rig refuses says why and shows the rig's setting again (ADR 0015)",
+      (tester) async {
+    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianFlipAuto: true))
+      ..refuse = StateError('rig error');
+    final (c, _) = await _pump(tester, _wire(), safety: safety);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mount-flip-off')));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(safetyPoliciesProvider).value!.meridianFlipAuto, isTrue, reason: 'the rig still flips');
+    expect(find.textContaining("Couldn't save the meridian flip"), findsOneWidget, reason: 'it says why');
   });
 
   testWidgets('Park is Parked / Unparked segments; while it moves it reads Parking…, then the new state', (tester) async {

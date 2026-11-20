@@ -461,7 +461,8 @@ class _PoliciesApi extends ProfileApi {
   _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
   final SafetyPolicies? policies;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: policies ?? (throw StateError('unreachable')), etag: '"v1"');
 }
 
 /// Fails its first safety-policies read, then answers with the weather on.
@@ -469,9 +470,30 @@ class _FlakyPoliciesApi extends ProfileApi {
   _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
   int calls = 0;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async {
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
     if (++calls == 1) throw StateError('unreachable');
-    return const SafetyPolicies(weatherTriggersEnabled: true);
+    return (value: const SafetyPolicies(weatherTriggersEnabled: true), etag: '"v1"');
+  }
+}
+
+/// The rig's copy, already in with an unsaved edit (Unattended running).
+class _EditedPolicies extends SafetyPoliciesNotifier {
+  @override
+  LoadedSection<SafetyPolicies> build() => const LoadedSection(
+    value: SafetyPolicies(weatherTriggersEnabled: true, meridianPauseMin: 12),
+    source: SectionSource.rig,
+    etag: '"v1"',
+  );
+}
+
+/// Counts its safety-policies reads; answers the class values.
+class _CountingPoliciesApi extends ProfileApi {
+  _CountingPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
+    calls++;
+    return (value: const SafetyPolicies(), etag: '"v2"');
   }
 }
 
@@ -796,7 +818,7 @@ class _GuideOpticsApi extends ProfileApi {
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
@@ -815,7 +837,7 @@ class _PierRefusedApi extends ProfileApi {
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async =>
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
       throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
@@ -989,7 +1011,7 @@ class _OpticsApi extends ProfileApi {
   final puts = <OpticsSettings>[];
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
   // The Storage block loads its section when Rig opens; no network here.
   @override
   Future<({StorageSettings value, String? etag})> getStorageSection() async =>
@@ -7211,11 +7233,30 @@ void main() {
       weatherProvider.overrideWith(() => _Windy()),
       profileApiProvider.overrideWithValue(_PoliciesApi(null)),
     ]);
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
         findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets(
+      'the Safety pill does not load the policies again when the rig\'s copy is in, so an unsaved edit stays (ADR 0015)',
+      (tester) async {
+    final api = _CountingPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+      safetyPoliciesProvider.overrideWith(_EditedPolicies.new),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, 0, reason: 'the rig\'s copy is in already');
+    expect(c.read(safetyPoliciesProvider).value!.meridianPauseMin, 12,
+        reason: 'the unsaved edit stays');
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'the copy in is the rig\'s, so the pill reads it');
   });
 
   testWidgets('a failed policies load is retried', (tester) async {
@@ -7229,7 +7270,7 @@ void main() {
     await tester.pump();
     expect(api.calls, greaterThan(0));
     // Anything that rebuilds the pill retries after the failed first load.
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     await tester.pump();

@@ -341,7 +341,10 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   late final _frames = TextEditingController(
-    text: ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+    text:
+        (ref.read(safetyPoliciesProvider).value ?? const SafetyPolicies())
+            .flatFramesPerFilter
+            .toString(),
   );
   final _coolTo = TextEditingController();
   bool _busy = false;
