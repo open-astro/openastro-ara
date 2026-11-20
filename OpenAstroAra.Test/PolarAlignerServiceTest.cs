@@ -345,6 +345,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stop_the_device_refuses_is_confirmed_by_a_still_read() {
+            // A driver without PolarAlign:Stop answers it with an error: the device answered, so a still read confirms it,
+            // and no Stop is owed for ever (it would refuse every later Home and run).
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Stop"] = () => throw new ASCOM.ActionNotImplementedException("PolarAlign:Stop");
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+
+            var stop = await service.StopAsync(null, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(stop.OperationType, Is.EqualTo("polaraligner.stop"));
+                Assert.That(service.StopOwed, Is.False);
+            });
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(actions.Calls, Does.Contain("PolarAlign:Home"));
+        }
+
+        [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),
                 Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));

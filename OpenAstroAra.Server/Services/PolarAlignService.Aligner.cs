@@ -243,21 +243,36 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        /// <summary>#2069 — the <c>polar_align.error</c> reason when the run's end could not confirm the Polar Aligner
+        /// stopped (the mount's own is <see cref="MountDidNotStop"/>, which wins when both are unconfirmed).</summary>
+        internal const string AlignerDidNotStop = "aligner_did_not_stop";
+
+        internal const string AlignerCutPowerSentence =
+            "Ara could not confirm that the Polar Aligner stopped. Cut the Polar Aligner's power if it still moves; Ara sends it Stop again before it moves it next.";
+
+        // #2069 — the run (its RunEnd) whose end could not confirm the Polar Aligner stopped, for the stop path to report
+        // once the run has unwound. Guarded by _gate.
+        private RunEnd? _alignerNotStoppedEnd;
+
         // Run task, on every exit: a run that moved the motors (or owes a Stop) stops them and verifies it (#2069). A
         // newer run's state is not touched. Started off the run task's thread so the mount's exit is not held behind it.
-        private Task EndAlignerRunAsync(AlignerRun? run) =>
-            run is null ? Task.CompletedTask : Task.Run(() => EndAlignerRunCoreAsync(run), CancellationToken.None);
+        // True when the device is confirmed still, or nothing was owed it.
+        private Task<bool> EndAlignerRunAsync(AlignerRun? run) =>
+            run is null ? Task.FromResult(true) : Task.Run(() => EndAlignerRunCoreAsync(run), CancellationToken.None);
 
-        private async Task EndAlignerRunCoreAsync(AlignerRun run) {
+        private async Task<bool> EndAlignerRunCoreAsync(AlignerRun run) {
             bool owed;
             lock (_gate) {
                 owed = run.StopOwed;
             }
             // An owed Stop goes to the device that answers now: after a reconnect that is a new object.
             var device = owed ? _alignerSource?.Current() ?? run.Device : run.Device;
-            if ((run.Engaged || owed) && device is not null
-                    && !await StopDeviceVerifiedAsync(run, device).ConfigureAwait(false)) {
-                LogAlignerStopNotConfirmedAtEnd();
+            var confirmed = true;
+            if (run.Engaged || owed) {
+                confirmed = device is not null && await StopDeviceVerifiedAsync(run, device).ConfigureAwait(false);
+                if (!confirmed) {
+                    LogAlignerStopNotConfirmedAtEnd();
+                }
             }
             lock (_gate) {
                 if (ReferenceEquals(_alignerRun, run)) {
@@ -266,7 +281,26 @@ namespace OpenAstroAra.Server.Services {
                 }
             }
             run.Dispose();
+            return confirmed;
         }
+
+        // Run task, after its end's aligner stop: an unconfirmed one is told. The stop path reports it when it has not yet
+        // told the client the run ended; when it already has, it is this run's to report. Not when the run reported its own
+        // end with the sentence (a failure, the check's verdict), nor once a newer run owns the client's view.
+        private async Task NoteAlignerEndAsync(RunEnd end, bool confirmed, bool reportedByRun) {
+            if (confirmed) {
+                return;
+            }
+            lock (_gate) {
+                _alignerNotStoppedEnd = end;
+            }
+            if (!reportedByRun && end.Reported) {
+                await PublishErrorAsync(AlignerDidNotStop, AlignerCutPowerSentence).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>The stop path, once the run unwound: whether that run's end could not confirm the Polar Aligner stopped.</summary>
+        private bool AlignerNotStoppedLocked(RunEnd? end) => end is not null && ReferenceEquals(_alignerNotStoppedEnd, end);
 
         /// <summary>One measurement's turn of the motors. Returns when they are still (or were never
         /// asked): the next frame the loop takes is the measurement of what they did.</summary>
@@ -292,10 +326,31 @@ namespace OpenAstroAra.Server.Services {
             if (stopOwed || _alignerSource!.StopOwed) {
                 if ((_alignerSource!.Current() ?? run.Device) is { } owed) {
                     await StopDeviceVerifiedAsync(run, owed).ConfigureAwait(false);
-                    await ReportStopAsync(gen, run).ConfigureAwait(false);
                 }
+                var resumed = false;
                 lock (_gate) {
                     stopOwed = run.StopOwed || _alignerSource.StopOwed;
+                    if (stopOwed && !run.Stopped) {
+                        // A Stop owed from before this run (the Stop route, Emergency Stop, an earlier run's end) that is
+                        // still not confirmed: the run stops correcting and says why, so the person is not left with
+                        // motors that never move and nothing on screen.
+                        run.Stopped = true;
+                        run.LastStop = (PolarAlignCorrectionCauses.StopNotConfirmed, null, null);
+                    } else if (!stopOwed && run.Stopped && run.LastStop?.Cause == PolarAlignCorrectionCauses.StopNotConfirmed) {
+                        // That Stop is confirmed now, and it was the only reason the run stopped: it drives again from a
+                        // new device read and probe, as it would have had the first resend been confirmed.
+                        run.Stopped = false;
+                        run.LastStop = null;
+                        run.Rearm();
+                        stopped = false;
+                        resumed = true;
+                        _aligner = new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Measuring, Moves: _alignerMoves);
+                    }
+                }
+                if (resumed) {
+                    await PublishAlignerAsync(gen).ConfigureAwait(false);
+                } else {
+                    await ReportStopAsync(gen, run).ConfigureAwait(false);
                 }
                 if (stopOwed) {
                     return;

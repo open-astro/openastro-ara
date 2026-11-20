@@ -261,7 +261,9 @@ void main() {
         'Ara stopped the motors: “Overheated”.');
   });
 
-  for (final MapEntry(key: cause, value: (axis, text, sentence)) in causes.entries) {
+  // stop_not_confirmed has its own test below: Stop in place of Resume.
+  for (final MapEntry(key: cause, value: (axis, text, sentence))
+      in causes.entries.where((e) => e.key != 'stop_not_confirmed')) {
     testWidgets('stopped ($cause): its sentence, carry on by hand, Home and Resume', (tester) async {
       final c = await _pump(tester,
           live: _run(PolarAlignerRun(state: 'stopped', cause: cause, axis: axis, deviceText: text, moves: 2)));
@@ -273,7 +275,7 @@ void main() {
       final home = tester.widget<OutlinedButton>(_key('polar-aligner-home'));
       // Resume is always there: after a lost link only the daemon can tell whether the device answers again.
       expect(resume.onPressed, isNotNull);
-      expect(home.onPressed == null, lost || cause == 'stop_not_confirmed');
+      expect(home.onPressed == null, lost);
       expect(find.text('Resume once it answers again. Home comes back then.'), lost ? findsOneWidget : findsNothing);
       expect(_key('polar-aligner-position'), lost ? findsNothing : findsOneWidget);
       await tester.tap(_key('polar-aligner-resume'));
@@ -281,6 +283,18 @@ void main() {
       expect(c.calls, contains('resumeInRoutine'));
     });
   }
+
+  testWidgets('stopped (stop_not_confirmed): Stop to send again in place of Resume, no Home', (tester) async {
+    // The daemon refuses Resume and Home until a Stop is confirmed.
+    final c = await _pump(tester,
+        live: _run(const PolarAlignerRun(state: 'stopped', cause: 'stop_not_confirmed', moves: 2)));
+    expect(find.text(causes['stop_not_confirmed']!.$3), findsOneWidget);
+    expect(_key('polar-aligner-resume'), findsNothing);
+    expect(tester.widget<OutlinedButton>(_key('polar-aligner-home')).onPressed, isNull);
+    await tester.tap(_key('polar-aligner-stop'));
+    await tester.pumpAndSettle();
+    expect(c.calls, contains('stopInRoutine'));
+  });
 
   testWidgets('stopped: a screen reader is told why the motors stopped', (tester) async {
     final handle = tester.ensureSemantics();

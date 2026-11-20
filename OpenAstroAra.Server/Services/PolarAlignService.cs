@@ -656,10 +656,13 @@ namespace OpenAstroAra.Server.Services {
                     }
                 }
                 var mountNotStopped = end?.MountStopped == false;
+                bool alignerNotStopped;
                 bool becameStopped;
                 bool reportNotStopped = false;
                 bool wasActive;
                 lock (_gate) {
+                    // #2069 — the run's end could not confirm the Polar Aligner stopped: told like a mount that did not stop.
+                    alignerNotStopped = AlignerNotStoppedLocked(end);
                     wasActive = _active;
                     _active = false;
                     if (wasActive && outcome != EndedBySequence) {
@@ -673,7 +676,7 @@ namespace OpenAstroAra.Server.Services {
                     // Done on the checked verdict (Complete) does end it: the client leaves the
                     // verdict on the stopped event, and the check already wrote the row.
                     becameStopped = _state is not "failed" && (_state != "checked" || outcome == "complete");
-                    if (becameStopped && mountNotStopped) {
+                    if (becameStopped && (mountNotStopped || alignerNotStopped)) {
                         // Never "stopped" for a mount that may still move: the client shows the failure and its sentence.
                         _state = "failed";
                         becameStopped = false;
@@ -690,7 +693,9 @@ namespace OpenAstroAra.Server.Services {
                 await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
                 LogStopped();
                 if (reportNotStopped) {
-                    await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
+                    await (mountNotStopped
+                        ? PublishErrorAsync(MountDidNotStop, alignerNotStopped ? CutPowerSentence + " " + AlignerCutPowerSentence : CutPowerSentence)
+                        : PublishErrorAsync(AlignerDidNotStop, AlignerCutPowerSentence)).ConfigureAwait(false);
                 } else if (becameStopped) {
                     await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
                 }
@@ -799,6 +804,11 @@ namespace OpenAstroAra.Server.Services {
                 _trackingTouched = false;
             }
             var alignerRun = BeginAlignerRun(site.LatitudeDeg);
+            // #2069 — the Polar Aligner's end stop, once: started beside the mount's exit (its up to 3 s of polling never
+            // holds the mount's stop back), before a failure or the check's verdict is reported, else in the finally.
+            Task<bool>? alignerEnd = null;
+            Task<bool> EndAlignerOnceAsync() => alignerEnd ??= EndAlignerRunAsync(alignerRun);
+            var alignerEndReported = false;
             lock (_gate) {
                 _raMotorSign = 1.0; // a new run learns the RA motor's sign afresh
             }
@@ -887,9 +897,14 @@ namespace OpenAstroAra.Server.Services {
                 }
                 ThrowIfStoppedFromOutside(gen);
                 var verdict = await RunCheckStageAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
-                // The check's verdict is a finished run: the mount is stopped and confirmed before the client hears of it.
+                // The check's verdict is a finished run: the mount is stopped and confirmed before the client hears of it,
+                // and so is the Polar Aligner (#2069).
+                var alignerStopping = EndAlignerOnceAsync();
                 if (await ExitMountOnceAsync(finished: true, "checked").ConfigureAwait(false) == false) {
                     throw new RoutineFailedException(MountDidNotStop, CutPowerSentence);
+                }
+                if (!await alignerStopping.ConfigureAwait(false)) {
+                    throw new RoutineFailedException(AlignerDidNotStop, AlignerCutPowerSentence);
                 }
                 await FinishCheckedAsync(gen, verdict).ConfigureAwait(false);
             } catch (OperationCanceledException) when (ct.IsCancellationRequested || !IsCurrent(gen)) {
@@ -899,11 +914,15 @@ namespace OpenAstroAra.Server.Services {
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
                 // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
                 // surface the solver's own actionable message, not internal_error.
-                await FailRoutineAsync("solver_configuration", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                alignerEndReported = true;
+                await FailRoutineAsync("solver_configuration", ex, gen, () => ExitMountOnceAsync(finished: false, "failed"), EndAlignerOnceAsync()).ConfigureAwait(false);
             } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver)).ConfigureAwait(false);
+                alignerEndReported = true;
+                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver),
+                    EndAlignerOnceAsync()).ConfigureAwait(false);
             } catch (Exception ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync("internal_error", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                alignerEndReported = true;
+                await FailRoutineAsync("internal_error", ex, gen, () => ExitMountOnceAsync(finished: false, "failed"), EndAlignerOnceAsync()).ConfigureAwait(false);
             } catch (Exception ex) {
                 // A superseded (zombie) run: its failure must not touch state, events, the lease, or
                 // the session log the successor run now owns — log and drain quietly.
@@ -911,7 +930,7 @@ namespace OpenAstroAra.Server.Services {
             } finally {
                 // #2069 — the Polar Aligner's verified stop starts first and runs beside the mount's exit, so its up to 3 s
                 // of polling never holds the mount's stop back; the run ends once both are done.
-                var alignerEnded = EndAlignerRunAsync(alignerRun);
+                var alignerEnded = EndAlignerOnceAsync();
                 // Every exit stops the mount, a clean Stop included (it bumps the generation but not the start
                 // sequence); only a run that a NEWER RUN superseded leaves the mount to that run. Tracking goes off,
                 // or back to how the run found it after Done with stop_tracking_when_done off (ApplyExitTracking).
@@ -919,7 +938,8 @@ namespace OpenAstroAra.Server.Services {
                     await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
                         handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
                 }
-                await alignerEnded.ConfigureAwait(false);
+                await NoteAlignerEndAsync(end, await alignerEnded.ConfigureAwait(false), alignerEndReported || !NoNewerRunStarted(startSeq))
+                    .ConfigureAwait(false);
                 TryDeleteWorkDir(workDir);
             }
         }
@@ -1474,8 +1494,9 @@ namespace OpenAstroAra.Server.Services {
         // the generation between the filter and this write — same discipline as SetErrors).
         // #2048: the state turns failed at once (a Stop meanwhile must not relabel it), then the mount is stopped and
         // confirmed (exitMount), and only then is the failure reported — with the cut-power sentence when the stop was not
-        // confirmed.
-        private async Task FailRoutineAsync(string reason, Exception ex, int gen, Func<Task<bool?>> exitMount) {
+        // confirmed. #2069: the Polar Aligner's end stop (alignerEnded, started beside the mount's) is awaited too, and its
+        // own sentence appended when it was not confirmed.
+        private async Task FailRoutineAsync(string reason, Exception ex, int gen, Func<Task<bool?>> exitMount, Task<bool> alignerEnded) {
             LogRoutineFailed(reason, ex);
             bool claimed;
             lock (_gate) {
@@ -1489,8 +1510,10 @@ namespace OpenAstroAra.Server.Services {
                 }
             }
             bool? mountStopped;
+            bool alignerStopped;
             try {
                 mountStopped = await exitMount().ConfigureAwait(false);
+                alignerStopped = await alignerEnded.ConfigureAwait(false);
             } finally {
                 if (claimed) {
                     lock (_gate) {
@@ -1502,6 +1525,9 @@ namespace OpenAstroAra.Server.Services {
                 return;
             }
             var message = mountStopped == false && reason != MountDidNotStop ? ex.Message + " " + CutPowerSentence : ex.Message;
+            if (!alignerStopped && reason != AlignerDidNotStop) {
+                message += " " + AlignerCutPowerSentence;
+            }
             await PublishErrorAsync(reason, message).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("failed", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);

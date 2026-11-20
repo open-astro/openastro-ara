@@ -129,8 +129,9 @@ internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Send
 /// #2069 (ARA-19) — every Stop of the Polar Aligner is a verified stop, as the mount's is (#2048). Stop goes out,
 /// then Status is polled until neither axis reports Moving, for up to <see cref="DefaultWindow"/>. While an axis
 /// still moves (or the device does not answer) Stop is sent again, evenly over the window, <see cref="Sends"/>
-/// times in all. Only a still read after a Stop the device accepted confirms it: a read that fails never counts
-/// as still, and nor does a still read while no Stop got through (a move sent before a link drop may yet start).
+/// times in all. Only a still read after a Stop the device answered (accepted, or refused with its own error)
+/// confirms it: a read that fails never counts as still, and nor does a still read while no Stop got through (a
+/// move sent before a link drop may yet start).
 /// Not confirmed at the end of the window: the caller
 /// reports <c>stop_not_confirmed</c> and owes the device a Stop.
 /// </summary>
@@ -154,6 +155,10 @@ internal static class PolarAlignerVerifiedStop {
                     delivered = true;
                 } catch (PolarAlignerException ex) {
                     error = ex.Message;
+                    // A refusal is an answer: the link works and nothing sent before it is still on the way, so a still
+                    // read from here on confirms the stop. A device that does not implement Stop (often one whose
+                    // canStop is false) would otherwise owe a Stop for ever, and no later run could move it.
+                    delivered |= ex.Failure == PolarAlignerFailure.Refused;
                 }
             }
             try {

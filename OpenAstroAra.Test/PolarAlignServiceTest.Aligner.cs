@@ -60,6 +60,12 @@ namespace OpenAstroAra.Test {
             public int FaultFromMove { get; set; } = int.MaxValue;
             public bool NeverFinishes { get; set; }
             public bool StopFails { get; set; }
+            /// <summary>#2069 — Stop is answered with the device's own error (a driver that does not implement it).</summary>
+            public bool StopRefused { get; set; }
+            /// <summary>#2069 — the source's record that a Stop is owed, as the daemon's Polar Aligner service keeps it.</summary>
+            public bool SourceStopOwed { get; set; }
+            bool IPolarAlignerSource.StopOwed => SourceStopOwed;
+            void IPolarAlignerSource.NoteStopOutcome(bool confirmed) => SourceStopOwed = !confirmed;
             /// <summary>Status throws as on a lost link.</summary>
             public bool StatusFails { get; set; }
             /// <summary>#2069 — Status reports each axis's position (its offset, as the axis really moved).</summary>
@@ -116,6 +122,9 @@ namespace OpenAstroAra.Test {
                 StopAnswers.Wait();
                 if (StopFails) {
                     throw new PolarAlignerException(PolarAlignerFailure.LinkLost, "no answer");
+                }
+                if (StopRefused) {
+                    throw new PolarAlignerException(PolarAlignerFailure.Refused, "PolarAlign:Stop is not implemented");
                 }
                 lock (_gate) {
                     if (StopsIgnored > 0) {
@@ -775,6 +784,59 @@ namespace OpenAstroAra.Test {
 
             Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.MountTracking));
             Assert.That(aligner.Moves, Is.Empty, "no move was sent");
+        }
+
+        [Test]
+        public async Task A_polar_align_stop_the_aligner_ignores_ends_failed_with_aligner_did_not_stop() {
+            // ARA-19: the Stop at the run's end is verified, and one the device never confirms is told, never "stopped".
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
+            var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
+            using var _ = svc;
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
+            aligner.StopsIgnored = int.MaxValue;
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var error = ws.Events.Single(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.AlignerDidNotStop));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Cut the Polar Aligner's power"));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.Zero, "never \"stopped\" while the aligner may still move");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            Assert.That(aligner.SourceStopOwed, Is.True, "the Stop is owed to the next one that drives it");
+        }
+
+        [Test]
+        public async Task A_stop_owed_from_before_the_run_is_reported_and_nothing_moves_until_it_is_confirmed() {
+            // The Stop route or Emergency Stop left a Stop owed; at this run's first measurement the resend fails too.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, StopFails = true };
+            var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
+            using var _ = svc;
+
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
+            Assert.That(aligner.Moves, Is.Empty, "nothing moves while the Stop is owed");
+            Assert.That((await AlignerStatusAsync(svc).ConfigureAwait(false))?.Cause, Is.EqualTo(PolarAlignCorrectionCauses.StopNotConfirmed));
+            await Assert.ThatAsync(() => svc.ResumeAlignerAsync(null, CancellationToken.None), Throws.InvalidOperationException,
+                "no Resume while the Stop is owed").ConfigureAwait(false);
+
+            // The device answers again: the owed Stop is confirmed at a later measurement, and the run drives it again.
+            var mark = ws.Events.Count;
+            aligner.StopFails = false;
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing, mark).ConfigureAwait(false);
+            Assert.That(aligner.SourceStopOwed, Is.False);
+            Assert.That(aligner.Moves, Is.Not.Empty);
+        }
+
+        [Test]
+        public async Task A_device_that_refuses_Stop_but_reads_still_is_confirmed_and_the_run_moves() {
+            // A device whose driver answers PolarAlign:Stop with an error (it has no Stop): the answer shows the link works,
+            // so a still read confirms the stop, and an owed Stop does not keep every later run from moving it.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, StopRefused = true };
+            var (svc, ws) = await StartWithAlignerAsync(aligner).ConfigureAwait(false);
+            using var _ = svc;
+
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
+            Assert.That(aligner.SourceStopOwed, Is.False, "the stop was confirmed");
+            Assert.That(aligner.Moves, Is.Not.Empty);
         }
     }
 }
