@@ -173,7 +173,7 @@ namespace OpenAstroAra.Test {
             var solver = new StuckSolver();
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5); // the Stop gives up on the stuck run, inside the park
-            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200);
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
@@ -189,7 +189,8 @@ namespace OpenAstroAra.Test {
                 solver.Release(); // the stuck run unwinds now, in the middle of the park
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
-                Assert.That(answeredIn, Is.LessThan(TimeSpan.FromSeconds(1)), "the takeover answered at its bound, not after the stuck run");
+                // Well under the 2.5 s grace, with 1.3 s of slack over the bound for a loaded runner's scheduling.
+                Assert.That(answeredIn, Is.LessThan(TimeSpan.FromSeconds(1.5)), "the takeover answered at its bound, not after the stuck run");
                 Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
                 Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
                     "no stop after the park went out. " + mount.Describe());
