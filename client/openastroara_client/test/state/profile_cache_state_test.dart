@@ -336,7 +336,7 @@ void main() {
     expect(await seedPlanningFromCache(c, 'p1'), isTrue);
     expect(c.read(opticsSettingsProvider).source, SectionSource.cache);
     c.read(opticsSettingsProvider.notifier).setSensorWidthPx(0);
-    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 382);
+    expect(c.read(opticsSettingsProvider).value!.sensorWidthPx, 6248);
     await expectLater(
       c.read(opticsSettingsProvider.notifier).save(rig.api()),
       throwsA(isA<SectionNotLoadedException>()),
