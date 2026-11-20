@@ -7,6 +7,7 @@ import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart';
+import '../../util/polar_align_error_text.dart';
 import 'simple_polar_panel.dart';
 import 'simple_screen.dart';
 
@@ -54,7 +55,7 @@ class SimplePolarScreen extends SimpleScreen {
           .show(
             SimpleMessageKind.error,
             context.l10n.polarPhaseFailed,
-            detail: next.errorMessage ?? next.errorReason,
+            detail: polarAlignErrorText(context.l10n, next),
             origin: SimpleStatusOrigin.polar,
           );
     });
