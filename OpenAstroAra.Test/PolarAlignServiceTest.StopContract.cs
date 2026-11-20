@@ -277,6 +277,46 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // A run fails on its own and its exit is confirming the stop when a read hangs (bounded by StopCommandTimeout). The
+        // takeover gives up meanwhile, fences the run, and the park goes out. The read then times out with no answer, and the
+        // loop's resend round (an AbortSlew, since no reading said still) went out after the check at the top of the loop had
+        // already passed: the park was aborted. The round checks the fence itself.
+        [Test]
+        public async Task An_exit_confirming_its_stop_through_a_hung_read_sends_no_resend_after_a_takeover_fenced_it() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.GoToRateDegPerSec = 15.0;
+            mount.MoveAxisRefused = true; // the run fails at its first turn, and its exit stops and confirms
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(3);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(300);
+            svc.StopCommandTimeout = TimeSpan.FromSeconds(1.5); // the hung read gives up inside the park
+            var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            mount.OnFreshRead = kind => {
+                if (kind == "pointing" && mount.Stops.Count > 0) {
+                    mount.HangReads = hang; // the exit's first confirmation read
+                }
+            };
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var parkAt = mount.Now;
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                await Task.Delay(svc.StopCommandTimeout).ConfigureAwait(false); // the hung read has given up by now
+
+                Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
+                Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
+                    "no resend from the fenced exit. " + mount.Describe());
+            } finally {
+                mount.OnFreshRead = null;
+                mount.HangReads = null;
+                hang.TrySetResult();
+            }
+        }
+
         // stop_tracking_when_done off: Done hands back the tracking the run found (off here). A Done that abandons a run stuck
         // past its grace left the hand-back to the run's own exit, and then fenced that exit: nobody handed tracking back, and
         // the mount tracked on toward the pier. The end that fences the run does the hand-back itself.
