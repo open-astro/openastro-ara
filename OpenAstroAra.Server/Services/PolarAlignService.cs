@@ -27,6 +27,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -113,6 +114,10 @@ namespace OpenAstroAra.Server.Services {
 
         // Stages (PolarAlignStages): which one this run measures (#2082: one per Start).
         private string? _stage;
+        // #2082 — the camera this run measures with (PolarAlignCameras), and whether a point of its measurement stayed
+        // scattered after its retake. Guarded by _gate.
+        private string? _camera;
+        private bool _measurementNoisy;
         private int _checkSolvesDone;
         private PolarAlignCheckResultDto? _checkResult;
         // #2082 — the last run's readout (any measurement that ended with one: Stop, Done, a failure, a check's verdict), both
@@ -228,7 +233,9 @@ namespace OpenAstroAra.Server.Services {
                     LastResult: _lastResult,
                     Correction: _aligner,
                     // #2072 — the caution describes a live readout: shown only while one runs.
-                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null));
+                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null,
+                    Camera: _camera,
+                    MeasurementNoisy: _measurementNoisy));
             }
         }
 
@@ -255,6 +262,12 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The preview is best-effort; any fetch failure just means no image this time.")]
         public async Task<byte[]?> GetLiveFrameJpegAsync(CancellationToken ct) {
+            lock (_gate) {
+                if (_active && _camera == PolarAlignCameras.Main) {
+                    // #2082 — this run shoots the main camera: the guider's last frame is an older one, not this run's.
+                    return null;
+                }
+            }
             IGuideCaptureLink guiderClient;
             try {
                 guiderClient = _guider.ConnectedLink();
@@ -351,9 +364,16 @@ namespace OpenAstroAra.Server.Services {
             var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg);
             var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
-                stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg);
+                stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg,
+                CameraFor(stage ?? PolarAlignStages.Fine, settings));
             return (plan, new RunBand(awaySign, maxSweepDeg), sweep);
         }
+
+        /// <summary>#2082 — the camera a start at <paramref name="stage"/> measures with: the main camera for the coarse stage
+        /// ("Rough first (main camera)", offered after the guide camera could not solve the pole field), else the
+        /// profile's <c>polar_align.camera</c> — for the fine measurement, its live loop and the check alike.</summary>
+        internal static string CameraFor(string stage, PolarAlignSettingsDto settings) =>
+            stage == PolarAlignStages.Coarse ? PolarAlignCameras.Main : settings.Camera;
 
         /// <inheritdoc />
         public async Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct) {
@@ -491,14 +511,15 @@ namespace OpenAstroAra.Server.Services {
                 var (plan, band, sweep) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
                 ThrowIfNotConfirmed(confirmation, plan);
                 var mainCamera = _mainCamera;
-                if (stage == PolarAlignStages.Coarse) {
+                var camera = plan.Camera;
+                if (camera == PolarAlignCameras.Main) {
                     // Before the mount moves: a camera that is off would otherwise turn the mount and then
-                    // fail the seed as a sky problem.
-                    var coarseUnavailable = mainCamera is null
-                        ? "the coarse measurement needs the main camera's plate solver, which this daemon has not wired up — start the fine measurement instead"
+                    // fail the seed as a sky problem. The rough step, and every measurement with polar_align.camera = main.
+                    var mainUnavailable = mainCamera is null
+                        ? "a main-camera measurement needs the main camera's plate solver, which this daemon has not wired up — measure with the guide camera instead"
                         : await mainCamera.UnavailableReasonAsync(ct).ConfigureAwait(false);
-                    if (coarseUnavailable is not null) {
-                        throw new InvalidOperationException(coarseUnavailable);
+                    if (mainUnavailable is not null) {
+                        throw new InvalidOperationException(mainUnavailable);
                     }
                 }
                 // Every stage opens in its own first state: the run starts from where the mount points (#2048).
@@ -543,6 +564,8 @@ namespace OpenAstroAra.Server.Services {
                         _active = true;
                         _state = initialState;
                         _stage = stage;
+                        _camera = camera;
+                        _measurementNoisy = false;
                         _checkSolvesDone = 0;
                         _checkResult = null;
                         _readoutCaution = null;
@@ -585,8 +608,8 @@ namespace OpenAstroAra.Server.Services {
                 LogStartConfirmed(plan.Direction, plan.StepDeg, plan.MaxSweepDeg);
                 // `started` goes out BEFORE the run task exists: the run's first stage event is only a directory
                 // create and a few mount reads away, and a client must fold `started` first.
-                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
+                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage, ["camera"] = camera }).ConfigureAwait(false);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, camera, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
             } finally {
                 _opLock.Release();
@@ -870,7 +893,7 @@ namespace OpenAstroAra.Server.Services {
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
         private async Task RunRoutineAsync(
                 IGuideCaptureLink guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
-                RunBand band, int gen, int startSeq, RunEnd end, CancellationToken ct) {
+                string camera, RunBand band, int gen, int startSeq, RunEnd end, CancellationToken ct) {
             // Per-run unique dir: an abandoned (zombie) run and its successor must never share
             // files — this run's cleanup deletes only its own directory.
             var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align", Guid.NewGuid().ToString("N"));
@@ -966,15 +989,18 @@ namespace OpenAstroAra.Server.Services {
                 // Done; the check ends the run itself (state `checked`). It starts where the mount points: no Home, no GoTo
                 // back (#2048); its turns go the way the user confirmed.
                 ThrowIfStoppedFromOutside(gen); // #2066 — a stop from outside since the Start
-                if (stage == PolarAlignStages.Coarse) {
-                    // StartAsync refused a coarse start without the main camera's solver.
-                    await RunCoarseStageAsync(
-                        mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
-                        site, settings, band, renew, gen, ct).ConfigureAwait(false);
-                } else if (stage == PolarAlignStages.Fine) {
-                    await RunFineStageAsync(guiderClient, site, settings, band, workDir, renew, gen, ct).ConfigureAwait(false);
+                // #2082 — the camera the plan named: StartAsync refused a main-camera start without the main camera's solver.
+                var main = camera == PolarAlignCameras.Main
+                    ? mainCamera ?? throw new InvalidOperationException("a main-camera measurement started without a main-camera solver")
+                    : null;
+                if (stage != PolarAlignStages.Check) {
+                    if (main is not null) {
+                        await RunMainCameraStageAsync(stage, main, site, settings, band, renew, gen, ct).ConfigureAwait(false);
+                    } else {
+                        await RunFineStageAsync(guiderClient, site, settings, band, workDir, renew, gen, ct).ConfigureAwait(false);
+                    }
                 } else {
-                    var verdict = await RunCheckStageAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
+                    var verdict = await RunCheckStageAsync(guiderClient, main, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
                     // The check's verdict is a finished run: the mount is stopped and confirmed before the client hears of it.
                     if (await ExitMountOnceAsync(finished: true, "checked").ConfigureAwait(false) == false) {
                         throw new RoutineFailedException(MountDidNotStop, CutPowerSentence);
@@ -1196,25 +1222,68 @@ namespace OpenAstroAra.Server.Services {
 
         // ── capture + solve plumbing ─────────────────────────────────────────────────────────
 
-        /// <summary>Seed frames must solve — retry a few times, then fail the routine (a seed that
-        /// can't solve means clouds/focus problems the live loop can't fix either).</summary>
-        private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
+        /// <summary>#2082 — a point whose solves scatter more than this about their mean is retaken once; still over it,
+        /// the measurement is flagged noisy.</summary>
+        internal const double MaxPointScatterArcsec = 3.0;
+
+        /// <summary>One point of a measurement (a seed or a check point): <see cref="PolarAlignSettingsDto.FramesPerPoint"/>
+        /// frames with the mount still, averaged as unit vectors (#2082), with the rms scatter of the solves about their
+        /// mean logged in arcseconds. A point scattered over <see cref="MaxPointScatterArcsec"/> is retaken once; still
+        /// over it, the run goes on and its result is flagged noisy (<see cref="MarkMeasurementNoisy"/>). A frame that
+        /// does not solve is retried, up to <c>SeedSolveAttempts</c> failures per set; a set with no solve fails the
+        /// routine (a seed that can't solve means clouds/focus problems the live loop can't fix either).</summary>
+        /// <returns>The point's mean pointing and the mean time of its solves (the three-point fit moves each point to
+        /// the last one's time by the Earth's turn since it was taken).</returns>
+        private async Task<(PolarAlignSolveOutcome Point, DateTimeOffset At)> SolveSeedFrameAsync(
                 LiveCapture capture, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            var frames = Math.Clamp(settings.FramesPerPoint, PolarAlignSettingsClamp.MinFramesPerPoint, PolarAlignSettingsClamp.MaxFramesPerPoint);
+            var set = await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore: 0, gen, ct).ConfigureAwait(false);
+            LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
+            if (set.ScatterArcsec > MaxPointScatterArcsec) {
+                LogPointRetake(frameId, set.ScatterArcsec, MaxPointScatterArcsec);
+                set = await SolvePointSetAsync(capture, frameId, (set.Point.RaDegJnow, set.Point.DecDegJnow), settings, frames,
+                    attemptsBefore: set.Attempts, gen, ct).ConfigureAwait(false);
+                LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
+                if (set.ScatterArcsec > MaxPointScatterArcsec) {
+                    LogPointNoisy(frameId, set.ScatterArcsec);
+                    MarkMeasurementNoisy(gen);
+                }
+            }
+            return (set.Point, set.At);
+        }
+
+        /// <summary>One set of a point's frames (<see cref="SolveSeedFrameAsync"/>).</summary>
+        private sealed record PointSet(PolarAlignSolveOutcome Point, DateTimeOffset At, int Solved, int Failed, double ScatterArcsec, int Attempts);
+
+        /// <param name="attemptsBefore">The frames this point took already (a retake): frame ids stay unique.</param>
+        private async Task<PointSet> SolvePointSetAsync(
+                LiveCapture capture, string frameId, (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings,
+                int frames, int attemptsBefore, int gen, CancellationToken ct) {
             var anyFrameReachedSolver = false;
             string? keptFrame = null;
-            for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
-                var timing = new FrameTiming { KeepUnsolvedFrame = attempt == SeedSolveAttempts };
-                // One id per attempt, on frame_started and frame_complete alike.
+            var solves = new List<(PolarAlignSolveOutcome S, DateTimeOffset At)>(frames);
+            var failed = 0;
+            var attempt = attemptsBefore;
+            var frameHint = hint;
+            while (solves.Count < frames && failed < SeedSolveAttempts) {
+                attempt++;
+                // The frame kept for the focal-length measurement: the last one a set with no solve may take.
+                var timing = new FrameTiming { KeepUnsolvedFrame = solves.Count == 0 && failed == SeedSolveAttempts - 1 };
+                // One id per frame, on frame_started and frame_complete alike.
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
-                var s = await capture(attemptId, hint, settings, timing, ct).ConfigureAwait(false);
-                await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
-                // #2066 — a stop during the exposure or the solve: no further attempt, and no turn after it.
+                var s = await capture(attemptId, frameHint, settings, timing, ct).ConfigureAwait(false);
+                var at = DateTimeOffset.UtcNow;
+                await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : failed + 1).ConfigureAwait(false);
+                // #2066 — a stop during the exposure or the solve: no further frame, and no turn after it.
                 ThrowIfStoppedFromOutside(gen);
                 keptFrame = timing.KeptFramePath;
                 if (s.Success) {
-                    return s;
+                    solves.Add((s, at));
+                    frameHint = (s.RaDegJnow, s.DecDegJnow); // the mount is still: the next frame solves near this one
+                    continue;
                 }
+                failed++;
                 // _lastCaptureFault reflects THIS attempt (set on any capture-layer fault, cleared
                 // when the fetch delivers a frame to the solver) — a null here means the attempt
                 // failed in the SOLVER, i.e. a real focus/sky problem exists regardless of what the
@@ -1226,6 +1295,12 @@ namespace OpenAstroAra.Server.Services {
                         anyFrameReachedSolver = true;
                     }
                 }
+            }
+            if (solves.Count > 0) {
+                var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.ConvertAll(p => (p.S.RaDegJnow, p.S.DecDegJnow)));
+                var first = solves[0].At;
+                var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
+                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec), meanAt, solves.Count, failed, scatter, attempt);
             }
             string? captureFault;
             lock (_gate) {
@@ -1241,6 +1316,16 @@ namespace OpenAstroAra.Server.Services {
             throw new RoutineFailedException("seed_solve_failed",
                 $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the optics configuration of the camera in use"
                 + (measured is { } mm ? $". With no scale hint the frame solves at a scale that implies a guide focal length of about {mm:0} mm: set it in Settings → Guiding if that is your guide scope" : ""));
+        }
+
+        /// <summary>#2082 — a point of this run's measurement stayed scattered after its retake: the status, each progress
+        /// event and the check's verdict say the readout rests on noisy solves.</summary>
+        private void MarkMeasurementNoisy(int gen) {
+            lock (_gate) {
+                if (_generation == gen) {
+                    _measurementNoisy = true;
+                }
+            }
         }
 
         /// <summary>#1715 — one solve with no scale hint on the last unsolved seed frame; null when it does not solve
@@ -1666,13 +1751,16 @@ namespace OpenAstroAra.Server.Services {
             var total = Math.Sqrt(altErrArcmin * altErrArcmin + azErrArcmin * azErrArcmin);
             string? stage;
             string? caution;
+            bool noisy;
             lock (_gate) {
                 stage = _stage;
                 caution = _readoutCaution;
+                noisy = _measurementNoisy;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
                 ["readout_caution"] = caution,
+                ["measurement_noisy"] = noisy,
                 ["iteration"] = iteration,
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),
                 ["azimuth_error_arcmin"] = Math.Round(azErrArcmin, 2),
@@ -1753,6 +1841,15 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4527, Level = LogLevel.Information, Message = "§45 polar-align {Frame} solved at RA {RaDeg:F4}° Dec {DecDeg:F4}° (JNOW)")]
         private partial void LogSeedSolve(string frame, double raDeg, double decDeg);
+
+        [LoggerMessage(EventId = 4574, Level = LogLevel.Information, Message = "§45 polar-align {Frame}: {Solved} solves averaged ({Failed} failed), mean RA {RaDeg:F5}° Dec {DecDeg:F5}° (JNOW), rms scatter {ScatterArcsec:F2}″")]
+        private partial void LogPointScatter(string frame, int solved, int failed, double raDeg, double decDeg, double scatterArcsec);
+
+        [LoggerMessage(EventId = 4575, Level = LogLevel.Information, Message = "§45 polar-align {Frame}: rms scatter {ScatterArcsec:F2}″ is over {LimitArcsec:F0}″ — retaking the point once")]
+        private partial void LogPointRetake(string frame, double scatterArcsec, double limitArcsec);
+
+        [LoggerMessage(EventId = 4576, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: still {ScatterArcsec:F2}″ rms after the retake — the result is flagged noisy")]
+        private partial void LogPointNoisy(string frame, double scatterArcsec);
 
         [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
         private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);

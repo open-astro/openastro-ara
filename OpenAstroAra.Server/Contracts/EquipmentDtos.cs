@@ -947,9 +947,11 @@ public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confir
 /// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
 /// <c>OriginOffsetDeg</c> is how far the RA axis has turned from the origin (signed: + east, − west), and
 /// <c>Direction</c> turns back toward it. No turn takes the axis more than <c>SweepLimitDeg</c> from the
-/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para></summary>
+/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para>
+/// <para>#2082 — <c>Camera</c> (<see cref="PolarAlignCameras"/>) is the camera the run measures with: <c>main</c> for the
+/// <c>coarse</c> stage ("Rough first"), else the profile's <c>polar_align.camera</c>.</para></summary>
 public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
-    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0);
+    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, string Camera = PolarAlignCameras.Guide);
 
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
 /// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
@@ -969,8 +971,9 @@ public static class PolarAlignDirections {
 /// with the mount's reported RA turns, the last run's readout for comparison (#2082: <c>FineErrorArcmin</c> keeps its
 /// wire name from when the fine stage led into the check; it is the readout of the last run that ended with one, null
 /// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
-/// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), and the verdict band
-/// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
+/// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
+/// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
+/// point stayed noisy after its retake (#2082, <c>Noisy</c>).</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -980,7 +983,9 @@ public sealed record PolarAlignCheckResultDto(
     double? FineErrorArcmin,
     double? FineDeltaArcmin,
     string Verdict,
-    DateTimeOffset MeasuredAt);
+    DateTimeOffset MeasuredAt,
+    // #2082 — a point of the check stayed scattered over 3″ after its retake (polar_align.frames_per_point).
+    bool Noisy = false);
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
@@ -1012,7 +1017,12 @@ public sealed record PolarAlignStateDto(
     PolarAlignCorrectionDto? Correction = null,
     // #2072 — a caution on the live readout from the last seed (PolarAlignReadoutCautions), also on each
     // polar_align.progress event; null when the readout is sound, before the first seed, and outside adjusting/paused.
-    string? ReadoutCaution = null);
+    string? ReadoutCaution = null,
+    // #2082 — the camera this run measures with (PolarAlignCameras); null before the first run.
+    string? Camera = null,
+    // #2082 — a point of this run's measurement stayed scattered over 3″ after its retake: the readout rests on noisy
+    // solves. Also on each polar_align.progress event. False before the first measurement.
+    bool MeasurementNoisy = false);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

@@ -14573,6 +14573,16 @@ components:
         stop_tracking_when_done:
           type: boolean
           default: true
+        camera:
+          type: string
+          default: guide
+        frames_per_point:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 3
     PolarAlignStartPlanDto:
       required:
         - stage
@@ -14623,6 +14633,9 @@ components:
             - string
           format: double
           default: 30
+        camera:
+          type: string
+          default: guide
     PolarAlignStartRequestDto:
       type: object
       properties:
