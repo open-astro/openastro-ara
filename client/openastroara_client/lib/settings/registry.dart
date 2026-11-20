@@ -565,8 +565,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.first_flip_confirmed',
     tier: SettingTier.advanced,
-    label: 'First-flip announce',
-    description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
+    label: 'Meridian flip confirmation',
+    description: 'Until you confirm a meridian flip on this profile, every flip posts a critical alert and waits 60 seconds before it starts — stop the run in that window if the scope could hit the mount. After a flip runs to the end, press Confirm here if the scope cleared the mount and the tripod and frames and guiding came back. Ara never confirms on its own; changing the optics train (or the Re-arm button here) asks again.',
     keywords: [
       'meridian',
       'flip',
@@ -586,21 +586,6 @@ const List<Setting> settingsRegistry = [
       'safety.policies.flip_safety_enabled',
       'safety.policies.meridian_flip_auto',
     ],
-  ),
-  Setting(
-    id: 'safety.policies.on_altitude_limit',
-    tier: SettingTier.advanced,
-    label: 'On altitude limit',
-    description: 'Action when a target drops below the minimum-altitude floor.',
-    keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
-    path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.enumValue([
-      'Skip target',
-      'Pause sequence',
-      'Abort sequence',
-    ]),
-    defaultValue: 'Skip target',
-    profilePath: 'safety.on_altitude_limit',
   ),
   Setting(
     id: 'safety.policies.park_if_no_more_targets',

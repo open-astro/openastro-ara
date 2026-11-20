@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -97,6 +98,53 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRearmSafety))));
     }
+  }
+
+  Future<void> _confirmFirstFlip() async {
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Not connected — connect to your rig to save this.'),
+        ),
+      );
+      return;
+    }
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).confirmFirstFlip(api);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Meridian flip confirmed — later flips run without the alert.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSave))));
+    }
+  }
+
+  /// #1589 — what the first-flip row says: not confirmed and no completed
+  /// flip, a completed flip waiting for the user's confirm, or confirmed.
+  static String _firstFlipStatus(SafetyPolicies s) {
+    final completed = s.firstFlipCompletedUtc;
+    if (s.firstFlipConfirmed) {
+      return 'Meridian flip confirmed: later flips run without the alert. '
+          'Re-arm after re-balancing or a rig change.';
+    }
+    if (completed == null) {
+      return 'Meridian flip not confirmed yet: every flip alerts and waits '
+          '60 s. Watch one flip from start to end, then confirm it here.';
+    }
+    final when = DateFormat('yyyy-MM-dd HH:mm').format(completed.toLocal());
+    final pier = s.firstFlipPierSideChanged
+        ? 'the mount reported its pier side changed'
+        : 'the mount did not report its pier side — check by eye';
+    return 'A flip completed at $when: $pier. Confirm if the scope cleared '
+        'the mount and the tripod, and frames and guiding came back.';
   }
 
   ProfileApi? _api() {
@@ -333,23 +381,30 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             if (v != null) n.setUnattendedShutdownWaitMinutes(v);
           },
         ),
-        // §58.8 — first-flip announce status + manual re-arm. The daemon owns
-        // the flag (set after the first announced flip, cleared automatically
-        // on an optics change); the panel offers only the one-way re-arm, so
-        // there is no way to silently skip the announce.
+        // §58.8 / #1589 — first-flip status, Confirm and Re-arm. The daemon
+        // owns the fields: it records a flip that ran to the end, and only
+        // the user confirms it, here, once one is on record. Re-arm (and an
+        // optics change) asks again.
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  s.firstFlipConfirmed
-                      ? 'First-flip announce: already ran — later flips '
-                            'are silent. Re-arm after re-balancing or a rig change.'
-                      : 'First-flip announce: armed — the next meridian '
-                            'flip alerts and waits 60 s before proceeding.',
+                  _firstFlipStatus(s),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                key: const Key('confirm_first_flip'),
+                // Immediate daemon round-trip, like Re-arm: the confirmation
+                // is daemon-owned and the general Save can't touch it.
+                onPressed: !s.firstFlipConfirmed &&
+                        s.firstFlipCompletedUtc != null
+                    ? _confirmFirstFlip
+                    : null,
+                child: const Text('Confirm'),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
@@ -363,20 +418,9 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             ],
           ),
         ),
-        const SettingsSectionHeader('On altitude limit'),
-        SettingsDropdownRow<AltitudeLimitAction>(
-          label: 'Action',
-          helpKey: 'safety.policies.on_altitude_limit',
-          value: s.onAltitudeLimit,
-          items: const {
-            AltitudeLimitAction.skipTarget: 'Skip + advance to next target',
-            AltitudeLimitAction.pauseSequence: 'Pause sequence',
-            AltitudeLimitAction.abortSequence: 'Abort sequence',
-          },
-          onChanged: (v) {
-            if (v != null) n.setOnAltitudeLimit(v);
-          },
-        ),
+        // #1589 — the old "On altitude limit" action had no daemon behind it
+        // and is gone; the park switch stays.
+        const SettingsSectionHeader('When targets run out'),
         SettingsSwitchRow(
           label: 'Park if no more targets',
           value: s.parkIfNoMoreTargets,

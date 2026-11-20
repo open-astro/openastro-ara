@@ -30,8 +30,15 @@ namespace OpenAstroAra.Test {
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class FirstFlipConfirmationResetTest {
 
+        /// <summary>#1589 — a confirmation always comes with the completed flip it confirms; a stored
+        /// <c>true</c> without one is a legacy value the file store resets on its next write.</summary>
+        private static SafetyPoliciesDto Confirmed(SafetyPoliciesDto current) =>
+            current with { FirstFlipConfirmed = true, FirstFlipCompletedUtc = FlipInstant, FirstFlipPierSideChanged = true };
+
+        private static readonly DateTimeOffset FlipInstant = new(2026, 11, 20, 3, 0, 0, TimeSpan.Zero);
+
         private static void AssertResetSemantics(IProfileStore store) {
-            store.PutSafetyPolicies(store.GetSafetyPolicies() with { FirstFlipConfirmed = true });
+            store.PutSafetyPolicies(Confirmed(store.GetSafetyPolicies()));
             var optics = store.GetOpticsSettings();
 
             // Identical re-save (the panel's Save with nothing edited) keeps the confirmation.
@@ -48,7 +55,7 @@ namespace OpenAstroAra.Test {
             // (CameraService.MaybeAutoPopulateOptics) writes sensor dimensions through
             // UpdateOpticsSettings, and a swapped camera is exactly the rig change the
             // §58.8 net re-arms on.
-            store.PutSafetyPolicies(store.GetSafetyPolicies() with { FirstFlipConfirmed = true });
+            store.PutSafetyPolicies(Confirmed(store.GetSafetyPolicies()));
             var unchanged = store.UpdateOpticsSettings(current => current);
             Assert.That(store.GetSafetyPolicies().FirstFlipConfirmed, Is.True,
                 "a no-op Update (same reference / null) is not an equipment change");
@@ -85,6 +92,73 @@ namespace OpenAstroAra.Test {
                     .PreserveDaemonOwnedSafetyFields(optimisticIncoming, armedStored).FirstFlipConfirmed,
                 Is.False,
                 "nor can a client PUT ever CONFIRM a flip — only the executor does that");
+        }
+
+        [Test]
+        public void The_safety_PUT_merge_keeps_the_stored_completed_flip_record() {
+            // #1589 — the completed-flip record is daemon-owned too: a PUT can neither invent one
+            // (and so open the way to a confirm) nor clear the one the executor wrote.
+            var stored = new InMemoryProfileStore().GetSafetyPolicies();
+            var invented = stored with { FirstFlipCompletedUtc = FlipInstant, FirstFlipPierSideChanged = true };
+            var merged = OpenAstroAra.Server.Endpoints.ProfileEndpoints.PreserveDaemonOwnedSafetyFields(invented, stored);
+            Assert.That(merged.FirstFlipCompletedUtc, Is.Null, "a client cannot record a flip");
+            Assert.That(merged.FirstFlipPierSideChanged, Is.False);
+
+            var recorded = stored with { FirstFlipCompletedUtc = FlipInstant, FirstFlipPierSideChanged = true };
+            var stale = OpenAstroAra.Server.Endpoints.ProfileEndpoints.PreserveDaemonOwnedSafetyFields(stored, recorded);
+            Assert.That(stale.FirstFlipCompletedUtc, Is.EqualTo(FlipInstant), "a stale PUT keeps the executor's record");
+            Assert.That(stale.FirstFlipPierSideChanged, Is.True);
+        }
+
+        private static void AssertOpticsChangeClearsTheRecord(IProfileStore store) {
+            store.UpdateSafetyPolicies(current => current with { FirstFlipCompletedUtc = FlipInstant, FirstFlipPierSideChanged = true });
+            var optics = store.GetOpticsSettings();
+            store.PutOpticsSettings(optics);
+            Assert.That(store.GetSafetyPolicies().FirstFlipCompletedUtc, Is.EqualTo(FlipInstant), "an identical re-save keeps the record");
+
+            store.PutOpticsSettings(optics with { FocalLengthMm = optics.FocalLengthMm + 100 });
+            Assert.That(store.GetSafetyPolicies().FirstFlipCompletedUtc, Is.Null,
+                "a flip on the old optics train is nothing to confirm for the new one");
+            Assert.That(store.GetSafetyPolicies().FirstFlipPierSideChanged, Is.False);
+
+            store.UpdateSafetyPolicies(current => current with { FirstFlipCompletedUtc = FlipInstant });
+            store.UpdateOpticsSettings(current => current with { SensorWidthPx = current.SensorWidthPx + 1 });
+            Assert.That(store.GetSafetyPolicies().FirstFlipCompletedUtc, Is.Null, "the Update path clears it too");
+        }
+
+        [Test]
+        public void An_optics_change_clears_the_completed_flip_record_on_both_stores() {
+            AssertOpticsChangeClearsTheRecord(new InMemoryProfileStore());
+            var dir = Path.Combine(Path.GetTempPath(), "ara-firstflip-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                AssertOpticsChangeClearsTheRecord(new FileProfileStore(dir));
+            } finally {
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        [Test]
+        public void A_legacy_confirmation_with_no_completed_flip_loads_unconfirmed() {
+            // #1589 — before this change the executor wrote true as soon as the 60 s wait ended,
+            // before any flip ran: such a true proves nothing and is reset on load. A confirmation
+            // with its completed flip survives a reopen.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-firstflip-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                new FileProfileStore(dir).UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = true });
+                Assert.That(new FileProfileStore(dir).GetSafetyPolicies().FirstFlipConfirmed, Is.False,
+                    "a legacy true with no completed flip is not a confirmation");
+
+                new FileProfileStore(dir).UpdateSafetyPolicies(Confirmed);
+                var reopened = new FileProfileStore(dir).GetSafetyPolicies();
+                Assert.That(reopened.FirstFlipConfirmed, Is.True);
+                Assert.That(reopened.FirstFlipCompletedUtc, Is.EqualTo(FlipInstant));
+            } finally {
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
 
         [Test]

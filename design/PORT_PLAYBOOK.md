@@ -8547,7 +8547,7 @@ This is a starting suggestion; user adjusts for their specific setup. Pier heigh
 
 ### 58.5 Side-of-pier verification
 
-After the flip, ARA queries Alpaca's `SideOfPier`. If it didn't change (or driver returns `pierUnknown`), log a warning but continue — some Alpaca drivers lie about pier side. If the driver doesn't expose `SideOfPier` at all (`CanSetPierSide = false`), ARA infers pier side from hour angle. No brand-quirk database (per §52 Alpaca-only commitment).
+As soon as the flip slew returns, before the re-center, re-focus or guider restart, ARA reads Alpaca's `SideOfPier` and compares it with the value read before the slew (#1589). A changed pier side verifies the flip. An unknown pier side (`pierUnknown`, before or after) verifies nothing: log a warning and continue. An unchanged known pier side means the mount likely did not flip: with the §58.9 layers on (`flip_safety_enabled`, the default) the flip fails there and goes to the Layer-4 safe rest, so nothing re-centers or guides an unflipped mount; with them off, ARA posts a Warning notification at once and continues, because some Alpaca drivers lie about pier side. No brand-quirk database (per §52 Alpaca-only commitment).
 
 ### 58.6 Profile schema
 
@@ -8587,7 +8587,7 @@ All equipment-impacting failures are subject to the unattended-safety pipeline i
 
 ### 58.8 First-flip confirmation safety net
 
-When a profile fires its meridian-flip trigger **for the first time** (`first_flip_confirmed: false`), instead of flipping autonomously, ARA sends a critical notification ~60 seconds before the flip:
+When a profile with no confirmed flip (`first_flip_confirmed: false`) fires its meridian-flip trigger, instead of flipping autonomously, ARA sends a critical notification ~60 seconds before the flip:
 
 > ⚠ **First meridian flip on this profile**
 >
@@ -8595,7 +8595,7 @@ When a profile fires its meridian-flip trigger **for the first time** (`first_fl
 >
 > [Proceed] [Pause sequence — let me check]
 
-If user confirms or doesn't respond in 60 s, flip proceeds. Sets `first_flip_confirmed: true` on the profile so subsequent flips run silently. Reset on any equipment change in the profile (the safety net assumes the rig hasn't changed since user verified).
+If the user doesn't stop the run in 60 s, the flip proceeds. The wait is not a confirmation (#1589): every flip announces and waits until the user confirms one. When a flip runs to the end on an unconfirmed profile, ARA records it (`first_flip_completed_utc`, and `first_flip_pier_side_changed`: false when the mount reported no pier side) and posts a Warning asking the user to confirm it. The user confirms in Settings → Unattended running → When to stop (`POST /api/v1/profile/safety/first-flip/confirm`) if the scope cleared the mount and the tripod and frames and guiding came back; that sets `first_flip_confirmed: true` so later flips run silently. With no completed flip on record the confirm is refused (`first-flip-not-completed`). A flip that fails, is stopped, or keeps the same pier side records nothing. ARA never confirms on its own. Re-arm, a shared profile and an optics-train change clear the confirmation and the record (the safety net assumes the rig hasn't changed since the user verified). A stored `true` with no completed flip on record (written by the earlier executor, which confirmed when its 60 s wait ended) loads as unconfirmed.
 
 Catches the one failure mode that actually breaks gear: user creates a new profile, gets the timing number wrong, OTA tries to flip into the tripod. The 60-second pause is cheap insurance.
 
@@ -8784,7 +8784,7 @@ Beyond the §46.3 catalog entries (`meridian_flip.imminent` info, `meridian_flip
 |---|---|---|
 | `GET` | `/api/v1/meridian-flip/state` | Current flip state (idle/imminent/executing/complete/failed); time-to-next-flip estimate |
 | `POST` | `/api/v1/meridian-flip/skip` | Skip the upcoming flip; advance to next target instead |
-| `POST` | `/api/v1/meridian-flip/confirm-first` | User confirms the first-flip prompt (§58.8) |
+| `POST` | `/api/v1/profile/safety/first-flip/confirm` | User confirms the profile's completed flip (§58.8, #1589); `/api/v1/profile/safety/first-flip/rearm` asks again |
 | `GET` | `/api/v1/preflight/today` | Pre-sleep checklist data (§58.14) |
 | `POST` | `/api/v1/unattended-shutdown/acknowledge` | User acknowledges urgent failure, cancels countdown |
 

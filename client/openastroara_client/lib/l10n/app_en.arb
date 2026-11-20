@@ -8583,6 +8583,8 @@
     "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
     "placeholders": {"offset": {"type": "String"}}
   },
+  "refusalFirstFlipNotCompleted": "No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.",
+  "@refusalFirstFlipNotCompleted": {"description": "Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",

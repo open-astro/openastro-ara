@@ -53,7 +53,8 @@ class SafetyPolicies {
   final String unattendedWindowStart;
   final String unattendedWindowEnd;
 
-  // On altitude limit.
+  // Unused (#1589): no daemon code reads on_altitude_limit and the panel no
+  // longer shows it. Kept only so the field round-trips on the wire.
   final AltitudeLimitAction onAltitudeLimit;
   final bool parkIfNoMoreTargets;
 
@@ -75,11 +76,18 @@ class SafetyPolicies {
   // min(3 × this, 5 min).
   final int expectedFlipSlewSeconds;
 
-  // §58.8 — whether this profile's one-time first-flip announce has already
-  // run (true = later flips are silent). The daemon sets it after the first
-  // announced flip and clears it on an optics change; the panel shows the
-  // state and offers a manual re-arm (set back to false).
+  // §58.8 — whether the user confirmed a completed meridian flip on this
+  // profile (true = later flips are silent). Until then every flip alerts and
+  // waits 60 s. The daemon owns it: the user confirms through
+  // [ProfileApi.confirmFirstFlip] (#1589) after a flip completed, and re-arm
+  // or an optics change clears it.
   final bool firstFlipConfirmed;
+
+  // #1589 — the last flip that ran to the end while the profile was not
+  // confirmed (null = none), and whether the mount reported its pier side
+  // changing (false = the mount did not report its pier side). Daemon-owned.
+  final DateTime? firstFlipCompletedUtc;
+  final bool firstFlipPierSideChanged;
 
   // §58.10 — bump equipment-impacting notification severities one level while
   // the site sits in astronomical darkness. Default on.
@@ -153,6 +161,8 @@ class SafetyPolicies {
     this.flipSafetyEnabled = true,
     this.expectedFlipSlewSeconds = 90,
     this.firstFlipConfirmed = false,
+    this.firstFlipCompletedUtc,
+    this.firstFlipPierSideChanged = false,
     this.unattendedEscalation = true,
     this.unattendedShutdownEnabled = true,
     this.unattendedShutdownWaitMinutes = 30,
@@ -197,6 +207,9 @@ class SafetyPolicies {
     bool? flipSafetyEnabled,
     int? expectedFlipSlewSeconds,
     bool? firstFlipConfirmed,
+    DateTime? firstFlipCompletedUtc,
+    bool clearFirstFlipCompletedUtc = false,
+    bool? firstFlipPierSideChanged,
     bool? unattendedEscalation,
     bool? unattendedShutdownEnabled,
     int? unattendedShutdownWaitMinutes,
@@ -247,6 +260,11 @@ class SafetyPolicies {
         expectedFlipSlewSeconds:
             expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
         firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
+        firstFlipCompletedUtc: clearFirstFlipCompletedUtc
+            ? null
+            : firstFlipCompletedUtc ?? this.firstFlipCompletedUtc,
+        firstFlipPierSideChanged:
+            firstFlipPierSideChanged ?? this.firstFlipPierSideChanged,
         unattendedEscalation:
             unattendedEscalation ?? this.unattendedEscalation,
         unattendedShutdownEnabled:
@@ -276,6 +294,16 @@ class SafetyPolicies {
         skyFlatStopAtMaxAdu: skyFlatStopAtMaxAdu ?? this.skyFlatStopAtMaxAdu,
         skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
         skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
+      );
+
+  /// This state with the daemon-owned first-flip fields taken from [echoed]
+  /// (the daemon's answer to a confirm or a re-arm); every other field keeps
+  /// its local value, so unsaved panel edits survive.
+  SafetyPolicies withFirstFlipFrom(SafetyPolicies echoed) => copyWith(
+        firstFlipConfirmed: echoed.firstFlipConfirmed,
+        firstFlipCompletedUtc: echoed.firstFlipCompletedUtc,
+        clearFirstFlipCompletedUtc: echoed.firstFlipCompletedUtc == null,
+        firstFlipPierSideChanged: echoed.firstFlipPierSideChanged,
       );
 }
 
@@ -353,8 +381,6 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
     state = state.copyWith(expectedFlipSlewSeconds: v);
   }
 
-  void setOnAltitudeLimit(AltitudeLimitAction a) =>
-      state = state.copyWith(onAltitudeLimit: a);
   void setParkIfNoMoreTargets(bool v) =>
       state = state.copyWith(parkIfNoMoreTargets: v);
   void setOnGuiderLost(GuiderLostAction a) =>
@@ -448,20 +474,28 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
 
-  /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
-  /// or any rig change the optics-based auto-reset can't see). Goes straight
-  /// to the daemon's dedicated endpoint — the flag is DAEMON-owned (the flip
-  /// executor sets it out-of-band, and the general safety PUT ignores it), so
-  /// a local-only mutation deferred to Save could clobber or be clobbered by
-  /// an overnight flip. State refreshes from the daemon's echoed policies.
+  /// §58.8 — re-arm the first-flip announce (e.g. after re-balancing or any
+  /// rig change the optics-based auto-reset can't see). Goes straight to the
+  /// daemon's dedicated endpoint — the fields are DAEMON-owned (the flip
+  /// executor records a completed flip out-of-band, and the general safety PUT
+  /// ignores them), so a local-only mutation deferred to Save could clobber or
+  /// be clobbered by an overnight flip.
   Future<void> rearmFirstFlip(ProfileApi api) async {
     final echoed = await api.rearmFirstFlip();
-    // Patch ONLY the daemon-owned flag into local state: the echo carries the
+    // Patch ONLY the daemon-owned fields into local state: the echo carries the
     // PERSISTED policies, and replacing the whole object would silently
     // discard any unsaved edits staged in the panel — the same stale-snapshot
-    // clobber class the server-side merge closes for the daemon-owned field,
-    // mirrored here for the thirteen user-owned ones.
-    state = state.copyWith(firstFlipConfirmed: echoed.firstFlipConfirmed);
+    // clobber class the server-side merge closes for the daemon-owned fields.
+    state = state.withFirstFlipFrom(echoed);
+  }
+
+  /// #1589 — confirm the profile's completed meridian flip (the user watched
+  /// it). Straight to the daemon's endpoint, like [rearmFirstFlip]: the
+  /// confirmation is daemon-owned. Patches only the daemon-owned fields from
+  /// the echo, so unsaved panel edits survive.
+  Future<void> confirmFirstFlip(ProfileApi api) async {
+    final echoed = await api.confirmFirstFlip();
+    state = state.withFirstFlipFrom(echoed);
   }
 
   Future<void> hydrateFromServer(ProfileApi api) =>

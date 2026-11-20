@@ -1845,6 +1845,7 @@
   "refusalPolarAlignMountParked": "A montagem está estacionada. Tire-a do estacionamento e aponte-a perto do polo primeiro.",
   "refusalPolarAlignUnconfirmed": "O alinhamento polar só move a montagem depois que você confirmar. Inicie de novo e confirme.",
   "refusalPolarAlignSweepLimit": "A montagem girou {offset}° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.",
+  "refusalFirstFlipNotCompleted": "Nenhuma virada de meridiano terminou neste perfil ainda. Acompanhe uma virada do início ao fim e depois confirme.",
   "polarConfirmTitle": "Antes de a montagem se mover",
   "polarConfirmPoint": "Aponte o tubo perto do polo, com os contrapesos para baixo.",
   "polarConfirmTurns": "A AR vai girar cerca de {step}° duas vezes em direção ao {direction} ({total}° no total).",

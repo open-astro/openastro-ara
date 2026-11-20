@@ -246,6 +246,8 @@ public sealed record SafetyPoliciesDto(
     int MeridianPauseMin,
     bool MeridianRecenter,
     bool MeridianRecalGuider,
+    // Unused (#1589): no daemon code reads it, and the client no longer shows it. It stays on the
+    // wire so older clients and profile files keep round-tripping; it is to be removed later.
     string OnAltitudeLimit,
     bool ParkIfNoMoreTargets,
     string OnGuiderLost,
@@ -271,12 +273,13 @@ public sealed record SafetyPoliciesDto(
     // timeout is min(3 × this, 5 minutes).
     int ExpectedFlipSlewSeconds = 90,
     // §58.8 — the first-flip confirmation safety net: false (a fresh profile / a changed rig)
-    // means the NEXT flip announces itself with a critical notification and a 60 s
+    // means EVERY flip announces itself with a critical notification and a 60 s
     // proceed-on-timeout window instead of flipping silently — the one failure mode that
     // actually breaks gear is a new profile with a wrong pause value flipping the OTA into
-    // the tripod. Set true by the executor after that first announced flip; reset to false
-    // when the optics train changes (the ARA equivalent of the spec's "equipment change in
-    // the profile" — see FileProfileStore.PutOpticsSettings).
+    // the tripod. #1589: set true only by the user (POST /safety/first-flip/confirm), after a
+    // flip ran to the end and was recorded in FirstFlipCompletedUtc; until then every flip
+    // announces. Reset to false when the optics train changes (the ARA equivalent of the
+    // spec's "equipment change in the profile" — see FileProfileStore.PutOpticsSettings).
     bool FirstFlipConfirmed = false,
     // §58.10 — bump equipment-impacting notification severities one level (Warning→Error,
     // Error→Critical) while the site sits in astronomical darkness, so the §35.5 alarm
@@ -379,7 +382,15 @@ public sealed record SafetyPoliciesDto(
     string? UnattendedWindowEnd = null,
     // Panel flats aim for this share of the camera's own full scale (its MaxADU, so 12-, 14- and
     // 16-bit cameras all land mid-range), measured as the median of the frame's central area.
-    double FlatTargetPercent = 50);
+    double FlatTargetPercent = 50,
+    // §58.8 (#1589) — the profile's last meridian flip that ran to the end while the profile was
+    // not confirmed: when it completed (UTC) and whether the mount reported a pier-side change
+    // (false = the mount reported an unknown pier side; a pier side that stayed the same fails or
+    // records nothing). Daemon-owned like FirstFlipConfirmed: only the flip executor writes them,
+    // POST /safety/first-flip/confirm needs them, and re-arm, a share and an optics change clear
+    // them. Optional ctor defaults keep an older profile.json deserializing.
+    DateTimeOffset? FirstFlipCompletedUtc = null,
+    bool FirstFlipPierSideChanged = false);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

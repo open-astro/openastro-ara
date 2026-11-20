@@ -56,7 +56,6 @@ void main() {
       expect(s.meridianPauseMin, 5);
       expect(s.meridianRecenter, isTrue);
       expect(s.meridianRecalGuider, isTrue);
-      expect(s.onAltitudeLimit, AltitudeLimitAction.skipTarget);
       expect(s.parkIfNoMoreTargets, isTrue);
       expect(s.onGuiderLost, GuiderLostAction.pauseAndRetry);
       expect(s.guiderRetryTimeoutSec, 60);
@@ -88,11 +87,9 @@ void main() {
     test('action enum setters switch policy', () {
       final n = container.read(safetyPoliciesProvider.notifier);
       n.setOnUnsafe(UnsafeAction.abortAndPark);
-      n.setOnAltitudeLimit(AltitudeLimitAction.abortSequence);
       n.setOnGuiderLost(GuiderLostAction.skipTarget);
       final s = container.read(safetyPoliciesProvider);
       expect(s.onUnsafe, UnsafeAction.abortAndPark);
-      expect(s.onAltitudeLimit, AltitudeLimitAction.abortSequence);
       expect(s.onGuiderLost, GuiderLostAction.skipTarget);
     });
 
