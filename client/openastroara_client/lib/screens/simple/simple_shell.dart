@@ -428,6 +428,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
     }, fireImmediately: true);
     _watchDeviceFailures();
+    // #2044 — kept alive with the shell: a meridian stop shows its pill on any screen.
+    ref.listenManual(simpleMountLimitProvider, (_, _) {});
     // #2076 — a frame late, as a pill changes a provider.
     ref.listenManual(cameraStatusProvider, (_, next) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

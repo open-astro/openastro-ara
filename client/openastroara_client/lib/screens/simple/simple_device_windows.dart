@@ -71,6 +71,7 @@ import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
+import 'simple_mount_limits.dart';
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/adaptive_controls.dart';
@@ -512,27 +513,34 @@ List<Widget> _versions(BuildContext context, DeviceDriver? d) {
 /// under each other line up as one column.
 const double kSimpleWindowControlWidth = 216;
 
-/// − value +, for a device window's numbers (refocus, dither).
+/// − value +, for a device window's numbers (refocus, dither). A null
+/// [onLess] or [onMore] disables that button (the value is at its end);
+/// [lessLabel] and [moreLabel] replace what a screen reader hears for them
+/// ("Raise lowest altitude", #2044).
 Widget simpleWindowStepper({
   required String id,
   required String text,
   // What it changes: read with Less and More on the buttons.
   String? name,
-  required VoidCallback onLess,
-  required VoidCallback onMore,
+  required VoidCallback? onLess,
+  required VoidCallback? onMore,
+  String? lessLabel,
+  String? moreLabel,
 }) {
   Widget button(
     String dir,
     IconData icon,
     String Function(AppLocalizations) label,
-    VoidCallback onTap,
+    String? spoken,
+    VoidCallback? onTap,
   ) => Builder(
     builder: (context) => IconButton(
       key: Key('$id-$dir'),
       onPressed: onTap,
       icon: Icon(
         icon,
-        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
+        semanticLabel: spoken ??
+            (name == null ? label(context.l10n) : '$name, ${label(context.l10n)}'),
       ),
     ),
   );
@@ -544,15 +552,20 @@ Widget simpleWindowStepper({
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        button('down', Icons.remove, (l) => l.deviceLess, onLess),
+        button('down', Icons.remove, (l) => l.deviceLess, lessLabel, onLess),
         // Gives way in a narrow window, keeping the buttons whole.
         Flexible(
           child: SizedBox(
             width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
-            child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
+            child: Text(
+              text,
+              key: Key('$id-value'),
+              textAlign: TextAlign.center,
+              style: kSimpleText,
+            ),
           ),
         ),
-        button('up', Icons.add, (l) => l.deviceMore, onMore),
+        button('up', Icons.add, (l) => l.deviceMore, moreLabel, onMore),
       ],
     ),
   );
@@ -1227,6 +1240,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
         ),
       );
+      // #2044 — under the switch: what the mount must not do.
+      children.add(const SimpleMountLimits());
       _addPadAndPointing(context, children, m, planRunning: planRunning);
     }
     if (widget.inSettings) {

@@ -28,6 +28,7 @@ import '../util/tonight_sky_local.dart'
 import '../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable;
 import 'ws/ws_providers.dart';
+import '../models/ws_event_types.dart';
 import '../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
@@ -1290,10 +1291,42 @@ final simpleMountStoppedProvider =
       SimpleMountStoppedNotifier.new,
     );
 
-/// #2044 — red stub.
+/// #2044 — the rig stopped tracking at a mount limit (`telescope.limit_reached`:
+/// the meridian, with the flip off): an error pill, and while the plan it
+/// paused stays paused, the same sentence as the run's reason (run state has
+/// no pause reason, as for [SimpleMountStoppedNotifier]).
 class SimpleMountLimitNotifier extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    ref.listen(wsEventsProvider, (_, next) {
+      final e = next.value;
+      if (e?.type != WsEventTypes.telescopeLimitReached) return;
+      final TelescopeLimitReachedPayload p;
+      try {
+        p = TelescopeLimitReachedPayload.fromJson(e!.payload);
+      } on TypeError {
+        return;
+      }
+      final l = l10nFor(ref.read(appLocaleProvider));
+      final text = [
+        p.trackingStopped
+            ? l.limitStoppedMeridian(p.minutes)
+            : l.limitNotStoppedMeridian(p.minutes),
+        if (p.runsPaused > 0) l.limitPlanPaused,
+        l.limitDidntMove,
+      ].join(' ');
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.error, text, origin: SimpleStatusOrigin.mount);
+      state = p.runsPaused > 0 ? text : null;
+    });
+    ref.listen(sequenceRunStateProvider, (prev, next) {
+      if (simpleRunPaused(prev?.value?.state) && !simpleRunPaused(next.value?.state)) {
+        state = null;
+      }
+    });
+    return null;
+  }
 }
 
 final simpleMountLimitProvider =

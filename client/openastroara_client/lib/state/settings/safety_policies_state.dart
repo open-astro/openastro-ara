@@ -319,6 +319,24 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
     state = state.copyWith(meridianPauseMin: v);
   }
 
+  /// #2044 — Simple Mode's signed "At the meridian" (see [meridianTimingMin]).
+  void setMeridianTimingMin(int v) => state = withMeridianTimingMin(state, v);
+
+  /// #2044 — puts back the three flip-window fields of [old] (a failed save),
+  /// leaving every other field as it is now.
+  void restoreMeridianWindow(SafetyPolicies old) => state = state.copyWith(
+    meridianPauseMin: old.meridianPauseMin,
+    minutesAfterMeridian: old.minutesAfterMeridian,
+    maxMinutesAfterMeridian: old.maxMinutesAfterMeridian,
+  );
+
+  /// #2044 — minutes before the meridian at which the rig stops tracking with
+  /// the flip off; 0 = off.
+  void setStopBeforeMeridianMin(int v) {
+    if (v < 0) return;
+    state = state.copyWith(stopBeforeMeridianMin: v);
+  }
+
   void setMeridianRecenter(bool v) =>
       state = state.copyWith(meridianRecenter: v);
 
@@ -495,11 +513,18 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
 /// which the daemon treats as a hard stop); positive = keep tracking that long
 /// after it, then flip ([SafetyPolicies.minutesAfterMeridian], the window's
 /// end 5 min later); 0 = flip on it.
-int meridianTimingMin(SafetyPolicies p) => throw UnimplementedError();
+int meridianTimingMin(SafetyPolicies p) =>
+    p.meridianPauseMin > 0 ? -p.meridianPauseMin : p.minutesAfterMeridian;
 
 /// #2044 — [p] with the signed value [v] written: only one side is non-zero.
-SafetyPolicies withMeridianTimingMin(SafetyPolicies p, int v) =>
-    throw UnimplementedError();
+SafetyPolicies withMeridianTimingMin(SafetyPolicies p, int v) {
+  final after = v > 0 ? v : 0;
+  return p.copyWith(
+    meridianPauseMin: v < 0 ? -v : 0,
+    minutesAfterMeridian: after,
+    maxMinutesAfterMeridian: after + 5,
+  );
+}
 
 final safetyPoliciesProvider =
     NotifierProvider<SafetyPoliciesNotifier, SafetyPolicies>(

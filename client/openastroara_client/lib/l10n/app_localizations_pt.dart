@@ -6758,6 +6758,155 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String get limitsTitle => 'Limits';
+
+  @override
+  String get limitsLowestAltitude => 'Lowest altitude';
+
+  @override
+  String get limitsLowestRaise => 'Raise lowest altitude';
+
+  @override
+  String get limitsLowestLower => 'Lower lowest altitude';
+
+  @override
+  String limitsDegrees(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get limitsMeasuredHorizon => 'Your measured horizon';
+
+  @override
+  String get limitsMeasuredHorizonCaption =>
+      'Change it in Advanced Mode › Settings › Site.';
+
+  @override
+  String get limitsAtMeridian => 'At the meridian';
+
+  @override
+  String get limitsAtMeridianLater => 'Later at the meridian';
+
+  @override
+  String get limitsAtMeridianEarlier => 'Earlier at the meridian';
+
+  @override
+  String limitsMinBefore(int n) {
+    return '$n min before';
+  }
+
+  @override
+  String get limitsOnMeridian => 'On it';
+
+  @override
+  String limitsMinAfter(int n) {
+    return '$n min after';
+  }
+
+  @override
+  String limitsCaptionBefore(int n) {
+    return 'Stops tracking $n min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.';
+  }
+
+  @override
+  String get limitsCaptionOn =>
+      'Flips as soon as the target crosses the meridian.';
+
+  @override
+  String limitsCaptionAfter(int n) {
+    return 'Keeps tracking $n min past the meridian, then flips.';
+  }
+
+  @override
+  String get limitsStopBefore => 'Stop before meridian';
+
+  @override
+  String get limitsStopBeforeRaise => 'Raise stop before meridian';
+
+  @override
+  String get limitsStopBeforeLower => 'Lower stop before meridian';
+
+  @override
+  String limitsMinutes(int n) {
+    return '$n min';
+  }
+
+  @override
+  String limitsStopCaption(int n) {
+    return 'Stops tracking and pauses the plan $n min before the meridian.';
+  }
+
+  @override
+  String get limitsStopCaptionOff =>
+      'The mount tracks through the meridian. Only its own firmware limit stops it.';
+
+  @override
+  String limitsPillLowest(int deg) {
+    return 'Lowest altitude $deg°';
+  }
+
+  @override
+  String limitsPillBefore(int n) {
+    return 'Stops tracking $n min before the meridian, flips after it';
+  }
+
+  @override
+  String get limitsPillOn => 'Flips at the meridian';
+
+  @override
+  String limitsPillAfter(int n) {
+    return 'Flips $n min after the meridian';
+  }
+
+  @override
+  String limitsPillStop(int n) {
+    return 'Stop before meridian $n min';
+  }
+
+  @override
+  String get limitsPillStopOff => 'Stop before meridian off';
+
+  @override
+  String get limitsCouldntSave => 'Couldn\'t save the limit';
+
+  @override
+  String limitsArcLabel(int deg) {
+    return 'Allowed sky from $deg° to the zenith';
+  }
+
+  @override
+  String get limitsArcTooLow => 'too low';
+
+  @override
+  String get limitsArcOk => 'OK';
+
+  @override
+  String get limitsArcHorizon => 'horizon';
+
+  @override
+  String limitStoppedMeridian(int n) {
+    return 'Tracking stopped $n min before the meridian.';
+  }
+
+  @override
+  String limitNotStoppedMeridian(int n) {
+    return 'The mount didn\'t stop tracking $n min before the meridian. Stop it by hand.';
+  }
+
+  @override
+  String get limitPlanPaused => 'Plan paused.';
+
+  @override
+  String get limitDidntMove => 'Ara didn\'t move the mount.';
+
+  @override
+  String get searchSettingMountLimits => 'Mount limits';
+
+  @override
+  String get searchWordsMountLimits =>
+      'limit horizon altitude lowest meridian stop flip';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13568,4 +13717,152 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clockWrongStartAnyway => 'Iniciar mesmo assim';
+
+  @override
+  String get limitsTitle => 'Limites';
+
+  @override
+  String get limitsLowestAltitude => 'Altitude mínima';
+
+  @override
+  String get limitsLowestRaise => 'Aumentar altitude mínima';
+
+  @override
+  String get limitsLowestLower => 'Diminuir altitude mínima';
+
+  @override
+  String limitsDegrees(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get limitsMeasuredHorizon => 'Seu horizonte medido';
+
+  @override
+  String get limitsMeasuredHorizonCaption =>
+      'Altere no Modo Avançado › Configurações › Local.';
+
+  @override
+  String get limitsAtMeridian => 'No meridiano';
+
+  @override
+  String get limitsAtMeridianLater => 'Mais tarde no meridiano';
+
+  @override
+  String get limitsAtMeridianEarlier => 'Mais cedo no meridiano';
+
+  @override
+  String limitsMinBefore(int n) {
+    return '$n min antes';
+  }
+
+  @override
+  String get limitsOnMeridian => 'Nele';
+
+  @override
+  String limitsMinAfter(int n) {
+    return '$n min depois';
+  }
+
+  @override
+  String limitsCaptionBefore(int n) {
+    return 'Para o rastreamento $n min antes do meridiano, espera ele passar e então vira. Para um telescópio que pode tocar o tripé ali.';
+  }
+
+  @override
+  String get limitsCaptionOn => 'Vira assim que o alvo cruza o meridiano.';
+
+  @override
+  String limitsCaptionAfter(int n) {
+    return 'Continua rastreando $n min após o meridiano e então vira.';
+  }
+
+  @override
+  String get limitsStopBefore => 'Parar antes do meridiano';
+
+  @override
+  String get limitsStopBeforeRaise => 'Aumentar parar antes do meridiano';
+
+  @override
+  String get limitsStopBeforeLower => 'Diminuir parar antes do meridiano';
+
+  @override
+  String limitsMinutes(int n) {
+    return '$n min';
+  }
+
+  @override
+  String limitsStopCaption(int n) {
+    return 'Para o rastreamento e pausa o plano $n min antes do meridiano.';
+  }
+
+  @override
+  String get limitsStopCaptionOff =>
+      'A montagem rastreia através do meridiano. Só o limite do próprio firmware a para.';
+
+  @override
+  String limitsPillLowest(int deg) {
+    return 'Altitude mínima $deg°';
+  }
+
+  @override
+  String limitsPillBefore(int n) {
+    return 'Para o rastreamento $n min antes do meridiano, vira depois dele';
+  }
+
+  @override
+  String get limitsPillOn => 'Vira no meridiano';
+
+  @override
+  String limitsPillAfter(int n) {
+    return 'Vira $n min depois do meridiano';
+  }
+
+  @override
+  String limitsPillStop(int n) {
+    return 'Parar antes do meridiano $n min';
+  }
+
+  @override
+  String get limitsPillStopOff => 'Parar antes do meridiano desligado';
+
+  @override
+  String get limitsCouldntSave => 'Não foi possível salvar o limite';
+
+  @override
+  String limitsArcLabel(int deg) {
+    return 'Céu permitido de $deg° até o zênite';
+  }
+
+  @override
+  String get limitsArcTooLow => 'baixo demais';
+
+  @override
+  String get limitsArcOk => 'OK';
+
+  @override
+  String get limitsArcHorizon => 'horizonte';
+
+  @override
+  String limitStoppedMeridian(int n) {
+    return 'Rastreamento parado $n min antes do meridiano.';
+  }
+
+  @override
+  String limitNotStoppedMeridian(int n) {
+    return 'A montagem não parou de rastrear $n min antes do meridiano. Pare-a manualmente.';
+  }
+
+  @override
+  String get limitPlanPaused => 'Plano pausado.';
+
+  @override
+  String get limitDidntMove => 'O Ara não moveu a montagem.';
+
+  @override
+  String get searchSettingMountLimits => 'Limites da montagem';
+
+  @override
+  String get searchWordsMountLimits =>
+      'limite horizonte altitude mínima meridiano parar virada';
 }

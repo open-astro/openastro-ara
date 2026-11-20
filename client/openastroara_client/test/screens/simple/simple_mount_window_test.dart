@@ -88,7 +88,10 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          // Scrolls, as the shell's window does: the Limits group (#2044) makes it tall.
+          child: SingleChildScrollView(
+            child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          ),
         ),
       ),
     ),
@@ -143,6 +146,16 @@ void main() {
     expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'one pill, not one per tap');
     await tester.pump(const Duration(seconds: 11));
     expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades like a result');
+  });
+
+  testWidgets('the Limits group sits under the Meridian flip switch, in the window and in Settings (#2044)', (tester) async {
+    for (final inSettings in [false, true]) {
+      await _pump(tester, _wire(), inSettings: inSettings);
+      final flip = tester.getTopLeft(find.byKey(const Key('simple-window-row-Meridian flip')));
+      final limits = tester.getTopLeft(find.byKey(const Key('simple-mount-limits')));
+      expect(limits.dy, greaterThan(flip.dy));
+      expect(find.text('LIMITS'), findsOneWidget);
+    }
   });
 
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {

@@ -117,6 +117,7 @@ void main() {
     await tester.pumpAndSettle();
     expect((rig.safety.meridianPauseMin, rig.safety.minutesAfterMeridian), (0, 0));
     expect(c.read(simpleMessagesProvider).map((m) => m.title), ['Flips at the meridian', 'Lowest altitude 25°']);
+    await tester.pump(kSimpleResultLife); // the pills fade
   });
 
   testWidgets('the steppers stop at their ends', (tester) async {
@@ -141,6 +142,7 @@ void main() {
     }
     expect(_value(tester, 'simple-mount-stop-before'), '30 min');
     expect(_enabled(tester, 'simple-mount-stop-before-up'), isFalse);
+    await tester.pump(kSimpleResultLife); // the pills fade
   });
 
   testWidgets('a failed save puts the old value back and says it could not save', (tester) async {

@@ -2142,6 +2142,7 @@ class SimpleRunPanel extends ConsumerWidget {
     final remaining = info?.estimatedRemainingSeconds;
     final paused = simpleRunPaused(info?.state);
     final mountStopped = ref.watch(simpleMountStoppedProvider);
+    final limitReason = ref.watch(simpleMountLimitProvider);
     final imaging = info?.state?.isActive ?? false;
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
@@ -2174,6 +2175,13 @@ class SimpleRunPanel extends ConsumerWidget {
                 Text(
                   context.l10n.planMountStopped,
                   style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                ),
+              // #2044 — the meridian stop (flip off) paused it.
+              if (paused && limitReason != null)
+                Text(
+                  limitReason,
+                  key: const Key('simple-run-limit-reason'),
+                  style: kSimpleText.copyWith(color: AraColors.errorText),
                 ),
               if (remaining != null)
                 Text(
