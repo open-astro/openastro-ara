@@ -328,7 +328,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 SlewWatch.NoteSlewTarget(ra, dec);
             }
         }
-        _ = Task.Run(() => SlewInBackgroundAsync(client, ra, dec, sync, abortEpoch, motion), CancellationToken.None);
+        // #2066 — the GoTo's checks are done: its calls (the tracking enable, then the PUT) start here.
+        var reAbort = motion is long sending ? NoteMotionOnTheWire(sending) : Task.CompletedTask;
+        _ = Task.Run(() => SlewInBackgroundAsync(client, ra, dec, sync, abortEpoch, motion, reAbort), CancellationToken.None);
         return Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey);
     }
 
@@ -569,8 +571,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 return abortEpoch;
             }
             var bumped = BumpAbortEpoch(reason);
-            if (motion is long token && _pendingMotions.ContainsKey(token)) {
-                _pendingMotions[token] = bumped; // #2066 — the park or Find Home is as new as its own count
+            if (motion is long token && _pendingMotions.TryGetValue(token, out var note)) {
+                note.From = bumped; // #2066 — the park or Find Home is as new as its own count
             }
             return bumped;
         }
@@ -596,21 +598,35 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // reading each carries. A REST command carries its request's reading (a stop counted since then drops it, so it is no
     // newer than that stop); a mediator one, the count when it is sent. A raced GoTo whose latest count is a stop is not
     // aborted again when a command at least as new as that stop reached the mount: the user moved the mount after the stop,
-    // and an AbortSlew now would stop the newer move. A command still on its way when the raced GoTo returns may yet be
-    // refused or dropped, so the GoTo's second abort is kept back (_deferredReAbort) until it settles: sent if the command
-    // fails and nothing else as new is left. Guarded by _abortReasonsGate.
+    // and an AbortSlew now would stop the newer move. A command whose call is on the wire when the raced GoTo returns may yet
+    // be refused, so the GoTo's second abort is kept back (_deferredReAbort) until it settles: sent if the command fails and
+    // nothing else as new is left. A command still in its checks (a guider stop, a pose or system read, a pier-side settle)
+    // does not hold the abort back: that would leave the mount driving on to the stopped GoTo's target for as long as the
+    // checks take. The abort goes out at once, and every command waits for an abort on its way (_reAbortSent) before its own
+    // call, so the abort cannot reach the mount after it. Guarded by _abortReasonsGate.
+    private sealed class PendingMotion(long? from) {
+        /// <summary>The abort-count reading; null for a mediator command until its send (it counts from then).</summary>
+        public long? From { get; set; } = from;
+        /// <summary>The command's call is on its way to the mount (from <see cref="SendMotion"/> on).</summary>
+        public bool OnTheWire { get; set; }
+    }
+
     private long _acceptedMotionFrom = -1;
-    private readonly Dictionary<long, long> _pendingMotions = new();
+    private readonly Dictionary<long, PendingMotion> _pendingMotions = new();
     private long _nextMotionToken;
     private (long Epoch, string Reason)? _deferredReAbort;
+    private Task _reAbortSent = Task.CompletedTask;
+
+    /// <summary>How long a motion command waits for a raced GoTo's second abort to reach the mount before its own call.</summary>
+    internal TimeSpan ReAbortWaitBound { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>#2066 — notes a motion command on its way; returns the token <see cref="NoteMotionSent"/> or
-    /// <see cref="NoteMotionFailed"/> settles. <paramref name="abortEpoch"/> is its own reading; null = the count now (a
-    /// sequencer or mediator command, which no stop drops).</summary>
+    /// <see cref="NoteMotionFailed"/> settles. <paramref name="abortEpoch"/> is its own reading; null = the count at its send
+    /// (a sequencer or mediator command, which no stop drops).</summary>
     private long NoteMotionDispatched(long? abortEpoch) {
         lock (_abortReasonsGate) {
             var token = ++_nextMotionToken;
-            _pendingMotions[token] = abortEpoch ?? Interlocked.Read(ref _abortEpoch);
+            _pendingMotions[token] = new PendingMotion(abortEpoch);
             return token;
         }
     }
@@ -626,9 +642,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// <summary>#2066 — the mount took the command: it replaces a raced GoTo, whose kept-back abort is dropped.</summary>
     private void NoteMotionSent(long token) {
         lock (_abortReasonsGate) {
-            if (!_pendingMotions.Remove(token, out var from)) {
+            if (!_pendingMotions.Remove(token, out var note)) {
                 return;
             }
+            var from = note.From ?? Interlocked.Read(ref _abortEpoch);
             if (from > _acceptedMotionFrom) {
                 _acceptedMotionFrom = from;
             }
@@ -642,26 +659,71 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// is sent now, unless another command as new is still on its way or reached the mount.</summary>
     private void NoteMotionFailed(long token, ITelescopeDevice client) {
         string reason;
+        TaskCompletionSource sent;
         lock (_abortReasonsGate) {
             if (!_pendingMotions.Remove(token) || _deferredReAbort is not { } deferred || NewerMotion(deferred.Epoch) != NewerMotionState.None) {
                 return;
             }
             _deferredReAbort = null;
             reason = deferred.Reason;
+            sent = ReAbortOnItsWayLocked();
         }
         LogDeferredReAbortSent(reason);
-        _ = AbortSlewCoreAsync(client, reason, rethrow: false, counted: true);
+        _ = SendReAbortAsync(client, reason, sent);
     }
 
-    /// <summary>#2066 — sends a noted motion command and settles its note: sent when the call returns, failed when it throws.</summary>
+    /// <summary>#2066 — a raced GoTo's second abort is going out: a command that starts its call from now on waits for it
+    /// (<see cref="SendMotion"/>). Under _abortReasonsGate, in the same step that decides the abort.</summary>
+    private TaskCompletionSource ReAbortOnItsWayLocked() {
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _reAbortSent = _reAbortSent.IsCompleted ? sent.Task : Task.WhenAll(_reAbortSent, sent.Task);
+        return sent;
+    }
+
+    /// <summary>#2066 — sends a raced GoTo's second abort and lets the commands waiting on it go (<paramref name="sent"/>).</summary>
+    private async Task SendReAbortAsync(ITelescopeDevice client, string reason, TaskCompletionSource sent) {
+        try {
+            await AbortSlewCoreAsync(client, reason, rethrow: false, counted: true).ConfigureAwait(false);
+        } finally {
+            sent.TrySetResult();
+        }
+    }
+
+    /// <summary>#2066 — sends a noted motion command and settles its note: sent when the call returns, failed when it throws.
+    /// A raced GoTo's second abort already on its way goes first: the command waits for it (bounded), so the abort cannot
+    /// reach the mount after the command and stop it. From here on the command is on the wire: a raced GoTo that returns now
+    /// keeps its abort back for it.</summary>
     private void SendMotion(long token, ITelescopeDevice client, Action send) {
         try {
+            WaitForReAbort(NoteMotionOnTheWire(token));
             send();
         } catch {
             NoteMotionFailed(token, client);
             throw;
         }
         NoteMotionSent(token);
+    }
+
+    /// <summary>#2066 — the command's checks are done and its calls start now: a raced GoTo that returns from here on keeps
+    /// its second abort back for it. Returns the second aborts already on their way, which the command waits for first.</summary>
+    private Task NoteMotionOnTheWire(long token) {
+        lock (_abortReasonsGate) {
+            if (_pendingMotions.TryGetValue(token, out var note)) {
+                note.OnTheWire = true;
+                note.From ??= Interlocked.Read(ref _abortEpoch);
+            }
+            return _reAbortSent;
+        }
+    }
+
+    private void WaitForReAbort(Task reAbort) {
+        if (reAbort.IsCompleted) {
+            return;
+        }
+        LogMoveWaitsForReAbort();
+        if (!reAbort.Wait(ReAbortWaitBound)) {
+            LogMoveReAbortWaitExpired((int)ReAbortWaitBound.TotalSeconds);
+        }
     }
 
     /// <summary>#2066 — runs a noted move's steps; a throw before its send settles the note as failed (never left on its way).</summary>
@@ -676,19 +738,21 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     private enum NewerMotionState { None, Pending, Sent }
 
-    // Under _abortReasonsGate.
+    // Under _abortReasonsGate. Only a command on the wire is Pending: one still in its checks has not started its call, and
+    // waits for the abort before it does (SendMotion).
     private NewerMotionState NewerMotion(long epoch) =>
         _acceptedMotionFrom >= epoch ? NewerMotionState.Sent
-        : _pendingMotions.Values.Any(from => from >= epoch) ? NewerMotionState.Pending
+        : _pendingMotions.Values.Any(note => note.OnTheWire && (note.From ?? long.MaxValue) >= epoch) ? NewerMotionState.Pending
         : NewerMotionState.None;
 
     /// <summary>#2066 — what a raced GoTo whose PUT returned after the counts since <paramref name="abortEpoch"/> does.
     /// <c>Move</c> is the park or Find Home, when one was the LATEST count: a move that a later AbortSlew would stop. A park
     /// or Find Home that a stop then stopped is not in force, so <c>Move</c> is null and the GoTo is aborted again.
     /// <c>Stop</c> is the first count that is not a park or Find Home, the reason the re-abort carries. <c>Newer</c>: a
-    /// motion command at least as new as the latest count reached the mount (<c>Sent</c>), or is still on its way
-    /// (<c>Pending</c>: the second abort is kept back, and sent if that command fails).</summary>
-    private (string? Move, string? Stop, NewerMotionState Newer) CountedSince(long abortEpoch) {
+    /// motion command at least as new as the latest count reached the mount (<c>Sent</c>), or its call is on the wire
+    /// (<c>Pending</c>: the second abort is kept back, and sent if that command fails). <c>AbortSent</c>: the GoTo is to be
+    /// aborted again, and every command that starts its call from now on waits until this is completed.</summary>
+    private (string? Move, string? Stop, NewerMotionState Newer, TaskCompletionSource? AbortSent) CountedSince(long abortEpoch) {
         string? latest = null;
         long latestEpoch = 0;
         string? stop = null;
@@ -707,7 +771,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             if (newer == NewerMotionState.Pending) {
                 _deferredReAbort = (latestEpoch, stop ?? latest ?? MountStopReasons.UserRequest);
             }
-            return (latest is MountStopReasons.Park or MountStopReasons.FindHome ? latest : null, stop, newer);
+            var move = latest is MountStopReasons.Park or MountStopReasons.FindHome ? latest : null;
+            // Decided here, under the gate: a command that starts its call after this waits for the abort (SendMotion).
+            var abortSent = move is null && newer == NewerMotionState.None ? ReAbortOnItsWayLocked() : null;
+            return (move, stop, newer, abortSent);
         }
     }
 
@@ -1063,7 +1130,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private async Task SlewInBackgroundAsync(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch, long? motion) {
+    private async Task SlewInBackgroundAsync(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch, long? motion, Task reAbort) {
         try {
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
@@ -1077,6 +1144,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
                 // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
                 // a refused write is logged at Debug and the slew attempt stays authoritative.
+                // #2066 — a raced GoTo's second abort on its way when this GoTo was dispatched goes first.
+                WaitForReAbort(reAbort);
                 if (!TryEnableTrackingUnlessAborted(client, abortEpoch)) {
                     if (motion is long dropped) {
                         NoteMotionFailed(dropped, client);
@@ -1097,10 +1166,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home counted
                 // LAST is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it. One
                 // that a later stop stopped wins nothing: the GoTo is aborted again. A GoTo, park or Find Home sent after
-                // the latest stop (REST, sequencer or mediator) is the user's newer move: it is not aborted either. One still
-                // on its way may yet be refused or dropped: the second abort is kept back, and sent if it is (NoteMotionFailed).
+                // the latest stop (REST, sequencer or mediator) is the user's newer move: it is not aborted either. One whose
+                // call is on the wire may yet be refused: the second abort is kept back, and sent if it is (NoteMotionFailed).
+                // One still in its checks does not hold the abort back: it goes out now, and that move waits for it (SendMotion).
                 if (AbortedSince(abortEpoch)) {
-                    var (move, stop, newer) = CountedSince(abortEpoch);
+                    var (move, stop, newer, abortSent) = CountedSince(abortEpoch);
                     if (move is not null) {
                         LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
                         return;
@@ -1120,7 +1190,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     }
                     var by = stop ?? MountStopReasons.UserRequest;
                     LogSlewAbortedAgain(raHours, decDeg, by);
-                    await AbortSlewCoreAsync(client, by, rethrow: false, counted: true).ConfigureAwait(false);
+                    await SendReAbortAsync(client, by, abortSent!).ConfigureAwait(false);
                     return;
                 }
             }
@@ -2018,6 +2088,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope: the move sent after a stop failed, so the GoTo that raced the stop is aborted again now ({By})")]
     private partial void LogDeferredReAbortSent(string by);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Telescope: a move waits for the second abort of a GoTo that raced a stop to reach the mount first")]
+    private partial void LogMoveWaitsForReAbort();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope: the second abort of a GoTo that raced a stop did not finish within {Seconds} s; the move is sent anyway")]
+    private partial void LogMoveReAbortWaitExpired(int seconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: no stop reason was kept for the count that raced the GoTo; aborting it again as user_request")]
     private partial void LogSlewAbortReasonUnknown(double ra, double dec);
