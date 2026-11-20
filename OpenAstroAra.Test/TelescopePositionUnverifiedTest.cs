@@ -305,7 +305,8 @@ namespace OpenAstroAra.Test {
 
         // #2066, #2065 (ARA-10) — a routine that could not confirm its stop (Polar Align's mount_did_not_stop) marks the pose
         // unverified: the mount may have run on. GoTo is refused as after a power loss, the flag is kept across a reconnect
-        // and in the store, and only a confirmed Home clears it.
+        // and in the store, and only a confirmed Home clears it. The reconnect is the power cycle the user makes after "cut
+        // the mount's power" (M28): the mount wakes reporting Home wherever it points, and the flag stays stop_unconfirmed.
         [Test]
         public async Task A_routine_that_could_not_confirm_its_stop_leaves_the_position_unverified_until_Home_is_confirmed() {
             var store = new MemoryPoseStore();
@@ -324,12 +325,16 @@ namespace OpenAstroAra.Test {
             Assert.That(refusal.Message, Does.Contain("could not confirm that the mount stopped"), "worded for the stop, not a power loss");
 
             await svc.DisconnectAsync(null, CancellationToken.None);
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; }; // power_cycle_reports_home: the false zero
             await ConnectAsync(svc);
-            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed), "a reconnect keeps it");
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is > 89.0, "the first read after the power cycle");
             await Task.Delay(100);
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed),
+                "the power cycle's false Home neither clears nor replaces it");
+            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.EqualTo(MountPoseTrust.StopUnconfirmed));
             Assert.That(Current.Slews, Is.Zero);
 
-            Current.ReportsAtHome = true; // the hand controller's zero search
+            // The hand controller's zero search: the mount really is at Home now.
             await svc.ConfirmHomeAsync(CancellationToken.None);
             Assert.That(Runtime(svc)!.PositionUnverified, Is.False);
             Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.Null);
