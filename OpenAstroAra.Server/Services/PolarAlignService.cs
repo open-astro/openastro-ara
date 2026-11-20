@@ -221,7 +221,9 @@ namespace OpenAstroAra.Server.Services {
                     CheckSolvesDone: _checkSolvesDone,
                     CheckResult: _checkResult,
                     LastResult: _lastResult,
-                    Correction: _aligner));
+                    Correction: _aligner,
+                    HandTurn: _handTurn,
+                    HandTurnWait: _handTurnWait));
             }
         }
 
@@ -344,8 +346,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>#2048 — the run's RA band: the direction away from the meridian at the start, and the start pose the
-        /// later stages measure their offset from (<see cref="RaOffsetFromStartDeg"/>).</summary>
-        private sealed record RunBand(double AwaySign, double StartRaDeg, long StartedAt, double MaxSweepDeg);
+        /// later stages measure their offset from (<see cref="RaOffsetFromStartDeg"/>). <c>HandTurn</c> (#2083): the user turns
+        /// RA by hand, and the run sends the mount no move (PolarAlignService.HandTurn.cs).</summary>
+        private sealed record RunBand(double AwaySign, double StartRaDeg, long StartedAt, double MaxSweepDeg, bool HandTurn = false);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the band the
         /// run keeps to and its place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
@@ -467,6 +470,8 @@ namespace OpenAstroAra.Server.Services {
                                 : $"the RA turn direction changed since you confirmed it (it is {plan.Direction} now) — confirm the start again",
                         new Dictionary<string, object?> { ["direction"] = plan.Direction });
                 }
+                // #2083 — the user's choice in the confirm step: turn RA by hand, so the run moves nothing.
+                band = band with { HandTurn = confirmation.HandTurn };
                 var mainCamera = _mainCamera;
                 if (stage == PolarAlignStages.Coarse) {
                     // Before the mount moves: a camera that is off would otherwise home, slew, and then
@@ -542,6 +547,9 @@ namespace OpenAstroAra.Server.Services {
                         _waitingForCapture = false;
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
+                        _handTurn = band.HandTurn;
+                        _handTurnWait = null;
+                        _handOffsetDeg = 0.0;
                         gen = ++_generation;
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
                         _abortWatch = (gen, baselineEpoch, baselineOwn);
@@ -566,9 +574,14 @@ namespace OpenAstroAra.Server.Services {
                 var runToken = runCts.Token;
                 LogStarted(stage);
                 LogStartConfirmed(plan.Direction, plan.StepDeg, plan.MaxSweepDeg);
+                if (band.HandTurn) {
+                    LogHandTurnRun();
+                }
                 // `started` goes out BEFORE the run task exists: the run's first stage event is only a directory
                 // create and a few mount reads away, and a client must fold `started` first.
-                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
+                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject {
+                    ["state"] = initialState, ["stage"] = stage, ["hand_turn"] = band.HandTurn,
+                }).ConfigureAwait(false);
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
             } finally {

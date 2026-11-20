@@ -220,6 +220,24 @@ framing/focus loop when you need to point or focus by eye.
   RA will turn (east or west: on the first start away from the meridian, later back toward Polar
   Align's start; about 10° twice) and the most the whole run
   turns; the mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
+- **Where to point for Polar Align** (NINA's advice, also on the confirm step). Pick a field fairly
+  high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a
+  start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on
+  the mount's power switch the first time you run this on a mount.
+- **Turning RA by hand.** The confirm step also offers **Turn RA by hand**, like NINA's manual mode:
+  you turn RA yourself (the hand pad, or the clutch open) and Ara moves nothing. No motor move, no
+  GoTo, no Find Home, and tracking is never switched on (it is still switched off for the knob loop,
+  which needs the camera still, and at the end like any run). The card asks for each turn ("Turn RA by
+  hand about 10° toward the east, then let go"), shows how far the frames say you have turned, and
+  takes the next frame once the mount is still; then the readout works as usual. Point the tube a few
+  degrees off the pole first: a hand-turn run does not tilt it for you, and fails if the camera looks
+  along the RA axis. The mount still has to be connected. An older rig does not offer it.
+- **The azimuth number is a true arc.** Ara shows the azimuth error as an arc on the sky (cos alt
+  applied, "true arc" next to the number). NINA shows the angle itself, which is larger by about
+  1/cos(latitude) (1.5× at 48°); the Full UI shows NINA's figure beside Ara's so the two compare.
+  A step that starts more than 2° from the pole warns that the correction is less reliable (get
+  closer, then run again); over 10°, check the site location, the start field, and that the mount
+  turned only in RA.
 - **Polar Align keeps RA near where it first started.** The first start after the mount connects is
   Polar Align's start for the session. Every later run (**Adjust again**, or a new Start) turns back
   toward it, and the confirm step says how far RA is from it ("RA is 20° east of where Polar Align

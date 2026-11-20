@@ -6710,6 +6710,56 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarDirectionWest => 'west';
 
   @override
+  String get polarConfirmGuideField =>
+      'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.';
+
+  @override
+  String get polarConfirmGuideMeridian =>
+      'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.';
+
+  @override
+  String get polarConfirmHandTurnHint =>
+      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and sees it in the frames.';
+
+  @override
+  String get polarConfirmHandTurn => 'Turn RA by hand';
+
+  @override
+  String polarHandTurnAsk(String step, String direction) {
+    return 'Turn RA by hand about $step° toward the $direction, then let go.';
+  }
+
+  @override
+  String polarHandTurnTurned(String turned) {
+    return 'Turned $turned° so far.';
+  }
+
+  @override
+  String polarHandTurnWrongWay(String direction) {
+    return 'That went the other way: turn toward the $direction.';
+  }
+
+  @override
+  String get polarHandTurnRunNote =>
+      'You turn RA by hand: Ara does not move the mount.';
+
+  @override
+  String get polarAzimuthArc => 'true arc (cos alt)';
+
+  @override
+  String polarAzimuthNina(String value) {
+    return 'NINA $value';
+  }
+
+  @override
+  String get polarInitialErrorLarge =>
+      'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.';
+
+  @override
+  String get polarInitialErrorHuge =>
+      'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
@@ -13573,6 +13623,56 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarDirectionWest => 'oeste';
+
+  @override
+  String get polarConfirmGuideField =>
+      'Escolha um campo bem alto em direção ao polo do seu hemisfério, pelo menos uns 15° acima do horizonte quando der.';
+
+  @override
+  String get polarConfirmGuideMeridian =>
+      'Escolha um início cujos giros não cruzem o meridiano, para o tubo não bater no pilar.';
+
+  @override
+  String get polarConfirmHandTurnHint =>
+      'Ou gire a AR você mesmo: com Girar a AR à mão, o Ara não move nada. Ele pede cada giro e o vê nos quadros.';
+
+  @override
+  String get polarConfirmHandTurn => 'Girar a AR à mão';
+
+  @override
+  String polarHandTurnAsk(String step, String direction) {
+    return 'Gire a AR à mão cerca de $step° em direção ao $direction e solte.';
+  }
+
+  @override
+  String polarHandTurnTurned(String turned) {
+    return 'Girou $turned° até agora.';
+  }
+
+  @override
+  String polarHandTurnWrongWay(String direction) {
+    return 'Isso foi para o outro lado: gire em direção ao $direction.';
+  }
+
+  @override
+  String get polarHandTurnRunNote =>
+      'Você gira a AR à mão: o Ara não move a montagem.';
+
+  @override
+  String get polarAzimuthArc => 'arco real (cos alt)';
+
+  @override
+  String polarAzimuthNina(String value) {
+    return 'NINA $value';
+  }
+
+  @override
+  String get polarInitialErrorLarge =>
+      'O erro no início passou de 2°: chegue mais perto e rode de novo. A leitura é menos confiável tão longe.';
+
+  @override
+  String get polarInitialErrorHuge =>
+      'O erro no início passou de 10°: confira a localização do site, o campo inicial e se a montagem girou só em AR.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

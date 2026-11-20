@@ -931,8 +931,12 @@ public static class PolarAlignStages {
 /// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
 /// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now). <c>NewOrigin</c> echoes the plan's
 /// <see cref="PolarAlignStartPlanDto.NewOrigin"/>: a start whose plan changed between a new start pose and a continued
-/// one since the user saw it is refused the same way.</summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false);
+/// one since the user saw it is refused the same way.
+/// <para>#2083 — <c>HandTurn</c> (NINA's manual mode): the user turns the RA axis by hand (the hand pad, or the clutch)
+/// between the three solves, and the run detects each turn from the solves. Such a run sends the mount no motor move,
+/// no GoTo and no Find Home, and never turns tracking on. Per run, not a profile setting.</para></summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false,
+    bool HandTurn = false);
 
 /// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
 /// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
@@ -944,14 +948,25 @@ public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confir
 /// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
 /// <c>OriginOffsetDeg</c> is how far the RA axis has turned from the origin (signed: + east, − west), and
 /// <c>Direction</c> turns back toward it. No turn takes the axis more than <c>SweepLimitDeg</c> from the
-/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para></summary>
+/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para>
+/// <para>#2083 — <c>HandTurnAvailable</c>: this daemon takes a hand-turn start (<c>hand_turn</c> on
+/// <see cref="PolarAlignStartRequestDto"/>). An older daemon leaves it out, and the app then offers no hand turn: that
+/// daemon would ignore <c>hand_turn</c> and turn the mount with its motor.</para></summary>
 public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
-    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0);
+    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, bool HandTurnAvailable = true);
 
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
 /// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
-/// they saw made this pose Polar Align's new origin.</summary>
-public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false);
+/// they saw made this pose Polar Align's new origin. <c>HandTurn</c> (#2083): the user turns RA by hand, so the run
+/// moves nothing (<see cref="PolarAlignStartRequestDto"/>).</summary>
+public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool HandTurn = false);
+
+/// <summary>#2083 — a hand-turn run waiting for the user to turn the RA axis (<c>hand_turn_wait</c> on the status, and
+/// the <c>polar_align.hand_turn</c> payload). <c>Point</c> is the solve it waits for (2 or 3 of three);
+/// <c>Direction</c> (<c>east</c> | <c>west</c>) and <c>TargetDeg</c> are the turn asked for; <c>TurnedDeg</c> is how far
+/// the solves say the RA axis has turned that way since the last point (negative: the other way), null before a solve.
+/// <c>Waiting</c> turns false once the turn is taken (the event's last payload for that point).</summary>
+public sealed record PolarAlignHandTurnDto(int Point, string Direction, double TargetDeg, double? TurnedDeg, bool Waiting = true);
 
 /// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
 public static class PolarAlignDirections {
@@ -1006,7 +1021,11 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastResultDto? LastResult = null,
     // #1971 — what the Polar Aligner is doing in this run; null when the rig has none, when Ara cannot
     // drive the one it has, or before the run's first measurement.
-    PolarAlignCorrectionDto? Correction = null);
+    PolarAlignCorrectionDto? Correction = null,
+    // #2083 — the current run, or the last one, turns RA by hand (no motor moves); false before any run.
+    bool HandTurn = false,
+    // #2083 — a hand-turn run waiting for the user's turn; null otherwise.
+    PolarAlignHandTurnDto? HandTurnWait = null);
 
 /// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.correction</c>.
 /// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>

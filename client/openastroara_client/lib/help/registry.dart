@@ -1123,12 +1123,16 @@ const Map<String, Help> helpRegistry = {
     title: 'Polar alignment in three steps',
     body:
         '* **Start** — point the tube near the pole with the counterweights down, then start. Ara never sends the mount Home or slews it, and it refuses a parked mount (unpark it first). Before anything moves it shows which way RA will turn — east or west, away from the meridian, about 10° twice — and the mount moves only when you confirm. Keep a hand on the mount\'s power switch.\n'
+        '* **Where to point** (NINA\'s advice) — pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
+        '* **Turn RA by hand** — on the confirm step you can turn RA yourself instead of the motor (the hand pad, or the clutch open), like NINA\'s manual mode. Ara then moves nothing: no motor move, no GoTo, no Find Home, and it never turns tracking on. It asks for each turn (about the step, the way shown), shows how far the frames say you have turned, and takes the next frame once the mount is still. Point the tube a few degrees off the pole first: a hand-turn run does not tilt it for you.\n'
         '* **Rough** — from where you pointed it (when the tube looks right at the pole, its Dec motor first tilts it 5° off the axis), its RA motor makes two turns of the profile\'s seed turn (10° for a new profile), with the *main camera* solving a frame at each of the three stops; the circle through them is where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
         '* **Fine** — from where the rough step left the mount, the *guide camera* measures the axis the same way (three solves, two RA turns back over the rough step\'s arc), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
         '* **Check** — once inside the tolerance, **Verify** takes three solves from where the mount is, turning the profile\'s check step (10° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
         '* Every move is one motor at a time, never a GoTo or Find Home, as NINA\'s three-point polar alignment: each step\'s turns stay inside the arc you confirmed (20° of RA from where you started, with 10° turns) and 5° of Dec, and Stop halts the motor at once. The mount\'s own limits still apply.\n'
-        '* **Stop** stops the mount where it is: it stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.',
+        '* **Stop** stops the mount where it is: it stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.\n'
+        '* **Azimuth** is a true arc on the sky (cos alt applied). NINA shows the angle itself, about 1/cos(latitude) larger (1.5× at 48°); the Full UI shows NINA\'s figure beside Ara\'s.\n'
+        '* A step that starts more than 2° from the pole warns that the correction is less reliable: get closer, then run again. Over 10°, check the site location, the start field, and that the mount turned only in RA.',
     relatedHelpKeys: [
       'img.polar.stop_tracking_when_done',
       'img.polar.seed_rotation_deg',
@@ -1136,7 +1140,7 @@ const Map<String, Help> helpRegistry = {
       'img.polar.coarse_exposure_seconds',
     ],
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
-    keywords: ['polar', 'alignment', 'confirm', 'parked', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west'],
+    keywords: ['polar', 'alignment', 'confirm', 'parked', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west', 'hand', 'manual', 'nina', 'azimuth'],
   ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',

@@ -11245,6 +11245,78 @@ abstract class AppLocalizations {
   /// **'west'**
   String get polarDirectionWest;
 
+  /// Polar align start confirm dialog (#2083): NINA's guidance on where to point before the start
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.'**
+  String get polarConfirmGuideField;
+
+  /// Polar align start confirm dialog (#2083): NINA's guidance, keep the RA turns on one side of the meridian (pier collision)
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'**
+  String get polarConfirmGuideMeridian;
+
+  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and sees it in the frames.'**
+  String get polarConfirmHandTurnHint;
+
+  /// Polar align start confirm dialog (#2083): button that starts a run in which the user turns the RA axis by hand and the mount's motors never move
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand'**
+  String get polarConfirmHandTurn;
+
+  /// Polar align hand-turn run (#2083): what the user must do now; step is whole degrees, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand about {step}° toward the {direction}, then let go.'**
+  String polarHandTurnAsk(String step, String direction);
+
+  /// Polar align hand-turn run (#2083): how far the frames show the RA axis turned the asked way, one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'Turned {turned}° so far.'**
+  String polarHandTurnTurned(String turned);
+
+  /// Polar align hand-turn run (#2083): the user turned RA the wrong way; direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'That went the other way: turn toward the {direction}.'**
+  String polarHandTurnWrongWay(String direction);
+
+  /// Polar align hand-turn run (#2083): reminder while it measures that the mount's motors are never used
+  ///
+  /// In en, this message translates to:
+  /// **'You turn RA by hand: Ara does not move the mount.'**
+  String get polarHandTurnRunNote;
+
+  /// Polar align readout (#2083): the azimuth error's convention, an arc on the sky (NINA shows the unscaled angle, larger by 1/cos(latitude))
+  ///
+  /// In en, this message translates to:
+  /// **'true arc (cos alt)'**
+  String get polarAzimuthArc;
+
+  /// Polar align readout (#2083): the same azimuth error as NINA would show it; value is a signed arcminute figure like +1.5′
+  ///
+  /// In en, this message translates to:
+  /// **'NINA {value}'**
+  String polarAzimuthNina(String value);
+
+  /// Polar align readout (#2083): NINA's large-error warning, the stage started more than 2° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.'**
+  String get polarInitialErrorLarge;
+
+  /// Polar align readout (#2083): NINA's huge-error warning, the stage started more than 10° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.'**
+  String get polarInitialErrorHuge;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:

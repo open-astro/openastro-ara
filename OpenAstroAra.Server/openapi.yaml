@@ -14594,6 +14594,9 @@ components:
             - string
           format: double
           default: 30
+        hand_turn_available:
+          type: boolean
+          default: true
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -14609,6 +14612,9 @@ components:
             - 'null'
             - string
         new_origin:
+          type: boolean
+          default: false
+        hand_turn:
           type: boolean
           default: false
     PreflightChecklistDto:
