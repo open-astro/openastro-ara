@@ -451,7 +451,8 @@ namespace OpenAstroAra.Server.Services {
             var intended = signedDeltaDeg >= 0 ? 1.0 : -1.0;
             var after = await MoveAxisUntilAsync(TelescopeAxes.Primary, intended, Math.Abs(signedDeltaDeg),
                 (from, now) => intended * Wrap180(now.RaDeg - from.RaDeg),
-                checkDirection: true, gen, ct).ConfigureAwait(false);
+                checkDirection: true, gen, ct,
+                beforeMove: start => ThrowIfTurnPassesSweepLimit(start.RaDeg, signedDeltaDeg)).ConfigureAwait(false);
             var turned = Math.Abs(Wrap180(after.RaDeg - fromRaDeg));
             if (turned < 1.0) {
                 throw new RoutineFailedException("slew_failed",
@@ -489,12 +490,14 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(double RaDeg, double DecDeg)> MoveAxisUntilAsync(
                 TelescopeAxes axis, double sign, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, bool checkDirection,
-                int gen, CancellationToken ct) {
+                int gen, CancellationToken ct, Action<(double RaDeg, double DecDeg)>? beforeMove = null) {
             // #2089 — every reading of a move comes from the driver, never the cache: after a failed status poll the cache
             // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
             // it away from the band (and the session's origin) until the stall bound. A failed read stops the move.
             var start = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
                 ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
+            // The caller's check of the move from the reading it starts at, before the motor runs (a turn's sweep limit).
+            beforeMove?.Invoke(start);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
             double learnedSign;
             lock (_gate) {

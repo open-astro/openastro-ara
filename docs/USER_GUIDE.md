@@ -255,8 +255,11 @@ framing/focus loop when you need to point or focus by eye.
   step says the run uses it. *Frames per point* (1 to 5, 3 by default) is how many frames each of the
   three points takes with the mount still; they are averaged, so one bad solve does not move the
   axis, and their scatter is in the log. A point whose solves scatter more than 3″ is taken again
-  once; if it is still scattered, the run goes on but says the measurement is noisy, under the
-  readout or under the Check. Check focus and seeing, or take more frames per point.
+  once; if it is still scattered, or a cloud hides the retake, the run goes on but says the
+  measurement is noisy, under the readout or under the Check. Check focus and seeing, or take more
+  frames per point. The mount tracks while the frames are taken: with many long frames per point,
+  a run can end before a turn that would take the mount past its sweep limit. Slew back near the
+  pole and start again, or take fewer or shorter frames.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
