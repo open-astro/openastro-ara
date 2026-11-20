@@ -13,6 +13,10 @@ import 'settings/migrated_sections.dart';
 /// (`profile.updated`): read that section again so an open screen never shows
 /// stale values, and refresh the offline profile cache. The write this device
 /// made itself is skipped, so editing never resets its own screen. A section
+/// on the section module is not skipped by time: it takes the rig's copy only
+/// when the tag moved past the one it holds, so its own save's announcement
+/// changes nothing and a daemon write in the same moments (the guide camera
+/// fill on guider connect, ADR 0015) still lands. A section
 /// no screen holds in memory needs nothing: it is read when opened. Custom
 /// targets (`saved-targets`) are held but left out: syncing them is a separate
 /// spec (#1644, Out of Scope).
@@ -22,10 +26,15 @@ Future<void> applyProfileUpdated(
 ) async {
   final api = container.read(profileApiProvider);
   if (api == null) return;
-  if (ProfileApi.wroteRecently(section)) return;
+  final own = ProfileApi.wroteRecently(section);
+  final migrated = _migratedRoutes.contains(section);
+  if (own && !migrated) return;
   try {
-    final hydrate = _hydrators[section];
+    final hydrate = migrated
+        ? (ProviderContainer c, ProfileApi a) => _syncMigrated(c, a, section)
+        : _hydrators[section];
     if (hydrate != null) await hydrate(container, api);
+    if (own) return; // the cache already holds what this device wrote
     final list = await api.listProfiles();
     await captureProfileCache(
       container.read(profileCacheServiceProvider),
@@ -41,19 +50,19 @@ Future<void> applyProfileUpdated(
 typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
 
 // Wire section name (first path segment under /api/v1/profile/) → the
-// notifier holding that section. A section on the section module is read from
-// `migratedSections`, so adding one there adds its row here.
+// notifier holding that section. A section on the section module is not
+// listed: its route comes from `migratedSections` and it syncs by tag.
 final Map<String, _Hydrate> _hydrators = {
-  for (final route in {for (final s in migratedSections) s.route})
-    route: (c, api) => _hydrateMigrated(c, api, route),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
 };
 
-Future<void> _hydrateMigrated(
+final Set<String> _migratedRoutes = {for (final s in migratedSections) s.route};
+
+Future<void> _syncMigrated(
   ProviderContainer c,
   ProfileApi api,
   String route,
 ) => Future.wait([
   for (final s in migratedSections)
-    if (s.route == route) c.read(s.provider.notifier).hydrateFromServer(api),
+    if (s.route == route) c.read(s.provider.notifier).syncFromServer(api),
 ]);

@@ -1070,6 +1070,55 @@ void main() {
     expect(eq.pushes, isEmpty);
   });
 
+  testWidgets('Guider: a Simple Mode step taken while the class values show steps from the rig\'s copy the load '
+      'brings in, never from the shown value (ADR 0015)', (tester) async {
+    const rigCopy = Phd2Settings(
+      ditherEveryNFrames: 4,
+      ditherPixels: 12,
+      settlePixels: 3,
+      settleTimeSec: 30,
+      settleTimeoutSec: 120,
+      minimumMove: 0.4,
+      decMinimumMove: 0.5,
+    );
+    for (final (tab, key, saved) in <(String?, String, Object Function(Phd2Settings))>[
+      (null, 'simple-guider-dither-up', (p) => p.ditherEveryNFrames),
+      ('tuning', 'simple-guider-min-move-ra-up', (p) => p.minimumMove),
+      ('tuning', 'simple-guider-min-move-dec-down', (p) => p.decMinimumMove),
+      ('tuning', 'simple-guider-dither-px-up', (p) => p.ditherPixels),
+      ('tuning', 'simple-guider-settle-px-up', (p) => p.settlePixels),
+      ('tuning', 'simple-guider-settle-time-up', (p) => p.settleTimeSec),
+      ('tuning', 'simple-guider-settle-timeout-down', (p) => p.settleTimeoutSec),
+    ]) {
+      final profile = _Profile(null); // the first load fails: the class values show
+      final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+        profileApiProvider.overrideWithValue(profile),
+        guiderEquipmentApiProvider.overrideWithValue(_GuiderEquipment()),
+      ]);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      if (tab != null) await _tab(tester, tab);
+      profile.phd2 = rigCopy; // the rig answers the load the tap tries again
+      await tester.tap(find.byKey(Key(key)));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      expect(saved(profile.puts.single), {
+        'simple-guider-dither-up': 5,
+        'simple-guider-min-move-ra-up': 0.45,
+        'simple-guider-min-move-dec-down': 0.45,
+        'simple-guider-dither-px-up': 13.0,
+        'simple-guider-settle-px-up': 3.1,
+        'simple-guider-settle-time-up': 31,
+        'simple-guider-settle-timeout-down': 115,
+      }[key], reason: key);
+      // Gone before the next one's screen size lands on it.
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    }
+  });
+
   testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
       (tester) async {
     final eq = _GuiderEquipment();

@@ -501,6 +501,33 @@ void main() {
     expect(body['settle_time_sec'], 15);
   });
 
+  test('phd2: a guide camera fill announced moments after this device\'s own '
+      'guider save still lands, so the next Save is not refused (ADR 0015)', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(phd2SettingsProvider).canSave);
+    final guider = c.read(phd2SettingsProvider.notifier);
+    // Settings → Guider's Connect saves the pending edit, then connects.
+    guider.setSettleTimeSec(12);
+    await guider.save(rig.api());
+    expect(ProfileApi.wroteRecently('phd2'), isTrue);
+    await applyProfileUpdated(c, 'phd2'); // that save's own announcement
+    // The guider connects within the same moments; the daemon fills the guide
+    // camera's pixel size and the guide train, then announces it.
+    rig.daemonWrote('phd2', {
+      ...rig.sectionOf('phd2')! as Map,
+      'guide_pixel_size': 3.75,
+      'guide_focal_length': 128,
+    });
+    final filled = rig.etagOf('phd2');
+    await applyProfileUpdated(c, 'phd2');
+    expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75);
+    guider.setSettleTimeSec(15);
+    await guider.save(rig.api());
+    expect(rig.puts.last.ifMatch, filled, reason: 'the tag of the copy the daemon wrote');
+    expect((rig.puts.last.body as Map)['guide_focal_length'], 128);
+  });
+
   test('phd2: a rig copy from before the Dec split reads Dec as RA, and an '
       'Automatic guider profile as 0 (ADR 0015)', () async {
     final rig = FakeSectionRig({

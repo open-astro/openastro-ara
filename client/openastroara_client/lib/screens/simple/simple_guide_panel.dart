@@ -182,7 +182,9 @@ class SimpleGuidePanel extends ConsumerWidget {
     final guiding = g?.isCorrecting ?? false;
     final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
-    // Not in from the rig yet: the class values show; a change is refused.
+    // Not in from the rig yet: the class values show. A change loads the
+    // rig's copy first and steps from it, never from the shown value, or is
+    // refused when that load fails too.
     final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     final tab = ref.watch(simpleGuiderTabProvider);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
@@ -321,8 +323,8 @@ class SimpleGuidePanel extends ConsumerWidget {
                   0 => l10n.deviceOff,
                   _ => l10n.deviceDitherEveryFrames(every),
                 },
-                onLess: () => _setDither(context, ref, every - 1),
-                onMore: () => _setDither(context, ref, every + 1),
+                onLess: () => _stepDither(context, ref, -1),
+                onMore: () => _stepDither(context, ref, 1),
               ),
             ),
                   ],
@@ -334,17 +336,17 @@ class SimpleGuidePanel extends ConsumerWidget {
     );
   }
 
-  /// 0 turns dithering off; 1 and up dithers every that many frames.
-  static void _setDither(BuildContext context, WidgetRef ref, int n) {
-    if (n < 0 || n > 20) return;
-    _save(
-      context,
-      ref,
-      (p) => p.copyWith(
+  /// One step from the rig's copy: 0 turns dithering off; 1 and up dithers
+  /// every that many frames.
+  static void _stepDither(BuildContext context, WidgetRef ref, int by) {
+    _save(context, ref, (p) {
+      final n = (p.ditherEnabled ? math.max(1, p.ditherEveryNFrames) : 0) + by;
+      if (n < 0 || n > 20) return p;
+      return p.copyWith(
         ditherEnabled: n > 0,
         ditherEveryNFrames: n > 0 ? n : null,
-      ),
-    );
+      );
+    });
   }
 
   static Future<void> _save(
@@ -466,7 +468,10 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         simpleSaveGuider(context, ref, change, live: true);
     void save(Phd2Settings Function(Phd2Settings) change) =>
         simpleSaveGuider(context, ref, change);
-    Widget minMove(String axis, String label, String id, double v, Phd2Settings Function(Phd2Settings, double) set) =>
+    // Each step is worked out from the rig's copy the save goes over, not the
+    // shown value: that may be the class value while the load is retried.
+    Widget minMove(String axis, String label, String id, double Function(Phd2Settings) v,
+            Phd2Settings Function(Phd2Settings, double) set) =>
         row(
           axis,
           id: label,
@@ -474,11 +479,9 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           simpleWindowStepper(
             name: '${l10n.guideMinimumMoveName}, $axis',
             id: 'simple-guider-min-move-$id',
-            text: '${v.toStringAsFixed(2)} px',
-            onLess: () {
-              if (v > 0) live((p) => set(p, math.max(0, _stepped(v, -0.05))));
-            },
-            onMore: () => live((p) => set(p, _stepped(v, 0.05))),
+            text: '${v(phd2).toStringAsFixed(2)} px',
+            onLess: () => live((p) => v(p) > 0 ? set(p, math.max(0, _stepped(v(p), -0.05))) : p),
+            onMore: () => live((p) => set(p, _stepped(v(p), 0.05))),
           ),
         );
     return Column(
@@ -487,8 +490,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
       spacing: 2,
       children: [
         Text(l10n.guideMinimumMove, style: AraText.caption),
-        minMove(l10n.guideAxisRa, 'RA minimum move', 'ra', phd2.minimumMove, (p, v) => p.copyWith(minimumMove: v)),
-        minMove(l10n.guideAxisDec, 'Dec minimum move', 'dec', phd2.decMinimumMove, (p, v) => p.copyWith(decMinimumMove: v)),
+        minMove(l10n.guideAxisRa, 'RA minimum move', 'ra', (p) => p.minimumMove, (p, v) => p.copyWith(minimumMove: v)),
+        minMove(l10n.guideAxisDec, 'Dec minimum move', 'dec', (p) => p.decMinimumMove, (p, v) => p.copyWith(decMinimumMove: v)),
         if (phd2.ditherEnabled)
           row(
             l10n.deviceDitherBy,
@@ -497,12 +500,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
               id: 'simple-guider-dither-px',
               name: l10n.deviceDitherBy,
               text: '${px == px.roundToDouble() ? px.round() : px} px',
-              onLess: () {
-                if (px > 1) save((p) => p.copyWith(ditherPixels: px - 1));
-              },
-              onMore: () {
-                if (px < 30) save((p) => p.copyWith(ditherPixels: px + 1));
-              },
+              onLess: () => save((p) => p.ditherPixels > 1 ? p.copyWith(ditherPixels: p.ditherPixels - 1) : p),
+              onMore: () => save((p) => p.ditherPixels < 30 ? p.copyWith(ditherPixels: p.ditherPixels + 1) : p),
             ),
           ),
         Text(l10n.guideSettle, style: AraText.caption),
@@ -514,10 +513,9 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-px',
             name: '${l10n.guideSettle}, ${l10n.guideSettleWithin}',
             text: '${phd2.settlePixels.toStringAsFixed(1)} px',
-            onLess: () {
-              if (phd2.settlePixels > 0.1) save((p) => p.copyWith(settlePixels: _stepped(phd2.settlePixels, -0.1)));
-            },
-            onMore: () => save((p) => p.copyWith(settlePixels: _stepped(phd2.settlePixels, 0.1))),
+            onLess: () => save((p) =>
+                p.settlePixels > 0.1 ? p.copyWith(settlePixels: _stepped(p.settlePixels, -0.1)) : p),
+            onMore: () => save((p) => p.copyWith(settlePixels: _stepped(p.settlePixels, 0.1))),
           ),
         ),
         row(
@@ -528,10 +526,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-time',
             name: '${l10n.guideSettle}, ${l10n.guideSettleFor}',
             text: '${phd2.settleTimeSec} s',
-            onLess: () {
-              if (phd2.settleTimeSec > 1) save((p) => p.copyWith(settleTimeSec: phd2.settleTimeSec - 1));
-            },
-            onMore: () => save((p) => p.copyWith(settleTimeSec: phd2.settleTimeSec + 1)),
+            onLess: () => save((p) => p.settleTimeSec > 1 ? p.copyWith(settleTimeSec: p.settleTimeSec - 1) : p),
+            onMore: () => save((p) => p.copyWith(settleTimeSec: p.settleTimeSec + 1)),
           ),
         ),
         row(
@@ -542,10 +538,9 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-timeout',
             name: '${l10n.guideSettle}, ${l10n.guideSettleGiveUp}',
             text: '${phd2.settleTimeoutSec} s',
-            onLess: () {
-              if (phd2.settleTimeoutSec > 5) save((p) => p.copyWith(settleTimeoutSec: phd2.settleTimeoutSec - 5));
-            },
-            onMore: () => save((p) => p.copyWith(settleTimeoutSec: phd2.settleTimeoutSec + 5)),
+            onLess: () => save((p) =>
+                p.settleTimeoutSec > 5 ? p.copyWith(settleTimeoutSec: p.settleTimeoutSec - 5) : p),
+            onMore: () => save((p) => p.copyWith(settleTimeoutSec: p.settleTimeoutSec + 5)),
           ),
         ),
       ],

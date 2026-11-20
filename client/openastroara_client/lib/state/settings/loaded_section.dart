@@ -107,8 +107,39 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     }
   }
 
-  /// Same as [load], for the live-sync table.
+  /// Same as [load], for a screen that reads the rig's copy again.
   Future<void> hydrateFromServer(ProfileApi api) => load(api);
+
+  /// Live sync (`profile.updated`): after any save in flight lands, fetch the
+  /// rig's copy and take it only when its tag differs from the one held here.
+  /// The announcement of this device's own save then changes nothing (edits
+  /// made since stay), while a write by the daemon or another device in the
+  /// same moments still lands. A save started while the fetch ran answers
+  /// with the newer tag itself, so the fetched copy is dropped.
+  Future<void> syncFromServer(ProfileApi api) async {
+    await (_saveChain ?? Future<void>.value()).catchError((Object _) {});
+    if (!ref.mounted) return;
+    final gen = _generation;
+    final chain = _saveChain;
+    try {
+      final r = await fetch(api);
+      if (!ref.mounted || gen != _generation || !identical(chain, _saveChain)) {
+        return;
+      }
+      if (state.canSave && r.etag != null && r.etag == state.etag) return;
+      _generation++;
+      _held = r.value;
+      state = LoadedSection(
+        value: r.value,
+        source: SectionSource.rig,
+        etag: r.etag,
+      );
+    } catch (e) {
+      if (ref.mounted && gen == _generation) {
+        state = state.copyWith(lastFailure: e);
+      }
+    }
+  }
 
   /// Apply an edit; ignored unless the value came from the rig. An offline
   /// cache seed is read-only: an edit on it would be replaced by the retry-load
