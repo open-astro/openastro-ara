@@ -111,6 +111,64 @@ internal interface IPolarAlignerDriver {
 /// offers the actions (a Switch before the mount; no setting names it). Null when there is none.</summary>
 internal interface IPolarAlignerSource {
     IPolarAligner? Current();
+
+    /// <summary>#2069 (ARA-19) — the last verified Stop of the rig's Polar Aligner was not confirmed: whoever
+    /// sent it (the routine, the Stop route, Emergency Stop, a park), the next one to drive the device sends Stop
+    /// again first, and moves nothing until a Stop is confirmed.</summary>
+    bool StopOwed => false;
+
+    /// <summary>Records the outcome of a verified Stop (<see cref="PolarAlignerVerifiedStop"/>).</summary>
+    void NoteStopOutcome(bool confirmed) { }
+}
+
+/// <summary>What one verified Stop found: whether the device reported both axes still, how many Stops went out,
+/// and the device's last error text when a call failed.</summary>
+internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Sends, string? Error);
+
+/// <summary>
+/// #2069 (ARA-19) — every Stop of the Polar Aligner is a verified stop, as the mount's is (#2048). Stop goes out,
+/// then Status is polled until neither axis reports Moving, for up to <see cref="DefaultWindow"/>. While an axis
+/// still moves (or the device does not answer) Stop is sent again, evenly over the window, <see cref="Sends"/>
+/// times in all. Only a still read after a Stop the device accepted confirms it: a read that fails never counts
+/// as still, and nor does a still read while no Stop got through (a move sent before a link drop may yet start).
+/// Not confirmed at the end of the window: the caller
+/// reports <c>stop_not_confirmed</c> and owes the device a Stop.
+/// </summary>
+internal static class PolarAlignerVerifiedStop {
+    internal static readonly TimeSpan DefaultWindow = TimeSpan.FromSeconds(3);
+    internal static readonly TimeSpan DefaultPoll = TimeSpan.FromMilliseconds(250);
+    internal const int Sends = 3;
+
+    /// <summary>The device calls block (HTTP): call this off a caller's thread.</summary>
+    public static async Task<PolarAlignerStopOutcome> StopAsync(IPolarAligner device, TimeSpan window, TimeSpan poll) {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var resendEvery = window / Sends;
+        var sends = 0;
+        var delivered = false;
+        string? error = null;
+        while (true) {
+            if (sends < Sends && clock.Elapsed >= resendEvery * sends) {
+                sends++;
+                try {
+                    device.Stop();
+                    delivered = true;
+                } catch (PolarAlignerException ex) {
+                    error = ex.Message;
+                }
+            }
+            try {
+                if (delivered && !device.Status().Moving) {
+                    return new PolarAlignerStopOutcome(true, sends, null);
+                }
+            } catch (PolarAlignerException ex) {
+                error = ex.Message;
+            }
+            if (clock.Elapsed >= window) {
+                return new PolarAlignerStopOutcome(false, sends, error);
+            }
+            await Task.Delay(poll).ConfigureAwait(false);
+        }
+    }
 }
 
 /// <summary>

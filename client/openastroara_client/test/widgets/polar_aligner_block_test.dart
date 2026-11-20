@@ -220,9 +220,9 @@ void main() {
 
   const causes = {
     'wrong_direction': ('azimuth', null,
-        'The test move on azimuth went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'),
+        'A move on azimuth went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'),
     'wrong_scale': ('altitude', null,
-        "The test move on altitude didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting."),
+        "A move on altitude didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting."),
     'device_fault': ('azimuth', 'Azimuth: end of travel', 'The Polar Aligner reported a fault: “Azimuth: end of travel”.'),
     'not_calibrated': (null, 'Not calibrated',
         "The Polar Aligner isn't calibrated, so it refused to move: “Not calibrated”. Calibrate it in its own app, then Resume."),
@@ -234,6 +234,12 @@ void main() {
         "The Polar Aligner can't move while the mount tracks. Turn tracking off in the Mount window, then Resume."),
     'mount_slewing': (null, null, "The Polar Aligner can't move while the mount slews. Resume once the mount stops."),
     'stopped_by_user': (null, null, 'You stopped the motors.'),
+    'stop_not_confirmed': (null, null,
+        "Ara sent Stop, but the Polar Aligner didn't confirm its motors stopped. Cut its power if it still moves. "
+            'Ara sends Stop again at each measurement.'),
+    'travel_limit': ('azimuth', null,
+        'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.'),
+    'move_limit': (null, null, 'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.'),
   };
 
   test('every stop cause has its own sentence in English and pt-BR', () {
@@ -267,7 +273,7 @@ void main() {
       final home = tester.widget<OutlinedButton>(_key('polar-aligner-home'));
       // Resume is always there: after a lost link only the daemon can tell whether the device answers again.
       expect(resume.onPressed, isNotNull);
-      expect(home.onPressed == null, lost);
+      expect(home.onPressed == null, lost || cause == 'stop_not_confirmed');
       expect(find.text('Resume once it answers again. Home comes back then.'), lost ? findsOneWidget : findsNothing);
       expect(_key('polar-aligner-position'), lost ? findsNothing : findsOneWidget);
       await tester.tap(_key('polar-aligner-resume'));

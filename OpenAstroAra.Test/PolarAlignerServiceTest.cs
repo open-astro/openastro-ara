@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
              "simultaneousMoves":false,"movesWhileTracking":true,"movesWhileSlewing":false,"canStop":true,"settleSeconds":1.5}
             """;
         private const string HealthyStatus = """{"az":{"moving":true,"position":-4.5},"alt":{"moving":false,"position":2,"fault":"limit"}}""";
+        private const string StillStatus = """{"az":{"moving":false,"position":-4.5},"alt":{"moving":false,"position":2}}""";
 
         /// <summary>A device's actions in memory: answers by action name, records every call.</summary>
         private sealed class ScriptedActions(params string[] supported) : IDriverActions {
@@ -48,7 +49,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static readonly string[] JustStop = ["PolarAlign:Stop"];
-        private static readonly string[] StopThenHome = ["PolarAlign:Stop", "PolarAlign:Home"];
+        private static readonly string[] StopThenHome = ["PolarAlign:Stop", "PolarAlign:Status", "PolarAlign:Home"];
 
         private Carriers _switches = null!;
         private Carriers _mount = null!;
@@ -59,7 +60,8 @@ namespace OpenAstroAra.Test {
             _mount = new Carriers();
         }
 
-        private PolarAlignerService Build() => new(_switches, _mount);
+        // #2069 — the verified stop at bench speed.
+        private PolarAlignerService Build() => new(_switches, _mount) { StopWindow = TimeSpan.FromMilliseconds(150), StopPoll = TimeSpan.FromMilliseconds(5) };
 
         private static ScriptedActions Healthy() {
             var actions = new ScriptedActions("PolarAlign:Info", "PolarAlign:Status");
@@ -249,6 +251,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Stop_and_home_call_the_device() {
             var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
             _switches.Connected.Add(new("sw", "Base", actions));
             var service = Build();
 
@@ -272,13 +275,14 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static readonly string[] RoutineThenDevice = ["routine stops its motor loop", "PolarAlign:Stop"];
+        private static readonly string[] RoutineThenDevice = ["routine stops its motor loop", "PolarAlign:Stop", "PolarAlign:Status"];
 
         [Test]
         public async Task Stop_ends_a_running_routines_motor_loop_before_it_stops_the_device() {
             // The emergency stop and the Stop route both come through here. A device Stop alone reads to
             // the routine as a finished move, and its next measurement would move the motors again.
             var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
             _switches.Connected.Add(new("sw", "Base", actions));
             var routine = new FakeRoutine(actions);
             var service = new PolarAlignerService(_switches, _mount, () => routine);
@@ -296,6 +300,48 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
             Assert.That(actions.Calls, Is.Empty, "nothing reached the device");
+        }
+
+        // ─── #2069 (ARA-19): the verified stop (the Stop route, Emergency Stop and the parks) ───
+
+        private static int StopCalls(ScriptedActions actions) => actions.Calls.Count(c => c == "PolarAlign:Stop");
+
+        [Test]
+        public async Task Aligner_stop_is_retried_until_the_device_reports_still() {
+            var actions = Healthy();
+            // The first two Stops are lost: the device reads moving until the third arrives.
+            actions.Replies["PolarAlign:Status"] = () => StopCalls(actions) < 3 ? HealthyStatus : StillStatus;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+
+            var stop = await service.StopAsync(null, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(StopCalls(actions), Is.EqualTo(PolarAlignerVerifiedStop.Sends));
+                Assert.That(stop.OperationType, Is.EqualTo("polaraligner.stop"));
+                Assert.That(service.StopOwed, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task A_stop_the_device_never_confirms_is_refused_and_owed_until_one_is() {
+            var actions = Healthy(); // an axis reads moving whatever is sent
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+            Assert.That(StopCalls(actions), Is.EqualTo(PolarAlignerVerifiedStop.Sends), "sent three times, then given up");
+            Assert.That(service.StopOwed, Is.True);
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException,
+                "no Home while a Stop is owed");
+            Assert.That(actions.Calls, Does.Not.Contain("PolarAlign:Home"));
+
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
+            await service.StopAsync(null, CancellationToken.None);
+            Assert.That(service.StopOwed, Is.False);
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(actions.Calls, Does.Contain("PolarAlign:Home"));
         }
 
         [Test]

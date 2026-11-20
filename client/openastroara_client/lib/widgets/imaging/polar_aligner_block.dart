@@ -77,6 +77,9 @@ String polarAlignerStopText(AppLocalizations l, PolarAlignerRun run) {
     PolarAlignerCauses.mountTracking => l.polarAlignerStopMountTracking,
     PolarAlignerCauses.mountSlewing => l.polarAlignerStopMountSlewing,
     PolarAlignerCauses.stoppedByUser => l.polarAlignerStopByUser,
+    PolarAlignerCauses.stopNotConfirmed => l.polarAlignerStopNotConfirmed,
+    PolarAlignerCauses.travelLimit => l.polarAlignerStopTravelLimit,
+    PolarAlignerCauses.moveLimit => l.polarAlignerStopMoveLimit,
     _ => unknown,
   };
 }
@@ -171,6 +174,8 @@ class PolarAlignerBlock extends ConsumerWidget {
       body = [line(l10n.polarAlignerByHand, color: AraColors.textSecondary), position];
     } else if (run?.state == PolarAlignerStates.stopped) {
       final lost = run!.cause == PolarAlignerCauses.linkLost;
+      // #2069: Home is a move, and the daemon refuses it while a Stop is owed.
+      final unconfirmed = run.cause == PolarAlignerCauses.stopNotConfirmed;
       body = [
         // The one line that must be heard: the motors stopped, and why.
         Semantics(
@@ -183,7 +188,7 @@ class PolarAlignerBlock extends ConsumerWidget {
         Row(
           spacing: AraSpace.s8,
           children: [
-            Expanded(child: home(enabled: !lost)),
+            Expanded(child: home(enabled: !lost && !unconfirmed)),
             Expanded(
               child: FilledButton(
                 key: const Key('polar-aligner-resume'),

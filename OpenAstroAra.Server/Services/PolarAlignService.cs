@@ -909,7 +909,9 @@ namespace OpenAstroAra.Server.Services {
                 // the session log the successor run now owns — log and drain quietly.
                 LogRoutineFailed("superseded", ex);
             } finally {
-                EndAlignerRun(alignerRun);
+                // #2069 — the Polar Aligner's verified stop starts first and runs beside the mount's exit, so its up to 3 s
+                // of polling never holds the mount's stop back; the run ends once both are done.
+                var alignerEnded = EndAlignerRunAsync(alignerRun);
                 // Every exit stops the mount, a clean Stop included (it bumps the generation but not the start
                 // sequence); only a run that a NEWER RUN superseded leaves the mount to that run. Tracking goes off,
                 // or back to how the run found it after Done with stop_tracking_when_done off (ApplyExitTracking).
@@ -917,6 +919,7 @@ namespace OpenAstroAra.Server.Services {
                     await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
                         handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
                 }
+                await alignerEnded.ConfigureAwait(false);
                 TryDeleteWorkDir(workDir);
             }
         }

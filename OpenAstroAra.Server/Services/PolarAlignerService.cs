@@ -88,19 +88,44 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
         return chosen is null ? None : await Task.Run(() => Read(chosen), ct).ConfigureAwait(false);
     }
 
+    /// <summary>#2069 (ARA-19) — the verified stop's bounds (<see cref="PolarAlignerVerifiedStop"/>); tests shrink them.</summary>
+    internal TimeSpan StopWindow { get; set; } = PolarAlignerVerifiedStop.DefaultWindow;
+    internal TimeSpan StopPoll { get; set; } = PolarAlignerVerifiedStop.DefaultPoll;
+
+    private volatile bool _stopOwed;
+
+    /// <inheritdoc />
+    public bool StopOwed => _stopOwed;
+
+    /// <inheritdoc />
+    public void NoteStopOutcome(bool confirmed) => _stopOwed = !confirmed;
+
     public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
         // A routine that is moving the motors ends its loop first: to it a device Stop alone looks like
         // a finished move, and its next measurement would move them again.
         if (routine?.Invoke() is { DrivesPolarAligner: true } driver) {
             await driver.StopPolarAlignerAsync().ConfigureAwait(false);
         }
-        return await CommandAsync(c => c.Stop(), "polaraligner.stop", idempotencyKey).ConfigureAwait(false);
+        var aligner = Current() ?? throw new InvalidOperationException("no Polar Aligner is connected");
+        // #2069 — a verified stop: the caller (Emergency Stop's rung, a park, the Stop route) hears 409 when the
+        // device does not report both axes still, and the Stop is owed until one is confirmed.
+        var outcome = await Task.Run(() => PolarAlignerVerifiedStop.StopAsync(aligner, StopWindow, StopPoll), CancellationToken.None)
+            .ConfigureAwait(false);
+        NoteStopOutcome(outcome.Confirmed);
+        if (!outcome.Confirmed) {
+            throw new InvalidOperationException(
+                $"stop_not_confirmed: the Polar Aligner did not report both axes still within {StopWindow.TotalSeconds:F0} s "
+                + $"of {outcome.Sends} Stop sends{(outcome.Error is { } e ? $" ({e})" : string.Empty)}. Cut its power if it still moves");
+        }
+        return new OperationAcceptedDto(Guid.NewGuid(), "polaraligner.stop", DateTimeOffset.UtcNow, idempotencyKey);
     }
 
     public Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct) =>
         routine?.Invoke() is { DrivesPolarAligner: true }
             ? throw new InvalidOperationException("polar alignment is moving the Polar Aligner; stop the motors first")
-            : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
+            : _stopOwed
+                ? throw new InvalidOperationException("the Polar Aligner's last Stop was not confirmed; press Stop until it is, then Home")
+                : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
 
     private Chosen? Choose() {
         var sw = switches.ConnectedActionCarriers()
