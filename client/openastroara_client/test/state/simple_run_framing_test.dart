@@ -11,6 +11,7 @@ import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/state/sky_atlas/plan_framing_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/util/input_coordinates.dart';
+import '../support/imaging_sections.dart';
 
 /// #1899 — a Target framed from Simple Mode (the planetarium page's framing
 /// box, as `planFramingProvider` holds it) reaches the rig in the block the
@@ -169,6 +170,7 @@ void main() {
     seq = _Seq();
     c = ProviderContainer(
       overrides: [
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => seq),
         planetariumSelectionProvider.overrideWith(_Sel.new),
       ],

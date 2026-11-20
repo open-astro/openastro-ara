@@ -153,15 +153,23 @@ Future<bool> seedPlanningFromCache(
     return v is Map ? Map<String, dynamic>.from(v) : const {};
   }
 
-  await container
-      .read(opticsSettingsProvider.notifier)
-      .hydrateGuarded(() async => ProfileApi.opticsFromJson(sec('optics')));
-  await container.read(imagingDefaultsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
-  await container.read(autofocusSettingsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
   // ADR 0015: a snapshot with no key for a section leaves it not loaded,
   // never a default that a Save could send. A cache copy is for planning only.
+  if (snap['optics'] is Map) {
+    container
+        .read(opticsSettingsProvider.notifier)
+        .seed(ProfileApi.opticsFromJson(sec('optics')));
+  }
+  if (snap['imaging_defaults'] is Map) {
+    container
+        .read(imagingDefaultsProvider.notifier)
+        .seed(ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
+  }
+  if (snap['autofocus'] is Map) {
+    container
+        .read(autofocusSettingsProvider.notifier)
+        .seed(ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
+  }
   if (snap['unguided'] is Map) {
     container
         .read(unguidedSettingsProvider.notifier)

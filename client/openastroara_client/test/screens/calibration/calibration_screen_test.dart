@@ -9,6 +9,20 @@ import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/calibration/calibration_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/models/camera_status.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
+
+class _Camera extends CameraStatusNotifier {
+  _Camera(this.status);
+  final CameraStatus status;
+  @override
+  Future<CameraStatus?> build() async => status;
+}
 
 class _FakeCalibrationClient implements CalibrationClient {
   final List<CalibrationSession> sessions;
@@ -415,6 +429,43 @@ void main() {
     final temps = tester.widget<TextField>(find.widgetWithText(
         TextField, 'Sensor temperatures (°C, comma-separated)'));
     expect(temps.controller!.text, '-10');
+  });
+
+  testWidgets('the dark form takes the cooler target from the profile once it is in from the rig (ADR 0015)',
+      (tester) async {
+    final defaults = FakeImagingDefaultsSection(initial: null);
+    final camera = CameraStatus.fromJson({
+      'device_id': 'c',
+      'name': 'ASI2600MM',
+      'state': 'connected',
+      'capabilities': {'has_cooler': true, 'can_set_temperature': true},
+    });
+    final container = ProviderContainer(overrides: [
+      calibrationApiProvider.overrideWithValue(_FakeCalibrationClient()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      imagingDefaultsProvider.overrideWith(() => defaults),
+      cameraStatusProvider.overrideWith(() => _Camera(camera)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(cameraStatusProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: CalibrationScreen()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark Library'));
+    await tester.pumpAndSettle();
+    final temps = find.widgetWithText(
+        TextField, 'Sensor temperatures (°C, comma-separated)');
+    expect(tester.widget<TextField>(temps).controller!.text, '',
+        reason: 'no client default while the rig has not answered');
+
+    defaults.initial = const ImagingDefaults(coolerTargetC: -15);
+    await container
+        .read(imagingDefaultsProvider.notifier)
+        .load(container.read(profileApiProvider)!);
+    await tester.pump();
+    expect(tester.widget<TextField>(temps).controller!.text, '-15');
   });
 
   testWidgets('dark library lists entries and opens the build sequence',

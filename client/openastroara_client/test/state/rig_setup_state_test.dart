@@ -45,8 +45,10 @@ class _Profile extends ProfileApi {
   Future<SiteSettings> getSiteSettings() async =>
       site ?? (throw Exception('connection refused'));
   @override
-  Future<OpticsSettings> getOptics() async =>
-      optics ?? (throw Exception('connection refused'));
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => (
+    value: optics ?? (throw Exception('connection refused')),
+    etag: '"v1"',
+  );
   @override
   Future<Phd2Settings> getPhd2Settings() async => phd2;
 }
@@ -328,8 +330,16 @@ void main() {
       // The user types a focal length in Settings and has not saved it yet.
       c.read(opticsSettingsProvider.notifier).setFocalLengthMm(1000);
       await _relink(c);
-      expect(c.read(opticsSettingsProvider).focalLengthMm, 1000);
+      expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 1000);
       expect(c.read(rigSetupFactsProvider), isNotNull);
+    });
+
+    test('optics back to not loaded (a rig or profile change) leave the facts untrusted (ADR 0015)', () async {
+      final c = await _trust(_Profile());
+      expect(c.read(rigSetupFactsProvider), isNotNull);
+      c.read(opticsSettingsProvider.notifier).reset();
+      expect(c.read(rigSetupFactsProvider), isNull, reason: 'no client default stands in for the rig\'s optics');
+      expect(c.read(rigSetupGapsProvider), isEmpty);
     });
 
     test(

@@ -6932,4 +6932,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get polarReadoutCautionAltitudeWeak =>
       'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }

@@ -34,6 +34,7 @@ import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
+import '../../support/imaging_sections.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
 /// [runState] (null = no active run) and [detail] (the open sequence's body).
@@ -133,7 +134,8 @@ class _SeededOptics extends OpticsSettingsNotifier {
   _SeededOptics(this._v);
   final OpticsSettings _v;
   @override
-  OpticsSettings build() => _v;
+  LoadedSection<OpticsSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededElectronics extends CameraElectronicsNotifier {
@@ -221,6 +223,7 @@ Widget _host(_RecordingClient client,
     ProviderScope(
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => objects ?? [_m31]),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => client),
         // No network in widget tests: the Why? preview renders its placeholder.
         targetPreviewProvider.overrideWith((ref, key) async => null),
@@ -236,6 +239,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
         targetPreviewProvider.overrideWith((ref, key) async => null),
       ],
@@ -262,6 +266,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
         targetPreviewProvider.overrideWith((ref, key) async => null),
       ],
@@ -328,6 +333,7 @@ void main() {
     );
     final container = ProviderContainer(overrides: [
       tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => client),
     ]);
     addTearDown(container.dispose);
@@ -719,6 +725,7 @@ void main() {
     // Own container so we can read the provider seam after the tap.
     final container = ProviderContainer(overrides: [
       tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
     ]);
     addTearDown(container.dispose);
@@ -847,6 +854,7 @@ void _upNowTests() {
       (tester) async {
     final container = ProviderContainer(overrides: [
       tonightSkyProvider.overrideWith((ref) async => [_risingLater()]),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
       targetPreviewProvider.overrideWith((ref, key) async => null),
     ]);
@@ -870,6 +878,7 @@ void _offlineAddTests() {
     final drafts = _MemDrafts();
     final container = ProviderContainer(overrides: [
       tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => null),
       draftSequenceServiceProvider.overrideWithValue(drafts),
       targetPreviewProvider.overrideWith((ref, key) async => null),
@@ -952,6 +961,7 @@ void _budgetTests() {
   Widget host(TonightSkyObject o, {List<StatsTarget>? stats}) => ProviderScope(
         overrides: [
           tonightSkyProvider.overrideWith((ref) async => [o]),
+          ...imagingSectionsFromRig(),
           sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
           targetPreviewProvider.overrideWith((ref, key) async => null),
           statsTargetsProvider.overrideWith(() => _FixedStats(stats)),

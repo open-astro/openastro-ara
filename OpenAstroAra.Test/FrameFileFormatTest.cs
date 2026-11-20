@@ -143,6 +143,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_daemon_frame_names_ara_and_its_version_in_swcreate_in_fits_and_xisf() {
+            // #2093: a captured frame says which release made it, and the Sky Album still knows it
+            // as Ara's own frame by the name prefix.
+            var expected = "OpenAstro Ara " + OpenAstroAra.Core.Utility.CoreUtil.Version;
+            foreach (var format in new[] { "fits", "xisf" }) {
+                UseStorage(format, "off");
+                var headers = FrameFileReader.ReadHeaders(Capture(Pattern(8, 8), 8, 8));
+                Assert.That(headers["SWCREATE"], Is.EqualTo(expected), format);
+                Assert.That(FrameAlbumFields.FromHeaders(headers).CapturedByAra, Is.True, format);
+            }
+        }
+
+        [Test]
         public void A_light_with_no_profile_pixel_size_takes_the_connected_cameras_in_its_header() {
             // Rig 11-13: the profile's pixel size read 0 mid-session and lights were written with no XPIXSZ.
             _profile.PutOpticsSettings(_profile.GetOpticsSettings() with { PixelSizeUm = 0 });

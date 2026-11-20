@@ -97,9 +97,10 @@ Future<List<TonightSkyObject>> _rankAt(
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
     return const <TonightSkyObject>[];
   }
-  final optics = ref.watch(opticsSettingsProvider);
   // Planning reads what is loaded (the rig, or the offline cache); a section
   // not loaded plans with the unset values, and is never saved from here.
+  final optics =
+      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
   final filterSet =
       ref.watch(filterSetProvider).value ?? const FilterSetSettings();
   final electronics =

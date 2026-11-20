@@ -48,6 +48,10 @@ on:
   push:
     branches:
       - master
+      # Release lines (docs/RELEASES.md): a fix merged into stable/X.Y gets the
+      # same CI as master. The tag is pushed after its merge, so this push run
+      # builds a nightly; a re-run on the tagged commit builds the release.
+      - 'stable/**'
   workflow_dispatch:
 
 # A new push to a branch cancels the run it replaces: nobody reads the old
@@ -140,6 +144,12 @@ jobs:
       # fragment, or an [Unreleased] section written back into CHANGELOG.md, would break the release step.
       - name: Changelog fragments
         run: python3 scripts/changelog-fragments.py --check
+
+      # #2093 — VERSION is the one version of a release (docs/RELEASES.md). The client pubspec
+      # version and the README badge must carry the same one, or a release PR cuts a mismatch.
+      # Each release script's --self-test already runs in the Python tooling tests above.
+      - name: Version file
+        run: python3 scripts/version.py --check
 
       # Decision records (docs/adr/README.md): every record keeps the shape the review bot reads.
       - name: Decision record shape
@@ -734,7 +744,7 @@ jobs:
           submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
           lfs: false
           persist-credentials: false
-          fetch-depth: 0  # need full history + tags so `git describe --tags --exact-match HEAD` can find the release tag for the .deb version step
+          fetch-depth: 0  # full history, tags and stable/* branches: the .deb version step looks for a release tag on HEAD and nightly-version.py for the newest release line
 
       - name: Setup .NET 11 SDK + .NET 10 runtime
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
@@ -1134,28 +1144,57 @@ jobs:
         run: docker rm -f oara-e2e || true
 
       # === Phase 10.5: .deb packaging ===
-      # Assemble an arm64 .deb on every push so the user can scp it to a
-      # Pi for testing. Apt repo (apt.openastro.net) + reprepro + GPG
-      # signing arrives at Phase 14 per playbook §34.5. For now this is
-      # an artifact-only build — download the .deb from the Actions run.
+      # Assemble an arm64 .deb on every push so a tester can scp it to a Pi.
+      # Ara releases are source only (docs/RELEASES.md): this .deb is a run
+      # artifact and is never published to a Release or to apt.
       - name: Compute .deb version
         id: deb-version
+        env:
+          # The branch being built: a PR's base, a merge group's base
+          # (refs/heads/stable/1.0, stripped below; ref_name there is the
+          # gh-readonly-queue branch), else the pushed branch. On stable/X.Y
+          # the nightly stays on that line (scripts/nightly-version.py).
+          # Via env, not ${{ }} interpolation into the script (zizmor template-injection).
+          BUILD_BRANCH: ${{ github.base_ref || github.event.merge_group.base_ref || github.ref_name }}
         run: |
-          # Release versions are tagged `v*` (e.g. `v0.0.1-ara.1`); the leading
-          # `v` is stripped to get the dpkg-valid Version field. Non-release
-          # tags like `phase-10.5-complete` are EXCLUDED via `--match 'v*'` so
-          # they don't get mistakenly used as Debian versions (dpkg-deb
-          # requires the Version field to start with a digit, which would
-          # reject `phase-10.5-complete` outright).
-          # Untagged commits get 0.0.0-dev-<short-sha> so they're trivially
-          # distinguishable from real releases and never collide.
-          if git describe --tags --exact-match --match 'v*' HEAD 2>/dev/null; then
-            VERSION="$(git describe --tags --exact-match --match 'v*' HEAD | sed 's/^v//')"
+          set -euo pipefail
+          # A commit carrying an Ara release tag (vX.Y.Z or vX.Y.Z-beta.N whose
+          # VERSION file names that version) is built as that release:
+          # VERSION in .deb spelling (1.0.0~beta1, 1.0.0). The repository still
+          # holds tags inherited from NINA (v1.10.1 among them); they have no
+          # matching VERSION, so they never name a build. Anything else is a dev
+          # build: <next>~~nightly<YYYYMMDDHHMM>.g<sha7> (or X.Y.Z~betaN+nightly...
+          # between betas), which dpkg sorts below the release and beta it leads to.
+          BUILD_BRANCH="${BUILD_BRANCH#refs/heads/}"
+          release_tag=""
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            # Exit 2 means "not an Ara release tag" (v.1.8 and other NINA
+            # shapes). Any other failure is a broken script: fail loudly
+            # rather than quietly build a nightly on a release commit.
+            rc=0
+            tag_info="$(python3 scripts/release-tag.py "$tag" 2>/dev/null)" || rc=$?
+            if [ "$rc" = 2 ]; then
+              continue
+            elif [ "$rc" != 0 ]; then
+              echo "::error::scripts/release-tag.py failed on tag $tag (exit $rc)"
+              exit 1
+            fi
+            tag_version="$(sed -n 's/^version=//p' <<<"$tag_info")"
+            if [ -n "$tag_version" ] && [ "$tag_version" = "$file_version" ]; then
+              release_tag="$tag"
+              break
+            fi
+          done < <(git tag --points-at HEAD --list 'v*')
+          if [ -n "$release_tag" ]; then
+            DEB_VERSION="$(python3 scripts/version.py --deb)"
+            echo "Release tag $release_tag -> .deb version $DEB_VERSION"
           else
-            VERSION="0.0.0-dev-$(git rev-parse --short HEAD)"
+            DEB_VERSION="$(python3 scripts/nightly-version.py --branch "$BUILD_BRANCH")"
+            echo "No release tag on HEAD -> dev .deb version $DEB_VERSION"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Computed .deb version: $VERSION"
+          echo "version=$DEB_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build .deb (arm64)
         # Pass the version through the environment rather than interpolating

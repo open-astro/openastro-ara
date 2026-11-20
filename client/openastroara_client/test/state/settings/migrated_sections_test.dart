@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
@@ -13,8 +15,10 @@ import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
@@ -27,6 +31,7 @@ import '../../support/fake_section_rig.dart';
 /// Every migrated section by the path the rig serves it under (the filter
 /// wheel's two sections share the route `filter-wheel`).
 const _paths = [
+  'autofocus',
   'camera-electronics',
   'cooling-fan',
   'custom-horizon',
@@ -37,18 +42,23 @@ const _paths = [
   'filter-set',
   'filter-wheel/labels',
   'filter-wheel/policy',
+  'imaging-defaults',
   'notifications',
+  'optics',
   'plate-solve',
   'storage',
   'unguided',
 ];
 
 final _selfLoading = {
+  autofocusSettingsProvider,
   coolingFanProvider,
   domeSettingsProvider,
   equipmentConnectionProvider,
   filterWheelLabelsProvider,
   filterWheelPolicyProvider,
+  imagingDefaultsProvider,
+  opticsSettingsProvider,
 };
 
 String _routeOf(String path) => path.split('/').first;
@@ -160,6 +170,12 @@ void main() {
     'filter-wheel/policy': (c) => c
         .read(filterWheelPolicyProvider.notifier)
         .edit((v) => v.copyWith(useFilterWheelOffsets: true)),
+    'imaging-defaults': (c) =>
+        c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-20),
+    'autofocus': (c) =>
+        c.read(autofocusSettingsProvider.notifier).setExposureSeconds(8),
+    'optics': (c) =>
+        c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -253,6 +269,18 @@ void main() {
       null,
       ...without(rigDefaults['filter-wheel/policy']!),
     ],
+    'imaging-defaults': [
+      null,
+      ...without(rigDefaults['imaging-defaults']!),
+      {...rigDefaults['imaging-defaults']!, 'frame_kind': 'bogus'},
+    ],
+    'autofocus': [
+      null,
+      ...without(rigDefaults['autofocus']!),
+      {...rigDefaults['autofocus']!, 'method': 'bogus'},
+      {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
+    ],
+    'optics': [null, ...without(rigDefaults['optics']!)],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -282,6 +310,7 @@ void main() {
   // The PUT reply is the rig's copy too: one without the edited key fails the
   // Save, which keeps the edit and the loaded tag (no default comes back).
   const replyDrops = {
+    'autofocus': 'exposure_seconds',
     'camera-electronics': 'read_noise_e',
     'cooling-fan': 'port_id',
     'custom-horizon': 'points',
@@ -290,6 +319,8 @@ void main() {
     'filter-set': 'filters',
     'filter-wheel/labels': 'labels',
     'filter-wheel/policy': 'use_filter_wheel_offsets',
+    'imaging-defaults': 'cooler_target_c',
+    'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
     'unguided': 'guard_enabled',
   };
@@ -313,6 +344,28 @@ void main() {
     });
   }
 
+  test('optics: a daemon write announced by profile.updated reloads the copy, '
+      'so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own optics save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(opticsSettingsProvider).canSave);
+    // A camera connect fills the sensor on the rig; the daemon announces it.
+    rig.daemonWrote('optics', {
+      ...rigDefaults['optics']!,
+      'sensor_width_px': 6248,
+      'sensor_height_px': 4176,
+      'pixel_size_um': 3.76,
+    });
+    await applyProfileUpdated(c, 'optics');
+    c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382);
+    await c.read(opticsSettingsProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, isNot('"optics-v1"'), reason: 'the tag of the copy the daemon wrote');
+    expect((put.body as Map)['sensor_width_px'], 6248, reason: 'the daemon\'s fill is kept');
+    expect((put.body as Map)['focal_length_mm'], 382);
+  });
+
   // The diagnostics radios save on each tap (replaceAndSave).
   const mode = 'diagnostics-mode', tapped = DiagnosticsMode.abortOnCritical;
 
@@ -321,14 +374,46 @@ void main() {
     final rig = _rig();
     final c = _container(rig);
     final n = c.read(diagnosticsModeProvider.notifier);
+    // Not loaded: the tap loads once more first; that failing too refuses it.
+    rig.failGet.add(mode);
     await expectLater(
       n.replaceAndSave(tapped),
       throwsA(isA<SectionNotLoadedException>()),
     );
+    rig.failGet.remove(mode);
     await n.load(rig.api());
     rig.failPut.add(mode);
     await expectLater(n.replaceAndSave(tapped), throwsException);
     expect(c.read(diagnosticsModeProvider).value, DiagnosticsMode.notifyOnly);
+    expect(rig.puts, isEmpty);
+  });
+
+  test('diagnostics-mode: a tap after one failed load loads again and saves '
+      'when the rig answers', () async {
+    final rig = _rig()..failGet.add(mode);
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    expect(c.read(diagnosticsModeProvider).canSave, isFalse);
+    rig.failGet.remove(mode);
+    await n.replaceAndSave(tapped);
+    expect(rig.puts, hasLength(1));
+    expect(c.read(diagnosticsModeProvider).source, SectionSource.rig);
+  });
+
+  test('diagnostics-mode: a tap made from the offline cache copy is refused '
+      'even when the rig answers, and nothing is sent', () async {
+    final rig = _rig()..failGet.add(mode);
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    n.seed(DiagnosticsMode.notifyOnly);
+    expect(c.read(diagnosticsModeProvider).source, SectionSource.cache);
+    rig.failGet.remove(mode);
+    await expectLater(
+      n.replaceAndSave(tapped),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
     expect(rig.puts, isEmpty);
   });
 

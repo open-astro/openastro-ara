@@ -15,6 +15,7 @@
 using System.Runtime.CompilerServices;
 
 // NovasAbiTest pins the internal NOVAS.cs marshaling structs to the SuperNOVAS layout (#1386).
-// Declared in source because this project sets GenerateAssemblyInfo=false, which silently
-// drops the csproj <InternalsVisibleTo> item.
+// Declared in source, next to the project's own AssemblyInfo: the project keeps its NINA
+// assembly attributes in source and lets the SDK generate only the version attributes
+// (AraVersionAttributesOnly, Directory.Build.targets).
 [assembly: InternalsVisibleTo("OpenAstroAra.Test")]

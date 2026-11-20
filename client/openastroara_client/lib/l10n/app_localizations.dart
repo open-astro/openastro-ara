@@ -11584,6 +11584,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.'**
   String get polarReadoutCautionAltitudeWeak;
+
+  /// Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'
+  ///
+  /// In en, this message translates to:
+  /// **'Server {server} and app {app} differ; update both from the same release.'**
+  String versionMismatchWarning(String server, String app);
 }
 
 class _AppLocalizationsDelegate

@@ -8,6 +8,7 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import '../../support/imaging_sections.dart';
 
 /// Regression for the rig failure of 2026-10-04: with nothing watching the
 /// autoDispose [sequenceApiProvider] (the coordinate-entry dialog, a Tonight's
@@ -69,6 +70,7 @@ void main() {
     // Keep the real provider's autoDispose + onDispose(close) contract.
     final container = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) {
         ref.onDispose(client.close);
         return client;

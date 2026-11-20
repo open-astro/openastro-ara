@@ -528,7 +528,8 @@ class _SeededOptics extends OpticsSettingsNotifier {
   _SeededOptics(this._v);
   final OpticsSettings _v;
   @override
-  OpticsSettings build() => _v;
+  LoadedSection<OpticsSettings> build() =>
+      LoadedSection(value: _v, source: SectionSource.rig);
 }
 
 class _SeededElectronics extends CameraElectronicsNotifier {

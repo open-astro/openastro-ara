@@ -17,7 +17,6 @@ using OpenAstroAra.Core.Model;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -35,42 +34,16 @@ namespace OpenAstroAra.Core.Utility {
         public static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public static readonly long UnixEpochTicks = UnixEpoch.Ticks;
 
-        public static string Version {
-            get {
-                System.Reflection.Assembly assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
-                string version = fvi.FileVersion ?? string.Empty;
-                return version;
-            }
-        }
-
-        public static string VersionFriendlyName => new ProjectVersion(Version).ToString();
-        public static bool IsReleaseBuild => new Version(Version).Revision >= 9000;
-        public static bool IsBetaBuild => new Version(Version).Revision >= 2000 && new Version(Version).Revision < 3000;
-        public static bool IsRCBuild => new Version(Version).Revision >= 3000 && new Version(Version).Revision < 9000;
-        public static bool IsNightlyBuild => new Version(Version).Revision < 2000;
-
-        public static string DocumentationPage {
-            get {
-                if (IsReleaseBuild) {
-                    return "https://nighttime-imaging.eu/docs/master/site/";
-                } else {
-                    return "https://nighttime-imaging.eu/docs/develop/site/";
-                }
-            }
-        }
+        /// <summary>
+        /// Product version in the SemVer display spelling (<c>1.0.0</c>, <c>1.0.0-beta.1</c>) from the
+        /// root VERSION file (#2093), the same value the daemon reports. Logs, the HTTP user agent and
+        /// the SWCREATE header of saved frames show it. NINA's FileVersion channel digit is gone.
+        /// </summary>
+        public static string Version { get; } = AraDisplayVersion.FromInformationalVersion(
+            typeof(CoreUtil).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            typeof(CoreUtil).Assembly.GetName().Version);
 
         public static string DocumentationLocalPage => Path.Combine(APPLICATIONDIRECTORY, "docs", "index.html");
-
-        public static string ChangelogPage {
-            get {
-                if (IsReleaseBuild) {
-                    return "https://github.com/isbeorn/nina/commits/master/";
-                } else {
-                    return "https://github.com/isbeorn/nina/commits/develop/";
-                }
-            }
-        }
 
         public static string Title => "OpenAstro Ara";
 

@@ -76,6 +76,7 @@ import 'package:openastroara/state/library/live_library_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import 'selection_tint_contrast.dart';
+import '../../support/imaging_sections.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -251,8 +252,11 @@ void _whole(WidgetTester tester, Finder text) {
 // target_plan_dialog_test).
 class _Optics extends OpticsSettingsNotifier {
   @override
-  OpticsSettings build() => const OpticsSettings(
-      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+  LoadedSection<OpticsSettings> build() => const LoadedSection(
+    value: OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91),
+    source: SectionSource.rig,
+  );
 }
 
 class _Electronics extends CameraElectronicsNotifier {
@@ -333,6 +337,7 @@ Future<ProviderContainer> _pump(
       ...overrides.cast(),
       tonightSkyProvider.overrideWith((ref) async => tonight),
       tonightsBestProvider.overrideWith((ref) async => tonight),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => seq),
       planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
       if (filtersLoaded)
@@ -875,6 +880,7 @@ void main() {
         if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
         tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),

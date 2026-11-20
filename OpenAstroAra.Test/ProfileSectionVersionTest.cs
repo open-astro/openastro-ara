@@ -112,6 +112,9 @@ namespace OpenAstroAra.Test {
             ["Dome"] = o => Bump(o, "dome_radius_mm"),
         };
 
+        /// <summary>Applies the section's one valid edit (shared with DaemonProfileWriteEventTest).</summary>
+        internal static void Change(string section, JsonObject o) => Changes[section](o);
+
         private static void Bump(JsonObject o, string key) => o[key] = o[key]!.GetValue<double>() + 1;
         private static void Flip(JsonObject o, string key) => o[key] = !(o[key]?.GetValue<bool>() ?? false);
 

@@ -60,7 +60,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Decision:** a 2xx GET or PUT answers a strong `ETag`, the SHA-256 of the stored section's JSON. A PUT may send `If-Match`: `*` or the tag it loaded passes; any other tag is a 412 problem, nothing is written and no `profile.updated` goes out. A PUT with no `If-Match` is still accepted until slice 4 makes it required. `PUT /profile/storage` moves onto the same check, so its tags change once (the hash now comes from the serializer context, not the reflection one) and its 400 rules are unchanged.
 
-**Reasoning:** two clients or panels saving a whole section over each other silently drop the other's edit (ADR 0015). A tag of the stored content, not a write counter, gives equal content an equal tag. A write by the daemon itself moves the tag too, so an open panel's next save is a 412 and the client reloads. A live-sync load (#1644) throws away open edits, so a 412 comes only when the event was missed or the daemon wrote the section.
+**Reasoning:** two clients or panels saving a whole section over each other silently drop the other's edit (ADR 0015). A tag of the stored content, not a write counter, gives equal content an equal tag. A write by the daemon itself moves the tag too; it publishes `profile.updated` like a route write (#1807 slice B, entry of 2026-11-20), so a client holding the section reloads it before its next save. A live-sync load (#1644) throws away open edits, so a 412 comes only when the event was missed.
 
 **Spec ref:** `Endpoints/ProfileEndpoints.cs` (`WithSection`, `CheckSectionVersion`), `Services/ProfileSections.cs` (`ProfileSection.Read`), `Program.cs` (the `If-Match` parameter).
 
@@ -279,7 +279,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Endpoint(s) or area:** `GET /api/v1/profile/storage` and `PUT /api/v1/profile/storage` (`storage` profile section).
 
-**Decision:** `GET` and a successful `PUT` answer with an `ETag` header: a strong tag, the SHA-256 of the stored (normalized) section's JSON, in quotes. Nothing is stored for it; equal content gives an equal tag. `PUT` takes an optional `If-Match` header. When it is sent and is neither `*` nor the current tag, the answer is `412` Problem and nothing is written; a `412` is a rejected write, so no `profile.updated` is published. When `If-Match` is absent the write is accepted as before (refusing a write without it is a later slice of #1807). The tag check runs before the existing `400` validation. `POST /api/v1/storage/configure` also writes this section (the new save directory) and publishes no `profile.updated`, so a client that holds the section loads it again after a successful configure. The tag compare and the store write are two steps, not one atomic step (`ProfileEndpoints.PutStorageSettings`): two saves that arrive together with the same tag can both pass. That is accepted because one client controls the rig at a time (ADR 0005), so two writes of the same section racing within that window is not a case the daemon has to arbitrate; the tag is there for the common case of a stale copy on a second device.
+**Decision:** `GET` and a successful `PUT` answer with an `ETag` header: a strong tag, the SHA-256 of the stored (normalized) section's JSON, in quotes. Nothing is stored for it; equal content gives an equal tag. `PUT` takes an optional `If-Match` header. When it is sent and is neither `*` nor the current tag, the answer is `412` Problem and nothing is written; a `412` is a rejected write, so no `profile.updated` is published. When `If-Match` is absent the write is accepted as before (refusing a write without it is a later slice of #1807). The tag check runs before the existing `400` validation. `POST /api/v1/storage/configure` also writes this section (the new save directory); since #1807 slice B that write publishes `profile.updated { section: "storage" }` like any daemon write of a client section, and the configuring client still loads the section again after a successful configure. The tag compare and the store write are two steps, not one atomic step (`ProfileEndpoints.PutStorageSettings`): two saves that arrive together with the same tag can both pass. That is accepted because one client controls the rig at a time (ADR 0005), so two writes of the same section racing within that window is not a case the daemon has to arbitrate; the tag is there for the common case of a stale copy on a second device.
 
 **Reasoning:** the client saved the Storage section from its own defaults when the load had failed, and saved over a newer copy another device had written. ADR 0015 makes a client load a section from the rig before it saves it and send back the tag of the copy it loaded. A derived hash needs no version column and no migration; a stored version counter was the alternative, and is left for when every section moves.
 
@@ -1463,7 +1463,12 @@ is connected, straight from its GuideStep events):
       (a PUT, or the first-flip re-arm POST); section is the first path
       segment ("site", "optics", "filter-wheel", "safety", ...). A rejected
       write (4xx/5xx) publishes nothing. Another device refetches that
-      section; the one that wrote may ignore it.
+      section; the one that wrote may ignore it. #1807 — also when the
+      daemon itself changes a client section outside those routes (time
+      sync, plate solve, a connect-time fill, the flip executor, auto
+      flats, the guider, the dome follower, the filter-wheel label mirror,
+      storage configure), once per section whose ETag moved. A profile
+      select and the daemon-only sections publish nothing.
   client_settings.updated { keys, updated_utc }
       #1644 — after a successful PUT or PATCH /api/v1/client-settings; keys
       are the top-level keys the write carried (PATCH: the patch's keys,
@@ -1692,7 +1697,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Endpoint(s) or area:** `PATCH /api/v1/client-settings`; WebSocket `profile.updated`, `client_settings.updated`.
 
-**Decision:** the existing `ClientSettingsDto` resource gains a top-level-key merge on the same path, as `PATCH` with the same `{ "settings": { ... } }` body as the `PUT`. Only the given top-level keys change (the value is replaced whole, not deep-merged); a key whose value is JSON `null` is removed; every other key is left alone. It takes the same write gate as the `PUT`, applies the object-only check (400) and the 256 KiB cap (400) to the merged result, writes with the same temp-file rename, and answers 200 with the stored object and its new `updated_utc`. The `PUT` is unchanged. The two WebSocket events are documented in the WebSocket section above; neither carries the preference values, only what changed. `profile.updated` is published by an endpoint filter on the whole `/api/v1/profile` group, so a section added later is covered without extra code; daemon-internal profile writes (calibration stamps, the connect-time identity record) are not client edits and publish nothing.
+**Decision:** the existing `ClientSettingsDto` resource gains a top-level-key merge on the same path, as `PATCH` with the same `{ "settings": { ... } }` body as the `PUT`. Only the given top-level keys change (the value is replaced whole, not deep-merged); a key whose value is JSON `null` is removed; every other key is left alone. It takes the same write gate as the `PUT`, applies the object-only check (400) and the 256 KiB cap (400) to the merged result, writes with the same temp-file rename, and answers 200 with the stored object and its new `updated_utc`. The `PUT` is unchanged. The two WebSocket events are documented in the WebSocket section above; neither carries the preference values, only what changed. `profile.updated` is published by an endpoint filter on the whole `/api/v1/profile` group, so a section added later is covered without extra code; daemon-internal profile writes (calibration stamps, the connect-time identity record) are not client edits and publish nothing (superseded in part by #1807 slice B: a daemon write of a section a client can load does publish, see the #1807 entry of 2026-11-20).
 
 **Reasoning:** two devices saving different keys at the same moment must both land, which a read-modify-replace on the client cannot guarantee. The merge runs inside the daemon's write gate. The `updated_utc` in the event lets the device that wrote skip the refetch of its own save. An older daemon answers 404/405 to the `PATCH` and sends neither event; the client then keeps its preferences local.
 
@@ -1931,6 +1936,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarAlignService.SweepOrigin.cs` (`PlanSweep`, `MovedSince`, `MechanicalTurnDeg`), `Services/PolarAlignService.cs` (`PlanStartAsync`, `StartAsync`), `Services/TelescopeService.cs` (`SessionEpoch`); client `lib/widgets/imaging/polar_start_confirm.dart`. Tests `PolarAlignServiceTest.Sweep.cs`.
 
 **Related:** #2048, #2089, #2070, #2071, ADR 0022
+
+## 2026-11-20 — A daemon write of a client section publishes `profile.updated`; the first-flip re-arm answers an `ETag` (#1807)
+
+**Endpoint(s) or area:** WebSocket `profile.updated { section }`; `POST /api/v1/profile/safety/first-flip/rearm`.
+
+**Decision:** when the daemon changes a section a client can load (one of the routes that answer an `ETag`) outside the profile routes, it publishes the same `profile.updated { section }` with the route name a route write uses ("site", "optics", "safety", "phd2", "guider-advanced", "camera-electronics", "filter-wheel", "dome", "storage", ...). One listener on the store's change event compares each section's `ETag` with the last one it saw and publishes each section whose tag moved, once, whoever wrote it: time sync's location, plate solve's learned focal length, the camera and mount connect-time fills, the flip executor's first-flip confirmation, the auto-flats capture choice, the guider's camera reconcile and guiding assistant, the dome follower, the filter-wheel label mirror, storage configure. A route write still publishes once: the route announces its own section while it runs, so the listener skips it; a second section the route write changes too (a real optics change clears `first_flip_confirmed`) is published as well. A whole-profile apply (select, the delete fallback, the boot load) publishes nothing, as before. A section with no client route (calibration records, the identity record) publishes nothing. The first-flip re-arm carries the safety section's metadata, so its 200 answers the stored safety section's `ETag`; it still takes no `If-Match`.
+
+**Reasoning:** a daemon write moved the tag with no event, so a client holding the section kept the old tag and its next Save was a 412 that said the settings changed on the rig (after a time sync, a plate solve, a flip, a guiding assistant run). One listener on the store covers every writer, present and future, instead of a call at each.
+
+**Spec ref:** `Services/ProfileSectionChangePublisher.cs` (`ProfileSectionChangePublisher`, `ProfileWriteScope`), `Endpoints/ProfileEndpoints.cs` (`PublishUpdatedAfterWrite`, `PublishDaemonProfileWrites`, `SectionRoutes`), `Services/ProfileStoreSnapshot.cs` (`Apply`), `Program.cs`.
+
+**Related:** #1807, #1644; ADR 0015; tests `DaemonProfileWriteEventTest`, `PreferenceSyncWiringTest`.
 
 ## 2026-11-20 — Polar Align says which number to trust: tracking off confirmed, `readout_caution`, `above_align` (#2072)
 

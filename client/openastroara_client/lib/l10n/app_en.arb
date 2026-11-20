@@ -8901,5 +8901,10 @@
   "polarReadoutCautionAltitudeWeak": "The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.",
   "@polarReadoutCautionAltitudeWeak": {
     "description": "Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)"
+  },
+  "versionMismatchWarning": "Server {server} and app {app} differ; update both from the same release.",
+  "@versionMismatchWarning": {
+    "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",
+    "placeholders": {"server": {"type": "String"}, "app": {"type": "String"}}
   }
 }

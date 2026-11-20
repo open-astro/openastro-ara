@@ -133,7 +133,12 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   /// Save [next] whole (a picker, a form). A 412 keeps [next] and flags the
   /// conflict (ADR 0015 rule 6). Any other failure puts the rig's copy back,
   /// unless a later edit already replaced [next]: that edit's save decides.
+  /// A [next] made from the offline cache copy is refused with nothing sent:
+  /// the cache's other fields must not overwrite the rig's.
   Future<void> replaceAndSave(T next) async {
+    if (state.source == SectionSource.cache) {
+      throw SectionNotLoadedException(state.lastFailure);
+    }
     try {
       await editAndSave((_) => next);
     } on SectionConflictException {
@@ -146,14 +151,42 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   }
 
   /// An auto-save row (a switch that saves on change): edit, then save.
-  /// Throws [SectionNotLoadedException] without editing when nothing was
-  /// loaded, so a refused toggle never shows as set.
-  Future<void> editAndSave(T Function(T current) change) {
-    if (!state.canSave) {
-      return Future.error(SectionNotLoadedException(state.lastFailure));
-    }
+  /// Not loaded from the rig: load once more first, as [save] does, so one
+  /// failed load does not refuse every later change. Throws
+  /// [SectionNotLoadedException] without editing when that fails too, so a
+  /// refused toggle never shows as set.
+  Future<void> editAndSave(T Function(T current) change) async {
+    if (!state.canSave) await _loadOnce();
+    if (!state.canSave) throw SectionNotLoadedException(state.lastFailure);
     edit(change);
     return save(_activeApi());
+  }
+
+  /// A Simple Mode row that saves each change: [change] applied to the rig's
+  /// copy (loaded once more first when it isn't in) and saved whole, so a
+  /// failed save puts the rig's copy back. A 412 reloads the rig's copy: the
+  /// row has no edits worth keeping, and the newer copy shows at once.
+  Future<void> changeAndSave(T Function(T current) change) async {
+    if (!state.canSave) await _loadOnce();
+    final v = state.value;
+    if (v == null || !state.canSave) {
+      throw SectionNotLoadedException(state.lastFailure);
+    }
+    try {
+      await replaceAndSave(change(v));
+    } on SectionConflictException {
+      final api = ref.mounted ? ref.read(profileApiProvider) : null;
+      if (api != null) await load(api);
+      rethrow;
+    }
+  }
+
+  // Runs only when not loaded: a loaded section edits at once (no await).
+  // Gone while the load ran: refused, nothing sent.
+  Future<void> _loadOnce() async {
+    final api = ref.read(profileApiProvider);
+    if (api != null) await load(api);
+    if (!ref.mounted) throw const SectionNotLoadedException(null);
   }
 
   /// Back to not loaded (rig or profile changed).
@@ -202,9 +235,10 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
 }
 
 /// A section read outside Settings (no panel opens it first): loads itself
-/// once the notifier is built and whenever it is back to not loaded with no
-/// failure, such as after the reset point (migrated_sections.dart) or when the
-/// rig connects. A failed load stays failed until Retry or the next Save.
+/// once the notifier is built and whenever it holds no copy from the rig and
+/// no failure, such as after the reset point (migrated_sections.dart), when the
+/// rig connects, or over an offline cache seed once the rig is there. A failed
+/// load stays failed until Retry or the next Save.
 abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
   @override
   LoadedSection<T> build() {
@@ -217,7 +251,7 @@ abstract class SelfLoadingSection<T> extends SectionNotifier<T> {
   void _loadIfDue(LoadedSection<T> now) {
     final api = ref.read(profileApiProvider);
     if (api != null &&
-        now.source == SectionSource.notLoaded &&
+        now.source != SectionSource.rig &&
         now.lastFailure == null) {
       load(api);
     }

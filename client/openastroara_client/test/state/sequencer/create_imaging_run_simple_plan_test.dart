@@ -10,6 +10,10 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
+
+import '../../support/section_load.dart';
+import '../../support/imaging_sections.dart';
 
 /// Simple Mode's Run hands createImagingRun a finished plan: no plan chooser,
 /// its own sub length and frame count, and a run of its own even with a
@@ -95,7 +99,7 @@ void main() {
   setUp(() {
     seq = _SeqClient();
     container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWith((ref) => seq)],
+      overrides: [...imagingSectionsFromRig(), sequenceApiProvider.overrideWith((ref) => seq)],
     );
     // A sequence is open: Simple Mode's run must not join it.
     container.read(selectedSequenceIdProvider.notifier).select('open-one');
@@ -133,6 +137,51 @@ void main() {
     expect(json, contains('"Iterations":30'));
   });
 
+  testWidgets('connected with the imaging defaults not loaded from the rig, no run is built from the class defaults (ADR 0015)', (
+    tester,
+  ) async {
+    container.dispose();
+    container = ProviderContainer(
+      overrides: [sequenceApiProvider.overrideWith((ref) => seq)],
+    );
+    // Autofocus is in; only the imaging defaults are missing.
+    await tester.runAsync(
+      () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
+    );
+    Object? error;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) => ElevatedButton(
+              onPressed: () => createImagingRun(
+                ref,
+                raDeg: 10.68,
+                decDeg: 41.27,
+                targetName: 'M31',
+                jumpToRun: false,
+                appendToOpen: false,
+                exposureSeconds: 120,
+                frameCount: 30,
+              ).catchError((Object e) {
+                error = e;
+                return null;
+              }),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    for (var i = 0; i < 20 && error == null; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(error, isA<SectionNotLoadedException>());
+    expect(seq.bodies, isEmpty, reason: 'nothing reaches the rig');
+  });
+
   // The profile's refocus-on-temperature amount reaches the run, plan or not.
   for (final withPlan in [true, false]) {
     testWidgets('the profile\'s temperature refocus becomes the run\'s trigger (plan: $withPlan)', (
@@ -141,9 +190,13 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: [
+          ...imagingSectionsFromRig(),
           sequenceApiProvider.overrideWith((ref) => seq),
           focuserProvider.overrideWith(_Focuser.new),
         ],
+      );
+      await tester.runAsync(
+        () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
       );
       container.read(autofocusSettingsProvider.notifier).setTriggerTempDeltaC(1.5);
       await _run(

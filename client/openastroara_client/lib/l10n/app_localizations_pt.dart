@@ -6932,6 +6932,11 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarReadoutCautionAltitudeWeak =>
       'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'Server $server and app $app differ; update both from the same release.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13917,4 +13922,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarReadoutCautionAltitudeWeak =>
       'A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo.';
+
+  @override
+  String versionMismatchWarning(String server, String app) {
+    return 'O servidor $server e o app $app são de versões diferentes; atualize os dois a partir da mesma versão.';
+  }
 }

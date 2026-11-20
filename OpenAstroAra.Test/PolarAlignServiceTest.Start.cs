@@ -110,6 +110,7 @@ namespace OpenAstroAra.Test {
             var parked = false;
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
                 Connected = true, SiderealTime = 20.0, TrackingEnabled = !Volatile.Read(ref parked), AtPark = Volatile.Read(ref parked),
+                SideOfPier = OpenAstroAra.Core.Enums.PierSide.pierWest, // NewMount's pose: HA −4 h, counterweight down
             });
             var fake = NewFake();
             fake.LeaseGate = active => {
