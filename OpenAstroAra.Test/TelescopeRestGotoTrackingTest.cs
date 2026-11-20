@@ -401,7 +401,7 @@ namespace OpenAstroAra.Test {
         }
 
         // #2066 — GoTo B, sent after the stop, is still waiting for the guider to stop when A's PUT returns. A's second abort
-        // would go out while B's PUT does, and could reach the mount after it: B counts as newer from its request on.
+        // goes out at once (the mount must not carry on to A while B waits), and B's PUT waits for it, so it cannot stop B.
         [Test]
         public async Task A_GoTo_still_stopping_the_guider_is_not_aborted_by_the_raced_GoTo() {
             var log = new WarningLog();
@@ -431,7 +431,7 @@ namespace OpenAstroAra.Test {
             stopDone.SetResult(true);
             await slewB!.WaitAsync(TimeSpan.FromSeconds(15));
             await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, "GoTo B never reached the mount");
-            Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race GoTo B's PUT");
+            AssertAbortedBetweenTheGoTos(box, log);
         }
 
         // #2066 — the same race with a sequencer (mediator) slew sent after the stop: it is not stopped by A's second abort.
@@ -448,15 +448,15 @@ namespace OpenAstroAra.Test {
                     if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
                         Thread.Sleep(200); // A's PUT on the wire
                         svc!.FenceMotion("user_request"); // a Stop Mount
-                        // The sequencer's slew starts before A's PUT returns and is noted as a move at once; it may still be
-                        // reading the mount (its coordinate system, when the first refresh has not read it yet) when A's PUT
-                        // returns. Its own PUT follows A's.
+                        // The sequencer's slew goes out before A's PUT returns: everything it reads first is cached, so it
+                        // reaches its send synchronously; its PUT follows A's.
                         slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW), CancellationToken.None);
                     }
                     return null;
                 });
             svc = await ConnectedAsync(box, log);
             using var _ = svc;
+            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.JNOW, "the mount's coordinate system was never read");
 
             await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
 
@@ -471,7 +471,8 @@ namespace OpenAstroAra.Test {
 
         // #2066 — the race with B held in its checks: the stop lands while A's PUT is on the wire, B starts after it, and the
         // mount's position must be read again before B moves (as after a reconnect). B's position read is held until A's PUT
-        // has returned and A has decided whether to abort again (its log line); B then goes on.
+        // has returned and A has decided whether to abort again (its log line); B then goes on, and when A aborts again, B
+        // is given the chance to reach the mount before A's AbortSlew does.
         private sealed class HeldChecksRace : IAsyncDisposable {
             public readonly WarningLog Log = new();
             public readonly ManualResetEventSlim Gate = new(false);
@@ -504,6 +505,15 @@ namespace OpenAstroAra.Test {
                         }
                         return null;
                     });
+                race.Log.OnWarning = message => {
+                    if (!message.Contains("the mount was aborted again", StringComparison.Ordinal)) {
+                        return;
+                    }
+                    // A has decided to abort again and is about to send it: B's read answers now, and B is given time to
+                    // reach the mount first if nothing holds its PUT back.
+                    race.Gate.Set();
+                    SpinWait.SpinUntil(() => race.Box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, TimeSpan.FromSeconds(1));
+                };
                 race.Svc = await ConnectedAsync(race.Box, race.Log);
                 return race;
             }
@@ -529,8 +539,23 @@ namespace OpenAstroAra.Test {
 
         private static readonly Coordinates SlewBTarget = new(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW);
 
-        // #2066 — a sequencer slew sent after the stop is the user's newer move from its request on: while it is still reading
-        // the mount, A's PUT returns, and A's second abort is kept back instead of racing (and maybe stopping) B's PUT.
+        // #2066 — the raced GoTo's second abort, and B's PUT after it: A's abort lies between A's GoTo and B's, and A said it
+        // aborted the mount again (not that it kept the abort back for B).
+        private static void AssertAbortedBetweenTheGoTos(ScriptedAlpacaDevice box, WarningLog log) {
+            var puts = box.Puts.ToArray();
+            var gotos = puts.Select((p, i) => (p, i)).Where(x => x.p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)).Select(x => x.i).ToArray();
+            var abort = PutIndex(box, "abortslew");
+            Assert.Multiple(() => {
+                Assert.That(gotos, Has.Length.EqualTo(2), "both GoTos reached the mount");
+                Assert.That(log.Messages, Has.Some.Contains("the mount was aborted again"), "the raced GoTo was aborted again at once");
+                Assert.That(abort, Is.GreaterThan(gotos[0]), "the abort follows the raced GoTo");
+                Assert.That(abort, Is.LessThan(gotos.Length > 1 ? gotos[1] : int.MaxValue), "the newer move's PUT waits for the abort");
+            });
+        }
+
+        // #2066 — a sequencer slew sent after the stop is still reading the mount when A's PUT returns. A's second abort goes
+        // out at once: kept back for B, it would leave the mount driving on to A for as long as B's checks take (each read can
+        // wait about 10 s). B's PUT waits for that abort, so the abort cannot stop B.
         [Test]
         public async Task A_sequencer_slew_still_in_its_checks_is_not_aborted_by_the_raced_GoTo() {
             await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None));
@@ -538,14 +563,10 @@ namespace OpenAstroAra.Test {
             var slewB = await race.RunAsync();
 
             Assert.That(await slewB.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the sequencer slew arrives");
-            Assert.Multiple(() => {
-                Assert.That(PutIndex(race.Box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race the sequencer slew's PUT");
-                Assert.That(race.Log.Messages, Has.None.Contains("the mount was aborted again"));
-                Assert.That(race.Box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)), Is.EqualTo(2), "the sequencer slew reached the mount");
-            });
+            AssertAbortedBetweenTheGoTos(race.Box, race.Log);
         }
 
-        // #2066 — the same with a meridian flip: it is noted before its own clock wait, position check and pier-side write.
+        // #2066 — the same with a meridian flip still in its checks.
         [Test]
         public async Task A_meridian_flip_still_in_its_checks_is_not_aborted_by_the_raced_GoTo() {
             await using var race = await HeldChecksRace.StartAsync(svc => svc.MeridianFlip(SlewBTarget, CancellationToken.None));
@@ -553,10 +574,105 @@ namespace OpenAstroAra.Test {
             var flip = await race.RunAsync();
 
             Assert.That(await flip.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the flip goto arrives");
-            Assert.Multiple(() => {
-                Assert.That(PutIndex(race.Box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race the flip goto's PUT");
-                Assert.That(race.Log.Messages, Has.None.Contains("the mount was aborted again"));
-            });
+            AssertAbortedBetweenTheGoTos(race.Box, race.Log);
+        }
+
+        // #2066 — a move requested just after A decided to abort again, with nothing left to check, still sends its PUT only
+        // once A's AbortSlew has gone out: the two calls travel on separate connections, and the abort arriving second would
+        // stop the move the user asked for after the stop.
+        [Test]
+        public async Task A_sequencer_slew_requested_as_the_raced_GoTo_aborts_again_waits_for_that_abort() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<bool>? slewB = null;
+            var gotos = 0;
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" : mount(path), // JNOW
+                putResponder: path => {
+                    if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                        Thread.Sleep(200); // A's PUT on the wire
+                        svc!.FenceMotion("user_request"); // a Stop Mount
+                    }
+                    return null;
+                });
+            log.OnWarning = message => {
+                if (!message.Contains("the mount was aborted again", StringComparison.Ordinal)) {
+                    return;
+                }
+                // A has decided to abort again and is about to send it: B starts now, and is given time to reach the mount
+                // first if nothing holds it back.
+                slewB = Task.Run(() => svc!.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None));
+                SpinWait.SpinUntil(() => box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, TimeSpan.FromSeconds(1));
+            };
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.JNOW, "the mount's coordinate system was never read");
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => slewB is not null, "the raced GoTo never aborted again");
+            Assert.That(await slewB!.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the sequencer slew arrives");
+            AssertAbortedBetweenTheGoTos(box, log);
+        }
+
+        // #2066 — a meridian flip whose pier-side write the mount ignores while it slews: the flip waits for the mount to stop
+        // before its goto. A's second abort must not wait for the flip, or the mount drives all the way to A after the stop.
+        [Test]
+        public async Task A_meridian_flip_waiting_on_its_pier_side_write_does_not_hold_the_raced_GoTo_on_its_way() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<bool>? flip = null;
+            var gotos = 0;
+            var slewing = 0; // the mount slews to A from A's GoTo until an AbortSlew or the flip's goto
+            var ra = (SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, 0.0) / 15.0 + 3.0) % 24.0; // 3 h east: pierWest
+            var raText = ra.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" // JNOW
+                    : path.EndsWith("/slewing", StringComparison.Ordinal) ? (Volatile.Read(ref slewing) == 1 ? "true" : "false")
+                    : path.EndsWith("/rightascension", StringComparison.Ordinal) ? raText
+                    : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "0" // pierEast: the flip writes pierWest
+                    : path.EndsWith("/cansetpierside", StringComparison.Ordinal) ? "true"
+                    : mount(path),
+                putResponder: path => {
+                    if (path.EndsWith("/abortslew", StringComparison.Ordinal)) {
+                        Volatile.Write(ref slewing, 0);
+                    } else if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                        Volatile.Write(ref slewing, 1);
+                        Thread.Sleep(200); // A's PUT on the wire
+                        svc!.FenceMotion("user_request"); // a Stop Mount
+                        flip = Task.Run(() => svc.MeridianFlip(new Coordinates(Angle.ByHours(ra), Angle.ByDegree(6.0), Epoch.JNOW), CancellationToken.None));
+                        Thread.Sleep(100); // the flip starts before A's PUT returns
+                    } else if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) {
+                        Volatile.Write(ref slewing, 0);
+                    }
+                    return null;
+                });
+            var profile = new OpenAstroAra.Profile.Profile();
+            profile.AstrometrySettings.Longitude = 0.0;
+            profile.MeridianFlipSettings.UseSideOfPier = true;
+            var profileService = new Mock<OpenAstroAra.Profile.Interfaces.IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile).Returns(profile);
+            using (profile) {
+                svc = new TelescopeService(logger: log, profileService: profileService.Object) { SlewSettleMaxPolls = 30 }; // 3 s
+                using var _ = svc;
+                await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+                await WaitForAsync(() => svc.GetInfo() is { EquatorialSystem: Epoch.JNOW, SideOfPier: PierSide.pierEast } info && !double.IsNaN(info.SiderealTime),
+                    "the mount never reported its coordinate system, pier side and sidereal time");
+
+                await svc.SlewAsync(new SlewRequestDto(ra, 6.0), idempotencyKey: null, CancellationToken.None);
+
+                await WaitForAsync(() => flip is not null, "the flip never started");
+                Assert.That(await flip!.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the flip goto arrives");
+                var puts = box.Puts.ToArray();
+                var pier = Array.FindIndex(puts, p => p.Path.EndsWith("/sideofpier", StringComparison.Ordinal));
+                Assert.Multiple(() => {
+                    Assert.That(pier, Is.GreaterThanOrEqualTo(0), "the flip wrote the pier side");
+                    Assert.That(log.Messages, Has.None.Contains("still moving"), "the flip waited out its bound while the mount drove on to A");
+                });
+                AssertAbortedBetweenTheGoTos(box, log);
+            }
         }
 
         // #2066 — the sequencer slew A's second abort was kept back for is then refused by its own checks (the mount's
@@ -719,12 +835,16 @@ namespace OpenAstroAra.Test {
 
         private sealed class WarningLog : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
             public ConcurrentQueue<string> Messages { get; } = new();
+            /// <summary>Runs on the logging thread, after the message is queued.</summary>
+            public Action<string>? OnWarning { get; set; }
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
             public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
             public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
                     TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
                 if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Warning) {
-                    Messages.Enqueue(formatter(state, exception));
+                    var message = formatter(state, exception);
+                    Messages.Enqueue(message);
+                    OnWarning?.Invoke(message);
                 }
             }
         }
