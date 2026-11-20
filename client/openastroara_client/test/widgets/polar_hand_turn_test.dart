@@ -10,6 +10,8 @@ import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
+import '../support/polar_align_section.dart';
 
 /// #2083 — NINA parity on the polar-align screens: the hand-turn run's prompt,
 /// the azimuth readout's convention, and NINA's large- and huge-error
@@ -31,10 +33,6 @@ class _Api implements PolarAlignClient {
   Future<void> requestCapture() async {}
   @override
   Future<Uint8List?> getLiveFrame() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async => const PolarAlignSettings();
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async => s;
   @override
   void close() {}
 }
@@ -58,6 +56,10 @@ Future<void> _pump(
       overrides: [
         polarAlignApiProvider.overrideWithValue(_Api()),
         polarAlignLiveProvider.overrideWith(() => _Live(live)),
+        // #1807 — the polar-align settings are the rig's profile section.
+        polarAlignSettingsProvider.overrideWith(
+          () => FakePolarAlignSection(loaded: true),
+        ),
       ],
       child: MaterialApp(
         home: Scaffold(body: SingleChildScrollView(child: panel)),
