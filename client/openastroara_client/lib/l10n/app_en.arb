@@ -1420,10 +1420,6 @@
   "@polarSideJoin": {
     "description": "Simple Mode Polar align panel, rough stage: joins the two directions in polarSideSits ('above' + ' and ' + 'east')"
   },
-  "polarNeedsHomeHint": "This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.",
-  "@polarNeedsHomeHint": {
-    "description": "Simple Mode Polar align panel: what to do when the mount cannot find Home"
-  },
   "polarCheckedLine": "Three-point check: {verdict}",
   "@polarCheckedLine": {
     "description": "Simple Mode Polar align panel: the check's verdict",
@@ -1433,9 +1429,9 @@
       }
     }
   },
-  "polarCheckedVsFine": "Three-point check: {verdict}, {delta}′ from the fine readout",
+  "polarCheckedVsFine": "Three-point check: {verdict}, {delta}′ from the last run's readout",
   "@polarCheckedVsFine": {
-    "description": "Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage",
+    "description": "Simple Mode Polar align panel: the check's verdict and its disagreement with the readout of the last run (#2082)",
     "placeholders": {
       "verdict": {
         "type": "String"
@@ -1445,25 +1441,9 @@
       }
     }
   },
-  "polarContinue": "Continue",
-  "@polarContinue": {
-    "description": "Simple Mode Polar align panel: button once the mount is at Home by hand"
-  },
-  "polarActionContinue": "continue polar alignment",
-  "@polarActionContinue": {
-    "description": "Completes \"Couldn't …\" for the Continue button"
-  },
-  "polarNextFine": "Next: fine",
-  "@polarNextFine": {
-    "description": "Simple Mode Polar align panel: button from the rough stage to the fine stage"
-  },
-  "polarActionNextFine": "move on to the fine step",
-  "@polarActionNextFine": {
-    "description": "Completes \"Couldn't …\" for the Next: fine button"
-  },
-  "polarCheck": "Verify",
+  "polarCheck": "Check",
   "@polarCheck": {
-    "description": "Simple Mode Polar align panel: button from the fine stage to the three-point check"
+    "description": "Polar align: the button that starts a three-point check, a confirmed new measurement (#2082): on the adjust screen it ends the adjust loop first"
   },
   "polarActionCheck": "start the check",
   "@polarActionCheck": {
@@ -7826,7 +7806,7 @@
   "@polarStepFine": {
     "description": "Simple Mode Polar align stepper: the fine step"
   },
-  "polarStepVerify": "Verify",
+  "polarStepVerify": "Check",
   "@polarStepVerify": {
     "description": "Simple Mode Polar align stepper: the verify step"
   },
@@ -7838,7 +7818,7 @@
   "@polarErrorHeading": {
     "description": "Simple Mode Polar align panel: heading over the bullseye and the turns"
   },
-  "polarInsideTolerance": "Inside your {tolerance}′ tolerance. Done keeps this alignment; Next: fine refines it.",
+  "polarInsideTolerance": "Inside your {tolerance}′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.",
   "@polarInsideTolerance": {
     "description": "Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance",
     "placeholders": {
@@ -7847,7 +7827,7 @@
       }
     }
   },
-  "polarOutsideTolerance": "Outside your {tolerance}′ tolerance: refine it, or stop with the shutter.",
+  "polarOutsideTolerance": "Outside your {tolerance}′ tolerance: stop with the shutter, then start again to refine it with the guide camera.",
   "@polarOutsideTolerance": {
     "description": "Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance",
     "placeholders": {
@@ -7856,9 +7836,14 @@
       }
     }
   },
-  "polarVerifyCaption": "Verify moves the mount and takes three frames to confirm the alignment.",
-  "@polarVerifyCaption": {
-    "description": "Simple Mode Polar align fine step: caption under the Verify button"
+  "polarCheckCaption": "Check turns the mount 2 × {step}° and takes three frames to measure the alignment.",
+  "@polarCheckCaption": {
+    "description": "Polar align (#2082): caption with the Check button, how far it turns the mount (the profile's check step, whole degrees) before it moves",
+    "placeholders": {"step": {"type": "String"}}
+  },
+  "polarRoughFirst": "Rough first (main camera)",
+  "@polarRoughFirst": {
+    "description": "Polar align (#2082): after the guide camera could not solve the pole field, a start that measures with the main camera first (it goes through the confirm step)"
   },
   "polarStepDone": "Done",
   "@polarStepDone": {
@@ -7876,7 +7861,7 @@
   "@polarKnobTurn": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: RA turn field label with its accepted range"
   },
-  "polarKnobVerifyStep": "Verify step (°, 5 to 30)",
+  "polarKnobVerifyStep": "Check step (°, 5 to 30)",
   "@polarKnobVerifyStep": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
   },
@@ -7960,7 +7945,7 @@
   "@polarAlignerHoming": {
     "description": "Polar Aligner block: the device is going home"
   },
-  "polarAlignerConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.",
+  "polarAlignerConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.",
   "@polarAlignerConverged": {
     "description": "Polar Aligner block: the motors rest inside the tolerance",
     "placeholders": {
@@ -8585,6 +8570,8 @@
   },
   "refusalPolarAlignMovingMount": "Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.",
   "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
+  "refusalPolarAlignOnAxis": "The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.",
+  "@refusalPolarAlignOnAxis": {"description": "Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more"},
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
@@ -8613,17 +8600,12 @@
   "@refusalFirstFlipNotCompleted": {"description": "Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
-  "polarConfirmPoint": "Point the tube near the pole, with the counterweights down.",
+  "polarConfirmPoint": "Point the tube 2–5° from the pole, with the counterweights down.",
   "@polarConfirmPoint": {"description": "Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo"},
   "polarConfirmTurns": "RA will turn about {step}° twice toward the {direction} ({total}° in all).",
   "@polarConfirmTurns": {
     "description": "Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest",
     "placeholders": {"step": {"type": "String"}, "direction": {"type": "String"}, "total": {"type": "String"}}
-  },
-  "polarConfirmBand": "Later steps turn back over the same arc: never more than {max}° from where it starts.",
-  "@polarConfirmBand": {
-    "description": "Polar align start confirm dialog: the most the whole run turns the RA axis from where it starts, whole degrees",
-    "placeholders": {"max": {"type": "String"}}
   },
   "polarConfirmFromOrigin": "RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.",
   "@polarConfirmFromOrigin": {

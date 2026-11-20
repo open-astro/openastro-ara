@@ -37,8 +37,6 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
-  Future<void> next() async {}
-  @override
   Future<void> stop() async {}
   @override
   Future<void> complete() async {}
@@ -146,7 +144,7 @@ void main() {
         'Polar align',
         'Tolerance',
         'Turn',
-        'Verify step',
+        'Check step',
         'Rough step exposure',
         'Stop tracking when polar align ends',
       ]) {
