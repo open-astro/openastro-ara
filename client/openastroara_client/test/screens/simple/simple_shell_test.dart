@@ -3936,6 +3936,36 @@ void main() {
     expect(c.read(opticsSettingsProvider).sensorWidthPx, 800);
   });
 
+  testWidgets('#2041 a wheel moved before the optics loaded from the rig never sends the sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), gear: [profileApiProvider.overrideWithValue(api)]);
+    // Two reads overlap; the older one lands and is dropped, the newer one is still in flight.
+    final optics = c.read(opticsSettingsProvider.notifier);
+    unawaited(optics.hydrateFromServer(api));
+    unawaited(optics.hydrateFromServer(api));
+    api.reads[0].complete(rig);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    for (final read in api.reads) {
+      if (!read.isCompleted) read.complete(rig);
+    }
+    await tester.pumpAndSettle();
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], everyElement(endsWith('800x600 px, 5.6 µm')));
+    expect(api.puts, isNotEmpty, reason: 'the wheel is still saved, once the rig\'s optics are in');
+  });
+
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
