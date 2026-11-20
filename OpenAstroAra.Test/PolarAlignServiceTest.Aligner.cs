@@ -62,6 +62,8 @@ namespace OpenAstroAra.Test {
             public bool StopFails { get; set; }
             /// <summary>#2069 — Stop is answered with the device's own error (a driver that does not implement it).</summary>
             public bool StopRefused { get; set; }
+            /// <summary>#2069 — Stop throws this, not a <see cref="PolarAlignerException"/> (a driver bug, a disposed client).</summary>
+            public Exception? StopThrows { get; set; }
             /// <summary>#2069 — the source's record that a Stop is owed, as the daemon's Polar Aligner service keeps it.</summary>
             public bool SourceStopOwed { get; set; }
             bool IPolarAlignerSource.StopOwed => SourceStopOwed;
@@ -120,6 +122,9 @@ namespace OpenAstroAra.Test {
 
             public void Stop() {
                 StopAnswers.Wait();
+                if (StopThrows is { } thrown) {
+                    throw thrown;
+                }
                 if (StopFails) {
                     throw new PolarAlignerException(PolarAlignerFailure.LinkLost, "no answer");
                 }
@@ -1031,6 +1036,141 @@ namespace OpenAstroAra.Test {
             await ws.WhenAsync(events => events.Any(IsAlignerDidNotStop)).WaitAsync(SignalTimeout).ConfigureAwait(false);
             await Task.Delay(100).ConfigureAwait(false);
             Assert.That(ws.Events.Count(IsAlignerDidNotStop), Is.EqualTo(1), "told once");
+        }
+
+        /// <summary>The fake sky, with a solver-setup fault the test can switch on, and the run's work dir (where each frame
+        /// it solves lies).</summary>
+        private sealed class FaultableSky(IPolarAlignFrameSolver inner) : IPolarAlignFrameSolver {
+            private volatile bool _fail;
+            private volatile string? _workDir;
+            public void Fail() => _fail = true;
+            public string? WorkDir => _workDir;
+            public Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) =>
+                inner.MeasureFocalLengthAsync(fitsPath, binning, hintRa, hintDec, ct);
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                _workDir = System.IO.Path.GetDirectoryName(fitsPath);
+                return _fail
+                    ? throw new OpenAstroAra.PlateSolving.PlateSolverConfigurationException("the guide scope's focal length is not set")
+                    : inner.SolveAsync(fitsPath, binning, hintRa, hintDec, ct);
+            }
+        }
+
+        [Test]
+        public async Task A_failure_after_the_aligner_moved_keeps_its_reason_and_adds_the_aligner_cut_power_sentence() {
+            // #2069 — the run moved the motors; the device ignores every Stop (the timed-out test move's, the resends, the
+            // end's). A failure then keeps its own reason, and says the Polar Aligner may still move.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true, StopsIgnored = int.MaxValue };
+            var sky = new FaultableSky(new CorrectedSky(aligner));
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), sky, ws: ws, aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+            svc.AlignerMoveTimeout = TimeSpan.FromMilliseconds(100);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
+            Assert.That(aligner.Moves, Is.Not.Empty, "the run moved the motors");
+
+            sky.Fail();
+
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("solver_configuration"), "the failure keeps its own reason");
+            var message = error.GetProperty("message").GetString();
+            Assert.That(message, Does.Contain("focal length is not set"));
+            Assert.That(message, Does.Contain("Cut the Polar Aligner's power"));
+            Assert.That(message, Does.Not.Contain("Cut the mount's power"), "the mount's stop was confirmed");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.EqualTo(1), "one error, no separate aligner_did_not_stop");
+        }
+
+        [Test]
+        public async Task A_stop_neither_the_mount_nor_the_aligner_confirms_tells_one_mount_did_not_stop_with_both_sentences() {
+            // #2066 + #2069 — both stops at the run's end are unconfirmed: one mount_did_not_stop (it wins), whose message
+            // asks to cut the mount's power and the Polar Aligner's.
+            var mount = new FakeStopMount(tracking: true);
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new CorrectedSky(aligner), mount.Mock, ws, aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
+            aligner.StopsIgnored = int.MaxValue;
+            mount.IgnoresStops = true;
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+            var message = error.GetProperty("message").GetString();
+            Assert.That(message, Does.Contain("Cut the mount's power"));
+            Assert.That(message, Does.Contain("Cut the Polar Aligner's power"));
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.EqualTo(1), "told once, not a second aligner_did_not_stop");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.Zero);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"));
+        }
+
+        [Test]
+        public async Task A_check_whose_end_cannot_confirm_a_stop_owed_from_before_fails_with_aligner_did_not_stop() {
+            // #2069 — the check never drives the Polar Aligner, but a Stop owed from before the run (Emergency Stop, the Stop
+            // route) is sent again at its end; when that is not confirmed, the verdict is not given: the run ends failed.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, StopFails = true };
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), NewPoleMount(), ws, store: NewStore(), aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.AlignerDidNotStop));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Cut the Polar Aligner's power"));
+            Assert.That(aligner.Moves, Is.Empty, "the check moves nothing");
+            Assert.That(aligner.SourceStopOwed, Is.True, "still owed");
+        }
+
+        [Test]
+        public async Task A_check_whose_end_confirms_a_stop_owed_from_before_gives_its_verdict() {
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true };
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), NewPoleMount(), store: NewStore(), aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1), "the owed Stop went out at the check's end");
+            Assert.That(aligner.SourceStopOwed, Is.False, "and was confirmed");
+        }
+
+        [Test]
+        public async Task A_driver_exception_from_Stop_is_an_unconfirmed_stop_and_the_run_still_cleans_up() {
+            // #2069 — a Stop that throws something other than the aligner's own error (a driver bug, a disposed client) is
+            // no answer: the run's end owes the Stop and says so, and still deletes its work dir.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
+            var sky = new FaultableSky(new CorrectedSky(aligner));
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), sky, ws: ws, aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
+            var workDir = sky.WorkDir;
+            Assert.That(workDir, Is.Not.Null.And.Not.Empty);
+            Assert.That(System.IO.Directory.Exists(workDir), Is.True);
+            aligner.StopThrows = new ObjectDisposedException("HttpClient");
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.AlignerDidNotStop));
+            Assert.That(aligner.SourceStopOwed, Is.True, "the Stop is owed");
+            var deadline = DateTime.UtcNow + SignalTimeout;
+            while (System.IO.Directory.Exists(workDir) && DateTime.UtcNow < deadline) {
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+            Assert.That(System.IO.Directory.Exists(workDir), Is.False, "the run's work dir is deleted");
         }
     }
 }

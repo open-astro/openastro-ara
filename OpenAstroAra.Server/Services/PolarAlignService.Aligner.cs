@@ -273,6 +273,10 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 owed = run.StopOwed;
             }
+            // A Stop owed from before the run (the Stop route, Emergency Stop, an earlier run's end) is sent again at its end
+            // too: a run that never resent it (the check takes no aligner step) does not end checked or stopped on a device
+            // that may still move.
+            owed |= _alignerSource?.StopOwed == true;
             // An owed Stop goes to the device that answers now: after a reconnect that is a new object.
             var device = owed ? _alignerSource?.Current() ?? run.Device : run.Device;
             var confirmed = true;

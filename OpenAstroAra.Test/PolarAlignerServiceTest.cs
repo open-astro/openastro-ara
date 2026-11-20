@@ -388,6 +388,51 @@ namespace OpenAstroAra.Test {
             Assert.That(service.StopOwed, Is.True, "a read that did not answer in time confirms nothing");
         }
 
+        /// <summary>A device that never confirms a Stop (an axis reads moving) leaves one owed on <paramref name="service"/>.</summary>
+        private static async Task OweAStopAsync(PolarAlignerService service) {
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+            Assert.That(service.StopOwed, Is.True);
+        }
+
+        [Test]
+        public async Task A_different_polar_aligner_that_connects_is_not_held_by_the_old_ones_owed_stop() {
+            // #2069 — the owed Stop belongs to the device it was sent to: a swapped-in device (another UniqueId) can be homed.
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            var replacement = Healthy();
+            replacement.Replies["PolarAlign:Status"] = () => StillStatus;
+            _switches.Connected.Add(new("sw-new", "New base", replacement));
+
+            Assert.That(service.StopOwed, Is.False, "the new device owes nothing");
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(replacement.Calls, Does.Contain("PolarAlign:Home"));
+
+            // The old device comes back: its Stop is still owed.
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            Assert.That(service.StopOwed, Is.True);
+        }
+
+        [Test]
+        public async Task A_plain_reconnect_of_the_same_polar_aligner_keeps_its_owed_stop() {
+            // #2069 — the same device (its UniqueId) on a new connection may still be moving: Home stays refused.
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            var reconnected = Healthy();
+            _switches.Connected.Add(new("sw", "Base", reconnected));
+
+            Assert.That(service.StopOwed, Is.True);
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
+            Assert.That(reconnected.Calls, Does.Not.Contain("PolarAlign:Home"));
+        }
+
         [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),

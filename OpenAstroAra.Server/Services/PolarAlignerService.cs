@@ -81,7 +81,15 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
 
     public bool IsPresent => Choose() is not null;
 
-    public IPolarAligner? Current() => Choose() is { } chosen ? new PolarAlignActionsAligner(chosen.Device.Actions) : null;
+    public IPolarAligner? Current() {
+        if (Choose() is not { } chosen) {
+            return null;
+        }
+        lock (_gate) {
+            _lastHandedOut = KeyOf(chosen);
+        }
+        return new PolarAlignActionsAligner(chosen.Device.Actions);
+    }
 
     public async Task<PolarAlignerDto> GetAsync(CancellationToken ct) {
         var chosen = Choose();
@@ -92,13 +100,38 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
     internal TimeSpan StopWindow { get; set; } = PolarAlignerVerifiedStop.DefaultWindow;
     internal TimeSpan StopPoll { get; set; } = PolarAlignerVerifiedStop.DefaultPoll;
 
-    private volatile bool _stopOwed;
+    // #2069 — the devices (carrier and UniqueId) whose last verified Stop was not confirmed, and the device Current() last
+    // handed out (the one a verified stop was sent to). A plain reconnect of the same device keeps its owed Stop; a different
+    // Polar Aligner that connects in its place is not held by it. Guarded by _gate.
+    private readonly HashSet<string> _stopOwedBy = new(StringComparer.Ordinal);
+    private string? _lastHandedOut;
+
+    private static string KeyOf(Chosen chosen) => chosen.Carrier + "/" + chosen.Device.DeviceId;
 
     /// <inheritdoc />
-    public bool StopOwed => _stopOwed;
+    /// <remarks>The device connected now owes a Stop; with none connected, any device does (nothing is driven then).</remarks>
+    public bool StopOwed {
+        get {
+            var chosen = Choose();
+            lock (_gate) {
+                return chosen is null ? _stopOwedBy.Count > 0 : _stopOwedBy.Contains(KeyOf(chosen));
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public void NoteStopOutcome(bool confirmed) => _stopOwed = !confirmed;
+    public void NoteStopOutcome(bool confirmed) {
+        lock (_gate) {
+            if (_lastHandedOut is not { } key) {
+                return; // no device was ever handed out: no Stop went to one
+            }
+            if (confirmed) {
+                _stopOwedBy.Remove(key);
+            } else {
+                _stopOwedBy.Add(key);
+            }
+        }
+    }
 
     public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
         // A routine that is moving the motors ends its loop first: to it a device Stop alone looks like
@@ -123,7 +156,7 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
     public Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct) =>
         routine?.Invoke() is { DrivesPolarAligner: true }
             ? throw new InvalidOperationException("polar alignment is moving the Polar Aligner; stop the motors first")
-            : _stopOwed
+            : StopOwed
                 ? throw new InvalidOperationException("the Polar Aligner's last Stop was not confirmed; press Stop until it is, then Home")
                 : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
 

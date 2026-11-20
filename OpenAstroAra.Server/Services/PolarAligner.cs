@@ -146,7 +146,10 @@ internal static class PolarAlignerVerifiedStop {
 
     private const string NoAnswerInWindow = "the Polar Aligner did not answer within the stop's window";
 
-    /// <summary>The device calls block (HTTP): call this off a caller's thread.</summary>
+    /// <summary>The device calls block (HTTP): call this off a caller's thread. Never throws for a device call: any failure
+    /// of one is no answer, and a stop without a confirming read is not confirmed (owed).</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A driver may throw anything (a socket error, a disposed client, a bug); an exception out of a Stop would skip the caller's own clean-up (the run's end, Emergency Stop's rung). Any failure is no answer: the stop is not confirmed and stays owed.")]
     public static async Task<PolarAlignerStopOutcome> StopAsync(IPolarAligner device, TimeSpan window, TimeSpan poll) {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var resendEvery = window / Sends;
@@ -168,6 +171,8 @@ internal static class PolarAlignerVerifiedStop {
                     delivered |= ex.Failure == PolarAlignerFailure.Refused;
                 } catch (TimeoutException) {
                     error = NoAnswerInWindow;
+                } catch (Exception ex) {
+                    error = ex.Message; // not the device's own refusal: no answer
                 }
             }
             if (clock.Elapsed >= window) {
@@ -181,6 +186,8 @@ internal static class PolarAlignerVerifiedStop {
                 error = ex.Message;
             } catch (TimeoutException) {
                 error = NoAnswerInWindow;
+            } catch (Exception ex) {
+                error = ex.Message;
             }
             var left = window - clock.Elapsed;
             if (left <= TimeSpan.Zero) {

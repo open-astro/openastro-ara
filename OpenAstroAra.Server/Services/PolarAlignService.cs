@@ -1082,16 +1082,20 @@ namespace OpenAstroAra.Server.Services {
                 // #2069 — the Polar Aligner's verified stop starts first and runs beside the mount's exit, so its up to 3 s
                 // of polling never holds the mount's stop back; the run ends once both are done.
                 var alignerEnded = EndAlignerOnceAsync();
-                // Every exit stops the mount, a clean Stop included (it bumps the generation but not the start
-                // sequence); only a run that a NEWER RUN superseded leaves the mount to that run. Tracking goes off,
-                // or back to how the run found it after Done with stop_tracking_when_done off (ApplyExitTracking).
-                if (!exited) {
-                    await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
-                        handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
+                try {
+                    // Every exit stops the mount, a clean Stop included (it bumps the generation but not the start
+                    // sequence); only a run that a NEWER RUN superseded leaves the mount to that run. Tracking goes off,
+                    // or back to how the run found it after Done with stop_tracking_when_done off (ApplyExitTracking).
+                    if (!exited) {
+                        await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
+                            handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
+                    }
+                    await NoteAlignerEndAsync(end, await alignerEnded.ConfigureAwait(false), alignerEndReported || !NoNewerRunStarted(startSeq))
+                        .ConfigureAwait(false);
+                } finally {
+                    // #2069 — whatever the exit or the aligner's end threw, the run's frames are not left behind.
+                    TryDeleteWorkDir(workDir);
                 }
-                await NoteAlignerEndAsync(end, await alignerEnded.ConfigureAwait(false), alignerEndReported || !NoNewerRunStarted(startSeq))
-                    .ConfigureAwait(false);
-                TryDeleteWorkDir(workDir);
             }
         }
 
