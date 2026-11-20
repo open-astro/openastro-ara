@@ -419,6 +419,58 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_motor_Check_from_the_adjust_loop_after_a_clutch_turn_is_refused_and_the_loop_runs_on() {
+            // The adjust screen's Check with Move the mount after a clutch-open hand run: refused while the loop still runs,
+            // so the user keeps the live readout and the mount is not stopped. Refused only after the loop ended, the
+            // readout would be gone for a check that never starts.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var from = ws.Events.Count;
+            var stopsBefore = mount.Stops.Count;
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            RefusalException? refusal = null;
+            try {
+                await svc.StartAsync(PolarAlignStages.Check, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (RefusalException ex) {
+                refusal = ex;
+            }
+            var after = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            var stopsAfter = mount.Stops.Count;
+            var loopEnded = ws.Events.Skip(from).Any(e => e.Type == WsEventCatalog.PolarAlignStopped);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(refusal?.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClutchTurned));
+            Assert.That(after.State, Is.EqualTo("adjusting"), "the loop still runs");
+            Assert.That(loopEnded, Is.False, "the loop was not ended");
+            Assert.That(stopsAfter, Is.EqualTo(stopsBefore), "nothing was stopped");
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, true)]
+        public async Task After_a_clutch_turn_the_exit_does_not_record_where_the_run_left_the_mount(bool encodersFollow, bool recorded) {
+            // The exit's reading is where the next start would measure "moved by other means" from. With the clutch open it
+            // is off by the user's turns, so it stays forgotten with the origin; the hand pad keeps the reading true.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, encodersFollow: encodersFollow).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, encodersFollow: encodersFollow).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(svc.SweepLastLeftRaDeg, recorded ? Is.Not.Null : Is.Null);
+        }
+
+        [Test]
         public async Task A_Stop_while_a_hand_turn_run_waits_for_a_turn_clears_the_wait_from_the_status() {
             var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();

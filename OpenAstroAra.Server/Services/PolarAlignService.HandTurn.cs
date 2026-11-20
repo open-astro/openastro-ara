@@ -385,6 +385,15 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        /// <summary>A clutch turn stands: one was seen in this mount session, with no sync since.</summary>
+        private bool ClutchTurnStands() {
+            var session = _motionControl.SessionEpoch;
+            var sync = _motionControl.SyncEpoch;
+            lock (_gate) {
+                return _clutchTurned is { } c && c.SessionEpoch == session && c.SyncEpoch == sync;
+            }
+        }
+
         /// <summary>Refuses (<c>polar-align-clutch-turned</c>) a start that turns RA with the motor while a clutch turn
         /// stands: none since in this mount session and with no sync since. A hand-turn start goes ahead.</summary>
         private void ThrowIfClutchTurned(PolarAlignStartConfirmation? confirmation) {
