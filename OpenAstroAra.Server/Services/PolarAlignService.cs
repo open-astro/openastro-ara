@@ -458,7 +458,8 @@ namespace OpenAstroAra.Server.Services {
                     if (_active) {
                         // #2083 — a retry of the same start is a no-op accept; a start that confirmed the other way of
                         // turning RA (by hand while the motor turns it, or the reverse) is refused: the user was promised
-                        // something the running run does not do.
+                        // something the running run does not do. _handTurn records the last run, so this comparison is
+                        // valid only here, inside if (_active): moved out, it would compare against a finished run.
                         if (confirmation is not null && confirmation.HandTurn != _handTurn) {
                             throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning,
                                 _handTurn

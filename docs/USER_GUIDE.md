@@ -235,7 +235,8 @@ framing/focus loop when you need to point or focus by eye.
   takes the next frame once the mount is still; then the readout works as usual. With the hand pad it
   shows how far the mount says you have turned. With the clutch open it shows no number: the mount
   does not see the turn, and the frames alone cannot measure it while the mount is off the pole, so
-  it waits until the view has moved far enough. A turn far past the two asked for ends the run. After
+  it waits until the view has moved far enough and has stayed still for a few frames (at least 5 s
+  after it asked). A turn far past the two asked for ends the run. After
   a turn with the clutch open the mount no longer knows where it points: **Move the mount** is
   refused until you sync it (Center does) or reconnect it once it is homed; **Turn RA by hand** still
   works. Each Start is one measurement, its two turns the way the confirm step

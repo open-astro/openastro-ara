@@ -435,6 +435,101 @@ namespace OpenAstroAra.Test {
             Assert.That(stopped.HandTurnWait, Is.Null, "no run waits for a turn after Stop");
         }
 
+        [TestCase(2)]
+        [TestCase(3)]
+        public async Task A_hand_pad_turn_whose_mount_reads_fail_as_the_turn_lands_is_no_clutch_turn_and_a_motor_start_goes_ahead(int failAt) {
+            // The hand pad turns the mount's reading with the axis, but the Alpaca reads of RA/Dec time out on the frames
+            // just after the turn for point failAt. A failed read says nothing about the clutch: those frames are not
+            // measured, the next reads show the turn, and nothing is refused afterwards.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            foreach (var point in new[] { 2, 3 }) {
+                await TurnByHandWhenAskedAsync(ws, mount, point: point, deg: 10.0, encodersFollow: true).ConfigureAwait(false);
+                if (point == failAt) {
+                    mount.FreshReadsFail = 3; // a frame in flight may take one; the frames after the turn fail too
+                }
+            }
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            RefusalException? refusal = null;
+            try {
+                await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (RefusalException ex) {
+                refusal = ex;
+            }
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
+            Assert.That(mount.FreshReadsFail, Is.Zero, "the reads did fail during the run");
+            Assert.That(refusal, Is.Null, "a failed read is no clutch turn: the motor start goes ahead");
+        }
+
+        private static (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) HandAt(
+                double raDeg, double decDeg, double seconds, (double RaDeg, double DecDeg)? reading) =>
+            (raDeg, decDeg, DateTimeOffset.UnixEpoch.AddSeconds(seconds), reading);
+
+        [Test]
+        public void MeasureHandTurn_flags_a_clutch_turn_only_when_the_mount_was_read_at_both_ends_and_stood() {
+            // The camera 5° from the pole, tracking: the solves move 10° of RA (about 0.87° on the sky), well past the
+            // distance a clutch turn needs, while the mount's reading stands, or one end's read failed.
+            var start = HandAt(0.0, 85.0, 0.0, (0.0, 85.0));
+            var nowRead = HandAt(10.0, 85.0, 60.0, (0.0, 85.0));
+            var nowUnread = HandAt(10.0, 85.0, 60.0, null);
+            var fromUnread = HandAt(0.0, 85.0, 0.0, null);
+
+            var stood = PolarAlignService.MeasureHandTurn(start, start, nowRead, 1.0, 10.0, tracking: true);
+            var readFailedNow = PolarAlignService.MeasureHandTurn(start, start, nowUnread, 1.0, 10.0, tracking: true);
+            var readFailedAtTheLastPoint = PolarAlignService.MeasureHandTurn(start, fromUnread, nowRead, 1.0, 10.0, tracking: true);
+
+            Assert.That((stood.Reached, stood.ByClutch), Is.EqualTo((true, true)), "read at both ends and stood: the clutch is open");
+            Assert.That((readFailedNow.Reached, readFailedNow.ByClutch, readFailedNow.ReadingUnknown), Is.EqualTo((false, false, true)),
+                "this frame's read failed: not measured, the next frame reads again");
+            Assert.That((readFailedAtTheLastPoint.Reached, readFailedAtTheLastPoint.ByClutch), Is.EqualTo((true, false)),
+                "the last point's reading is unknown: the solves take the turn, and no clutch turn is flagged");
+            Assert.That(readFailedAtTheLastPoint.TurnedDeg, Is.Null, "no angle is claimed");
+        }
+
+        [Test]
+        public void HandTurnSettled_takes_a_clutch_turn_only_after_three_solves_at_rest_and_the_minimum_wait() {
+            var wait = PolarAlignService.DefaultHandTurnClutchMinWait;
+            Assert.That(wait, Is.EqualTo(TimeSpan.FromSeconds(5)));
+            Assert.That(PolarAlignService.HandTurnSettled(byReading: true, 2, TimeSpan.Zero, wait), Is.True, "the hand pad: two solves at rest");
+            Assert.That(PolarAlignService.HandTurnSettled(byReading: true, 1, TimeSpan.FromMinutes(1), wait), Is.False);
+            Assert.That(PolarAlignService.HandTurnSettled(byReading: false, 2, TimeSpan.FromMinutes(1), wait), Is.False, "the clutch: two are not enough");
+            Assert.That(PolarAlignService.HandTurnSettled(byReading: false, 3, TimeSpan.FromSeconds(4.9), wait), Is.False, "the clutch: too soon after the ask");
+            Assert.That(PolarAlignService.HandTurnSettled(byReading: false, 3, wait, wait), Is.True);
+        }
+
+        [Test]
+        public async Task A_small_nudge_with_the_clutch_open_is_not_taken_as_the_turn_before_the_points_minimum_wait() {
+            // The camera 5° from the pole: a 4° nudge with the clutch open moves the solves past the distance an 8° turn
+            // needs at the axis distance the run allows for. Held still, it is still not taken before the wait is up, so
+            // the user has time to finish the 10° turn.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            svc.HandTurnClutchMinWait = TimeSpan.FromMinutes(1);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 4.0).ConfigureAwait(false);
+            var nudged = ws.Events.Count;
+            static bool Point((string Type, System.Text.Json.JsonElement Payload) e, int point) =>
+                IsHandTurn(e) && e.Payload.GetProperty("point").GetInt32() == point;
+            await ws.WhenAsync(events => events.Skip(nudged).Count(e => Point(e, 2)) >= 6 || events.Any(e => Point(e, 3)))
+                .WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var waiting = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ws.Events.Any(e => Point(e, 3)), Is.False, "five solves at rest after a 4° nudge, and the turn is not taken yet");
+            Assert.That(waiting.HandTurnWait?.Point, Is.EqualTo(2));
+        }
+
         [Test]
         public void HandTurnDeg_takes_the_Earths_turn_out_only_when_the_mount_does_not_track() {
             // 60 s at the sidereal rate is about 0.25° of RA drift with tracking off.
